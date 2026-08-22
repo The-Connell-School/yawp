@@ -47,9 +47,13 @@ export async function signToolJwt(
   payload: Record<string, unknown>,
   header: Record<string, unknown> = {}
 ): Promise<string> {
-  const { privateKey, kid } = await getToolKeyPair();
-  const signer = new SignJWT(payload)
-    .setProtectedHeader({ alg: 'RS256', kid, ...header });
+  const { privateKey, kid, publicJwk } = await getToolKeyPair();
+  const signer = new SignJWT(payload).setProtectedHeader({
+    alg: 'RS256',
+    kid,
+    jwk: publicJwk,
+    ...header,
+  });
   // Caller should set iss/aud/iat/exp as needed.
   return await signer.sign(privateKey);
 }

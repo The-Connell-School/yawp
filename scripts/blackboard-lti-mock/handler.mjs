@@ -617,7 +617,8 @@ async function handleDeepLinking(ctx) {
   }
   try {
     const decoded = decodeJwt(jwt);
-    const jwk = await resolveToolJwk(config, decoded.header.kid);
+    const jwk =
+      decoded.header?.jwk || (await resolveToolJwk(config, decoded.header.kid));
     verifyJwt(jwt, jwk, { now: config.now() });
     const contentItems =
       decoded.payload['https://purl.imsglobal.org/spec/lti-dl/claim/content_items'] || [];
