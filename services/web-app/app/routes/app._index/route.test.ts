@@ -18,12 +18,12 @@ const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const getStudentPreviewState = mock();
 const getStudentEnrolledClasses = mock();
+const listGroupSubmitNudges = mock();
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
 // before any file could mock.module() this path (see comment there).
-const actualAssignmentTypeAccess = globalThis.__realModules[
-  '~/utils/assignment-type-access.server'
-];
+const actualAssignmentTypeAccess =
+  globalThis.__realModules['~/utils/assignment-type-access.server'];
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
@@ -45,6 +45,9 @@ mock.module('~/utils/assignment-type-access.server', () => ({
 }));
 mock.module('~/utils/student-classes.server', () => ({
   getStudentEnrolledClasses,
+}));
+mock.module('~/domain/collaboration/nudges.server', () => ({
+  listGroupSubmitNudges,
 }));
 const { loader } = await import('./route');
 
@@ -69,10 +72,15 @@ describe('app index loader assignments', () => {
     getTeacherRecentActiveClassIds.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
     getStudentPreviewState.mockReset();
-    getStudentPreviewState.mockResolvedValue({ active: false, organizationId: null });
+    getStudentPreviewState.mockResolvedValue({
+      active: false,
+      organizationId: null,
+    });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
     getStudentEnrolledClasses.mockReset();
     getStudentEnrolledClasses.mockResolvedValue([]);
+    listGroupSubmitNudges.mockReset();
+    listGroupSubmitNudges.mockResolvedValue([]);
     getTeacherClassCardStats.mockResolvedValue({
       ungradedCount: 0,
       gradedUnreleasedCount: 0,
@@ -338,7 +346,10 @@ describe('app index loader assignments', () => {
           id: 'class-active-2',
           school: { id: 'school-1', organizationId: 'org-1' },
         },
-        { id: 'class-quiet', school: { id: 'school-1', organizationId: 'org-1' } },
+        {
+          id: 'class-quiet',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
       ];
     });
 
@@ -350,9 +361,9 @@ describe('app index loader assignments', () => {
     const data = (response as { data: any }).data;
 
     expect(data.totalTeacherClassCount).toBe(3);
-    expect(data.teacherClassCards.map((klass: { id: string }) => klass.id)).toEqual(
-      ['class-active-1', 'class-active-2', 'class-quiet']
-    );
+    expect(
+      data.teacherClassCards.map((klass: { id: string }) => klass.id)
+    ).toEqual(['class-active-1', 'class-active-2', 'class-quiet']);
     expect(data.teacherWorkspaceClassStats).toHaveLength(3);
   });
 
@@ -383,7 +394,10 @@ describe('app index loader assignments', () => {
 
       return classRows.map((klass) => ({
         id: klass.id,
-        school: { id: klass.school.id, organizationId: klass.school.organizationId },
+        school: {
+          id: klass.school.id,
+          organizationId: klass.school.organizationId,
+        },
       }));
     });
 
@@ -426,7 +440,10 @@ describe('app index loader assignments', () => {
       }
 
       return [
-        { id: 'class-quiet', school: { id: 'school-1', organizationId: 'org-1' } },
+        {
+          id: 'class-quiet',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
       ];
     });
 
@@ -577,4 +594,63 @@ describe('app index loader assignments', () => {
     ]);
   });
 
+  /**
+   * The dashboard is the only place that reaches a student who pressed Submit
+   * and walked away, or who never pressed at all. Both believe they are done.
+   */
+  describe('group work waiting to go in', () => {
+    const run = () =>
+      loader({
+        request: new Request('https://example.test/app'),
+        params: {},
+        context: {} as never,
+      } as any);
+
+    const readBody = (response: any) =>
+      typeof response.json === 'function' ? response.json() : response.data;
+
+    test('asks for this student’s outstanding shared drafts', async () => {
+      await run();
+
+      expect(listGroupSubmitNudges).toHaveBeenCalledWith({
+        membershipId: 'profile-1',
+      });
+    });
+
+    test('hands them to the page', async () => {
+      listGroupSubmitNudges.mockResolvedValue([
+        {
+          documentId: 'doc-1',
+          title: 'Expansion Plan',
+          groupLabel: 'Group 2',
+          waitingOnViewer: true,
+          readiness: { total: 2, submittedCount: 1 },
+        },
+      ]);
+
+      const body = await readBody(await run());
+
+      expect(body.groupSubmitNudges).toHaveLength(1);
+      expect(body.groupSubmitNudges[0].waitingOnViewer).toBe(true);
+    });
+
+    test('a teacher is not asked at all', async () => {
+      // Their dashboard has nothing to press, and the groups board already
+      // shows them the same thing for a whole class.
+      requireMembership.mockResolvedValue({
+        id: 'teacher-1',
+        role: 'TEACHER',
+        isOrgOwner: false,
+        organization: { id: 'org-1', name: 'Org' },
+      });
+      // A teacher with no classes: the branch under test is the nudge query,
+      // and the class-card fixtures are another test's concern.
+      prisma.class.findMany.mockResolvedValue([]);
+
+      const body = await readBody(await run());
+
+      expect(listGroupSubmitNudges).not.toHaveBeenCalled();
+      expect(body.groupSubmitNudges).toEqual([]);
+    });
+  });
 });

@@ -28,6 +28,8 @@ import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
 import { formatClassLabel } from '~/utils/class-display';
+import { listGroupSubmitNudges } from '~/domain/collaboration/nudges.server';
+import { StudentGroupSubmitNudges } from '~/components/student-group-submit-nudges';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -50,20 +52,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     profile
   );
 
-  const studentClassCount =
-    useStudentExperience
-      ? ((
-          await prisma.orgMembership.findUnique({
-            where: { id: profile.id },
-            select: { _count: { select: { classesAsStudent: true } } },
-          })
-        )?._count.classesAsStudent ?? 0)
-      : 0;
+  const studentClassCount = useStudentExperience
+    ? ((
+        await prisma.orgMembership.findUnique({
+          where: { id: profile.id },
+          select: { _count: { select: { classesAsStudent: true } } },
+        })
+      )?._count.classesAsStudent ?? 0)
+    : 0;
 
   const isStudentOnlyWithNoClasses =
-    useStudentExperience &&
-    !profile.isOrgOwner &&
-    studentClassCount === 0;
+    useStudentExperience && !profile.isOrgOwner && studentClassCount === 0;
 
   if (isStudentOnlyWithNoClasses) {
     return redirect('/enter-code');
@@ -121,10 +120,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
           }))
         )
     : [];
-  const assignmentsEnabled =
-    useStudentExperience
-      ? studentAssignmentClassIds.length > 0
-      : teacherAssignmentClassScopes.length > 0;
+  const assignmentsEnabled = useStudentExperience
+    ? studentAssignmentClassIds.length > 0
+    : teacherAssignmentClassScopes.length > 0;
 
   const enrolledClasses = useStudentExperience
     ? await getStudentEnrolledClasses(profile.id, schoolYearScope)
@@ -161,7 +159,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
             classArtKey: true,
             school: { select: { id: true, name: true, organizationId: true } },
             _count: {
-              select: { students: true, teachers: true, classAssignments: true },
+              select: {
+                students: true,
+                teachers: true,
+                classAssignments: true,
+              },
             },
           },
         })
@@ -203,13 +205,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const teacherClassStatsById = !useStudentExperience
     ? new Map(
         await Promise.all(
-          teacherClasses.map(async (klass) => [
-            klass.id,
-            {
-              stats: await getTeacherClassCardStats(klass.id),
-              assignments: klass._count.classAssignments,
-            },
-          ] as const)
+          teacherClasses.map(
+            async (klass) =>
+              [
+                klass.id,
+                {
+                  stats: await getTeacherClassCardStats(klass.id),
+                  assignments: klass._count.classAssignments,
+                },
+              ] as const
+          )
         )
       )
     : new Map<
@@ -270,6 +275,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
         })
       : [];
 
+  // Shared drafts this student's group has not handed in yet. Only for the
+  // student experience: a teacher's own dashboard has nothing to press, and the
+  // groups board is where they see the same thing for a whole class.
+  //
+  // The query is scoped to opened collaborative rooms this student is an active
+  // member of, so for everyone outside the pilot — which today is everyone — it
+  // matches nothing and the section does not render.
+  const groupSubmitNudges = useStudentExperience
+    ? await listGroupSubmitNudges({ membershipId: profile.id })
+    : [];
+
   const enabledTeacherClasses =
     !useStudentExperience && assignmentsEnabled ? teacherClassesOrdered : [];
   const assignmentCreationClasses = enabledTeacherClasses;
@@ -286,6 +302,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return dataResponse({
     assignmentTypes,
     enrolledClasses,
+    groupSubmitNudges,
     teacherClasses: teacherClassesOrdered,
     assignmentsEnabled,
     teacherClassCards,
@@ -394,13 +411,15 @@ export default function AppRoute() {
                 manage your writing.
               </p>
             </div>
-            <StudentWriteSomethingNew
-              assignmentTypes={data.assignmentTypes}
-            />
+            <StudentWriteSomethingNew assignmentTypes={data.assignmentTypes} />
           </div>
         </div>
       </div>
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
+        {/* Above the classes, because it is the only thing on this page with a
+            deadline attached: a group draft nobody presses on is work that
+            silently never arrives. */}
+        <StudentGroupSubmitNudges nudges={data.groupSubmitNudges} />
         <div className="flex flex-col">
           <p className="my-2 text-foreground/60">Classes</p>
           {data.enrolledClasses.length > 0 ? (

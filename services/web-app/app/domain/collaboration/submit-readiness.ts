@@ -237,3 +237,31 @@ export function summarizeBoardSubmitProgress(
     sentence: `${groupsSubmitted} of ${groupsTotal} groups have submitted — ${students} still to press Submit.`,
   };
 }
+
+/**
+ * The dashboard nudge: one line, about work the student is not currently
+ * looking at.
+ *
+ * Shorter and more directive than `describeGroupSubmitProgress`, which sits
+ * beside the draft where the roster is already on screen. Here it has to carry
+ * the whole situation on its own, and say which of the two situations it is:
+ * something to do, or something to chase.
+ */
+export function describeGroupSubmitNudge(
+  readiness: GroupSubmitReadiness
+): string {
+  const others = readiness.waitingOn.filter((member) => !member.isViewer);
+  const othersLabel = joinNames(others.map((member) => member.name));
+
+  if (!readiness.viewerSubmitted) {
+    return others.length === 0
+      ? 'Your group is waiting on you — press Submit to hand this in.'
+      : `Your group is waiting on you${
+          others.length === 1 ? ` and ${othersLabel}` : `, ${othersLabel},`
+        } to press Submit.`;
+  }
+
+  return `You have submitted. This goes to your teacher when ${othersLabel} ${
+    others.length === 1 ? 'has' : 'have'
+  } pressed Submit too.`;
+}

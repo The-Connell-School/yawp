@@ -1023,10 +1023,28 @@ board already ran, so the per-group half is free.
 Unopened groups show nothing. There is no draft before groups are opened, so
 "0 of 3 submitted" would be a count of something that cannot happen yet.
 
-**Still open:** nothing tells a group they are being waited on when they are not
-looking at their draft. The teacher can now see a stuck group from the board and
-act on it; the students still cannot see it from anywhere else. A notification
-is the remaining piece, and it does not exist.
+### Telling the students — 2026-08-22
+
+The student dashboard now lists shared drafts their group has not handed in:
+"Expansion Plan · Group 2 — Your group is waiting on you: press Submit to hand
+this in", or, for a student who has already pressed, "You have submitted. This
+goes to your teacher when Taylor Nguyen has pressed Submit too." The ones the
+student can act on sort first; their own press is the only thing on that list
+they control. `listGroupSubmitNudges` is scoped to opened collaborative rooms
+the student is an active member of with no live submission, so outside the pilot
+it matches nothing and the section does not render.
+
+**In-app rather than email, deliberately.** There is no background scheduler in
+this app, so a "you are holding up your group" email would have to be sent from
+whatever request happened to notice — which is nobody's idea of a mail schedule.
+And mailing K-12 students is a product and compliance question (COPPA, plus
+whatever a school's own rules say about contacting pupils), not one to settle
+inside a UI change.
+
+**What this still does not do:** it reaches a student when they next open Yawp,
+and not before. A group that stops opening the app between Friday and a Sunday
+deadline is not reached by anything here. Closing that needs a scheduler and a
+decision about email or push — both worth having, neither in this change.
 
 ## Open questions
 

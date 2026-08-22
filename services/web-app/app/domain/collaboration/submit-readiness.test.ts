@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  describeGroupSubmitNudge,
   describeGroupSubmitProgress,
   describeGroupSubmitWaiting,
   describeTeacherSubmitConfirmation,
@@ -323,5 +324,76 @@ describe('summarizeBoardSubmitProgress', () => {
 
     expect(summary.sentence).toBe('');
     expect(summary.groupsTotal).toBe(0);
+  });
+});
+
+/**
+ * The dashboard line. It has to carry the whole situation without the roster
+ * beside it, and say which of two things this is: something to do, or something
+ * to chase.
+ */
+describe('describeGroupSubmitNudge', () => {
+  const readinessFor = (
+    entries: [id: string, name: string, submittedAt: string | null][],
+    viewerMembershipId: string
+  ) =>
+    summarizeGroupSubmitReadiness({
+      members: entries.map(([membershipId, name, submittedAt]) => ({
+        membershipId,
+        name,
+        submittedAt,
+      })),
+      viewerMembershipId,
+    });
+
+  const PRESSED = '2026-08-22T10:00:00.000Z';
+
+  test('puts it on the student when they are the only one left', () => {
+    const sentence = describeGroupSubmitNudge(
+      readinessFor(
+        [
+          ['m1', 'Sam Reyes', PRESSED],
+          ['m2', 'Taylor Nguyen', null],
+        ],
+        'm2'
+      )
+    );
+
+    expect(sentence).toBe(
+      'Your group is waiting on you — press Submit to hand this in.'
+    );
+  });
+
+  test('names the others when the student is not the only one left', () => {
+    const sentence = describeGroupSubmitNudge(
+      readinessFor(
+        [
+          ['m1', 'Sam Reyes', null],
+          ['m2', 'Taylor Nguyen', null],
+        ],
+        'm2'
+      )
+    );
+
+    expect(sentence).toContain('you and Sam Reyes');
+  });
+
+  test('tells a student who has pressed who to chase', () => {
+    // The other half of the gap: without this, a student who pressed has no way
+    // to know why nothing has happened.
+    const sentence = describeGroupSubmitNudge(
+      readinessFor(
+        [
+          ['m1', 'Sam Reyes', PRESSED],
+          ['m2', 'Taylor Nguyen', null],
+          ['m3', 'Alex Diaz', null],
+        ],
+        'm1'
+      )
+    );
+
+    expect(sentence).toContain('You have submitted');
+    expect(sentence).toContain('Taylor Nguyen and Alex Diaz');
+    expect(sentence).toContain('have pressed Submit');
   });
 });
