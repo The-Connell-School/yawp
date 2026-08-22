@@ -258,7 +258,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   ]);
 
   const activityPage =
-    !isOwner && (isTeacher || isAdmin) && submissionActivityEnabled
+    !isOwner && (isTeacher || isAdmin)
       ? await prisma.submissionActivity.findMany({
           where: {
             submissionId: submission.id,
@@ -401,6 +401,7 @@ export default function SubmissionRoute() {
 
   const effectiveGradedAt = localGradedAt ?? submission.gradedAt;
   const effectiveReleasedAt = localReleasedAt ?? submission.releasedAt;
+  const isWithdrawn = submission.unsubmittedAt != null;
   const isGraded = !!effectiveGradedAt;
   const isReleased = !!effectiveReleasedAt;
   const effectiveNumericPct =
@@ -409,8 +410,8 @@ export default function SubmissionRoute() {
     teacherGradeUi?.overallScore ?? submission.overallScore ?? null;
   const effectiveScore = teacherGradeUi?.score ?? submission.score ?? null;
   const lifecycleState = resolveSubmissionLifecycleState({
-    isGraded,
-    isReleased,
+    isGraded: isWithdrawn ? false : isGraded,
+    isReleased: isWithdrawn ? false : isReleased,
     hasGrade: hasRecordedGrade({
       numericPercentage: effectiveNumericPct,
       overallScore: effectiveOverallScore,
@@ -460,26 +461,32 @@ export default function SubmissionRoute() {
       : null);
 
   // ── Status badge (reflects optimistic save / release) ─────────────
-  const statusLabel = isOwner
-    ? effectiveReleasedAt
-      ? 'Graded'
-      : submission.submittedAt
-        ? 'Submitted'
-        : 'Draft'
-    : effectiveReleasedAt
-      ? 'Released'
-      : lifecycleState === 'graded'
+  const statusLabel = isWithdrawn
+    ? 'Withdrawn'
+    : isOwner
+      ? effectiveReleasedAt
         ? 'Graded'
         : submission.submittedAt
           ? 'Submitted'
-          : 'Draft';
+          : 'Draft'
+      : effectiveReleasedAt
+        ? 'Released'
+        : lifecycleState === 'graded'
+          ? 'Graded'
+          : submission.submittedAt
+            ? 'Submitted'
+            : 'Draft';
   const statusVariant = isOwner
-    ? effectiveReleasedAt
+    ? isWithdrawn
+      ? ('secondary' as const)
+      : effectiveReleasedAt
       ? ('success' as const)
       : submission.submittedAt
         ? ('info-outlined' as const)
         : ('secondary' as const)
-    : effectiveReleasedAt
+    : isWithdrawn
+      ? ('secondary' as const)
+      : effectiveReleasedAt
       ? ('success' as const)
       : lifecycleState === 'graded'
         ? ('success' as const)
@@ -968,7 +975,7 @@ export default function SubmissionRoute() {
         ) : null}
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          {isGradingOther && submissionActivityEnabled ? (
+          {isGradingOther ? (
             <SubmissionActivitySheet
               activities={activities as any}
               hasMore={activityHasMore}
