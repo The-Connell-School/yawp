@@ -1,66 +1,160 @@
 import {
-  ArrowLeft,
-  CheckCircle2,
-  Loader2,
-  PenLine,
-  RotateCcw,
-} from 'lucide-react';
-import { useEffect, useState } from 'react';
-import {
   Link,
   data as dataResponse,
   redirect,
-  useFetcher,
   useLoaderData,
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
-import { ActPracticeQuestionView } from '~/components/writing-lessons/act-practice-question';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { getActPracticeQuestions } from '~/utils/writing-lessons/act-practice-bank';
-import { generateActPracticeQuestions } from '~/utils/writing-lessons/act-practice-generation.server';
 import {
-  gradeActAnswer,
-  type ActGradeResult,
-  type ActPracticeQuestion,
-} from '~/utils/writing-lessons/act-practice.shared';
-import { buildActPracticeSequence } from '~/utils/writing-lessons/practice-assignments.server';
+  PracticeRunner,
+  type PracticeRunnerItem,
+  type PracticeRunnerResult,
+  type RewriteCheckResult,
+} from '~/components/writing-lessons/practice-runner';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
+import {
+  buildTopicFallbackPrompts,
+  sanitizeCompositionTopic,
+} from '~/utils/writing-lessons/composition-topic-prompts';
+import {
+  buildMixedGeneratedPracticeSequence,
+  type MixedAssignedPracticeItem,
+} from '~/utils/writing-lessons/practice-assignments.server';
+import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
+import { detectPracticeGuardrail } from '~/utils/writing-lessons/practice-feedback.shared';
+import { generatePracticePrompts } from '~/utils/writing-lessons/practice-prompt-generation.server';
 import {
   getQuickWritingLessonBySlug,
   getQuickWritingLessonContext,
+  getQuickWritingPracticePrompts,
+  type QuickWritingPracticePrompt,
 } from '~/utils/writing-lessons/static-lessons.server';
 
 const MAX_PROBLEMS = 20;
+const DEFAULT_PROBLEMS = 5;
 
+/**
+ * The skills a session can be built from: real lessons only, and composition
+ * lessons only while the Composition rollout flag is on — a self-directed set
+ * must never reach past the same boundary an assigned one respects.
+ */
 function parseSkills(raw: string | null): string[] {
-  return (
-    (raw ?? '')
-      .split(',')
-      .map((slug) => slug.trim())
-      .filter(Boolean)
-      // The self-directed session is ACT multiple-choice only, so composition
-      // lessons (constructed response) can never be pulled into one.
-      .filter(
-        (slug) =>
-          getQuickWritingLessonBySlug(slug)?.section === 'Grammar & Mechanics'
-      )
-  );
+  const compositionEnabled = isCompositionPracticeEnabled();
+  const seen = new Set<string>();
+  return (raw ?? '')
+    .split(',')
+    .map((slug) => slug.trim())
+    .filter(Boolean)
+    .filter((slug) => {
+      if (seen.has(slug)) return false;
+      seen.add(slug);
+      const lesson = getQuickWritingLessonBySlug(slug);
+      if (!lesson) return false;
+      return lesson.section !== 'Composition' || compositionEnabled;
+    });
 }
 
 function clampCount(raw: string | null): number {
   const value = Number(raw);
-  if (!Number.isFinite(value)) return 5;
+  if (!Number.isFinite(value)) return DEFAULT_PROBLEMS;
   return Math.min(Math.max(Math.trunc(value), 1), MAX_PROBLEMS);
 }
 
-// A self-directed practice session: the student picks the skills and how many
-// problems, and we build an interleaved ACT set from the selected skills.
-// Nothing is persisted — this is on-the-fly practice, endless via AI top-ups.
+function isComposition(slug: string): boolean {
+  return getQuickWritingLessonBySlug(slug)?.section === 'Composition';
+}
+
+function sessionTitle(skills: string[]): string {
+  if (skills.length === 1) {
+    return getQuickWritingLessonBySlug(skills[0])?.title ?? 'Writing practice';
+  }
+  if (skills.every(isComposition)) return 'Composition practice';
+  if (skills.every((slug) => !isComposition(slug))) return 'Grammar practice';
+  return 'Writing practice';
+}
+
+/**
+ * Interest-driven practice: the student names what the set should be about and
+ * the prompts are rebuilt around it. AI generation is preferred; the
+ * deterministic topic templates keep choice working with no ANTHROPIC_API_KEY,
+ * so personalizing never dead-ends.
+ */
+async function buildTopicSequence(
+  skills: string[],
+  problemCount: number,
+  topic: string
+): Promise<MixedAssignedPracticeItem[]> {
+  const perLesson = await Promise.all(
+    skills.map(async (slug) => {
+      const context = getQuickWritingLessonContext(slug);
+      const lesson = getQuickWritingLessonBySlug(slug);
+      if (!context || !lesson) return null;
+      const staticPrompts = getQuickWritingPracticePrompts(slug);
+      const generated = await generatePracticePrompts({
+        skill: context.skill,
+        lessonTitle: context.title,
+        rule: context.rule,
+        exampleExercises: staticPrompts
+          .slice(0, 4)
+          .map((prompt) => prompt.exercise),
+        count: problemCount,
+        topic,
+      });
+      const prompts: QuickWritingPracticePrompt[] =
+        generated.length > 0
+          ? generated.map((prompt, index) => ({
+              id: `${slug}-personal-${index + 1}`,
+              ...prompt,
+            }))
+          : buildTopicFallbackPrompts(slug, topic);
+      return { slug, title: lesson.title, prompts };
+    })
+  );
+
+  // Interleave round-robin so a multi-skill set alternates skills.
+  const interleaved: Array<{
+    lessonSlug: string;
+    lessonTitle: string;
+    prompt: QuickWritingPracticePrompt;
+  }> = [];
+  let round = 0;
+  let addedThisRound = true;
+  while (addedThisRound) {
+    addedThisRound = false;
+    for (const lesson of perLesson) {
+      const prompt = lesson?.prompts[round];
+      if (lesson && prompt) {
+        interleaved.push({
+          lessonSlug: lesson.slug,
+          lessonTitle: lesson.title,
+          prompt,
+        });
+        addedThisRound = true;
+      }
+    }
+    round += 1;
+  }
+
+  if (interleaved.length === 0) return [];
+  return Array.from({ length: problemCount }, (_, index) => ({
+    kind: 'composition' as const,
+    position: index + 1,
+    ...interleaved[index % interleaved.length],
+  }));
+}
+
+/**
+ * A self-directed practice session: the student picks the skills and how many
+ * problems, and gets the same practice screen a teacher's assignment would put
+ * in front of them. Nothing is persisted — this is practice they gave
+ * themselves, so it never reaches a teacher's results.
+ */
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
@@ -76,20 +170,48 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect('/app/writing-lessons');
   }
 
-  const sequence = buildActPracticeSequence(skills, count);
+  // A topic only shapes constructed response, so it applies to a set built
+  // purely from composition skills; anything else keeps the standard prompts.
+  const requestedTopic = url.searchParams.get('topic');
+  const topic = requestedTopic
+    ? sanitizeCompositionTopic(requestedTopic)
+    : null;
+  const topicApplies = Boolean(topic) && skills.every(isComposition);
+
+  const sequence =
+    topic && topicApplies
+      ? await buildTopicSequence(skills, count, topic)
+      : (await buildMixedGeneratedPracticeSequence(skills, count)).items;
+
+  const items = sequence.map((item) => ({
+    ...item,
+    initialStatus: 'todo' as const,
+  }));
   const skillTitles = skills.map(
     (slug) => getQuickWritingLessonBySlug(slug)?.title ?? slug
   );
+  const sessionPath = `/app/writing-lessons/practice?${new URLSearchParams({
+    skills: skills.join(','),
+    count: String(count),
+    ...(topic && topicApplies ? { topic } : {}),
+  }).toString()}`;
 
-  return dataResponse({ sequence, skills, skillTitles, count });
+  return dataResponse({
+    title: sessionTitle(skills),
+    skills,
+    skillTitles,
+    items,
+    problemCount: items.length,
+    hasComposition: items.some((item) => item.kind === 'composition'),
+    topic: topicApplies ? topic : null,
+    // The topic was asked for but could not shape this set (it was declined by
+    // the safety screen, or the set includes grammar skills).
+    topicDeclined: Boolean(requestedTopic) && !topicApplies,
+    sessionPath,
+  });
 }
 
-type GenerateActionData = {
-  intent: 'generate-act';
-  lessonSlug: string;
-  lessonTitle: string;
-  questions: ActPracticeQuestion[];
-};
+type PracticeSessionActionData = PracticeRunnerResult | RewriteCheckResult;
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -103,214 +225,151 @@ export async function action({ request }: ActionFunctionArgs) {
   const lessonSlug = String(formData.get('lessonSlug') ?? '');
   const context = getQuickWritingLessonContext(lessonSlug);
   const lesson = getQuickWritingLessonBySlug(lessonSlug);
-  if (!context || lesson?.section !== 'Grammar & Mechanics') {
+  if (!context || !lesson) {
+    throw new Response('Unknown practice skill', { status: 400 });
+  }
+  if (lesson.section === 'Composition' && !isCompositionPracticeEnabled()) {
     throw new Response('Unknown practice skill', { status: 400 });
   }
 
-  // Grading is deterministic and done on the client, so the only server action
-  // is topping up the session with fresh AI questions for a skill.
-  if (intent !== 'generate-act') {
-    throw new Response('Unsupported action', { status: 400 });
+  // A written correction of an ACT sentence on a grammar lesson. Graded by the
+  // same tutor service as composition, grounded in this lesson's skill + rule.
+  if (intent === 'check-rewrite') {
+    if (lesson.section !== 'Grammar & Mechanics') {
+      throw new Response('Only grammar practice takes a rewrite', {
+        status: 400,
+      });
+    }
+    const feedback = await generatePracticeFeedback({
+      lessonTitle: context.title,
+      skill: context.skill,
+      rule: context.rule,
+      exercise: String(formData.get('exercise') ?? ''),
+      instruction: String(formData.get('instruction') ?? ''),
+      response: String(formData.get('response') ?? ''),
+    });
+    return dataResponse<PracticeSessionActionData>({
+      intent: 'check-rewrite',
+      questionId: String(formData.get('questionId') ?? ''),
+      feedback,
+    });
   }
 
-  const requested = Number(formData.get('count') ?? 4);
-  const count = Number.isFinite(requested)
-    ? Math.min(Math.max(Math.trunc(requested), 1), 6)
-    : 4;
-  const exampleSentences = getActPracticeQuestions(lessonSlug)
-    .slice(0, 3)
-    .map((question) => question.sentence);
-  const questions = await generateActPracticeQuestions({
-    lessonSlug,
-    skill: context.skill,
-    lessonTitle: context.title,
-    rule: context.rule,
-    exampleSentences,
-    count,
-  });
+  // Constructed response: the tutor grades the writing so the student can
+  // revise toward mastery, exactly as an assigned composition problem does.
+  // Nothing is persisted — a self-directed set is not assignment progress —
+  // so the set the answer belongs to travels with the request.
+  if (String(formData.get('kind') ?? '') === 'composition') {
+    if (lesson.section !== 'Composition') {
+      throw new Response('Unknown or invalid practice answer', { status: 400 });
+    }
+    const position = Number(formData.get('position'));
+    const safePosition = Number.isFinite(position) ? position : 0;
+    const exercise = String(formData.get('exercise') ?? '');
+    const instruction = String(formData.get('instruction') ?? '');
+    const responseText = String(formData.get('response') ?? '');
 
-  return dataResponse<GenerateActionData>({
-    intent: 'generate-act',
-    lessonSlug,
-    lessonTitle: context.title,
-    questions,
-  });
+    const guardrail = detectPracticeGuardrail({
+      exercise,
+      response: responseText,
+    });
+    if (guardrail) {
+      return dataResponse<PracticeSessionActionData>({
+        kind: 'composition',
+        position: safePosition,
+        feedback: { ...guardrail, degraded: false },
+        recorded: false,
+      });
+    }
+
+    const feedback = await generatePracticeFeedback({
+      lessonTitle: context.title,
+      skill: context.skill,
+      rule: context.rule,
+      exercise,
+      instruction,
+      response: responseText,
+    });
+
+    return dataResponse<PracticeSessionActionData>({
+      kind: 'composition',
+      position: safePosition,
+      feedback,
+      // Not persisted, but it counts on this screen: the revise-and-master
+      // loop is what makes the practice worth doing.
+      recorded: true,
+    });
+  }
+
+  // Multiple choice grades on the client (a deterministic index comparison),
+  // so there is no server intent for it.
+  throw new Response('Unsupported action', { status: 400 });
 }
 
-type SessionItem = {
-  lessonSlug: string;
-  lessonTitle: string;
-  question: ActPracticeQuestion;
-};
-
 export default function WritingPracticeSessionRoute() {
-  const { sequence, skills, skillTitles } = useLoaderData<typeof loader>();
-
-  const initialItems: SessionItem[] = sequence.map((item) => ({
-    lessonSlug: item.lessonSlug,
-    lessonTitle: item.lessonTitle,
-    question: item.question,
-  }));
-
-  const generateFetcher = useFetcher<GenerateActionData>();
-
-  const [items, setItems] = useState<SessionItem[]>(initialItems);
-  const [index, setIndex] = useState(0);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [grade, setGrade] = useState<ActGradeResult | null>(null);
-  // Round-robin over the selected skills when topping up the session.
-  const [nextSkill, setNextSkill] = useState(0);
-
-  const active = items[index] ?? null;
-  const isGenerating = generateFetcher.state !== 'idle';
-  const isGraded = grade !== null;
-
-  useEffect(() => {
-    const generated = generateFetcher.data;
-    if (
-      generated?.intent !== 'generate-act' ||
-      generated.questions.length === 0
-    ) {
-      return;
-    }
-    setItems((current) => {
-      const seen = new Set(current.map((item) => item.question.id));
-      const fresh = generated.questions
-        .filter((question) => !seen.has(question.id))
-        .map((question) => ({
-          lessonSlug: generated.lessonSlug,
-          lessonTitle: generated.lessonTitle,
-          question,
-        }));
-      return fresh.length > 0 ? [...current, ...fresh] : current;
-    });
-  }, [generateFetcher.data]);
-
-  function requestMore() {
-    if (isGenerating || skills.length === 0) return;
-    const slug = skills[nextSkill % skills.length];
-    setNextSkill((current) => current + 1);
-    generateFetcher.submit(
-      { intent: 'generate-act', lessonSlug: slug, count: '4' },
-      { method: 'post' }
-    );
-  }
-
-  function checkAnswer() {
-    if (active === null || selectedIndex === null || grade !== null) return;
-    setGrade(gradeActAnswer(active.question, selectedIndex));
-  }
-
-  function showNext() {
-    if (items.length === 0) return;
-    const next = index + 1;
-    if (next >= items.length - 2) {
-      requestMore();
-    }
-    setIndex(next < items.length ? next : 0);
-    setSelectedIndex(null);
-    setGrade(null);
-  }
+  const {
+    title,
+    skillTitles,
+    items,
+    problemCount,
+    hasComposition,
+    topic,
+    topicDeclined,
+    sessionPath,
+  } = useLoaderData<typeof loader>();
 
   return (
-    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
-      <div className="w-full border-b bg-secondary">
-        <div className="mx-auto w-full max-w-screen-md p-3 sm:p-5">
-          <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2">
-            <Link to="/app/writing-lessons">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to practice
-            </Link>
-          </Button>
-          <p className="text-base font-medium text-primary sm:text-sm">
-            Your practice
-          </p>
-          <h2 className="mt-1">Grammar practice</h2>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {skillTitles.map((title) => (
-              <Badge key={title} variant="secondary" size="sm">
-                {title}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="mx-auto w-full max-w-screen-md px-3 py-8 pb-24 sm:px-5">
-        <Card className="overflow-hidden rounded-2xl border-border/70 shadow-sm">
-          <CardHeader className="border-b bg-muted/40 pb-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <PenLine className="h-4 w-4" />
-                </span>
-                <CardTitle className="text-lg">Try it yourself</CardTitle>
-              </div>
-              {active ? (
-                <span className="text-xs font-medium text-muted-foreground">
-                  Problem {index + 1}
-                </span>
-              ) : null}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4 p-5">
-            {active ? (
-              <div
-                className="space-y-4"
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    checkAnswer();
-                  }
-                }}
-              >
-                <Badge variant="secondary" size="sm" className="w-fit">
-                  {active.lessonTitle}
+    <PracticeRunner
+      eyebrow="Your practice"
+      title={title}
+      instructions={
+        topicDeclined
+          ? 'We kept the standard prompts for this set. Practice is graded on your screen only — nothing here is sent to your teacher.'
+          : 'Practice you gave yourself: same screen as an assigned set, but nothing here is sent to your teacher.'
+      }
+      headerBadges={
+        <>
+          {topic ? (
+            <Badge
+              variant="outline"
+              size="sm"
+              data-testid="composition-topic-active"
+            >
+              Practicing with {topic}
+            </Badge>
+          ) : null}
+          {skillTitles.length > 1
+            ? skillTitles.map((skillTitle) => (
+                <Badge key={skillTitle} variant="outline" size="sm">
+                  {skillTitle}
                 </Badge>
-
-                <ActPracticeQuestionView
-                  question={active.question}
-                  selectedIndex={selectedIndex}
-                  grade={grade}
-                  onSelect={setSelectedIndex}
-                />
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {!isGraded ? (
-                    <Button
-                      type="button"
-                      className="rounded-full"
-                      disabled={selectedIndex === null}
-                      onClick={checkAnswer}
-                    >
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Check my answer
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="rounded-full text-muted-foreground"
-                    onClick={showNext}
-                  >
-                    {isGenerating ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <RotateCcw className="mr-2 h-4 w-4" />
-                    )}
-                    Next problem
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-base text-muted-foreground sm:text-sm">
-                This practice set is empty. Pick a skill to start.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </section>
+              ))
+            : null}
+        </>
+      }
+      problemCount={problemCount}
+      items={items as PracticeRunnerItem[]}
+      hasComposition={hasComposition}
+      backTo="/app/writing-lessons"
+      backLabel="Back to practice"
+      reviewFrom={sessionPath}
+      // Deterministic index grading, and nothing to record: check it here.
+      gradeActOnClient
+      // Spotting the right choice and writing the fix are different skills;
+      // self-directed practice is where a student can drill both.
+      allowRewrite
+      submitLabel="Check my answer"
+      submittingLabel="Checking…"
+      emptyMessage="This practice set is empty. Pick a skill to start."
+      completionHeadline="You’ve finished this practice set."
+      completionExtra={
+        <Button asChild size="sm" data-testid="practice-again">
+          <Link to={sessionPath} reloadDocument>
+            Practice again
+          </Link>
+        </Button>
+      }
+    />
   );
 }
 

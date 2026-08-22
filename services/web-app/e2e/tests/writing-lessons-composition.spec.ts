@@ -172,33 +172,33 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     ).toBeVisible();
   });
 
-  test('keeps Composition lessons out of the ACT practice session', async ({
+  test('builds a self-directed session for either strand', async ({
     page,
     e2eContext,
     signIn,
   }) => {
     await signIn(e2eContext.userEmail, 'johndoe');
 
-    // The self-directed session is ACT multiple choice only. A composition
-    // skill has no ACT items, so the session refuses it rather than building
-    // an empty set — even when the slug is supplied by hand in the URL.
+    // A composition skill builds a constructed-response set: a writing box,
+    // never ACT answer choices.
     await page.goto(
-      '/app/writing-lessons/practice?skills=topic-sentences&count=5'
+      '/app/writing-lessons/practice?skills=topic-sentences&count=3'
     );
-    await expect(page).toHaveURL(/\/app\/writing-lessons$/);
+    await expect(
+      page.getByRole('heading', { name: /problem 1 of 3/i })
+    ).toBeVisible();
+    await expect(page.getByTestId('composition-prompt')).toBeVisible();
+    await expect(page.getByText(/choose the best answer/i)).toHaveCount(0);
 
-    // A grammar skill builds the session as normal.
+    // A grammar skill builds the multiple-choice set as normal.
     await page.goto(
       '/app/writing-lessons/practice?skills=fixing-comma-splices&count=5'
     );
     await expect(page.getByText(/choose the best answer/i)).toBeVisible();
 
-    // Mixing the two keeps only the grammar half.
-    await page.goto(
-      '/app/writing-lessons/practice?skills=topic-sentences,fixing-comma-splices&count=5'
-    );
-    await expect(page.getByText(/choose the best answer/i)).toBeVisible();
-    await expect(page.getByText('Topic Sentences')).toHaveCount(0);
+    // A skill that does not exist can never build a set.
+    await page.goto('/app/writing-lessons/practice?skills=not-a-lesson');
+    await expect(page).toHaveURL(/\/app\/writing-lessons$/);
   });
 
   test('lets a student make the practice about their own interest', async ({
@@ -212,25 +212,32 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     const panel = page.getByRole('complementary');
     await expect(panel.getByTestId('composition-topic-picker')).toBeVisible();
 
-    // Name a topic. E2E runs offline (no ANTHROPIC_API_KEY), so AI generation
-    // degrades to the deterministic topic templates — choice still works.
+    // Name a topic before starting. E2E runs offline (no ANTHROPIC_API_KEY),
+    // so AI generation degrades to the deterministic topic templates — choice
+    // still works.
     await panel.getByTestId('composition-topic-input').fill('skateboarding');
     await panel.getByRole('button', { name: /make it mine/i }).click();
 
     const activeTopic = panel.getByTestId('composition-topic-active');
     await expect(activeTopic).toBeVisible();
     await expect(activeTopic).toContainText('skateboarding');
-    // The prompt itself is now built around the student's interest.
-    await expect(
-      panel.getByText(/one opinion you hold about skateboarding/i)
-    ).toBeVisible();
 
-    // And they can drop back to the standard prompts at any time.
+    // They can drop back to the standard prompts before starting.
     await panel.getByRole('button', { name: /use standard prompts/i }).click();
     await expect(panel.getByTestId('composition-topic-picker')).toBeVisible();
+
+    // Name it again and start: the set itself is built around their interest.
+    await panel.getByTestId('composition-topic-input').fill('skateboarding');
+    await panel.getByRole('button', { name: /make it mine/i }).click();
+    await panel.getByTestId('start-practice').click();
+
+    await expect(page).toHaveURL(/topic=skateboarding/);
+    await expect(page.getByTestId('composition-topic-active')).toContainText(
+      'skateboarding'
+    );
     await expect(
-      panel.getByText(/one opinion you hold about skateboarding/i)
-    ).toHaveCount(0);
+      page.getByText(/one opinion you hold about skateboarding/i)
+    ).toBeVisible();
   });
 
   test('lets a student write a topic sentence and get tutor feedback', async ({
@@ -247,29 +254,45 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
 
     const panel = page.getByRole('complementary');
     await expect(panel.getByText(/try it yourself/i)).toBeVisible();
+    await panel.getByTestId('start-practice').click();
+
     // Constructed response, not multiple choice: there is a writing box and no
-    // ACT answer choices.
-    await expect(panel.getByText(/choose the best answer/i)).toHaveCount(0);
-    const response = panel.getByTestId('composition-response');
+    // ACT answer choices — the same screen an assigned composition set uses.
+    await expect(
+      page.getByRole('heading', { name: /problem 1 of 3/i })
+    ).toBeVisible();
+    await expect(page.getByText(/choose the best answer/i)).toHaveCount(0);
+    const response = page.getByTestId('assigned-composition-response');
     await expect(response).toBeVisible();
 
-    // A guardrail catches a blank submission before it ever reaches the tutor.
-    await panel.getByRole('button', { name: /check my answer/i }).click();
-    const result = page.getByTestId('composition-result');
-    await expect(result).toBeVisible();
-    await expect(result).toContainText(/add your revision/i);
+    // Nothing to check yet, so there is nothing to submit.
+    await expect(
+      page.getByRole('button', { name: /check my answer/i })
+    ).toBeDisabled();
 
-    // A real attempt gets real (here, offline-degraded) tutor feedback.
+    // A real attempt gets real (here, offline-degraded) tutor feedback, and
+    // the revise-and-master loop that assigned practice runs.
     await response.fill(
       'The cafeteria menu punishes the students who most need a real lunch.'
     );
-    await panel.getByRole('button', { name: /check my answer/i }).click();
-    await expect(result).toBeVisible();
-    await expect(result).toContainText(/tutor is offline/i);
+    await page.getByRole('button', { name: /check my answer/i }).click();
+    const feedback = page.getByTestId('assigned-composition-feedback');
+    await expect(feedback.first()).toBeVisible();
+    await expect(feedback.first()).toContainText(/tutor is offline/i);
+    await expect(
+      page.getByTestId('composition-draft-history').getByText('Draft 1')
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /revise & resubmit/i })
+    ).toBeVisible();
+    // Nothing was mastered, so the set's progress does not move.
+    await expect(page.getByText(/0 of 3 mastered/i)).toBeVisible();
 
     // The student can move on to a fresh prompt without dead-ending.
-    await panel.getByRole('button', { name: /new prompt/i }).click();
-    await expect(page.getByTestId('composition-result')).toHaveCount(0);
-    await expect(panel.getByTestId('composition-response')).toHaveValue('');
+    await page.getByRole('button', { name: /skip for now/i }).click();
+    await expect(
+      page.getByRole('heading', { name: /problem 2 of 3/i })
+    ).toBeVisible();
+    await expect(page.getByTestId('composition-draft-history')).toHaveCount(0);
   });
 });

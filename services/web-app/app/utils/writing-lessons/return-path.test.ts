@@ -9,7 +9,27 @@ describe('safeAssignedReturnPath', () => {
     ).toBe('/app/writing-lessons/assigned/clx123_ab-CD');
   });
 
-  test('rejects anything that is not an assigned-practice path', () => {
+  test('accepts a self-directed session path with its set in the query', () => {
+    expect(safeAssignedReturnPath('/app/writing-lessons/practice')).toBe(
+      '/app/writing-lessons/practice'
+    );
+    expect(
+      safeAssignedReturnPath(
+        '/app/writing-lessons/practice?skills=fixing-comma-splices,passive-voice&count=10'
+      )
+    ).toBe(
+      '/app/writing-lessons/practice?skills=fixing-comma-splices,passive-voice&count=10'
+    );
+    expect(
+      safeAssignedReturnPath(
+        '/app/writing-lessons/practice?skills=topic-sentences&count=5&topic=skateboarding'
+      )
+    ).toBe(
+      '/app/writing-lessons/practice?skills=topic-sentences&count=5&topic=skateboarding'
+    );
+  });
+
+  test('rejects anything that is not a practice path', () => {
     expect(safeAssignedReturnPath(null)).toBeNull();
     expect(safeAssignedReturnPath('')).toBeNull();
     expect(safeAssignedReturnPath('/app/writing-lessons')).toBeNull();
@@ -19,6 +39,12 @@ describe('safeAssignedReturnPath', () => {
     expect(safeAssignedReturnPath('//evil.example.com')).toBeNull();
     expect(
       safeAssignedReturnPath('/app/writing-lessons/assigned/a/../../admin')
+    ).toBeNull();
+    expect(
+      safeAssignedReturnPath('/app/writing-lessons/practice/../../admin')
+    ).toBeNull();
+    expect(
+      safeAssignedReturnPath('/app/writing-lessons/practice?next=//evil.test')
     ).toBeNull();
   });
 });

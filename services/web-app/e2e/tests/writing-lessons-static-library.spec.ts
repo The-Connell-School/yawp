@@ -83,11 +83,11 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await expect(lessonLink).toBeHidden();
   });
 
-  // KNOWN GAP, not a flake: the student "Create practice" builder is absent
+  // KNOWN GAP, not a flake: the multi-skill "Create practice" builder is absent
   // from the practice index. It was dropped when this branch merged main's
-  // redesigned index route, which left /app/writing-lessons/practice with no
-  // entry point in the UI. Restore the builder (or retire this test) — the
-  // session route itself is covered in writing-lessons-composition.spec.ts.
+  // redesigned index route. Single-skill sessions are reachable — every lesson
+  // page starts one — so what is missing is only the builder that mixes several
+  // skills into one set. Restore it, or retire this test.
   test.fixme('lets a student create their own mixed practice set', async ({
     page,
     e2eContext,
@@ -152,18 +152,26 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await expect(
       page.getByRole('heading', { name: 'Revising for Wordiness' })
     ).toBeVisible();
-    await expect(page.getByText(/try it yourself/i)).toBeVisible();
 
-    // The self-serve panel now serves ACT English–style multiple choice: a
-    // sentence with an underlined portion and four answer choices.
+    // The lesson hands the student the real practice screen rather than a
+    // preview panel: one button, and they are working the same set layout an
+    // assignment would put in front of them.
     const panel = page.getByRole('complementary');
-    await expect(panel.getByText(/choose the best answer/i)).toBeVisible();
+    await expect(panel.getByText(/try it yourself/i)).toBeVisible();
+    await panel.getByTestId('start-practice').click();
+
+    await expect(
+      page.getByRole('heading', { name: /problem 1 of 5/i })
+    ).toBeVisible();
+    // ACT English-style multiple choice: a sentence with an underlined portion
+    // and four answer choices.
+    await expect(page.getByText(/choose the best answer/i)).toBeVisible();
     // The first offline question drills a padded opening phrase.
-    await expect(panel.getByText(/committee has not reached/i)).toBeVisible();
+    await expect(page.getByText(/committee has not reached/i)).toBeVisible();
 
     // Pick the concise correct answer and check — grading is deterministic and
     // works with no ANTHROPIC_API_KEY (E2E runs offline against the static bank).
-    await panel.getByRole('radio', { name: /currently/i }).check();
+    await page.getByRole('radio', { name: /currently/i }).check();
     await page.getByRole('button', { name: /check my answer/i }).click();
 
     const result = page.getByTestId('act-result');
@@ -171,16 +179,32 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await expect(result.getByText(/correct!/i)).toBeVisible();
     await expect(result.getByText(/currently/i)).toBeVisible();
 
-    // "New question" clears the result and serves a fresh item without ever
-    // dead-ending. AI generation degrades to an empty batch offline, so the
-    // panel cycles the static bank — but it must always show a question.
-    const questionCounter = panel.getByText(/^Question \d+$/);
-    for (let i = 0; i < 8; i++) {
-      await page.getByRole('button', { name: /new question/i }).click();
+    // The set keeps its own progress and works through to the end without ever
+    // dead-ending — the offline bank is smaller than the set, so it cycles.
+    await expect(page.getByText(/1 of 5 done/i)).toBeVisible();
+    for (let problem = 2; problem <= 5; problem++) {
+      await page.getByRole('button', { name: /next problem/i }).click();
+      await expect(
+        page.getByRole('heading', {
+          name: new RegExp(`problem ${problem} of 5`, 'i'),
+        })
+      ).toBeVisible();
       await expect(page.getByTestId('act-result')).toHaveCount(0);
-      await expect(questionCounter).toBeVisible();
-      await expect(panel.getByText(/choose the best answer/i)).toBeVisible();
+      await expect(page.getByText(/choose the best answer/i)).toBeVisible();
+
+      // Each problem has to be answered before the set moves on.
+      await page.getByRole('radio').first().check();
+      await page.getByRole('button', { name: /check my answer/i }).click();
+      await expect(page.getByTestId('act-result')).toBeVisible();
+      await expect(
+        page.getByText(new RegExp(`${problem} of 5 done`, 'i'))
+      ).toBeVisible();
     }
+
+    // Finishing the last problem closes the set out.
+    await page.getByRole('button', { name: /finish/i }).click();
+    await expect(page.getByText(/finished this practice set/i)).toBeVisible();
+    await expect(page.getByTestId('practice-again')).toBeVisible();
   });
 
   test('lets a teacher assign a lesson to one of their classes', async ({
@@ -217,16 +241,17 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/writing-lessons/fixing-comma-splices');
 
-    // Teachers can test-drive the lesson, not just assign it: the same ACT
-    // panel students get sits alongside the assign panel, labelled as a
-    // preview because a teacher is evaluating it rather than practising.
+    // Teachers can test-drive the lesson, not just assign it — and what they
+    // get is the students' screen, labelled as a preview because a teacher is
+    // evaluating it rather than practising.
     const panel = page.getByRole('complementary');
     await expect(panel.getByText(/preview the practice/i)).toBeVisible();
-    await expect(panel.getByText(/choose the best answer/i)).toBeVisible();
+    await panel.getByTestId('start-practice').click();
+    await expect(page.getByText(/choose the best answer/i)).toBeVisible();
 
     // The first comma-splice item is fixed with a semicolon. Select it and
     // press Enter to check — no button click needed.
-    const correct = panel.getByRole('radio', { name: /week; students/i });
+    const correct = page.getByRole('radio', { name: /week; students/i });
     await correct.check();
     await correct.press('Enter');
 

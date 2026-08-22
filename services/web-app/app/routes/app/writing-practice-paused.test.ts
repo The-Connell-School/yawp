@@ -25,6 +25,7 @@ const requireMembership = mock();
 const classFindMany = mock();
 const createWritingPracticeAssignmentForClasses = mock();
 const buildActPracticeSequence = mock();
+const buildMixedGeneratedPracticeSequence = mock();
 const getAssignedPracticeForStudentById = mock();
 const getOrCreateStudentPracticeSet = mock();
 const getWritingPracticeResultsForTeacher = mock();
@@ -46,6 +47,7 @@ mock.module('~/utils/db.server', () => ({
 // under test import has to be listed here or the import fails outright.
 mock.module('~/utils/writing-lessons/practice-assignments.server', () => ({
   buildActPracticeSequence,
+  buildMixedGeneratedPracticeSequence,
   createWritingPracticeAssignmentForClasses,
   getAssignedPracticeForStudentById,
   getOrCreateStudentPracticeSet,
@@ -61,8 +63,6 @@ const { FLAT_SIDEBAR_SECTIONS, getVisibleSidebarSections } =
 const { loader: indexLoader } =
   await import('~/routes/app.writing-lessons._index/route');
 const { loader: lessonLoader } =
-  await import('~/routes/app.writing-lessons.$lessonSlug/route');
-const { action: lessonAction } =
   await import('~/routes/app.writing-lessons.$lessonSlug/route');
 const { action: assignAction } =
   await import('~/routes/app.writing-lessons.assign/route');
@@ -129,6 +129,7 @@ describe('Writing Practice routes refuse while paused', () => {
     classFindMany.mockReset();
     createWritingPracticeAssignmentForClasses.mockReset();
     buildActPracticeSequence.mockReset();
+    buildMixedGeneratedPracticeSequence.mockReset();
     getAssignedPracticeForStudentById.mockReset();
     getOrCreateStudentPracticeSet.mockReset();
     getWritingPracticeResultsForTeacher.mockReset();
@@ -138,6 +139,10 @@ describe('Writing Practice routes refuse while paused', () => {
     requireUserId.mockResolvedValue('user-1');
     classFindMany.mockResolvedValue([{ id: 'class-1' }]);
     buildActPracticeSequence.mockReturnValue([]);
+    buildMixedGeneratedPracticeSequence.mockResolvedValue({
+      items: [],
+      source: 'static',
+    });
   });
 
   test('the library index refuses for a student', async () => {
@@ -191,28 +196,6 @@ describe('Writing Practice routes refuse while paused', () => {
     ).rejects.toMatchObject({ status: 302 });
   });
 
-  test('a lesson action refuses before tutor work', async () => {
-    requireMembership.mockResolvedValue({
-      id: 'student-1',
-      role: 'STUDENT',
-      organization: { id: 'org-1', writingPracticeEnabled: false },
-    });
-
-    await expect(
-      lessonAction({
-        request: new Request(
-          'https://example.test/app/writing-lessons/fixing-comma-splices',
-          {
-            method: 'POST',
-            body: new URLSearchParams([['intent', 'unsupported']]),
-          }
-        ),
-        params: { lessonSlug: 'fixing-comma-splices' },
-        context: {} as never,
-      } as any)
-    ).rejects.toMatchObject({ status: 404 });
-  });
-
   test('the self-directed session loader and action refuse', async () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
@@ -229,7 +212,7 @@ describe('Writing Practice routes refuse while paused', () => {
         context: {} as never,
       } as any)
     ).rejects.toMatchObject({ status: 302 });
-    expect(buildActPracticeSequence).not.toHaveBeenCalled();
+    expect(buildMixedGeneratedPracticeSequence).not.toHaveBeenCalled();
 
     await expect(
       practiceAction({
@@ -237,7 +220,10 @@ describe('Writing Practice routes refuse while paused', () => {
           'https://example.test/app/writing-lessons/practice',
           {
             method: 'POST',
-            body: new URLSearchParams([['intent', 'unsupported']]),
+            body: new URLSearchParams([
+              ['intent', 'check-rewrite'],
+              ['lessonSlug', 'fixing-comma-splices'],
+            ]),
           }
         ),
         params: {},
@@ -403,8 +389,9 @@ describe('Composition routes refuse while their rollout flag is off', () => {
           {
             method: 'POST',
             body: new URLSearchParams([
-              ['intent', 'generate-act'],
+              ['kind', 'composition'],
               ['lessonSlug', 'topic-sentences'],
+              ['response', 'a real attempt'],
             ]),
           }
         ),
