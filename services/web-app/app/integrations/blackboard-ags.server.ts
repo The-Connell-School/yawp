@@ -280,15 +280,25 @@ export async function maybePostGradeToBlackboard({
     String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(/\/$/, '');
   if (!derivedOrigin) return;
 
-  const lineItemUrl =
+  // Build URLs relative to the internal mock upstream when available,
+  // else route through our same-origin proxy at /dev/blackboard-lti-mock.
+  const mockInternal = String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(/\/$/, '');
+  const toMockUrl = (path: string) => {
+    if (mockInternal) return `${mockInternal}${path}`;
+    // same-origin proxy
+    const proxyBase = `${derivedOrigin}/dev/blackboard-lti-mock`;
+    return `${proxyBase}${path}`;
+  };
+  const lineItemPath =
     ags?.lineitem && isUrl(ags.lineitem)
-      ? `${ags.lineitem.replace(/\/$/, '')}/scores`
-      : `${derivedOrigin}/learn/api/v1/lti/courses/${encodeURIComponent(
+      ? new URL(ags.lineitem).pathname.replace(/\/$/, '') + '/scores'
+      : `/learn/api/v1/lti/courses/${encodeURIComponent(
           contextId
         )}/lineItems/${encodeURIComponent(
           (ags?.lineitem?.split('/').pop() || '_99_1_grade')
         )}/scores`;
-  const tokenEndpoint = `${derivedOrigin}/api/v1/gateway/oauth2/jwttoken`;
+  const lineItemUrl = toMockUrl(lineItemPath);
+  const tokenEndpoint = toMockUrl('/api/v1/gateway/oauth2/jwttoken');
   const userId = studentMockUserId || claims.sub || 'bb-user-student';
 
   await postScoreToAgs({
