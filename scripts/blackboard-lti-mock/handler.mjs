@@ -235,9 +235,11 @@ function handleDevLaunch(
   });
   const hintId = `hint_${randomUUID()}`;
   store.launchHints.set(hintId, profile);
-  // Lock to the current request URL's origin (already computed from forwarded headers)
-  // and preserve its scheme (https on previews, http in local tests).
-  const hostOrigin = url.origin;
+  // Prefer preview public host when forwarded; otherwise use the Tool's configured login origin for local tests.
+  const xfHost = request.headers['x-forwarded-host'];
+  const hostOrigin = xfHost
+    ? `https://${xfHost}`
+    : new URL(config.toolOidcLoginUrl).origin;
   const login = new URL('/lti/login', hostOrigin);
   login.searchParams.set('iss', config.issuer);
   login.searchParams.set('login_hint', profile.user.sub);
