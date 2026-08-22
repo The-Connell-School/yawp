@@ -91,11 +91,7 @@ async function handlePost(request: Request) {
           title:
             payload?.['https://purl.imsglobal.org/spec/lti/claim/resource_link']
               ?.title || 'Yawp Assignment',
-          url: `${previewOrigin}/lti/login?target_link_uri=${encodeURIComponent(`${previewOrigin}/lti/launch`)}&client_id=${encodeURIComponent(
-            clientId
-          )}&iss=${encodeURIComponent(
-            'https://blackboard.com'
-          )}`,
+          url: `${previewOrigin}/lti/launch`,
           lineItem: {
             // Blackboard maps these at placement-time; here we express intent only.
             label: 'Yawp Assignment',
