@@ -54,8 +54,10 @@ const fetcher = {
 const stateFor = (
   entries: [id: string, name: string, submitted: boolean][],
   viewerMembershipId: string,
-  submittedAt: string | null = null
+  submittedAt: string | null = null,
+  submittedByTeacherName: string | null = null
 ) => ({
+  submittedByTeacherName,
   readiness: summarizeGroupSubmitReadiness({
     members: entries.map(([membershipId, name, submitted]) => ({
       membershipId,
@@ -257,6 +259,31 @@ describe('GroupSubmitBanner', () => {
 
     expect(container.textContent).toContain('in this group');
     expect(container.textContent).not.toContain('your group');
+  });
+
+  test('says when a teacher submitted the draft for the group', () => {
+    // The one case where the draft went in without the group agreeing. Reading
+    // "Submitted to your teacher" here would hide who ended their editing.
+    const container = render(
+      <GroupSubmitBanner
+        state={stateFor(
+          [
+            ['m1', 'Sam Reyes', true],
+            ['m2', 'Taylor Nguyen', false],
+          ],
+          'm2',
+          '2026-08-22T11:00:00.000Z',
+          'Ms Okonkwo'
+        )}
+      />
+    );
+
+    expect(container.textContent).toContain(
+      'Ms Okonkwo submitted this draft for your group'
+    );
+    expect(container.textContent).toContain(
+      'What your group had written by then is what your teacher has'
+    );
   });
 
   test('stays out of the way on a draft with one writer', () => {

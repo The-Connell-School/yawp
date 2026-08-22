@@ -979,9 +979,38 @@ submitted yet — 1 of 3 in your group have pressed Submit" and names who is
 outstanding, and the roster marks which of those people is you. After pressing,
 the same place offers "Undo my submit" until the group is complete.
 
-**Still open:** nothing tells the group they are waiting when they are not
-looking at the page. A nudge — a notification, or a teacher-side view of who is
-outstanding — is the obvious follow-up, and neither exists yet.
+### The way out: a teacher may submit for the group — 2026-08-22
+
+The rule's failure mode is a group waiting on one student who is absent, has
+given up, or simply never presses. Nobody inside the group can resolve that, and
+the deadline does not move. The teacher can.
+
+- On the group-draft page: how far the group has got, who is outstanding by
+  name, and a "Submit for this group" button behind a confirmation that names
+  those students.
+- `Submission.submittedByTeacherMembershipId` (migration
+  `20260822140000_teacher_submit_for_group`, additive and nullable) records it,
+  following the `gradedBy`/`unsubmittedBy` pattern already on that table.
+- The group's own page then reads "Ms Okonkwo submitted this draft for your
+  group at …" rather than the ordinary confirmation. A draft that went in
+  without them is something students should learn from the page, not from a
+  grade.
+- The override never marks a member as having pressed. The marks are the
+  students' agreement, and recording a teacher's decision as one would misreport
+  who agreed. The journal keeps how far the group had got.
+- The student endpoint is unchanged and still excludes teachers: the override is
+  a separate action on the teacher's own page, so the two paths cannot be
+  confused for each other.
+
+Note the wording is careful about what it promises: the room stays open after a
+submission, so what is handed in is the snapshot taken at that moment, not a
+lock on further typing. Locking the room on submit is a separate question and is
+not built.
+
+**Still open:** nothing tells a group they are being waited on when they are not
+looking at the page, and nothing tells a teacher that a group is stuck without
+their opening the group-draft page. A nudge — a notification, or an outstanding
+column on the groups board — is the obvious follow-up, and neither exists yet.
 
 ## Open questions
 

@@ -28,6 +28,11 @@ import {
 } from '~/domain/collaboration/member-grades.server';
 import { suggestMemberGrades } from '~/domain/collaboration/member-grade-suggestions.server';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
+import {
+  GroupSubmitError,
+  readGroupSubmitState,
+  submitGroupDraft,
+} from '~/domain/collaboration/submit.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -35,6 +40,7 @@ import {
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 import { ContributionPanel } from './contribution-panel';
+import { GroupSubmitStatusPanel } from './group-submit-status-panel';
 
 /**
  * The teacher's view of one group's draft: what it says, and who wrote it.
@@ -108,16 +114,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const roster = (doc.group?.members ?? []).map((member) => ({
     membershipId: member.membershipId,
-    name:
-      member.membership.user.name?.trim() || member.membership.user.email,
+    name: member.membership.user.name?.trim() || member.membership.user.email,
   }));
 
-  const [breakdown, grades, groupGrade, comments] = await Promise.all([
-    buildContributionBreakdown({ documentId: doc.id, roster }),
-    doc.group ? readMemberGrades({ groupId: doc.group.id }) : new Map(),
-    readGroupGrade({ documentId: doc.id }),
-    listDraftComments({ documentId: doc.id, documentLevelOnly: true }),
-  ]);
+  const [breakdown, grades, groupGrade, comments, submitState] =
+    await Promise.all([
+      buildContributionBreakdown({ documentId: doc.id, roster }),
+      doc.group ? readMemberGrades({ groupId: doc.group.id }) : new Map(),
+      readGroupGrade({ documentId: doc.id }),
+      listDraftComments({ documentId: doc.id, documentLevelOnly: true }),
+      // How far the group has got with submitting. Without this the teacher can
+      // see a draft that has not come in and has no way to tell whether the
+      // group is still writing or waiting on one student who never pressed.
+      readGroupSubmitState({
+        documentId: doc.id,
+        viewerMembershipId: profile.id,
+      }),
+    ]);
 
   return dataResponse({
     documentId: doc.id,
@@ -129,6 +142,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     // `??` would let a blank title through.
     title: doc.assignment?.title?.trim() || doc.title?.trim() || 'Shared draft',
     groupLabel: doc.group?.label ?? 'Group',
+    submitState,
     backTo: doc.group?.classAssignmentId
       ? `/app/class-assignments/${doc.group.classAssignmentId}/groups`
       : '/app',
@@ -196,6 +210,53 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
+
+  // Submitting for the group.
+  //
+  // The escape hatch for the every-member rule: a group waiting on one student
+  // who never presses has nobody inside it who can resolve that, and a deadline
+  // does not wait. Recorded rather than silent — the submission names the
+  // teacher who did it and the group's page tells them so, because a draft that
+  // went in without them is something they should learn from the page rather
+  // than from a grade.
+  if (intent === 'submit-for-group') {
+    const submittable = await prisma.document.findFirst({
+      where: { id: params.documentId },
+      select: { id: true, title: true, revision: true, html: true, text: true },
+    });
+
+    if (!submittable) {
+      return dataResponse(
+        { success: false, message: 'Draft not found.' },
+        { status: 404 }
+      );
+    }
+
+    try {
+      const result = await submitGroupDraft({
+        document: submittable,
+        userId,
+        membershipId: profile.id,
+        submittedByTeacherMembershipId: profile.id,
+      });
+
+      return dataResponse({
+        success: true,
+        message:
+          result.status === 'already-submitted'
+            ? 'This group had already submitted.'
+            : 'Submitted for the group. They will see that you did it.',
+      });
+    } catch (error) {
+      if (error instanceof GroupSubmitError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 400 }
+        );
+      }
+      throw error;
+    }
+  }
 
   // Commenting is the teacher's whole channel into a group's draft: they never
   // write in it, so this is how they say anything at all about the work.
@@ -340,17 +401,17 @@ export default function GroupDraftRoute() {
         </header>
 
         <div className="grid gap-6">
+          <GroupSubmitStatusPanel
+            documentId={data.documentId}
+            state={data.submitState}
+          />
           <ContributionPanel
             breakdown={data.breakdown}
             grades={data.grades}
             groupGrade={data.groupGrade}
           />
           {/* The teacher writes here; the group replies from their own page. */}
-          <DraftCommentThread
-            comments={data.comments}
-            canComment
-            canReply
-          />
+          <DraftCommentThread comments={data.comments} canComment canReply />
         </div>
       </div>
     </div>

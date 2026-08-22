@@ -23,6 +23,10 @@ import {
  *   the draft, so the first press must not be able to do that to the rest of the
  *   group: a press marks one member, and the press that completes the set is the
  *   one that creates the `Submission`. Before that, nothing reaches the teacher.
+ *   The one exception is the teacher, who may submit for a group that is stuck on
+ *   a member who never presses — the rule needs a way out, and nobody inside the
+ *   group has one. It is recorded rather than silent: the submission says which
+ *   teacher did it, and the group's page tells them so.
  * - **A press is reversible until then.** A student who pressed too early can
  *   take it back while the group is still waiting on someone, which is the only
  *   way out that does not involve a teacher.
@@ -110,13 +114,18 @@ export async function readGroupSubmitState({
   readiness: GroupSubmitReadiness;
   submittedAt: string | null;
   submissionId: string | null;
+  submittedByTeacherName: string | null;
 }> {
   const [group, submission] = await Promise.all([
     loadGroup(documentId),
     prisma.submission.findFirst({
       where: { documentId, unsubmittedAt: null },
       orderBy: { submittedAt: 'desc' },
-      select: { id: true, submittedAt: true },
+      select: {
+        id: true,
+        submittedAt: true,
+        submittedByTeacher: { select: { user: { select: { name: true } } } },
+      },
     }),
   ]);
 
@@ -124,6 +133,11 @@ export async function readGroupSubmitState({
     readiness: readinessOf(group, viewerMembershipId),
     submittedAt: submission?.submittedAt?.toISOString() ?? null,
     submissionId: submission?.id ?? null,
+    // Named, not just flagged: "your teacher submitted this" is a different
+    // sentence from "Ms Okonkwo submitted this for your group", and the second
+    // is the one a student can act on.
+    submittedByTeacherName:
+      submission?.submittedByTeacher?.user.name?.trim() || null,
   };
 }
 
@@ -167,6 +181,7 @@ export async function submitGroupDraft({
   document,
   userId,
   membershipId,
+  submittedByTeacherMembershipId = null,
   now = new Date(),
 }: {
   document: {
@@ -178,6 +193,12 @@ export async function submitGroupDraft({
   };
   userId: string;
   membershipId: string;
+  /**
+   * Set when a teacher is submitting for the group rather than a member
+   * pressing. Skips the every-member requirement — that is the whole point of
+   * the override — and is written onto the submission so the group is told.
+   */
+  submittedByTeacherMembershipId?: string | null;
   now?: Date;
 }): Promise<GroupSubmitResult> {
   // An existing submission wins. Checked before anything is written so a second
@@ -225,25 +246,32 @@ export async function submitGroupDraft({
     throw new GroupSubmitError('Cannot submit an empty draft.');
   }
 
+  const byTeacher = Boolean(submittedByTeacherMembershipId);
+
   // Record this member's press. Filtered through the group's relation rather
   // than a looked-up id so the press is one statement, and `submittedAt: null`
   // keeps a second press from moving the timestamp: the roster should show when
   // someone committed, not when they last clicked.
-  await prisma.documentGroupMember.updateMany({
-    where: {
-      group: { is: { documentId: document.id } },
-      membershipId,
-      removedAt: null,
-      submittedAt: null,
-    },
-    data: { submittedAt: now },
-  });
+  //
+  // Not for a teacher: the marks are the students' agreement, and recording an
+  // override as a press would misreport who agreed to hand this in.
+  if (!byTeacher) {
+    await prisma.documentGroupMember.updateMany({
+      where: {
+        group: { is: { documentId: document.id } },
+        membershipId,
+        removedAt: null,
+        submittedAt: null,
+      },
+      data: { submittedAt: now },
+    });
+  }
 
   const readiness = readinessOf(await loadGroup(document.id), membershipId);
 
   // Still someone to hear from. Nothing is written beyond this member's mark, so
   // the teacher sees no submission and the group keeps writing.
-  if (!readiness.everyoneSubmitted) {
+  if (!byTeacher && !readiness.everyoneSubmitted) {
     return {
       status: 'waiting',
       submissionId: null,
@@ -256,7 +284,7 @@ export async function submitGroupDraft({
   const journal = await prisma.documentWriteJournal.create({
     data: {
       eventType: 'document.submit',
-      source: 'collab-submit',
+      source: byTeacher ? 'collab-submit-teacher' : 'collab-submit',
       status: 'pending',
       userId,
       // Whoever completed the set; the marks on the group say who else agreed.
@@ -271,10 +299,13 @@ export async function submitGroupDraft({
       metadata: {
         source: 'collab',
         submittedAt: now.toISOString(),
-        // The whole group's agreement, recorded at the moment it completed.
-        submittedByMembershipIds: readiness.members.map(
-          (member) => member.membershipId
-        ),
+        // Who had agreed at the moment this was written. On a member's press
+        // that is the whole group; on a teacher's override it is however far the
+        // group had got, which is the part worth keeping.
+        submittedByMembershipIds: readiness.members
+          .filter((member) => member.submitted)
+          .map((member) => member.membershipId),
+        submittedByTeacherMembershipId,
       },
     },
   });
@@ -305,6 +336,7 @@ export async function submitGroupDraft({
           html,
           text,
           submittedAt: now,
+          submittedByTeacherMembershipId,
         },
         select: { id: true },
       });

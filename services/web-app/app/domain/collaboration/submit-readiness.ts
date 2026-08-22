@@ -135,3 +135,39 @@ export function describeGroupSubmitProgress(
 
   return `${count} in your group have submitted — nothing goes to your teacher until ${waitingLabel} press Submit as well.`;
 }
+
+/**
+ * What the teacher's page says about a group that has not submitted.
+ *
+ * Names, not a count: "waiting on Devon" is something a teacher can act on in
+ * the next thirty seconds, and "1 of 2" is not.
+ */
+export function describeGroupSubmitWaiting(waitingNames: string[]): string {
+  if (waitingNames.length === 0) {
+    return 'Nobody in this group has pressed Submit yet.';
+  }
+  return `Waiting on ${joinNames(waitingNames)}. A shared draft goes in only once every member has pressed.`;
+}
+
+/**
+ * What a teacher is asked to confirm before submitting for a group.
+ *
+ * Names who has not pressed, so the override is a decision about a specific
+ * situation rather than a generic button — and says plainly what it costs the
+ * students, because it ends their editing and they will be told who did it.
+ */
+export function describeTeacherSubmitConfirmation(
+  waitingNames: string[]
+): string {
+  const who =
+    waitingNames.length === 0
+      ? 'Nobody in this group has pressed Submit.'
+      : `${joinNames(waitingNames)} ${
+          waitingNames.length === 1 ? 'has' : 'have'
+        } not pressed Submit.`;
+
+  // Deliberately not "this ends their editing": the room stays open after a
+  // submission, and what is graded is the snapshot taken now. Saying otherwise
+  // would be a promise the page does not keep.
+  return `${who} What the group has written so far is what gets handed in, and they will see that you submitted it for them.`;
+}

@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   describeGroupSubmitProgress,
+  describeGroupSubmitWaiting,
+  describeTeacherSubmitConfirmation,
   summarizeGroupSubmitReadiness,
   type GroupSubmitMemberInput,
 } from './submit-readiness';
@@ -210,5 +212,34 @@ describe('describeGroupSubmitProgress', () => {
     );
 
     expect(sentence).not.toMatch(/1 of 1/);
+  });
+});
+
+describe('what the teacher is told and asked', () => {
+  test('names who the group is waiting on, rather than counting them', () => {
+    // "Waiting on Devon" is something a teacher can act on now; "1 of 2" is not.
+    expect(describeGroupSubmitWaiting(['Devon', 'Maya'])).toContain(
+      'Devon and Maya'
+    );
+  });
+
+  test('says when nobody has pressed at all', () => {
+    expect(describeGroupSubmitWaiting([])).toMatch(/nobody/i);
+  });
+
+  test('the confirmation names the students who have not pressed', () => {
+    const sentence = describeTeacherSubmitConfirmation(['Devon']);
+
+    expect(sentence).toContain('Devon has not pressed Submit');
+  });
+
+  test('the confirmation says what it costs the group', () => {
+    // Two things a teacher should not discover afterwards: what gets handed in
+    // is the draft as it stands now, and the group is told who submitted it.
+    const sentence = describeTeacherSubmitConfirmation(['Devon', 'Maya']);
+
+    expect(sentence).toMatch(/what the group has written so far/i);
+    expect(sentence).toMatch(/see that you submitted it for them/i);
+    expect(sentence).toContain('Devon and Maya have not pressed');
   });
 });

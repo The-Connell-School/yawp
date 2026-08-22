@@ -857,6 +857,7 @@ model OrgMembership {
   pasteAlerts                       PasteAlert[]
   submissionsGraded                 Submission[]                   @relation("SubmissionGradedBy")
   submissionsUnsubmitted            Submission[]                   @relation("SubmissionUnsubmittedBy")
+  submissionsSubmittedForGroup      Submission[]                   @relation("SubmissionSubmittedByTeacher")
   submissionComments                SubmissionComment[]            @relation("SubmissionCommentProfile")
   ownedAssignmentTypes              AssignmentType[]               @relation("AssignmentTypeOwner")
   classesAsTeacher                  Class[]                        @relation("ClassTeachers")
@@ -1218,6 +1219,13 @@ model Submission {
   unsubmittedAt             DateTime?                       @db.Timestamptz(6)
   unsubmittedByMembershipId String?
   unsubmittedBy             OrgMembership?                  @relation("SubmissionUnsubmittedBy", fields: [unsubmittedByMembershipId], references: [id], onDelete: SetNull)
+  /// Set only when a teacher submitted a group's shared draft for them, instead
+  /// of the group completing it themselves. Null on every other submission,
+  /// including every one that predates collaborative drafts. Students are told
+  /// which of the two happened: a draft that went in without them pressing is
+  /// something they should learn from the page, not from a grade.
+  submittedByTeacherMembershipId String?
+  submittedByTeacher        OrgMembership?                  @relation("SubmissionSubmittedByTeacher", fields: [submittedByTeacherMembershipId], references: [id], onDelete: SetNull)
   documentId                String
   document                  Document                        @relation(fields: [documentId], references: [id], onDelete: Restrict)
   comments                  SubmissionComment[]

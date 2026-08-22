@@ -29,6 +29,12 @@ export type GroupSubmitState = {
   readiness: GroupSubmitReadiness;
   /** ISO timestamp of the group's submission, or null while it is still theirs. */
   submittedAt: string | null;
+  /**
+   * The teacher who submitted it for the group, when that is how it went in.
+   * Null when the group completed it themselves — which is all but one case, and
+   * the difference is one students are owed.
+   */
+  submittedByTeacherName?: string | null;
 };
 
 /**
@@ -45,14 +51,18 @@ type FormLike = {
   state: 'idle' | 'loading' | 'submitting';
 };
 
-const submittedLabel = (submittedAt: string) => {
+/** " at 22 Aug 2026, 11:00", or nothing at all if the timestamp is unreadable. */
+const submittedWhen = (submittedAt: string) => {
   const date = new Date(submittedAt);
-  if (Number.isNaN(date.getTime())) return 'Submitted to your teacher.';
-  return `Submitted to your teacher at ${date.toLocaleString(undefined, {
+  if (Number.isNaN(date.getTime())) return '';
+  return ` at ${date.toLocaleString(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short',
-  })}.`;
+  })}`;
 };
+
+const submittedLabel = (submittedAt: string) =>
+  `Submitted to your teacher${submittedWhen(submittedAt)}.`;
 
 export function GroupSubmitButton({
   docId,
@@ -122,6 +132,22 @@ export function GroupSubmitBanner({ state }: { state: GroupSubmitState }) {
   const submitted = Boolean(submittedAt);
 
   if (submitted) {
+    // Who submitted it matters here in a way it never does on solo work: a draft
+    // that went in while you were still writing is not the same event as one
+    // your group agreed to, and the page must not blur the two.
+    if (state.submittedByTeacherName) {
+      return (
+        <p
+          className="border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900"
+          role="status"
+        >
+          {state.submittedByTeacherName} submitted this draft for your group
+          {submittedWhen(submittedAt!)}. What your group had written by then is
+          what your teacher has — talk to them if that is not what you expected.
+        </p>
+      );
+    }
+
     return (
       <p
         className="border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900"

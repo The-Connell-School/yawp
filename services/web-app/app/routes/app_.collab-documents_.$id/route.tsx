@@ -249,6 +249,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     canWrite: Boolean(asAuthor),
     submittedAt: doc.submissions[0]?.submittedAt?.toISOString() ?? null,
     submitReadiness: submitState.readiness,
+    submittedByTeacherName: submitState.submittedByTeacherName,
     comments,
     // `null`, never `undefined`: a shared draft whose assignment type has no
     // modules has no session to resume, and undefined would be dropped on the
@@ -330,6 +331,7 @@ type GroupSubmitPayload = {
   message?: string;
   status?: string;
   submittedAt?: string | null;
+  submittedByTeacherName?: string | null;
   readiness?: GroupSubmitReadiness;
 };
 
@@ -342,6 +344,7 @@ export default function CollabDocumentRoute() {
     canWrite,
     submittedAt,
     submitReadiness,
+    submittedByTeacherName,
     comments,
     currentCms,
     currentCmsIdx,
@@ -378,6 +381,10 @@ export default function CollabDocumentRoute() {
   const submitState = {
     readiness: latest?.readiness ?? submitReadiness,
     submittedAt: latest ? (latest.submittedAt ?? null) : submittedAt,
+    // The action's reply does not carry this; the loader, revalidated after it,
+    // does.
+    submittedByTeacherName:
+      latest?.submittedByTeacherName ?? submittedByTeacherName,
   };
   const groupSubmitted = Boolean(submitState.submittedAt);
 

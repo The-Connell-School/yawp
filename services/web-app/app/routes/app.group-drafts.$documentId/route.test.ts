@@ -11,18 +11,23 @@ const readGroupGrade = mock();
 const suggestMemberGrades = mock();
 const recordGroupGrade = mock();
 const listDraftComments = mock();
+const readGroupSubmitState = mock();
+const submitGroupDraft = mock();
 const addDraftComment = mock();
 const replyToDraftComment = mock();
 class DraftCommentError extends Error {}
+class GroupSubmitError extends Error {}
 class MemberGradeError extends Error {}
 class GroupGradeError extends Error {}
 
-const actualDocumentAccess = globalThis.__realModules[
-  '~/utils/document-access.server'
-];
+const actualDocumentAccess =
+  globalThis.__realModules['~/utils/document-access.server'];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
 mock.module('~/utils/document-access.server', () => ({
   ...actualDocumentAccess,
   getIsPlatformAdmin,
@@ -43,6 +48,11 @@ mock.module('~/domain/collaboration/comments.server', () => ({
 }));
 mock.module('~/domain/collaboration/member-grade-suggestions.server', () => ({
   suggestMemberGrades,
+}));
+mock.module('~/domain/collaboration/submit.server', () => ({
+  readGroupSubmitState,
+  submitGroupDraft,
+  GroupSubmitError,
 }));
 mock.module('~/domain/collaboration/group-grade.server', () => ({
   readGroupGrade,
@@ -113,6 +123,35 @@ describe('app.group-drafts.$documentId loader', () => {
     suggestMemberGrades
       .mockReset()
       .mockResolvedValue({ suggestions: [], model: 'test-model' });
+    readGroupSubmitState.mockReset().mockResolvedValue({
+      readiness: {
+        members: [],
+        total: 2,
+        submittedCount: 1,
+        waitingOn: [
+          {
+            membershipId: 'member-2',
+            name: 'Devon',
+            submitted: false,
+            submittedAt: null,
+            isViewer: false,
+          },
+        ],
+        everyoneSubmitted: false,
+        viewerSubmitted: false,
+        viewerIsMember: false,
+      },
+      submittedAt: null,
+      submissionId: null,
+      submittedByTeacherName: null,
+    });
+    submitGroupDraft.mockReset().mockResolvedValue({
+      status: 'submitted',
+      submissionId: 'sub-1',
+      submittedAt: '2026-08-22T12:00:00.000Z',
+      created: true,
+      readiness: { total: 2, submittedCount: 1 },
+    });
   });
 
   test('404s for a student', async () => {
@@ -191,10 +230,7 @@ describe('app.group-drafts.$documentId loader', () => {
   test('serialises existing grades for the panel', async () => {
     readMemberGrades.mockResolvedValue(
       new Map([
-        [
-          'member-1',
-          { score: '18/20', feedback: 'Strong.', releasedAt: null },
-        ],
+        ['member-1', { score: '18/20', feedback: 'Strong.', releasedAt: null }],
       ])
     );
 
@@ -219,7 +255,8 @@ describe('app.group-drafts.$documentId loader', () => {
   describe('grading', () => {
     const post = (fields: Record<string, string>) => {
       const form = new FormData();
-      for (const [key, value] of Object.entries(fields)) form.append(key, value);
+      for (const [key, value] of Object.entries(fields))
+        form.append(key, value);
       return action({
         request: new Request('https://example.com/app/group-drafts/doc-1', {
           method: 'POST',
@@ -230,7 +267,11 @@ describe('app.group-drafts.$documentId loader', () => {
     };
 
     test('records a grade against the group the document belongs to', async () => {
-      await post({ membershipId: 'member-1', score: '18/20', feedback: 'Good.' });
+      await post({
+        membershipId: 'member-1',
+        score: '18/20',
+        feedback: 'Good.',
+      });
 
       expect(recordMemberGrade).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -270,7 +311,11 @@ describe('app.group-drafts.$documentId loader', () => {
     });
 
     test('takes a grade back when asked', async () => {
-      await post({ membershipId: 'member-1', score: '18/20', release: 'false' });
+      await post({
+        membershipId: 'member-1',
+        score: '18/20',
+        release: 'false',
+      });
 
       expect(recordMemberGrade.mock.calls[0][0].release).toBe(false);
     });
@@ -278,7 +323,10 @@ describe('app.group-drafts.$documentId loader', () => {
     test('refuses a student', async () => {
       requireMembership.mockResolvedValue({ id: 'member-1', role: 'STUDENT' });
 
-      const response: any = await post({ membershipId: 'member-1', score: '5' });
+      const response: any = await post({
+        membershipId: 'member-1',
+        score: '5',
+      });
 
       expect(recordMemberGrade).not.toHaveBeenCalled();
       expect((await readBody(response)).success).toBe(false);
@@ -287,7 +335,10 @@ describe('app.group-drafts.$documentId loader', () => {
     test('refuses a document this teacher cannot see', async () => {
       prisma.document.findFirst.mockResolvedValue(null);
 
-      const response: any = await post({ membershipId: 'member-1', score: '5' });
+      const response: any = await post({
+        membershipId: 'member-1',
+        score: '5',
+      });
 
       expect(recordMemberGrade).not.toHaveBeenCalled();
       expect((await readBody(response)).success).toBe(false);
@@ -382,7 +433,11 @@ describe('app.group-drafts.$documentId loader', () => {
         // stops. Saving is still their press.
         suggestMemberGrades.mockResolvedValue({
           suggestions: [
-            { membershipId: 'member-1', score: null, feedback: 'You framed it.' },
+            {
+              membershipId: 'member-1',
+              score: null,
+              feedback: 'You framed it.',
+            },
           ],
           model: 'test-model',
         });
@@ -393,7 +448,11 @@ describe('app.group-drafts.$documentId loader', () => {
           expect.objectContaining({
             success: true,
             suggestions: [
-              { membershipId: 'member-1', score: null, feedback: 'You framed it.' },
+              {
+                membershipId: 'member-1',
+                score: null,
+                feedback: 'You framed it.',
+              },
             ],
           })
         );
@@ -449,6 +508,92 @@ describe('app.group-drafts.$documentId loader', () => {
         expect(response.init.status).toBe(502);
         expect((await readBody(response)).message).toMatch(/could not/i);
       });
+    });
+  });
+
+  /**
+   * The escape hatch for "every member presses Submit": a group waiting on a
+   * student who never presses has nobody inside it who can resolve that.
+   */
+  describe('submitting for the group', () => {
+    const post = (fields: Record<string, string>) => {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(fields))
+        form.append(key, value);
+      return action({
+        request: new Request('https://example.com/app/group-drafts/doc-1', {
+          method: 'POST',
+          body: form,
+        }),
+        params: { documentId: 'doc-1' },
+      } as any);
+    };
+
+    test('submits on the group’s behalf, recorded against the teacher', async () => {
+      prisma.document.findFirst.mockResolvedValue({
+        ...docRow(),
+        revision: 3,
+        html: '<p>x</p>',
+        text: 'x',
+      });
+
+      const body = await readBody(await post({ intent: 'submit-for-group' }));
+
+      expect(submitGroupDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          membershipId: 'teacher-1',
+          submittedByTeacherMembershipId: 'teacher-1',
+        })
+      );
+      expect(body.success).toBe(true);
+      expect(body.message).toMatch(/they will see that you did it/i);
+    });
+
+    test('a student cannot reach it', async () => {
+      // Same 403 as grading: this page is teachers only, and this is the one
+      // action on it that changes a student's work.
+      requireMembership.mockResolvedValue({ id: 'member-1', role: 'STUDENT' });
+
+      const response: any = await post({ intent: 'submit-for-group' });
+
+      expect(response.init.status).toBe(403);
+      expect(submitGroupDraft).not.toHaveBeenCalled();
+    });
+
+    test('a refusal from the domain comes back as a 400', async () => {
+      submitGroupDraft.mockRejectedValue(
+        new GroupSubmitError('Cannot submit an empty draft.')
+      );
+
+      const response: any = await post({ intent: 'submit-for-group' });
+
+      expect(response.init.status).toBe(400);
+      expect((await readBody(response)).message).toMatch(/empty/i);
+    });
+
+    test('says so plainly when the group had already submitted', async () => {
+      submitGroupDraft.mockResolvedValue({
+        status: 'already-submitted',
+        submissionId: 'sub-1',
+        submittedAt: '2026-08-22T09:00:00.000Z',
+        created: false,
+        readiness: { total: 2, submittedCount: 2 },
+      });
+
+      const body = await readBody(await post({ intent: 'submit-for-group' }));
+
+      expect(body.message).toMatch(/already submitted/i);
+    });
+
+    test('the loader tells the teacher how far the group has got', async () => {
+      const body = await readBody(await get());
+
+      expect(readGroupSubmitState).toHaveBeenCalledWith({
+        documentId: 'doc-1',
+        viewerMembershipId: 'teacher-1',
+      });
+      expect(body.submitState.readiness.submittedCount).toBe(1);
+      expect(body.submitState.readiness.waitingOn[0].name).toBe('Devon');
     });
   });
 });

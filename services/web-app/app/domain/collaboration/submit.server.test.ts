@@ -260,6 +260,105 @@ describe('submitGroupDraft', () => {
     });
   });
 
+  /**
+   * The way out of the rule when it jams: a group waiting on somebody who never
+   * presses has nobody inside it who can resolve that.
+   */
+  describe('a teacher submitting for the group', () => {
+    test('does not wait for the members who have not pressed', async () => {
+      groupRows = group(
+        [SAM, 'Sam Reyes', null],
+        [TAYLOR, 'Taylor Nguyen', null]
+      );
+
+      const result = await submit({
+        membershipId: 'teacher-1',
+        submittedByTeacherMembershipId: 'teacher-1',
+      });
+
+      expect(result.status).toBe('submitted');
+      expect(prisma.submission.create).toHaveBeenCalled();
+    });
+
+    test('records which teacher did it, so the group can be told', async () => {
+      groupRows = group(
+        [SAM, 'Sam Reyes', null],
+        [TAYLOR, 'Taylor Nguyen', null]
+      );
+
+      await submit({
+        membershipId: 'teacher-1',
+        submittedByTeacherMembershipId: 'teacher-1',
+      });
+
+      expect(prisma.submission.create.mock.calls[0][0].data).toMatchObject({
+        submittedByTeacherMembershipId: 'teacher-1',
+      });
+    });
+
+    test('never marks the teacher as one of the group', async () => {
+      // The marks are the students' agreement. A teacher's override is not a
+      // press, and recording it as one would misreport who agreed.
+      groupRows = group(
+        [SAM, 'Sam Reyes', null],
+        [TAYLOR, 'Taylor Nguyen', null]
+      );
+
+      await submit({
+        membershipId: 'teacher-1',
+        submittedByTeacherMembershipId: 'teacher-1',
+      });
+
+      const marking = prisma.documentGroupMember.updateMany.mock.calls.find(
+        (call: any) => call[0].data.submittedAt !== null
+      );
+      expect(marking).toBeUndefined();
+    });
+
+    test('journals the override as its own kind of submit', async () => {
+      groupRows = group(
+        [SAM, 'Sam Reyes', null],
+        [TAYLOR, 'Taylor Nguyen', null]
+      );
+
+      await submit({
+        membershipId: 'teacher-1',
+        submittedByTeacherMembershipId: 'teacher-1',
+      });
+
+      const data = prisma.documentWriteJournal.create.mock.calls[0][0].data;
+      expect(data.source).toBe('collab-submit-teacher');
+      expect(data.metadata.submittedByTeacherMembershipId).toBe('teacher-1');
+    });
+
+    test('still refuses an empty draft', async () => {
+      // Submitting nothing on a group's behalf helps nobody.
+      yUpdateToSnapshot.mockReturnValue({ html: '', text: '' });
+
+      await expect(
+        submit({
+          membershipId: 'teacher-1',
+          submittedByTeacherMembershipId: 'teacher-1',
+        })
+      ).rejects.toThrow(/empty/i);
+    });
+
+    test('a group that already submitted is left alone', async () => {
+      prisma.submission.findFirst.mockResolvedValue({
+        id: 'sub-existing',
+        submittedAt: new Date('2026-08-22T09:00:00Z'),
+      });
+
+      const result = await submit({
+        membershipId: 'teacher-1',
+        submittedByTeacherMembershipId: 'teacher-1',
+      });
+
+      expect(result.status).toBe('already-submitted');
+      expect(prisma.submission.create).not.toHaveBeenCalled();
+    });
+  });
+
   test('submits what is in the room, not the stored snapshot', async () => {
     // The dual-write can lag a keystroke behind, so reading the room at submit
     // time is what stops a group submitting a version they can see is out of
@@ -439,10 +538,41 @@ describe('readGroupSubmitState', () => {
     ]);
   });
 
+  test('says when a teacher submitted for the group, and who', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      submittedAt: new Date('2026-08-22T11:00:00Z'),
+      submittedByTeacher: { user: { name: 'Ms Okonkwo' } },
+    });
+
+    const state = await readGroupSubmitState({
+      documentId: 'doc-1',
+      viewerMembershipId: TAYLOR,
+    });
+
+    expect(state.submittedByTeacherName).toBe('Ms Okonkwo');
+  });
+
+  test('a group that submitted itself has no teacher on the record', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      submittedAt: new Date('2026-08-22T11:00:00Z'),
+      submittedByTeacher: null,
+    });
+
+    const state = await readGroupSubmitState({
+      documentId: 'doc-1',
+      viewerMembershipId: TAYLOR,
+    });
+
+    expect(state.submittedByTeacherName).toBeNull();
+  });
+
   test('reports the submission once the group has handed it in', async () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       submittedAt: new Date('2026-08-22T11:00:00Z'),
+      submittedByTeacher: null,
     });
 
     const state = await readGroupSubmitState({
