@@ -470,6 +470,8 @@ export function SubmissionLifecyclePanel({
             ) : null}
             <TeacherGradingPanel
               {...teacherGradingPanelProps}
+              documentId={documentId}
+              submissionId={submissionId}
               hideHeader
               onHeaderStateChange={setHeaderState}
             />
