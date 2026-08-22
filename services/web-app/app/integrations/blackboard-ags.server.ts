@@ -71,7 +71,7 @@ function ensureToolKeypair() {
       alg: 'RS256',
       use: 'sig',
     };
-    toolKidCache = toolPublicJwkCache.kid || 'yawp-tool-key';
+    toolKidCache = (toolPublicJwkCache && toolPublicJwkCache.kid) ? toolPublicJwkCache.kid : 'yawp-tool-key';
     return;
   }
   const { publicKey, privateKey } = generateKeyPairSync('rsa', {
