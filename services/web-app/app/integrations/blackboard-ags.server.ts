@@ -32,7 +32,6 @@ type PostScoreInput = {
   // OAuth / client assertion inputs
   tokenEndpoint: string;
   clientId: string;
-  privateKeyPem: string;
   extraScopes?: string[]; // e.g. lineitem for future flows
 };
 
@@ -45,7 +44,15 @@ let cachedMockLaunch: {
 
 // In-memory Tool keypair (dev/preview). Stable for process lifetime.
 let toolPrivateKeyPemCache: string | null = null;
-let toolPublicJwkCache: Record<string, unknown> | null = null;
+type PublicJwkSig = {
+  kty: 'RSA';
+  alg: 'RS256';
+  use: 'sig';
+  kid?: string;
+  n?: string;
+  e?: string;
+};
+let toolPublicJwkCache: PublicJwkSig | null = null;
 let toolKidCache: string | null = null;
 
 function ensureToolKeypair() {
