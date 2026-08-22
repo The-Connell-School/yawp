@@ -338,6 +338,21 @@ export function SubmissionLifecyclePanel({
     });
   };
   const isUnsubmitting = teacherUnsubmitFetcher.state !== 'idle';
+  const isWithdrawn =
+    (submissionForView as any)?.unsubmittedAt != null;
+
+  // Revalidate after successful unsubmit to refresh status/Activity
+  useEffect(() => {
+    if (teacherUnsubmitFetcher.state !== 'idle') return;
+    const body =
+      (teacherUnsubmitFetcher.data as { success?: boolean } | undefined) ??
+      undefined;
+    if (body?.success) {
+      // Force a full reload of the route to pick up latest status and activity
+      // eslint-disable-next-line no-restricted-globals
+      location.reload();
+    }
+  }, [teacherUnsubmitFetcher.state, teacherUnsubmitFetcher.data]);
 
   return (
     <div
@@ -348,10 +363,10 @@ export function SubmissionLifecyclePanel({
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-semibold">{label}</span>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {lifecycleState === 'released' ? (
+            {lifecycleState === 'released' && !isWithdrawn ? (
               <GradeSummaryReleasedLabel />
             ) : null}
-            {releasedEditEnabled && !isEditingGrade ? (
+            {releasedEditEnabled && !isEditingGrade && !isWithdrawn ? (
               <Button
                 type="button"
                 size="sm"
@@ -362,7 +377,7 @@ export function SubmissionLifecyclePanel({
                 Edit
               </Button>
             ) : null}
-            {isReadyToRelease ? (
+            {isReadyToRelease && !isWithdrawn ? (
               <>
                 <ConfirmationDialog
                   title="Release Grade?"
@@ -398,23 +413,25 @@ export function SubmissionLifecyclePanel({
                 onAbortStart={() => setIsGradingAssistantPending(false)}
               />
             ) : null}
-            <ConfirmationDialog
-              title="Unsubmit Submission?"
-              description="Withdraw this submission so the student can continue editing and resubmit."
-              confirmText="Unsubmit"
-              cancelText="Cancel"
-              onConfirm={() => handleTeacherUnsubmit()}
-            >
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                data-testid="submission-lifecycle-unsubmit"
-                disabled={isUnsubmitting}
+            {!isWithdrawn ? (
+              <ConfirmationDialog
+                title="Unsubmit Submission?"
+                description="Withdraw this submission so the student can continue editing and resubmit."
+                confirmText="Unsubmit"
+                cancelText="Cancel"
+                onConfirm={() => handleTeacherUnsubmit()}
               >
-                {isUnsubmitting ? 'Unsubmitting...' : 'Unsubmit'}
-              </Button>
-            </ConfirmationDialog>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  data-testid="submission-lifecycle-unsubmit"
+                  disabled={isUnsubmitting}
+                >
+                  {isUnsubmitting ? 'Unsubmitting...' : 'Unsubmit'}
+                </Button>
+              </ConfirmationDialog>
+            ) : null}
           </div>
         </div>
       </div>
