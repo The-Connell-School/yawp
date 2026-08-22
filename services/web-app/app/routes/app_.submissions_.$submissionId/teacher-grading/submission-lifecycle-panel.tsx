@@ -240,15 +240,22 @@ export function SubmissionLifecyclePanel({
   submissionId: string;
   documentId: string;
 } & ComponentProps<typeof TeacherGradingPanel>) {
-  const label = lifecycleState === 'needs_grading' ? 'Grading' : 'Grade Summary';
+  const isWithdrawn =
+    (submissionForView as any)?.unsubmittedAt != null;
+  const label = isWithdrawn
+    ? 'Withdrawn'
+    : lifecycleState === 'needs_grading'
+      ? 'Grading'
+      : 'Grade Summary';
   const isReadyToRelease =
-    lifecycleState === 'graded' && !isEditingGrade;
+    !isWithdrawn && lifecycleState === 'graded' && !isEditingGrade;
   const releasedEditEnabled =
-    lifecycleState === 'released' && submissionActivityEnabled;
+    !isWithdrawn && lifecycleState === 'released' && submissionActivityEnabled;
   const showEditingForm =
-    lifecycleState === 'needs_grading' ||
-    (lifecycleState === 'graded' && isEditingGrade) ||
-    (releasedEditEnabled && isEditingGrade);
+    !isWithdrawn &&
+    (lifecycleState === 'needs_grading' ||
+      (lifecycleState === 'graded' && isEditingGrade) ||
+      (releasedEditEnabled && isEditingGrade));
   const [headerState, setHeaderState] =
     useState<TeacherGradingPanelHeaderState | null>(null);
   const [isGradingAssistantPending, setIsGradingAssistantPending] =
@@ -338,9 +345,6 @@ export function SubmissionLifecyclePanel({
     });
   };
   const isUnsubmitting = teacherUnsubmitFetcher.state !== 'idle';
-  const isWithdrawn =
-    (submissionForView as any)?.unsubmittedAt != null;
-
   // Revalidate after successful unsubmit to refresh status/Activity
   useEffect(() => {
     if (teacherUnsubmitFetcher.state !== 'idle') return;
@@ -437,7 +441,22 @@ export function SubmissionLifecyclePanel({
       </div>
 
       <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto">
-        {showEditingForm ? (
+        {isWithdrawn ? (
+          <div className="p-4 text-sm">
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="font-medium">This submission was withdrawn.</p>
+              {'unsubmittedAt' in (submissionForView as any) &&
+              (submissionForView as any).unsubmittedAt ? (
+                <p className="mt-1 text-muted-foreground">
+                  Withdrawn at{' '}
+                  {new Date(
+                    (submissionForView as any).unsubmittedAt as string
+                  ).toLocaleString()}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : showEditingForm ? (
           <>
             {lifecycleState === 'released' ? (
               <div
