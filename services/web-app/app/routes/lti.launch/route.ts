@@ -222,7 +222,8 @@ export async function action({ request }: ActionFunctionArgs) {
           // Best-effort: enroll the student into one teacher class in-seat so the doc appears
           if (orgId) {
             try {
-              const teacher = await prisma.user.findFirst({
+              // Prefer a class taught by the dev teacher; else pick any class in-seat
+              const devTeacher = await prisma.user.findFirst({
                 where: {
                   email: 'dev.teacher@yawp.local',
                   memberships: { some: { organizationId: orgId, role: 'TEACHER' } },
@@ -235,7 +236,15 @@ export async function action({ request }: ActionFunctionArgs) {
                   },
                 },
               });
-              const classId = teacher?.memberships[0]?.classesAsTeacher[0]?.id;
+              let classId = devTeacher?.memberships[0]?.classesAsTeacher[0]?.id ?? null;
+              if (!classId) {
+                const anyClass = await prisma.class.findFirst({
+                  where: { teachers: { some: { organizationId: orgId } }, isArchived: false },
+                  select: { id: true },
+                  orderBy: { createdAt: 'asc' },
+                });
+                classId = anyClass?.id ?? null;
+              }
               if (classId) {
                 await prisma.class.update({
                   where: { id: classId },
