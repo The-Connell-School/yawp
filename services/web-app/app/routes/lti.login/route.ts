@@ -11,6 +11,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Force target_link_uri to this preview's /lti/launch so the platform POSTS here
   const launch = new URL('/lti/launch', url.origin);
   target.searchParams.set('target_link_uri', launch.toString());
+  // Some platforms (our mock) post to `redirect_uri` for the HTML form action
+  target.searchParams.set('redirect_uri', launch.toString());
   return redirect(target.toString());
 }
 
