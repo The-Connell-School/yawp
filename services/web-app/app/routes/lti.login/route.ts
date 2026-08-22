@@ -1,4 +1,5 @@
 import { redirect, type LoaderFunctionArgs } from 'react-router';
+import { getDomainUrl } from '~/utils/misc';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -8,8 +9,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   for (const [key, value] of url.searchParams.entries()) {
     target.searchParams.set(key, value);
   }
+  // Force HTTPS preview origin using forwarded headers
+  const origin = getDomainUrl(request);
   // Force target_link_uri to this preview's /lti/launch so the platform POSTS here
-  const launch = new URL('/lti/launch', url.origin);
+  const launch = new URL('/lti/launch', origin);
   target.searchParams.set('target_link_uri', launch.toString());
   // Some platforms (our mock) post to `redirect_uri` for the HTML form action
   target.searchParams.set('redirect_uri', launch.toString());
