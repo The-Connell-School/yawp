@@ -72,7 +72,11 @@ function originFrom(config, request, listenOrigin) {
   if (xfHost) return `https://${xfHost}${config.publicBasePath}`;
   if (config.publicUrl) return config.publicUrl;
   const host = request.headers.host;
-  if (host) return `https://${host}${config.publicBasePath}`;
+  if (host) {
+    const isLocal = /^(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(host);
+    const scheme = isLocal ? 'http' : 'https';
+    return `${scheme}://${host}${config.publicBasePath}`;
+  }
   return `${listenOrigin}${config.publicBasePath}`;
 }
 
@@ -232,8 +236,8 @@ function handleDevLaunch(
   const hintId = `hint_${randomUUID()}`;
   store.launchHints.set(hintId, profile);
   // Lock to the current request URL's origin (already computed from forwarded headers)
-  // and force HTTPS. This prevents cross-preview leaks and http scheme regressions.
-  const hostOrigin = url.origin.replace(/^http:\/\//, 'https://');
+  // and preserve its scheme (https on previews, http in local tests).
+  const hostOrigin = url.origin;
   const login = new URL('/lti/login', hostOrigin);
   login.searchParams.set('iss', config.issuer);
   login.searchParams.set('login_hint', profile.user.sub);
