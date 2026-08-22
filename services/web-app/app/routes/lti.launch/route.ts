@@ -80,10 +80,14 @@ export async function action({ request }: ActionFunctionArgs) {
       }
       if (returnUrl) candidates.push(returnUrl);
       const postOnce = async (urlStr: string) => {
+        const forwardHeaders = {
+          'x-forwarded-host': new URL(getDomainUrl(request)).host,
+          'x-forwarded-proto': 'https',
+        } as Record<string, string>;
         // Try JSON then x-www-form-urlencoded, require 2xx
         let res = await fetch(urlStr, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', ...forwardHeaders },
           body: JSON.stringify({ JWT: responseJwt }),
         }).catch(() => null);
         if (!res || !res.ok) {
@@ -91,7 +95,7 @@ export async function action({ request }: ActionFunctionArgs) {
           body.set('JWT', responseJwt);
           res = await fetch(urlStr, {
             method: 'POST',
-            headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            headers: { 'content-type': 'application/x-www-form-urlencoded', ...forwardHeaders },
             body: body.toString(),
           }).catch(() => null);
         }
