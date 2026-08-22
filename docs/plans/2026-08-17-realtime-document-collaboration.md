@@ -15,7 +15,7 @@ Answers from Kevin. These supersede anything below that contradicts them.
 | --- | --- | --- |
 | 1 | Buy a collaboration provider? | **No.** Build with what we already have — no new SaaS subscription. |
 | 2 | May student writing leave our AWS account? | **Probably not** — Bryant decides, but plan for no. |
-| 3 | Can any group member hit submit? | **Yes**, any one of them submits for the group. |
+| 3 | Can any group member hit submit? | ~~**Yes**, any one of them submits for the group.~~ **Superseded 2026-08-22: every member presses Submit, and the last press submits.** See "Submission needs every member" below. |
 | 4 | Can an individual grade exceed the group grade? | **Open.** Still thinking. |
 | 5 | Shared writing tutor, or one each? | **One each.** |
 | 6 | Can teachers type in a student draft? | **No — comment only.** |
@@ -68,9 +68,11 @@ periodic compaction so the table does not grow without bound.
 
 ### What 3, 5, 6, 7 and 8 change
 
-- **3 — any member submits.** Group submission is a real feature now rather than
-  an open question. Still needs the availability fallback described below, and
-  still sits behind the two-tier grading model.
+- **3 — every member submits.** Group submission is a real feature now rather
+  than an open question. The original answer was "any one of them submits for the
+  group"; that was reversed on 2026-08-22 — see "Submission needs every member"
+  below. Still needs the availability fallback described below, and still sits
+  behind the two-tier grading model.
 - **5 — one tutor conversation each.** This is the larger of the two options
   considered: `AssignmentModuleSession` is keyed to `documentId` with no
   `membershipId`, so it needs the column, a backfill from `Document.membershipId`,
@@ -935,10 +937,56 @@ the square of the participant count. Once the breakout panel is being built
 anyway, small groups are the better first pilot — 2-4 concurrent editors is a
 gentle load, and it exercises group formation, where the real product risk lives.
 
+## Submission needs every member — decided 2026-08-22
+
+Reverses decision 3. A press records that one member is ready; the draft goes to
+the teacher only when every active member has pressed, and the press that
+completes the set is the one that creates the `Submission`.
+
+**Why the reversal.** Submitting ends everybody's chance to change the draft. On
+solo work that is the author's own call; on a shared draft, "any member submits"
+lets one student end three students' work mid-sentence, at 9:02, for a deadline
+at 23:59. The failure is silent and unrecoverable by the people it happens to —
+only a teacher can unsubmit.
+
+**What it costs, and why that is acceptable.** A group can now be held up by one
+member who never presses. That is visible (the page names who is outstanding),
+recoverable by the group (a member can take their own press back), and
+recoverable by the teacher, who can see the state and unsubmit or intervene. The
+failure it replaces is neither visible nor recoverable.
+
+**How it is built.**
+
+- `DocumentGroupMember.submittedAt` is one member's press for the round in
+  progress. Migration `20260822120000_group_submit_requires_every_member`,
+  additive and nullable.
+- Cleared for the whole group when the `Submission` is created, so the column
+  always describes the round in progress: after a teacher unsubmits, the group
+  agrees again rather than the draft going back in on stale presses.
+- Only **active** members are waited on (`removedAt: null`), so a student moved
+  out of a group cannot hold their old group's draft hostage.
+- `api/collab/:id/submit` takes `intent=submit` or `intent=withdraw`, and its
+  `GET` answers the group's progress for the page to poll — someone else pressing
+  is a change this browser did not make, and there is no socket.
+- `api.domain.submit-document` now refuses a collaboration room. It scopes to the
+  document's owner, and a group draft has a nominal owner
+  (`Document.membershipId`), so without that guard one student — or a teacher
+  acting for them — could still submit alone.
+
+**What students see**, because a rule they cannot see is a rule that fails
+quietly: the button reads "Submit my part", a strip under the nav reads "Not
+submitted yet — 1 of 3 in your group have pressed Submit" and names who is
+outstanding, and the roster marks which of those people is you. After pressing,
+the same place offers "Undo my submit" until the group is complete.
+
+**Still open:** nothing tells the group they are waiting when they are not
+looking at the page. A nudge — a notification, or a teacher-side view of who is
+outstanding — is the obvious follow-up, and neither exists yet.
+
 ## Open questions
 
-1. **Can one student submit for the whole group?** All of the grading model
-   hangs off this.
+1. ~~**Can one student submit for the whole group?**~~ **Decided 2026-08-22:** no
+   — every member presses, and the last press submits. See above.
 2. ~~**Does every group member get the same grade?**~~ **Decided:** no. Two-tier —
    a group grade on `Submission` plus a per-member `SubmissionMemberGrade` that
    defaults to following the group grade and detaches when the teacher edits it.

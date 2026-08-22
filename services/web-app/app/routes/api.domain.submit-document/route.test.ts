@@ -35,6 +35,10 @@ mock.module('~/utils/toast.server', () => ({
 
 const { action } = await import('./route');
 
+/** What each of the two document reads answers with. */
+let soloDocument: any = null;
+let collaborationRoom: { id: string } | null = null;
+
 describe('api.domain.submit-document', () => {
   beforeEach(() => {
     prisma.user.findUnique.mockReset();
@@ -54,7 +58,14 @@ describe('api.domain.submit-document', () => {
       organization: { id: 'org-1', name: 'Org' },
     });
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
-    prisma.document.findFirst.mockResolvedValue({
+    // Two document reads now: the route's own, and the collaboration-room probe
+    // that keeps a group's shared draft off this path. Only the probe filters on
+    // `group`, which is what tells them apart here.
+    prisma.document.findFirst.mockImplementation(async (args: any) =>
+      args?.where?.group ? collaborationRoom : soloDocument
+    );
+    collaborationRoom = null;
+    soloDocument = {
       id: 'doc-1',
       html: '<p>Draft</p>',
       text: 'Draft',
@@ -72,7 +83,7 @@ describe('api.domain.submit-document', () => {
           },
         ],
       },
-    });
+    };
     prisma.documentWriteJournal.create.mockResolvedValue({ id: 'journal-1' });
     prisma.documentWriteJournal.update.mockResolvedValue({
       id: 'journal-1',
@@ -154,5 +165,29 @@ describe('api.domain.submit-document', () => {
         },
       }
     );
+  });
+
+  test('refuses a shared draft: those are submitted by the whole group', async () => {
+    // This endpoint scopes to the document's owner, and a group draft has one.
+    // Left open, that student could hand the group's work in alone — the exact
+    // thing the group submit flow exists to prevent.
+    collaborationRoom = { id: 'doc-1' };
+
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    const response: any = await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+      context: {},
+    } as any);
+
+    const body = await response.json();
+    expect(body.to).toBe('/app/collab-documents/doc-1');
+    expect(body.payload.description).toMatch(/everyone in your group/i);
+    expect(prisma.documentWriteJournal.create).not.toHaveBeenCalled();
   });
 });

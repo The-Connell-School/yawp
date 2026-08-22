@@ -1,4 +1,5 @@
 import { type Prisma } from '@app/prisma';
+import { prisma } from '~/utils/db.server';
 
 /**
  * "Is this document a live collaboration room?"
@@ -36,4 +37,25 @@ export function collaborationRoomWhere(): Prisma.DocumentWhereInput {
       { group: { is: { kind: 'student-share' } } },
     ],
   };
+}
+
+/**
+ * "Is this particular document a room?", asked by code outside the feature.
+ *
+ * The solo submit endpoint is the caller that matters: it scopes to a document's
+ * owner, and a group draft has a nominal owner — `Document.membershipId` names
+ * whoever the row was created for. Without this check that one student (or a
+ * teacher acting for them) could hand the group's draft in through the old path,
+ * and the rule that every member presses first would hold only in the UI.
+ *
+ * Deliberately the same predicate rather than a second reading of it.
+ */
+export async function isCollaborationRoom(
+  documentId: string
+): Promise<boolean> {
+  const room = await prisma.document.findFirst({
+    where: { id: documentId, ...collaborationRoomWhere() },
+    select: { id: true },
+  });
+  return Boolean(room);
 }

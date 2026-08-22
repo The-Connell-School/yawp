@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
+import { isCollaborationRoom } from '~/domain/collaboration/room.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
@@ -87,6 +88,22 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   if (!document) {
     return redirectWithToast('/app/courses', {
       description: 'Document not found.',
+      type: 'error',
+    });
+  }
+
+  // A shared draft is never submitted from here.
+  //
+  // This endpoint scopes to the document's owner, and a group draft has one —
+  // `Document.membershipId` names whoever the row was created for. Left open,
+  // that student, or a teacher acting for them, could hand the group's work in
+  // without the rest of the group agreeing, which is exactly what the group
+  // submit flow exists to prevent. Every document that predates collaborative
+  // drafts has no group, so this matches none of them.
+  if (await isCollaborationRoom(document.id)) {
+    return redirectWithToast(`/app/collab-documents/${document.id}`, {
+      description:
+        'This is a shared draft. It goes to your teacher once everyone in your group has pressed Submit.',
       type: 'error',
     });
   }

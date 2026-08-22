@@ -317,10 +317,17 @@ model DocumentGroupMember {
   membershipId String
   membership   OrgMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   removedAt    DateTime?     @db.Timestamptz(6)
+  /// When this member pressed Submit for the round in progress. A shared draft
+  /// is submitted only once every active member has pressed, because submitting
+  /// ends everyone's chance to change a document they all wrote. Cleared for the
+  /// whole group when the Submission is created, so the column always describes
+  /// the current round: after a teacher unsubmits, the group agrees again.
+  submittedAt  DateTime?     @db.Timestamptz(6)
 
   @@unique([groupId, membershipId])
   @@index([membershipId])
   @@index([groupId, removedAt])
+  @@index([groupId, submittedAt])
 }
 
 /// Class-wide, assignment-level feedback for the teacher: an AI summary of how

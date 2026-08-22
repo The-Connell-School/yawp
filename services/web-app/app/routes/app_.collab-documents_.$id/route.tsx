@@ -1,5 +1,6 @@
 import { invariant } from '@epic-web/invariant';
 import { ArrowLeft } from 'lucide-react';
+import { useEffect } from 'react';
 import {
   data as dataResponse,
   useFetcher,
@@ -29,6 +30,9 @@ import {
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 import { CollabEditor } from './collab-editor';
+import { GroupSubmitBanner, GroupSubmitButton } from './group-submit';
+import { readGroupSubmitState } from '~/domain/collaboration/submit.server';
+import type { GroupSubmitReadiness } from '~/domain/collaboration/submit-readiness';
 import { buildAuthorColorScale } from '~/domain/collaboration/author-colors';
 
 /**
@@ -221,7 +225,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const nextCmId =
     moduleIndex >= 0 ? allModules[moduleIndex + 1]?.id : undefined;
 
-  const [user, comments] = await Promise.all([
+  const [user, comments, submitState] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: { name: true },
@@ -229,6 +233,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     // Document-level only: the collaborative schema has no comment mark, so an
     // anchored comment would point at text this page cannot highlight.
     listDraftComments({ documentId: doc.id, documentLevelOnly: true }),
+    // Who in the group has pressed Submit. Read here rather than derived from
+    // `doc.group.members` so the page and the submit endpoint answer the same
+    // question with the same code.
+    readGroupSubmitState({
+      documentId: doc.id,
+      viewerMembershipId: profile.id,
+    }),
   ]);
 
   return dataResponse({
@@ -237,6 +248,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     userName: user?.name?.trim() || 'Someone',
     canWrite: Boolean(asAuthor),
     submittedAt: doc.submissions[0]?.submittedAt?.toISOString() ?? null,
+    submitReadiness: submitState.readiness,
     comments,
     // `null`, never `undefined`: a shared draft whose assignment type has no
     // modules has no session to resume, and undefined would be dropped on the
@@ -312,11 +324,24 @@ function isTutorEnabled(assignment: { tutorEnabled?: boolean } | null) {
   return assignment?.tutorEnabled !== false;
 }
 
+/** What the submit endpoint answers with, by either verb. */
+type GroupSubmitPayload = {
+  success?: boolean;
+  message?: string;
+  status?: string;
+  submittedAt?: string | null;
+  readiness?: GroupSubmitReadiness;
+};
+
+/** How often the page re-asks who has pressed. */
+const SUBMIT_PROGRESS_POLL_MS = 15_000;
+
 export default function CollabDocumentRoute() {
   const {
     doc,
     canWrite,
     submittedAt,
+    submitReadiness,
     comments,
     currentCms,
     currentCmsIdx,
@@ -324,14 +349,48 @@ export default function CollabDocumentRoute() {
     hasPreviousCms,
   } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
-  const submitFetcher = useFetcher<{ success?: boolean; message?: string }>();
-  const submitting = submitFetcher.state !== 'idle';
+  const submitFetcher = useFetcher<GroupSubmitPayload>();
+  // Somebody else pressing Submit is a change to this page that this browser did
+  // not make, so it has to be asked for. The same reason the draft itself polls:
+  // there is no socket. Cheap — one small read — and it stops once the draft is
+  // in.
+  const progressFetcher = useFetcher<GroupSubmitPayload>();
   const submitError =
     submitFetcher.data && submitFetcher.data.success === false
       ? submitFetcher.data.message
       : '';
+  const submitNotice =
+    submitFetcher.data && submitFetcher.data.success
+      ? submitFetcher.data.message
+      : '';
   const [searchParams] = useSearchParams();
   const exitTarget = searchParams.get('exitTo') || '/app';
+
+  // Freshest answer wins: this student's own press, then the last poll, then
+  // whatever the page was rendered with.
+  const latest: GroupSubmitPayload | undefined =
+    submitFetcher.data?.success && submitFetcher.data.readiness
+      ? submitFetcher.data
+      : progressFetcher.data?.readiness
+        ? progressFetcher.data
+        : undefined;
+
+  const submitState = {
+    readiness: latest?.readiness ?? submitReadiness,
+    submittedAt: latest ? (latest.submittedAt ?? null) : submittedAt,
+  };
+  const groupSubmitted = Boolean(submitState.submittedAt);
+
+  const progressUrl = `/api/collab/${doc.id}/submit`;
+  const load = progressFetcher.load;
+  const idle = progressFetcher.state === 'idle';
+  useEffect(() => {
+    if (!canWrite || groupSubmitted) return;
+    const timer = setInterval(() => {
+      if (idle) load(progressUrl);
+    }, SUBMIT_PROGRESS_POLL_MS);
+    return () => clearInterval(timer);
+  }, [canWrite, groupSubmitted, idle, load, progressUrl]);
 
   const groupMemberCount = doc.group?.members.length ?? 0;
 
@@ -384,24 +443,16 @@ export default function CollabDocumentRoute() {
           </span>
         </div>
 
-        {/* Any member may submit for the group, which is what the group agreed
-            when they asked for it. Pressing twice is harmless: the route returns
-            the existing submission rather than creating a second. */}
+        {/* Every member presses before the draft goes anywhere. The button says
+            so, and the strip below the nav says how far along the group is —
+            because a button reading "Submitted" on a draft that has not been
+            submitted is the way this rule would quietly fail. */}
         {canWrite ? (
-          <submitFetcher.Form
-            method="post"
-            action={`/api/collab/${doc.id}/submit`}
-            className="shrink-0"
-          >
-            <Button
-              type="submit"
-              size="sm"
-              variant={submittedAt ? 'outline' : 'default'}
-              disabled={submitting || Boolean(submittedAt)}
-            >
-              {submittedAt ? 'Submitted' : 'Submit'}
-            </Button>
-          </submitFetcher.Form>
+          <GroupSubmitButton
+            docId={doc.id}
+            fetcher={submitFetcher}
+            state={submitState}
+          />
         ) : null}
 
         {/* The group's roster, in the colors their carets use in the document,
@@ -441,6 +492,23 @@ export default function CollabDocumentRoute() {
           {submitError}
         </p>
       ) : null}
+
+      {/* What just happened, in words, for the student who pressed: "recorded,
+          still waiting on Taylor" reads differently from "gone to your
+          teacher", and the difference matters more here than anywhere else on
+          the page. */}
+      {submitNotice ? (
+        <p
+          className="border-b bg-slate-50 px-4 py-2 text-sm text-slate-800"
+          role="status"
+        >
+          {submitNotice}
+        </p>
+      ) : null}
+
+      {/* Shown to readers too: a teacher opening a group's draft should be able
+          to see why it has not come in yet. */}
+      <GroupSubmitBanner state={submitState} />
 
       <div className="mx-auto flex min-h-0 w-full max-w-screen-2xl flex-1 overflow-hidden">
         {/* Same order as the solo editor — tutor, then the writing, then what

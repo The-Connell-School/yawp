@@ -1,6 +1,7 @@
 import { resolve } from 'path';
 
-process.env.SESSION_SECRET = process.env.SESSION_SECRET ?? 'test-secret-for-unit-tests';
+process.env.SESSION_SECRET =
+  process.env.SESSION_SECRET ?? 'test-secret-for-unit-tests';
 
 // bun's mock.module() replaces a module for the rest of the test run — it is
 // not scoped to a single file, and mock.restore() does not undo it (see
@@ -90,6 +91,12 @@ if (isWebAppTestFile()) {
     // The group-draft route stubs these wholesale; other files need them real.
     '~/domain/collaboration/group-grade.server': await snapshot(
       '~/domain/collaboration/group-grade.server'
+    ),
+    // The submit-route test stubs the three entry points and needs the real
+    // GroupSubmitError class back: the route decides a 400 with `instanceof`,
+    // so a stubbed-away class turns that branch into a TypeError.
+    '~/domain/collaboration/submit.server': await snapshot(
+      '~/domain/collaboration/submit.server'
     ),
     '~/domain/collaboration/member-grades.server': await snapshot(
       '~/domain/collaboration/member-grades.server'
