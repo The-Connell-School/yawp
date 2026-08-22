@@ -9,6 +9,8 @@ const allowedUnguardedWriteRoutes = new Set([
   'services/web-app/app/routes/api.domain.retention/route.ts',
   'services/web-app/app/routes/api.preferences.nav/route.tsx',
   'services/web-app/app/routes/api.preferences.submitted-papers-filter/route.tsx',
+  // LTI launch establishes session and preview identities without read-only guard by design
+  'services/web-app/app/routes/lti.launch/route.ts',
 ]);
 
 function routeFiles(dir: string): string[] {

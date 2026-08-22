@@ -30,11 +30,13 @@ export async function proxyBlackboardLtiMock(request: Request, splat = '') {
   request.headers.forEach((value, name) => {
     if (!HOP_BY_HOP.has(name.toLowerCase())) headers.set(name, value);
   });
-  // Preserve the public preview host/proto for the mock to construct browser-facing URLs.
-  const publicUrl = new URL(request.url);
-  headers.set('x-forwarded-host', publicUrl.host);
-  headers.set('x-forwarded-proto', publicUrl.protocol.replace(/:$/, ''));
-  headers.set('x-forwarded-port', publicUrl.protocol === 'https:' ? '443' : (publicUrl.port || '80'));
+  // Preserve the public origin for absolute URLs the mock generates
+  headers.set('x-forwarded-host', url.host);
+  headers.set('x-forwarded-proto', url.protocol.replace(/:$/, ''));
+  headers.set(
+    'x-forwarded-port',
+    url.protocol === 'https:' ? '443' : url.port || '80'
+  );
 
   const init: RequestInit = {
     method: request.method,
@@ -48,6 +50,27 @@ export async function proxyBlackboardLtiMock(request: Request, splat = '') {
   const upstreamResponse = await fetch(target, init);
   const responseHeaders = new Headers(upstreamResponse.headers);
   responseHeaders.delete('transfer-encoding');
+  // Rewrite absolute Location headers to this preview host to prevent cross-preview hops
+  const rawLocation = responseHeaders.get('location');
+  if (rawLocation) {
+    try {
+      const loc = new URL(rawLocation, `${url.protocol}//${url.host}`);
+      // If upstream points to a different host for /lti/login, force same-origin /lti/login
+      if (
+        loc.host !== url.host &&
+        (/\/lti\/login(?:\/)?$/i.test(loc.pathname) || loc.pathname === '/lti/login')
+      ) {
+        const sameOriginLogin = new URL('/lti/login', url.origin);
+        // Preserve query parameters from upstream
+        for (const [k, v] of loc.searchParams.entries()) {
+          sameOriginLogin.searchParams.set(k, v);
+        }
+        responseHeaders.set('location', sameOriginLogin.toString());
+      }
+    } catch {
+      // ignore parse failures; leave header as-is
+    }
+  }
   return new Response(upstreamResponse.body, {
     status: upstreamResponse.status,
     headers: responseHeaders,

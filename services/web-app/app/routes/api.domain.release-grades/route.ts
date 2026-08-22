@@ -14,6 +14,7 @@ import {
   resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
+import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
 
 const POST = z.object({
   submissionIds: z.preprocess(
@@ -82,6 +83,7 @@ export async function action({ request }: ActionFunctionArgs) {
           id: true,
           updatedAt: true,
           releasedAt: true,
+          numericPercentage: true,
           document: {
             select: {
               classAssignment: {
@@ -221,9 +223,28 @@ export async function action({ request }: ActionFunctionArgs) {
       ? 'Grade released to student.'
       : `${result.releasedCount} grades released to students.`;
 
+  // Fire-and-forget AGS passback for each released submission (dev/preview only)
+  // Run outside the transaction; failures should not block release UX.
+  try {
+    const releasedSubs = await prisma.submission.findMany({
+      where: { id: { in: requestedSubmissionIds } },
+      select: { id: true, numericPercentage: true },
+    });
+    for (const s of releasedSubs) {
+      if (typeof s.numericPercentage === 'number') {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        maybePostGradeToBlackboard({ numericPercentage: s.numericPercentage });
+      }
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('Blackboard AGS passback (mock) on release failed', { err });
+  }
+
   return dataResponse({
     success: true,
     message,
     releasedCount: result.releasedCount,
   });
 }
+
