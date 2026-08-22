@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   user: { findUnique: mock() },
-  submission: { findFirst: mock() },
+  submission: { findFirst: mock(), findMany: mock() },
   submissionActivity: { findMany: mock() },
   assignmentType: { findUnique: mock() },
+  class: { findMany: mock() },
 };
 
 const requireUserId = mock();
