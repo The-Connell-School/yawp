@@ -66,10 +66,19 @@ export async function action({ request }: ActionFunctionArgs) {
       });
       // Post back to the mock. Try internal upstream, then same-origin proxy, then returnUrl.
       const candidates: string[] = [];
+      // Prefer same-origin proxy first (proven path through preview gate),
+      // then internal upstream, then the platform's return URL.
+      candidates.push(
+        new URL(
+          '/dev/blackboard-lti-mock/api/v1/lti/deep-linking',
+          getDomainUrl(request)
+        ).toString()
+      );
       const internalMock = String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(/\/$/, '');
-      if (internalMock) candidates.push(new URL('/api/v1/lti/deep-linking', internalMock).toString());
-      candidates.push(new URL('/dev/blackboard-lti-mock/api/v1/lti/deep-linking', getDomainUrl(request)).toString());
-      candidates.push(returnUrl);
+      if (internalMock) {
+        candidates.push(new URL('/api/v1/lti/deep-linking', internalMock).toString());
+      }
+      if (returnUrl) candidates.push(returnUrl);
       const postOnce = async (urlStr: string) => {
         // Try JSON then x-www-form-urlencoded, require 2xx
         let res = await fetch(urlStr, {
