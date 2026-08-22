@@ -114,6 +114,11 @@ export function tryLearnRoute(ctx, { handleDevLaunch, send }) {
       send(response, 404, { error: 'content not found' });
       return { status: 404 };
     }
+    // Prefer the Deep Linking-provided URL when available to ensure the Tool
+    // launch targets the exact host returned in the signed content item.
+    if (item.url) {
+      return redirect(response, item.url);
+    }
     return handleDevLaunch(
       {
         ...ctx,

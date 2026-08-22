@@ -33,6 +33,10 @@ export async function proxyBlackboardLtiMock(request: Request, splat = '') {
   // Preserve the public origin for absolute URLs the mock generates
   headers.set('x-forwarded-host', url.host);
   headers.set('x-forwarded-proto', url.protocol.replace(/:$/, ''));
+  headers.set(
+    'x-forwarded-port',
+    url.protocol === 'https:' ? '443' : url.port || '80'
+  );
 
   const init: RequestInit = {
     method: request.method,

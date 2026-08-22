@@ -68,10 +68,15 @@ function faultFrom(url, headers, body = {}) {
 }
 
 function originFrom(config, request, listenOrigin) {
+  const xfHost = request.headers['x-forwarded-host'];
+  if (xfHost) return `https://${xfHost}${config.publicBasePath}`;
   if (config.publicUrl) return config.publicUrl;
-  const proto = request.headers['x-forwarded-proto'] || 'http';
-  const host = request.headers['x-forwarded-host'] || request.headers.host;
-  if (host) return `${proto}://${host}${config.publicBasePath}`;
+  const host = request.headers.host;
+  if (host) {
+    const isLocal = /^(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(host);
+    const scheme = isLocal ? 'http' : 'https';
+    return `${scheme}://${host}${config.publicBasePath}`;
+  }
   return `${listenOrigin}${config.publicBasePath}`;
 }
 
@@ -212,7 +217,10 @@ async function route(ctx) {
   return { status: 404 };
 }
 
-function handleDevLaunch({ url, response, config, store, publicOrigin }, fault) {
+function handleDevLaunch(
+  { url, request, response, config, store, publicOrigin },
+  fault
+) {
   const profile = buildLaunchProfile({
     role: url.searchParams.get('role'),
     sub: url.searchParams.get('sub'),
@@ -227,10 +235,15 @@ function handleDevLaunch({ url, response, config, store, publicOrigin }, fault) 
   });
   const hintId = `hint_${randomUUID()}`;
   store.launchHints.set(hintId, profile);
-  const login = new URL(config.toolOidcLoginUrl);
+  // Prefer preview public host when forwarded; otherwise use the Tool's configured login origin for local tests.
+  const xfHost = request.headers['x-forwarded-host'];
+  const hostOrigin = xfHost
+    ? `https://${xfHost}`
+    : new URL(config.toolOidcLoginUrl).origin;
+  const login = new URL('/lti/login', hostOrigin);
   login.searchParams.set('iss', config.issuer);
   login.searchParams.set('login_hint', profile.user.sub);
-  login.searchParams.set('target_link_uri', config.toolRedirectUri);
+  login.searchParams.set('target_link_uri', new URL('/lti/launch', hostOrigin).toString());
   login.searchParams.set('lti_message_hint', hintId);
   login.searchParams.set('client_id', config.clientId);
   login.searchParams.set('lti_deployment_id', config.deploymentId);
@@ -610,7 +623,8 @@ async function handleDeepLinking(ctx) {
   }
   try {
     const decoded = decodeJwt(jwt);
-    const jwk = await resolveToolJwk(config, decoded.header.kid);
+    const jwk =
+      decoded.header?.jwk || (await resolveToolJwk(config, decoded.header.kid));
     verifyJwt(jwt, jwk, { now: config.now() });
     const contentItems =
       decoded.payload['https://purl.imsglobal.org/spec/lti-dl/claim/content_items'] || [];
