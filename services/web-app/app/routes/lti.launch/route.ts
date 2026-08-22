@@ -190,6 +190,58 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (user) {
+      // Opportunistically ensure the mock has a deep-linked content item for THIS preview
+      try {
+        const currentOrigin = getDomainUrl(request);
+        const deepLinksRes = await fetch(
+          new URL('/dev/blackboard-lti-mock/dev/deep-links', currentOrigin).toString(),
+          { headers: { accept: 'application/json' } }
+        ).catch(() => null);
+        const hasCurrent =
+          deepLinksRes && deepLinksRes.ok
+            ? ((await deepLinksRes.json()) as any[])
+                .flatMap((r) => r?.contentItems ?? [])
+                .some((ci) => String(ci?.url || '').startsWith(currentOrigin))
+            : false;
+        if (!hasCurrent) {
+          const now = Math.floor(Date.now() / 1000);
+          const responseJwt = signToolJwt({
+            iss: process.env.LTI_CLIENT_ID || 'yawp-blackboard-mock',
+            iat: now,
+            exp: now + 300,
+            'https://purl.imsglobal.org/spec/lti/claim/message_type':
+              'LtiDeepLinkingResponse',
+            'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
+            // deployment_id not required by the mock for DL response; include if present on launch
+            ...(claims['https://purl.imsglobal.org/spec/lti/claim/deployment_id']
+              ? {
+                  'https://purl.imsglobal.org/spec/lti/claim/deployment_id':
+                    claims['https://purl.imsglobal.org/spec/lti/claim/deployment_id'],
+                }
+              : {}),
+            'https://purl.imsglobal.org/spec/lti-dl/claim/data': `dl_${now}`,
+            'https://purl.imsglobal.org/spec/lti-dl/claim/content_items': [
+              {
+                type: 'ltiResourceLink',
+                title: 'Yawp essay',
+                url: new URL('/lti/launch', currentOrigin).toString(),
+                lineItem: { scoreMaximum: 100, label: 'Yawp essay' },
+              },
+            ],
+          });
+          const internalMock = String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(
+            /\/$/,
+            ''
+          );
+          if (internalMock) {
+            await fetch(new URL('/api/v1/lti/deep-linking', internalMock).toString(), {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ JWT: responseJwt }),
+            }).catch(() => {});
+          }
+        }
+      } catch {}
       // Prefer re-binding the existing browser sessionId to the target user
       const incomingCookies = request.headers.get('cookie');
       const existingSession = await authSessionStorage.getSession(incomingCookies);
