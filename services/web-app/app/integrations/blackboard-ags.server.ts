@@ -261,20 +261,25 @@ export async function maybePostGradeToBlackboard({
   studentMockUserId?: string; // Optional override; defaults to launch sub
 }) {
   if (numericPercentage == null) return;
-  const claims = await ensureMockLaunchClaims();
+  // Use the latest real launch claims first (from POST /lti/launch)
+  let claims = getLatestLtiLaunchClaims();
+  if (!claims) {
+    claims = await ensureMockLaunchClaims();
+  }
   if (!claims) return;
+
   const ags = claims['https://purl.imsglobal.org/spec/lti-ags/claim/endpoint'];
-  const contextId = claims['https://purl.imsglobal.org/spec/lti/claim/context']?.id || '_4_1';
+  const contextId =
+    claims['https://purl.imsglobal.org/spec/lti/claim/context']?.id || '_4_1';
   const clientId = String(process.env.LTI_CLIENT_ID || 'yawp-blackboard-mock');
 
-  // Prefer the launch's AGS URLs; fall back to env origin if needed
+  // Derive origin and line item from the actual launch claims when available
   const derivedOrigin =
     (ags?.lineitems && safeOrigin(ags.lineitems)) ||
     (ags?.lineitem && safeOrigin(ags.lineitem)) ||
     String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(/\/$/, '');
   if (!derivedOrigin) return;
 
-  // Prefer the exact line item URL from claims
   const lineItemUrl =
     ags?.lineitem && isUrl(ags.lineitem)
       ? `${ags.lineitem.replace(/\/$/, '')}/scores`
