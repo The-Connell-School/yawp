@@ -209,6 +209,11 @@ export default function Route() {
               Continue
             </Button>
           </Form>
+          <Form method="POST" action="/auth/logout" className="mt-3">
+            <Button variant="outline" className="w-full" type="submit">
+              Log out
+            </Button>
+          </Form>
         </div>
       </div>
     );
@@ -256,6 +261,11 @@ export default function Route() {
           />
           <Button className="w-full" type="submit" disabled={isLoading}>
             Join Class
+          </Button>
+        </Form>
+        <Form method="POST" action="/auth/logout" className="mt-3">
+          <Button variant="outline" className="w-full" type="submit">
+            Log out
           </Button>
         </Form>
       </div>
