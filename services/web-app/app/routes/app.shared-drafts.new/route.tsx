@@ -7,7 +7,10 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 import { Button } from '~/components/ui/button';
-import { MAX_COLLABORATION_GROUP_SIZE } from '~/domain/assignments/collaboration';
+import {
+  MAX_COLLABORATION_GROUP_SIZE,
+  studentStartedSharedDraftsEnabled,
+} from '~/domain/assignments/collaboration';
 import {
   createSharedDocument,
   DocumentShareError,
@@ -81,6 +84,16 @@ async function collaborativeAssignmentTypesForStudent(
 async function requireSharingStudent(request: Request) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+
+  // The pedagogical gate, checked here rather than in each export so the loader
+  // and the action can never disagree about whether this road is open. While it
+  // is closed this page behaves exactly as it does for a teacher — 404 from the
+  // loader, a redirect from the action — instead of rendering a form that then
+  // refuses to submit. Everything below stays intact and tested for the day it
+  // reopens; see `studentStartedSharedDraftsEnabled`.
+  if (!studentStartedSharedDraftsEnabled()) {
+    return { profile, membership: null };
+  }
 
   const membership = await prisma.orgMembership.findFirst({
     where: { id: profile.id, role: 'STUDENT', isActive: true },

@@ -128,3 +128,29 @@ export function toCollaborationGroupMode(
     DEFAULT_COLLABORATION_GROUP_MODE
   );
 }
+
+/**
+ * Whether a student may start their own shared draft and choose who writes in
+ * it — the `student-share` road to a `DocumentGroup`, as opposed to a teacher
+ * arranging groups on an assignment.
+ *
+ * **Off, and the machinery behind it is deliberately still here.** Every part of
+ * that road — the page at `/app/shared-drafts/new`, `share.server.ts`, the
+ * `student-share` group kind, its seeding and its tests — is untouched and still
+ * covered. What this switch removes is the ability to reach it: the two entry
+ * points that offered it, and the page itself, which answers as though it does
+ * not exist rather than half-working.
+ *
+ * The reason is pedagogical rather than technical. Who works with whom is a
+ * teaching decision, and letting a class sort itself into groups has social
+ * consequences a teacher is the one positioned to manage. Teachers have not been
+ * asked yet whether they want students to have it, so it ships off and the
+ * question stays open. Flipping this to `true` is the whole of putting it back.
+ *
+ * A function rather than a bare constant so callers read it at call time and
+ * tests can drive both branches — the point of keeping the code is that the
+ * branch that is off today still has to work when it is turned on.
+ */
+export function studentStartedSharedDraftsEnabled(): boolean {
+  return false;
+}

@@ -102,6 +102,12 @@ if (isWebAppTestFile()) {
     '~/domain/collaboration/comments.server': await snapshot(
       '~/domain/collaboration/comments.server'
     ),
+    // The shared-drafts test drives both sides of the student-shared-draft gate
+    // by stubbing `studentStartedSharedDraftsEnabled`; every other file needs
+    // the group-mode constants in this module real.
+    '~/domain/assignments/collaboration': await snapshot(
+      '~/domain/assignments/collaboration'
+    ),
     '~/domain/documents.server': await snapshot('~/domain/documents.server'),
   };
 }

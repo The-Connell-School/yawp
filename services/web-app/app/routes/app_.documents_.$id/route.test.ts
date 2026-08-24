@@ -275,6 +275,40 @@ describe('app_.documents_.$id loader', () => {
     }));
   });
 
+  test('offers no road to writing with a classmate while students may not group themselves', async () => {
+    // Everything else about this document qualifies: the student owns it, it is
+    // a kind of writing in the pilot, and it belongs to no group yet. The only
+    // reason the menu item is withheld is the pedagogical gate, and it is
+    // answered server-side so no client can render its own way in.
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'STUDENT',
+      teacherProfile: null,
+    });
+    prisma.document.findFirst.mockImplementation((args: any) =>
+      Promise.resolve(
+        args?.where?.assignmentType
+          ? null
+          : {
+              ...makeDocument({ includeSnapshot: false }),
+              group: null,
+              assignmentType: {
+                id: 'type-1',
+                title: 'AP History Essay',
+                collaborationSupported: true,
+              },
+            }
+      )
+    );
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/documents/doc-1'),
+      params: { id: 'doc-1' },
+    } as never)) as any;
+
+    expect(response.data.canShareWithClassmates).toBe(false);
+  });
+
   test('selects and returns immutable AP History assignment snapshots', async () => {
     const response = (await loader({
       request: new Request('https://example.test/app/documents/doc-1'),

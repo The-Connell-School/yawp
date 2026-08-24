@@ -29,6 +29,15 @@ const actualSchoolYearScope = globalThis.__realModules[
 const actualStudentScopes = globalThis.__realModules[
   '~/utils/student-assignment-type-scopes.server'
 ];
+const actualCollaboration = globalThis.__realModules[
+  '~/domain/assignments/collaboration'
+];
+
+// The pedagogical gate, stubbed so both of its branches are exercised. Every
+// test below except the `student group-making is hidden` block runs with the
+// road open, which is what the rest of this file is about: the machinery is
+// still here and still has to work when a teacher asks for it back.
+const studentStartedSharedDraftsEnabled = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
@@ -57,6 +66,10 @@ mock.module('~/utils/student-assignment-type-scopes.server', () => ({
   studentAssignmentTypeScopes,
 }));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast }));
+mock.module('~/domain/assignments/collaboration', () => ({
+  ...actualCollaboration,
+  studentStartedSharedDraftsEnabled,
+}));
 
 const { action, loader } = await import('./route');
 
@@ -71,6 +84,7 @@ afterAll(() => {
     '~/utils/student-assignment-type-scopes.server',
     () => actualStudentScopes
   );
+  mock.module('~/domain/assignments/collaboration', () => actualCollaboration);
 });
 
 const post = (fields: Record<string, string | string[]>) => {
@@ -143,6 +157,44 @@ describe('app.shared-drafts.new', () => {
     redirectWithToast
       .mockReset()
       .mockImplementation((to: string, options: any) => ({ to, options }));
+    studentStartedSharedDraftsEnabled.mockReset().mockReturnValue(true);
+  });
+
+  describe('student group-making is hidden', () => {
+    // What ships today. The road is closed at `requireSharingStudent`, which
+    // both exports go through, so there is no way in through either of them —
+    // and no way for them to disagree about it.
+    test('the loader 404s even for an enrolled student', async () => {
+      studentStartedSharedDraftsEnabled.mockReturnValue(false);
+
+      await expect(get()).rejects.toBeDefined();
+    });
+
+    test('the loader never reaches the database', async () => {
+      // Closed before the queries, so a hidden page costs nothing to refuse.
+      studentStartedSharedDraftsEnabled.mockReturnValue(false);
+
+      await expect(get()).rejects.toBeDefined();
+      expect(prisma.orgMembership.findFirst).not.toHaveBeenCalled();
+      expect(listShareableClassmates).not.toHaveBeenCalled();
+    });
+
+    test('the action creates nothing, however it is posted', async () => {
+      // Hiding the two links is not the gate — a student who kept the URL, or
+      // posts the form straight at it, gets the same answer.
+      studentStartedSharedDraftsEnabled.mockReturnValue(false);
+
+      const created: any = await post({ intent: 'create', assignmentTypeId: 'at-1' });
+      const copied: any = await post({
+        intent: 'share-copy',
+        sourceDocumentId: 'doc-source',
+      });
+
+      expect(createSharedDocument).not.toHaveBeenCalled();
+      expect(shareDocumentCopy).not.toHaveBeenCalled();
+      expect(created.options.type).toBe('error');
+      expect(copied.options.type).toBe('error');
+    });
   });
 
   describe('gate', () => {

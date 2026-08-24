@@ -33,6 +33,7 @@ import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server'
 import { listSavedThesisPrompts } from '~/domain/thesis-prompts/saved-prompts.server';
 import { listSavedDailyPagesPrompts } from '~/domain/daily-pages-prompts/saved-prompts.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { studentStartedSharedDraftsEnabled } from '~/domain/assignments/collaboration';
 import {
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
@@ -685,8 +686,12 @@ export default function AppAssignmentTypesIdRoute() {
             <div className="flex items-center gap-2">
               {/* The student's road to a shared draft. Offered only for kinds of
                   writing in the collaboration pilot, because it leads to a
-                  separate collaborative page that will not serve anything else. */}
-              {data.assignmentType.collaborationSupported ? (
+                  separate collaborative page that will not serve anything else —
+                  and only while students may form their own groups at all, which
+                  they currently may not. The link and the page behind it are
+                  intact; see `studentStartedSharedDraftsEnabled`. */}
+              {studentStartedSharedDraftsEnabled() &&
+              data.assignmentType.collaborationSupported ? (
                 <Button asChild variant="outline" className="w-fit">
                   <Link to="/app/shared-drafts/new">
                     <UsersIcon className="mr-1 h-5 w-5" /> Write with a classmate

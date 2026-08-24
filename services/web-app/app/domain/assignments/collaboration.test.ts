@@ -4,6 +4,7 @@ import {
   COLLABORATION_GROUP_MODE_OPTIONS,
   collaborationModeAutoArranges,
   collaborationModeNeedsGroupSize,
+  studentStartedSharedDraftsEnabled,
 } from './collaboration';
 
 describe('COLLABORATION_GROUP_MODE_OPTIONS', () => {
@@ -44,5 +45,14 @@ describe('collaborationModeAutoArranges', () => {
 
   test('teacher-built groups start empty', () => {
     expect(collaborationModeAutoArranges('teacher')).toBe(false);
+  });
+});
+
+describe('studentStartedSharedDraftsEnabled', () => {
+  test('is off, so no student road to a shared draft is offered', () => {
+    // Locks the shipped default. Turning students' own group-making back on is
+    // a decision to make with teachers, not a line to flip in passing — this
+    // test failing is the reminder that the conversation happened.
+    expect(studentStartedSharedDraftsEnabled()).toBe(false);
   });
 });

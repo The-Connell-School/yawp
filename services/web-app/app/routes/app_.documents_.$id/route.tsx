@@ -60,6 +60,7 @@ import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ensureAssignmentModuleSessionsForDocument } from '~/domain/documents.server';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
+import { studentStartedSharedDraftsEnabled } from '~/domain/assignments/collaboration';
 import { documentReadWhere } from '~/utils/document-access.server';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
@@ -475,7 +476,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     // Offering a student the chance to write this with a classmate. Their own
     // draft only, a kind of writing in the pilot only, and not one that is
     // already shared — sharing a shared draft would fork the group's work.
+    //
+    // Gated first on whether students may form their own groups at all, which
+    // they currently may not. Answered in the loader rather than hidden in the
+    // menu so the flag decides once, server-side, for every client.
     canShareWithClassmates:
+      studentStartedSharedDraftsEnabled() &&
       isOwner &&
       profile.role === 'STUDENT' &&
       doc.group === null &&
