@@ -8,19 +8,12 @@ import {
   type LocalDevPersona,
 } from './dev-personas';
 import {
-  REVISION_EARLY_DRAFT_TEXT,
-  REVISION_ESSAY_TEXT,
-  REVISION_ESSAY_TITLE,
-  REVISION_LETTER_GRADE,
-  REVISION_NUMERIC_PERCENTAGE,
-  REVISION_OVERALL_COMMENT,
-  REVISION_OVERALL_SCORE,
-  REVISION_RUBRIC_SCORES,
-  REVISION_TEACHER_COMMENTS,
-  REVISION_TUTOR_EXCHANGE,
+  GRADED_ESSAY_FIXTURES,
+  buildEarlyDraftHtml,
+  buildEssayHtml,
+  buildGrammarIssuesPayload,
   buildRevisionDraftComments,
-  buildRevisionEssayHtml,
-  buildRevisionGrammarIssuesPayload,
+  essayText,
 } from './revision-fixture';
 
 type PersonaRecord = {
@@ -445,96 +438,111 @@ export async function seedSyntheticLocalDevData(
     },
   });
 
-  // A full-length graded essay: the revision split screen is unreadable as a
-  // design question until the panes hold work of a realistic size. See
-  // ./revision-fixture.ts.
-  const gradedText = REVISION_ESSAY_TEXT;
-  // Scoped to this organization: the preview-seat script runs this seed once
-  // per seat into one shared database, and DocumentComment.id is global.
-  const gradedDraftComments = buildRevisionDraftComments(organizationId);
-  const gradedHtml = buildRevisionEssayHtml(gradedDraftComments);
-  const gradedDocument = await prisma.document.create({
-    data: {
-      title: REVISION_ESSAY_TITLE,
-      text: gradedText,
-      html: gradedHtml,
-      revision: 12,
-      membershipId: studentGraded.membershipId,
-      assignmentTypeId: thesisAssignmentTypeId,
-      assignmentId: thesisAssignment.id,
-      classAssignmentId: thesisClassAssignment.id,
-      assignmentModuleSessions: {
-        create: buildModuleSessionsCreateData(thesisModules, {
-          firstModuleExchange: REVISION_TUTOR_EXCHANGE,
-        }),
-      },
-    },
-  });
-  await prisma.documentRevision.createMany({
-    data: [
-      {
-        documentId: gradedDocument.id,
-        text: REVISION_EARLY_DRAFT_TEXT,
-        html: REVISION_EARLY_DRAFT_TEXT.split('\n\n')
-          .map((paragraph) => `<p>${paragraph}</p>`)
-          .join(''),
-        trigger: 'auto',
-      },
-      {
-        documentId: gradedDocument.id,
-        text: gradedText,
-        html: gradedHtml,
-        trigger: 'submit',
-      },
-    ],
-  });
-  for (const draftComment of gradedDraftComments) {
-    await prisma.documentComment.create({
+  // Full-length graded essays. One is not enough: the split screen only shows
+  // its problems across a range of feedback loads, so the fixtures run from a
+  // heavily annotated low-scoring paper to a near-clean high-scoring one.
+  // See ./revision-fixture.ts.
+  for (const fixture of GRADED_ESSAY_FIXTURES) {
+    const fixtureText = essayText(fixture);
+    // Ids are scoped to this organization: the preview-seat script runs this
+    // seed once per seat into one shared database, and DocumentComment.id is
+    // global.
+    const draftComments = buildRevisionDraftComments(fixture, organizationId);
+    const fixtureHtml = buildEssayHtml(fixture, draftComments);
+    const submittedAt = new Date(
+      Date.now() - 1000 * 60 * 60 * 24 * fixture.submittedDaysAgo
+    );
+
+    const gradedDocument = await prisma.document.create({
       data: {
-        id: draftComment.id,
-        documentId: gradedDocument.id,
-        membershipId: primaryTeacher.membershipId,
-        content: draftComment.content,
-        highlightId: draftComment.id,
-        responses: draftComment.responses
-          ? {
-              create: draftComment.responses.map((content) => ({
-                content,
-                membershipId: studentGraded.membershipId,
-              })),
-            }
-          : undefined,
+        title: fixture.title,
+        text: fixtureText,
+        html: fixtureHtml,
+        revision: 12,
+        membershipId: studentGraded.membershipId,
+        assignmentTypeId: thesisAssignmentTypeId,
+        assignmentId: thesisAssignment.id,
+        classAssignmentId: thesisClassAssignment.id,
+        assignmentModuleSessions: {
+          create: buildModuleSessionsCreateData(thesisModules, {
+            firstModuleExchange: fixture.tutorExchange,
+          }),
+        },
       },
     });
-  }
-  const gradedSubmission = await prisma.submission.create({
-    data: {
-      documentId: gradedDocument.id,
-      html: gradedHtml,
-      text: gradedText,
-      title: REVISION_ESSAY_TITLE,
-      submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3),
-      gradedByMembershipId: primaryTeacher.membershipId,
-      gradedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
-      numericPercentage: REVISION_NUMERIC_PERCENTAGE,
-      letterGrade: REVISION_LETTER_GRADE,
-      overallScore: REVISION_OVERALL_SCORE,
-      overallComment: REVISION_OVERALL_COMMENT,
-      rubricScores: REVISION_RUBRIC_SCORES,
-      grammarIssues: buildRevisionGrammarIssuesPayload(),
-      releasedAt: new Date(),
-    },
-  });
-  for (const comment of REVISION_TEACHER_COMMENTS) {
-    await prisma.submissionComment.create({
+
+    const earlyDraftHtml = buildEarlyDraftHtml(fixture);
+    await prisma.documentRevision.createMany({
+      data: [
+        ...(earlyDraftHtml && fixture.earlyDraftText
+          ? [
+              {
+                documentId: gradedDocument.id,
+                text: fixture.earlyDraftText,
+                html: earlyDraftHtml,
+                trigger: 'auto',
+              },
+            ]
+          : []),
+        {
+          documentId: gradedDocument.id,
+          text: fixtureText,
+          html: fixtureHtml,
+          trigger: 'submit',
+        },
+      ],
+    });
+
+    for (const draftComment of draftComments) {
+      await prisma.documentComment.create({
+        data: {
+          id: draftComment.id,
+          documentId: gradedDocument.id,
+          membershipId: primaryTeacher.membershipId,
+          content: draftComment.content,
+          highlightId: draftComment.id,
+          responses: draftComment.responses
+            ? {
+                create: draftComment.responses.map((content) => ({
+                  content,
+                  membershipId: studentGraded.membershipId,
+                })),
+              }
+            : undefined,
+        },
+      });
+    }
+
+    const gradedSubmission = await prisma.submission.create({
       data: {
-        submissionId: gradedSubmission.id,
-        membershipId: primaryTeacher.membershipId,
-        content: comment.content,
-        excerpt: comment.excerpt,
-        occurrence: comment.occurrence,
+        documentId: gradedDocument.id,
+        html: fixtureHtml,
+        text: fixtureText,
+        title: fixture.title,
+        submittedAt,
+        gradedByMembershipId: primaryTeacher.membershipId,
+        gradedAt: new Date(submittedAt.getTime() + 1000 * 60 * 60 * 24),
+        numericPercentage: fixture.numericPercentage,
+        letterGrade: fixture.letterGrade,
+        overallScore: fixture.overallScore,
+        overallComment: fixture.overallComment,
+        rubricScores: fixture.rubricScores,
+        grammarIssues: buildGrammarIssuesPayload(fixture),
+        releasedAt: new Date(submittedAt.getTime() + 1000 * 60 * 60 * 25),
       },
     });
+
+    for (const comment of fixture.teacherComments) {
+      await prisma.submissionComment.create({
+        data: {
+          submissionId: gradedSubmission.id,
+          membershipId: primaryTeacher.membershipId,
+          content: comment.content,
+          excerpt: comment.excerpt,
+          occurrence: comment.occurrence,
+        },
+      });
+    }
   }
 
   const unreleasedText =
