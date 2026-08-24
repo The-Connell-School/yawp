@@ -1,4 +1,0 @@
-interface:
-  display_name: "QA Video Capture"
-  short_description: "Capture narrated QA media and publish a phone-safe video link."
-  default_prompt: "Create a narrated QA video and screenshot set for this repo or PR, publish a public mobile-safe video link, then summarize what passed, failed, and needs review."
