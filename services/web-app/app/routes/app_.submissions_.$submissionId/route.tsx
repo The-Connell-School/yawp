@@ -37,6 +37,7 @@ import {
 } from '~/domain/grading/grammarIssues';
 import { parseAssistantSuggestion } from '~/domain/grading/assistant-suggestion';
 import { resolveGrammarHighlightingEnabled } from '~/domain/assignment-types/rubric-category-options';
+import { resolveRevisionEntryPath } from '~/domain/revisions/revision-flow';
 import { findExcerptRange } from '~/utils/excerpt-position';
 import {
   readLastNonDocumentRoute,
@@ -310,6 +311,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   return {
+    revisionFlowEnabled: profile.organization.revisionFlowEnabled === true,
     submission: {
       ...submission,
       comments: sortedComments,
@@ -332,8 +334,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function SubmissionRoute() {
   const loaderData = useLoaderData<typeof loader>();
-  const { submission, isOwner, isTeacher, submissionActivityEnabled } =
-    loaderData;
+  const {
+    submission,
+    isOwner,
+    isTeacher,
+    submissionActivityEnabled,
+    revisionFlowEnabled,
+  } = loaderData;
   const activities = 'activities' in loaderData ? loaderData.activities : [];
   const activityHasMore =
     'activityHasMore' in loaderData ? loaderData.activityHasMore : false;
@@ -902,7 +909,13 @@ export default function SubmissionRoute() {
   }, [submission.id]);
 
   // ── Paths ──────────────────────────────────────────────────────────
-  const revisePath = `/app/documents/${submission.documentId}?revise=1`;
+  const revisePath = resolveRevisionEntryPath({
+    revisionFlowEnabled,
+    submissionId: submission.id,
+    documentId: submission.documentId,
+    isReleased: isReleased,
+    isWithdrawn,
+  });
   const viewDocumentHref = useMemo(() => {
     const returnUrl = `${location.pathname}${location.search}${location.hash}`;
     return `/app/documents/${submission.documentId}?exitTo=${encodeURIComponent(returnUrl)}`;
@@ -1010,7 +1023,9 @@ export default function SubmissionRoute() {
           {/* Student: Revise Essay link */}
           {isOwner ? (
             <Button size="sm" variant="outline" asChild>
-              <Link to={revisePath}>Revise Essay</Link>
+              <Link to={revisePath} data-testid="submission-revise-essay">
+                Revise Essay
+              </Link>
             </Button>
           ) : null}
         </div>

@@ -36,9 +36,10 @@ const TEACHER_MEMBERSHIP_ID = 'membership-teacher';
 function membership(
   id: string,
   role: 'STUDENT' | 'TEACHER',
-  organizationId = 'org-1'
+  organizationId = 'org-1',
+  { revisionFlowEnabled = false } = {}
 ) {
-  return { id, role, organization: { id: organizationId } };
+  return { id, role, organization: { id: organizationId, revisionFlowEnabled } };
 }
 
 function buildSubmission(
@@ -165,6 +166,40 @@ describe('submission loader — unsubmitted redirect', () => {
 
     expect(result).not.toBeInstanceOf(Response);
     expect((result as { isOwner: boolean }).isOwner).toBe(true);
+  });
+
+  test('reports the revision flow gate so the Revise button can route on it', async () => {
+    requireMembership.mockResolvedValue(
+      membership(STUDENT_MEMBERSHIP_ID, 'STUDENT', 'org-1', {
+        revisionFlowEnabled: true,
+      })
+    );
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission());
+
+    const result = await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    });
+
+    expect((result as { revisionFlowEnabled: boolean }).revisionFlowEnabled).toBe(
+      true
+    );
+  });
+
+  test('reports the revision flow gate as off for an organization without it', async () => {
+    requireMembership.mockResolvedValue(
+      membership(STUDENT_MEMBERSHIP_ID, 'STUDENT')
+    );
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission());
+
+    const result = await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    });
+
+    expect((result as { revisionFlowEnabled: boolean }).revisionFlowEnabled).toBe(
+      false
+    );
   });
 
   test('does not redirect a teacher viewing an unsubmitted submission', async () => {
