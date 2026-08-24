@@ -245,4 +245,68 @@ describe('renderPreviewCompose', () => {
       else process.env.PREVIEW_ANTHROPIC_API_KEY = previousAnthropicKey;
     }
   });
+
+  // The studio variables are an assertion that the target holds demo data, so
+  // they are emitted only for a target this render can vouch for — the preview
+  // itself, in seed mode.
+  test('seed previews enable the Marketing Studio pointed at themselves', () => {
+    const compose = renderCompose();
+
+    expect(compose).toContain('MARKETING_STUDIO_ENABLED: "on"');
+    expect(compose).toContain(
+      'MARKETING_RENDER_TARGET_URL: "https://pr-142.preview.yawp.school"'
+    );
+    expect(compose).toContain('MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"');
+  });
+
+  // The renderer stores outputs on a volume the app serves, so seeded previews
+  // produce their own marketing media with no AWS anywhere. It films the
+  // public https hostname, not the internal http route: newer chromium
+  // refuses the Secure session cookie over plain http to a non-localhost
+  // host, and every page filmed that way was the logged-out landing page.
+  // host-gateway makes the hostname resolve to this host's Traefik, and the
+  // worker clears the access gate with a seat code like any reviewer would.
+  test('seed previews run a renderer filming the gated https preview itself', () => {
+    const compose = renderCompose();
+
+    expect(compose).toContain('renderer:');
+    expect(compose).toContain(
+      'MARKETING_RENDER_TARGET_URL: "https://pr-142.preview.yawp.school"'
+    );
+    expect(compose).toContain('"pr-142.preview.yawp.school:host-gateway"');
+    // Reuses the first configured seat: a renderer-only seat would need its
+    // own organization, which the seed data never creates.
+    expect(compose).toContain(
+      'MARKETING_RENDERER_ACCESS_CODE: "brave-otter-4193"'
+    );
+    expect(compose).toContain('MARKETING_MEDIA_STORAGE: "disk"');
+    expect(compose).toContain('MARKETING_MEDIA_DIR: "/media"');
+    expect(compose).toContain('yawp-pr-142-media:/media');
+    expect(compose).toContain('marketing-renderer start');
+    // Playwright 1.60 images ship the browser as chrome-linux64 where 1.49
+    // shipped chrome-linux; the narrow glob silently matched nothing and the
+    // renderer fell back to the headless shell, which segfaulted on the host.
+    expect(compose).toContain('chromium-*/chrome-linux*/chrome');
+  });
+
+  // The library resolves browsers and its recording ffmpeg by revision paths
+  // baked into the image, so image tag and installed library version must move
+  // together. They drifted once — playwright's ^ range floated to 1.60 while
+  // the image stayed 1.49 — and every clip render died at newPage with
+  // "Executable doesn't exist". This reads the actually-installed version, so
+  // a future playwright bump fails here until the image tag is bumped with it.
+  test('renderer image ships browsers for the installed playwright version', () => {
+    const { version } = require('playwright-core/package.json');
+    expect(renderCompose()).toContain(
+      `image: mcr.microsoft.com/playwright:v${version}-jammy`
+    );
+  });
+
+  test('production-dump previews never claim to be a marketing demo target', () => {
+    const compose = renderCompose({ dataMode: 'production-dump' });
+
+    expect(compose).not.toContain('MARKETING_STUDIO_ENABLED');
+    expect(compose).not.toContain('MARKETING_RENDER_TARGET_IS_DEMO');
+    expect(compose).not.toContain('renderer:');
+  });
 });
