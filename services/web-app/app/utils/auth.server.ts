@@ -29,6 +29,7 @@ const membershipSelect = {
       classInsightsEnabled: true,
       writingPracticeEnabled: true,
       submissionActivityEnabled: true,
+      revisionFlowEnabled: true,
     },
   },
 } as const;
