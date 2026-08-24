@@ -77,15 +77,15 @@ export function CollabEditor({ docId, canWrite, user }: Props) {
   const [provider, setProvider] = useState<CollabHttpProvider | null>(null);
 
   useEffect(() => {
-    const started = new CollabHttpProvider({
+    const connection = new CollabHttpProvider({
       documentId: docId,
       ydoc,
       canWrite,
       onStatusChange: setStatus,
     });
-    setProvider(started);
+    setProvider(connection);
 
-    void started.start().then(() => {
+    void connection.start().then(() => {
       // Schema-version handshake, once the room has loaded. A room written by a
       // newer client must not be edited by this one: it would silently drop the
       // nodes it cannot represent, damaging everyone's draft rather than just its
@@ -106,7 +106,7 @@ export function CollabEditor({ docId, canWrite, user }: Props) {
       // Send anything still queued before tearing down, so closing the tab mid
       // sentence does not lose it. `destroy` also says goodbye, which takes this
       // writer's caret off their teammates' screens at once.
-      void started.flush().finally(() => started.destroy());
+      void connection.flush().finally(() => connection.destroy());
     };
   }, [docId, ydoc, canWrite]);
 
