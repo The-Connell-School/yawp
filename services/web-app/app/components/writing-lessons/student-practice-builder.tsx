@@ -111,17 +111,21 @@ export function StudentPracticeBuilderContent({
                 </button>
               );
             })}
-            <Input
-              type="number"
-              min={MIN_PROBLEM_COUNT}
-              max={MAX_PROBLEM_COUNT}
-              inputMode="numeric"
-              data-testid="practice-count-custom"
-              aria-label="Custom number of problems"
-              value={problemCount}
-              onChange={(event) => setProblemCount(event.target.value)}
-              className="h-9 w-20"
-            />
+            {/* The ui Input is full-width by default, so the box that sits in
+                the preset row is sized by its own wrapper. */}
+            <div className="w-20">
+              <Input
+                type="number"
+                min={MIN_PROBLEM_COUNT}
+                max={MAX_PROBLEM_COUNT}
+                inputMode="numeric"
+                data-testid="practice-count-custom"
+                aria-label="Custom number of problems"
+                value={problemCount}
+                onChange={(event) => setProblemCount(event.target.value)}
+                className="h-9"
+              />
+            </div>
           </div>
           <p className="text-sm text-muted-foreground">
             Between {MIN_PROBLEM_COUNT} and {MAX_PROBLEM_COUNT} problems.
