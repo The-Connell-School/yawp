@@ -311,6 +311,49 @@ code {
   background-color: #d8b4fe80;
 }
 
+/* Collaborator carets in a shared draft.
+
+   Drawn as widget decorations by y-prosemirror, so they sit between characters
+   and take no width in the text flow: the sentence a student is typing does not
+   reflow because a teammate's cursor is near it.
+
+   The name label is always visible rather than shown on hover. The point of the
+   feature is knowing where a teammate is *while* you write, and a label you have
+   to go looking for does not tell you that. It is lifted above the line and made
+   inert to the pointer so it cannot cover the words underneath or swallow a
+   click meant for the text. Two carets on the same word do overlap; that is the
+   accepted cost of a label that is simply there. */
+.collaboration-cursor__caret {
+  border-left: 1px solid;
+  border-right: 1px solid;
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: none;
+  position: relative;
+  word-break: normal;
+}
+.collaboration-cursor__label {
+  border-radius: 3px 3px 3px 0;
+  color: #fff;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  left: -1px;
+  line-height: normal;
+  padding: 1px 5px;
+  position: absolute;
+  top: -1.35em;
+  user-select: none;
+  white-space: nowrap;
+}
+/* The tint over a teammate's selection. Alpha comes from the colour itself so
+   the text underneath keeps its contrast — a solid fill would make the words a
+   student is reading unreadable. */
+.collaboration-cursor__selection {
+  border-radius: 2px;
+}
+
 @keyframes highlight-mark-active {
   0% {
     background-color: #f9e055fc;

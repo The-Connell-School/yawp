@@ -29,7 +29,11 @@ import {
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 import { CollabEditor } from './collab-editor';
-import { buildAuthorColorScale } from '~/domain/collaboration/author-colors';
+import {
+  AUTHOR_COLOR_MEMBER_ORDER,
+  buildAuthorColorScale,
+  UNATTRIBUTED_COLOR,
+} from '~/domain/collaboration/author-colors';
 
 /**
  * The collaborative draft page: `/app/collab-documents/:id`.
@@ -150,6 +154,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           label: true,
           members: {
             where: { removedAt: null },
+            orderBy: AUTHOR_COLOR_MEMBER_ORDER,
             select: {
               membershipId: true,
               membership: {
@@ -315,6 +320,8 @@ function isTutorEnabled(assignment: { tutorEnabled?: boolean } | null) {
 export default function CollabDocumentRoute() {
   const {
     doc,
+    membershipId,
+    userName,
     canWrite,
     submittedAt,
     comments,
@@ -404,8 +411,8 @@ export default function CollabDocumentRoute() {
           </submitFetcher.Form>
         ) : null}
 
-        {/* The group's roster, in the colors their carets use in the document,
-            so one color means one person everywhere on the page. */}
+        {/* The group's roster, in the colours their carets use in the document,
+            so one colour means one person everywhere on the page. */}
         <ul
           className="flex shrink-0 items-center -space-x-1.5"
           aria-label="Writers in this draft"
@@ -470,7 +477,16 @@ export default function CollabDocumentRoute() {
             />
           </div>
         ) : null}
-        <CollabEditor docId={doc.id} canWrite={canWrite} />
+        <CollabEditor
+          docId={doc.id}
+          canWrite={canWrite}
+          // This writer's own caret. Falls back to grey for a teacher, who is
+          // not in the scale and never publishes a caret anyway.
+          user={{
+            name: userName,
+            color: colorScale.get(membershipId) ?? UNATTRIBUTED_COLOR,
+          }}
+        />
         {/* Prompt and teacher comments share a column: both are things to read
             while writing, and neither should take width from the draft. */}
         <div className="flex w-full shrink-0 flex-col overflow-y-auto border-l md:w-[340px] lg:w-[380px]">

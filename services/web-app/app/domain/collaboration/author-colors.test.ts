@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  AUTHOR_COLOR_MEMBER_ORDER,
   AUTHOR_COLORS,
   authorColor,
   buildAuthorColorScale,
@@ -28,14 +29,31 @@ describe('buildAuthorColorScale', () => {
     ]);
   });
 
-  test('agrees between two surfaces listing the same people', () => {
-    // A student's colour in their own editor and in the teacher's panel have to
-    // match, and the two pages build their lists from different queries.
-    const roster = ['m-3', 'm-1', 'm-2'];
+  test('the order of the roster decides the colours, inside the palette', () => {
+    // Not a quirk to work around — it is what makes the scale predictable — but
+    // it does mean two pages that order their rosters differently hand the same
+    // student two different colours. Everything that builds a scale therefore
+    // queries members with AUTHOR_COLOR_MEMBER_ORDER, and this is the test that
+    // says why that is not optional.
+    const listedOneWay = buildAuthorColorScale(['m-3', 'm-1', 'm-2']);
+    const listedAnother = buildAuthorColorScale(['m-1', 'm-2', 'm-3']);
+
+    expect(listedOneWay.get('m-3')).not.toBe(listedAnother.get('m-3')!);
+  });
+
+  test('agrees between two surfaces that ordered the roster alike', () => {
+    // A student's colour in their own editor, on their caret and in the
+    // teacher's panel have to match, and those pages build their lists from
+    // different queries — ordered the same way.
+    const roster = ['m-1', 'm-2', 'm-3'];
     const teacherView = buildAuthorColorScale(roster);
-    const studentView = buildAuthorColorScale(roster);
+    const studentView = buildAuthorColorScale([...roster]);
 
     expect([...studentView.entries()]).toEqual([...teacherView.entries()]);
+  });
+
+  test('AUTHOR_COLOR_MEMBER_ORDER is the order those queries use', () => {
+    expect(AUTHOR_COLOR_MEMBER_ORDER).toEqual({ membershipId: 'asc' });
   });
 
   test('keeps current members ahead of someone who left the group', () => {

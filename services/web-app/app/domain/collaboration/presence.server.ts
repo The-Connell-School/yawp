@@ -1,5 +1,8 @@
 import { prisma } from '~/utils/db.server';
-import { buildAuthorColorScale } from './author-colors';
+import {
+  AUTHOR_COLOR_MEMBER_ORDER,
+  buildAuthorColorScale,
+} from './author-colors';
 import {
   attributePresence,
   livePresence,
@@ -53,10 +56,7 @@ export async function presenceIdentityFor({
     select: {
       members: {
         where: { removedAt: null },
-        // The scale is a function of the member list, so the list has to be
-        // ordered the same way everywhere it is built. Without this the same
-        // student can be olive on one page and fuchsia on another.
-        orderBy: { membershipId: 'asc' },
+        orderBy: AUTHOR_COLOR_MEMBER_ORDER,
         select: {
           membershipId: true,
           membership: { select: { user: { select: { name: true } } } },

@@ -1,4 +1,5 @@
 import Collaboration from '@tiptap/extension-collaboration';
+import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Y from 'yjs';
@@ -30,18 +31,31 @@ import { ErrorBoundary } from '../app_.documents_.$id/document-editor/error-boun
  * with the server-side snapshot conversion, so the HTML written into Postgres for
  * grading is generated from exactly the schema the editor wrote with.
  *
- * ⚠️ Named collaborator carets are NOT here yet. They need Yjs awareness synced as
- * its own channel, which this transport does not carry. Presence below is derived
- * from who has recently written, which is honest but coarser.
+ * Named collaborator carets are drawn from Yjs awareness, which the provider
+ * carries alongside the document: a teammate's cursor and selection appear where
+ * they are working, labelled with their name in the same colour their initials
+ * have in the header and their sentences have on the teacher's page.
+ *
+ * A caret is not document state, and the transport keeps them apart on purpose —
+ * a cursor never enters the room's update log, so it is never replayed to a
+ * future reader or folded into the snapshot the teacher grades.
  */
 
 type Props = {
   docId: string;
   /** False for a teacher: they follow the draft and comment, never write in it. */
   canWrite: boolean;
+  /**
+   * Whose caret this is. Sent as a courtesy — the server overwrites it with the
+   * identity it resolved from the session before any teammate sees it, so a
+   * browser cannot label its cursor with a classmate's name. It is passed at all
+   * so this writer's own view is consistent from the first keystroke rather than
+   * after the first round trip.
+   */
+  user: { name: string; color: string };
 };
 
-export function CollabEditor({ docId, canWrite }: Props) {
+export function CollabEditor({ docId, canWrite, user }: Props) {
   const [status, setStatus] = useState<CollabStatus>({ kind: 'connecting' });
   const [staleSchema, setStaleSchema] = useState(false);
 
@@ -49,14 +63,22 @@ export function CollabEditor({ docId, canWrite }: Props) {
   // discard the room and re-download it.
   const ydoc = useMemo(() => new Y.Doc(), [docId]);
 
-  useEffect(() => {
-    const provider = new CollabHttpProvider({
-      documentId: docId,
-      ydoc,
-      canWrite,
-      onStatusChange: setStatus,
-    });
+  // The provider is built here rather than inside the effect because the cursor
+  // extension needs it while the extension list is assembled — it reads carets
+  // off `provider.awareness`. Starting and tearing down still happen in the
+  // effect below; this only constructs it.
+  const provider = useMemo(
+    () =>
+      new CollabHttpProvider({
+        documentId: docId,
+        ydoc,
+        canWrite,
+        onStatusChange: setStatus,
+      }),
+    [docId, ydoc, canWrite]
+  );
 
+  useEffect(() => {
     void provider.start().then(() => {
       // Schema-version handshake, once the room has loaded. A room written by a
       // newer client must not be edited by this one: it would silently drop the
@@ -76,17 +98,22 @@ export function CollabEditor({ docId, canWrite }: Props) {
 
     return () => {
       // Send anything still queued before tearing down, so closing the tab mid
-      // sentence does not lose it.
+      // sentence does not lose it. `destroy` also says goodbye, which takes this
+      // writer's caret off their teammates' screens at once.
       void provider.flush().finally(() => provider.destroy());
     };
-  }, [docId, ydoc, canWrite]);
+  }, [provider, ydoc, canWrite]);
 
   const extensions = useMemo(
     () => [
       ...collaborativeSchemaExtensions,
       Collaboration.configure({ document: ydoc }),
+      CollaborationCursor.configure({
+        provider,
+        user: { name: user.name, color: user.color },
+      }),
     ],
-    [ydoc]
+    [ydoc, provider, user.name, user.color]
   );
 
   const editable = canWrite && status.kind === 'live' && !staleSchema;

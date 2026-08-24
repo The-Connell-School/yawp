@@ -28,6 +28,19 @@
  */
 
 /**
+ * The order every surface must list a draft's members in before building the
+ * scale.
+ *
+ * The scale is a function of the member *list*, not of the member set, so two
+ * pages that order the roster differently hand the same student two different
+ * colours. That is not cosmetic once carets exist: a caret in one colour and
+ * the initials of the person holding it in another is worse than no caret at
+ * all. Exported so the query is written once and every call site can be found
+ * by looking for it.
+ */
+export const AUTHOR_COLOR_MEMBER_ORDER = { membershipId: 'asc' } as const;
+
+/**
  * Ordered by separation: take any prefix and it is the most distinguishable set
  * of that size this palette can give you. All are dark enough for white text
  * (WCAG AA at 5.3:1 or better), because the swatches carry initials.

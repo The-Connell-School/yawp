@@ -14,6 +14,7 @@ import {
   listDraftComments,
   replyToDraftComment,
 } from '~/domain/collaboration/comments.server';
+import { AUTHOR_COLOR_MEMBER_ORDER } from '~/domain/collaboration/author-colors';
 import { DraftCommentThread } from '~/domain/collaboration/draft-comments';
 import { buildContributionBreakdown } from '~/domain/collaboration/contribution.server';
 import {
@@ -85,7 +86,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           classAssignment: { select: { classId: true } },
           members: {
             where: { removedAt: null },
-            orderBy: { membershipId: 'asc' },
+            orderBy: AUTHOR_COLOR_MEMBER_ORDER,
             select: {
               membershipId: true,
               membership: {
@@ -174,7 +175,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           id: true,
           members: {
             where: { removedAt: null },
-            orderBy: { membershipId: 'asc' },
+            orderBy: AUTHOR_COLOR_MEMBER_ORDER,
             select: {
               membershipId: true,
               membership: {
