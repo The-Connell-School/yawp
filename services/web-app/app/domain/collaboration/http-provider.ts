@@ -1,4 +1,11 @@
+import {
+  Awareness,
+  applyAwarenessUpdate,
+  encodeAwarenessUpdate,
+  removeAwarenessStates,
+} from 'y-protocols/awareness';
 import * as Y from 'yjs';
+import { PRESENCE_HEARTBEAT_MS } from './presence';
 
 /**
  * A minimal Yjs provider that syncs over ordinary HTTP requests.
@@ -12,6 +19,11 @@ import * as Y from 'yjs';
  * interval. What it does not cost is the writer's own experience: local edits are
  * applied by the editor before this provider ever sees them, so typing is always
  * instant.
+ *
+ * Carets ride on the same transport. Presence is *not* document state — a
+ * cursor position is worth nothing a second after it is sent — so it is read
+ * from the same poll (same cadence, same draft, no second timer) and written to
+ * its own endpoint, where it can never reach the room's permanent update log.
  *
  * `fetchImpl` and `now` are injectable so the sync logic is testable without a
  * browser.
@@ -38,17 +50,18 @@ export type CollabProviderOptions = {
   sendDebounceMs?: number;
   /** How often to ask for collaborators' edits. */
   pollIntervalMs?: number;
+  /** How long to settle a moving cursor before publishing where it landed. */
+  presenceDebounceMs?: number;
+  /** How often a writer who is not typing re-asserts that they are there. */
+  presenceHeartbeatMs?: number;
   fetchImpl?: FetchLike;
   onStatusChange?: (status: CollabStatus) => void;
-  onPresenceChange?: (present: PresentMember[]) => void;
 };
 
 export type CollabStatus =
   | { kind: 'connecting' }
   | { kind: 'live' }
   | { kind: 'error'; message: string };
-
-export type PresentMember = { membershipId: string; name: string };
 
 /**
  * 250ms of batching turns a burst of keystrokes into one request without being
@@ -57,6 +70,11 @@ export type PresentMember = { membershipId: string; name: string };
 const DEFAULT_SEND_DEBOUNCE_MS = 250;
 /** One second: the agreed latency budget for a collaborator's text appearing. */
 const DEFAULT_POLL_INTERVAL_MS = 1000;
+/**
+ * Short enough that a caret follows the sentence being typed rather than
+ * arriving after it, long enough that holding an arrow key is one request.
+ */
+const DEFAULT_PRESENCE_DEBOUNCE_MS = 200;
 
 export class CollabHttpProvider {
   private readonly documentId: string;
@@ -64,21 +82,36 @@ export class CollabHttpProvider {
   private readonly canWrite: boolean;
   private readonly sendDebounceMs: number;
   private readonly pollIntervalMs: number;
+  private readonly presenceDebounceMs: number;
+  private readonly presenceHeartbeatMs: number;
   private readonly fetchImpl: FetchLike;
   private readonly onStatusChange?: (status: CollabStatus) => void;
-  private readonly onPresenceChange?: (present: PresentMember[]) => void;
+
+  /**
+   * The caret channel, exposed because TipTap's `CollaborationCursor` takes a
+   * provider and reads `provider.awareness` off it. Built on this document's
+   * `Y.Doc` so its client id is the same one the document's own items carry —
+   * which is what lets a caret and the text it wrote belong to one person.
+   */
+  readonly awareness: Awareness;
 
   /** Server cursor: the highest sequence this client has applied. */
   private cursor = 0;
   private pending: Uint8Array[] = [];
   private sendTimer: ReturnType<typeof setTimeout> | null = null;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
+  private presenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
   /** Guards against overlapping requests when one is slow. */
   private sending = false;
   private polling = false;
 
   private readonly handleLocalUpdate: (update: Uint8Array, origin: unknown) => void;
+  private readonly handleAwarenessUpdate: (
+    changes: { added: number[]; updated: number[]; removed: number[] },
+    origin: unknown
+  ) => void;
 
   constructor(options: CollabProviderOptions) {
     this.documentId = options.documentId;
@@ -86,6 +119,11 @@ export class CollabHttpProvider {
     this.canWrite = options.canWrite;
     this.sendDebounceMs = options.sendDebounceMs ?? DEFAULT_SEND_DEBOUNCE_MS;
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+    this.presenceDebounceMs =
+      options.presenceDebounceMs ?? DEFAULT_PRESENCE_DEBOUNCE_MS;
+    this.presenceHeartbeatMs =
+      options.presenceHeartbeatMs ?? PRESENCE_HEARTBEAT_MS;
+    this.awareness = new Awareness(this.ydoc);
     // Wrapped, not assigned. `this.fetchImpl(...)` calls with the provider as
     // `this`, and the browser's fetch throws "Illegal invocation" unless it is
     // called on the global. Assigning it bare means no request ever leaves the
@@ -94,7 +132,6 @@ export class CollabHttpProvider {
     this.fetchImpl =
       options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
     this.onStatusChange = options.onStatusChange;
-    this.onPresenceChange = options.onPresenceChange;
 
     this.handleLocalUpdate = (update, origin) => {
       // Anything we just applied from the server must not be sent back, or two
@@ -104,11 +141,26 @@ export class CollabHttpProvider {
       this.scheduleSend();
     };
 
+    this.handleAwarenessUpdate = ({ added, updated, removed }, origin) => {
+      // Applying a teammate's caret fires this same event. Republishing it
+      // would have two browsers trading one cursor forever, so only a change to
+      // *our own* state, made locally, is worth a request.
+      if (origin === REMOTE_ORIGIN || this.destroyed || !this.canWrite) return;
+      const touched = [...added, ...updated, ...removed];
+      if (!touched.includes(this.awareness.clientID)) return;
+      this.schedulePresenceSend();
+    };
+
     this.ydoc.on('update', this.handleLocalUpdate);
+    this.awareness.on('update', this.handleAwarenessUpdate);
   }
 
   private get endpoint() {
     return `/api/collab/${encodeURIComponent(this.documentId)}/updates`;
+  }
+
+  private get presenceEndpoint() {
+    return `/api/collab/${encodeURIComponent(this.documentId)}/presence`;
   }
 
   /** Catches up on the room, then starts polling. */
@@ -129,6 +181,13 @@ export class CollabHttpProvider {
 
     this.onStatusChange?.({ kind: 'live' });
     this.schedulePoll();
+
+    // Announce arrival rather than waiting for the first cursor move or the
+    // first beat. Presence is "who is in the room", and someone reading their
+    // group's draft without clicking into it is in it — they simply have no
+    // caret to draw yet.
+    if (this.canWrite) void this.sendPresence();
+    this.scheduleHeartbeat();
   }
 
   private scheduleSend() {
@@ -137,6 +196,92 @@ export class CollabHttpProvider {
       this.sendTimer = null;
       void this.flush();
     }, this.sendDebounceMs);
+  }
+
+  private schedulePresenceSend() {
+    if (this.presenceTimer) return;
+    this.presenceTimer = setTimeout(() => {
+      this.presenceTimer = null;
+      void this.sendPresence();
+    }, this.presenceDebounceMs);
+  }
+
+  /**
+   * A writer who is reading rather than typing still has a caret, and the
+   * server's TTL is what covers a browser that vanished. Without a beat between
+   * the two, someone sitting still would lose their caret mid-sentence.
+   */
+  private scheduleHeartbeat() {
+    if (this.destroyed || !this.canWrite || this.heartbeatTimer) return;
+    this.heartbeatTimer = setTimeout(() => {
+      this.heartbeatTimer = null;
+      void this.sendPresence().finally(() => this.scheduleHeartbeat());
+    }, this.presenceHeartbeatMs);
+  }
+
+  /**
+   * Publishes where this client's cursor is.
+   *
+   * Failure is silent, and deliberately so. A caret is worth nothing a second
+   * later: retrying a stale position is worse than dropping it, and putting an
+   * error banner over the draft because a cursor did not arrive would be a
+   * bigger interruption than the missing cursor. The next beat carries the
+   * current position, and the server's TTL handles a client that stops.
+   */
+  private async sendPresence({ keepalive = false } = {}): Promise<void> {
+    if (!this.canWrite) return;
+
+    const update = encodeAwarenessUpdate(this.awareness, [
+      this.awareness.clientID,
+    ]);
+
+    try {
+      await this.fetchImpl(this.presenceEndpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        // The goodbye is sent from `destroy`, as the page is going away. Without
+        // keepalive the browser cancels it with the rest of the page's requests
+        // and the caret lingers until the TTL expires it.
+        keepalive,
+        body: JSON.stringify({ awareness: bytesToBase64(update) }),
+      });
+    } catch {
+      // Intentionally ignored; see above.
+    }
+  }
+
+  /**
+   * Reconciles the carets on screen with the ones the server says are live.
+   *
+   * The response is the whole live set, not a delta, which makes this both the
+   * apply and the removal: a client we are still showing that the server no
+   * longer names has gone, whether it said goodbye or simply stopped.
+   */
+  private applyPresence(entries: { clientId: number; state: string }[]) {
+    const live = new Set<number>();
+
+    for (const entry of entries) {
+      live.add(entry.clientId);
+      // Our own state, echoed back. Applying it would be a no-op — the clock is
+      // ours and cannot be newer than what we hold — so skip the work.
+      if (entry.clientId === this.awareness.clientID) continue;
+      try {
+        applyAwarenessUpdate(
+          this.awareness,
+          base64ToBytes(entry.state),
+          REMOTE_ORIGIN
+        );
+      } catch {
+        // One unreadable caret must not cost the others.
+      }
+    }
+
+    const gone = [...this.awareness.getStates().keys()].filter(
+      (clientId) => clientId !== this.awareness.clientID && !live.has(clientId)
+    );
+    if (gone.length > 0) {
+      removeAwarenessStates(this.awareness, gone, REMOTE_ORIGIN);
+    }
   }
 
   private schedulePoll() {
@@ -197,7 +342,7 @@ export class CollabHttpProvider {
       const body = (await response.json()) as {
         cursor?: number;
         updates?: string[];
-        present?: PresentMember[];
+        presence?: { clientId: number; state: string }[];
       };
       if (this.destroyed) return true;
 
@@ -212,7 +357,7 @@ export class CollabHttpProvider {
       if (typeof body.cursor === 'number' && body.cursor > this.cursor) {
         this.cursor = body.cursor;
       }
-      if (body.present) this.onPresenceChange?.(body.present);
+      if (body.presence) this.applyPresence(body.presence);
 
       return true;
     } catch {
@@ -225,10 +370,27 @@ export class CollabHttpProvider {
   destroy() {
     this.destroyed = true;
     this.ydoc.off('update', this.handleLocalUpdate);
+    this.awareness.off('update', this.handleAwarenessUpdate);
+
     if (this.sendTimer) clearTimeout(this.sendTimer);
     if (this.pollTimer) clearTimeout(this.pollTimer);
+    if (this.presenceTimer) clearTimeout(this.presenceTimer);
+    if (this.heartbeatTimer) clearTimeout(this.heartbeatTimer);
     this.sendTimer = null;
     this.pollTimer = null;
+    this.presenceTimer = null;
+    this.heartbeatTimer = null;
+
+    // Say goodbye before tearing down, so a teammate's screen loses the caret
+    // when the tab closes rather than fifteen seconds later. `setLocalState`
+    // must come first: it is what makes the encoded state a removal.
+    const leaving = this.canWrite;
+    this.awareness.setLocalState(null);
+    if (leaving) void this.sendPresence({ keepalive: true });
+
+    // Destroying the Awareness clears its own renewal interval, which would
+    // otherwise keep a timer alive for the life of the page.
+    this.awareness.destroy();
   }
 }
 
