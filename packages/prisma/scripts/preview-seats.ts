@@ -119,6 +119,10 @@ export async function createPreviewSeat(
       numOfTeacherSeats: 40,
       reporterEnabled: true,
       classInsightsEnabled: false,
+      // Preview seats exist to demo pilot features. A seat created with the
+      // gate off hides the feature it was deployed to show, and reads as
+      // broken rather than switched off.
+      revisionFlowEnabled: true,
       previewSeatCode: seat.previewSeatCode,
     },
   });

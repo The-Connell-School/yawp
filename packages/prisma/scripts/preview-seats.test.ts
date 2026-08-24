@@ -3,6 +3,7 @@ import {
   backfillLegacyPreviewSeatCodes,
   buildPreviewSeatDefinition,
   buildPreviewSeatDefinitions,
+  createPreviewSeat,
   createRuntimePreviewSeat,
   ensurePreviewSeats,
   type PreviewSeatDefinition,
@@ -302,6 +303,40 @@ describe('legacy preview seat code backfill', () => {
       'missing',
     ]);
     expect(updateMany).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('preview seat pilot flags', () => {
+  // Preview seats exist so people can try the pilot features. A seat created
+  // with a rollout gate off silently hides the feature it was deployed to
+  // demonstrate, and the symptom looks like the feature is broken rather than
+  // switched off.
+  test('turns the student revision flow on for a newly created seat', async () => {
+    const created: Array<Record<string, unknown>> = [];
+    const transaction = {
+      organization: {
+        create: mock(async ({ data }: { data: Record<string, unknown> }) => {
+          created.push(data);
+          return data;
+        }),
+      },
+      organizationAssignmentType: { createMany: mock(async () => ({})) },
+      assignmentType: { findMany: mock(async () => []) },
+    };
+
+    await createPreviewSeat(transaction as never, {
+      ...buildPreviewSeatDefinition(2, { previewSeatCode: 'calm-panda-8127' }),
+    }).catch(() => {
+      // The seed and class-insights steps need a real client; the organization
+      // row is created before either of them and is all this test asserts on.
+    });
+
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({
+      id: 'preview-seat-2',
+      reporterEnabled: true,
+      revisionFlowEnabled: true,
+    });
   });
 });
 
