@@ -1,7 +1,8 @@
 import { data as dataResponse, type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import * as Y from 'yjs';
 import { applyCollabSnapshot } from '~/domain/collaboration/dual-write.server';
-import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
+import { readPresence } from '~/domain/collaboration/presence.server';
+import { requireCollabRoomAccess } from '~/domain/collaboration/room-access.server';
 import {
   appendUpdate,
   compactRoomIfNeeded,
@@ -9,18 +10,12 @@ import {
   readUpdatesSince,
 } from '~/domain/collaboration/room-store.server';
 import { yUpdateToSnapshot } from '~/domain/collaboration/snapshot';
-import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { prisma } from '~/utils/db.server';
-import {
-  documentAuthorWhere,
-  documentReadWhere,
-  getIsPlatformAdmin,
-} from '~/utils/document-access.server';
 
 /**
  * The collaboration transport, self-hosted.
  *
- * `GET`  — everything after the caller's cursor, so a client can catch up or poll.
+ * `GET`  — everything after the caller's cursor, so a client can catch up or
+ *          poll, plus who is currently in the room and where their carets are.
  * `POST` — one batch of the caller's own Yjs updates.
  *
  * This is what replaces a hosted provider. It works because Yjs updates are
@@ -35,52 +30,27 @@ import {
  * - reading requires read scope, so a teacher can follow a draft live
  * - writing requires author scope, which excludes teachers by design: they comment
  *   on student work, they do not type in it
+ *
+ * Presence rides along on the GET rather than getting a poll of its own. Carets
+ * and text are wanted on exactly the same cadence and about exactly the same
+ * draft, so a second timer would double the request count to learn things this
+ * one already had to ask for. Publishing a caret is a separate endpoint, and
+ * that asymmetry is deliberate: a cursor move must never enter the update log
+ * or trigger the snapshot dual-write, which is what a POST here does.
  */
 
 /** Guards against a single request carrying an implausible amount of state. */
 const MAX_UPDATE_BYTES = 512 * 1024;
 const MAX_UPDATES_PER_REQUEST = 64;
 
-async function requireRoom(request: Request, documentId: string | undefined) {
-  if (!documentId) return { error: 'missing-document' as const };
-
-  const userId = await requireUserId(request);
-  const profile = await requireMembership(request, userId);
-  const isAdmin = await getIsPlatformAdmin(userId);
-
-  const room = await prisma.document.findFirst({
-    where: { id: documentId, ...collaborationRoomWhere() },
-    select: { id: true },
-  });
-
-  if (!room) return { error: 'not-a-room' as const };
-
-  return { profileId: profile.id, isAdmin };
-}
-
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const documentId = params.id;
-  const room = await requireRoom(request, documentId);
+  const access = await requireCollabRoomAccess(request, documentId, 'read');
 
-  if ('error' in room) {
+  if (!access.ok) {
     return dataResponse(
       { success: false, message: 'Not available.' },
-      { status: room.error === 'missing-document' ? 400 : 403 }
-    );
-  }
-
-  const readable = await prisma.document.findFirst({
-    where: {
-      id: documentId,
-      ...documentReadWhere({ profileId: room.profileId, isAdmin: room.isAdmin }),
-    },
-    select: { id: true },
-  });
-
-  if (!readable) {
-    return dataResponse(
-      { success: false, message: 'Not available.' },
-      { status: 403 }
+      { status: access.reason === 'missing-document' ? 400 : 403 }
     );
   }
 
@@ -90,44 +60,44 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // harmless, whereas trusting a bad number could silently drop content.
   const sinceSeq = Number.isFinite(rawSince) && rawSince > 0 ? Math.floor(rawSince) : 0;
 
-  const { updates, cursor, hasMore } = await readUpdatesSince({
-    documentId: documentId!,
-    sinceSeq,
-  });
+  const [{ updates, cursor, hasMore }, presence] = await Promise.all([
+    readUpdatesSince({ documentId: documentId!, sinceSeq }),
+    readPresence({ documentId: documentId! }),
+  ]);
 
   return dataResponse({
     success: true,
     cursor,
     hasMore,
     updates: updates.map((update) => Buffer.from(update).toString('base64')),
+    // The whole live set every time, not a delta. Awareness states carry their
+    // own clock, so re-applying one a client already has is a no-op — the same
+    // property that lets the document updates above be replayed safely. It also
+    // means the list doubles as the answer to "who left": a client the caller is
+    // still showing and this set does not name has gone.
+    presence: presence.map((entry) => ({
+      clientId: entry.clientId,
+      state: Buffer.from(entry.state).toString('base64'),
+    })),
   });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const documentId = params.id;
-  const room = await requireRoom(request, documentId);
-
-  if ('error' in room) {
-    return dataResponse(
-      { success: false, message: 'Not available.' },
-      { status: room.error === 'missing-document' ? 400 : 403 }
-    );
-  }
-
   // Author scope: the owner or an active co-author. A teacher reading the draft
   // gets a 403 here even though the GET above succeeds for them.
-  const writable = await prisma.document.findFirst({
-    where: {
-      id: documentId,
-      ...documentAuthorWhere({ profileId: room.profileId, isAdmin: room.isAdmin }),
-    },
-    select: { id: true },
-  });
+  const access = await requireCollabRoomAccess(request, documentId, 'author');
 
-  if (!writable) {
+  if (!access.ok) {
     return dataResponse(
-      { success: false, message: 'You can read this draft but not write in it.' },
-      { status: 403 }
+      {
+        success: false,
+        message:
+          access.reason === 'out-of-scope'
+            ? 'You can read this draft but not write in it.'
+            : 'Not available.',
+      },
+      { status: access.reason === 'missing-document' ? 400 : 403 }
     );
   }
 
@@ -195,7 +165,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const { seq } = await appendUpdate({
       documentId: documentId!,
       update,
-      membershipId: room.profileId,
+      membershipId: access.profileId,
     });
     cursor = seq;
   }
@@ -213,7 +183,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       documentId: documentId!,
       snapshot: yUpdateToSnapshot(state),
       source: 'collab-http',
-      membershipId: room.profileId,
+      membershipId: access.profileId,
     });
   }
 

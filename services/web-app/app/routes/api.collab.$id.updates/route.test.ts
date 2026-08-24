@@ -13,6 +13,7 @@ const readUpdatesSince = mock();
 const readRoomState = mock();
 const compactRoomIfNeeded = mock();
 const applyCollabSnapshot = mock();
+const readPresence = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
@@ -25,6 +26,7 @@ mock.module('~/domain/collaboration/room-store.server', () => ({
 mock.module('~/domain/collaboration/dual-write.server', () => ({
   applyCollabSnapshot,
 }));
+mock.module('~/domain/collaboration/presence.server', () => ({ readPresence }));
 
 const { action, loader } = await import('./route');
 
@@ -88,6 +90,7 @@ describe('api.collab.$id.updates', () => {
       .mockReset()
       .mockResolvedValue({ updates: [], cursor: 0, hasMore: false });
     readRoomState.mockReset().mockResolvedValue(null);
+    readPresence.mockReset().mockResolvedValue([]);
     compactRoomIfNeeded.mockReset().mockResolvedValue({ compacted: false });
     applyCollabSnapshot
       .mockReset()
@@ -95,6 +98,42 @@ describe('api.collab.$id.updates', () => {
   });
 
   describe('reading', () => {
+    test('carries the whole live set of carets alongside the text', async () => {
+      // Presence rides on this poll rather than getting one of its own: carets
+      // and text are wanted on the same cadence about the same draft.
+      queue(ROOM, ROOM);
+      readPresence.mockResolvedValue([
+        { clientId: 42, membershipId: 'member-ada', state: new Uint8Array([1, 2]) },
+      ]);
+
+      const body = await readBody(await get());
+
+      expect(body.presence).toEqual([
+        { clientId: 42, state: Buffer.from([1, 2]).toString('base64') },
+      ]);
+    });
+
+    test('a teacher following the draft sees the carets in it', async () => {
+      // Read scope, not author scope: they never publish one of their own, but
+      // watching a group write is the point of the page for them.
+      queue(ROOM, ROOM);
+      readPresence.mockResolvedValue([
+        { clientId: 7, membershipId: 'member-sam', state: new Uint8Array([9]) },
+      ]);
+
+      const body = await readBody(await get());
+
+      expect(body.presence).toHaveLength(1);
+    });
+
+    test('never reads presence for a caller outside read scope', async () => {
+      queue(ROOM, null);
+
+      await get();
+
+      expect(readPresence).not.toHaveBeenCalled();
+    });
+
     test('returns updates after the cursor, base64 encoded', async () => {
       queue(ROOM, ROOM);
       readUpdatesSince.mockResolvedValue({
