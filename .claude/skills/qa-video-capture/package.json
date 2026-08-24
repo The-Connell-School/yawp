@@ -1,0 +1,19 @@
+{
+  "name": "qa-video-capture-skill",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Portable Claude Code skill helpers for narrated browser QA capture.",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "doctor": "./bin/doctor",
+    "capture": "node scripts/capture_browser_qa.mjs",
+    "narrate": "node scripts/narrate_qa_video.mjs",
+    "publish": "node scripts/publish_qa_video.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.61.1"
+  }
+}

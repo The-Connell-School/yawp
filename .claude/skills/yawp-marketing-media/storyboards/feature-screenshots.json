@@ -1,0 +1,57 @@
+{
+  "name": "feature-screenshots",
+  "title": "Screenshot set for site, deck, and one-pager",
+  "audience": "Any surface that needs still images of the product",
+  "goal": "Produce a consistent, current set of product stills at one viewport.",
+  "persona": "teacher",
+  "viewport": { "width": 1440, "height": 900 },
+  "deviceScaleFactor": 2,
+  "defaultHold": 0.5,
+  "scenes": [
+    {
+      "id": "landing",
+      "goto": "/",
+      "waitFor": "main",
+      "screenshotName": "01-landing"
+    },
+    {
+      "id": "teacher-dashboard",
+      "goto": "/app",
+      "waitFor": "main",
+      "screenshotName": "02-teacher-dashboard"
+    },
+    {
+      "id": "my-classes",
+      "goto": "/app/my-classes",
+      "waitFor": "main",
+      "screenshotName": "03-my-classes"
+    },
+    {
+      "id": "assignments",
+      "goto": "/app/assignments",
+      "waitFor": "main",
+      "screenshotName": "04-assignments"
+    },
+    {
+      "id": "student-work",
+      "goto": "/app/student-work",
+      "waitFor": "main",
+      "screenshotName": "05-student-work"
+    },
+    {
+      "id": "teacher-trainings",
+      "goto": "/app/teacher-trainings",
+      "waitFor": "main",
+      "screenshotName": "06-teacher-trainings"
+    },
+    {
+      "id": "student-dashboard",
+      "steps": [
+        { "action": "login", "persona": "student", "path": "/app" },
+        { "action": "waitFor", "selector": "main" },
+        { "action": "wait", "seconds": 1 }
+      ],
+      "screenshotName": "07-student-dashboard"
+    }
+  ]
+}
