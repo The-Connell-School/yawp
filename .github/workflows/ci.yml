@@ -101,6 +101,9 @@ jobs:
           PGPASSWORD: postgres
         run: createdb -h 127.0.0.1 -U postgres yawp_migration_ci
 
+      - name: 🧪 Validate local dev seed fixtures
+        run: bun test ./packages/prisma/scripts/local-dev/revision-fixture.test.ts ./packages/prisma/scripts/seed-local-dev.test.ts
+
       - name: 🧪 Validate teacher training assignment migration data swap
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci

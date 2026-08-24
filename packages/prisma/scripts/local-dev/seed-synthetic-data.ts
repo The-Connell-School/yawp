@@ -7,6 +7,21 @@ import {
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './dev-personas';
+import {
+  REVISION_DRAFT_COMMENTS,
+  REVISION_EARLY_DRAFT_TEXT,
+  REVISION_ESSAY_TEXT,
+  REVISION_ESSAY_TITLE,
+  REVISION_LETTER_GRADE,
+  REVISION_NUMERIC_PERCENTAGE,
+  REVISION_OVERALL_COMMENT,
+  REVISION_OVERALL_SCORE,
+  REVISION_RUBRIC_SCORES,
+  REVISION_TEACHER_COMMENTS,
+  REVISION_TUTOR_EXCHANGE,
+  buildRevisionEssayHtml,
+  buildRevisionGrammarIssuesPayload,
+} from './revision-fixture';
 
 type PersonaRecord = {
   persona: LocalDevPersona;
@@ -248,11 +263,23 @@ export async function seedSyntheticLocalDevData(
   // AssignmentType, or opening it hits "No assignment module session found."
   // Kept in sync by hand because this script runs outside the web-app's `~/`
   // alias resolution and can't import that helper directly.
-  function buildModuleSessionsCreateData(modules: typeof thesisModules) {
-    return modules.map((assignmentModule) => {
+  function buildModuleSessionsCreateData(
+    modules: typeof thesisModules,
+    options: {
+      /**
+       * A worked pre-writing conversation to append to the first module's
+       * session, after its opening instruction. Without one, every seeded
+       * document's tutor column shows a single canned prompt and nothing else.
+       */
+      firstModuleExchange?: Array<{ agent: 'user' | 'assistant'; content: string }>;
+    } = {}
+  ) {
+    return modules.map((assignmentModule, moduleIndex) => {
       const firstInstruction = assignmentModule.instructions[0];
+      const exchange =
+        moduleIndex === 0 ? (options.firstModuleExchange ?? []) : [];
       return {
-        instructionsCompleted: 0,
+        instructionsCompleted: exchange.length > 0 ? 1 : 0,
         assignmentModuleId: assignmentModule.id,
         ...(firstInstruction
           ? {
@@ -263,6 +290,11 @@ export async function seedSyntheticLocalDevData(
                     agent: 'assistant',
                     instructionId: firstInstruction.id,
                   },
+                  ...exchange.map((message) => ({
+                    content: message.content,
+                    agent: message.agent,
+                    instructionId: firstInstruction.id,
+                  })),
                 ],
               },
             }
@@ -413,56 +445,94 @@ export async function seedSyntheticLocalDevData(
     },
   });
 
-  const gradedText =
-    'Education is the foundation of society. Through learning, students develop critical thinking skills.';
-  const gradedHtml = `<p>${gradedText}</p>`;
+  // A full-length graded essay: the revision split screen is unreadable as a
+  // design question until the panes hold work of a realistic size. See
+  // ./revision-fixture.ts.
+  const gradedText = REVISION_ESSAY_TEXT;
+  const gradedHtml = buildRevisionEssayHtml();
   const gradedDocument = await prisma.document.create({
     data: {
-      title: 'Graded civic essay',
+      title: REVISION_ESSAY_TITLE,
       text: gradedText,
       html: gradedHtml,
-      revision: 4,
+      revision: 12,
       membershipId: studentGraded.membershipId,
       assignmentTypeId: thesisAssignmentTypeId,
       assignmentId: thesisAssignment.id,
       classAssignmentId: thesisClassAssignment.id,
       assignmentModuleSessions: {
-        create: buildModuleSessionsCreateData(thesisModules),
+        create: buildModuleSessionsCreateData(thesisModules, {
+          firstModuleExchange: REVISION_TUTOR_EXCHANGE,
+        }),
       },
     },
   });
+  await prisma.documentRevision.createMany({
+    data: [
+      {
+        documentId: gradedDocument.id,
+        text: REVISION_EARLY_DRAFT_TEXT,
+        html: REVISION_EARLY_DRAFT_TEXT.split('\n\n')
+          .map((paragraph) => `<p>${paragraph}</p>`)
+          .join(''),
+        trigger: 'auto',
+      },
+      {
+        documentId: gradedDocument.id,
+        text: gradedText,
+        html: gradedHtml,
+        trigger: 'submit',
+      },
+    ],
+  });
+  for (const draftComment of REVISION_DRAFT_COMMENTS) {
+    await prisma.documentComment.create({
+      data: {
+        id: draftComment.id,
+        documentId: gradedDocument.id,
+        membershipId: primaryTeacher.membershipId,
+        content: draftComment.content,
+        highlightId: draftComment.id,
+        responses: draftComment.responses
+          ? {
+              create: draftComment.responses.map((content) => ({
+                content,
+                membershipId: studentGraded.membershipId,
+              })),
+            }
+          : undefined,
+      },
+    });
+  }
   const gradedSubmission = await prisma.submission.create({
     data: {
       documentId: gradedDocument.id,
       html: gradedHtml,
       text: gradedText,
-      title: 'Graded civic essay',
-      submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+      title: REVISION_ESSAY_TITLE,
+      submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3),
       gradedByMembershipId: primaryTeacher.membershipId,
-      gradedAt: new Date(),
-      numericPercentage: 82,
-      letterGrade: 'B',
-      overallScore: 4,
-      overallComment: 'Strong thesis with room to deepen evidence.',
-      rubricScores: {
-        thesis_and_content: 4,
-        organization_and_structure: 4,
-        evidence_and_support: 3,
-        voice_and_style: 4,
-        grammar_and_mechanics: 3,
-      },
+      gradedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+      numericPercentage: REVISION_NUMERIC_PERCENTAGE,
+      letterGrade: REVISION_LETTER_GRADE,
+      overallScore: REVISION_OVERALL_SCORE,
+      overallComment: REVISION_OVERALL_COMMENT,
+      rubricScores: REVISION_RUBRIC_SCORES,
+      grammarIssues: buildRevisionGrammarIssuesPayload(),
       releasedAt: new Date(),
     },
   });
-  await prisma.submissionComment.create({
-    data: {
-      submissionId: gradedSubmission.id,
-      membershipId: primaryTeacher.membershipId,
-      content: 'Strong thesis statement in the opening sentence.',
-      excerpt: 'Education is the foundation of society.',
-      occurrence: 1,
-    },
-  });
+  for (const comment of REVISION_TEACHER_COMMENTS) {
+    await prisma.submissionComment.create({
+      data: {
+        submissionId: gradedSubmission.id,
+        membershipId: primaryTeacher.membershipId,
+        content: comment.content,
+        excerpt: comment.excerpt,
+        occurrence: comment.occurrence,
+      },
+    });
+  }
 
   const unreleasedText =
     'Pending release essay body. The first sentence matters for the excerpt.';
