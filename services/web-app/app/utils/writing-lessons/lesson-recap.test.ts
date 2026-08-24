@@ -76,6 +76,13 @@ describe('buildLessonRecap', () => {
     expect(recap).toContain('by zombies');
   });
 
+  test('attaches each section body to its heading, as the lessons write it', () => {
+    // The renderer reads a heading plus the block under it as one unit, so a
+    // tip a blank line away renders as an empty tip card.
+    expect(recap).toContain('## Quick Tip\n**The "by zombies" test:**');
+    expect(recap).toContain('## The Rule\nIn **active voice**');
+  });
+
   test('drops the framing and the exercises', () => {
     // "Why This Matters" sells the skill — a student already practising it has
     // bought in. The exercises are the set they are already working.

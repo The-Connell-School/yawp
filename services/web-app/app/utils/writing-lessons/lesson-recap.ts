@@ -62,6 +62,18 @@ function findSection(
   return sections.find((section) => pattern.test(section.heading));
 }
 
+/**
+ * A heading and its body, attached the way the lessons themselves write it:
+ * the first block on the line under the heading. The renderer reads a heading
+ * plus its opening block as one unit — a Quick Tip whose text is a block away
+ * renders as an empty tip card with the tip loose underneath it.
+ */
+function withHeading(heading: string, blocks: string[]): string {
+  const [first, ...rest] = blocks;
+  const opening = `## ${heading}\n${first}`;
+  return rest.length > 0 ? `${opening}\n\n${rest.join('\n\n')}` : opening;
+}
+
 export function buildLessonRecap(content: string): string {
   const sections = splitSections(content);
   const parts: string[] = [];
@@ -70,7 +82,7 @@ export function buildLessonRecap(content: string): string {
   if (rule) {
     const kept = blocksOf(rule.body).slice(0, MAX_RULE_BLOCKS);
     if (kept.length > 0) {
-      parts.push(`## The Rule\n\n${kept.join('\n\n')}`);
+      parts.push(withHeading('The Rule', kept));
     }
   }
 
@@ -81,7 +93,7 @@ export function buildLessonRecap(content: string): string {
       .filter((block) => /^\*\*Example/i.test(block))
       .slice(0, MAX_EXAMPLES);
     if (kept.length > 0) {
-      parts.push(`## See It In Action\n\n${kept.join('\n\n')}`);
+      parts.push(withHeading('See It In Action', kept));
     }
   }
 
@@ -89,7 +101,7 @@ export function buildLessonRecap(content: string): string {
   if (quickTip) {
     const kept = blocksOf(quickTip.body);
     if (kept.length > 0) {
-      parts.push(`## Quick Tip\n\n${kept.join('\n\n')}`);
+      parts.push(withHeading('Quick Tip', kept));
     }
   }
 
