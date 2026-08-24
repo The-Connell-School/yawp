@@ -9,7 +9,23 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
+import {
+  ArrowLeft,
+  Camera,
+  Check,
+  Clapperboard,
+  Download,
+  Film,
+  Images,
+  Monitor,
+  PenLine,
+  Smartphone,
+  Timer,
+  UserRound,
+  X,
+  ZoomIn,
+} from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { JobStatusBadge } from '~/components/marketing/job-status-badge';
 import { Button } from '~/components/ui/button';
@@ -34,6 +50,7 @@ import {
   safeParseStoryboard,
   type MarketingJobStatus,
   type MarketingOutput,
+  type StoryboardScene,
 } from '../../../../../packages/marketing-media';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 
@@ -325,6 +342,140 @@ export async function action({ request, params }: ActionFunctionArgs) {
   return dataResponse({ error: 'Unknown action.' }, { status: 400 });
 }
 
+type StageState = 'done' | 'active' | 'failed' | 'stopped' | 'pending';
+
+/**
+ * Where a job stands, drawn as the pipeline it travels: storyboard →
+ * queue → filming → media. Which stage a failure or cancellation landed in
+ * is read off the row — a job with no storyboard died writing one, a job
+ * with one died (or was stopped) later.
+ */
+function pipelineStages(job: {
+  status: string;
+  storyboard: unknown;
+}): { key: string; label: string; icon: ReactNode; state: StageState }[] {
+  const hasStoryboard = Boolean(job.storyboard);
+  const states: Record<string, StageState[]> = {
+    GENERATING: ['active', 'pending', 'pending'],
+    QUEUED: ['done', 'active', 'pending'],
+    RENDERING: ['done', 'done', 'active'],
+    SUCCEEDED: ['done', 'done', 'done'],
+    FAILED: hasStoryboard
+      ? ['done', 'done', 'failed']
+      : ['failed', 'pending', 'pending'],
+    CANCELLED: hasStoryboard
+      ? ['done', 'stopped', 'stopped']
+      : ['stopped', 'stopped', 'stopped'],
+  };
+  const [storyboardState, queueState, filmingState] = states[job.status] ?? [
+    'pending',
+    'pending',
+    'pending',
+  ];
+
+  return [
+    {
+      key: 'storyboard',
+      label: 'Storyboard',
+      icon: <PenLine className="h-3.5 w-3.5" aria-hidden />,
+      state: storyboardState,
+    },
+    {
+      key: 'queue',
+      label: 'Queue',
+      icon: <Timer className="h-3.5 w-3.5" aria-hidden />,
+      state: queueState,
+    },
+    {
+      key: 'filming',
+      label: 'Filming',
+      icon: <Clapperboard className="h-3.5 w-3.5" aria-hidden />,
+      state: filmingState,
+    },
+    {
+      key: 'media',
+      label: 'Media',
+      icon: <Images className="h-3.5 w-3.5" aria-hidden />,
+      state:
+        job.status === 'SUCCEEDED'
+          ? 'done'
+          : filmingState === 'active'
+            ? 'pending'
+            : filmingState === 'done'
+              ? 'done'
+              : filmingState,
+    },
+  ];
+}
+
+const STAGE_CIRCLE: Record<StageState, string> = {
+  done: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+  active:
+    'border-indigo-400 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200 animate-pulse',
+  failed: 'border-red-300 bg-red-50 text-red-700',
+  stopped: 'border-gray-300 bg-gray-100 text-gray-500',
+  pending: 'border-border bg-muted/40 text-muted-foreground/60',
+};
+
+function PipelineRail({ stages }: { stages: ReturnType<typeof pipelineStages> }) {
+  return (
+    <ol className="flex items-center gap-0" aria-label="Render pipeline">
+      {stages.map((stage, index) => (
+        <li key={stage.key} className="flex items-center">
+          {index > 0 ? (
+            <span
+              aria-hidden
+              className={`mx-1 h-px w-6 md:w-10 ${
+                stage.state === 'pending' ? 'bg-border' : 'bg-emerald-300'
+              }`}
+            />
+          ) : null}
+          <span className="flex items-center gap-1.5">
+            <span
+              className={`flex h-7 w-7 items-center justify-center rounded-full border ${STAGE_CIRCLE[stage.state]}`}
+            >
+              {stage.state === 'done' ? (
+                <Check className="h-3.5 w-3.5" aria-hidden />
+              ) : stage.state === 'failed' || stage.state === 'stopped' ? (
+                <X className="h-3.5 w-3.5" aria-hidden />
+              ) : (
+                stage.icon
+              )}
+            </span>
+            <span
+              className={`hidden text-xs sm:block ${
+                stage.state === 'pending'
+                  ? 'text-muted-foreground/60'
+                  : 'text-foreground'
+              }`}
+            >
+              {stage.label}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (!bytes) return '';
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** One human line for what a scene's steps do, without dumping JSON on the page. */
+function summarizeSteps(scene: StoryboardScene): string | null {
+  if (!scene.steps || scene.steps.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const step of scene.steps) {
+    counts.set(step.action, (counts.get(step.action) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([action, count]) => (count > 1 ? `${action} ×${count}` : action))
+    .join(' · ');
+}
+
 export default function Route() {
   const {
     job,
@@ -352,17 +503,30 @@ export default function Route() {
     return () => clearInterval(timer);
   }, [active, revalidator]);
 
+  const sceneSeconds =
+    storyboard?.scenes.map((scene) =>
+      estimateRenderSeconds({ scenes: [scene] })
+    ) ?? [];
+  const totalSceneSeconds = sceneSeconds.reduce(
+    (total, seconds) => total + seconds,
+    0
+  );
+
   return (
-    <div className="flex flex-col gap-6 p-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 pb-16">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Link className="text-sm underline" to="/app/admin/marketing-media">
-            ← All renders
+        <div className="min-w-0">
+          <Link
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            to="/app/admin/marketing-media"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+            All renders
           </Link>
           <h1 className="mt-1 text-2xl font-semibold">
             {storyboard?.title ?? 'Untitled render'}
           </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
             <JobStatusBadge status={job.status} />
             {job.parentJobId ? (
               <Link
@@ -372,9 +536,35 @@ export default function Route() {
                 Revision of an earlier take
               </Link>
             ) : null}
-            <span>{job.kind === 'CLIP' ? 'Silent clip' : 'Screenshots'}</span>
+            <span className="inline-flex items-center gap-1">
+              {job.kind === 'CLIP' ? (
+                <Film className="h-3.5 w-3.5" aria-hidden />
+              ) : (
+                <Camera className="h-3.5 w-3.5" aria-hidden />
+              )}
+              {job.kind === 'CLIP' ? 'Silent clip' : 'Screenshots'}
+            </span>
             {estimatedSeconds ? (
-              <span>~{estimatedSeconds}s of screen time</span>
+              <span className="inline-flex items-center gap-1">
+                <Timer className="h-3.5 w-3.5" aria-hidden />~{estimatedSeconds}
+                s of screen time
+              </span>
+            ) : null}
+            {storyboard ? (
+              <span className="inline-flex items-center gap-1">
+                <UserRound className="h-3.5 w-3.5" aria-hidden />
+                {storyboard.persona}
+              </span>
+            ) : null}
+            {storyboard ? (
+              <span className="inline-flex items-center gap-1">
+                {storyboard.viewport.width < storyboard.viewport.height ? (
+                  <Smartphone className="h-3.5 w-3.5" aria-hidden />
+                ) : (
+                  <Monitor className="h-3.5 w-3.5" aria-hidden />
+                )}
+                {storyboard.viewport.width}×{storyboard.viewport.height}
+              </span>
             ) : null}
             {job.model ? (
               <span>via {job.model}</span>
@@ -408,6 +598,11 @@ export default function Route() {
         </div>
       </div>
 
+      {/* Where in the pipeline this take stands right now. */}
+      <div className="rounded-lg border bg-muted/20 px-4 py-3">
+        <PipelineRail stages={pipelineStages(job)} />
+      </div>
+
       {job.revisionFeedback ? (
         <Card>
           <CardHeader>
@@ -416,7 +611,7 @@ export default function Route() {
           <CardContent className="flex flex-col gap-3">
             <blockquote
               data-testid="marketing-revision-feedback"
-              className="border-l-2 pl-3 text-sm italic text-muted-foreground"
+              className="border-l-2 border-indigo-300 pl-3 text-sm italic text-muted-foreground"
             >
               {job.revisionFeedback}
             </blockquote>
@@ -527,6 +722,90 @@ export default function Route() {
         </Card>
       ) : null}
 
+      {/* ——— The screening room: what this take produced ——— */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Images className="h-4 w-4 text-indigo-500" aria-hidden />
+            Media
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {outputs.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed p-8 text-center">
+              <Clapperboard
+                className={`h-7 w-7 text-muted-foreground/50 ${active ? 'animate-pulse' : ''}`}
+                aria-hidden
+              />
+              <p className="text-sm text-muted-foreground">
+                {active
+                  ? 'Nothing yet. This page refreshes while the render runs.'
+                  : 'This job produced no media.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {outputs.map((output) => (
+                <figure
+                  key={output.key}
+                  data-testid="marketing-job-output"
+                  className="flex flex-col overflow-hidden rounded-lg border"
+                >
+                  <div className="flex items-center justify-center bg-slate-950 p-2">
+                    {output.kind === 'VIDEO' ? (
+                      <video
+                        className="max-h-96 w-full rounded"
+                        src={output.url}
+                        controls
+                        preload="metadata"
+                      />
+                    ) : (
+                      <img
+                        className="max-h-96 w-full rounded object-contain"
+                        src={output.url}
+                        alt={output.label}
+                        loading="lazy"
+                      />
+                    )}
+                  </div>
+                  <figcaption className="flex items-center justify-between gap-2 bg-card px-3 py-2 text-xs text-muted-foreground">
+                    <span className="truncate font-medium text-foreground">
+                      {output.label}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-3">
+                      {output.width && output.height ? (
+                        <span className="tabular-nums">
+                          {output.width}×{output.height}
+                        </span>
+                      ) : null}
+                      {output.durationMs ? (
+                        <span className="tabular-nums">
+                          {Math.round(output.durationMs / 100) / 10}s
+                        </span>
+                      ) : null}
+                      {output.bytes ? (
+                        <span className="tabular-nums">
+                          {formatBytes(output.bytes)}
+                        </span>
+                      ) : null}
+                      <a
+                        className="inline-flex items-center gap-1 font-medium text-foreground underline"
+                        href={output.url}
+                        download
+                      >
+                        <Download className="h-3 w-3" aria-hidden />
+                        Download
+                      </a>
+                    </span>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ——— The brief this take was filmed from ——— */}
       <Card>
         <CardHeader>
           <CardTitle>Brief</CardTitle>
@@ -544,53 +823,6 @@ export default function Route() {
             {job.createdBy.name || job.createdBy.email} ·{' '}
             {new Date(job.createdAt).toLocaleString()}
           </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Media</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {outputs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {active
-                ? 'Nothing yet. This page refreshes while the render runs.'
-                : 'This job produced no media.'}
-            </p>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {outputs.map((output) => (
-                <figure
-                  key={output.key}
-                  data-testid="marketing-job-output"
-                  className="flex flex-col gap-2"
-                >
-                  {output.kind === 'VIDEO' ? (
-                    <video
-                      className="w-full rounded border"
-                      src={output.url}
-                      controls
-                      preload="metadata"
-                    />
-                  ) : (
-                    <img
-                      className="w-full rounded border"
-                      src={output.url}
-                      alt={output.label}
-                      loading="lazy"
-                    />
-                  )}
-                  <figcaption className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{output.label}</span>
-                    <a className="underline" href={output.url} download>
-                      Download
-                    </a>
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -612,7 +844,7 @@ export default function Route() {
                 data-testid="marketing-refine-feedback"
                 required
                 rows={3}
-                className="w-full rounded border bg-background p-2 text-sm"
+                className="w-full rounded-md border bg-background p-2 text-sm"
                 placeholder={
                   job.kind === 'CLIP'
                     ? 'e.g. I can barely see the prompt library — scroll down to it and hold there for a couple of seconds.'
@@ -621,6 +853,7 @@ export default function Route() {
               />
               <div>
                 <Button type="submit" disabled={refining}>
+                  <Clapperboard className="mr-1.5 h-4 w-4" aria-hidden />
                   {refining ? 'Writing the revision…' : 'Render a new take'}
                 </Button>
               </div>
@@ -655,38 +888,86 @@ export default function Route() {
         </Card>
       ) : null}
 
+      {/* ——— The storyboard, drawn as the timeline it films ——— */}
       <Card>
         <CardHeader>
-          <CardTitle>Storyboard</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Film className="h-4 w-4 text-indigo-500" aria-hidden />
+            Storyboard
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {storyboard ? (
             <>
-              <ol className="flex flex-col gap-2 text-sm">
-                {storyboard.scenes.map((scene, index) => (
-                  <li
-                    key={scene.id}
-                    data-testid="marketing-job-scene"
-                    className="rounded border p-2"
-                  >
-                    <div className="font-medium">
-                      {index + 1}. {scene.id}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {scene.goto ? (
-                        <code>{scene.goto}</code>
-                      ) : (
-                        'continues on screen'
-                      )}
-                      {scene.steps.length > 0
-                        ? ` · ${scene.steps.length} step${scene.steps.length === 1 ? '' : 's'}`
-                        : null}
-                    </div>
-                    {scene.caption ? (
-                      <div className="mt-1">{scene.caption}</div>
-                    ) : null}
-                  </li>
-                ))}
+              <ol className="flex flex-col gap-2">
+                {storyboard.scenes.map((scene, index) => {
+                  const seconds = sceneSeconds[index] ?? 0;
+                  const share =
+                    totalSceneSeconds > 0
+                      ? Math.max(4, (seconds / totalSceneSeconds) * 100)
+                      : 0;
+                  const steps = summarizeSteps(scene);
+                  return (
+                    <li
+                      key={scene.id}
+                      data-testid="marketing-job-scene"
+                      className="rounded-lg border p-3"
+                    >
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <div className="flex items-baseline gap-2">
+                          <span className="flex h-5 w-5 shrink-0 -translate-y-px items-center justify-center self-center rounded bg-indigo-50 text-xs font-semibold text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
+                            {index + 1}
+                          </span>
+                          <span className="text-sm font-medium">{scene.id}</span>
+                          {scene.goto ? (
+                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                              {scene.goto}
+                            </code>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              continues on screen
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          ~{seconds}s
+                        </span>
+                      </div>
+                      {/* Screen-time bar: how much of the take this scene occupies. */}
+                      <div
+                        aria-hidden
+                        className="mt-2 h-1 w-full rounded-full bg-muted"
+                      >
+                        <div
+                          className="h-1 rounded-full bg-indigo-400"
+                          style={{ width: `${share}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        {steps ? <span>{steps}</span> : null}
+                        {scene.focus ? (
+                          <span className="inline-flex items-center gap-1">
+                            <ZoomIn className="h-3 w-3" aria-hidden />
+                            push-in ×{scene.focus.scale}
+                          </span>
+                        ) : null}
+                        {scene.startsClip ? (
+                          <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400">
+                            clip starts here
+                          </span>
+                        ) : null}
+                      </div>
+                      {scene.caption ? (
+                        <p className="mt-1.5 text-sm">{scene.caption}</p>
+                      ) : null}
+                      {scene.overlay ? (
+                        <p className="mt-1.5 inline-block rounded bg-slate-950 px-2 py-0.5 text-xs font-medium text-slate-50">
+                          {scene.overlay}
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ol>
               <details className="mt-4">
                 <summary className="cursor-pointer text-sm text-muted-foreground">
