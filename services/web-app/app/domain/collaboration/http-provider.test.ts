@@ -540,6 +540,31 @@ describe('carets', () => {
     ada.provider.destroy();
   });
 
+  test('a destroyed provider stays finished rather than reporting connecting', async () => {
+    // What a memoized provider did when React StrictMode's second effect setup
+    // got the instance the first cleanup had already destroyed: the editor sat
+    // on "Opening your group's draft…" for good. Restarting one is a mistake,
+    // and doing nothing is how it stays visible.
+    const server = fakeServer();
+    const statuses: string[] = [];
+    const provider = new CollabHttpProvider({
+      documentId: 'doc-1',
+      ydoc: new Y.Doc(),
+      canWrite: true,
+      fetchImpl: server.fetchImpl,
+      pollIntervalMs: 10_000,
+      onStatusChange: (status) => statuses.push(status.kind),
+    });
+
+    await provider.start();
+    provider.destroy();
+    statuses.length = 0;
+    await provider.start();
+
+    expect(statuses).toEqual([]);
+    expect(server.calls.get).toBe(1);
+  });
+
   test('announces a writer who has the draft open but no cursor in it', async () => {
     // Presence is "who is here", and a caret is only the part of it that can be
     // drawn. Someone reading their group's draft without clicking into it is

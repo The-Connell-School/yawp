@@ -163,8 +163,19 @@ export class CollabHttpProvider {
     return `/api/collab/${encodeURIComponent(this.documentId)}/presence`;
   }
 
-  /** Catches up on the room, then starts polling. */
+  /**
+   * Catches up on the room, then starts polling.
+   *
+   * A destroyed provider is finished, and says so by doing nothing rather than
+   * announcing "connecting" and then never connecting. That distinction is not
+   * hypothetical: a memoized provider handed back to React StrictMode's second
+   * effect setup left the editor reporting "Opening your group's draft…"
+   * indefinitely. The component builds a fresh provider per effect now, and this
+   * guard makes the same mistake visible instead of silent.
+   */
   async start(): Promise<void> {
+    if (this.destroyed) return;
+
     this.onStatusChange?.({ kind: 'connecting' });
 
     const caughtUp = await this.pullOnce();

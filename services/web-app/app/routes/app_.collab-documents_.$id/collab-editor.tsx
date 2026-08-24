@@ -63,23 +63,29 @@ export function CollabEditor({ docId, canWrite, user }: Props) {
   // discard the room and re-download it.
   const ydoc = useMemo(() => new Y.Doc(), [docId]);
 
-  // The provider is built here rather than inside the effect because the cursor
-  // extension needs it while the extension list is assembled — it reads carets
-  // off `provider.awareness`. Starting and tearing down still happen in the
-  // effect below; this only constructs it.
-  const provider = useMemo(
-    () =>
-      new CollabHttpProvider({
-        documentId: docId,
-        ydoc,
-        canWrite,
-        onStatusChange: setStatus,
-      }),
-    [docId, ydoc, canWrite]
-  );
+  // The provider is constructed by the effect and published to the render through
+  // state, rather than built in a memo where the extension list could reach it
+  // directly. The memo is the obvious shape and it is wrong: React StrictMode
+  // renders twice and runs every effect setup → cleanup → setup, so a memoized
+  // provider is destroyed and then handed back to the second setup. It reported
+  // "connecting" forever, because `start` on a destroyed provider does nothing —
+  // and the discarded second render leaked a provider nobody would ever destroy.
+  //
+  // The cost is that the editor is built once without carets and once with them.
+  // That is cheap here: with Collaboration the Y.Doc holds the content, so
+  // rebuilding the editor loses nothing.
+  const [provider, setProvider] = useState<CollabHttpProvider | null>(null);
 
   useEffect(() => {
-    void provider.start().then(() => {
+    const started = new CollabHttpProvider({
+      documentId: docId,
+      ydoc,
+      canWrite,
+      onStatusChange: setStatus,
+    });
+    setProvider(started);
+
+    void started.start().then(() => {
       // Schema-version handshake, once the room has loaded. A room written by a
       // newer client must not be edited by this one: it would silently drop the
       // nodes it cannot represent, damaging everyone's draft rather than just its
@@ -100,18 +106,24 @@ export function CollabEditor({ docId, canWrite, user }: Props) {
       // Send anything still queued before tearing down, so closing the tab mid
       // sentence does not lose it. `destroy` also says goodbye, which takes this
       // writer's caret off their teammates' screens at once.
-      void provider.flush().finally(() => provider.destroy());
+      void started.flush().finally(() => started.destroy());
     };
-  }, [provider, ydoc, canWrite]);
+  }, [docId, ydoc, canWrite]);
 
   const extensions = useMemo(
     () => [
       ...collaborativeSchemaExtensions,
       Collaboration.configure({ document: ydoc }),
-      CollaborationCursor.configure({
-        provider,
-        user: { name: user.name, color: user.color },
-      }),
+      // Only once the provider exists: the extension throws without one, and it
+      // reads carets straight off `provider.awareness`.
+      ...(provider
+        ? [
+            CollaborationCursor.configure({
+              provider,
+              user: { name: user.name, color: user.color },
+            }),
+          ]
+        : []),
     ],
     [ydoc, provider, user.name, user.color]
   );
@@ -131,7 +143,8 @@ export function CollabEditor({ docId, canWrite, user }: Props) {
         attributes: { 'aria-label': 'Shared group document editor' },
       },
     },
-    [ydoc]
+    // Rebuilt when the provider arrives, which is what puts the carets in.
+    [ydoc, provider]
   );
 
   useEffect(() => {
