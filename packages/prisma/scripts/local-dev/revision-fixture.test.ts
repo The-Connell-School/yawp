@@ -9,6 +9,7 @@ import {
   REVISION_GRAMMAR_ISSUES,
   REVISION_RUBRIC_SCORES,
   REVISION_TEACHER_COMMENTS,
+  buildRevisionDraftComments,
   buildRevisionEssayHtml,
   buildRevisionGrammarIssuesPayload,
 } from './revision-fixture';
@@ -78,9 +79,10 @@ describe('local dev revision fixture', () => {
   });
 
   test('draft comment marks are written into the essay html', () => {
-    const html = buildRevisionEssayHtml();
+    const comments = buildRevisionDraftComments('doc-1');
+    const html = buildRevisionEssayHtml(comments);
 
-    for (const comment of REVISION_DRAFT_COMMENTS) {
+    for (const comment of comments) {
       expect(
         html.includes(`data-comment-id="${comment.id}"`),
         `draft comment never anchored: ${comment.anchor}`
@@ -89,8 +91,29 @@ describe('local dev revision fixture', () => {
     }
   });
 
-  test('draft comment ids are unique', () => {
-    const ids = REVISION_DRAFT_COMMENTS.map((comment) => comment.id);
-    expect(new Set(ids).size).toBe(ids.length);
+  test('draft comment keys are unique', () => {
+    const keys = REVISION_DRAFT_COMMENTS.map((comment) => comment.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  // The preview-seat script seeds one organization per seat into a single
+  // shared database, so hardcoded ids made the second seat die on
+  // DocumentComment_pkey and took the preview-access E2E suite down with it.
+  test('two seed runs produce no colliding document comment ids', () => {
+    const first = buildRevisionDraftComments('doc-1');
+    const second = buildRevisionDraftComments('doc-2');
+    const all = [...first, ...second].map((comment) => comment.id);
+
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  test('essay html carries the ids of the comments it was built with', () => {
+    const comments = buildRevisionDraftComments('doc-2');
+    const html = buildRevisionEssayHtml(comments);
+
+    expect(html).not.toContain('doc-1');
+    for (const comment of comments) {
+      expect(html).toContain(`data-comment-id="${comment.id}"`);
+    }
   });
 });

@@ -8,7 +8,6 @@ import {
   type LocalDevPersona,
 } from './dev-personas';
 import {
-  REVISION_DRAFT_COMMENTS,
   REVISION_EARLY_DRAFT_TEXT,
   REVISION_ESSAY_TEXT,
   REVISION_ESSAY_TITLE,
@@ -19,6 +18,7 @@ import {
   REVISION_RUBRIC_SCORES,
   REVISION_TEACHER_COMMENTS,
   REVISION_TUTOR_EXCHANGE,
+  buildRevisionDraftComments,
   buildRevisionEssayHtml,
   buildRevisionGrammarIssuesPayload,
 } from './revision-fixture';
@@ -449,7 +449,10 @@ export async function seedSyntheticLocalDevData(
   // design question until the panes hold work of a realistic size. See
   // ./revision-fixture.ts.
   const gradedText = REVISION_ESSAY_TEXT;
-  const gradedHtml = buildRevisionEssayHtml();
+  // Scoped to this organization: the preview-seat script runs this seed once
+  // per seat into one shared database, and DocumentComment.id is global.
+  const gradedDraftComments = buildRevisionDraftComments(organizationId);
+  const gradedHtml = buildRevisionEssayHtml(gradedDraftComments);
   const gradedDocument = await prisma.document.create({
     data: {
       title: REVISION_ESSAY_TITLE,
@@ -485,7 +488,7 @@ export async function seedSyntheticLocalDevData(
       },
     ],
   });
-  for (const draftComment of REVISION_DRAFT_COMMENTS) {
+  for (const draftComment of gradedDraftComments) {
     await prisma.documentComment.create({
       data: {
         id: draftComment.id,

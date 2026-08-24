@@ -31,13 +31,16 @@ export type FixtureGrammarIssue = {
 };
 
 export type FixtureDraftComment = {
-  id: string;
+  /** Stable within the fixture; the row id is built from it per seed. */
+  key: string;
   content: string;
   /** Phrase in the essay the comment mark wraps. Must be unique. */
   anchor: string;
   /** Student replies, oldest first. */
   responses?: string[];
 };
+
+export type SeededDraftComment = FixtureDraftComment & { id: string };
 
 export const REVISION_ESSAY_TITLE = 'What school owes a first-time voter';
 
@@ -57,12 +60,16 @@ export const REVISION_ESSAY_TEXT = REVISION_ESSAY_PARAGRAPHS.join('\n\n');
  * with the student's replies — the marks the revision screen deliberately does
  * not repeat on the working copy. DocumentComment has no author but a
  * membership, so the tutor's voice lives in REVISION_TUTOR_EXCHANGE instead,
- * which is the model the tutor actually writes to. Ids are fixed so the HTML
- * can carry the matching `data-comment-id` spans.
+ * which is the model the tutor actually writes to.
+ *
+ * DocumentComment.id is a global primary key and this seed runs once per
+ * preview seat into one shared database, so ids are built per seed from a
+ * caller-supplied prefix rather than hardcoded — see
+ * buildRevisionDraftComments.
  */
 export const REVISION_DRAFT_COMMENTS: FixtureDraftComment[] = [
   {
-    id: 'localdev-draft-comment-thesis',
+    key: 'thesis',
     anchor: 'they should stop treating citizenship as a unit in a textbook',
     content:
       'This is the sentence your whole essay rests on. Read it out loud — can you hear where the claim actually starts?',
@@ -71,13 +78,13 @@ export const REVISION_DRAFT_COMMENTS: FixtureDraftComment[] = [
     ],
   },
   {
-    id: 'localdev-draft-comment-evidence',
+    key: 'evidence',
     anchor: 'In my own family',
     content:
       'You are about to use the strongest evidence you have. Slow down here and tell me what actually happened before you tell me what it proves.',
   },
   {
-    id: 'localdev-draft-comment-budget',
+    key: 'budget',
     anchor: 'Schools could hand a real budget line to students',
     content:
       'Ambitious — I like it. Would any of the objections a principal might raise fit in this paragraph?',
@@ -87,7 +94,7 @@ export const REVISION_DRAFT_COMMENTS: FixtureDraftComment[] = [
     ],
   },
   {
-    id: 'localdev-draft-comment-counter',
+    key: 'counter',
     anchor: 'That worry is real',
     content:
       'Good instinct conceding here. Do not concede so much that your own claim disappears.',
@@ -283,15 +290,34 @@ function escapeHtml(value: string) {
 }
 
 /**
+ * Draft comments with row ids scoped to one seeded document.
+ *
+ * The prefix must be unique per seed run: the preview-seat script seeds a
+ * separate organization into the same database for every seat, and a shared
+ * literal id makes the second seat fail on DocumentComment_pkey.
+ */
+export function buildRevisionDraftComments(
+  idPrefix: string
+): SeededDraftComment[] {
+  return REVISION_DRAFT_COMMENTS.map((comment) => ({
+    ...comment,
+    id: `${idPrefix}-draft-comment-${comment.key}`,
+  }));
+}
+
+/**
  * The essay as HTML, with a `data-comment-id` span around each draft comment's
  * anchor — the same markup the editor writes when a comment is created, so the
  * document and its submission look exactly like real student work rather than
- * like a fixture.
+ * like a fixture. Takes the comments so the marks carry the same ids the rows
+ * are created with.
  */
-export function buildRevisionEssayHtml(): string {
+export function buildRevisionEssayHtml(
+  comments: SeededDraftComment[]
+): string {
   return REVISION_ESSAY_PARAGRAPHS.map((paragraph) => {
     let html = escapeHtml(paragraph);
-    for (const comment of REVISION_DRAFT_COMMENTS) {
+    for (const comment of comments) {
       const anchor = escapeHtml(comment.anchor);
       if (!html.includes(anchor)) continue;
       html = html.replace(
