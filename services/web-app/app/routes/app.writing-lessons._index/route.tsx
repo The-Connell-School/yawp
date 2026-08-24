@@ -3,9 +3,10 @@ import {
   ChevronDown,
   ChevronRight,
   Plus,
+  Sparkles,
   Zap,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Link,
   data as dataResponse,
@@ -23,6 +24,8 @@ import {
   CollapsibleTrigger,
 } from '~/components/ui/collapsible';
 import { Tooltip } from '~/components/ui/tooltip';
+import { type PracticeSkillOption } from '~/components/writing-lessons/practice-skill-picker';
+import { StudentPracticeBuilder } from '~/components/writing-lessons/student-practice-builder';
 import { WritingPracticeAssignmentSheet } from '~/components/writing-lessons/writing-practice-assignment-sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { formatClassLabel } from '~/utils/class-display';
@@ -160,6 +163,25 @@ export default function WritingLessonsIndexRoute() {
     slug: string;
     title: string;
   } | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+  // The whole library, flat: what a mixed set — practice a student builds for
+  // themselves, or an assignment a teacher sends — gets to choose from. The
+  // loader has already dropped anything a rollout flag still hides.
+  const skillOptions = useMemo<PracticeSkillOption[]>(
+    () =>
+      sections.flatMap((section) =>
+        section.groups.flatMap((group) =>
+          group.lessons.map((lesson) => ({
+            slug: lesson.slug,
+            title: lesson.title,
+            section: section.section,
+            category: group.category,
+          }))
+        )
+      ),
+    [sections]
+  );
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -169,9 +191,21 @@ export default function WritingLessonsIndexRoute() {
         className="relative shrink-0 overflow-hidden border-b bg-linear-to-br from-background via-background to-primary/5"
       >
         <div className="mx-auto w-full min-w-0 max-w-screen-lg px-3 py-8 sm:px-5 sm:py-12">
-          <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-            Writing practice
-          </h2>
+          <div className="flex items-start justify-between gap-4">
+            <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+              Writing practice
+            </h2>
+            {/* One set, several skills: a teacher assigns mixed practice from
+                here, a student builds the same thing for themselves. */}
+            <Button
+              data-testid="writing-practice-create"
+              className="shrink-0 rounded-full"
+              onClick={() => setIsCreateOpen(true)}
+            >
+              <Sparkles className="mr-2 size-4 shrink-0" />
+              {isTeacher ? 'Create assignment' : 'Create practice'}
+            </Button>
+          </div>
           {isTeacher ? (
             <p className="mt-3 max-w-xl text-pretty text-base text-muted-foreground sm:text-sm">
               Create and send lessons on grammar, syntax, and revision to hone
@@ -391,6 +425,25 @@ export default function WritingLessonsIndexRoute() {
           );
         })}
       </div>
+
+      {isCreateOpen ? (
+        isTeacher ? (
+          <WritingPracticeAssignmentSheet
+            skillOptions={skillOptions}
+            teacherClasses={teacherClasses}
+            onOpenChange={(open) => {
+              if (!open) setIsCreateOpen(false);
+            }}
+          />
+        ) : (
+          <StudentPracticeBuilder
+            skills={skillOptions}
+            onOpenChange={(open) => {
+              if (!open) setIsCreateOpen(false);
+            }}
+          />
+        )
+      ) : null}
 
       {lessonToAssign ? (
         <WritingPracticeAssignmentSheet

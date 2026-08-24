@@ -83,12 +83,7 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await expect(lessonLink).toBeHidden();
   });
 
-  // KNOWN GAP, not a flake: the multi-skill "Create practice" builder is absent
-  // from the practice index. It was dropped when this branch merged main's
-  // redesigned index route. Single-skill sessions are reachable — every lesson
-  // page starts one — so what is missing is only the builder that mixes several
-  // skills into one set. Restore it, or retire this test.
-  test.fixme('lets a student create their own mixed practice set', async ({
+  test('lets a student create their own mixed practice set', async ({
     page,
     e2eContext,
     signIn,
@@ -96,27 +91,93 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto('/app/writing-lessons');
 
-    await page.getByRole('button', { name: /create practice/i }).click();
+    await page.getByTestId('writing-practice-create').click();
 
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByText(/skills to practice/i)).toBeVisible();
-    await dialog.getByText('Fixing Comma Splices', { exact: true }).click();
-    await dialog.getByText('Passive Voice', { exact: true }).click();
-    await dialog.getByRole('button', { name: '10', exact: true }).click();
-    await dialog.getByRole('button', { name: /start practice/i }).click();
+    await dialog.getByTestId('practice-skill-fixing-comma-splices').click();
+    await dialog.getByTestId('practice-skill-passive-voice').click();
+    await dialog.getByTestId('practice-count-10').click();
+    await dialog.getByTestId('start-practice').click();
 
-    // Lands in a self-directed session with the chosen skills.
+    // Lands in a self-directed session built from both skills, ten problems
+    // long — the set the student asked for, not a single-skill fallback.
+    await expect(page).toHaveURL(
+      /\/app\/writing-lessons\/practice\?skills=fixing-comma-splices%2Cpassive-voice&count=10/
+    );
     await expect(
       page.getByRole('heading', { name: /grammar practice/i })
     ).toBeVisible();
-    await expect(page.getByText(/try it yourself/i)).toBeVisible();
-    await expect(page.getByText(/^Problem 1$/)).toBeVisible();
+    // Both skills are named in the header, so the set reads as the mix it is.
+    await expect(
+      page.getByText('Fixing Comma Splices', { exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByText('Passive Voice', { exact: true })
+    ).toBeVisible();
+    await expect(page.getByText(/1 of 10/i)).toBeVisible();
 
     // Answer an ACT multiple-choice question and see the deterministic result.
-    await expect(page.getByText(/choose the best answer/i)).toBeVisible();
     await page.getByRole('radio').first().check();
     await page.getByRole('button', { name: /check my answer/i }).click();
     await expect(page.getByTestId('act-result')).toBeVisible();
+  });
+
+  test('lets a teacher assign one set covering several skills', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons');
+
+    // Same corner, same button — a teacher creates an assignment where a
+    // student creates practice.
+    const create = page.getByTestId('writing-practice-create');
+    await expect(create).toHaveText(/create assignment/i);
+    await create.click();
+
+    const dialog = page.getByRole('dialog');
+    await dialog.getByTestId('practice-skill-fixing-comma-splices').click();
+    await dialog.getByTestId('practice-skill-passive-voice').click();
+    // Two skills, so the set is named for the mix rather than either one.
+    await expect(dialog.getByLabel('Assignment title')).toHaveValue(
+      'Mixed writing practice'
+    );
+
+    await dialog
+      .getByTestId(/^writing-practice-class-/)
+      .first()
+      .click();
+    await dialog.getByLabel('Due date').fill('2026-12-01');
+    await dialog.getByLabel('Number of problems').fill('4');
+    await dialog.getByRole('button', { name: /assign practice/i }).click();
+    await expect(
+      dialog.getByTestId('writing-practice-assign-result')
+    ).toContainText(/assigned to/i);
+
+    // One assignment carrying both skills — not one assignment per skill.
+    await page.reload();
+    const card = page
+      .getByTestId('writing-practice-assignment-list')
+      .locator('[data-testid^="writing-practice-assignment-"]')
+      .filter({ hasText: 'Mixed writing practice' });
+    await expect(card).toContainText('Fixing Comma Splices');
+    await expect(card).toContainText('Passive Voice');
+
+    // And the student it was assigned to works that one mixed set.
+    await page.request.post('/auth/logout');
+    await page.context().clearCookies();
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
+    await page
+      .getByTestId('writing-practice-assignment-list')
+      .locator('[data-testid^="writing-practice-assignment-"]')
+      .filter({ hasText: 'Mixed writing practice' })
+      .getByTestId(/^writing-practice-start-/)
+      .click();
+    await expect(page).toHaveURL(/\/app\/writing-lessons\/assigned\//);
+    await expect(page.getByText(/Problem 1 of 4/i)).toBeVisible();
   });
 
   test('loads lessons by direct URL and supports a self-guided practice check', async ({
