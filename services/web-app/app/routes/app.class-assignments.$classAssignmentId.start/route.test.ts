@@ -143,3 +143,69 @@ describe('class assignment start', () => {
     expect(options.description).toMatch(/Only students/i);
   });
 });
+
+/**
+ * Arrived on `main` while the collaboration branch was open, and both sides
+ * created this file — so the two suites are merged here rather than one of them
+ * being dropped.
+ *
+ * The block above mocks `~/utils/toast.server`, and bun's mock.module is global
+ * to the test run, so this suite cannot get the real `redirectWithToast` back.
+ * It stands in a passthrough that returns what the real helper returns — a 302
+ * carrying `Location` — which leaves the assertions below testing the route
+ * (where it sends a student, and that the query is gated on `postAt`) rather
+ * than testing the toast helper.
+ */
+describe('student start is rejected when postAt is in the future', () => {
+  beforeEach(() => {
+    prisma.classAssignment.findFirst.mockReset();
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    redirectWithToast
+      .mockReset()
+      .mockImplementation(
+        (to: string) =>
+          new Response(null, { status: 302, headers: { Location: to } })
+      );
+
+    requireUserId.mockResolvedValue('user-1');
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1' },
+    });
+  });
+
+  test('findFirst applies postAt visibility gate and rejects', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue(null);
+
+    const response = await action({
+      request: new Request(
+        'https://example.test/app/class-assignments/ca-1/start',
+        { method: 'POST', body: new FormData() }
+      ),
+      params: { classAssignmentId: 'ca-1' },
+      context: {} as never,
+    } as any);
+
+    // Redirect back to assignments with a toast
+    expect(response).toBeInstanceOf(Response);
+    if (!(response instanceof Response)) {
+      throw new Error('Expected assignment-not-found redirect response');
+    }
+    expect(response.status).toBe(302);
+    const location = response.headers.get('Location') || '';
+    expect(location).toContain('/app?tab=assignments');
+
+    // The query included the visibility gate on postAt
+    const where = prisma.classAssignment.findFirst.mock.calls[0][0].where;
+    expect(where).toEqual(
+      expect.objectContaining({
+        OR: [
+          { postAt: null },
+          { postAt: expect.objectContaining({ lte: expect.any(Date) }) },
+        ],
+      })
+    );
+  });
+});

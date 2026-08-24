@@ -1,16 +1,19 @@
 import { test, expect } from '../test-setup';
 
-test.describe.serial('Student reads teacher feedback on a released grade', () => {
-  test('dashboard document card opens the graded submission', async ({
+test.describe
+  .serial('Student reads teacher feedback on a released grade', () => {
+  test('My Documents card opens the graded submission', async ({
     page,
     signIn,
     e2eContext,
   }) => {
     await signIn(e2eContext.userEmail, 'johndoe');
-    await page.goto('/app');
+    await page.goto('/app/my-documents');
     await page.waitForLoadState('networkidle');
 
-    await page.getByRole('link', { name: /graded document/i }).click();
+    await page
+      .getByRole('heading', { name: 'Graded Document', exact: true })
+      .click();
     await page.waitForURL(`**/app/submissions/${e2eContext.gradeId}**`, {
       timeout: 15000,
     });
@@ -54,7 +57,9 @@ test.describe.serial('Student reads teacher feedback on a released grade', () =>
     await expect(
       page.getByRole('heading', { name: /overall grade/i })
     ).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole('paragraph').filter({ hasText: /^77%\s*\(C\+\)$/ })).toBeVisible();
+    await expect(
+      page.getByRole('paragraph').filter({ hasText: /^77%\s*\(C\+\)$/ })
+    ).toBeVisible();
 
     await expect(
       page.getByRole('heading', { name: /overall feedback/i })
@@ -65,7 +70,9 @@ test.describe.serial('Student reads teacher feedback on a released grade', () =>
 
     await expect(page.getByRole('heading', { name: /rubric/i })).toBeVisible();
     await expect(page.getByText(/Thesis And Content/i).first()).toBeVisible();
-    await expect(page.getByText(/Organization And Structure/i).first()).toBeVisible();
+    await expect(
+      page.getByText(/Organization And Structure/i).first()
+    ).toBeVisible();
 
     await expect(
       page.getByText('Strong thesis statement in the opening sentence.')

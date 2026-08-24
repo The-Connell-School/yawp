@@ -8,6 +8,7 @@ import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 export type GradingActor = {
+  userId: string;
   membershipId: string;
   organizationId: string;
   teacherProfileId: string | null;
@@ -26,6 +27,7 @@ export async function getGradingActor(request: Request): Promise<GradingActor> {
   ]);
 
   return {
+    userId,
     membershipId: membership.id,
     organizationId: membership.organization.id,
     teacherProfileId: isTeacherMembership(membership) ? membership.id : null,
@@ -41,27 +43,53 @@ export function canManageGrades(actor: GradingActor): boolean {
 export function buildTeacherClassWhere(
   actor: GradingActor
 ): Prisma.DocumentWhereInput {
-  if (actor.isAdmin) return {};
+  return buildTeacherDocumentAccessWhere({
+    membershipId: actor.membershipId,
+    organizationId: actor.organizationId,
+    isAdmin: actor.isAdmin,
+  });
+}
+
+export function buildTeacherDocumentAccessWhere({
+  membershipId,
+  organizationId,
+  isAdmin = false,
+}: {
+  membershipId: string;
+  organizationId: string;
+  isAdmin?: boolean;
+}): Prisma.DocumentWhereInput {
+  if (isAdmin) return {};
   return {
+    membership: { organizationId },
     OR: [
       {
         classAssignment: {
           class: {
+            school: { organizationId },
             teachers: {
               some: {
-                id: actor.membershipId,
+                id: membershipId,
+                isActive: true,
               },
             },
           },
         },
       },
       {
+        // Only submissions from before ClassAssignment existed use the
+        // student's class memberships as their source of teacher access.
+        // Applying this fallback to current submissions would let a teacher
+        // from an unrelated class of the same student read the submission.
+        classAssignment: { is: null },
         membership: {
           classesAsStudent: {
             some: {
+              school: { organizationId },
               teachers: {
                 some: {
-                  id: actor.membershipId,
+                  id: membershipId,
+                  isActive: true,
                 },
               },
             },
@@ -75,7 +103,12 @@ export function buildTeacherClassWhere(
 /** Document owner must never use teacher grading flows on that submission, including admins. */
 export function isGradingOwnDocument(
   actorMembershipId: string,
-  documentMembershipId: string
+  documentMembershipId: string,
+  actorUserId?: string,
+  documentOwnerUserId?: string
 ): boolean {
-  return actorMembershipId === documentMembershipId;
+  return (
+    actorMembershipId === documentMembershipId ||
+    (actorUserId != null && actorUserId === documentOwnerUserId)
+  );
 }

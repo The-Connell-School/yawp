@@ -1,6 +1,9 @@
 import { resolve } from 'path';
 
 process.env.SESSION_SECRET = process.env.SESSION_SECRET ?? 'test-secret-for-unit-tests';
+// Provide a benign default so Prisma client construction in imported modules does not throw.
+process.env.DATABASE_URL =
+  process.env.DATABASE_URL ?? 'postgresql://postgres:password@127.0.0.1:5432/yawp_test';
 
 // bun's mock.module() replaces a module for the rest of the test run — it is
 // not scoped to a single file, and mock.restore() does not undo it (see

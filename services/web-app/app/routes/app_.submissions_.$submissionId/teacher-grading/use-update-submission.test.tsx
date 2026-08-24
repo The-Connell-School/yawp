@@ -22,7 +22,10 @@ function TestHarness({
   submissionId: string;
   onReady: (save: (fields: Record<string, unknown>) => Promise<void>) => void;
 }) {
-  const { save } = useUpdateSubmission(submissionId);
+  const { save } = useUpdateSubmission(
+    submissionId,
+    '2026-08-20T12:00:00.000Z'
+  );
   onReady(save);
   return null;
 }
@@ -116,5 +119,43 @@ describe('useUpdateSubmission', () => {
     const result = await triggerSave({ score: '90% A' });
 
     expect(result).toEqual({ ok: true, message: undefined });
+  });
+
+  it('sends the page-load version and advances it after each successful save', async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    globalThis.fetch = mock(async (_input, init) => {
+      requests.push(JSON.parse(String(init?.body)));
+      return new Response(
+        JSON.stringify({
+          success: true,
+          submission: {
+            updatedAt:
+              requests.length === 1
+                ? '2026-08-20T12:01:00.000Z'
+                : '2026-08-20T12:02:00.000Z',
+          },
+        }),
+        { status: 200 }
+      );
+    }) as unknown as typeof fetch;
+
+    let save: ((fields: Record<string, unknown>) => Promise<void>) | null =
+      null;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root!.render(
+        <TestHarness submissionId="sub-1" onReady={(fn) => (save = fn)} />
+      );
+    });
+
+    await act(async () => {
+      await save!({ score: '90% A-' });
+      await save!({ score: '91% A-' });
+    });
+
+    expect(requests[0]?.expectedUpdatedAt).toBe('2026-08-20T12:00:00.000Z');
+    expect(requests[1]?.expectedUpdatedAt).toBe('2026-08-20T12:01:00.000Z');
   });
 });

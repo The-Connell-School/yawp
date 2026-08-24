@@ -613,9 +613,7 @@ export default function Route() {
   );
 
   const studentList = isViewingAsTeacher ? submissions : activeSubmissions;
-  const submissionCountForBadge = isViewingAsTeacher
-    ? submissions.length
-    : activeSubmissions.length;
+  const submissionCountForBadge = activeSubmissions.length;
 
   const isSubmitted = activeSubmissions.length > 0;
   const hasAnySubmissionRecord = submissions.length > 0;
@@ -891,7 +889,8 @@ export default function Route() {
                         v,
                         'Untitled submission'
                       );
-                      const isGraded = s.releasedAt != null;
+                      const isWithdrawn = s.unsubmittedAt != null;
+                      const isGraded = !isWithdrawn && s.releasedAt != null;
                       return (
                         <div
                           key={s.id}
@@ -916,12 +915,18 @@ export default function Route() {
                                   Archived
                                 </Badge>
                               ) : null}
-                              <Badge
-                                variant={isGraded ? 'success' : 'secondary'}
-                                className="text-[10px]"
-                              >
-                                {isGraded ? 'Graded' : 'Submitted'}
-                              </Badge>
+                              {isWithdrawn ? (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  Withdrawn
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant={isGraded ? 'success' : 'secondary'}
+                                  className="text-[10px]"
+                                >
+                                  {isGraded ? 'Graded' : 'Submitted'}
+                                </Badge>
+                              )}
                             </div>
                           </Link>
                           {!isViewingAsTeacher && !isArchived ? (

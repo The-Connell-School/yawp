@@ -8,11 +8,12 @@ The target behavior is:
 - Closed PRs are destroyed automatically with `docker compose down -v`, and stale previews are swept by the scheduled cleanup workflow.
 - Open previews sleep after 48 hours without PR or authorized preview-URL activity. Sleep uses `docker compose stop`, preserving containers, database, volumes, source, and access codes.
 - Opening a sleeping preview with its one-click URL or an already authorized browser wakes that same Compose project automatically. The first request can take up to a minute while the app becomes healthy; no manual workflow or rebuild is required.
-- The app adds a non-secret response marker only after validating the signed preview seat. Traefik retains only that response header and records authorized URL activity asynchronously, so anonymous redirects, the access screen, stale cookies, and static assets cannot renew leases. A wake-service outage cannot take already-running previews offline. The bounded access log is truncated after 50 MiB.
+- The app adds a non-secret response marker only after validating the signed preview seat. The custom ingress consumes and strips that marker while recording authorized activity directly, so anonymous redirects, the access screen, stale cookies, and static assets cannot renew leases. No request log or URL is persisted.
 - Each PR gets its own app container and database inside the shared preview Postgres container.
 - The shared template database restores the configured preview-safe database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
 - The preview URL is `https://pr-<number>.$PREVIEW_DOMAIN` when TLS is enabled.
+- Blackboard Learn for that PR is `https://blackboard-pr-<number>.$PREVIEW_DOMAIN`. That hostname matches the existing `*.preview.yawp.school` wildcard; `blackboard.pr-<number>.preview.yawp.school` would not.
 - The React Router app protects every loader, action, and API route with a signed-cookie access gate. `/api/healthcheck` is the only exception. Deploys generate a memorable code and fail closed if no code reaches the app.
 - Live Anthropic AI is enabled in every access-gated PR preview. Deploys fail closed when neither `PREVIEW_ANTHROPIC_API_KEY` nor `ANTHROPIC_API_KEY` is configured for the preview-host environment.
 - The default runtime is `PREVIEW_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, React Router runs in dev mode, and warm deploys skip dependency install, Prisma generate, and migration work when the tooling fingerprint has not changed. The web container is still recreated after each source sync so the dev server starts from a clean process. Set `PREVIEW_RUNTIME=production` to use the production Dockerfile build path.
@@ -26,7 +27,7 @@ Attach an IAM instance profile that can read the configured production dump obje
 Open inbound ports:
 
 - `22` from GitHub Actions egress or the office/VPN range used for operations.
-- `80` and `443` from the internet for Traefik.
+- `80` and `443` from the internet for the custom preview ingress and HTTP-01 certificate validation.
 
 Then run:
 
@@ -39,6 +40,8 @@ bash scripts/preview/bootstrap-host.sh
 ```
 
 Point `*.preview.yawp.school` or the chosen wildcard domain at the host public IP.
+
+Bootstrap migrates valid certificates for resident PRs from the retired Traefik ACME store, proves the custom ingress on alternate ports, then performs a rollback-protected 80/443 cutover. Successful public TLS smoke removes the Traefik container. New PR deploys provision their certificate through the ingress HTTP-01 endpoint before public health checks; a daily systemd timer renews resident certificates inside a 30-day window.
 
 For a temporary IP-based smoke host, use the dashed `sslip.io` form and disable TLS:
 
@@ -66,6 +69,7 @@ Required repository settings:
 - Variable `PREVIEW_ROOT`
 - Variable `PREVIEW_SSH_USER`
 - Variable `PREVIEW_TLS`
+- Variable `PREVIEW_ACME_EMAIL`
 - Variable `PREVIEW_RUNTIME`
 - Variable `PREVIEW_MAX_RESIDENT` (defaults to `20`; disk/state limit)
 - Variable `PREVIEW_MAX_RUNNING` (defaults to `4`; memory limit)
@@ -171,15 +175,15 @@ Production-dump app-login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and 
 
 The hot path deliberately keeps state on the host: Docker layer cache, Bun dependency volumes, the shared restored template database, and PR-scoped Postgres databases. The first build on a cold host is slower because it creates the shared Postgres container and restores the production dump. Subsequent PR creates clone the template database locally, and warm PR updates skip tooling work when package, Prisma, and migration inputs are unchanged. In `fast` runtime, the web container still restarts by default; the speedup comes from removing package install, Prisma generate, migration, dump restore, and cloud control-plane work from the warm path.
 
-Scheduled reconciliation runs every six hours. It destroys closed PR environments, sleeps open previews after their idle lease, and enforces separate resident and running caps. Only traffic whose app response carries the non-secret authorization marker updates the activity lease; HEAD, healthcheck, anonymous redirect, access-screen, static-asset, stale-cookie, and error traffic do not. The resident cap (20), running cap (4), Traefik rate limit (2 requests/minute with burst 3), and wake concurrency limit (2) bound resource use. A sleeping preview wakes automatically when the request carries either its one-click `code` or a valid signed access cookie from an earlier visit. Bare anonymous requests remain asleep and receive `401`, preventing bots and public probes from churning host memory. An authorized wake at the running cap may sleep the least recently used unpinned preview first. `preview:keep-awake` excludes a PR from sleep. Only resident-cap eviction or PR closure deletes preview-local state.
+Scheduled reconciliation runs every six hours. It destroys closed PR environments, sleeps open previews after their idle lease, and enforces separate resident and running caps. Only traffic whose app response carries the non-secret authorization marker updates the activity lease; HEAD, healthcheck, anonymous redirect, access-screen, static-asset, stale-cookie, and error traffic do not. The resident cap (20), running cap (4), and wake concurrency limit (2) bound resource use. A sleeping preview wakes automatically when the request carries either its one-click `code` or a valid signed access cookie from an earlier visit. The ingress holds that first request and proxies it after the original Compose project becomes healthy; no second click or manual workflow is required. Bare anonymous requests remain asleep and receive `401`, preventing bots and public probes from churning host memory. An authorized wake at the running cap may sleep the least recently used unpinned preview first. `preview:keep-awake` excludes a PR from sleep. Only resident-cap eviction or PR closure deletes preview-local state.
 
 The host-bootstrap workflow runs only when dispatched from the default branch and checks out that dispatch's immutable commit SHA. It cannot execute an arbitrary PR ref with shared-host credentials.
 
 ### Sleep/wake rollout and rollback
 
-Keep `PREVIEW_SLEEP_ENABLED=false` during the cutover. Merge the reviewed code, run the default-branch host-bootstrap workflow, and verify `yawp-preview-wake.service` plus the Traefik fallback before enabling sleep. The bootstrap copies that switch into the wake service, so dispatch bootstrap after changing it when a rollback must also disable wake-triggered displacement. Use a disposable seeded PR preview as the canary: preserve its access code and a state marker, stop it, open its URL, wait for health, then confirm the same Compose project and state returned. Set both idle variables to `48` and enable sleeping only after that canary passes.
+Keep `PREVIEW_SLEEP_ENABLED=false` during the first ingress cutover. Merge the reviewed code, run the default-branch host-bootstrap workflow, and verify `yawp-preview-ingress.service`, `yawp-preview-certificate-renewal.timer`, and the absence of a running Traefik container before enabling sleep. The bootstrap copies the sleep switch into the ingress service, so dispatch bootstrap after changing it when a rollback must also disable wake-triggered displacement. Use a disposable seeded PR preview as the canary: preserve its access code and a state marker, stop it, open its one-click URL, wait for health, then confirm the same Compose project and state returned. Set both idle variables to `48` and enable sleeping only after that canary passes.
 
-For rollback, record the currently running PR set, set `PREVIEW_SLEEP_ENABLED=false`, and dispatch the default-branch host-bootstrap workflow so both reconciliation and wake displacement honor the switch. Do not start every resident project. Restore only the recorded or explicitly selected projects, one at a time, while keeping the running count at or below `PREVIEW_MAX_RUNNING`; verify health after each start. If the required set exceeds the cap, keep the least-recently-used projects stopped and escalate to a host resize rather than overcommitting memory. Already-running preview routes never depend on the wake service, so disabling or removing the fallback does not interrupt them.
+For rollback, record the currently running PR set, set `PREVIEW_SLEEP_ENABLED=false`, and dispatch the default-branch host-bootstrap workflow so both reconciliation and wake displacement honor the switch. Do not start every resident project. Restore only the recorded or explicitly selected projects, one at a time, while keeping the running count at or below `PREVIEW_MAX_RUNNING`; verify health after each start. If the required set exceeds the cap, keep the least-recently-used projects stopped and escalate to a host resize rather than overcommitting memory.
 
 Run `scripts/preview/prove-wake.sh` for a disposable real-Compose proof. It creates an isolated fixture project, stops it, wakes it through the production wake script, and verifies the container identity, state marker, and fixture access-code hash are unchanged before cleaning itself up.
 

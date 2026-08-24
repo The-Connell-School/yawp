@@ -203,6 +203,13 @@ load_or_create_access_config() {
 }
 
 load_or_create_access_config
+if [[ -n "${DIRECT_PORT:-}" || -f "$ROOT/ingress/current/ingress-server.mjs" ]]; then
+  export PREVIEW_CUSTOM_INGRESS_ACTIVE=true
+else
+  # The migration PR itself still deploys through the old host. Keep its labels until
+  # bootstrap proves and activates custom ingress; after cutover they disappear.
+  export PREVIEW_CUSTOM_INGRESS_ACTIVE=false
+fi
 node "$SCRIPT_DIR/render-compose.mjs" > "$PREVIEW_DIR/docker-compose.yml"
 
 docker network inspect preview >/dev/null 2>&1 || docker network create preview >/dev/null
@@ -721,7 +728,14 @@ remove_legacy_project_postgres() {
 
 refresh_web_container_if_needed() {
   "${compose[@]}" up -d --force-recreate web
+  start_blackboard_lti_mock_if_present
   remove_legacy_project_postgres
+}
+
+start_blackboard_lti_mock_if_present() {
+  if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$PREVIEW_DIR/docker-compose.yml"; then
+    "${compose[@]}" up -d --force-recreate blackboard-lti-mock
+  fi
 }
 
 rollout_demo_web_without_downtime() {
@@ -794,8 +808,28 @@ start_or_refresh_web() {
   else
     refresh_web_container_if_needed
   fi
+  if [[ "$SLUG" == "demo" && "$RUNTIME" == "production" && -z "${DIRECT_PORT:-}" ]]; then
+    start_blackboard_lti_mock_if_present
+  fi
 }
 start_or_refresh_web
+
+  if [[ "$SLUG" != "demo" \
+    && -z "${DIRECT_PORT:-}" \
+    && "${PREVIEW_TLS:-true}" == "true" \
+    && "$PREVIEW_CUSTOM_INGRESS_ACTIVE" == "true" ]]; then
+  PREVIEW_ROOT="$ROOT" \
+  PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
+  PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
+    node "$SCRIPT_DIR/certificate-manager.mjs" "$HOSTNAME"
+  if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$PREVIEW_DIR/docker-compose.yml"; then
+    PREVIEW_ROOT="$ROOT" \
+    PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
+    PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
+      node "$SCRIPT_DIR/certificate-manager.mjs" "$BLACKBOARD_HOSTNAME" \
+      || echo "Blackboard hostname certificate not issued yet; host ingress must route ${BLACKBOARD_HOSTNAME}"
+  fi
+fi
 
 for attempt in $(seq 1 90); do
   if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
@@ -807,6 +841,8 @@ for attempt in $(seq 1 90); do
     elapsed_ms="$((end_ms - start_ms))"
     echo "PREVIEW_URL=$URL"
     echo "PREVIEW_HOSTNAME=$HOSTNAME"
+    echo "BLACKBOARD_URL=$BLACKBOARD_URL"
+    echo "BLACKBOARD_HOSTNAME=$BLACKBOARD_HOSTNAME"
     echo "PREVIEW_ACCESS_CODE=$smoke_access_code"
     echo "PREVIEW_MASTER_ORG_GATE_ENABLED=$PREVIEW_MASTER_ORG_GATE_ENABLED"
     PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e '

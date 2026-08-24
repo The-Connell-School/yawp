@@ -5,9 +5,9 @@ name: Preview host bootstrap
 # The host is reachable only with PREVIEW_SSH_PRIVATE_KEY, which is write-only, so
 # host-level changes cannot be applied from a workstation — they have to come through a
 # workflow that holds the secret. bootstrap-host.sh is idempotent, so running it again is
-# how the host picks up changes to Traefik or the shared Postgres.
+# how the host picks up changes to custom ingress or the shared Postgres.
 #
-# It rewrites the shared Traefik/Postgres configuration, migrates existing residents
+# It rewrites the shared ingress/Postgres configuration, migrates existing residents
 # to isolated database roles, and installs the wake service. Resident application state
 # is preserved; previews that were sleeping remain stopped and healthy running previews
 # are recreated and health-checked.
@@ -69,6 +69,8 @@ jobs:
             "mkdir -p ${PREVIEW_ROOT}/bootstrap/scripts/preview"
           scp -i ~/.ssh/preview_key \
             scripts/preview/bootstrap-host.sh \
+            scripts/preview/certificate-manager.mjs \
+            scripts/preview/ingress-server.mjs \
             scripts/preview/migrate-resident-database-roles.sh \
             scripts/preview/publish-host-metrics.sh \
             scripts/preview/wake-server.mjs \

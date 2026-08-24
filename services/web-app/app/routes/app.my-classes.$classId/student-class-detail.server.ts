@@ -81,13 +81,23 @@ export async function loadStudentClassDetail({
     prisma.classAssignment.findMany({
       where: {
         classId: klass.id,
-        // A collaborative assignment has nothing for this student to open until
-        // their teacher opens groups, so it stays off the list until then rather
-        // than sitting there refusing the click.
-        ...studentVisibleClassAssignmentWhere(membershipId),
+        // Two independent rules, both of which must hold — kept in an AND rather
+        // than spread side by side, because each is expressed as an `OR` and one
+        // would silently overwrite the other at that key. Losing the first shows
+        // a student a group assignment they cannot open; losing the second shows
+        // them an assignment before its post date.
+        AND: [
+          // A collaborative assignment has nothing for this student to open
+          // until their teacher opens groups, so it stays off the list until
+          // then rather than sitting there refusing the click.
+          studentVisibleClassAssignmentWhere(membershipId),
+          { OR: [{ postAt: null }, { postAt: { lte: new Date() } }] },
+        ],
       },
       select: {
         id: true,
+        postAt: true,
+        dueAt: true,
         assignment: {
           select: {
             id: true,

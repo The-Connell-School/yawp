@@ -118,6 +118,32 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  // Optional deployment dates (applied to each selected class)
+  let postAt: Date | null = null;
+  let dueAt: Date | null = null;
+  const postAtRaw = formData.get('postAt')?.toString()?.trim() ?? '';
+  const dueAtRaw = formData.get('dueAt')?.toString()?.trim() ?? '';
+  if (postAtRaw) {
+    const parsed = new Date(postAtRaw);
+    if (Number.isNaN(parsed.getTime())) {
+      return dataResponse(
+        { success: false, message: 'The post date is invalid.' },
+        { status: 400 }
+      );
+    }
+    postAt = parsed;
+  }
+  if (dueAtRaw) {
+    const parsed = new Date(dueAtRaw);
+    if (Number.isNaN(parsed.getTime())) {
+      return dataResponse(
+        { success: false, message: 'The due date is invalid.' },
+        { status: 400 }
+      );
+    }
+    dueAt = parsed;
+  }
+
   const classes = await prisma.class.findMany({
     where: {
       id: { in: classIds },
@@ -218,6 +244,7 @@ export async function action({ request }: ActionFunctionArgs) {
         ...collaboration,
       },
       classIds: deployClassIds,
+      deployment: { postAt, dueAt },
     });
 
     // Unreachable while AP History is outside the pilot, which forces
@@ -283,6 +310,7 @@ export async function action({ request }: ActionFunctionArgs) {
           : {}),
       },
       classIds: deployClassIds,
+      deployment: { postAt, dueAt },
     });
 
     // "Group them for me" and "one doc for the whole class" describe an

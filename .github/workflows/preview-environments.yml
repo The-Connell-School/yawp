@@ -38,6 +38,7 @@ jobs:
       PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
       PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
       PREVIEW_TLS: ${{ vars.PREVIEW_TLS || 'true' }}
+      PREVIEW_ACME_EMAIL: ${{ vars.PREVIEW_ACME_EMAIL || 'bryant@brock.software' }}
       PREVIEW_RUNTIME: ${{ vars.PREVIEW_RUNTIME || 'fast' }}
       PREVIEW_MAX_ENVS: ${{ vars.PREVIEW_MAX_ENVS || '30' }}
       PREVIEW_MAX_RESIDENT: ${{ vars.PREVIEW_MAX_RESIDENT || vars.PREVIEW_MAX_ENVS || '20' }}
@@ -198,6 +199,7 @@ jobs:
             "PREVIEW_GITHUB_API_URL=$(shell_quote "$GITHUB_API_URL")"
             "PREVIEW_GITHUB_TOKEN=$(shell_quote "$GH_TOKEN")"
             "PREVIEW_TLS=$(shell_quote "$PREVIEW_TLS")"
+            "PREVIEW_ACME_EMAIL=$(shell_quote "$PREVIEW_ACME_EMAIL")"
             "PREVIEW_RUNTIME=$(shell_quote "$PREVIEW_RUNTIME")"
             "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
             "PREVIEW_SEAT_COUNT=$(shell_quote "$PREVIEW_SEAT_COUNT")"
@@ -250,6 +252,7 @@ jobs:
           fi
 
           preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          blackboard_url="$(awk -F= '/^BLACKBOARD_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           master_org_gate_enabled="$(awk -F= '/^PREVIEW_MASTER_ORG_GATE_ENABLED=/{print $2}' /tmp/preview-deploy.log | tail -1)"
@@ -258,6 +261,7 @@ jobs:
           echo "Preview capacity OK: ${running}/${PREVIEW_MAX_RUNNING} running before deploy, ${resident}/${PREVIEW_MAX_RESIDENT} resident."
           {
             echo "url=$preview_url"
+            echo "blackboard_url=${blackboard_url:-}"
             echo "access_code=$access_code"
             echo "elapsed_ms=${elapsed_ms:-unknown}"
             echo "master_org_gate_enabled=${master_org_gate_enabled:-false}"
@@ -341,6 +345,7 @@ jobs:
 
             - **One-click:** ${{ steps.deploy.outputs.url }}/?code=${{ steps.deploy.outputs.access_code }}
             - **URL:** ${{ steps.deploy.outputs.url }}
+            - **Blackboard:** ${{ steps.deploy.outputs.blackboard_url }}
             - **Access code:** `${{ steps.deploy.outputs.access_code }}`
             - **Runtime:** Docker Compose on the preview environment host
             - **Data:** `${{ env.PREVIEW_DATA_MODE }}` in an isolated PR database

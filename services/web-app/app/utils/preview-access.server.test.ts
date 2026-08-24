@@ -209,7 +209,9 @@ describe('preview access gate', () => {
       '1'
     );
 
-    const tampered = `${cookiePair.slice(0, -1)}x`;
+    const valueStart = cookiePair.indexOf('=') + 1;
+    const replacement = cookiePair[valueStart] === 'a' ? 'b' : 'a';
+    const tampered = `${cookiePair.slice(0, valueStart)}${replacement}${cookiePair.slice(valueStart + 1)}`;
     const rejected = await middleware(
       middlewareArgs(request('/app', { headers: { cookie: tampered } })),
       next
@@ -567,10 +569,7 @@ describe('preview access codes', () => {
     });
 
     expect(
-      await findPreviewAccessCredentialByCode(
-        'yawp-rocks',
-        runtimeRepository
-      )
+      await findPreviewAccessCredentialByCode('yawp-rocks', runtimeRepository)
     ).toEqual({
       kind: 'organization',
       seat: { organizationId: 'existing-org', label: 'Existing Org' },
@@ -590,10 +589,7 @@ describe('preview access codes', () => {
     const runtimeRepository = repository();
 
     expect(
-      await findPreviewAccessCredentialByCode(
-        ' YAWP-ROCKS ',
-        runtimeRepository
-      )
+      await findPreviewAccessCredentialByCode(' YAWP-ROCKS ', runtimeRepository)
     ).toEqual({ kind: 'master' });
     expect(
       await findPreviewAccessCredentialByCode(

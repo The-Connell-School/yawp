@@ -318,6 +318,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
     const titleRaw = formData.get('title')?.toString() ?? '';
     const promptRaw = formData.get('prompt')?.toString() ?? '';
+    const postAtRaw = formData.get('postAt')?.toString()?.trim() ?? '';
+    const dueAtRaw = formData.get('dueAt')?.toString()?.trim() ?? '';
     const strictnessRaw = formData.get('gradingAssistantStrictnessLevel');
 
     const title = titleRaw.trim() || null;
@@ -468,6 +470,34 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
+    // Optional deployment dates (applied/updated for this class deployment)
+    let postAt: Date | null | undefined = undefined;
+    let dueAt: Date | null | undefined = undefined;
+    if (postAtRaw) {
+      const parsed = new Date(postAtRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        return dataResponse(
+          { success: false, message: 'The post date is invalid.' },
+          { status: 400 }
+        );
+      }
+      postAt = parsed;
+    } else if (formData.has('postAt')) {
+      postAt = null;
+    }
+    if (dueAtRaw) {
+      const parsed = new Date(dueAtRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        return dataResponse(
+          { success: false, message: 'The due date is invalid.' },
+          { status: 400 }
+        );
+      }
+      dueAt = parsed;
+    } else if (formData.has('dueAt')) {
+      dueAt = null;
+    }
+
     if (intent === 'create-assignment') {
       try {
         await createAssignmentDeployedToClasses({
@@ -483,6 +513,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
             ...promptAttachmentData,
           },
           classIds: [classId],
+          deployment: {
+            postAt: postAt ?? null,
+            dueAt: dueAt ?? null,
+          },
         });
       } catch (error) {
         if (promptAttachmentData?.promptAttachmentKey) {
@@ -520,6 +554,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
           ...promptAttachmentData,
         },
       });
+      // Update the class deployment dates when present in the form
+      if (postAt !== undefined || dueAt !== undefined) {
+        await prisma.classAssignment.updateMany({
+          where: { assignmentId: existingAssignment!.id, classId },
+          data: {
+            ...(postAt !== undefined ? { postAt } : {}),
+            ...(dueAt !== undefined ? { dueAt } : {}),
+          },
+        });
+      }
     } catch (error) {
       if (
         promptAttachmentData?.promptAttachmentKey &&

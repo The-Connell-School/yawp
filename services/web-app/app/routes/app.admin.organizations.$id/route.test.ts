@@ -18,6 +18,9 @@ const prisma = {
     createMany: mock(),
     deleteMany: mock(),
   },
+  submissionActivity: {
+    count: mock(),
+  },
   user: {
     findUnique: mock(),
   },
@@ -64,6 +67,7 @@ function organizationFixture() {
     reporterEnabled: false,
     classInsightsEnabled: false,
     writingPracticeEnabled: false,
+    submissionActivityEnabled: false,
     accessExpiresAt: null,
     memberships: [],
     assignmentTypeAssignments: [],
@@ -111,9 +115,26 @@ describe('admin organization detail route', () => {
     prisma.$transaction.mockResolvedValue([]);
   });
 
+  test('keeps organization hard deletion compatible with database cascades', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'deleteOrganization');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.delete).toHaveBeenCalledWith({
+      where: { id: 'org-1' },
+    });
+  });
+
   test('does not load writing practice state for the organization edit sheet', async () => {
     const response = await loader({
-      request: new Request('https://example.test/app/admin/organizations/org-1'),
+      request: new Request(
+        'https://example.test/app/admin/organizations/org-1'
+      ),
       params: { id: 'org-1' },
       context: {} as never,
     });
@@ -216,6 +237,28 @@ describe('admin organization detail route', () => {
     });
 
     expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      writingPracticeEnabled: false,
+    });
+  });
+
+  test('updates the released grade activity rollout gate independently', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+    form.set('submissionActivityEnabled', 'true');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      submissionActivityEnabled: true,
+      reporterEnabled: false,
+      classInsightsEnabled: false,
       writingPracticeEnabled: false,
     });
   });

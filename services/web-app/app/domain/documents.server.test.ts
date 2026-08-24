@@ -14,6 +14,7 @@ const prisma = {
     findUnique: mock(),
   },
   document: {
+    findFirst: mock(),
     create: mock(),
     update: mock(),
   },
@@ -30,6 +31,7 @@ describe('createDocumentForAssignmentType', () => {
     prisma.assignmentModule.findMany.mockReset();
     prisma.assignment.findUnique.mockReset();
     prisma.classAssignment.findUnique.mockReset();
+    prisma.document.findFirst.mockReset();
     prisma.document.create.mockReset();
     prisma.document.update.mockReset();
 
@@ -47,6 +49,7 @@ describe('createDocumentForAssignmentType', () => {
       assignmentId: 'assignment-1',
       assignment: { assignmentTypeId: 'assignment-type-1' },
     });
+    prisma.document.findFirst.mockResolvedValue(null);
     prisma.assignmentModule.findMany.mockResolvedValue([
       {
         id: 'module-1',
@@ -71,7 +74,59 @@ describe('createDocumentForAssignmentType', () => {
     );
   });
 
+  test('reuses existing document when classAssignmentId already has a document', async () => {
+    prisma.classAssignment.findUnique.mockResolvedValue({
+      assignmentId: 'assignment-1',
+      assignment: { assignmentTypeId: 'assignment-type-1' },
+    });
+    prisma.assignmentModule.findMany.mockResolvedValue([
+      {
+        id: 'module-1',
+        instructions: [{ id: 'instruction-1', prompt: 'Prompt 1' }],
+      },
+    ]);
+    prisma.document.findFirst.mockResolvedValue({ id: 'existing-doc-1' });
+
+    const created = await createDocumentForAssignmentType({
+      membershipId: 'membership-1',
+      assignmentTypeId: 'assignment-type-1',
+      assignmentId: 'assignment-1',
+      classAssignmentId: 'class-assignment-1',
+    });
+
+    expect(created.documentId).toBe('existing-doc-1');
+    expect(prisma.document.create).not.toHaveBeenCalled();
+  });
+
+  test('falls back to assignmentId reuse when no classAssignmentId match exists', async () => {
+    prisma.classAssignment.findUnique.mockResolvedValue({
+      assignmentId: 'assignment-1',
+      assignment: { assignmentTypeId: 'assignment-type-1' },
+    });
+    prisma.assignmentModule.findMany.mockResolvedValue([
+      {
+        id: 'module-1',
+        instructions: [{ id: 'instruction-1', prompt: 'Prompt 1' }],
+      },
+    ]);
+    // First search by classAssignmentId returns null; second by assignmentId returns a match.
+    prisma.document.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'existing-by-assignment' });
+
+    const created = await createDocumentForAssignmentType({
+      membershipId: 'membership-1',
+      assignmentTypeId: 'assignment-type-1',
+      assignmentId: 'assignment-1',
+      classAssignmentId: 'class-assignment-1',
+    });
+
+    expect(created.documentId).toBe('existing-by-assignment');
+    expect(prisma.document.create).not.toHaveBeenCalled();
+  });
+
   test('creates one module session for every active assignment module', async () => {
+    prisma.document.findFirst.mockResolvedValue(null);
     prisma.assignmentModule.findMany.mockResolvedValue([
       {
         id: 'module-1',

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { rubricKeys } from '~/domain/grading/rubric';
 
 const prisma = {
+  $transaction: mock(),
+  user: { findUnique: mock() },
   submission: {
     findFirst: mock(),
     update: mock(),
@@ -12,6 +14,7 @@ const prisma = {
   submissionGradingAssistantRun: {
     create: mock(),
   },
+  submissionActivity: { create: mock() },
 };
 
 const getLLMCompletion = mock();
@@ -39,9 +42,8 @@ mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
 }));
 
-const { LlmFallbackRetrySignal } = await import(
-  '~/utils/getLLMCompletion/llm-provider-errors.server'
-);
+const { LlmFallbackRetrySignal } =
+  await import('~/utils/getLLMCompletion/llm-provider-errors.server');
 const { action, getRubricEvaluationMaxTokens } = await import('./route');
 
 test('expands the rubric response budget for category-heavy grading assistants', () => {
@@ -88,6 +90,17 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
     text: 'Frozen AI essay text',
     html: '<p>Frozen AI essay text</p>',
     gradedAt: null,
+    updatedAt: new Date('2026-08-20T10:00:00.000Z'),
+    releasedAt: null,
+    unsubmittedAt: null,
+    score: null,
+    feedback: null,
+    rubricScores: null,
+    overallScore: null,
+    overallComment: null,
+    numericPercentage: null,
+    letterGrade: null,
+    grammarIssues: null,
     document: {
       id: 'doc-1',
       membershipId: 'student-profile-1',
@@ -99,6 +112,8 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
       },
       classAssignment: { class: { schoolId: 'school-1' } },
       membership: {
+        organizationId: 'org-1',
+        organization: { submissionActivityEnabled: false },
         classesAsStudent: [],
         user: { name: 'Jordan Student' },
       },
@@ -194,9 +209,12 @@ const leqSnapshot = {
 describe('api.domain.grade-essay-ai', () => {
   beforeEach(() => {
     prisma.submission.findFirst.mockReset();
+    prisma.user.findUnique.mockReset();
     prisma.submission.update.mockReset();
     prisma.assignmentType.findUnique.mockReset();
     prisma.submissionGradingAssistantRun.create.mockReset();
+    prisma.submissionActivity.create.mockReset();
+    prisma.$transaction.mockReset();
     getLLMCompletion.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
@@ -206,6 +224,7 @@ describe('api.domain.grade-essay-ai', () => {
 
     getGradingActor.mockResolvedValue({
       membershipId: 'teacher-1',
+      organizationId: 'org-1',
       teacherProfileId: 'teacher-1',
       isTeacher: true,
       isAdmin: false,
@@ -217,10 +236,17 @@ describe('api.domain.grade-essay-ai', () => {
     );
     redirectWithToast.mockResolvedValue(new Response(null, { status: 302 }));
     prisma.submission.update.mockResolvedValue({ id: 'sub-1' });
+    prisma.user.findUnique.mockResolvedValue({
+      name: 'Teacher One',
+      email: 'teacher@example.test',
+    });
     prisma.assignmentType.findUnique.mockResolvedValue(mockAssignmentType());
     prisma.submissionGradingAssistantRun.create.mockResolvedValue({
       id: 'ga-run-1',
     });
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(prisma)
+    );
 
     getLLMCompletion
       .mockResolvedValueOnce(buildRubricResponseJson())
@@ -266,12 +292,31 @@ describe('api.domain.grade-essay-ai', () => {
       (payload.rubricConfig as { source?: string } | undefined)?.source
     ).toBe('thesis-default');
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        submissionId: 'sub-1',
+        organizationId: 'org-1',
+        actorMembershipId: 'teacher-1',
+        eventType: 'submission.grading_assistant_updated',
+        occurredAfterRelease: false,
+        metadata: expect.objectContaining({
+          gradingAssistantRunId: 'ga-run-1',
+          model: expect.any(String),
+          gradingConfigSource: 'thesis-default',
+          gradingConfigVersion: 1,
+        }),
+      })
+    );
     expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'assignment-type-legacy' },
       })
     );
-    expect(prisma.submission.update.mock.calls[0]?.[0].data.aiMeta).toMatchObject({
+    expect(
+      prisma.submission.update.mock.calls[0]?.[0].data.aiMeta
+    ).toMatchObject({
       gradingConfigSource: 'thesis-default',
       assignmentTypeRubricSource: 'thesis-default',
       assignmentTypeGradingVersion: 1,
@@ -345,6 +390,177 @@ describe('api.domain.grade-essay-ai', () => {
       documentTextSha256:
         '073d1a79b60fbc3caaccdb440a9c17a1e12c9360f209e321e3b0bada66abb5d9',
     });
+  });
+
+  test('fails closed when required grading-assistant activity recording is unavailable', async () => {
+    const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+    process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = 'false';
+    prisma.submission.findFirst.mockResolvedValue(mockSubmission());
+    const form = new FormData();
+    form.append('submissionId', 'sub-1');
+
+    try {
+      await expect(
+        action({
+          request: new Request(
+            'https://example.com/api/domain/grade-essay-ai',
+            { method: 'POST', body: form }
+          ),
+        } as any)
+      ).rejects.toThrow(
+        'Submission activity recording is temporarily unavailable'
+      );
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.submission.update).toHaveBeenCalledTimes(1);
+      expect(prisma.submissionGradingAssistantRun.create).toHaveBeenCalledTimes(
+        1
+      );
+      expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+      } else {
+        process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = previous;
+      }
+    }
+  });
+
+  test('never stores a cross-tenant admin membership as AI grader attribution', async () => {
+    getGradingActor.mockResolvedValue({
+      userId: 'admin-user',
+      membershipId: 'admin-membership',
+      organizationId: 'admin-org',
+      teacherProfileId: null,
+      isTeacher: false,
+      isAdmin: true,
+    });
+    const base = mockSubmission();
+    prisma.submission.findFirst.mockResolvedValue({
+      ...base,
+      document: {
+        ...(base.document as Record<string, unknown>),
+        membership: {
+          ...(base.document.membership as Record<string, unknown>),
+          userId: 'student-user',
+          organizationId: 'org-1',
+        },
+      },
+    });
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-1');
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect((response as { data: { success: boolean } }).data.success).toBe(
+      true
+    );
+    expect(prisma.submission.update.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({ gradedByMembershipId: null })
+    );
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        organizationId: 'org-1',
+        actorMembershipId: null,
+      })
+    );
+  });
+
+  test('returns 409 and rolls back activity when a general AI grade is stale', async () => {
+    prisma.submission.findFirst.mockResolvedValue(mockSubmission());
+    prisma.submission.update.mockRejectedValue({ code: 'P2025' });
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-1');
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect((response as { init?: { status?: number } }).init?.status).toBe(409);
+    expect(prisma.submissionGradingAssistantRun.create).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
+  test('records every persisted assistant run even when its grade values are unchanged', async () => {
+    const category = {
+      key: 'daily_habit',
+      label: 'Daily Habit',
+      description: 'Did the student write today?',
+      weight: 1,
+      grammarHighlighting: false,
+    };
+    prisma.assignmentType.findUnique.mockResolvedValue(
+      mockAssignmentType({
+        rubricJson: { categories: [category] },
+        gradingPromptConfigJson: {
+          gradingInstructions: 'Grade against this rubric.',
+        },
+      })
+    );
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        categories: [
+          {
+            key: 'daily_habit',
+            score: 3,
+            comment: 'Comment for daily_habit',
+          },
+        ],
+        overallComment: 'Jordan, this draft has clear progress.',
+      })
+    );
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        gradedAt: new Date('2026-08-19T10:00:00.000Z'),
+        rubricScores: {
+          daily_habit: {
+            score: 3,
+            comment: 'Comment for daily_habit',
+            isAi: true,
+          },
+        },
+        overallScore: 3,
+        overallComment: 'Jordan, this draft has clear progress.',
+        numericPercentage: 79,
+        letterGrade: 'C',
+        score: '79% (C)',
+        grammarIssues: { version: 1, issues: [] },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-1');
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect((response as { data: { success: boolean } }).data.success).toBe(
+      true
+    );
+    expect(prisma.submissionGradingAssistantRun.create).toHaveBeenCalledTimes(
+      1
+    );
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        eventType: 'submission.grading_assistant_updated',
+        changes: {},
+        metadata: expect.objectContaining({
+          gradingAssistantRunId: 'ga-run-1',
+        }),
+      })
+    );
   });
 
   test('starts the grading deadline before request preflight work', async () => {
@@ -669,9 +885,7 @@ describe('api.domain.grade-essay-ai', () => {
     expect(rubricInstructionsIndex).toBeGreaterThan(-1);
     expect(assignmentPromptIndex).toBeGreaterThan(rubricInstructionsIndex);
     expect(essayIndex).toBeGreaterThan(assignmentPromptIndex);
-    expect(
-      prompt.slice(assignmentPromptIndex, essayIndex).trim()
-    ).toBe(
+    expect(prompt.slice(assignmentPromptIndex, essayIndex).trim()).toBe(
       'Assignment prompt: Analyze the theme of ambition in Macbeth.'
     );
     expect(prompt.slice(essayIndex)).toBe('Essay:\nFrozen AI essay text');
@@ -780,7 +994,9 @@ describe('api.domain.grade-essay-ai', () => {
 
     const prompt = getLLMCompletion.mock.calls[0]?.[0]?.messages?.[0]?.content;
 
-    expect(prompt).toContain('Assignment prompt: No assignment prompt was provided.');
+    expect(prompt).toContain(
+      'Assignment prompt: No assignment prompt was provided.'
+    );
   });
 
   test('uses assignment-type-owned ACT Writing grading config and records snapshots', async () => {
@@ -820,7 +1036,11 @@ describe('api.domain.grade-essay-ai', () => {
         id: 'assignment-type-act',
         title: 'ACT Writing',
         kind: 'act_writing',
-        scoringScaleJson: { type: 'act_writing_2_12', minScore: 1, maxScore: 6 },
+        scoringScaleJson: {
+          type: 'act_writing_2_12',
+          minScore: 1,
+          maxScore: 6,
+        },
         rubricJson: {
           categories: [
             {
@@ -948,7 +1168,9 @@ describe('api.domain.grade-essay-ai', () => {
         scoreInstructions: 'Scores must be integers 1-6 for each ACT domain.',
       },
     });
-    expect(runCall.data.assignmentTypeRubricSnapshot.categories).toHaveLength(4);
+    expect(runCall.data.assignmentTypeRubricSnapshot.categories).toHaveLength(
+      4
+    );
     expect(runCall.data.metadata).toMatchObject({
       assignmentTypeGradingLabel: 'ACT Writing',
       assignmentTypeRubricSource: 'assignment-type',
@@ -1111,15 +1333,18 @@ describe('api.domain.grade-essay-ai', () => {
           },
           contextualization: {
             earned: true,
-            comment: 'The essay places Reconstruction in the Civil War context.',
+            comment:
+              'The essay places Reconstruction in the Civil War context.',
           },
           document_use_describes: {
             earned: true,
-            comment: 'The essay accurately describes evidence from the documents.',
+            comment:
+              'The essay accurately describes evidence from the documents.',
           },
           document_use_supports_argument: {
             earned: false,
-            comment: 'The documents are not yet tied consistently to the argument.',
+            comment:
+              'The documents are not yet tied consistently to the argument.',
           },
           outside_evidence: {
             earned: true,
@@ -1127,7 +1352,8 @@ describe('api.domain.grade-essay-ai', () => {
           },
           sourcing: {
             earned: false,
-            comment: 'The essay needs clearer sourcing of document perspective.',
+            comment:
+              'The essay needs clearer sourcing of document perspective.',
           },
           complexity: {
             earned: false,
@@ -1266,11 +1492,13 @@ describe('api.domain.grade-essay-ai', () => {
         },
         document_use_describes: {
           earned: true,
-          comment: 'The essay accurately describes evidence from the documents.',
+          comment:
+            'The essay accurately describes evidence from the documents.',
         },
         document_use_supports_argument: {
           earned: false,
-          comment: 'The documents are not yet tied consistently to the argument.',
+          comment:
+            'The documents are not yet tied consistently to the argument.',
         },
         outside_evidence: {
           earned: true,
@@ -1306,6 +1534,102 @@ describe('api.domain.grade-essay-ai', () => {
     expect(Object.hasOwn(updateData, 'grammarIssues')).toBe(false);
   });
 
+  test('records an AP History assistant rerun when identical grade values still persist', async () => {
+    const modelOutput = JSON.stringify({
+      rubricVersion: 'ap-history-dbq-2026',
+      points: {
+        thesis: { earned: true, comment: 'Defensible thesis.' },
+        contextualization: { earned: false, comment: 'Needs context.' },
+        document_use_describes: {
+          earned: false,
+          comment: 'Needs document description.',
+        },
+        document_use_supports_argument: {
+          earned: false,
+          comment: 'Needs document support.',
+        },
+        outside_evidence: { earned: false, comment: 'Needs evidence.' },
+        sourcing: { earned: false, comment: 'Needs sourcing.' },
+        complexity: { earned: false, comment: 'Needs complexity.' },
+      },
+      overallComment: 'Jordan, keep developing the AP History response.',
+    });
+    const apDocument = {
+      id: 'ap-repeat-doc',
+      membershipId: 'student-profile-1',
+      assignmentTypeId: 'ap-history-type',
+      assignmentType: {
+        id: 'ap-history-type',
+        kind: null,
+        title: 'AP History Essay',
+      },
+      assignment: {
+        apHistorySnapshot: dbqSnapshot,
+        class: { schoolId: 'school-1' },
+      },
+      membership: {
+        organizationId: 'org-1',
+        organization: { submissionActivityEnabled: true },
+        classesAsStudent: [],
+        user: { name: 'Jordan Student' },
+      },
+    };
+
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockResolvedValueOnce(modelOutput);
+    prisma.submission.findFirst.mockResolvedValueOnce(
+      mockSubmission({
+        id: 'ap-repeat-sub',
+        text: 'A repeated AP response.',
+        document: apDocument,
+      })
+    );
+    const form = new FormData();
+    form.append('submissionId', 'ap-repeat-sub');
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const persistedGrade = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+
+    getLLMCompletion.mockResolvedValueOnce(modelOutput);
+    prisma.submissionActivity.create.mockReset();
+    prisma.submission.findFirst.mockResolvedValueOnce(
+      mockSubmission({
+        id: 'ap-repeat-sub',
+        text: 'A repeated AP response.',
+        ...persistedGrade,
+        updatedAt: new Date('2026-08-20T12:01:00.000Z'),
+        document: apDocument,
+      })
+    );
+    const repeatForm = new FormData();
+    repeatForm.append('submissionId', 'ap-repeat-sub');
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: repeatForm,
+      }),
+    } as any);
+
+    expect((response as { data: { success: boolean } }).data.success).toBe(
+      true
+    );
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        eventType: 'submission.grading_assistant_updated',
+        changes: {},
+        metadata: expect.objectContaining({
+          rubricMode: 'ap_history',
+          rubricId: 'ap-history-dbq-2026',
+        }),
+      })
+    );
+  });
+
   test('grades AP History LEQ with canonical keys, ignores DBQ-only keys, and caps scoring at snapshot total', async () => {
     getLLMCompletion.mockReset();
     getLLMCompletion.mockResolvedValueOnce(
@@ -1323,7 +1647,8 @@ describe('api.domain.grade-essay-ai', () => {
           },
           evidence: {
             earned: true,
-            comment: 'The essay uses specific evidence about canals and factories.',
+            comment:
+              'The essay uses specific evidence about canals and factories.',
           },
           analysis_reasoning: {
             earned: true,
@@ -1395,7 +1720,8 @@ describe('api.domain.grade-essay-ai', () => {
         },
         evidence: {
           earned: true,
-          comment: 'The essay uses specific evidence about canals and factories.',
+          comment:
+            'The essay uses specific evidence about canals and factories.',
         },
         analysis_reasoning: {
           earned: true,
@@ -1475,13 +1801,22 @@ describe('api.domain.grade-essay-ai', () => {
         rubricVersion: 'ap-history-dbq-2026',
         points: {
           thesis: { earned: true, comment: 'Defensible thesis.' },
-          contextualization: { earned: false, comment: 'Needs broader context.' },
-          document_use_describes: { earned: false, comment: 'Needs documents.' },
+          contextualization: {
+            earned: false,
+            comment: 'Needs broader context.',
+          },
+          document_use_describes: {
+            earned: false,
+            comment: 'Needs documents.',
+          },
           document_use_supports_argument: {
             earned: false,
             comment: 'Needs argument support.',
           },
-          outside_evidence: { earned: false, comment: 'Needs outside evidence.' },
+          outside_evidence: {
+            earned: false,
+            comment: 'Needs outside evidence.',
+          },
           sourcing: { earned: false, comment: 'Needs sourcing.' },
           complexity: { earned: false, comment: 'Needs complexity.' },
         },
@@ -1519,6 +1854,69 @@ describe('api.domain.grade-essay-ai', () => {
         }),
       } as any)
     ).rejects.toThrow('database down');
+  });
+
+  test('returns 409 and rolls back activity when an AP History AI grade is stale', async () => {
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        rubricVersion: 'ap-history-dbq-2026',
+        points: {
+          thesis: { earned: true, comment: 'Defensible thesis.' },
+          contextualization: {
+            earned: false,
+            comment: 'Needs broader context.',
+          },
+          document_use_describes: {
+            earned: false,
+            comment: 'Needs documents.',
+          },
+          document_use_supports_argument: {
+            earned: false,
+            comment: 'Needs argument support.',
+          },
+          outside_evidence: {
+            earned: false,
+            comment: 'Needs outside evidence.',
+          },
+          sourcing: { earned: false, comment: 'Needs sourcing.' },
+          complexity: { earned: false, comment: 'Needs complexity.' },
+        },
+        overallComment: 'Jordan, this DBQ has a defensible thesis.',
+      })
+    );
+    prisma.submission.update.mockRejectedValueOnce({ code: 'P2025' });
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'ap-sub-stale',
+        text: 'Reconstruction changed political rights through amendments.',
+        document: {
+          id: 'ap-doc-stale',
+          membershipId: 'student-profile-1',
+          assignment: {
+            apHistorySnapshot: dbqSnapshot,
+            class: { schoolId: 'school-1' },
+          },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'ap-sub-stale');
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect((response as { init?: { status?: number } }).init?.status).toBe(409);
+    expect(prisma.submissionGradingAssistantRun.create).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
   test('repairs a top-level categories array response from the model', async () => {
@@ -1719,11 +2117,11 @@ describe('api.domain.grade-essay-ai', () => {
         }),
       ]);
 
-      const snapshot = prisma.submissionGradingAssistantRun.create.mock.calls.at(
-        -1
-      )?.[0].data.assignmentTypeRubricSnapshot as {
-        categories: Record<string, unknown>[];
-      };
+      const snapshot =
+        prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data
+          .assignmentTypeRubricSnapshot as {
+          categories: Record<string, unknown>[];
+        };
 
       expect(snapshot.categories[0]).toMatchObject({
         key: 'daily_habit',
@@ -1906,8 +2304,9 @@ describe('api.domain.grade-essay-ai', () => {
         prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data;
       expect(run.source).toBe('daily-pages-default');
       expect(
-        (run.assignmentTypeRubricSnapshot as { categories: { key: string }[] })
-          .categories.map((category) => category.key)
+        (
+          run.assignmentTypeRubricSnapshot as { categories: { key: string }[] }
+        ).categories.map((category) => category.key)
       ).toEqual(['engagement']);
     });
 

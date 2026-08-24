@@ -68,11 +68,14 @@ describe('renderPreviewCompose', () => {
       `DATABASE_URL: "postgresql://yawp_pr_142_app:${previewDatabasePassword}@preview-postgres:5432/yawp_pr_142"`
     );
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
-    expect(compose).toContain('YAWP_ENVIRONMENT: "preview"');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"');
+    expect(compose).toContain('blackboard-lti-mock:');
+    expect(compose).toContain('bun scripts/blackboard-lti-mock/server.mjs');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_ENABLED: "true"');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_ISSUER: "https://blackboard.com"');
     expect(compose).toContain('AI_MODEL: "claude-sonnet-4-6"');
     expect(compose).not.toContain('target: production');
-    expect(compose).toContain('traefik.enable=true');
-    expect(compose).toContain('Host(`pr-142.preview.yawp.school`)');
+    expect(compose).not.toContain('traefik');
     expect(compose).not.toContain('yawp-pr-142-postgres-data');
     expect(compose).not.toContain('apprunner');
     expect(compose).not.toContain('terraform');
@@ -90,11 +93,30 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('target: production');
   });
 
-  test('pins Traefik to the shared preview network', () => {
+  test('joins the shared preview network for the host ingress', () => {
     const compose = renderCompose();
+    const parsed = Bun.YAML.parse(compose);
 
-    expect(compose).toContain('traefik.docker.network=preview');
+    expect(parsed.services.web.networks).toContain('preview');
+    expect(parsed.networks.preview.external).toBe(true);
+    expect(compose).not.toContain('traefik');
     expect(compose).not.toContain(deprecatedPreviewSlug);
+  });
+
+  test('retains Traefik labels for the separately hosted demo environment', () => {
+    const compose = renderCompose({ prNumber: undefined, slug: 'demo' });
+
+    expect(compose).toContain('traefik.enable=true');
+    expect(compose).toContain('Host(`demo.preview.yawp.school`)');
+  });
+
+  test('retains legacy PR labels only until the custom ingress is active', () => {
+    const transitional = renderCompose({ customIngressActive: false });
+    const migrated = renderCompose({ customIngressActive: true });
+
+    expect(transitional).toContain('traefik.enable=true');
+    expect(transitional).toContain('Host(`pr-142.preview.yawp.school`)');
+    expect(migrated).not.toContain('traefik');
   });
 
   test('leaves running preview traffic independent of the wake service', () => {

@@ -1,6 +1,9 @@
 // ESM wrapper for CommonJS Prisma client
 // Use createRequire for proper CommonJS interop in Node.js/SSR
 import { createRequire } from 'module';
+// Re-export generated types for compile-time
+export type * as PrismaTypes from './generated/prisma/index.js';
+export type * from './generated/prisma/index.js';
 
 const createRequireFromUrl = createRequire;
 const requireFn = createRequireFromUrl(import.meta.url);
@@ -8,7 +11,7 @@ const requireFn = createRequireFromUrl(import.meta.url);
 // According to package.json exports, require('@app/prisma') resolves to ./generated/prisma/index.js
 // Use require.resolve to get the actual path to the generated file via Node's module resolution
 // This works even when bundled because Node resolves the package location at runtime
-let PrismaGenerated;
+let PrismaGenerated: any;
 try {
   const generatedPath = requireFn.resolve('@app/prisma');
   PrismaGenerated = requireFn(generatedPath);
@@ -17,8 +20,9 @@ try {
   PrismaGenerated = requireFn('@app/prisma');
 }
 
-export const PrismaClient = PrismaGenerated.PrismaClient;
-export const Prisma = PrismaGenerated.Prisma;
-
-// Re-export all types
-export type * from './generated/prisma/index.js';
+// Bridge runtime values to generated types so TypeScript sees the correct types
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+type Generated = typeof import('./generated/prisma/index.js');
+export const PrismaClient = PrismaGenerated
+  .PrismaClient as unknown as Generated['PrismaClient'];
+export const Prisma = PrismaGenerated.Prisma as unknown as Generated['Prisma'];

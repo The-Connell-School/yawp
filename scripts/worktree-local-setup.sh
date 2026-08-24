@@ -31,15 +31,17 @@ ensure_config() {
   mkdir -p "$CONFIG_DIR"
 
   if [[ -f "$CONFIG_FILE" ]]; then
-    # shellcheck disable=SC1090
-    source "$CONFIG_FILE"
-    return
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+  LTI_MOCK_PORT="${LTI_MOCK_PORT:-$((DEV_PORT + 4297))}"
+  return
   fi
 
   local slot
   slot="$(hash_slot "$SLUG" 70)"
   PG_PORT=$((54320 + slot))
   DEV_PORT=$((5176 + slot))
+  LTI_MOCK_PORT=$((9473 + slot))
   CONTAINER_NAME="yawp-${SLUG}-postgres"
   VOLUME_NAME="yawp-${SLUG}-postgres-data"
   DB_NAME="yawp_${SLUG}"
@@ -48,6 +50,7 @@ ensure_config() {
 SLUG=$SLUG
 PG_PORT=$PG_PORT
 DEV_PORT=$DEV_PORT
+LTI_MOCK_PORT=$LTI_MOCK_PORT
 CONTAINER_NAME=$CONTAINER_NAME
 VOLUME_NAME=$VOLUME_NAME
 DB_NAME=$DB_NAME
@@ -138,6 +141,7 @@ AWS_S3_REGION_FOR_VIDEOS="us-east-1"
 ${mock_mode_line}
 ${ai_model_line:-AI_MODEL="claude-sonnet-4-5"}
 ${anthropic_line:-ANTHROPIC_API_KEY=""}
+BLACKBOARD_LTI_MOCK_URL="http://127.0.0.1:${LTI_MOCK_PORT}"
 EOF
 
   if [[ ! -f "$ROOT/.env" ]]; then
@@ -233,7 +237,13 @@ Dev logins (password: yawp-dev):
 Commands:
   bash scripts/worktree-local-setup.sh          # ensure db + env
   bash scripts/worktree-local-setup.sh --fresh  # reset + re-seed
+  bun blackboard-lti-mock                       # Blackboard Learn mock (student/teacher)
   bun dev                                       # start app
+
+Blackboard Learn mock:
+  BLACKBOARD_LTI_MOCK_ENABLED=true BLACKBOARD_LTI_MOCK_PORT=${LTI_MOCK_PORT} bun blackboard-lti-mock
+  Learn:       http://localhost:${LTI_MOCK_PORT}/
+  Same-origin: http://localhost:${DEV_PORT:-5176}/dev/blackboard-lti-mock/
 
 Class insights mock mode (services/web-app/.env):
   CLASS_INSIGHT_MOCK_MODE=fixture   # fake summaries, no Anthropic calls
