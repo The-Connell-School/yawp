@@ -305,6 +305,17 @@ describe('local dev seed fixtures', () => {
     expect(seedSource).toContain('[LOCAL_DEV_ORG_ID]');
   });
 
+  test('enables the student revision flow for local development', () => {
+    const seedSource = readFileSync(
+      join(import.meta.dirname, 'seed-local-dev.ts'),
+      'utf8'
+    );
+
+    // Off by default in production; on locally so the split-screen revision
+    // flow is reachable without hand-editing the organization row.
+    expect(seedSource).toContain('revisionFlowEnabled: true');
+  });
+
   test('treats localhost database urls as local seed targets', () => {
     expect(
       isLocalDatabaseUrl('postgresql://postgres:postgres@localhost:5432/yawp')

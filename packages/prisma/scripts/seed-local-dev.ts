@@ -36,6 +36,9 @@ try {
       numOfTeacherSeats: 40,
       reporterEnabled: true,
       classInsightsEnabled: false,
+      // Off by default everywhere else; on locally so the split-screen
+      // revision flow is reachable without hand-editing the organization.
+      revisionFlowEnabled: true,
     },
   });
   await enableClassInsightsForOrganizations(prisma, [LOCAL_DEV_ORG_ID]);
