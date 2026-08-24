@@ -114,7 +114,23 @@ export type E2EContext = {
   gradeId: string;
   /** Graded but not released; has inline comment (student must not see highlights until release) */
   unreleasedGradedSubmissionId: string;
+  /** Kind of writing inside the collaboration pilot. */
+  collabAssignmentTypeId: string;
+  /** The group's shared draft, already opened, with two writers in it. */
+  collabDocumentId: string;
+  collabGroupId: string;
+  collabClassAssignmentId: string;
+  /** The second writer in that group, so two browsers can meet in one draft. */
+  secondStudentEmail: string;
+  secondStudentPassword: string;
+  secondStudentName: string;
+  secondStudentMembershipId: string;
 };
+
+/** The group's second writer, so two browsers can meet in one draft. */
+const SECOND_STUDENT_EMAIL = 'riley.e2e@yawp.test';
+const SECOND_STUDENT_PASSWORD = 'riley-e2e-password';
+const SECOND_STUDENT_NAME = 'Riley Park';
 
 export async function seedE2E(): Promise<E2EContext> {
   if (!prisma) {
@@ -642,6 +658,97 @@ export async function seedE2E(): Promise<E2EContext> {
     },
   });
 
+  // 7. A shared draft with two writers in it.
+  //
+  // Both roads to a collaborative room converge on a DocumentGroup, and this is
+  // the teacher's one: an assignment with collaboration on, a group with its
+  // members, and `openedAt` set, which is what makes the document a live room
+  // rather than an ordinary draft. Built directly rather than through the
+  // arrange/open endpoints so the fixture states the shape it needs instead of
+  // depending on the UI that produces it.
+  const collabAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'E2E Group Writing',
+      position: 5,
+      ownerOrgId: org.id,
+      collaborationSupported: true,
+      assignmentModules: {
+        create: [{ title: 'E2E Group Module', position: 1 }],
+      },
+    },
+    select: { id: true },
+  });
+
+  const {
+    assignment: collabAssignment,
+    classAssignment: collabClassAssignment,
+  } = await createDeployedAssignment({
+    prisma,
+    classId: seededClass.id,
+    assignmentTypeId: collabAssignmentType.id,
+    title: 'E2E Group Assignment',
+    prompt: 'Write this one together.',
+  });
+  await prisma.assignment.update({
+    where: { id: collabAssignment.id },
+    data: { collaborationEnabled: true, collaborationGroupMode: 'teacher' },
+  });
+
+  const secondStudent = await prisma.user.create({
+    data: {
+      email: SECOND_STUDENT_EMAIL,
+      name: SECOND_STUDENT_NAME,
+      password: { create: createPassword(SECOND_STUDENT_PASSWORD) },
+      memberships: {
+        create: [
+          {
+            organizationId: org.id,
+            isOrgOwner: false,
+            role: 'STUDENT' as const,
+            classesAsStudent: { connect: { id: seededClass.id } },
+          },
+        ],
+      },
+    },
+    include: { memberships: true },
+  });
+  const secondStudentMembership = secondStudent.memberships[0];
+
+  const collabDoc = await prisma.document.create({
+    data: {
+      title: 'E2E Shared Draft',
+      text: '',
+      html: '<p></p>',
+      // Single-valued on a group draft, so it names the first member.
+      membershipId: membership.id,
+      assignmentTypeId: collabAssignmentType.id,
+      assignmentId: collabAssignment.id,
+      classAssignmentId: collabClassAssignment.id,
+    },
+    select: { id: true },
+  });
+
+  const collabGroup = await prisma.documentGroup.create({
+    data: {
+      kind: 'assignment',
+      classAssignmentId: collabClassAssignment.id,
+      label: 'Group 1',
+      ordinal: 0,
+      // Opened and already seeded: an empty room needs no seeding, and stamping
+      // it keeps the server from copying an empty document into itself.
+      openedAt: new Date(),
+      seededAt: new Date(),
+      documentId: collabDoc.id,
+      members: {
+        create: [
+          { membershipId: membership.id },
+          { membershipId: secondStudentMembership.id },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
   return {
     organizationId: org.id,
     schoolId: school.id,
@@ -673,6 +780,14 @@ export async function seedE2E(): Promise<E2EContext> {
     snapshotId: gradedSubmission.id,
     gradeId: gradedSubmission.id,
     unreleasedGradedSubmissionId: unreleasedGradedSubmission.id,
+    collabAssignmentTypeId: collabAssignmentType.id,
+    collabDocumentId: collabDoc.id,
+    collabGroupId: collabGroup.id,
+    collabClassAssignmentId: collabClassAssignment.id,
+    secondStudentEmail: SECOND_STUDENT_EMAIL,
+    secondStudentPassword: SECOND_STUDENT_PASSWORD,
+    secondStudentName: SECOND_STUDENT_NAME,
+    secondStudentMembershipId: secondStudentMembership.id,
   };
 }
 

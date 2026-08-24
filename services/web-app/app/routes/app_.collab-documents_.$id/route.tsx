@@ -69,7 +69,11 @@ import {
  *    list and to the teacher on the group-drafts page, not here.
  * 2. NO MOBILE LAYOUT. Three columns and no tab switcher, so the tutor is
  *    hidden below `md` and the prompt column still crowds the draft.
- * 3. NO E2E SPEC. The two-browser proof was run by hand, not in CI.
+ *
+ * The two-browser proof is no longer only by hand: `collab-carets.spec.ts`
+ * drives two logged-in students into one draft and asserts that the text
+ * arrives, that the writer's named caret arrives with it in the colour their
+ * initials carry in the header, and that it goes when they leave.
  *
  * The tutor is here, one conversation per member: `AssignmentModuleSession`
  * carries a `membershipId` on a shared draft (null on every solo document,

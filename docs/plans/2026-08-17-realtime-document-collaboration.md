@@ -532,6 +532,50 @@ Honest summary: **~200–350ms without leaving App Runner if SSE streaming works
 is worth a day precisely because it separates "feels live" from "feels laggy"
 without spending a month on infrastructure.
 
+### 2c. Carets, as built — and where this doc was wrong about them
+
+The plan said awareness could "ride a faster cadence than content, so cursors
+feel live even when text trails". It does not, and the reason is worth recording
+because it inverts the assumption.
+
+Awareness on its own cadence means a second timer, and a second timer against
+this transport means a second HTTP request per client per interval. Carets and
+text are wanted about the same draft at the same moment, so a separate presence
+poll would double the request count to learn something the content poll already
+had to ask for — and the poll row above is the one that scales O(participants).
+So **reading** presence rides the content GET, and the caret is exactly as
+current as the text it sits beside. That is the honest pairing anyway: a caret
+that is 300ms ahead of the sentence it is in front of is not more truthful, it
+is misplaced.
+
+**Writing** presence is a separate endpoint, and that asymmetry is deliberate. A
+document POST appends to the room's permanent log and triggers the snapshot
+dual-write that grading, search and submission read. A cursor moving several
+times a second must reach neither, and keeping the endpoints apart means it
+cannot, however the client behaves.
+
+Three things the plan did not anticipate:
+
+**Presence is in Postgres, not in a process.** The transport polls whatever app
+instance answers, so in-memory presence is per-instance presence: two students in
+one group would see each other only when their requests happened to land on the
+same one. Teammates whose carets come and go are worse than no carets. The cost
+is one small upsert per open editor per few seconds and one indexed read that
+rides an existing query, with a TTL sweep that only runs when it has something to
+delete.
+
+**The caret label is written by the server.** It is the one part of presence a
+student reads and believes, and awareness state is whatever the browser puts in
+it — including a classmate's name. So the endpoint throws away what was claimed,
+keeps only the cursor, and stamps the identity it resolved from the session.
+
+**Colour is a function of the ordered roster, not the roster.** Inside the
+palette, `buildAuthorColorScale` assigns by position, so two pages that order
+their member queries differently hand the same student two different colours.
+Harmless while colour only tinted a contribution panel; not harmless once a caret
+carries it, because a caret in one colour and its owner's initials in another is
+worse than no caret. Every query that feeds a scale now shares one ordering.
+
 ### 3. Document ownership and authorization (smaller than it looked)
 
 `Document.membershipId` is a single owner, and no group or team concept exists
@@ -961,3 +1005,16 @@ gentle load, and it exercises group formation, where the real product risk lives
    an established problem here, not a hypothetical. The "Not in a group" bucket
    covers transfers *in*; transfers *out* still need an answer (does the group
    keep working with their text in place? almost certainly yes).
+7. **May students form their own groups?** **Not until teachers are asked.** The
+   student road — start a shared draft, invite classmates — is built, tested and
+   currently hidden: `studentStartedSharedDraftsEnabled()` closes it at
+   `requireSharingStudent`, which both the loader and the action go through, and
+   the two entry points that offered it are gated on the same function. Nothing
+   was deleted, so turning it back on is one line.
+
+   The reason is pedagogical, not technical. Who works with whom is a teaching
+   decision, and a class that sorts itself into groups has social consequences a
+   teacher is positioned to manage and the software is not. The pilot therefore
+   ships with only the teacher road open, and the question of whether students
+   should ever have the other one is a conversation to have with teachers rather
+   than a default to arrive at by having built it first.
