@@ -46,11 +46,15 @@ type Props = {
   /** False for a teacher: they follow the draft and comment, never write in it. */
   canWrite: boolean;
   /**
-   * Whose caret this is. Sent as a courtesy — the server overwrites it with the
-   * identity it resolved from the session before any teammate sees it, so a
-   * browser cannot label its cursor with a classmate's name. It is passed at all
-   * so this writer's own view is consistent from the first keystroke rather than
-   * after the first round trip.
+   * What this client publishes about itself.
+   *
+   * Nobody here ever sees it: y-prosemirror does not draw your own caret, and
+   * the server replaces this label with the identity it resolved from the
+   * session before any teammate receives it — a browser does not get to put a
+   * classmate's name on its cursor. It is passed anyway so what goes on the wire
+   * is the truth as this client knows it, rather than the extension's
+   * placeholder, and so the two would still agree if that rewrite were ever
+   * relaxed.
    */
   user: { name: string; color: string };
 };

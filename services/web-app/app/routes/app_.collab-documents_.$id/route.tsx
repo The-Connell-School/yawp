@@ -484,8 +484,8 @@ export default function CollabDocumentRoute() {
         <CollabEditor
           docId={doc.id}
           canWrite={canWrite}
-          // This writer's own caret. Falls back to grey for a teacher, who is
-          // not in the scale and never publishes a caret anyway.
+          // What this browser publishes about its own cursor. Grey for a
+          // teacher, who is not in the scale and never publishes one anyway.
           user={{
             name: userName,
             color: colorScale.get(membershipId) ?? UNATTRIBUTED_COLOR,
