@@ -78,6 +78,30 @@ ${tlsLabels}
 `
     : '';
   const cookieSecure = enableTls ? '"true"' : '"false"';
+  // The Marketing Studio films whatever these variables point at and publishes the
+  // result, so they follow the same rule as dev-login: seeded data only. A
+  // production-dump preview never gets them — "confirmed" is a statement that the
+  // target holds no real student work, and a dump is exactly that work. Seed-mode
+  // previews target themselves, which is the one URL this render can vouch for.
+  const rendererEnabled = env.dataMode === 'seed' && env.runtime === 'fast';
+  const mediaVolumeMount = rendererEnabled
+    ? `\n      - ${env.composeProject}-media:/media`
+    : '';
+  const mediaVolumeDefinition = rendererEnabled
+    ? `\n  ${env.composeProject}-media:`
+    : '';
+  const marketingStudioEnvironment =
+    env.dataMode === 'seed'
+      ? `
+      MARKETING_STUDIO_ENABLED: "on"
+      MARKETING_RENDER_TARGET_URL: ${q(`${enableTls ? 'https' : 'http'}://${env.hostname}`)}
+      MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"${
+        rendererEnabled
+          ? `
+      MARKETING_MEDIA_DIR: "/media"`
+          : ''
+      }`
+      : '';
   // PREVIEW_ACCESS_GATE is consumed by the root route middleware itself. This render
   // cannot emit that enforcement switch without validated seats and its own signing secret,
   // so enabling role-swap necessarily enables the request-boundary gate too.
@@ -109,7 +133,7 @@ ${masterAccessEnvironment}      PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
       CLASS_INSIGHT_MOCK_MODE: ${q(aiMode === 'disabled' ? 'fixture' : optionalEnv('PREVIEW_CLASS_INSIGHT_MOCK_MODE'))}
       ANTHROPIC_API_KEY: ${q(anthropicApiKey)}
       AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}
-      BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"`;
+      BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"${marketingStudioEnvironment}`;
   const fastVolumes = `    volumes:
       - ${q(`${env.sourceDir}:/app`)}
       - ${env.composeProject}-node-modules:/app/node_modules
@@ -145,7 +169,7 @@ ${commonEnvironment}
     image: oven/bun:1.3.1
     working_dir: /app
     command: bash -lc "cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
-${fastVolumes}
+${fastVolumes}${mediaVolumeMount}
     environment:
 ${commonEnvironment}
 `
@@ -161,10 +185,56 @@ ${commonEnvironment}
 ${commonEnvironment}
 `;
 
+  // Renders the preview's own marketing jobs. Seed-mode fast previews only:
+  // the service mounts the same source volumes as the web container and stores
+  // outputs on a volume the app serves at /media. The worker films the public
+  // https hostname — newer chromium refuses the session cookie over the plain
+  // internal http route, and every page it filmed there was the logged-out
+  // landing page. host-gateway points the hostname at this host's Traefik, and
+  // the worker clears the access gate the way a reviewer does, by presenting a
+  // seat code.
+  //
+  // It reuses the first configured seat rather than getting one of its own: a
+  // seat is bound to a unique organization, so a renderer-only seat would need
+  // an organization the seed data never creates, and seat validation would
+  // reject it at request time.
+  const rendererService = rendererEnabled
+    ? `  renderer:
+    image: mcr.microsoft.com/playwright:v1.60.0-jammy
+    working_dir: /app
+    restart: unless-stopped
+    extra_hosts:
+      - ${q(`${env.hostname}:host-gateway`)}
+${fastVolumes}
+      - ${env.composeProject}-media:/media
+    environment:
+      DATABASE_URL: ${q(env.databaseUrl)}
+      DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
+      MARKETING_RENDER_TARGET_URL: ${q(`${enableTls ? 'https' : 'http'}://${env.hostname}`)}
+      MARKETING_RENDERER_ACCESS_CODE: ${q(JSON.parse(previewAccessSeats)[0].code)}
+      MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"
+      MARKETING_MEDIA_STORAGE: "disk"
+      MARKETING_MEDIA_DIR: "/media"
+      FFMPEG_PATH: "ffmpeg"
+    command: >
+      bash -lc "
+      export PATH=\$$HOME/.bun/bin:\$$PATH;
+      command -v ffmpeg >/dev/null || (apt-get update -qq && apt-get install -y -qq ffmpeg) || echo 'renderer: ffmpeg install failed';
+      command -v bun >/dev/null || npm install -g bun || { echo 'renderer: bun install failed'; exit 1; };
+      export MARKETING_RENDERER_CHROMIUM_PATH=\$$(ls -d /ms-playwright/chromium-*/chrome-linux*/chrome 2>/dev/null | head -1);
+      test -z \$$MARKETING_RENDERER_CHROMIUM_PATH && echo 'renderer: WARNING no full chromium under /ms-playwright, playwright falls back to its default browser';
+      until curl -fsS -o /dev/null http://web:8080/api/healthcheck; do echo 'renderer: waiting for web'; sleep 3; done;
+      bun run --cwd services/marketing-renderer start"
+    networks:
+      - default
+      - preview
+`
+    : '';
+
   return `name: ${env.composeProject}
 services:
 ${toolboxService}
-${webService}${legacyTraefikLabels}    restart: unless-stopped
+${rendererService}${webService}${legacyTraefikLabels}    restart: unless-stopped
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:8080/api/healthcheck').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s
@@ -209,7 +279,7 @@ ${webService}${legacyTraefikLabels}    restart: unless-stopped
 
 volumes:
   ${env.composeProject}-node-modules:
-  ${env.composeProject}-web-node-modules:
+  ${env.composeProject}-web-node-modules:${mediaVolumeDefinition}
 
 networks:
   preview:
