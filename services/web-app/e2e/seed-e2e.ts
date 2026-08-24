@@ -130,6 +130,7 @@ export async function seedE2E(): Promise<E2EContext> {
       name: 'The Connell School',
       classInsightsEnabled: true,
       submissionActivityEnabled: true,
+      revisionFlowEnabled: true,
     },
   });
 

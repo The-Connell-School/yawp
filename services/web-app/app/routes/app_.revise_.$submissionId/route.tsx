@@ -29,6 +29,7 @@ import {
   resolveRevisionAccess,
   resolveRevisionDenialRedirect,
 } from '~/domain/revisions/revision-flow';
+import { CommentsSelectionProvider } from '~/routes/app_.documents_.$id/comments/selection-context';
 import { DocumentEditor } from '~/routes/app_.documents_.$id/document-editor/document-editor';
 import type { EditorBridge } from '~/routes/app_.documents_.$id/document-editor/use-editor-sync';
 import { useAuthHeartbeat } from '~/routes/app_.documents_.$id/hooks/use-auth-heartbeat';
@@ -396,20 +397,24 @@ export default function ReviseRoute() {
               Edits save automatically
             </span>
           </div>
-          <DocumentEditor
-            docId={document.id}
-            assignment={document.assignment}
-            serverHtml={document.html}
-            serverText={document.text}
-            serverUpdatedAt={document.updatedAt}
-            initialRevision={document.revision}
-            isEditable={!auth.isLocked && auth.isInitialCheckComplete}
-            onBridgeReady={(bridge) => {
-              editorBridgeRef.current = bridge;
-            }}
-            onSyncStatusChange={setSyncStatus}
-            onSubmittableContentChange={handleSubmittableContentChange}
-          />
+          {/* The editor's selection toolbar reads this context. V1 shows no
+              comment UI of its own, so the provider is only a host. */}
+          <CommentsSelectionProvider>
+            <DocumentEditor
+              docId={document.id}
+              assignment={document.assignment}
+              serverHtml={document.html}
+              serverText={document.text}
+              serverUpdatedAt={document.updatedAt}
+              initialRevision={document.revision}
+              isEditable={!auth.isLocked && auth.isInitialCheckComplete}
+              onBridgeReady={(bridge) => {
+                editorBridgeRef.current = bridge;
+              }}
+              onSyncStatusChange={setSyncStatus}
+              onSubmittableContentChange={handleSubmittableContentChange}
+            />
+          </CommentsSelectionProvider>
         </section>
       </div>
 
