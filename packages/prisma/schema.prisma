@@ -265,6 +265,44 @@ model DocumentCollabAuthor {
   @@index([documentId, membershipId])
 }
 
+/// Where each writer's caret is in a shared draft, right now.
+///
+/// Ephemeral, and the only table here that is. A row is one open editor saying
+/// "I am here, at this position"; it is rewritten every few seconds while that
+/// editor is open, deleted when it closes, and ignored once it goes stale. None
+/// of it is worth keeping — a caret from yesterday means nothing.
+///
+/// It is in Postgres rather than in a process because the transport is HTTP
+/// polling against however many app instances happen to be running. Presence
+/// held in memory would be presence held per instance, so two students in the
+/// same group would see each other only when their requests landed on the same
+/// one — and the symptom would be teammates who intermittently have no caret,
+/// which is worse than having none at all.
+///
+/// `membershipId` is part of the primary key, not merely a column, so one
+/// student cannot write over another's row by claiming their Yjs client id. The
+/// server writes the name and colour into `state` for the same reason: what the
+/// caret is labelled with is never what the browser said it was.
+model DocumentCollabPresence {
+  /// Yjs client id — one per open editor, so a student with two tabs has two.
+  /// Text, not Int, for the same reason DocumentCollabAuthor.clientId is: Yjs
+  /// mints uint32 values that run past a Postgres integer column.
+  clientId     String
+  documentId   String
+  document     Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  membershipId String
+  membership   OrgMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  /// One encoded Yjs awareness update carrying exactly this client's state:
+  /// where its cursor is, and who the server says is holding it.
+  state        Bytes
+  /// Doubles as the liveness clock. A row older than the presence TTL is a
+  /// closed tab that never got to say goodbye, and reads skip it.
+  updatedAt    DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@id([documentId, membershipId, clientId])
+  @@index([documentId, updatedAt])
+}
+
 /// One student's individual grade on a shared draft.
 ///
 /// The group's own grade lives on `Submission` — one document, one submission,
@@ -590,6 +628,7 @@ model Document {
   group                    DocumentGroup?
   collabUpdates            DocumentCollabUpdate[]
   collabAuthors            DocumentCollabAuthor[]
+  collabPresence           DocumentCollabPresence[]
 
   @@index([assignmentId])
   @@index([classAssignmentId])
@@ -871,6 +910,7 @@ model OrgMembership {
   savedAssignments                 SavedAssignment[]
   documentGroupMemberships         DocumentGroupMember[]
   documentCollabAuthorships        DocumentCollabAuthor[]
+  documentCollabPresence           DocumentCollabPresence[]
   documentGroupMemberGrades        DocumentGroupMemberGrade[]
   assignmentModuleSessions         AssignmentModuleSession[]
   documentGroupMemberGradesGiven   DocumentGroupMemberGrade[] @relation("DocumentGroupMemberGradedBy")
