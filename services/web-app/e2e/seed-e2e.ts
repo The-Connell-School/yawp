@@ -672,6 +672,13 @@ export async function seedE2E(): Promise<E2EContext> {
       position: 5,
       ownerOrgId: org.id,
       collaborationSupported: true,
+      // Owning the type is not the same as offering it. Without this row the
+      // type is invisible to the students enrolled in the org, their course page
+      // 404s, and a test that only asserts a link is absent passes for the wrong
+      // reason — which is exactly what happened.
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
       assignmentModules: {
         create: [{ title: 'E2E Group Module', position: 1 }],
       },

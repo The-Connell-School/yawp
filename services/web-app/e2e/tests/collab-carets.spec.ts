@@ -53,6 +53,20 @@ async function openSharedDraft(page: Page, documentId: string) {
   });
 }
 
+/**
+ * Hovers a caret by its coordinates.
+ *
+ * `locator.hover()` waits for actionability on a two-pixel-wide element and can
+ * sit there until the test times out. The caret is static once its writer stops
+ * typing, so moving the mouse to the middle of its box is both simpler and what
+ * a person does.
+ */
+async function hoverCaret(page: Page) {
+  const box = await page.locator(CARET).first().boundingBox();
+  if (!box) throw new Error('no caret to hover');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+}
+
 /** Both writers, each in their own browser context with their own session. */
 async function twoWriters(browser: any, ctx: E2EContext) {
   const first = await browser.newContext();
@@ -103,7 +117,16 @@ test.describe('collaborative carets', () => {
       // And now so does the person writing it.
       const caret = riley.locator(CARET).first();
       await expect(caret).toBeVisible({ timeout: 20000 });
-      await expect(caret.locator(CARET_LABEL)).toHaveText('John Doe');
+
+      // The name is revealed on hover, so the label must not merely exist —
+      // asserting on a label at opacity 0 would pass while a reader saw
+      // nothing. Playwright counts a transparent element as visible, so this
+      // checks the property that actually decides whether it can be read.
+      const label = caret.locator(CARET_LABEL);
+      await expect(label).toHaveCSS('opacity', '0');
+      await hoverCaret(riley);
+      await expect(label).toHaveCSS('opacity', '1');
+      await expect(label).toHaveText('John Doe');
 
       // Sam sees no caret of his own: y-prosemirror filters out the local
       // client, so nobody watches their own cursor duplicated.
@@ -126,8 +149,10 @@ test.describe('collaborative carets', () => {
       await sam.locator(EDITOR).click();
       await sam.locator(EDITOR).pressSequentially('Colour check.', { delay: 30 });
 
+      await expect(riley.locator(CARET).first()).toBeVisible({ timeout: 20000 });
+      await hoverCaret(riley);
       const label = riley.locator(CARET_LABEL).first();
-      await expect(label).toBeVisible({ timeout: 20000 });
+      await expect(label).toHaveCSS('opacity', '1');
 
       const caretColour = await label.evaluate(
         (node: Element) => getComputedStyle(node).backgroundColor
@@ -180,6 +205,17 @@ test.describe('students cannot start their own shared drafts', () => {
     await signIn('jdoe@brock.software', 'johndoe');
     await page.goto(`/app/assignment-types/${e2eContext.collabAssignmentTypeId}`);
     await page.waitForLoadState('networkidle');
+
+    // Prove we are on the page before proving something is missing from it. The
+    // first version of this test did not, and passed while the loader was
+    // bouncing the student back to the dashboard with "Assignment type not
+    // found" — an absent link is trivially absent on a page that never rendered.
+    await expect(
+      page.getByRole('heading', { name: 'E2E Group Writing' })
+    ).toBeVisible();
+    await expect(page).toHaveURL(
+      new RegExp(`/app/assignment-types/${e2eContext.collabAssignmentTypeId}`)
+    );
 
     await expect(
       page.getByRole('link', { name: /write with a classmate/i })

@@ -317,20 +317,34 @@ code {
    and take no width in the text flow: the sentence a student is typing does not
    reflow because a teammate's cursor is near it.
 
-   The name label is always visible rather than shown on hover. The point of the
-   feature is knowing where a teammate is *while* you write, and a label you have
-   to go looking for does not tell you that. It is lifted above the line and made
-   inert to the pointer so it cannot cover the words underneath or swallow a
-   click meant for the text. Two carets on the same word do overlap; that is the
-   accepted cost of a label that is simply there. */
+   The caret itself is always there — that is the feature, and its colour is the
+   one its owner's initials carry in the header, so colour alone answers "who".
+   The name is revealed on hover instead, because a label pinned above the caret
+   sits on top of the previous line: at this editor's line height it covered the
+   words a student was reading, which costs more than it explains. Hovering needs
+   a pointer target, so the caret takes events; a click on a 2px sliver still
+   resolves to the text position under it, since ProseMirror places the selection
+   from the coordinates. */
 .collaboration-cursor__caret {
   border-left: 1px solid;
   border-right: 1px solid;
+  cursor: text;
   margin-left: -1px;
   margin-right: -1px;
-  pointer-events: none;
+  pointer-events: auto;
   position: relative;
   word-break: normal;
+}
+/* A hover target you can actually hit. The caret is two pixels wide, which is
+   the right width to draw and the wrong width to aim at, so an invisible pad
+   widens it to roughly a fingertip without widening what is drawn. It sits over
+   the text either side; a click there still lands where it looks like it lands,
+   because ProseMirror resolves a click on a widget to the position under the
+   pointer. */
+.collaboration-cursor__caret::before {
+  content: '';
+  position: absolute;
+  inset: -2px -6px;
 }
 .collaboration-cursor__label {
   border-radius: 3px 3px 3px 0;
@@ -341,11 +355,17 @@ code {
   font-weight: 600;
   left: -1px;
   line-height: normal;
+  opacity: 0;
   padding: 1px 5px;
+  pointer-events: none;
   position: absolute;
   top: -1.35em;
+  transition: opacity 120ms ease;
   user-select: none;
   white-space: nowrap;
+}
+.collaboration-cursor__caret:hover .collaboration-cursor__label {
+  opacity: 1;
 }
 /* The tint over a teammate's selection. Alpha comes from the colour itself so
    the text underneath keeps its contrast — a solid fill would make the words a
