@@ -32,6 +32,7 @@ import { generatePracticePrompts } from '~/utils/writing-lessons/practice-prompt
 import {
   getQuickWritingLessonBySlug,
   getQuickWritingLessonContext,
+  getQuickWritingLessonRecap,
   getQuickWritingPracticePrompts,
   type QuickWritingPracticePrompt,
 } from '~/utils/writing-lessons/static-lessons.server';
@@ -190,6 +191,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const skillTitles = skills.map(
     (slug) => getQuickWritingLessonBySlug(slug)?.title ?? slug
   );
+  // The abridged lesson behind each skill, so the refresher opens beside the
+  // problem rather than sending the student back to the lesson page.
+  const lessonRecaps = skills
+    .map((slug) => getQuickWritingLessonRecap(slug))
+    .filter((recap): recap is NonNullable<typeof recap> => recap !== null);
   const sessionPath = `/app/writing-lessons/practice?${new URLSearchParams({
     skills: skills.join(','),
     count: String(count),
@@ -208,6 +214,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // the safety screen, or the set includes grammar skills).
     topicDeclined: Boolean(requestedTopic) && !topicApplies,
     sessionPath,
+    lessonRecaps,
   });
 }
 
@@ -316,6 +323,7 @@ export default function WritingPracticeSessionRoute() {
     topic,
     topicDeclined,
     sessionPath,
+    lessonRecaps,
   } = useLoaderData<typeof loader>();
 
   return (
@@ -353,6 +361,7 @@ export default function WritingPracticeSessionRoute() {
       backTo="/app/writing-lessons"
       backLabel="Back to practice"
       reviewFrom={sessionPath}
+      lessonRecaps={lessonRecaps}
       // Deterministic index grading, and nothing to record: check it here.
       gradeActOnClient
       // Spotting the right choice and writing the fix are different skills;

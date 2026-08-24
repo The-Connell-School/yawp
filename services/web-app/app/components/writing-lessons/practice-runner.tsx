@@ -14,8 +14,16 @@ import { Link, useFetcher } from 'react-router';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '~/components/ui/sheet';
 import { Textarea } from '~/components/ui/textarea';
 import { ActPracticeQuestionView } from '~/components/writing-lessons/act-practice-question';
+import { LessonBody } from '~/components/writing-lessons/lesson-body';
 import { CompositionPrompt } from '~/components/writing-lessons/composition-prompt';
 import { PracticeFeedbackPanel } from '~/components/writing-lessons/practice-feedback-panel';
 import {
@@ -66,6 +74,18 @@ export type PracticeRunnerResult =
       recorded: boolean;
     };
 
+/**
+ * A lesson abridged for the panel a student can open beside the problem they
+ * are working, rather than navigating back to the lesson and losing their
+ * place. Without one for a lesson the header falls back to a link to it.
+ */
+export type PracticeLessonRecap = {
+  slug: string;
+  title: string;
+  /** Lesson markdown, rendered by the shared lesson renderer. */
+  markdown: string;
+};
+
 export type RewriteCheckResult = {
   intent: 'check-rewrite';
   questionId: string;
@@ -98,6 +118,7 @@ export function PracticeRunner({
   backTo,
   backLabel,
   reviewFrom,
+  lessonRecaps = [],
   gradeActOnClient = false,
   allowRewrite = false,
   submitLabel = 'Check & save',
@@ -117,6 +138,7 @@ export function PracticeRunner({
   backTo: string;
   backLabel: string;
   reviewFrom: string;
+  lessonRecaps?: PracticeLessonRecap[];
   gradeActOnClient?: boolean;
   allowRewrite?: boolean;
   submitLabel?: string;
@@ -182,8 +204,13 @@ export function PracticeRunner({
   const pendingResponseRef = useRef('');
   // Guards the result effect against processing the same fetcher payload twice.
   const lastProcessedRef = useRef<PracticeRunnerResult | null>(null);
+  const [isRecapOpen, setRecapOpen] = useState(false);
 
   const currentItem = items[pointer] ?? null;
+  // The refresher for the skill this problem drills, if the flow supplied one.
+  const currentRecap =
+    lessonRecaps.find((recap) => recap.slug === currentItem?.lessonSlug) ??
+    null;
   const isChecking = fetcher.state !== 'idle';
   const isComposition = currentItem?.kind === 'composition';
   // Multiple choice grades on the client only where the flow asks for it;
@@ -280,6 +307,7 @@ export function PracticeRunner({
   }
 
   function goNext() {
+    setRecapOpen(false);
     setPointer((prev) => prev + 1);
     setSelectedIndex(null);
     setWrittenResponse('');
@@ -290,6 +318,7 @@ export function PracticeRunner({
   function revisitUnfinished() {
     const next = items.findIndex((item) => !donePositions.has(item.position));
     if (next === -1) return;
+    setRecapOpen(false);
     setPointer(next);
     setSelectedIndex(null);
     setWrittenResponse('');
@@ -358,15 +387,26 @@ export function PracticeRunner({
                 <CardTitle className="text-xl">
                   Problem {currentItem.position} of {problemCount}
                 </CardTitle>
-                <Link
-                  to={`/app/writing-lessons/${currentItem.lessonSlug}?from=${encodeURIComponent(
-                    reviewFrom
-                  )}`}
-                  className="inline-flex items-center gap-1 text-base text-primary hover:underline sm:text-sm"
-                >
-                  <BookOpen className="h-4 w-4" />
-                  Review lesson: {currentItem.lessonTitle}
-                </Link>
+                {currentRecap ? (
+                  <button
+                    type="button"
+                    onClick={() => setRecapOpen(true)}
+                    className="inline-flex items-center gap-1 text-base text-primary hover:underline sm:text-sm"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    Review lesson: {currentItem.lessonTitle}
+                  </button>
+                ) : (
+                  <Link
+                    to={`/app/writing-lessons/${currentItem.lessonSlug}?from=${encodeURIComponent(
+                      reviewFrom
+                    )}`}
+                    className="inline-flex items-center gap-1 text-base text-primary hover:underline sm:text-sm"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    Review lesson: {currentItem.lessonTitle}
+                  </Link>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -610,6 +650,37 @@ export function PracticeRunner({
           </Card>
         )}
       </div>
+
+      {/* The refresher comes to the student: leaving for the lesson page
+          mid-set costs them the problem they were on. */}
+      {currentRecap ? (
+        <Sheet open={isRecapOpen} onOpenChange={setRecapOpen}>
+          <SheetContent
+            data-testid="lesson-recap"
+            className="w-full overflow-y-auto sm:max-w-xl"
+          >
+            <SheetHeader>
+              <SheetTitle>{currentRecap.title}</SheetTitle>
+              <SheetDescription>
+                A quick refresher on the skill. Your place in the set is kept.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="mt-6 space-y-6">
+              <LessonBody content={currentRecap.markdown} />
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  to={`/app/writing-lessons/${currentRecap.slug}?from=${encodeURIComponent(
+                    reviewFrom
+                  )}`}
+                >
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  Read the full lesson
+                </Link>
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : null}
     </section>
   );
 }

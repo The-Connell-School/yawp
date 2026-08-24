@@ -27,6 +27,7 @@ import { detectPracticeGuardrail } from '~/utils/writing-lessons/practice-feedba
 import {
   getQuickWritingLessonBySlug,
   getQuickWritingLessonContext,
+  getQuickWritingLessonRecap,
 } from '~/utils/writing-lessons/static-lessons.server';
 
 function assignmentIncludesComposition(lessonSlugs: string[]) {
@@ -94,6 +95,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const hasComposition = sequence.some((item) => item.kind === 'composition');
 
+  // The abridged lesson behind each skill in the set, so a student can refresh
+  // it beside the problem instead of navigating away from their place.
+  const lessonRecaps = [...new Set(sequence.map((item) => item.lessonSlug))]
+    .map((slug) => getQuickWritingLessonRecap(slug))
+    .filter((recap): recap is NonNullable<typeof recap> => recap !== null);
+
   return dataResponse({
     classAssignmentId: classAssignment.id,
     title: writingPracticeAssignmentTitle(assignment),
@@ -102,6 +109,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     problemCount: assignment.problemCount,
     items,
     hasComposition,
+    lessonRecaps,
   });
 }
 
@@ -245,6 +253,7 @@ export default function AssignedPracticeRoute() {
     problemCount,
     items,
     hasComposition,
+    lessonRecaps,
   } = useLoaderData<typeof loader>();
 
   // The same screen a student gets when they start practice on their own —
@@ -261,6 +270,7 @@ export default function AssignedPracticeRoute() {
       backTo="/app/writing-lessons"
       backLabel="Back to practice"
       reviewFrom={`/app/writing-lessons/assigned/${classAssignmentId}`}
+      lessonRecaps={lessonRecaps}
     />
   );
 }

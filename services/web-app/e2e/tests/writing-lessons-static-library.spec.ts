@@ -98,7 +98,7 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await dialog.getByTestId('practice-skill-fixing-comma-splices').click();
     await dialog.getByTestId('practice-skill-passive-voice').click();
     await dialog.getByTestId('practice-count-10').click();
-    await dialog.getByTestId('start-practice').click();
+    await dialog.getByTestId('start-mixed-practice').click();
 
     // Lands in a self-directed session built from both skills, ten problems
     // long — the set the student asked for, not a single-skill fallback.
@@ -292,6 +292,65 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await expect(page.getByTestId('assign-result')).toContainText(
       /assigned to 1 class/i
     );
+  });
+
+  test('a student mid-assignment refreshes the skill without losing their place', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    // Leaving for the lesson page mid-set costs a student the problem they
+    // were on, so the refresher comes to them.
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons/passive-voice');
+    await page.locator('input[name="classIds"]').first().check();
+    await page.locator('input[name="problemCount"]').fill('3');
+    await page.locator('input[name="dueAt"]').fill('2026-12-01');
+    await page.getByRole('button', { name: /assign practice/i }).click();
+    await expect(page.getByTestId('assign-result')).toContainText(
+      /assigned to/i
+    );
+
+    await page.request.post('/auth/logout');
+    await page.context().clearCookies();
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
+    await page
+      .getByTestId('writing-practice-assignment-list')
+      .locator('[data-testid^="writing-practice-assignment-"]')
+      .filter({ hasText: 'Passive Voice practice' })
+      .getByTestId(/^writing-practice-start-/)
+      .click();
+    await expect(page).toHaveURL(/\/app\/writing-lessons\/assigned\//);
+    const assignedUrl = page.url();
+    await expect(
+      page.getByRole('heading', { name: /problem 1 of 3/i })
+    ).toBeVisible();
+
+    // The refresher opens beside the problem, abridged: the rule and a worked
+    // example, not the whole lesson.
+    await page
+      .getByRole('button', { name: /review lesson: passive voice/i })
+      .click();
+    const recap = page.getByTestId('lesson-recap');
+    await expect(recap).toBeVisible();
+    await expect(recap.getByText('The Rule')).toBeVisible();
+    await expect(recap.getByText(/example 1/i)).toBeVisible();
+    // The parts a student mid-set does not need are left behind.
+    await expect(recap).not.toContainText(/why this matters/i);
+    await expect(recap).not.toContainText(/practice time/i);
+    // The full lesson is still one click away when the recap is not enough.
+    await expect(
+      recap.getByRole('link', { name: /read the full lesson/i })
+    ).toBeVisible();
+
+    // Closing it puts them back on the same problem, on the same page.
+    await page.keyboard.press('Escape');
+    await expect(recap).toHaveCount(0);
+    expect(page.url()).toBe(assignedUrl);
+    await expect(
+      page.getByRole('heading', { name: /problem 1 of 3/i })
+    ).toBeVisible();
   });
 
   test('lets a teacher try the practice themselves and check with Enter', async ({

@@ -133,7 +133,7 @@ export function StudentPracticeBuilderContent({
             Cancel
           </Button>
           <Button
-            data-testid="start-practice"
+            data-testid="start-mixed-practice"
             onClick={start}
             disabled={!canStart}
           >

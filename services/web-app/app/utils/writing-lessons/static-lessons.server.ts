@@ -1,3 +1,4 @@
+import { buildLessonRecap } from './lesson-recap';
 import promptContent from './prompt-content';
 
 /**
@@ -32,6 +33,14 @@ export type QuickWritingLessonContext = {
   skill: string;
   /** The explicit rule text from the lesson's "The Rule" section. */
   rule: string;
+};
+
+/** A lesson abridged for the refresher panel a student opens mid-practice. */
+export type QuickWritingLessonRecap = {
+  slug: string;
+  title: string;
+  /** Lesson markdown, rendered by the same renderer the lesson page uses. */
+  markdown: string;
 };
 
 export type QuickWritingLesson = LessonMetadata & {
@@ -260,6 +269,24 @@ export function getQuickWritingLessonContext(
     title: lesson.title,
     skill: lesson.skill,
     rule: extractRuleSection(lesson.content),
+  };
+}
+
+/**
+ * The abridged lesson a student can open beside a problem they are working:
+ * the rule, a couple of worked examples, and the quick tip, as lesson markdown.
+ * Returns `null` for an unknown slug.
+ */
+export function getQuickWritingLessonRecap(
+  slug: string | undefined
+): QuickWritingLessonRecap | null {
+  const lesson = getQuickWritingLessonBySlug(slug);
+  if (!lesson) return null;
+
+  return {
+    slug: lesson.slug,
+    title: lesson.title,
+    markdown: buildLessonRecap(lesson.content),
   };
 }
 

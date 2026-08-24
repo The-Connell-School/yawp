@@ -62,8 +62,9 @@ test.describe.serial('Writing Fundamentals Practice — Grammar', () => {
       page.getByRole('heading', { name: /problem 1 of 5/i })
     ).toBeVisible();
     await expect(page.getByText(/0 of 5 done/i)).toBeVisible();
+    // The refresher is a panel, not a trip back to the lesson page.
     await expect(
-      page.getByRole('link', { name: /review lesson: fixing comma splices/i })
+      page.getByRole('button', { name: /review lesson: fixing comma splices/i })
     ).toBeVisible();
 
     // Multiple choice still grades deterministically, and counts on the set.

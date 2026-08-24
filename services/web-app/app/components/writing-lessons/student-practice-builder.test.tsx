@@ -86,7 +86,7 @@ function click(selector: string) {
 
 function startButton() {
   const button = document.querySelector<HTMLButtonElement>(
-    '[data-testid="start-practice"]'
+    '[data-testid="start-mixed-practice"]'
   );
   expect(button).not.toBeNull();
   return button!;
@@ -109,7 +109,7 @@ describe('StudentPracticeBuilderContent', () => {
     click('[data-testid="practice-skill-fixing-comma-splices"]');
     click('[data-testid="practice-skill-passive-voice"]');
     click('[data-testid="practice-count-10"]');
-    click('[data-testid="start-practice"]');
+    click('[data-testid="start-mixed-practice"]');
 
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate.mock.calls[0][0]).toBe(
@@ -123,7 +123,7 @@ describe('StudentPracticeBuilderContent', () => {
     );
 
     click('[data-testid="practice-skill-passive-voice"]');
-    click('[data-testid="start-practice"]');
+    click('[data-testid="start-mixed-practice"]');
 
     expect(navigate.mock.calls[0][0]).toBe(
       '/app/writing-lessons/practice?skills=passive-voice&count=5'
