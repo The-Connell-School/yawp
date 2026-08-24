@@ -1,8 +1,0 @@
-yawp-marketing-media/
-node_modules/
-*.mp4
-*.webm
-*.wav
-*-audio/
-prepared-narration.json
-public-url.json
