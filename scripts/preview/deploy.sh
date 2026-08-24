@@ -32,6 +32,7 @@ if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[0-9]+$ ]] \
   exit 1
 fi
 source "$SCRIPT_DIR/demo-reset-guard.sh"
+source "$SCRIPT_DIR/preview-reset-guard.sh"
 DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://yawp-preview-videos/production.dump}"
 DUMP_VERSION="${PREVIEW_DB_DUMP_VERSION:-unversioned}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
@@ -545,6 +546,21 @@ install_demo_backup_tooling() {
   install -m 700 "$SCRIPT_DIR/restore-demo-backup.sh" "$ROOT/ops/restore-demo-backup.sh"
 }
 
+# A seed-mode preview database is created once and preserved on every later
+# deploy, which is right when people have diverged the demo data and wrong when
+# the change under review *is* the seed data — the environment then shows
+# fixtures from whenever it was first created. The preview:reset-data label
+# recreates it so the current seeds run. Guarded away from demo by
+# preview-reset-guard.sh.
+reset_pr_preview_seed_database() {
+  validate_database_name "$DATABASE_NAME"
+  echo "Recreating preview database $DATABASE_NAME from the current seeds..."
+  "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  drop_preview_database "$DATABASE_NAME"
+  docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" "$DATABASE_NAME"
+  DATABASE_CREATED=1
+}
+
 create_seed_preview_database() {
   validate_database_name "$DATABASE_NAME"
   echo "Creating preview database $DATABASE_NAME for seeded local-dev data..."
@@ -557,6 +573,9 @@ ensure_preview_database() {
     seed)
       if [[ "${DEMO_RESET_DATA:-false}" == "true" ]]; then
         reset_seed_preview_database
+      elif [[ "${PREVIEW_RESET_DATA:-false}" == "true" ]] \
+        && database_exists "$DATABASE_NAME"; then
+        reset_pr_preview_seed_database
       elif database_exists "$DATABASE_NAME"; then
         echo "Preview database $DATABASE_NAME already exists; preserving seat data."
       else

@@ -46,6 +46,16 @@ The legacy path stays live and is the fallback for every case the new screen
 does not cover (not released, withdrawn, not the owner), so the flag can be
 turned off at any point without stranding a student.
 
+## Seeing it in a preview environment
+
+A seed-mode preview database is created once and preserved on every later
+deploy, so an environment created before a seed change keeps showing the old
+fixtures no matter how many times the branch redeploys. Add the
+**`preview:reset-data`** label to the pull request and redeploy: the database
+is recreated and `seed-local-dev` plus `seed-preview-seats` run against the
+current branch. The label cannot touch the demo environment, which keeps its
+own backup-and-confirmation reset.
+
 ## Files
 
 - `packages/prisma/schema.prisma`, `migrations/20260824120000_add_revision_flow_flag`

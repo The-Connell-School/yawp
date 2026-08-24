@@ -47,6 +47,9 @@ jobs:
       PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '48' }}
       PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '48' }}
       PREVIEW_KEEP_AWAKE: ${{ contains(github.event.pull_request.labels.*.name, 'preview:keep-awake') }}
+      # Recreates a seed-mode preview database so updated seed fixtures reach
+      # the environment. Seed previews are otherwise created once and preserved.
+      PREVIEW_RESET_DATA: ${{ contains(github.event.pull_request.labels.*.name, 'preview:reset-data') }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
       PREVIEW_DATA_MODE: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'sanitized-production' || vars.PREVIEW_DATA_MODE || 'seed' }}
       PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}
@@ -191,6 +194,7 @@ jobs:
             "PREVIEW_DRAFT_IDLE_HOURS=$(shell_quote "$PREVIEW_DRAFT_IDLE_HOURS")"
             "PREVIEW_READY_IDLE_HOURS=$(shell_quote "$PREVIEW_READY_IDLE_HOURS")"
             "PREVIEW_KEEP_AWAKE=$(shell_quote "$PREVIEW_KEEP_AWAKE")"
+            "PREVIEW_RESET_DATA=$(shell_quote "$PREVIEW_RESET_DATA")"
             "PREVIEW_INFLIGHT_TTL_SECONDS=$(shell_quote "$PREVIEW_INFLIGHT_TTL_SECONDS")"
             "PREVIEW_INFLIGHT_MARKER=$(shell_quote "$inflight_marker")"
             "PREVIEW_QUARANTINE_MARKER=$(shell_quote "$quarantine_marker")"
