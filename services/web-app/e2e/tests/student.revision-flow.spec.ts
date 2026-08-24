@@ -1,0 +1,156 @@
+import { test, expect } from '../test-setup';
+import { EDITOR_SELECTOR } from '../test-helpers';
+
+/**
+ * Student revision flow, V1 (behind Organization.revisionFlowEnabled, on for
+ * the E2E organization).
+ *
+ * The graded submission and its feedback stay on the left; the live draft the
+ * student rewrites is on the right. No tutor — that is V2.
+ */
+test.describe.serial('Student revises a released essay', () => {
+  test('Revise Essay opens the split screen', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/submissions/${e2eContext.gradeId}`);
+
+    await page.getByTestId('submission-revise-essay').click();
+
+    await expect(page).toHaveURL(
+      new RegExp(`/app/revise/${e2eContext.gradeId}`),
+      { timeout: 15000 }
+    );
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByTestId('revision-draft-pane')).toBeVisible();
+    await expect(page.locator('nav').getByText('Revising')).toBeVisible();
+  });
+
+  test('the graded pane carries the feedback and the draft pane carries none', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+
+    const gradedPane = page.getByTestId('revision-graded-pane');
+    const draftPane = page.getByTestId('revision-draft-pane');
+
+    // The teacher's marks live only on the released snapshot.
+    await expect(gradedPane.locator('.grade-comment-mark').first()).toBeVisible(
+      { timeout: 15000 }
+    );
+    await expect(draftPane.locator('.grade-comment-mark')).toHaveCount(0);
+    await expect(draftPane.locator('.grammar-issue-mark')).toHaveCount(0);
+
+    // Grade tab is the default view of the feedback panel.
+    await expect(gradedPane.getByText('77% (C+)')).toBeVisible();
+    await expect(
+      gradedPane.getByText('Good effort with room for improvement.')
+    ).toBeVisible();
+
+    await page.getByTestId('revision-feedback-tab-teacher').click();
+    await expect(
+      gradedPane.getByText('Strong thesis statement in the opening sentence.')
+    ).toBeVisible();
+
+    await page.getByTestId('revision-feedback-tab-assistant').click();
+    await expect(
+      gradedPane.getByText('E2E grammar highlight for student toggle.')
+    ).toBeVisible();
+  });
+
+  test('the feedback panel collapses and reopens', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+
+    await expect(page.getByTestId('revision-feedback-panel')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Hide feedback' }).click();
+    await expect(page.getByTestId('revision-feedback-panel')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Show feedback' }).click();
+    await expect(page.getByTestId('revision-feedback-panel')).toBeVisible();
+  });
+
+  test('the draft pane is editable and the graded pane is not', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+    await helpers.waitForEditorReady();
+
+    // Exactly one editing surface on the page: the revision draft.
+    await expect(page.locator(EDITOR_SELECTOR)).toHaveCount(1);
+    await expect(
+      page.getByTestId('revision-draft-pane').locator(EDITOR_SELECTOR)
+    ).toBeVisible();
+
+    const editor = page.locator(EDITOR_SELECTOR).first();
+    await editor.click();
+    await editor.pressSequentially(' Revised in the split screen.', {
+      delay: 20,
+    });
+    await helpers.waitForSaved();
+
+    // The released snapshot is frozen: the revision never rewrites it.
+    await expect(
+      page.getByTestId('revision-graded-pane')
+    ).not.toContainText('Revised in the split screen.');
+  });
+
+  test('an unreleased submission cannot be revised yet', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(
+      `/app/revise/${e2eContext.unreleasedGradedSubmissionId}`
+    );
+
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/app/submissions/${e2eContext.unreleasedGradedSubmissionId}`
+      ),
+      { timeout: 15000 }
+    );
+    await expect(page.getByTestId('revision-draft-pane')).toHaveCount(0);
+  });
+
+  test('a teacher is refused the student revision screen', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+
+    await expect(page).toHaveURL(
+      new RegExp(`/app/submissions/${e2eContext.gradeId}`),
+      { timeout: 15000 }
+    );
+    await expect(page.getByTestId('revision-draft-pane')).toHaveCount(0);
+  });
+});
