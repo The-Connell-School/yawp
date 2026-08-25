@@ -73,6 +73,7 @@ jobs:
             scripts/preview/ingress-server.mjs \
             scripts/preview/migrate-resident-database-roles.sh \
             scripts/preview/publish-host-metrics.sh \
+            scripts/preview/install-host-metrics.sh \
             scripts/preview/wake-server.mjs \
             scripts/preview/wake-preview.sh \
             "${PREVIEW_SSH_USER}@${PREVIEW_HOST}:${PREVIEW_ROOT}/bootstrap/scripts/preview/"
