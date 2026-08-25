@@ -21,11 +21,11 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
     // The old Courses/Assignments tab switcher is gone.
     await expect(page.getByRole('tab', { name: /^Courses/ })).toHaveCount(0);
 
-    // The dashboard is classes plus Write something new, nothing else: documents live
-    // under My Documents and assignments under each class.
-    await expect(
-      page.getByRole('button', { name: /write something new/i })
-    ).toBeVisible();
+    // The dashboard is classes only: documents live under My Documents and
+    // assignments under each class.
+    await expect(page.getByRole('button', { name: /write something new/i })).toHaveCount(
+      0
+    );
     await expect(page.getByText('Documents', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Assignments', { exact: true })).toHaveCount(0);
   });
@@ -58,9 +58,8 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
     await expect(page.getByTestId('app.my-documents._index')).toBeVisible();
   });
 
-  test('"Write something new" lets the student pick an available assignment type and start it', async ({
+  test('student dashboard no longer links to assignment-type document creation', async ({
     page,
-    e2eContext,
   }) => {
     await page.goto('/auth/login');
     await page.locator('input[type="email"]').fill(STUDENT_EMAIL);
@@ -68,10 +67,8 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
     await page.getByRole('button', { name: /log in/i }).click();
     await page.waitForURL('**/app**', { timeout: 15000 });
 
-    await page.getByRole('button', { name: 'Write something new' }).click();
-    await page.getByRole('menuitem', { name: 'E2E Course' }).click();
-    await page.waitForURL(
-      `**/app/assignment-types/${e2eContext.assignmentTypeId}**`
+    await expect(page.getByRole('button', { name: 'Write something new' })).toHaveCount(
+      0
     );
   });
 

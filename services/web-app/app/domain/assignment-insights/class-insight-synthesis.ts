@@ -1,8 +1,3 @@
-import {
-  rubricCategories,
-  rubricKeys,
-  type RubricKey,
-} from '~/domain/grading/rubric';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import type { ClassRubricAggregate } from './aggregate-rubric-performance';
 
@@ -11,7 +6,7 @@ export type CategoryInsightStatus = 'strength' | 'mixed' | 'gap';
 const CATEGORY_STATUSES: CategoryInsightStatus[] = ['strength', 'mixed', 'gap'];
 
 export type CategoryInsight = {
-  key: RubricKey;
+  key: string;
   label: string;
   status: CategoryInsightStatus;
   summary: string;
@@ -25,7 +20,7 @@ export type CategoryInsight = {
 export type TeachingNextStep = {
   title: string;
   detail: string;
-  rubricCategory: RubricKey;
+  rubricCategory: string;
 };
 
 export type ClassInsightSummary = {
@@ -39,10 +34,15 @@ export type InsightPromptContext = {
   className?: string | null;
 };
 
-const rubricKeySet = new Set<string>(rubricKeys);
-const labelByKey = new Map<string, string>(
-  rubricCategories.map((c) => [c.key, c.label])
-);
+function rubricLookup(aggregate: ClassRubricAggregate) {
+  const rubricKeySet = new Set(
+    aggregate.categories.map((category) => category.key)
+  );
+  const labelByKey = new Map(
+    aggregate.categories.map((category) => [category.key, category.label])
+  );
+  return { rubricKeySet, labelByKey };
+}
 
 function formatAverage(average: number | null): string {
   return average === null ? 'not scored' : `${average.toFixed(2)} / 5`;
@@ -52,6 +52,8 @@ export function buildInsightPrompt(
   aggregate: ClassRubricAggregate,
   context: InsightPromptContext
 ): { system: string; user: string } {
+  const { labelByKey } = rubricLookup(aggregate);
+  const rubricKeys = aggregate.categories.map((category) => category.key);
   const categoryLines = aggregate.categories
     .map(
       (category) =>
@@ -123,7 +125,12 @@ function asString(value: unknown): string | null {
     : null;
 }
 
-export function parseInsightResponse(text: string): ClassInsightSummary | null {
+export function parseInsightResponse(
+  text: string,
+  aggregate: ClassRubricAggregate
+): ClassInsightSummary | null {
+  const { rubricKeySet, labelByKey } = rubricLookup(aggregate);
+
   let parsed: unknown;
   try {
     parsed = parseFirstJsonValue(text);
@@ -152,7 +159,7 @@ export function parseInsightResponse(text: string): ClassInsightSummary | null {
     const summary = asString(entry.summary);
     if (!summary) continue;
     categories.push({
-      key: key as RubricKey,
+      key,
       label: labelByKey.get(key) ?? key,
       status: coerceStatus(entry.status),
       summary,
@@ -176,7 +183,7 @@ export function parseInsightResponse(text: string): ClassInsightSummary | null {
     nextSteps.push({
       title,
       detail,
-      rubricCategory: rubricCategory as RubricKey,
+      rubricCategory,
     });
   }
 

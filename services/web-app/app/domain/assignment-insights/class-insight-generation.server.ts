@@ -13,6 +13,8 @@ import {
   type DifferentiationInput,
 } from '~/domain/assignment-insights/differentiate-students';
 import type { ClassInsightSummary } from '~/domain/assignment-insights/class-insight-synthesis';
+import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { insightRubricCategoriesFromAssignmentType } from '~/domain/assignment-insights/insight-rubric-categories';
 import { prisma } from '~/utils/db.server';
 import {
   AiRateLimitError,
@@ -152,7 +154,13 @@ export async function generateClassAssignmentInsight(input: {
     },
     select: {
       id: true,
-      assignment: { select: { title: true } },
+      assignment: {
+        select: {
+          title: true,
+          assignmentTypeId: true,
+          assignmentType: { select: { title: true, kind: true } },
+        },
+      },
       class: {
         select: {
           grade: true,
@@ -228,7 +236,18 @@ export async function generateClassAssignmentInsight(input: {
     };
   }
 
-  const aggregate = aggregateRubricPerformance(differentiationInputs);
+  const gradingConfig = await resolveAssignmentTypeGradingConfig({
+    assignmentTypeId: classAssignment.assignment.assignmentTypeId,
+    assignmentTypeKind: classAssignment.assignment.assignmentType.kind,
+    assignmentTypeTitle: classAssignment.assignment.assignmentType.title,
+  });
+  const insightRubricCategories = insightRubricCategoriesFromAssignmentType(
+    gradingConfig.rubricCategories
+  );
+  const aggregate = aggregateRubricPerformance(
+    differentiationInputs,
+    insightRubricCategories
+  );
   const generatedAt = new Date();
 
   if (input.generatedByMembershipId) {
@@ -302,7 +321,10 @@ export async function generateClassAssignmentInsight(input: {
     };
   }
 
-  const differentiation = buildDifferentiation(differentiationInputs);
+  const differentiation = buildDifferentiation(
+    differentiationInputs,
+    insightRubricCategories
+  );
   const enrichedSummary = differentiation
     ? { ...summary, differentiation }
     : summary;
