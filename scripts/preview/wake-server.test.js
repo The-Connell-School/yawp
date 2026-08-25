@@ -16,7 +16,9 @@ import {
   createDefaultWakeOperations,
   createPreviewSeatLookup,
   hasMatchingPreviewAccessCredential,
+  parsePreviewHost,
   parsePreviewPr,
+  previewServiceHostname,
   startAccessLogFollower,
   wakeCommandTimeoutMs,
 } from './wake-server.mjs';
@@ -52,6 +54,22 @@ describe('preview wake server', () => {
     expect(parsePreviewPr('pr-241.preview.yawp.school.evil.test', 'preview.yawp.school')).toBeNull();
     expect(parsePreviewPr('pr-241.evil.test', 'preview.yawp.school')).toBeNull();
     expect(parsePreviewPr('pr-241.preview.yawp.school:443', 'preview.yawp.school')).toBe(241);
+    expect(parsePreviewPr('blackboard-pr-241.preview.yawp.school', 'preview.yawp.school')).toBe(241);
+    expect(parsePreviewPr('blackboard.pr-241.preview.yawp.school', 'preview.yawp.school')).toBeNull();
+  });
+
+  test('distinguishes the Blackboard Learn host from the YAWP preview host', () => {
+    expect(parsePreviewHost('pr-241.preview.yawp.school', 'preview.yawp.school')).toEqual({
+      pr: 241,
+      service: 'web',
+    });
+    expect(parsePreviewHost('blackboard-pr-291.preview.yawp.school', 'preview.yawp.school')).toEqual({
+      pr: 291,
+      service: 'blackboard',
+    });
+    expect(previewServiceHostname(291, 'preview.yawp.school', 'blackboard')).toBe(
+      'blackboard-pr-291.preview.yawp.school'
+    );
   });
 
   test('keeps the parent wake timeout beyond lock, health, and rollback phases', () => {

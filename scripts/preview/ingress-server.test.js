@@ -210,6 +210,54 @@ describe('preview ingress', () => {
     expect(redirect.status).toBe(308);
     expect(redirect.headers.location).toBe('https://pr-241.preview.yawp.school/classes?mine=true');
     expect(invalidHost.status).toBe(404);
+
+    const blackboardRedirect = await request(port, {
+      path: '/',
+      headers: { host: 'blackboard-pr-241.preview.yawp.school' },
+    });
+    expect(blackboardRedirect.status).toBe(308);
+    expect(blackboardRedirect.headers.location).toBe(
+      'https://blackboard-pr-241.preview.yawp.school/'
+    );
+  });
+
+  test('proxies the Blackboard Learn host to the mock container', async () => {
+    let received;
+    const resolved = [];
+    const accesses = [];
+    const upstreamPort = await listen(createServer((incoming, response) => {
+      received = {
+        url: incoming.url,
+        host: incoming.headers.host,
+        forwardedHost: incoming.headers['x-forwarded-host'],
+      };
+      response.end('learn');
+    }));
+    const ingress = createPreviewIngress({
+      domain: 'preview.yawp.school',
+      resolveTarget: async (pr, options = {}) => {
+        resolved.push({ pr, service: options.service || 'web' });
+        return { host: '127.0.0.1', port: upstreamPort };
+      },
+      authorizeWake: async () => false,
+      ensureRunning: async () => { throw new Error('must not wake running preview'); },
+      recordAccess: async (pr) => accesses.push(pr),
+    });
+    const ingressPort = await listen(createServer(ingress));
+
+    const response = await request(ingressPort, {
+      headers: { host: 'blackboard-pr-241.preview.yawp.school' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toBe('learn');
+    expect(resolved).toEqual([{ pr: 241, service: 'blackboard' }]);
+    expect(received).toEqual({
+      url: '/',
+      host: 'blackboard-pr-241.preview.yawp.school',
+      forwardedHost: 'blackboard-pr-241.preview.yawp.school',
+    });
+    expect(accesses).toEqual([241]);
   });
 
   test('tunnels WebSocket upgrades to the resolved preview target', async () => {
@@ -280,6 +328,10 @@ describe('preview ingress', () => {
       State: { Running: true },
       NetworkSettings: { Networks: { preview: { IPAddress: '172.21.0.14' } } },
     })).toEqual({ host: '172.21.0.14', port: 8080 });
+    expect(targetFromDockerInspect({
+      State: { Running: true },
+      NetworkSettings: { Networks: { preview: { IPAddress: '172.21.0.22' } } },
+    }, 9473)).toEqual({ host: '172.21.0.22', port: 9473 });
     expect(targetFromDockerInspect({
       State: { Running: false },
       NetworkSettings: { Networks: { preview: { IPAddress: '172.21.0.14' } } },

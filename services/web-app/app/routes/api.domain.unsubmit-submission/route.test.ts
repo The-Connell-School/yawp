@@ -10,6 +10,7 @@ const prisma = {
     findFirst: mock(),
     updateMany: mock(),
   },
+  submissionActivity: { create: mock() },
 };
 
 const getGradingActor = mock();
@@ -44,7 +45,10 @@ function ownedSubmission(overrides: Record<string, unknown> = {}) {
     id: 'sub-1',
     gradedAt: null,
     releasedAt: null,
-    document: { membershipId: 'student-1' },
+    document: {
+      membershipId: 'student-1',
+      membership: { organizationId: 'org-1' },
+    },
     ...overrides,
   };
 }
@@ -59,6 +63,7 @@ describe('api.domain.unsubmit-submission', () => {
     prisma.$transaction.mockReset();
     prisma.submission.findFirst.mockReset();
     prisma.submission.updateMany.mockReset();
+    prisma.submissionActivity.create.mockReset();
     getGradingActor.mockReset();
 
     getGradingActor.mockResolvedValue(studentActor());
@@ -76,6 +81,16 @@ describe('api.domain.unsubmit-submission', () => {
     } as any)) as ActionResponse;
 
     expect(response.data.success).toBe(true);
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        submissionId: 'sub-1',
+        organizationId: 'org-1',
+        actorMembershipId: 'student-1',
+        eventType: 'submission.unsubmitted',
+        occurredAfterRelease: false,
+      })
+    );
     expect(prisma.submission.findFirst).toHaveBeenCalledTimes(1);
     const lookup = prisma.submission.findFirst.mock.calls[0][0];
     expect(lookup.where).toEqual({
@@ -83,6 +98,28 @@ describe('api.domain.unsubmit-submission', () => {
       unsubmittedAt: null,
       document: { is: { membershipId: 'student-1' } },
     });
+  });
+
+  test('fails closed when the required unsubmit audit write is unavailable', async () => {
+    const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+    process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = 'false';
+    prisma.submission.findFirst.mockResolvedValue(ownedSubmission());
+
+    try {
+      await expect(
+        action({ request: makeRequest('sub-1') } as any)
+      ).rejects.toThrow(
+        'Submission activity recording is temporarily unavailable'
+      );
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+      } else {
+        process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = previous;
+      }
+    }
   });
 
   test('refuses a teacher even for a submission in their own class', async () => {
@@ -203,6 +240,7 @@ describe('api.domain.unsubmit-submission', () => {
       unsubmittedAt: null,
       gradedAt: null,
       releasedAt: null,
+      document: { is: { membershipId: 'student-1' } },
     });
     expect(call.data).toEqual({
       unsubmittedAt: expect.any(Date),
@@ -232,5 +270,6 @@ describe('api.domain.unsubmit-submission', () => {
     expect(response.data.message).toBe(
       'This submission was already changed. Please refresh and try again.'
     );
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 });

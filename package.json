@@ -40,6 +40,7 @@
     "db:seed-local-dev": "bun run --cwd packages/prisma seed-local-dev",
     "worktree:setup": "bash scripts/worktree-local-setup.sh --no-dev",
     "worktree:setup:fresh": "bash scripts/worktree-local-setup.sh --fresh --no-dev",
+    "blackboard-lti-mock": "BLACKBOARD_LTI_MOCK_ENABLED=true bun scripts/blackboard-lti-mock/server.mjs",
     "db:fixtures-export-prod-fidelity": "bun run --cwd packages/prisma fixtures:export-prod-fidelity",
     "db:assignment-type-release-gate": "bun run --cwd packages/prisma assignment-type-release-gate",
     "db:refresh-sanitized-preview-data": "bash scripts/refresh-sanitized-preview-data.sh",

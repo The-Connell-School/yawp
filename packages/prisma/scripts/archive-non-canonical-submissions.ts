@@ -1,6 +1,7 @@
 /**
  * Delete Submission rows that are not the canonical "real" submit (or are version-only snapshots).
- * `SubmissionComment` rows cascade; `LegacyGradeRedirect` is removed first (no FK to Submission).
+ * `SubmissionComment` rows cascade; `LegacyGradeRedirect` is removed after each confirmed deletion.
+ * Submissions with durable `SubmissionActivity` history are always retained.
  *
  * Modes (`DERIVE_CANONICAL_FROM`):
  * - `submitted_snapshot_id` (default): SOURCE_DATABASE_URL must be a pre-consolidate DB with
@@ -25,10 +26,15 @@
  *   cd packages/prisma && DERIVE_CANONICAL_FROM=latest_submitted_at TARGET_DATABASE_URL=... bun ./scripts/archive-non-canonical-submissions.ts
  */
 import pg from 'pg';
+import {
+  deleteSubmissionsAndRedirects,
+  durableActivityExclusionSql,
+} from './archive-non-canonical-submissions.helpers';
 
 const SOURCE_URL = process.env.SOURCE_DATABASE_URL;
 const TARGET_URL = process.env.TARGET_DATABASE_URL ?? process.env.DATABASE_URL;
-const DERIVE_MODE = process.env.DERIVE_CANONICAL_FROM ?? 'submitted_snapshot_id';
+const DERIVE_MODE =
+  process.env.DERIVE_CANONICAL_FROM ?? 'submitted_snapshot_id';
 const DRY_RUN =
   process.env.YAWP_DRY_RUN === '1' ||
   process.env.DRY_RUN === '1' ||
@@ -37,7 +43,8 @@ const CONFIRM = process.env.YAWP_CONFIRM === 'yes';
 const ARCHIVE_WHEN_NO_CANONICAL =
   process.env.ARCHIVE_WHEN_NO_CANONICAL === 'yes' ||
   process.env.ARCHIVE_WHEN_NO_CANONICAL === '1';
-const KEEP_GRADED = process.env.KEEP_GRADED !== 'no' && process.env.KEEP_GRADED !== '0';
+const KEEP_GRADED =
+  process.env.KEEP_GRADED !== 'no' && process.env.KEEP_GRADED !== '0';
 
 function requireEnv(name: string, value: string | undefined): string {
   if (!value?.trim()) {
@@ -51,25 +58,32 @@ type SourceRow = {
   submittedSnapshotId: string | null;
 };
 
-async function loadSourceDocuments(client: pg.PoolClient): Promise<SourceRow[]> {
+async function loadSourceDocuments(
+  client: pg.PoolClient
+): Promise<SourceRow[]> {
   const { rows } = await client.query<SourceRow>(
-    `SELECT id, "submittedSnapshotId" FROM "Document"`,
+    `SELECT id, "submittedSnapshotId" FROM "Document"`
   );
   return rows;
 }
 
 /** Snapshots that became Submissions but were never submission/grade rows (submittedAt never set). */
-async function loadSnapshotIdsWithoutSubmittedAt(client: pg.PoolClient): Promise<string[]> {
+async function loadSnapshotIdsWithoutSubmittedAt(
+  client: pg.PoolClient
+): Promise<string[]> {
   const { rows } = await client.query<{ id: string }>(
-    `SELECT id FROM "DocumentSnapshot" WHERE "archivedAt" IS NULL AND "submittedAt" IS NULL`,
+    `SELECT id FROM "DocumentSnapshot" WHERE "archivedAt" IS NULL AND "submittedAt" IS NULL`
   );
   return rows.map((r) => r.id);
 }
 
 async function loadPairsLatestSubmittedAt(
-  client: pg.PoolClient,
+  client: pg.PoolClient
 ): Promise<{ documentId: string; canonicalId: string }[]> {
-  const { rows } = await client.query<{ document_id: string; canonical_id: string }>(`
+  const { rows } = await client.query<{
+    document_id: string;
+    canonical_id: string;
+  }>(`
     WITH ranked AS (
       SELECT
         id,
@@ -93,7 +107,10 @@ async function loadPairsLatestSubmittedAt(
     INNER JOIN multi m ON m."documentId" = r."documentId"
     WHERE r.rn = 1
   `);
-  return rows.map((r) => ({ documentId: r.document_id, canonicalId: r.canonical_id }));
+  return rows.map((r) => ({
+    documentId: r.document_id,
+    canonicalId: r.canonical_id,
+  }));
 }
 
 function gradeSignalsSql(alias: string): string {
@@ -108,19 +125,23 @@ function gradeSignalsSql(alias: string): string {
   `;
 }
 
-/** `LegacyGradeRedirect` has no FK; remove before deleting submissions. */
+/** Remove redirect rows only after their submissions were confirmed deleted. */
 async function deleteLegacyRedirectsForSubmissionIds(
   client: pg.PoolClient,
-  ids: string[],
+  ids: string[]
 ): Promise<void> {
   if (ids.length === 0) return;
-  await client.query(`DELETE FROM "LegacyGradeRedirect" WHERE "submissionId" = ANY($1::text[])`, [
-    ids,
-  ]);
+  await client.query(
+    `DELETE FROM "LegacyGradeRedirect" WHERE "submissionId" = ANY($1::text[])`,
+    [ids]
+  );
 }
 
 async function main() {
-  const targetUrl = requireEnv('TARGET_DATABASE_URL or DATABASE_URL', TARGET_URL);
+  const targetUrl = requireEnv(
+    'TARGET_DATABASE_URL or DATABASE_URL',
+    TARGET_URL
+  );
 
   if (
     DERIVE_MODE !== 'submitted_snapshot_id' &&
@@ -128,15 +149,20 @@ async function main() {
     DERIVE_MODE !== 'latest_submitted_at'
   ) {
     throw new Error(
-      `Invalid DERIVE_CANONICAL_FROM="${DERIVE_MODE}" (use submitted_snapshot_id, snapshot_submitted_at, or latest_submitted_at)`,
+      `Invalid DERIVE_CANONICAL_FROM="${DERIVE_MODE}" (use submitted_snapshot_id, snapshot_submitted_at, or latest_submitted_at)`
     );
   }
 
   const useSource =
-    DERIVE_MODE === 'submitted_snapshot_id' || DERIVE_MODE === 'snapshot_submitted_at';
-  const sourceUrl = useSource ? requireEnv('SOURCE_DATABASE_URL', SOURCE_URL) : undefined;
+    DERIVE_MODE === 'submitted_snapshot_id' ||
+    DERIVE_MODE === 'snapshot_submitted_at';
+  const sourceUrl = useSource
+    ? requireEnv('SOURCE_DATABASE_URL', SOURCE_URL)
+    : undefined;
 
-  const sourcePool = sourceUrl ? new pg.Pool({ connectionString: sourceUrl }) : null;
+  const sourcePool = sourceUrl
+    ? new pg.Pool({ connectionString: sourceUrl })
+    : null;
   const targetPool = new pg.Pool({ connectionString: targetUrl });
 
   const willCommit = CONFIRM && !DRY_RUN;
@@ -154,7 +180,7 @@ async function main() {
         sourceClient.release();
       }
       console.log(
-        `Mode snapshot_submitted_at: ${versionOnlyIds.length} active DocumentSnapshots with submittedAt NULL (version-only).`,
+        `Mode snapshot_submitted_at: ${versionOnlyIds.length} active DocumentSnapshots with submittedAt NULL (version-only).`
       );
 
       const targetClient = await targetPool.connect();
@@ -168,18 +194,27 @@ async function main() {
             DELETE FROM "Submission" s
             WHERE s.id = ANY($1::text[])
               AND s."archivedAt" IS NULL
+              AND ${durableActivityExclusionSql('s')}
               AND NOT (${gradeSignalsSql('s')})
+            RETURNING s.id
             `
             : `
             DELETE FROM "Submission" s
             WHERE s.id = ANY($1::text[])
               AND s."archivedAt" IS NULL
+              AND ${durableActivityExclusionSql('s')}
+            RETURNING s.id
             `;
           for (let i = 0; i < versionOnlyIds.length; i += chunkSize) {
             const chunk = versionOnlyIds.slice(i, i + chunkSize);
             if (chunk.length === 0) continue;
-            await deleteLegacyRedirectsForSubmissionIds(targetClient, chunk);
-            const res = await targetClient.query(deleteSql, [chunk]);
+            const res = await targetClient.query<{ id: string }>(deleteSql, [
+              chunk,
+            ]);
+            await deleteLegacyRedirectsForSubmissionIds(
+              targetClient,
+              res.rows.map((row) => row.id)
+            );
             deleted += res.rowCount ?? 0;
           }
 
@@ -191,7 +226,7 @@ async function main() {
             console.log(
               DRY_RUN
                 ? '\nDRY_RUN: rolled back.'
-                : '\nPreview: rolled back (set YAWP_CONFIRM=yes to commit).',
+                : '\nPreview: rolled back (set YAWP_CONFIRM=yes to commit).'
             );
           }
         } catch (err) {
@@ -199,8 +234,12 @@ async function main() {
           throw err;
         }
 
-        console.log(`Deleted (version-only snapshots): ${deleted} submission rows`);
-        console.log(`KEEP_GRADED=${KEEP_GRADED} DERIVE_CANONICAL_FROM=${DERIVE_MODE}`);
+        console.log(
+          `Deleted (version-only snapshots): ${deleted} submission rows`
+        );
+        console.log(
+          `KEEP_GRADED=${KEEP_GRADED} DERIVE_CANONICAL_FROM=${DERIVE_MODE}`
+        );
       } finally {
         targetClient.release();
       }
@@ -215,7 +254,7 @@ async function main() {
         targetClient.release();
       }
       console.log(
-        `Mode latest_submitted_at: ${pairs.length} documents with multiple active submissions (canonical = latest submittedAt).`,
+        `Mode latest_submitted_at: ${pairs.length} documents with multiple active submissions (canonical = latest submittedAt).`
       );
     } else {
       const sourceClient = await sourcePool!.connect();
@@ -226,14 +265,18 @@ async function main() {
         sourceClient.release();
       }
 
-      const withCanonical = sourceDocs.filter((d) => d.submittedSnapshotId != null) as {
+      const withCanonical = sourceDocs.filter(
+        (d) => d.submittedSnapshotId != null
+      ) as {
         id: string;
         submittedSnapshotId: string;
       }[];
-      withoutCanonical = sourceDocs.filter((d) => d.submittedSnapshotId == null);
+      withoutCanonical = sourceDocs.filter(
+        (d) => d.submittedSnapshotId == null
+      );
 
       console.log(
-        `Loaded ${sourceDocs.length} documents from source (${withCanonical.length} with submittedSnapshotId, ${withoutCanonical.length} without).`,
+        `Loaded ${sourceDocs.length} documents from source (${withCanonical.length} with submittedSnapshotId, ${withoutCanonical.length} without).`
       );
 
       const targetClient = await targetPool.connect();
@@ -243,7 +286,7 @@ async function main() {
         for (const d of withCanonical) {
           const check = await targetClient.query<{ ok: boolean }>(
             `SELECT true AS ok FROM "Submission" WHERE id = $1 AND "documentId" = $2 LIMIT 1`,
-            [d.submittedSnapshotId, d.id],
+            [d.submittedSnapshotId, d.id]
           );
           if (check.rows.length === 0) {
             missingCanonical.push(d.id);
@@ -254,7 +297,7 @@ async function main() {
 
         if (missingCanonical.length > 0) {
           console.warn(
-            `\nWARNING: ${missingCanonical.length} documents have a canonical snapshot id that is missing or mismatched on target (skipped). First 20 ids:`,
+            `\nWARNING: ${missingCanonical.length} documents have a canonical snapshot id that is missing or mismatched on target (skipped). First 20 ids:`
           );
           console.warn(missingCanonical.slice(0, 20).join(', '));
         }
@@ -293,7 +336,7 @@ async function main() {
             .join(', ');
           await targetClient.query(
             `INSERT INTO _archive_canonical_submission (document_id, canonical_id) VALUES ${values}`,
-            flat,
+            flat
           );
         }
 
@@ -303,6 +346,7 @@ async function main() {
           INNER JOIN _archive_canonical_submission m ON s."documentId" = m.document_id
           WHERE s.id <> m.canonical_id
             AND s."archivedAt" IS NULL
+            AND ${durableActivityExclusionSql('s')}
             AND NOT (${gradeSignalsSql('s')})
           `
           : `
@@ -310,50 +354,58 @@ async function main() {
           INNER JOIN _archive_canonical_submission m ON s."documentId" = m.document_id
           WHERE s.id <> m.canonical_id
             AND s."archivedAt" IS NULL
+            AND ${durableActivityExclusionSql('s')}
           `;
 
-        const doomedRows = await targetClient.query<{ id: string }>(doomedCanonicalSql);
+        const doomedRows = await targetClient.query<{ id: string }>(
+          doomedCanonicalSql
+        );
         const doomedIds = doomedRows.rows.map((r) => r.id);
         for (let i = 0; i < doomedIds.length; i += chunkSize) {
           const chunk = doomedIds.slice(i, i + chunkSize);
           if (chunk.length === 0) continue;
-          await deleteLegacyRedirectsForSubmissionIds(targetClient, chunk);
-          const delRes = await targetClient.query(
-            `DELETE FROM "Submission" WHERE id = ANY($1::text[])`,
-            [chunk],
+          deletedCanonical += await deleteSubmissionsAndRedirects(
+            targetClient,
+            chunk
           );
-          deletedCanonical += delRes.rowCount ?? 0;
         }
 
-        if (useSource && ARCHIVE_WHEN_NO_CANONICAL && withoutCanonical.length > 0) {
+        if (
+          useSource &&
+          ARCHIVE_WHEN_NO_CANONICAL &&
+          withoutCanonical.length > 0
+        ) {
           const ids = withoutCanonical.map((d) => d.id);
           const doomedNcSql = KEEP_GRADED
             ? `
             SELECT s.id FROM "Submission" s
             WHERE s."documentId" = ANY($1::text[])
               AND s."archivedAt" IS NULL
+              AND ${durableActivityExclusionSql('s')}
               AND NOT (${gradeSignalsSql('s')})
             `
             : `
             SELECT s.id FROM "Submission" s
             WHERE s."documentId" = ANY($1::text[])
               AND s."archivedAt" IS NULL
+              AND ${durableActivityExclusionSql('s')}
             `;
-          const doomedNc = await targetClient.query<{ id: string }>(doomedNcSql, [ids]);
+          const doomedNc = await targetClient.query<{ id: string }>(
+            doomedNcSql,
+            [ids]
+          );
           const doomedNcIds = doomedNc.rows.map((r) => r.id);
           for (let i = 0; i < doomedNcIds.length; i += chunkSize) {
             const chunk = doomedNcIds.slice(i, i + chunkSize);
             if (chunk.length === 0) continue;
-            await deleteLegacyRedirectsForSubmissionIds(targetClient, chunk);
-            const delRes = await targetClient.query(
-              `DELETE FROM "Submission" WHERE id = ANY($1::text[])`,
-              [chunk],
+            deletedNoCanonical += await deleteSubmissionsAndRedirects(
+              targetClient,
+              chunk
             );
-            deletedNoCanonical += delRes.rowCount ?? 0;
           }
         } else if (useSource && withoutCanonical.length > 0) {
           console.log(
-            `\nINFO: ${withoutCanonical.length} documents had NULL submittedSnapshotId in source — skipped (set ARCHIVE_WHEN_NO_CANONICAL=yes to delete their submissions).`,
+            `\nINFO: ${withoutCanonical.length} documents had NULL submittedSnapshotId in source — skipped (set ARCHIVE_WHEN_NO_CANONICAL=yes to delete their submissions).`
           );
         }
 
@@ -365,7 +417,7 @@ async function main() {
           console.log(
             DRY_RUN
               ? '\nDRY_RUN: rolled back.'
-              : '\nPreview: rolled back (set YAWP_CONFIRM=yes to commit).',
+              : '\nPreview: rolled back (set YAWP_CONFIRM=yes to commit).'
           );
         }
       } catch (err) {
@@ -373,10 +425,18 @@ async function main() {
         throw err;
       }
 
-      console.log(`Deleted (canonical path): ${deletedCanonical} submission rows`);
-      console.log(`Deleted (no-canonical path): ${deletedNoCanonical} submission rows`);
-      console.log(`Total rows deleted in transaction: ${deletedCanonical + deletedNoCanonical}`);
-      console.log(`KEEP_GRADED=${KEEP_GRADED} DERIVE_CANONICAL_FROM=${DERIVE_MODE}`);
+      console.log(
+        `Deleted (canonical path): ${deletedCanonical} submission rows`
+      );
+      console.log(
+        `Deleted (no-canonical path): ${deletedNoCanonical} submission rows`
+      );
+      console.log(
+        `Total rows deleted in transaction: ${deletedCanonical + deletedNoCanonical}`
+      );
+      console.log(
+        `KEEP_GRADED=${KEEP_GRADED} DERIVE_CANONICAL_FROM=${DERIVE_MODE}`
+      );
     } finally {
       targetClient.release();
     }

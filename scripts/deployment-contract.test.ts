@@ -191,6 +191,9 @@ describe('production deployment contract', () => {
     const migrateIndex = deployWorkflow.indexOf(
       'bun prisma:migrate-remote production'
     );
+    const fingerprintCheckIndex = deployWorkflow.indexOf(
+      '"${observed_fingerprint}" != "${PROD_SSH_HOST_FINGERPRINT}"'
+    );
     const pushIndex = deployWorkflow.indexOf(
       'bun web-app:docker:production:push'
     );
@@ -213,6 +216,11 @@ describe('production deployment contract', () => {
     expect(deployWorkflow).toContain('backfill-class-art-key');
     expect(deployWorkflow).toContain('PROD_SSH_PRIVATE_KEY');
     expect(deployWorkflow).toContain('PROD_SSH_KEY_PATH');
+    expect(deployWorkflow).toContain('PROD_SSH_HOST_FINGERPRINT');
+    expect(deployWorkflow).toContain('PROD_SSH_KNOWN_HOSTS_PATH');
+    expect(deployWorkflow).not.toContain(
+      'ssh-keyscan -H "${PROD_SSH_HOST}" >> ~/.ssh/known_hosts'
+    );
     expect(deployWorkflow).toContain('PROD_DB_HOST');
     expect(deployWorkflow).toContain('PROD_DB_NAME');
     expect(deployWorkflow).toContain('PROD_DB_USER');
@@ -227,6 +235,8 @@ describe('production deployment contract', () => {
       deployValidateMigrateIndex
     );
     expect(migrateIndex).toBeGreaterThan(-1);
+    expect(fingerprintCheckIndex).toBeGreaterThan(-1);
+    expect(fingerprintCheckIndex).toBeLessThan(migrateIndex);
     expect(pushIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeLessThan(pushIndex);
     expect(migrateRemoteScript).toContain('--require-data');
@@ -238,9 +248,52 @@ describe('production deployment contract', () => {
     );
     expect(migrateRemoteScript).toContain('rejectUnauthorized: false');
     expect(migrateRemoteScript).toContain("REMOTE_MIGRATE_TUNNEL: '1'");
+    expect(migrateRemoteScript).toContain("'StrictHostKeyChecking=yes'");
+    expect(migrateRemoteScript).toContain('UserKnownHostsFile=');
+    expect(migrateRemoteScript).toContain('PROD_SSH_KNOWN_HOSTS_PATH');
     expect(remoteMigrateIndex).toBeGreaterThan(-1);
     expect(remoteBackfillIndex).toBeGreaterThan(remoteMigrateIndex);
     expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);
+  });
+
+  test('production QA pins and verifies the bastion host key before opening a tunnel', () => {
+    const productionQaWorkflow = readRepoFile(
+      '.github/workflows/production-qa-profile.yml'
+    );
+
+    expect(productionQaWorkflow).toContain('PROD_SSH_HOST_FINGERPRINT');
+    expect(productionQaWorkflow).toContain('observed_fingerprint');
+    expect(productionQaWorkflow).toContain(
+      '"${observed_fingerprint}" != "${PROD_SSH_HOST_FINGERPRINT}"'
+    );
+    expect(productionQaWorkflow).not.toContain(
+      'ssh-keyscan -H "${PROD_SSH_HOST}" >> ~/.ssh/known_hosts'
+    );
+  });
+
+  test('production QA captures responsive evidence and verifies the database post-state', () => {
+    const productionQaWorkflow = readRepoFile(
+      '.github/workflows/production-qa-profile.yml'
+    );
+    const browserProof = readRepoFile(
+      'services/web-app/scripts/production-qa-released-grade.ts'
+    );
+
+    expect(productionQaWorkflow).toContain(
+      'production-qa-profile-remote production-postcheck'
+    );
+    expect(productionQaWorkflow).toContain(
+      'services/web-app/test-results/production-*'
+    );
+    expect(browserProof).toContain(
+      'production-released-grade-activity-mobile.png'
+    );
+    expect(browserProof).toContain(
+      'production-released-grade-student-mobile.png'
+    );
+    expect(browserProof).toContain(
+      'production-released-grade-walkthrough.webm'
+    );
   });
 });
 
@@ -262,6 +315,17 @@ describe('worktree local setup contract', () => {
 
     expect(viteConfig).toContain('Number(process.env.PORT ?? 5176)');
     expect(viteConfig).toContain('strictPort: true');
+  });
+
+  test('worktree setup writes a Blackboard LTI mock URL and bun script', () => {
+    const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
+    const rootPackage = JSON.parse(readRepoFile('package.json'));
+
+    expect(setupScript).toContain('BLACKBOARD_LTI_MOCK_URL=');
+    expect(setupScript).toContain('LTI_MOCK_PORT');
+    expect(rootPackage.scripts['blackboard-lti-mock']).toContain(
+      'BLACKBOARD_LTI_MOCK_ENABLED=true'
+    );
   });
 
   test('worktree setup backfills class art keys before local seed verification', () => {
@@ -689,8 +753,15 @@ describe('PR preview deployment contract', () => {
     const metrics = readRepoFile('scripts/preview/publish-host-metrics.sh');
 
     expect(bootstrapWorkflow).toContain('publish-host-metrics.sh');
-    expect(bootstrap).toContain('yawp-preview-metrics.timer');
-    expect(bootstrap).toContain('OnUnitActiveSec=60');
+    expect(bootstrapWorkflow).toContain('install-host-metrics.sh');
+    expect(bootstrap).toContain('install-host-metrics.sh');
+    expect(bootstrap).toContain('HOST_METRICS_SERVICE=yawp-preview-metrics');
+    expect(readRepoFile('scripts/preview/install-host-metrics.sh')).toContain(
+      '${METRICS_SERVICE}.timer'
+    );
+    expect(readRepoFile('scripts/preview/install-host-metrics.sh')).toContain(
+      'OnUnitActiveSec=60'
+    );
     expect(metrics).toContain('Yawp/PreviewHost');
     expect(metrics).toContain('MemoryUsedPercent');
     expect(metrics).toContain('RunningPreviews');
@@ -749,9 +820,11 @@ describe('PR preview deployment contract', () => {
     expect(bootstrap).not.toContain(
       '/var/run/docker.sock:/var/run/docker.sock:rw'
     );
-    expect(wakeServer).toContain('timingSafeEqual');
+    expect(wakeServer).toContain('parsePreviewHost');
+    expect(ingressServer).toContain("service === 'blackboard'");
+    expect(ingressServer).toContain('yawp-pr-${pr}-blackboard-lti-mock-1');
     expect(ingressServer).toContain('createWebSocketUpgradeHandler');
-    expect(ingressServer).toContain('authorizeWake(pr, request.url, request)');
+    expect(ingressServer).toContain('authorizeWake(parsed.pr, request.url, request)');
     expect(ingressServer).toContain("upstreamResponse.headers['x-yawp-preview-authorized']");
     expect(certificateManager).toContain("type === 'http-01'");
     expect(wakeScript).toContain('docker compose');
@@ -1127,6 +1200,23 @@ describe('PR preview deployment contract', () => {
     }
   });
 
+  test('preview compose starts the Blackboard LTI mock as a sibling service', () => {
+    const compose = readRepoFile('scripts/preview/render-compose.mjs');
+    const deploy = readRepoFile('scripts/preview/deploy.sh');
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+
+    expect(compose).toContain('blackboard-lti-mock:');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_ENABLED: "true"');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"');
+    expect(deploy).toContain('start_blackboard_lti_mock_if_present');
+    expect(deploy).toContain('blackboard-lti-mock:');
+    expect(deploy).toContain('BLACKBOARD_HOSTNAME');
+    expect(deploy).toContain('BLACKBOARD_URL');
+    expect(dockerfile).not.toContain('blackboard-lti-mock');
+    expect(dockerfile).not.toContain('blackboard-lti-mock');
+    expect(dockerfile).toContain('CMD ["bash", "services/web-app/start.sh"]');
+  });
+
   test('preview comment describes selected data and dev-login smoke', () => {
     const previewWorkflow = readRepoFile(
       '.github/workflows/preview-environments.yml'
@@ -1136,7 +1226,7 @@ describe('PR preview deployment contract', () => {
       '- **Data:** `${{ env.PREVIEW_DATA_MODE }}` in an isolated PR database'
     );
     expect(previewWorkflow).toContain(
-      '- **Smoke:** in-app access gate + dev login'
+      '- **Blackboard:** ${{ steps.deploy.outputs.blackboard_url }}'
     );
     expect(previewWorkflow).not.toContain('seed overlay');
   });
@@ -1234,10 +1324,13 @@ describe('demo environment deployment contract', () => {
 
   test('demo deploys share the host mutation lock with PR preview deploys', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const detached = readRepoFile(
+      'scripts/preview/run-host-deploy-detached.sh'
+    );
 
     expect(workflow).toContain('lock_file="${PREVIEW_ROOT}/preview-host.lock"');
-    expect(workflow).toContain('flock -w 1800');
-    expect(workflow).toContain('bash -lc $(shell_quote "$deploy_command")');
+    expect(detached).toContain('flock -w 1800');
+    expect(detached).toContain('LOCK_FILE');
   });
 
   test('demo reset requires typed confirmation and takes a pre-reset backup', () => {
@@ -1281,6 +1374,31 @@ describe('demo environment deployment contract', () => {
     expect(deployScript).toContain('recover_demo_database_on_failure');
     expect(deployScript).toContain('restore-demo-backup.sh');
     expect(deployScript).toContain('install_demo_backup_tooling');
+  });
+
+  test('demo deploy runs detached from the GitHub Actions SSH session', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+
+    expect(workflow).toContain('Prepare demo host capacity');
+    expect(workflow).toContain('ensure-host-swap.sh');
+    expect(workflow).toContain('install-host-metrics.sh');
+    expect(workflow).toContain('run-host-deploy-detached.sh');
+    expect(workflow).not.toContain(
+      'flock -w 1800 $(shell_quote "$lock_file") bash -lc $(shell_quote "$deploy_command")'
+    );
+  });
+
+  test('demo host monitoring provisions alarms and verifies metrics', () => {
+    const workflow = readRepoFile('.github/workflows/demo-host-monitoring.yml');
+    const provision = readRepoFile('scripts/preview/provision-host-alarms.sh');
+    const verify = readRepoFile('scripts/preview/verify-host-alarms.sh');
+
+    expect(workflow).toContain('provision-host-alarms.sh');
+    expect(workflow).toContain('yawp-demo-host');
+    expect(workflow).toContain('verify-host-alarms.sh');
+    expect(provision).toContain('MemoryUsedPercent');
+    expect(provision).toContain('DiskUsedPercent');
+    expect(verify).toContain('yawp-demo-host-memory-warning');
   });
 
   test('normal demo deploys prove aggregate data counts do not decrease', () => {

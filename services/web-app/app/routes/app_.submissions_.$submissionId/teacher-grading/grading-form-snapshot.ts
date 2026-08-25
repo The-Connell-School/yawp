@@ -19,10 +19,17 @@ export function buildGradingFormSnapshot({
   overallScore?: string;
   grammarIssues: GrammarIssue[];
 }) {
+  const trimmedPercentage = numericPercentage.trim();
+  const parsedPercentage = Number(trimmedPercentage);
+  const normalizedPercentage =
+    trimmedPercentage !== '' && Number.isFinite(parsedPercentage)
+      ? String(Math.max(0, Math.min(100, Math.round(parsedPercentage))))
+      : trimmedPercentage;
+
   return JSON.stringify({
     rubricScores,
     overallComment,
-    numericPercentage,
+    numericPercentage: normalizedPercentage,
     overallScore,
     grammarIssues: grammarIssues.map((issue) => ({
       id: issue.id,

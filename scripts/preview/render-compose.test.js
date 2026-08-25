@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { renderPreviewCompose } from './render-compose.mjs';
 
@@ -68,7 +68,11 @@ describe('renderPreviewCompose', () => {
       `DATABASE_URL: "postgresql://yawp_pr_142_app:${previewDatabasePassword}@preview-postgres:5432/yawp_pr_142"`
     );
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
-    expect(compose).toContain('YAWP_ENVIRONMENT: "preview"');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"');
+    expect(compose).toContain('blackboard-lti-mock:');
+    expect(compose).toContain('bun scripts/blackboard-lti-mock/server.mjs');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_ENABLED: "true"');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_ISSUER: "https://blackboard.com"');
     expect(compose).toContain('AI_MODEL: "claude-sonnet-4-6"');
     expect(compose).not.toContain('target: production');
     expect(compose).not.toContain('traefik');
@@ -240,5 +244,83 @@ describe('renderPreviewCompose', () => {
         delete process.env.PREVIEW_ANTHROPIC_API_KEY;
       else process.env.PREVIEW_ANTHROPIC_API_KEY = previousAnthropicKey;
     }
+  });
+
+  // The studio variables are an assertion that the target holds demo data, so
+  // they are emitted only when the previewed source actually contains the
+  // studio package AND the preview runs on seeded data. Shipping this control
+  // plane ahead of the studio itself must change nothing for studio-less PRs.
+  describe('marketing studio opt-in', () => {
+    const { mkdtempSync, mkdirSync, rmSync } = require('node:fs');
+    const { tmpdir } = require('node:os');
+    const { join } = require('node:path');
+
+    let sourceWithStudio;
+    beforeAll(() => {
+      sourceWithStudio = mkdtempSync(join(tmpdir(), 'yawp-compose-'));
+      mkdirSync(join(sourceWithStudio, 'packages/marketing-media'), {
+        recursive: true,
+      });
+    });
+    afterAll(() => {
+      rmSync(sourceWithStudio, { recursive: true, force: true });
+    });
+
+    test('a source without the studio package gets no studio variables', () => {
+      const compose = renderCompose();
+
+      expect(compose).not.toContain('MARKETING_STUDIO_ENABLED');
+      expect(compose).not.toContain('renderer:');
+    });
+
+    test('a seed preview of studio-bearing source enables the studio pointed at itself', () => {
+      const compose = renderCompose({ sourceDir: sourceWithStudio });
+
+      expect(compose).toContain('MARKETING_STUDIO_ENABLED: "on"');
+      expect(compose).toContain(
+        'MARKETING_RENDER_TARGET_URL: "https://pr-142.preview.yawp.school"'
+      );
+      expect(compose).toContain('MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"');
+    });
+
+    test('a seed preview of studio-bearing source runs a renderer filming the gated https preview', () => {
+      const compose = renderCompose({ sourceDir: sourceWithStudio });
+
+      expect(compose).toContain('renderer:');
+      expect(compose).toContain('"pr-142.preview.yawp.school:host-gateway"');
+      // Reuses the first configured seat: a renderer-only seat would need its
+      // own organization, which the seed data never creates.
+      expect(compose).toContain(
+        'MARKETING_RENDERER_ACCESS_CODE: "brave-otter-4193"'
+      );
+      expect(compose).toContain('MARKETING_MEDIA_STORAGE: "disk"');
+      expect(compose).toContain('MARKETING_MEDIA_DIR: "/media"');
+      expect(compose).toContain('yawp-pr-142-media:/media');
+      expect(compose).toContain('marketing-renderer start');
+      // Playwright 1.60 images ship the browser as chrome-linux64 where 1.49
+      // shipped chrome-linux; a narrow glob silently matches nothing and the
+      // renderer falls back to the headless shell.
+      expect(compose).toContain('chromium-*/chrome-linux*/chrome');
+    });
+
+    // The renderer image and the installed playwright library resolve browsers
+    // by revision paths baked into the image, so they must move together.
+    test('renderer image ships browsers for the installed playwright version', () => {
+      const { version } = require('playwright-core/package.json');
+      expect(renderCompose({ sourceDir: sourceWithStudio })).toContain(
+        `image: mcr.microsoft.com/playwright:v${version}-jammy`
+      );
+    });
+
+    test('production-dump previews never claim to be a marketing demo target', () => {
+      const compose = renderCompose({
+        sourceDir: sourceWithStudio,
+        dataMode: 'production-dump',
+      });
+
+      expect(compose).not.toContain('MARKETING_STUDIO_ENABLED');
+      expect(compose).not.toContain('MARKETING_RENDER_TARGET_IS_DEMO');
+      expect(compose).not.toContain('renderer:');
+    });
   });
 });

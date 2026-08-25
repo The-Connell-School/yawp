@@ -87,6 +87,9 @@ jobs:
       - name: 🧪 Validate deployment contract
         run: bun test ./scripts/deployment-contract.test.ts
 
+      - name: 🧪 Validate Blackboard LTI mock
+        run: bun test ./scripts/blackboard-lti-mock/ --timeout 60000
+
       - name: 🧪 Validate read-only impersonation contract
         run: bun test ./scripts/read-only-impersonation-contract.test.ts
 

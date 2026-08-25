@@ -658,6 +658,7 @@ describe('class detail loader document visibility', () => {
         tutorEnabled: true,
       },
       classIds: ['class-1'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -694,6 +695,7 @@ describe('class detail loader document visibility', () => {
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({ tutorEnabled: false }),
       classIds: ['class-1'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -742,6 +744,7 @@ describe('class detail loader document visibility', () => {
         promptAttachmentSize: 4,
       }),
       classIds: ['class-1'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 

@@ -14,8 +14,9 @@ const prisma = createPrismaClient();
 
 try {
   const bundle = await loadProdFidelityBundle();
-  const result = await prisma.$transaction((transaction) =>
-    syncProdFidelityFixtures(transaction, bundle)
+  const result = await prisma.$transaction(
+    (transaction) => syncProdFidelityFixtures(transaction, bundle),
+    { timeout: 60_000 }
   );
   console.log('Synced prod-fidelity configuration fixtures.');
   console.log(JSON.stringify(result, null, 2));

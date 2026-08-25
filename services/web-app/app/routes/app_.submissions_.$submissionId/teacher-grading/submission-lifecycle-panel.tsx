@@ -1,4 +1,5 @@
 import { type ComponentProps, useEffect, useRef, useState } from 'react';
+import { useFetcher } from 'react-router';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -221,6 +222,9 @@ export function SubmissionLifecyclePanel({
   onRelease,
   isReleasing,
   submissionForView,
+  submissionActivityEnabled = false,
+  submissionId,
+  documentId,
   ...teacherGradingPanelProps
 }: {
   lifecycleState: SubmissionLifecycleState;
@@ -232,13 +236,26 @@ export function SubmissionLifecyclePanel({
   onRelease: () => void;
   isReleasing: boolean;
   submissionForView: ViewPanelSubmission;
+  submissionActivityEnabled?: boolean;
+  submissionId: string;
+  documentId: string;
 } & ComponentProps<typeof TeacherGradingPanel>) {
-  const label = lifecycleState === 'needs_grading' ? 'Grading' : 'Grade Summary';
+  const isWithdrawn =
+    (submissionForView as any)?.unsubmittedAt != null;
+  const label = isWithdrawn
+    ? 'Withdrawn'
+    : lifecycleState === 'needs_grading'
+      ? 'Grading'
+      : 'Grade Summary';
   const isReadyToRelease =
-    lifecycleState === 'graded' && !isEditingGrade;
+    !isWithdrawn && lifecycleState === 'graded' && !isEditingGrade;
+  const releasedEditEnabled =
+    !isWithdrawn && lifecycleState === 'released' && submissionActivityEnabled;
   const showEditingForm =
-    lifecycleState === 'needs_grading' ||
-    (lifecycleState === 'graded' && isEditingGrade);
+    !isWithdrawn &&
+    (lifecycleState === 'needs_grading' ||
+      (lifecycleState === 'graded' && isEditingGrade) ||
+      (releasedEditEnabled && isEditingGrade));
   const [headerState, setHeaderState] =
     useState<TeacherGradingPanelHeaderState | null>(null);
   const [isGradingAssistantPending, setIsGradingAssistantPending] =
@@ -267,6 +284,7 @@ export function SubmissionLifecyclePanel({
         hasDraftToReplace: headerState.hasDraftToReplace,
         hasUnsavedChanges: headerState.hasUnsavedChanges,
         hasGrade: headerState.hasGrade,
+        releasedEditEnabled,
       })
     : false;
 
@@ -276,21 +294,29 @@ export function SubmissionLifecyclePanel({
 
   const handleSave = async () => {
     if (!headerState || !saveEnabled) return;
+    let draftSaved = false;
     try {
       await headerState.saveDraft();
-      onGradeSaved(headerState.getSavedGradeSnapshot());
+      draftSaved = true;
       if (
         lifecycleState === 'needs_grading' &&
         headerState.hasGrade
       ) {
         await onMarkGraded();
       }
+      // Revalidate only after the final lifecycle mutation. Marking graded
+      // advances Submission.updatedAt, so revalidating after saveDraft but
+      // before onMarkGraded could leave the next edit with a stale token.
+      onGradeSaved(headerState.getSavedGradeSnapshot());
     } catch (err) {
       // The server refuses this write (e.g. the student unsubmitted while
       // this panel was open). Surface exactly why, and kick the teacher
       // back out of a form that will never save rather than leaving them
       // stuck retrying it.
       toast.error(err instanceof Error ? err.message : 'Save failed.');
+      if (!draftSaved) {
+        headerState.discardDraft();
+      }
       exitEditMode();
       return;
     }
@@ -308,6 +334,30 @@ export function SubmissionLifecyclePanel({
     exitEditMode();
   };
 
+  // Teacher Unsubmit
+  const teacherUnsubmitFetcher = useFetcher();
+  const handleTeacherUnsubmit = () => {
+    const fd = new FormData();
+    fd.set('submissionId', submissionId);
+    teacherUnsubmitFetcher.submit(fd, {
+      method: 'POST',
+      action: '/api/domain/teacher-unsubmit-submission',
+    });
+  };
+  const isUnsubmitting = teacherUnsubmitFetcher.state !== 'idle';
+  // Revalidate after successful unsubmit to refresh status/Activity
+  useEffect(() => {
+    if (teacherUnsubmitFetcher.state !== 'idle') return;
+    const body =
+      (teacherUnsubmitFetcher.data as { success?: boolean } | undefined) ??
+      undefined;
+    if (body?.success) {
+      // Force a full reload of the route to pick up latest status and activity
+      // eslint-disable-next-line no-restricted-globals
+      location.reload();
+    }
+  }, [teacherUnsubmitFetcher.state, teacherUnsubmitFetcher.data]);
+
   return (
     <div
       className="flex h-full w-full flex-col"
@@ -317,10 +367,21 @@ export function SubmissionLifecyclePanel({
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-semibold">{label}</span>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {lifecycleState === 'released' ? (
+            {lifecycleState === 'released' && !isWithdrawn ? (
               <GradeSummaryReleasedLabel />
             ) : null}
-            {isReadyToRelease ? (
+            {releasedEditEnabled && !isEditingGrade && !isWithdrawn ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-testid="submission-lifecycle-edit"
+                onClick={() => onEditingGradeChange(true)}
+              >
+                Edit
+              </Button>
+            ) : null}
+            {isReadyToRelease && !isWithdrawn ? (
               <>
                 <ConfirmationDialog
                   title="Release Grade?"
@@ -348,7 +409,7 @@ export function SubmissionLifecyclePanel({
                 </Button>
               </>
             ) : null}
-            {showEditingForm ? (
+            {showEditingForm && lifecycleState !== 'released' ? (
               <GradingAssistantSplitButton
                 headerState={headerState}
                 isPendingStart={isGradingAssistantPending}
@@ -356,23 +417,65 @@ export function SubmissionLifecyclePanel({
                 onAbortStart={() => setIsGradingAssistantPending(false)}
               />
             ) : null}
-            {/* Teachers can no longer unsubmit a document from here — only
-                the student who owns it can. The unsubmit machinery
-                (Submission.unsubmittedAt/unsubmittedByMembershipId, the
-                /api/domain/unsubmit-submission endpoint, and its
-                exclusion from active reads) is unchanged; only this
-                teacher-facing entry point was removed. */}
+            {!isWithdrawn ? (
+              <ConfirmationDialog
+                title="Unsubmit Submission?"
+                description="Withdraw this submission so the student can continue editing and resubmit."
+                confirmText="Unsubmit"
+                cancelText="Cancel"
+                onConfirm={() => handleTeacherUnsubmit()}
+              >
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  data-testid="submission-lifecycle-unsubmit"
+                  disabled={isUnsubmitting}
+                >
+                  {isUnsubmitting ? 'Unsubmitting...' : 'Unsubmit'}
+                </Button>
+              </ConfirmationDialog>
+            ) : null}
           </div>
         </div>
       </div>
 
       <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto">
-        {showEditingForm ? (
-          <TeacherGradingPanel
-            {...teacherGradingPanelProps}
-            hideHeader
-            onHeaderStateChange={setHeaderState}
-          />
+        {isWithdrawn ? (
+          <div className="p-4 text-sm">
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="font-medium">This submission was withdrawn.</p>
+              {'unsubmittedAt' in (submissionForView as any) &&
+              (submissionForView as any).unsubmittedAt ? (
+                <p className="mt-1 text-muted-foreground">
+                  Withdrawn at{' '}
+                  {new Date(
+                    (submissionForView as any).unsubmittedAt as string
+                  ).toLocaleString()}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : showEditingForm ? (
+          <>
+            {lifecycleState === 'released' ? (
+              <div
+                className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                role="status"
+                data-testid="released-grade-edit-warning"
+              >
+                Saving immediately changes the grade and feedback visible to
+                the student and records the change in Activity.
+              </div>
+            ) : null}
+            <TeacherGradingPanel
+              {...teacherGradingPanelProps}
+              documentId={documentId}
+              submissionId={submissionId}
+              hideHeader
+              onHeaderStateChange={setHeaderState}
+            />
+          </>
         ) : isReadyToRelease || lifecycleState === 'released' ? (
           <ViewPanel submission={submissionForView} />
         ) : null}

@@ -121,6 +121,10 @@ describe('loadStudentClassDetail', () => {
 
     expect(prisma.classAssignment.findMany.mock.calls[0][0].where).toEqual({
       classId: 'class-1',
+      OR: [
+        { postAt: null },
+        { postAt: { lte: expect.any(Date) } },
+      ],
     });
   });
 

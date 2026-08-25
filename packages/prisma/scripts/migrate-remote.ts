@@ -24,6 +24,7 @@ const DB_PASSWORD = process.env.PROD_DB_PASSWORD;
 const SSH_HOST = `ec2-user@${process.env.PROD_SSH_HOST}`;
 const DB_HOST = process.env.PROD_DB_HOST;
 const SSH_KEY_PATH = process.env.PROD_SSH_KEY_PATH;
+const SSH_KNOWN_HOSTS_PATH = process.env.PROD_SSH_KNOWN_HOSTS_PATH;
 const LOCAL_PORT = process.env.PROD_DB_LOCAL_PORT ?? '3306';
 
 const missing = [
@@ -33,6 +34,7 @@ const missing = [
   ['PROD_DB_USER', DB_USER],
   ['PROD_SSH_HOST', process.env.PROD_SSH_HOST],
   ['PROD_SSH_KEY_PATH', SSH_KEY_PATH],
+  ['PROD_SSH_KNOWN_HOSTS_PATH', SSH_KNOWN_HOSTS_PATH],
 ].filter(([, value]) => !value);
 
 if (missing.length > 0) {
@@ -42,6 +44,13 @@ if (missing.length > 0) {
 
 if (!existsSync(SSH_KEY_PATH!)) {
   console.error(`Error: SSH key not found at ${SSH_KEY_PATH}`);
+  process.exit(1);
+}
+
+if (!existsSync(SSH_KNOWN_HOSTS_PATH!)) {
+  console.error(
+    `Error: SSH known-hosts file not found at ${SSH_KNOWN_HOSTS_PATH}`
+  );
   process.exit(1);
 }
 
@@ -150,6 +159,10 @@ const sshProcess = spawn('ssh', [
   '-N',
   '-o',
   'ExitOnForwardFailure=yes',
+  '-o',
+  'StrictHostKeyChecking=yes',
+  '-o',
+  `UserKnownHostsFile=${SSH_KNOWN_HOSTS_PATH}`,
   '-L',
   `${LOCAL_PORT}:${DB_HOST}:5432`,
   SSH_HOST,

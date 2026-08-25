@@ -138,7 +138,31 @@ describe('app.assignment-types.$id action', () => {
     }));
   });
 
+  test('rejects direct document creation for students', async () => {
+    const response = await action({
+      request: new Request('https://example.test/app/assignment-types/at-1', {
+        method: 'POST',
+      }),
+      params: { id: 'at-1' },
+    } as never);
+
+    expect(response as unknown).toEqual({
+      redirectedTo: '/app',
+      toast: {
+        type: 'error',
+        description: 'Start writing from an assignment in one of your classes.',
+      },
+    });
+    expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
+  });
+
   test('requires assignment type availability before creating a document', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+
     await action({
       request: new Request('https://example.test/app/assignment-types/at-1', {
         method: 'POST',
@@ -183,6 +207,11 @@ describe('app.assignment-types.$id action', () => {
   });
 
   test('rejects direct document creation for AP History assignment types', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
+    });
     mockActionAssignmentTypeAvailable({
       id: 'ap-history-type',
       systemKey: 'ap_history_essay',

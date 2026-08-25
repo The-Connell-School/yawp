@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
@@ -192,6 +199,7 @@ export function TeacherGradingPanel({
   existingGrade:
     | {
         id: string;
+        updatedAt?: Date | string | null;
         score: string | null;
         feedback: string | null;
         rubricScores?: unknown | null;
@@ -229,7 +237,8 @@ export function TeacherGradingPanel({
   const aiFetcher = useFetcher();
   const targetSubmissionId = existingGrade?.id ?? submissionId;
   const { save: autoSave, status: autoSaveStatus } = useUpdateSubmission(
-    targetSubmissionId ?? ''
+    targetSubmissionId ?? '',
+    existingGrade?.updatedAt ?? null
   );
   const propRubricConfig = useMemo(
     () => normalizeRubricDisplayConfig(rubricConfig),
@@ -284,7 +293,6 @@ export function TeacherGradingPanel({
       activeRubricConfig.categories
     );
   }, [activeRubricConfig, rubricScores]);
-
 
   /**
    * The grade this rubric produces on a scale that reports raw points rather
@@ -494,10 +502,13 @@ export function TeacherGradingPanel({
     ) {
       hasRetriedAiFormRef.current = true;
       setIsAiRetrying(true);
-      aiFetcher.submit(cloneFormDataWithFallbackRetry(pendingAiFormRef.current), {
-        method: 'POST',
-        action: '/api/domain/grade-essay-ai',
-      });
+      aiFetcher.submit(
+        cloneFormDataWithFallbackRetry(pendingAiFormRef.current),
+        {
+          method: 'POST',
+          action: '/api/domain/grade-essay-ai',
+        }
+      );
       return;
     }
 
@@ -619,14 +630,33 @@ export function TeacherGradingPanel({
       scoringType: activeRubricConfig.scoringType,
     });
 
+    const savedForm = savedSnapshot
+      ? (JSON.parse(savedSnapshot) as {
+          rubricScores: Record<string, RubricScore>;
+          grammarIssues: GrammarIssue[];
+        })
+      : null;
+    const rubricChanged =
+      savedForm == null ||
+      JSON.stringify(effectiveRubric) !==
+        JSON.stringify(savedForm.rubricScores);
+    const grammarChanged =
+      savedForm == null ||
+      JSON.stringify(effectiveGrammarIssues) !==
+        JSON.stringify(savedForm.grammarIssues);
+
     const payload: Record<string, unknown> = {
       feedback: effectiveComment,
       overallComment: effectiveComment,
-      rubricScores: toPersistedRubricScores(
-        effectiveRubric,
-        activeRubricConfig.minScore
-      ),
-      grammarIssues: effectiveGrammarIssues,
+      ...(rubricChanged
+        ? {
+            rubricScores: toPersistedRubricScores(
+              effectiveRubric,
+              activeRubricConfig.minScore
+            ),
+          }
+        : {}),
+      ...(grammarChanged ? { grammarIssues: effectiveGrammarIssues } : {}),
     };
     const scaleDenominator = Number(scaleGrade?.score?.split('/')[1]);
 
@@ -716,7 +746,6 @@ export function TeacherGradingPanel({
     totalPointsBounds,
   ]);
 
-
   /**
    * The suggestions to restore: whatever the assistant produced in this
    * session if it has just run, otherwise the copy kept with the last run, so
@@ -786,9 +815,11 @@ export function TeacherGradingPanel({
     generateAiSuggestionsAtLevel(gradingAssistantStrictnessLevel);
   }, [generateAiSuggestionsAtLevel, gradingAssistantStrictnessLevel]);
 
-  const saveDraft = () => saveAll();
+  const saveAllRef = useRef(saveAll);
+  saveAllRef.current = saveAll;
+  const saveDraft = useCallback(() => saveAllRef.current(), []);
 
-  const getSavedGradeSnapshot = useCallback((): SavedGradeSnapshot => {
+  const buildSavedGradeSnapshot = useCallback((): SavedGradeSnapshot => {
     const letter =
       resolvedNumericPercentage === null
         ? null
@@ -797,7 +828,8 @@ export function TeacherGradingPanel({
     // the save wrote, so a total the teacher typed wins over the one the
     // category scores imply -- otherwise the grade reverts on screen until the
     // page is reloaded.
-    const scaleScore = manualScaleScore ?? rubricScaleGrade?.overallScore ?? null;
+    const scaleScore =
+      manualScaleScore ?? rubricScaleGrade?.overallScore ?? null;
     const scaleScoreText =
       manualScaleScore !== null && scaleScoreOutOf !== null
         ? `${manualScaleScore}/${scaleScoreOutOf}`
@@ -823,6 +855,12 @@ export function TeacherGradingPanel({
     rubricScores,
     scaleScoreOutOf,
   ]);
+  const savedGradeSnapshotRef = useRef(buildSavedGradeSnapshot);
+  savedGradeSnapshotRef.current = buildSavedGradeSnapshot;
+  const getSavedGradeSnapshot = useCallback(
+    () => savedGradeSnapshotRef.current(),
+    []
+  );
 
   const discardDraft = useCallback(() => {
     if (!savedSnapshot) return;
@@ -966,7 +1004,10 @@ export function TeacherGradingPanel({
                           key={option.value}
                           text={option.description}
                           delayDuration={200}
-                          contentProps={{ side: 'bottom', className: 'max-w-xs' }}
+                          contentProps={{
+                            side: 'bottom',
+                            className: 'max-w-xs',
+                          }}
                         >
                           <button
                             type="button"
@@ -1046,7 +1087,8 @@ export function TeacherGradingPanel({
         {rubricScaleGrade ? (
           <div className="space-y-2">
             <Label htmlFor="overall-score">
-              Total points{scaleScoreOutOf === null ? '' : ` (out of ${scaleScoreOutOf})`}
+              Total points
+              {scaleScoreOutOf === null ? '' : ` (out of ${scaleScoreOutOf})`}
             </Label>
             <Input
               id="overall-score"
@@ -1065,7 +1107,10 @@ export function TeacherGradingPanel({
                 // Typing is unrestricted; leaving the field is where an
                 // out-of-range or off-step number is pulled onto the scale.
                 const typed = Number(e.currentTarget.value.trim());
-                if (e.currentTarget.value.trim() !== '' && Number.isFinite(typed)) {
+                if (
+                  e.currentTarget.value.trim() !== '' &&
+                  Number.isFinite(typed)
+                ) {
                   setOverallScoreInput(
                     String(
                       snapToScaleValue(
@@ -1088,36 +1133,36 @@ export function TeacherGradingPanel({
             />
           </div>
         ) : (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="pct">Overall Percentage</Label>
-          </div>
-          <Input
-            id="pct"
-            data-testid="grading-overall-percentage"
-            type="number"
-            min={0}
-            max={100}
-            value={numericPercentage}
-            disabled={isGenerating}
-            onChange={(e) => {
-              setNumericPercentage(e.target.value);
-              setHasManualPercentOverride(true);
-            }}
-            onBlur={(e) => {
-              if (!hideHeader) {
-                void saveAll(undefined, undefined, e.currentTarget.value);
-              }
-            }}
-          />
-          {computedNumericPercentage !== null ? (
-            <ResetToAssistantSuggestions
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="pct">Overall Percentage</Label>
+            </div>
+            <Input
+              id="pct"
+              data-testid="grading-overall-percentage"
+              type="number"
+              min={0}
+              max={100}
+              value={numericPercentage}
               disabled={isGenerating}
-              available={restorableSuggestion !== null}
-              onReset={handleResetToAssistantSuggestions}
+              onChange={(e) => {
+                setNumericPercentage(e.target.value);
+                setHasManualPercentOverride(true);
+              }}
+              onBlur={(e) => {
+                if (!hideHeader) {
+                  void saveAll(undefined, undefined, e.currentTarget.value);
+                }
+              }}
             />
-          ) : null}
-        </div>
+            {computedNumericPercentage !== null ? (
+              <ResetToAssistantSuggestions
+                disabled={isGenerating}
+                available={restorableSuggestion !== null}
+                onReset={handleResetToAssistantSuggestions}
+              />
+            ) : null}
+          </div>
         )}
 
         <div className="space-y-2">
@@ -1147,9 +1192,7 @@ export function TeacherGradingPanel({
             >
               <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
               <div>
-                <p className="text-sm font-medium">
-                  This rubric is incomplete
-                </p>
+                <p className="text-sm font-medium">This rubric is incomplete</p>
                 <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
                   Some categories on this assignment type are missing a name,
                   description, or weight. Grading still uses this rubric as

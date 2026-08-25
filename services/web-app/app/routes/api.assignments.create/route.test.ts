@@ -190,6 +190,7 @@ describe('api.assignments.create', () => {
         gradingAssistantStrictnessLevel: 'intermediate',
       }),
       classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -226,6 +227,7 @@ describe('api.assignments.create', () => {
         promptAttachmentSize: 4,
       }),
       classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -249,6 +251,7 @@ describe('api.assignments.create', () => {
         gradingAssistantStrictnessLevel: 'advanced',
       }),
       classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -271,6 +274,7 @@ describe('api.assignments.create', () => {
         gradingAssistantStrictnessLevel: 'intermediate',
       }),
       classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -312,6 +316,7 @@ describe('api.assignments.create', () => {
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({ tutorEnabled: true }),
       classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -333,6 +338,7 @@ describe('api.assignments.create', () => {
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({ tutorEnabled: false }),
       classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -382,6 +388,7 @@ describe('api.assignments.create', () => {
         pointValue: null,
       }),
       classIds: ['class-1'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -535,6 +542,7 @@ describe('api.assignments.create', () => {
         gradingAssistantStrictnessLevel: 'intermediate',
       }),
       classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -578,6 +586,7 @@ describe('api.assignments.create', () => {
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({ tutorEnabled: false }),
       classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 

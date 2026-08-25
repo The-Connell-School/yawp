@@ -1,35 +1,59 @@
+import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
+import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
+
+export function buildSubmissionTitleEditWhere(params: {
+  submissionId: string;
+  membershipId: string;
+  organizationId: string;
+  isAdmin: boolean;
+}): Prisma.SubmissionWhereInput {
+  return {
+    id: params.submissionId,
+    document: {
+      is: {
+        deletedAt: null,
+        OR: [
+          {
+            membership: {
+              is: {
+                id: params.membershipId,
+                organizationId: params.organizationId,
+              },
+            },
+          },
+          {
+            ...buildTeacherDocumentAccessWhere({
+              membershipId: params.membershipId,
+              organizationId: params.organizationId,
+            }),
+          },
+          ...(params.isAdmin ? [{}] : []),
+        ],
+      },
+    },
+  };
+}
 
 /** Owner, teacher of student's class, or admin — same visibility as submission page loader. */
 export async function findSubmissionForTitleEdit(params: {
   submissionId: string;
   membershipId: string;
+  organizationId: string;
   isAdmin: boolean;
 }) {
   return prisma.submission.findFirst({
-    where: {
-      id: params.submissionId,
+    where: buildSubmissionTitleEditWhere(params),
+    select: {
+      id: true,
+      title: true,
+      updatedAt: true,
+      releasedAt: true,
       document: {
-        is: {
-          deletedAt: null,
-          OR: [
-            { membershipId: params.membershipId },
-            {
-              membership: {
-                classesAsStudent: {
-                  some: {
-                    teachers: {
-                      some: { id: params.membershipId },
-                    },
-                  },
-                },
-              },
-            },
-            ...(params.isAdmin ? [{}] : []),
-          ],
+        select: {
+          membership: { select: { organizationId: true } },
         },
       },
     },
-    select: { id: true },
   });
 }
