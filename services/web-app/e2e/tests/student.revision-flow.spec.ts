@@ -88,6 +88,65 @@ test.describe.serial('Student revises a released essay', () => {
     await expect(page.getByTestId('revision-feedback-panel')).toBeVisible();
   });
 
+  // Clicking a mark is how a student asks "what did they say about this?".
+  // The panel has to come back out if they collapsed it, land on the right
+  // tab, and put that note in front of them.
+  test('clicking a teacher mark reopens the panel on that comment', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Collapse it first: reopening is the part that matters.
+    await page.getByRole('button', { name: 'Hide feedback' }).click();
+    await expect(page.getByTestId('revision-feedback-panel')).toHaveCount(0);
+
+    await page.locator('.grade-comment-mark').first().click();
+
+    await expect(page.getByTestId('revision-feedback-panel')).toBeVisible();
+    await expect(page.getByTestId('revision-feedback-tab-teacher')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await expect(
+      page
+        .getByTestId('revision-feedback-panel')
+        .getByText('Strong thesis statement in the opening sentence.')
+    ).toBeInViewport();
+  });
+
+  test('clicking an assistant mark reopens the panel on that note', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+
+    await page.getByRole('button', { name: 'Hide feedback' }).click();
+    await expect(page.getByTestId('revision-feedback-panel')).toHaveCount(0);
+
+    await page.locator('.grammar-issue-mark').first().click();
+
+    await expect(page.getByTestId('revision-feedback-panel')).toBeVisible();
+    await expect(
+      page.getByTestId('revision-feedback-tab-assistant')
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      page
+        .getByTestId('revision-feedback-panel')
+        .getByText('E2E grammar highlight for student toggle.')
+    ).toBeInViewport();
+  });
+
   test('the draft pane is editable and the graded pane is not', async ({
     page,
     signIn,
