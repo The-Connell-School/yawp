@@ -14,16 +14,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  monitoring:
+  host-setup:
     runs-on: ubuntu-22.04
     environment: demo
     env:
-      AWS_REGION: us-east-1
-      PREVIEW_DOMAIN: ${{ vars.DEMO_DOMAIN || 'yawp.school' }}
       PREVIEW_HOST: ${{ vars.DEMO_HOST }}
       PREVIEW_ROOT: ${{ vars.DEMO_ROOT || '/srv/yawp-demo' }}
       PREVIEW_SSH_USER: ${{ vars.DEMO_SSH_USER || 'ec2-user' }}
-      DEMO_INSTANCE_ID: ${{ vars.DEMO_INSTANCE_ID }}
     steps:
       - name: Check configuration
         env:
@@ -38,13 +35,6 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
 
       - name: Prepare SSH
         env:
@@ -74,6 +64,53 @@ jobs:
             exit 1
           }
 
+      - name: Install swap and metrics timer on demo host
+        run: |
+          set -euo pipefail
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_control="${PREVIEW_ROOT}/control/demo"
+          ssh -i ~/.ssh/demo_key "$ssh_target" "mkdir -p '$remote_control/scripts/preview'"
+          rsync -az \
+            -e "ssh -i ~/.ssh/demo_key" \
+            scripts/preview/publish-host-metrics.sh \
+            scripts/preview/install-host-metrics.sh \
+            scripts/preview/ensure-host-swap.sh \
+            "$ssh_target:$remote_control/scripts/preview/"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "PREVIEW_ROOT=$(printf '%q' "$PREVIEW_ROOT") bash $(printf '%q' "${remote_control}/scripts/preview/ensure-host-swap.sh")"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "PREVIEW_ROOT=$(printf '%q' "$PREVIEW_ROOT") \
+             HOST_METRICS_SCRIPT=$(printf '%q' "${remote_control}/scripts/preview/publish-host-metrics.sh") \
+             HOST_METRICS_SERVICE=yawp-demo-metrics \
+             bash $(printf '%q' "${remote_control}/scripts/preview/install-host-metrics.sh")"
+
+  alarms:
+    needs: host-setup
+    runs-on: ubuntu-22.04
+    environment: production
+    env:
+      AWS_REGION: us-east-1
+      PREVIEW_HOST: ${{ vars.DEMO_HOST }}
+      DEMO_INSTANCE_ID: ${{ vars.DEMO_INSTANCE_ID }}
+    outputs:
+      instance_id: ${{ steps.instance.outputs.id }}
+    steps:
+      - name: Check configuration
+        run: test -n "$PREVIEW_HOST" || { echo "Missing DEMO_HOST"; exit 1; }
+
+      - name: Checkout reviewed control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Resolve demo instance id
         id: instance
         run: |
@@ -99,26 +136,6 @@ jobs:
           bash scripts/preview/provision-host-alarms.sh \
             "${{ steps.instance.outputs.id }}" \
             yawp-demo-host
-
-      - name: Sync monitoring scripts and install metrics timer
-        run: |
-          set -euo pipefail
-          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
-          remote_control="${PREVIEW_ROOT}/control/demo"
-          ssh -i ~/.ssh/demo_key "$ssh_target" "mkdir -p '$remote_control/scripts/preview'"
-          rsync -az \
-            -e "ssh -i ~/.ssh/demo_key" \
-            scripts/preview/publish-host-metrics.sh \
-            scripts/preview/install-host-metrics.sh \
-            scripts/preview/ensure-host-swap.sh \
-            "$ssh_target:$remote_control/scripts/preview/"
-          ssh -i ~/.ssh/demo_key "$ssh_target" \
-            "PREVIEW_ROOT=$(printf '%q' "$PREVIEW_ROOT") bash $(printf '%q' "${remote_control}/scripts/preview/ensure-host-swap.sh")"
-          ssh -i ~/.ssh/demo_key "$ssh_target" \
-            "PREVIEW_ROOT=$(printf '%q' "$PREVIEW_ROOT") \
-             HOST_METRICS_SCRIPT=$(printf '%q' "${remote_control}/scripts/preview/publish-host-metrics.sh") \
-             HOST_METRICS_SERVICE=yawp-demo-metrics \
-             bash $(printf '%q' "${remote_control}/scripts/preview/install-host-metrics.sh")"
 
       - name: Verify demo metrics are publishing
         run: |
