@@ -194,6 +194,48 @@ describe('aggregateRubricPerformance', () => {
     expect(thesis.scoredCount).toBe(1);
     expect(thesis.averageScore).toBe(4);
   });
+
+  test('aggregates against the assignment rubric categories when provided', () => {
+    const result = aggregateRubricPerformance(
+      [
+        submission('a', {
+          conventions: { score: 2 },
+          development: { score: 4 },
+        }),
+        submission('b', {
+          conventions: { score: 3 },
+          development: { score: 5 },
+        }),
+      ],
+      {
+        // Arrived from `main` as a bare category list. Same assertion, same
+        // scale — the range is explicit now because a rubric carries one.
+        categories: [
+          {
+            key: 'conventions',
+            label: 'Conventions',
+            weight: 0.5,
+            minScore: 1,
+            maxScore: 5,
+          },
+          {
+            key: 'development',
+            label: 'Development',
+            weight: 0.5,
+            minScore: 1,
+            maxScore: 5,
+          },
+        ],
+      }
+    );
+
+    expect(result.categories.map((category) => category.key)).toEqual([
+      'conventions',
+      'development',
+    ]);
+    expect(result.weakest).toBe('conventions');
+    expect(result.strongest).toBe('development');
+  });
 });
 
 describe('aggregating against an assignment type’s own rubric', () => {

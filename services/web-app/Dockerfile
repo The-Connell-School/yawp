@@ -12,6 +12,7 @@ RUN bun install --ignore-scripts
 RUN bun prisma generate
 
 FROM deps AS build
+ENV NODE_OPTIONS=--max-old-space-size=1280
 RUN bun web-app:build
 
 FROM base AS production

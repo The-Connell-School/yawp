@@ -39,15 +39,9 @@ test.describe.serial('Student class detail', () => {
           page.getByRole('button', { name: /E2E Class Detail Assignment/i })
         ).toBeVisible({ timeout: 10000 });
 
-        // The same "Write something new" entry point as the dashboard, with
-        // options inherited from the teacher's enabled assignment types.
-        await page
-          .getByRole('button', { name: 'Write something new' })
-          .click();
-        await expect(
-          page.getByRole('menuitem', { name: 'E2E Course' })
-        ).toBeVisible();
-        await page.keyboard.press('Escape');
+        await expect(page.getByRole('button', { name: 'Write something new' })).toHaveCount(
+          0
+        );
 
         await expect(page.getByText('Documents', { exact: true })).toBeVisible();
 

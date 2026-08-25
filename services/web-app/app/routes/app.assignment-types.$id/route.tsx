@@ -6,7 +6,7 @@ import {
   Form,
 } from 'react-router';
 import { Link, useLoaderData, useNavigation } from 'react-router';
-import { ChevronDownIcon, PlusIcon, UsersIcon } from 'lucide-react';
+import { ChevronDownIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { CaretLeftIcon } from '~/components/icons';
@@ -33,7 +33,6 @@ import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server'
 import { listSavedThesisPrompts } from '~/domain/thesis-prompts/saved-prompts.server';
 import { listSavedDailyPagesPrompts } from '~/domain/daily-pages-prompts/saved-prompts.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import { studentStartedSharedDraftsEnabled } from '~/domain/assignments/collaboration';
 import {
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
@@ -528,6 +527,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
+  if (profile.role !== 'TEACHER') {
+    return redirectWithToast('/app', {
+      type: 'error',
+      description: 'Start writing from an assignment in one of your classes.',
+    });
+  }
+
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
     return redirectWithToast(`/app/assignment-types/${params.id}`, {
       type: 'error',
@@ -682,33 +688,6 @@ export default function AppAssignmentTypesIdRoute() {
                 />
               ) : null}
             </>
-          ) : canCreateDirectDocument ? (
-            <div className="flex items-center gap-2">
-              {/* The student's road to a shared draft. Offered only for kinds of
-                  writing in the collaboration pilot, because it leads to a
-                  separate collaborative page that will not serve anything else —
-                  and only while students may form their own groups at all, which
-                  they currently may not. The link and the page behind it are
-                  intact; see `studentStartedSharedDraftsEnabled`. */}
-              {studentStartedSharedDraftsEnabled() &&
-              data.assignmentType.collaborationSupported ? (
-                <Button asChild variant="outline" className="w-fit">
-                  <Link to="/app/shared-drafts/new">
-                    <UsersIcon className="mr-1 h-5 w-5" /> Write with a classmate
-                  </Link>
-                </Button>
-              ) : null}
-              <Form method="post">
-                <Button
-                  type="submit"
-                  className="w-fit"
-                  disabled={!hasModules || isLoading}
-                  isLoading={isLoading}
-                >
-                  New <PlusIcon className="ml-1 h-5 w-5" />
-                </Button>
-              </Form>
-            </div>
           ) : null}
         </div>
         <div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
@@ -851,13 +830,15 @@ export default function AppAssignmentTypesIdRoute() {
           <NoDataPlaceholder
             title="No documents"
             subtitle={
-              canCreateDirectDocument ? (
+              isTeacher && canCreateDirectDocument ? (
                 <>
                   Hit the <code className="px-1">New +</code> button above to
                   create your first document.
                 </>
-              ) : (
+              ) : isTeacher ? (
                 'Choose a prompt from the APUSH library to create an assignment.'
+              ) : (
+                'Open an assignment from one of your classes to start writing.'
               )
             }
           />

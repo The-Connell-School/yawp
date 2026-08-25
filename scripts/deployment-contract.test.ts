@@ -742,8 +742,15 @@ describe('PR preview deployment contract', () => {
     const metrics = readRepoFile('scripts/preview/publish-host-metrics.sh');
 
     expect(bootstrapWorkflow).toContain('publish-host-metrics.sh');
-    expect(bootstrap).toContain('yawp-preview-metrics.timer');
-    expect(bootstrap).toContain('OnUnitActiveSec=60');
+    expect(bootstrapWorkflow).toContain('install-host-metrics.sh');
+    expect(bootstrap).toContain('install-host-metrics.sh');
+    expect(bootstrap).toContain('HOST_METRICS_SERVICE=yawp-preview-metrics');
+    expect(readRepoFile('scripts/preview/install-host-metrics.sh')).toContain(
+      '${METRICS_SERVICE}.timer'
+    );
+    expect(readRepoFile('scripts/preview/install-host-metrics.sh')).toContain(
+      'OnUnitActiveSec=60'
+    );
     expect(metrics).toContain('Yawp/PreviewHost');
     expect(metrics).toContain('MemoryUsedPercent');
     expect(metrics).toContain('RunningPreviews');
@@ -1306,10 +1313,13 @@ describe('demo environment deployment contract', () => {
 
   test('demo deploys share the host mutation lock with PR preview deploys', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const detached = readRepoFile(
+      'scripts/preview/run-host-deploy-detached.sh'
+    );
 
     expect(workflow).toContain('lock_file="${PREVIEW_ROOT}/preview-host.lock"');
-    expect(workflow).toContain('flock -w 1800');
-    expect(workflow).toContain('bash -lc $(shell_quote "$deploy_command")');
+    expect(detached).toContain('flock -w 1800');
+    expect(detached).toContain('LOCK_FILE');
   });
 
   test('demo reset requires typed confirmation and takes a pre-reset backup', () => {
@@ -1353,6 +1363,31 @@ describe('demo environment deployment contract', () => {
     expect(deployScript).toContain('recover_demo_database_on_failure');
     expect(deployScript).toContain('restore-demo-backup.sh');
     expect(deployScript).toContain('install_demo_backup_tooling');
+  });
+
+  test('demo deploy runs detached from the GitHub Actions SSH session', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+
+    expect(workflow).toContain('Prepare demo host capacity');
+    expect(workflow).toContain('ensure-host-swap.sh');
+    expect(workflow).toContain('install-host-metrics.sh');
+    expect(workflow).toContain('run-host-deploy-detached.sh');
+    expect(workflow).not.toContain(
+      'flock -w 1800 $(shell_quote "$lock_file") bash -lc $(shell_quote "$deploy_command")'
+    );
+  });
+
+  test('demo host monitoring provisions alarms and verifies metrics', () => {
+    const workflow = readRepoFile('.github/workflows/demo-host-monitoring.yml');
+    const provision = readRepoFile('scripts/preview/provision-host-alarms.sh');
+    const verify = readRepoFile('scripts/preview/verify-host-alarms.sh');
+
+    expect(workflow).toContain('provision-host-alarms.sh');
+    expect(workflow).toContain('yawp-demo-host');
+    expect(workflow).toContain('verify-host-alarms.sh');
+    expect(provision).toContain('MemoryUsedPercent');
+    expect(provision).toContain('DiskUsedPercent');
+    expect(verify).toContain('yawp-demo-host-memory-warning');
   });
 
   test('normal demo deploys prove aggregate data counts do not decrease', () => {

@@ -4,7 +4,7 @@ import {
   buildInsightPrompt,
   parseInsightResponse,
 } from './class-insight-synthesis';
-import type { InsightRubric } from './insight-rubric';
+import { DEFAULT_INSIGHT_RUBRIC, type InsightRubric } from './insight-rubric';
 
 const GBA_RUBRIC: InsightRubric = {
   categories: [
@@ -99,7 +99,10 @@ describe('parseInsightResponse', () => {
   };
 
   test('parses a well-formed payload', () => {
-    const result = parseInsightResponse(JSON.stringify(validPayload));
+    const result = parseInsightResponse(
+      JSON.stringify(validPayload),
+      DEFAULT_INSIGHT_RUBRIC
+    );
     expect(result).not.toBeNull();
     expect(result!.overview).toContain('strong theses');
     expect(result!.categories).toHaveLength(2);
@@ -110,7 +113,7 @@ describe('parseInsightResponse', () => {
     const wrapped = `Here is the summary:\n\n${JSON.stringify(
       validPayload
     )}\n\nHope that helps!`;
-    const result = parseInsightResponse(wrapped);
+    const result = parseInsightResponse(wrapped, DEFAULT_INSIGHT_RUBRIC);
     expect(result).not.toBeNull();
     expect(result!.categories).toHaveLength(2);
   });
@@ -127,7 +130,8 @@ describe('parseInsightResponse', () => {
           { title: 'a', detail: 'b', rubricCategory: 'made_up' },
           { title: 'c', detail: 'd', rubricCategory: 'thesis_and_content' },
         ],
-      })
+      }),
+      DEFAULT_INSIGHT_RUBRIC
     );
     expect(result!.categories.map((c) => c.key)).toEqual([
       'thesis_and_content',
@@ -144,17 +148,20 @@ describe('parseInsightResponse', () => {
           { key: 'thesis_and_content', status: 'whatever', summary: 'y' },
         ],
         nextSteps: [],
-      })
+      }),
+      DEFAULT_INSIGHT_RUBRIC
     );
     expect(result!.categories[0].status).toBe('mixed');
   });
 
   test('returns null when there is no parseable object', () => {
-    expect(parseInsightResponse('the model refused')).toBeNull();
+    expect(parseInsightResponse('the model refused', DEFAULT_INSIGHT_RUBRIC)).toBeNull();
   });
 
   test('returns null when required fields are missing', () => {
-    expect(parseInsightResponse(JSON.stringify({ foo: 'bar' }))).toBeNull();
+    expect(
+      parseInsightResponse(JSON.stringify({ foo: 'bar' }), DEFAULT_INSIGHT_RUBRIC)
+    ).toBeNull();
   });
 });
 

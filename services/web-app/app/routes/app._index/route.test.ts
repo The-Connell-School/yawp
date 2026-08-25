@@ -109,31 +109,14 @@ describe('app index loader assignments', () => {
     prisma.submission.findMany.mockResolvedValue([]);
   });
 
-  test('offers a student only the assignment types their own teachers can assign', async () => {
+  test('does not load assignment types for the student dashboard', async () => {
     await loader({
       request: new Request('https://example.test/app'),
       params: {},
       context: {} as never,
     } as any);
 
-    // One scope per teacher of each class the student is enrolled in: a type a teacher
-    // cannot assign must not be offered to that teacher's students either.
-    expect(getAvailableAssignmentTypesForScopes).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scopes: [
-          {
-            organizationId: 'org-1',
-            schoolId: 'school-1',
-            teacherProfileId: 'teacher-1',
-          },
-          {
-            organizationId: 'org-1',
-            schoolId: 'school-1',
-            teacherProfileId: 'teacher-2',
-          },
-        ],
-      })
-    );
+    expect(getAvailableAssignmentTypesForScopes).not.toHaveBeenCalled();
   });
 
   test('does not load documents or assignments for the student dashboard', async () => {
@@ -494,7 +477,6 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(data.assignmentTypes).toEqual([]);
     expect(data.teacherAssignmentTypes).toEqual([
       {
         id: 'type-1',
