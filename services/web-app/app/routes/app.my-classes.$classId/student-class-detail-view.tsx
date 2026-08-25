@@ -107,7 +107,7 @@ export function StudentClassDetailView({
           ) : (
             <NoDataPlaceholder
               title="No documents"
-              subtitle="Start an assignment or use Write something new to get started."
+              subtitle="Start an assignment from the Assignments section above."
             />
           )}
         </div>

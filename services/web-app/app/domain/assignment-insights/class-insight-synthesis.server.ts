@@ -94,5 +94,5 @@ export async function generateClassInsight({
     },
   });
 
-  return { summary: parseInsightResponse(raw), model, raw };
+  return { summary: parseInsightResponse(raw, aggregate), model, raw };
 }

@@ -16,7 +16,6 @@ import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-ac
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import type { TeacherClassCardData } from '~/components/teacher-class-card';
 import { StudentClassCard } from '~/components/student-class-card';
-import { StudentWriteSomethingNew } from '~/components/student-write-something-new';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { getTeacherRecentActiveClassIds } from '~/utils/teacher-dashboard-recent-classes.server';
 import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
@@ -68,35 +67,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect('/enter-code');
   }
 
-  // A student may only start the assignment types their own teachers can assign, so the
-  // scopes are built per teacher of each class the student is in — the same scope shape the
-  // teacher-side dashboard uses, just resolved through enrollment instead of ownership.
+  // Student assignment types were only used for the retired "Write something new"
+  // entry point. Students now start writing only from a class assignment.
   let studentAssignmentClassIds: string[] = [];
-  let studentAssignmentTypeScopes: {
-    organizationId: string;
-    schoolId: string;
-    teacherProfileId: string;
-  }[] = [];
   if (useStudentExperience) {
     const studentClasses = await prisma.class.findMany({
       where: {
         students: { some: { id: profile.id } },
         ...schoolYearWhere(schoolYearScope),
       },
-      select: {
-        id: true,
-        school: { select: { id: true, organizationId: true } },
-        teachers: { select: { id: true } },
-      },
+      select: { id: true },
     });
     studentAssignmentClassIds = studentClasses.map((klass) => klass.id);
-    studentAssignmentTypeScopes = studentClasses.flatMap((klass) =>
-      klass.teachers.map((teacher) => ({
-        organizationId: klass.school.organizationId,
-        schoolId: klass.school.id,
-        teacherProfileId: teacher.id,
-      }))
-    );
   }
 
   const teacherAssignmentClassScopes = !useStudentExperience
@@ -129,42 +111,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? await getStudentEnrolledClasses(profile.id, schoolYearScope)
     : [];
 
-  const [assignmentTypes, teacherClasses] = await Promise.all([
-    !useStudentExperience || studentAssignmentTypeScopes.length === 0
-      ? ([] as AssignmentTypeRow[])
-      : getAvailableAssignmentTypesForScopes<AssignmentTypeRow>({
-          scopes: studentAssignmentTypeScopes,
-          select: {
-            id: true,
-            title: true,
-            systemKey: true,
-            image: { select: { id: true } },
+  const teacherClasses = !useStudentExperience
+    ? await prisma.class.findMany({
+        where: {
+          teachers: { some: { id: profile.id } },
+          isArchived: false,
+          ...schoolYearWhere(schoolYearScope),
+        },
+        select: {
+          id: true,
+          grade: true,
+          period: true,
+          title: true,
+          classArtIndex: true,
+          classArtKey: true,
+          school: { select: { id: true, name: true, organizationId: true } },
+          _count: {
+            select: { students: true, teachers: true, classAssignments: true },
           },
-          orderBy: { position: 'asc' },
-        }),
-    // Teacher classes and recent ordering
-    !useStudentExperience
-      ? prisma.class.findMany({
-          where: {
-            teachers: { some: { id: profile.id } },
-            isArchived: false,
-            ...schoolYearWhere(schoolYearScope),
-          },
-          select: {
-            id: true,
-            grade: true,
-            period: true,
-            title: true,
-            classArtIndex: true,
-            classArtKey: true,
-            school: { select: { id: true, name: true, organizationId: true } },
-            _count: {
-              select: { students: true, teachers: true, classAssignments: true },
-            },
-          },
-        })
-      : [],
-  ]);
+        },
+      })
+    : [];
 
   // Sort teacher classes with recent activity first.
   let teacherClassesOrdered: typeof teacherClasses = teacherClasses;
@@ -278,7 +245,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }));
 
   return dataResponse({
-    assignmentTypes,
     enrolledClasses,
     teacherClasses: teacherClassesOrdered,
     assignmentsEnabled,
@@ -380,17 +346,12 @@ export default function AppRoute() {
     >
       <div className="flex w-full justify-between border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex flex-col">
-              <h2>Welcome, {user.name}!</h2>
-              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-                Welcome to your dashboard. Here you can view your classes and
-                manage your writing.
-              </p>
-            </div>
-            <StudentWriteSomethingNew
-              assignmentTypes={data.assignmentTypes}
-            />
+          <div className="flex flex-col">
+            <h2>Welcome, {user.name}!</h2>
+            <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
+              Welcome to your dashboard. Open a class to see your assignments
+              and continue your writing.
+            </p>
           </div>
         </div>
       </div>

@@ -179,4 +179,38 @@ describe('aggregateRubricPerformance', () => {
     expect(thesis.scoredCount).toBe(1);
     expect(thesis.averageScore).toBe(4);
   });
+
+  test('aggregates against the assignment rubric categories when provided', () => {
+    const result = aggregateRubricPerformance(
+      [
+        submission('a', {
+          conventions: { score: 2 },
+          development: { score: 4 },
+        }),
+        submission('b', {
+          conventions: { score: 3 },
+          development: { score: 5 },
+        }),
+      ],
+      [
+        {
+          key: 'conventions',
+          label: 'Conventions',
+          weight: 0.5,
+        },
+        {
+          key: 'development',
+          label: 'Development',
+          weight: 0.5,
+        },
+      ]
+    );
+
+    expect(result.categories.map((category) => category.key)).toEqual([
+      'conventions',
+      'development',
+    ]);
+    expect(result.weakest).toBe('conventions');
+    expect(result.strongest).toBe('development');
+  });
 });

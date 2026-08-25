@@ -1,4 +1,7 @@
-import { rubricCategories, type RubricKey } from '~/domain/grading/rubric';
+import {
+  defaultInsightRubricCategories,
+  type InsightRubricCategory,
+} from './insight-rubric-categories';
 
 /** How many example comments to retain per category for LLM synthesis. */
 const SAMPLE_COMMENT_CAP = 5;
@@ -26,7 +29,7 @@ export type GradedSubmissionInput = {
 export type ScoreBand = 1 | 2 | 3 | 4 | 5;
 
 export type CategoryAggregate = {
-  key: RubricKey;
+  key: string;
   label: string;
   weight: number;
   /** Mean score across submissions that scored this category; null when none did. */
@@ -41,8 +44,8 @@ export type CategoryAggregate = {
 export type ClassRubricAggregate = {
   submissionCount: number;
   categories: CategoryAggregate[];
-  strongest: RubricKey | null;
-  weakest: RubricKey | null;
+  strongest: string | null;
+  weakest: string | null;
 };
 
 function emptyDistribution(): Record<ScoreBand, number> {
@@ -75,7 +78,8 @@ function toBand(score: number): ScoreBand | null {
 }
 
 export function aggregateRubricPerformance(
-  submissions: GradedSubmissionInput[]
+  submissions: GradedSubmissionInput[],
+  rubricCategories: InsightRubricCategory[] = defaultInsightRubricCategories()
 ): ClassRubricAggregate {
   const categories: CategoryAggregate[] = rubricCategories.map((category) => {
     const scores: number[] = [];

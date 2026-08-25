@@ -1,4 +1,7 @@
-import { rubricCategories, type RubricKey } from '~/domain/grading/rubric';
+import {
+  defaultInsightRubricCategories,
+  type InsightRubricCategory,
+} from './insight-rubric-categories';
 import {
   readRubricEntryScore,
   type GradedSubmissionInput,
@@ -25,7 +28,7 @@ export type DifferentiationStudent = {
 
 /** Students who scored low on the same rubric category — a natural small group. */
 export type DifferentiationGroup = {
-  category: RubricKey;
+  category: string;
   label: string;
   students: DifferentiationStudent[];
 };
@@ -47,7 +50,7 @@ export type DifferentiationSummary = {
 
 type StudentProfile = {
   student: DifferentiationStudent;
-  scores: Map<RubricKey, number>;
+  scores: Map<string, number>;
   averageScore: number;
 };
 
@@ -59,10 +62,13 @@ function toStudent(input: DifferentiationInput): DifferentiationStudent {
   return { name, href: input.href ?? null };
 }
 
-function buildProfiles(inputs: DifferentiationInput[]): StudentProfile[] {
+function buildProfiles(
+  inputs: DifferentiationInput[],
+  rubricCategories: InsightRubricCategory[]
+): StudentProfile[] {
   const profiles: StudentProfile[] = [];
   for (const input of inputs) {
-    const scores = new Map<RubricKey, number>();
+    const scores = new Map<string, number>();
     for (const category of rubricCategories) {
       const score = readRubricEntryScore(input.rubricScores?.[category.key]);
       if (score !== null) scores.set(category.key, score);
@@ -87,9 +93,10 @@ function buildProfiles(inputs: DifferentiationInput[]): StudentProfile[] {
  * so callers can omit the section entirely.
  */
 export function buildDifferentiation(
-  inputs: DifferentiationInput[]
+  inputs: DifferentiationInput[],
+  rubricCategories: InsightRubricCategory[] = defaultInsightRubricCategories()
 ): DifferentiationSummary | null {
-  const profiles = buildProfiles(inputs);
+  const profiles = buildProfiles(inputs, rubricCategories);
   if (profiles.length < 2) return null;
 
   const focusGroups: DifferentiationGroup[] = [];
