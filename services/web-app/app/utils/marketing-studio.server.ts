@@ -9,6 +9,8 @@
  * puts real student work in a marketing asset.
  */
 
+import { isAllowedRenderTargetHost } from '../../../../packages/marketing-media';
+
 const DEMO_CONFIRMATION = 'confirmed';
 
 export function getMarketingRenderTarget(): string | null {
@@ -27,6 +29,10 @@ export function getMarketingRenderTarget(): string | null {
   }
 
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+
+  // Even a confirmed variable cannot point the camera at production: the
+  // studio only accepts previews, the demo box, and local development.
+  if (!isAllowedRenderTargetHost(url.hostname)) return null;
 
   return (
     url.origin + (url.pathname === '/' ? '' : url.pathname.replace(/\/$/, ''))

@@ -34,7 +34,7 @@ its own configured target. The queue cannot redirect the browser.
 
 ```bash
 export DATABASE_URL=postgresql://...              # the app database
-export MARKETING_RENDER_TARGET_URL=https://demo.example
+export MARKETING_RENDER_TARGET_URL=https://demo.yawp.school
 export MARKETING_RENDER_TARGET_IS_DEMO=confirmed
 export AWS_S3_BUCKET_FOR_VIDEOS=yawp-...-videos
 export AWS_S3_REGION_FOR_VIDEOS=us-east-1

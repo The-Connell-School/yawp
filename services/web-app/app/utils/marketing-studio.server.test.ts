@@ -33,7 +33,7 @@ describe('isMarketingStudioEnabled', () => {
   test('is off when the target exists but nobody confirmed it is a demo environment', () => {
     setEnv({
       MARKETING_STUDIO_ENABLED: 'on',
-      MARKETING_RENDER_TARGET_URL: 'https://demo.yawp.test',
+      MARKETING_RENDER_TARGET_URL: 'https://demo.yawp.school',
     });
 
     expect(isMarketingStudioEnabled()).toBe(false);
@@ -43,18 +43,18 @@ describe('isMarketingStudioEnabled', () => {
   test('is on only with the flag, a target, and an explicit demo confirmation', () => {
     setEnv({
       MARKETING_STUDIO_ENABLED: 'on',
-      MARKETING_RENDER_TARGET_URL: 'https://demo.yawp.test',
+      MARKETING_RENDER_TARGET_URL: 'https://demo.yawp.school',
       MARKETING_RENDER_TARGET_IS_DEMO: 'confirmed',
     });
 
     expect(isMarketingStudioEnabled()).toBe(true);
-    expect(getMarketingRenderTarget()).toBe('https://demo.yawp.test');
+    expect(getMarketingRenderTarget()).toBe('https://demo.yawp.school');
   });
 
   test('stays off for a flag value other than on', () => {
     setEnv({
       MARKETING_STUDIO_ENABLED: 'true',
-      MARKETING_RENDER_TARGET_URL: 'https://demo.yawp.test',
+      MARKETING_RENDER_TARGET_URL: 'https://demo.yawp.school',
       MARKETING_RENDER_TARGET_IS_DEMO: 'confirmed',
     });
 
@@ -66,16 +66,16 @@ describe('getMarketingRenderTarget', () => {
   test('normalizes a trailing slash', () => {
     setEnv({
       MARKETING_STUDIO_ENABLED: 'on',
-      MARKETING_RENDER_TARGET_URL: 'https://demo.yawp.test/',
+      MARKETING_RENDER_TARGET_URL: 'https://demo.yawp.school/',
       MARKETING_RENDER_TARGET_IS_DEMO: 'confirmed',
     });
 
-    expect(getMarketingRenderTarget()).toBe('https://demo.yawp.test');
+    expect(getMarketingRenderTarget()).toBe('https://demo.yawp.school');
   });
 
   test('rejects a target that is not an http url', () => {
     for (const url of [
-      'demo.yawp.test',
+      'demo.yawp.school',
       'file:///etc/passwd',
       'javascript:alert(1)',
     ]) {
@@ -97,5 +97,17 @@ describe('getMarketingRenderTarget', () => {
     });
 
     expect(getMarketingRenderTarget()).toBe('http://localhost:3000');
+  });
+
+  test('hides the studio when the target is production or an unknown host', () => {
+    for (const url of ['https://yawp.school', 'https://example.com']) {
+      setEnv({
+        MARKETING_STUDIO_ENABLED: 'on',
+        MARKETING_RENDER_TARGET_URL: url,
+        MARKETING_RENDER_TARGET_IS_DEMO: 'confirmed',
+      });
+      expect(getMarketingRenderTarget()).toBeNull();
+      expect(isMarketingStudioEnabled()).toBe(false);
+    }
   });
 });

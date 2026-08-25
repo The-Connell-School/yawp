@@ -3,7 +3,7 @@ import { ConfigError, loadConfig } from './config';
 
 const BASE = {
   DATABASE_URL: 'postgresql://localhost:5432/demo',
-  MARKETING_RENDER_TARGET_URL: 'https://demo.yawp.test',
+  MARKETING_RENDER_TARGET_URL: 'https://demo.yawp.school',
   MARKETING_RENDER_TARGET_IS_DEMO: 'confirmed',
   AWS_S3_BUCKET_FOR_VIDEOS: 'yawp-videos',
 } as NodeJS.ProcessEnv;
@@ -35,8 +35,17 @@ describe('loadConfig', () => {
       loadConfig({ ...BASE, MARKETING_RENDER_TARGET_URL: 'file:///etc/passwd' })
     ).toThrow(ConfigError);
     expect(() =>
-      loadConfig({ ...BASE, MARKETING_RENDER_TARGET_URL: 'demo.yawp.test' })
+      loadConfig({ ...BASE, MARKETING_RENDER_TARGET_URL: 'demo.yawp.school' })
     ).toThrow(ConfigError);
+  });
+
+  test('refuses production and unknown hosts even when confirmed', () => {
+    expect(() =>
+      loadConfig({ ...BASE, MARKETING_RENDER_TARGET_URL: 'https://yawp.school' })
+    ).toThrow(/not a demo surface/);
+    expect(() =>
+      loadConfig({ ...BASE, MARKETING_RENDER_TARGET_URL: 'https://example.com' })
+    ).toThrow(/not a demo surface/);
   });
 
   // Previews sit behind an access-code gate; the renderer holds a seat code and
@@ -119,10 +128,10 @@ describe('loadConfig', () => {
   test('normalizes the target to an origin and fills defaults', () => {
     const config = loadConfig({
       ...BASE,
-      MARKETING_RENDER_TARGET_URL: 'https://demo.yawp.test/app/',
+      MARKETING_RENDER_TARGET_URL: 'https://demo.yawp.school/app/',
     });
 
-    expect(config.targetUrl).toBe('https://demo.yawp.test');
+    expect(config.targetUrl).toBe('https://demo.yawp.school');
     expect(config.region).toBe('us-east-1');
     expect(config.ffmpegPath).toBe('ffmpeg');
     expect(config.loginPath).toBe('/auth/dev-login');

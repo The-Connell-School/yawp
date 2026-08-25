@@ -7,6 +7,11 @@
  * should be able to cause that alone.
  */
 
+import {
+  ALLOWED_RENDER_TARGETS_DESCRIPTION,
+  isAllowedRenderTargetHost,
+} from '@app/marketing-media';
+
 export type RendererConfig = {
   databaseUrl: string;
   targetUrl: string;
@@ -67,6 +72,15 @@ export function loadConfig(
   }
   if (target.protocol !== 'http:' && target.protocol !== 'https:') {
     throw new ConfigError('MARKETING_RENDER_TARGET_URL must be http or https');
+  }
+
+  // Even a confirmed variable cannot point the camera at production. The
+  // studio has no business seeing it, so the allow-list refuses anything
+  // that is not a demo surface, whatever the variables claim.
+  if (!isAllowedRenderTargetHost(target.hostname)) {
+    throw new ConfigError(
+      `MARKETING_RENDER_TARGET_URL host "${target.hostname}" is not a demo surface. The renderer only films ${ALLOWED_RENDER_TARGETS_DESCRIPTION}.`
+    );
   }
 
   // Preview environments sit behind an access-code gate, so the renderer holds
