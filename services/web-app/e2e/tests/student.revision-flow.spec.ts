@@ -51,10 +51,20 @@ test.describe.serial('Student revises a released essay', () => {
     await expect(draftPane.locator('.grade-comment-mark')).toHaveCount(0);
     await expect(draftPane.locator('.grammar-issue-mark')).toHaveCount(0);
 
-    // Grade tab is the default view of the feedback panel.
-    await expect(gradedPane.getByText('77% (C+)')).toBeVisible();
+    // The legend explains the colors but is not itself a mark: chips carrying
+    // the mark classes would make "the first mark in the essay" select a chip.
+    const legend = page.getByTestId('revision-mark-legend');
+    await expect(legend).toBeVisible();
+    await expect(legend.locator('.grade-comment-mark')).toHaveCount(0);
+    await expect(legend.locator('.grammar-issue-mark')).toHaveCount(0);
+
+    // Grade tab is the default view of the feedback panel. Scoped to the panel
+    // because the pane header also carries the grade, so a student who has
+    // collapsed the panel can still see what the essay scored.
+    const feedbackPanel = page.getByTestId('revision-feedback-panel');
+    await expect(feedbackPanel.getByText('77% (C+)')).toBeVisible();
     await expect(
-      gradedPane.getByText('Good effort with room for improvement.')
+      feedbackPanel.getByText('Good effort with room for improvement.')
     ).toBeVisible();
 
     await page.getByTestId('revision-feedback-tab-teacher').click();
@@ -177,6 +187,59 @@ test.describe.serial('Student revises a released essay', () => {
     await expect(
       page.getByTestId('revision-graded-pane')
     ).not.toContainText('Revised in the split screen.');
+  });
+
+  // The two panes are one document seen twice, so a reader compares them line
+  // by line. Both columns carry the same two rows of chrome to make that work,
+  // and a change to either one's height would quietly break it.
+  test('both panes start their text on the same line', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+    await page.locator(EDITOR_SELECTOR).first().waitFor({ timeout: 15000 });
+
+    const topOf = (locator: ReturnType<typeof page.locator>) =>
+      locator.first().evaluate((el) => el.getBoundingClientRect().top);
+
+    const gradedTop = await topOf(
+      page.getByTestId('revision-graded-pane').locator('.submission-essay p')
+    );
+    const draftTop = await topOf(
+      page.getByTestId('revision-draft-pane').locator(`${EDITOR_SELECTOR} p`)
+    );
+
+    expect(Math.abs(draftTop - gradedTop)).toBeLessThanOrEqual(2);
+  });
+
+  // The prompt describes the assignment both drafts answer, so it spans the
+  // screen once rather than sitting inside the editor above one of them.
+  test('the assignment prompt spans both panes', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    const prompt = page.getByTestId('revision-assignment-prompt');
+    await expect(prompt).toBeVisible({ timeout: 15000 });
+
+    const promptWidth = await prompt.evaluate(
+      (el) => el.getBoundingClientRect().width
+    );
+    const draftWidth = await page
+      .getByTestId('revision-draft-pane')
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    expect(promptWidth).toBeGreaterThan(draftWidth * 1.5);
+    await expect(
+      page.getByTestId('revision-draft-pane').getByTestId('assignment-prompt-panel')
+    ).toHaveCount(0);
   });
 
   test('an unreleased submission cannot be revised yet', async ({

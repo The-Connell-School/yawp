@@ -83,7 +83,7 @@ export function RevisionFeedbackPanel({
 
   if (!isOpen) {
     return (
-      <div className="flex w-11 shrink-0 flex-col items-center gap-2 border-r bg-muted/30 py-2">
+      <div className="flex w-11 shrink-0 flex-col items-center gap-2 border-r bg-muted/30 py-2.5">
         <Button
           type="button"
           variant="ghost"
@@ -108,7 +108,9 @@ export function RevisionFeedbackPanel({
       className="flex w-[320px] shrink-0 flex-col overflow-hidden border-r bg-white"
       data-testid="revision-feedback-panel"
     >
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
+      {/* Same heights as the panes' header and bar rows (see PANE_HEADER_CLASS
+          in route.tsx), so all three columns start their content on one line. */}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2.5">
         <span className="text-sm font-semibold">Feedback</span>
         <Button
           type="button"
@@ -124,7 +126,7 @@ export function RevisionFeedbackPanel({
         </Button>
       </div>
 
-      <div className="flex shrink-0 gap-1 border-b px-2 py-1.5">
+      <div className="flex shrink-0 gap-1 border-b p-1 px-2">
         <TabButton
           isActive={tab === 'grade'}
           onClick={() => setTab('grade')}
@@ -195,7 +197,7 @@ function TabButton({
       data-testid={testId}
       aria-pressed={isActive}
       onClick={onClick}
-      className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition ${
+      className={`flex h-8 flex-1 items-center justify-center rounded-md px-2 text-xs font-medium transition ${
         isActive
           ? 'bg-muted text-foreground'
           : 'text-muted-foreground hover:bg-muted/60'

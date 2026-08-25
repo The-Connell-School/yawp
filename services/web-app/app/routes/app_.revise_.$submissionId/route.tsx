@@ -1,5 +1,5 @@
 import { invariant } from '@epic-web/invariant';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -234,6 +234,93 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 /** Hover tints the mark through the overlay's own CSS; nothing else. */
 const noopGrammarHover = () => {};
 
+/*
+ * The two panes read as one document seen twice, so their text has to start on
+ * the same line. Both columns therefore carry the same two rows of chrome, and
+ * these classes are what keep the heights equal without anyone measuring:
+ *
+ *   header — px-4 py-2.5 around text-sm, plus a border: 41px
+ *   bar    — p-1 around h-8 content, plus a border: 41px, which is exactly what
+ *            the editor's own toolbar (p-1 + h-8 buttons) comes to
+ *
+ * The editor toolbar is the right pane's second row, so the left pane's second
+ * row has to match it. If the toolbar's padding or button height ever changes,
+ * change these with it.
+ */
+const PANE_HEADER_CLASS =
+  'flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5';
+const PANE_BAR_CLASS =
+  'flex shrink-0 items-center gap-3 border-b px-4 p-1';
+
+/** What the marks in the graded essay mean — otherwise the colors are a code. */
+function MarkLegend({
+  teacherCount,
+  assistantCount,
+}: {
+  teacherCount: number;
+  assistantCount: number;
+}) {
+  return (
+    <div className="flex h-8 items-center gap-4" data-testid="revision-mark-legend">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="mark-swatch-teacher inline-block h-3 w-4 rounded-sm" />
+        Teacher
+        <span className="font-medium text-foreground">{teacherCount}</span>
+      </span>
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="mark-swatch-assistant inline-block h-3 w-4 rounded-sm" />
+        Assistant
+        <span className="font-medium text-foreground">{assistantCount}</span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The assignment prompt, spanning both panes. Collapsible and collapsed-by-
+ * default state is remembered per document, matching the editor's own banner
+ * so a student who closed it there does not meet it reopened here.
+ */
+function RevisionAssignmentPrompt({
+  assignment,
+}: {
+  assignment: { title: string | null; prompt: string | null } | null;
+}) {
+  const [isOpen, setIsOpen] = useState(true);
+  if (!assignment?.prompt?.trim()) return null;
+
+  return (
+    <div
+      className="shrink-0 border-b bg-amber-50"
+      data-testid="revision-assignment-prompt"
+    >
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-4 py-1.5 text-left"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        <span className="shrink-0 text-sm text-muted-foreground">
+          Assignment prompt
+        </span>
+        <span className="min-w-0 truncate text-sm font-bold text-foreground/80">
+          {assignment.title}
+        </span>
+        <ChevronDown
+          className={`ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+      {isOpen ? (
+        <p className="max-h-[20vh] overflow-y-auto px-4 pb-2 text-sm">
+          {assignment.prompt}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function ReviseRoute() {
   const { submission, document } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
@@ -339,6 +426,17 @@ export default function ReviseRoute() {
     [requestFeedbackFocus]
   );
 
+  const gradeSummaryLabel = useMemo(() => {
+    if (submission.numericPercentage == null) return submission.score ?? null;
+    return submission.letterGrade
+      ? `${submission.numericPercentage}% (${submission.letterGrade})`
+      : `${submission.numericPercentage}%`;
+  }, [
+    submission.numericPercentage,
+    submission.letterGrade,
+    submission.score,
+  ]);
+
   const canSubmitRevision =
     editorSubmittable && !auth.isLocked && !submit.isSubmitting;
 
@@ -377,6 +475,11 @@ export default function ReviseRoute() {
         </div>
       </nav>
 
+      {/* The prompt belongs to both drafts, so it spans both panes rather than
+          sitting inside the editor. That also removes the tallest reason the
+          two columns started at different heights. */}
+      <RevisionAssignmentPrompt assignment={document.assignment} />
+
       <div className="flex min-h-0 grow flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* ── Left: the graded essay, frozen, with its feedback ─────── */}
         <section
@@ -393,7 +496,24 @@ export default function ReviseRoute() {
               onSelectComment={setActiveCommentId}
               focusRequest={focusRequest}
             />
+            {/* The essay column carries the same two rows as the draft pane —
+                and the feedback panel carries its own of equal height — so all
+                three columns begin their content on one line. */}
             <div className="flex min-w-0 grow flex-col overflow-hidden">
+              <div className={PANE_HEADER_CLASS}>
+                <span className="text-sm font-semibold">Graded version</span>
+                {gradeSummaryLabel ? (
+                  <span className="text-xs text-muted-foreground">
+                    {gradeSummaryLabel}
+                  </span>
+                ) : null}
+              </div>
+              <div className={PANE_BAR_CLASS}>
+                <MarkLegend
+                  teacherCount={submission.comments.length}
+                  assistantCount={grammarIssues.length}
+                />
+              </div>
               <EssayPanel
                 ref={setGradedEssayElement}
                 html={submission.html ?? ''}
@@ -424,7 +544,7 @@ export default function ReviseRoute() {
           className="draft-comments-hidden flex min-h-[60vh] w-full min-w-0 grow flex-col overflow-hidden bg-white md:h-full md:min-h-0 md:w-1/2"
           aria-label="Your revision"
         >
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5">
+          <div className={PANE_HEADER_CLASS}>
             <span className="text-sm font-semibold">Your revision</span>
             <span className="text-xs text-muted-foreground">
               Edits save automatically
@@ -435,7 +555,8 @@ export default function ReviseRoute() {
           <CommentsSelectionProvider>
             <DocumentEditor
               docId={document.id}
-              assignment={document.assignment}
+              // Rendered once above both panes instead.
+              assignment={null}
               serverHtml={document.html}
               serverText={document.text}
               serverUpdatedAt={document.updatedAt}
