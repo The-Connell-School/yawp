@@ -201,6 +201,20 @@ jobs:
           echo "signature=$signature" >> "$GITHUB_OUTPUT"
           echo "Demo aggregate data before deploy: $signature"
 
+      - name: Prepare demo host capacity
+        run: |
+          set -euo pipefail
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_control="${PREVIEW_ROOT}/control/demo"
+          remote_metrics="${remote_control}/scripts/preview/publish-host-metrics.sh"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "PREVIEW_ROOT=$(printf '%q' "$PREVIEW_ROOT") bash $(printf '%q' "${remote_control}/scripts/preview/ensure-host-swap.sh")"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "PREVIEW_ROOT=$(printf '%q' "$PREVIEW_ROOT") \
+             HOST_METRICS_SCRIPT=$(printf '%q' "$remote_metrics") \
+             HOST_METRICS_SERVICE=yawp-demo-metrics \
+             bash $(printf '%q' "${remote_control}/scripts/preview/install-host-metrics.sh")"
+
       - name: Deploy demo
         id: deploy
         run: |
@@ -231,9 +245,14 @@ jobs:
             "SOURCE_DIR=$(shell_quote "$remote_source")"
           )
           lock_file="${PREVIEW_ROOT}/preview-host.lock"
+          deploy_log="${PREVIEW_ROOT}/logs/demo-deploy-${GITHUB_RUN_ID}.log"
           deploy_command="cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/deploy.sh"
-          ssh -i ~/.ssh/demo_key "$ssh_target" \
-            "flock -w 1800 $(shell_quote "$lock_file") bash -lc $(shell_quote "$deploy_command")" \
+          SSH_IDENTITY="$HOME/.ssh/demo_key" \
+          SSH_TARGET="$ssh_target" \
+          LOCK_FILE="$lock_file" \
+          DEPLOY_LOG="$deploy_log" \
+          REMOTE_COMMAND="$deploy_command" \
+          bash demo-control/scripts/preview/run-host-deploy-detached.sh \
             | tee /tmp/demo-deploy.log
           url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/demo-deploy.log | tail -1)"

@@ -406,38 +406,9 @@ flock -u 8
 
 metrics_script="$ROOT/bootstrap/scripts/preview/publish-host-metrics.sh"
 if [[ -f "$metrics_script" ]]; then
-  chmod +x "$metrics_script"
-  sudo tee /etc/systemd/system/yawp-preview-metrics.service >/dev/null <<UNIT
-[Unit]
-Description=Publish Yawp preview host capacity metrics
-After=docker.service network-online.target
-
-[Service]
-Type=oneshot
-User=$METRICS_USER
-Environment=PREVIEW_ROOT=$ROOT
-Environment=PREVIEW_AWS_REGION=${PREVIEW_AWS_REGION:-us-east-1}
-ExecStart=/usr/bin/env bash $metrics_script
-UNIT
-
-  sudo tee /etc/systemd/system/yawp-preview-metrics.timer >/dev/null <<'UNIT'
-[Unit]
-Description=Publish Yawp preview host metrics every minute
-
-[Timer]
-OnBootSec=60
-OnUnitActiveSec=60
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-UNIT
-
-  sudo systemctl daemon-reload
-  sudo systemctl enable --now yawp-preview-metrics.timer
-  if ! bash "$metrics_script"; then
-    echo "Warning: initial preview metric publish failed; timer remains installed." >&2
-  fi
+  export HOST_METRICS_SCRIPT="$metrics_script"
+  export HOST_METRICS_SERVICE=yawp-preview-metrics
+  bash "$ROOT/bootstrap/scripts/preview/install-host-metrics.sh"
 else
   echo "Warning: $metrics_script missing; host metrics timer not installed." >&2
 fi
