@@ -39,30 +39,7 @@ jobs:
       - name: Prepare SSH
         env:
           DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$DEMO_SSH_PRIVATE_KEY" > ~/.ssh/demo_key
-          chmod 600 ~/.ssh/demo_key
-          cat >> ~/.ssh/config <<'EOF'
-          Host *
-            ServerAliveInterval 30
-            ServerAliveCountMax 120
-            TCPKeepAlive yes
-          EOF
-          chmod 600 ~/.ssh/config
-          for attempt in 1 2 3 4 5; do
-            if ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
-              break
-            fi
-            echo "ssh-keyscan attempt $attempt failed; retrying in 15s" >&2
-            sleep 15
-          done
-          grep -q "$PREVIEW_HOST" ~/.ssh/known_hosts || {
-            echo "Could not reach demo host $PREVIEW_HOST over SSH" >&2
-            exit 1
-          }
+        run: bash scripts/preview/prepare-demo-ssh.sh
 
       - name: Install swap and metrics timer on demo host
         run: |
