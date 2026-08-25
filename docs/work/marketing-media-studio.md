@@ -49,6 +49,11 @@ rather than an inference:
   is exactly `confirmed`.
 - The worker refuses to start under the same confirmation rule, and always films
   its own configured target even if the job row names a different one.
+- Both sides additionally check the target host against a shared allow-list
+  (`packages/marketing-media/src/render-target.ts`): `*.preview.yawp.school`,
+  `demo.yawp.school`, and local development. Production is not on the list, so
+  even a mis-set `confirmed` cannot point the camera at it — the web app hides
+  the studio and the worker refuses to start, naming the rule.
 
 This follows the reasoning already written down in `local-dev-auth.server.ts`:
 inferring "this must be safe" from environment shape was the bug there, so this
