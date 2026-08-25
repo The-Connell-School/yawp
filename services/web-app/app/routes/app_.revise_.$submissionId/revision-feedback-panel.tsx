@@ -1,5 +1,5 @@
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '~/components/ui/button';
 import type { GrammarIssue } from '~/domain/grading/grammarIssues';
@@ -8,6 +8,12 @@ import {
   ViewPanel,
   type ViewPanelSubmission,
 } from '~/routes/app_.submissions_.$submissionId/teacher-grading/view-panel';
+
+import {
+  ASSISTANT_NOTE_ATTRIBUTE,
+  resolveFeedbackFocusTarget,
+  type FeedbackFocusRequest,
+} from './feedback-focus';
 
 type FeedbackComment = {
   id: string;
@@ -25,11 +31,12 @@ type Props = {
   activeCommentId: string | null;
   onSelectComment: (id: string) => void;
   /**
-   * Set when the student hovers an assistant mark in the graded essay. The
-   * panel opens on the Assistant tab so the note that explains the mark is
-   * visible without a tooltip to chase.
+   * Set when the student clicks a mark in the graded essay. The panel comes
+   * back out if they collapsed it, moves to the tab holding that note, and
+   * scrolls it into view — so a click answers "what was said about this?"
+   * rather than leaving them to find it.
    */
-  focusedGrammarIssueId?: string | null;
+  focusRequest?: FeedbackFocusRequest | null;
 };
 
 type Tab = 'grade' | 'teacher' | 'assistant';
@@ -47,16 +54,32 @@ export function RevisionFeedbackPanel({
   grammarIssues,
   activeCommentId,
   onSelectComment,
-  focusedGrammarIssueId = null,
+  focusRequest = null,
 }: Props) {
   const [isOpen, setIsOpen] = useState(true);
   const [tab, setTab] = useState<Tab>('grade');
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const focusedNoteId =
+    focusRequest?.kind === 'assistant' ? focusRequest.id : null;
 
+  // Keyed on the nonce, not the id: clicking the same mark twice has to reopen
+  // a panel the student collapsed in between.
   useEffect(() => {
-    if (!focusedGrammarIssueId) return;
+    if (!focusRequest) return;
+    const { tab: nextTab, selector } = resolveFeedbackFocusTarget(focusRequest);
     setIsOpen(true);
-    setTab('assistant');
-  }, [focusedGrammarIssueId]);
+    setTab(nextTab);
+
+    // The tab's content mounts in this same commit, so wait one frame before
+    // looking for the note to scroll to.
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current
+        ?.querySelector<HTMLElement>(selector)
+        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest?.nonce]);
 
   if (!isOpen) {
     return (
@@ -127,7 +150,10 @@ export function RevisionFeedbackPanel({
         </TabButton>
       </div>
 
-      <div className="no-scrollbar min-h-0 grow overflow-y-auto">
+      <div
+        ref={scrollRef}
+        className="no-scrollbar min-h-0 grow overflow-y-auto"
+      >
         {tab === 'grade' ? <ViewPanel submission={submission} /> : null}
         {tab === 'teacher' ? (
           <GradingCommentsSidebar
@@ -142,7 +168,7 @@ export function RevisionFeedbackPanel({
         {tab === 'assistant' ? (
           <AssistantNotes
             grammarIssues={grammarIssues}
-            focusedGrammarIssueId={focusedGrammarIssueId}
+            focusedGrammarIssueId={focusedNoteId}
           />
         ) : null}
       </div>
@@ -208,6 +234,7 @@ function AssistantNotes({
         <li
           key={issue.id}
           data-testid={`revision-assistant-note-${issue.id}`}
+          {...{ [ASSISTANT_NOTE_ATTRIBUTE]: issue.id }}
           className={`p-3 ${
             issue.id === focusedGrammarIssueId ? 'bg-purple-50' : ''
           }`}

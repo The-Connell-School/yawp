@@ -47,6 +47,10 @@ import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import { redirectWithToast } from '~/utils/toast.server';
 import type { SyncStatus } from '~/utils/sync-service';
 
+import {
+  resolveClickedFeedback,
+  type FeedbackFocusRequest,
+} from './feedback-focus';
 import { RevisionFeedbackPanel } from './revision-feedback-panel';
 
 /**
@@ -227,6 +231,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   };
 }
 
+/** Hover tints the mark through the overlay's own CSS; nothing else. */
+const noopGrammarHover = () => {};
+
 export default function ReviseRoute() {
   const { submission, document } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
@@ -240,9 +247,20 @@ export default function ReviseRoute() {
   const [gradedEssayElement, setGradedEssayElement] =
     useState<HTMLDivElement | null>(null);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
-  const [focusedGrammarIssueId, setFocusedGrammarIssueId] = useState<
-    string | null
-  >(null);
+  const [focusRequest, setFocusRequest] = useState<FeedbackFocusRequest | null>(
+    null
+  );
+  const focusNonceRef = useRef(0);
+
+  const requestFeedbackFocus = useCallback(
+    (clicked: { kind: 'teacher' | 'assistant'; id: string } | null) => {
+      if (!clicked) return;
+      if (clicked.kind === 'teacher') setActiveCommentId(clicked.id);
+      focusNonceRef.current += 1;
+      setFocusRequest({ ...clicked, nonce: focusNonceRef.current });
+    },
+    []
+  );
 
   const auth = useAuthHeartbeat({ documentId: document.id, isEditable: true });
 
@@ -303,10 +321,23 @@ export default function ReviseRoute() {
     [submission.comments, grammarIssues]
   );
 
-  const handleGrammarIssueHover = useCallback((ids: string[]) => {
-    if (ids.length === 0) return;
-    setFocusedGrammarIssueId(ids[0]);
-  }, []);
+  const handleCommentMarkClick = useCallback(
+    (commentId: string) => {
+      requestFeedbackFocus(
+        resolveClickedFeedback({ commentId, grammarIssueIds: [] })
+      );
+    },
+    [requestFeedbackFocus]
+  );
+
+  const handleGrammarMarkClick = useCallback(
+    (grammarIssueIds: string[]) => {
+      requestFeedbackFocus(
+        resolveClickedFeedback({ commentId: null, grammarIssueIds })
+      );
+    },
+    [requestFeedbackFocus]
+  );
 
   const canSubmitRevision =
     editorSubmittable && !auth.isLocked && !submit.isSubmitting;
@@ -360,7 +391,7 @@ export default function ReviseRoute() {
               grammarIssues={grammarIssues}
               activeCommentId={activeCommentId}
               onSelectComment={setActiveCommentId}
-              focusedGrammarIssueId={focusedGrammarIssueId}
+              focusRequest={focusRequest}
             />
             <div className="flex min-w-0 grow flex-col overflow-hidden">
               <EssayPanel
@@ -372,11 +403,13 @@ export default function ReviseRoute() {
                   contentRoot={gradedEssayElement}
                   highlights={gradedHighlights}
                   activeGradeCommentId={activeCommentId}
-                  onGradeCommentSelect={setActiveCommentId}
-                  // Hovering an assistant mark opens the note that explains it
-                  // in the panel, which is where V2's revision tutor will read
-                  // from too.
-                  onGrammarIssueHover={handleGrammarIssueHover}
+                  // Clicking any mark opens the note behind it in the panel —
+                  // the panel is also where V2's revision tutor will read from.
+                  // Hover only tints the mark; it must not yank the panel open
+                  // as the student reads across the essay.
+                  onGradeCommentSelect={handleCommentMarkClick}
+                  onGrammarIssueHover={noopGrammarHover}
+                  onGrammarIssueSelect={handleGrammarMarkClick}
                 />
               ) : null}
             </div>

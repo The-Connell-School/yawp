@@ -169,6 +169,12 @@ type Props = {
   activeGradeCommentId: string | null;
   onGradeCommentSelect: (id: string) => void;
   onGrammarIssueHover: (ids: string[], rect: DOMRect | null) => void;
+  /**
+   * Optional: clicking an assistant mark. The grading view answers hovers with
+   * a tooltip and has no use for this; the revision view has no tooltip and
+   * opens the note in its feedback panel instead.
+   */
+  onGrammarIssueSelect?: (ids: string[]) => void;
 };
 
 export function GradeHighlightsOverlay({
@@ -177,6 +183,7 @@ export function GradeHighlightsOverlay({
   activeGradeCommentId,
   onGradeCommentSelect,
   onGrammarIssueHover,
+  onGrammarIssueSelect,
 }: Props) {
   // Store callbacks in refs so the mousemove effect never re-runs
   // due to callback identity changes.
@@ -184,6 +191,8 @@ export function GradeHighlightsOverlay({
   commentSelectRef.current = onGradeCommentSelect;
   const grammarHoverRef = useRef(onGrammarIssueHover);
   grammarHoverRef.current = onGrammarIssueHover;
+  const grammarSelectRef = useRef(onGrammarIssueSelect);
+  grammarSelectRef.current = onGrammarIssueSelect;
 
   // ── Effect 1: Build/rebuild DOM marks when highlights change ──────
   // This is the ONLY effect that touches the DOM structure.
@@ -232,9 +241,24 @@ export function GradeHighlightsOverlay({
       const mark = target?.closest(
         '[data-grade-comment-id]'
       ) as HTMLElement | null;
-      if (!mark) return;
-      const id = mark.getAttribute('data-grade-comment-id');
-      if (id) commentSelectRef.current(id);
+      const id = mark?.getAttribute('data-grade-comment-id');
+      if (id) {
+        commentSelectRef.current(id);
+        return;
+      }
+
+      const select = grammarSelectRef.current;
+      if (!select) return;
+      // A click can land inside several nested assistant marks; report them
+      // outward-in, the same order the hover path collects them.
+      const grammarIds: string[] = [];
+      let node: HTMLElement | null = target;
+      while (node && node !== contentRoot) {
+        const gid = node.getAttribute('data-grammar-issue-id');
+        if (gid && !grammarIds.includes(gid)) grammarIds.push(gid);
+        node = node.parentElement;
+      }
+      if (grammarIds.length > 0) select(grammarIds);
     };
 
     const onMouseMove = (event: MouseEvent) => {
