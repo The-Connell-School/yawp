@@ -1263,6 +1263,23 @@ describe('PR preview deployment contract', () => {
     }
   });
 
+  // The renderer is defined by the compose render but only runs if the deploy
+  // script starts it by name, the same way the Blackboard mock does. When it
+  // did not, the studio rendered its UI and every job stayed QUEUED.
+  test('preview deploy starts the marketing renderer when compose defines it', () => {
+    const compose = readRepoFile('scripts/preview/render-compose.mjs');
+    const deploy = readRepoFile('scripts/preview/deploy.sh');
+
+    expect(compose).toContain('rendererService');
+    expect(deploy).toContain('start_marketing_renderer_if_present');
+    expect(deploy).toContain('up -d --force-recreate renderer');
+    // Started from the same place the web container is refreshed, so a preview
+    // that gets a web container gets its renderer too.
+    expect(deploy).toMatch(
+      /refresh_web_container_if_needed\(\)\s*\{[\s\S]*?start_marketing_renderer_if_present[\s\S]*?\n\}/
+    );
+  });
+
   test('preview compose starts the Blackboard LTI mock as a sibling service', () => {
     const compose = readRepoFile('scripts/preview/render-compose.mjs');
     const deploy = readRepoFile('scripts/preview/deploy.sh');
