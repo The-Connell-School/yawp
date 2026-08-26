@@ -48,7 +48,10 @@ function makeRequest(
 const gbaDocument = {
   id: 'doc-1',
   membershipId: 'profile-1',
-  assignmentType: { rubric: { name: GBA300_EXPANSION_RUBRIC_NAME } },
+  assignmentType: {
+    allowsImageUploads: false,
+    rubric: { name: GBA300_EXPANSION_RUBRIC_NAME },
+  },
 };
 
 describe('api.document.$id.image', () => {
@@ -112,7 +115,7 @@ describe('api.document.$id.image', () => {
   test('refuses an assignment type outside the rollout', async () => {
     prisma.document.findFirst.mockResolvedValue({
       ...gbaDocument,
-      assignmentType: { rubric: { name: 'thesis-driven-essay' } },
+      assignmentType: { allowsImageUploads: false, rubric: { name: 'thesis-driven-essay' } },
     });
 
     const response = await action({
@@ -124,6 +127,22 @@ describe('api.document.$id.image', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ ok: false, reason: 'not-enabled' });
     expect(prisma.documentImage.create).not.toHaveBeenCalled();
+  });
+
+  test('accepts an assignment type that opted in without a linked rubric', async () => {
+    prisma.document.findFirst.mockResolvedValue({
+      ...gbaDocument,
+      assignmentType: { allowsImageUploads: true, rubric: null },
+    });
+
+    const response = await action({
+      request: makeRequest('doc-1'),
+      params: { id: 'doc-1' },
+      context: {} as never,
+    } as never);
+
+    expect(response.status).toBe(200);
+    expect(prisma.documentImage.create).toHaveBeenCalled();
   });
 
   test('refuses everything once the kill switch is set', async () => {

@@ -56,14 +56,32 @@ const DOCUMENT_IMAGE_SRC_PREFIX = '/api/image/document/';
  */
 export const DOCUMENT_IMAGE_KILL_SWITCH_ENV = 'DOCUMENT_IMAGE_UPLOAD_DISABLED';
 
+/**
+ * Two signals, either of which opens the feature for a document:
+ *
+ * - `allowsImageUploads` on the assignment type. This is the one that carries
+ *   the rollout: production's GBA 300 expansion assignment type stores its
+ *   rubric inline as JSON with no linked Rubric row and no systemKey, so the
+ *   rubric name is not available there at all. The column is backfilled to
+ *   true for that one row and defaults false everywhere else.
+ * - the assignment type's linked rubric name. This covers assignment types
+ *   built from the rubric library, where the GBA expansion rubric *is* a
+ *   Rubric row, so a teacher who spins up a fresh copy of the course gets the
+ *   feature without anyone touching the database.
+ *
+ * The env kill switch overrides both.
+ */
 export function isDocumentImageUploadEnabled({
   rubricName,
+  allowsImageUploads,
   killSwitch,
 }: {
-  rubricName: string | null | undefined;
+  rubricName?: string | null;
+  allowsImageUploads?: boolean | null;
   killSwitch?: string | null;
 }): boolean {
   if (killSwitch?.trim().toLowerCase() === 'true') return false;
+  if (allowsImageUploads === true) return true;
   if (!rubricName) return false;
   return DOCUMENT_IMAGE_ENABLED_RUBRIC_NAMES.includes(rubricName);
 }

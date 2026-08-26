@@ -35,7 +35,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     where: { id: params.id, membershipId: profile.id, deletedAt: null },
     select: {
       id: true,
-      assignmentType: { select: { rubric: { select: { name: true } } } },
+      assignmentType: {
+        select: { allowsImageUploads: true, rubric: { select: { name: true } } },
+      },
     },
   });
 
@@ -43,6 +45,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const enabled = isDocumentImageUploadEnabled({
     rubricName: document.assignmentType?.rubric?.name ?? null,
+    allowsImageUploads: document.assignmentType?.allowsImageUploads ?? false,
     killSwitch: process.env[DOCUMENT_IMAGE_KILL_SWITCH_ENV],
   });
   if (!enabled) return json({ ok: false, reason: 'not-enabled' }, 403);

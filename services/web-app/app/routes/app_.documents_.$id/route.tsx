@@ -238,6 +238,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          allowsImageUploads: true,
           rubric: { select: { name: true } },
         },
       },
@@ -447,6 +448,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       isOwner &&
       isDocumentImageUploadEnabled({
         rubricName: doc.assignmentType?.rubric?.name ?? null,
+        allowsImageUploads: doc.assignmentType?.allowsImageUploads ?? false,
         killSwitch: process.env[DOCUMENT_IMAGE_KILL_SWITCH_ENV],
       }),
     canSelfUnsubmit:

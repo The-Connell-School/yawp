@@ -31,6 +31,29 @@ describe('isDocumentImageUploadEnabled', () => {
     expect(isDocumentImageUploadEnabled({ rubricName: undefined })).toBe(false);
   });
 
+  test('enables uploads for an assignment type that opted in directly', () => {
+    // Production's GBA 300 expansion assignment type has no linked Rubric row,
+    // so the column is the signal that actually carries the rollout.
+    expect(
+      isDocumentImageUploadEnabled({ rubricName: null, allowsImageUploads: true })
+    ).toBe(true);
+  });
+
+  test('leaves an assignment type that has not opted in alone', () => {
+    expect(
+      isDocumentImageUploadEnabled({
+        rubricName: 'thesis-driven-essay',
+        allowsImageUploads: false,
+      })
+    ).toBe(false);
+  });
+
+  test('the kill switch overrides a direct opt-in too', () => {
+    expect(
+      isDocumentImageUploadEnabled({ allowsImageUploads: true, killSwitch: 'true' })
+    ).toBe(false);
+  });
+
   test('the kill switch turns the feature off even for the GBA expansion rubric', () => {
     expect(
       isDocumentImageUploadEnabled({

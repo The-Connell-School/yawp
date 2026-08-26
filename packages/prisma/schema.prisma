@@ -81,6 +81,10 @@ model AssignmentType {
   gradingAssistantVersion            Int                           @default(1)
   gradingAssistantSourceTemplateId   String?
   gradingAssistantSourceTemplateSlug String?
+  /// Opt-in for student-uploaded figures (charts, graphs, logos) in the
+  /// document editor. Defaults off, so every assignment type that exists today
+  /// keeps the toolbar it has today.
+  allowsImageUploads                 Boolean                       @default(false)
   image                              AssignmentTypeImage?
   organizationAssignments            OrganizationAssignmentType[]
   schoolAssignments                  SchoolAssignmentType[]
