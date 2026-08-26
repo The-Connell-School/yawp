@@ -3,6 +3,8 @@ import {
   isDocumentImageSrc,
   normalizeAltText,
 } from '~/domain/document-images/document-images';
+import { USER_SOURCE_META } from './source-tracker';
+import { TOOLBAR_SOURCE } from '../use-pm-tripwire';
 
 export const DOCUMENT_IMAGE_SIZES = ['full', 'half'] as const;
 export type DocumentImageSize = (typeof DOCUMENT_IMAGE_SIZES)[number];
@@ -113,8 +115,12 @@ export const DocumentImage = Node.create({
     return {
       insertDocumentImage:
         ({ src, alt, size }) =>
-        ({ commands }) => {
+        ({ commands, tr }) => {
           if (!isDocumentImageSrc(src)) return false;
+          // The toolbar lives outside the editor DOM, so SourceTracker never
+          // sees the click that caused this. Say who we are, or the PM
+          // tripwire logs every inserted figure as an unauthorized write.
+          tr.setMeta(USER_SOURCE_META, TOOLBAR_SOURCE);
           return commands.insertContent({
             type: this.name,
             attrs: { src, alt: normalizeAltText(alt ?? ''), size: coerceSize(size) },
@@ -122,8 +128,10 @@ export const DocumentImage = Node.create({
         },
       setDocumentImageSize:
         (size) =>
-        ({ commands }) =>
-          commands.updateAttributes(this.name, { size: coerceSize(size) }),
+        ({ commands, tr }) => {
+          tr.setMeta(USER_SOURCE_META, TOOLBAR_SOURCE);
+          return commands.updateAttributes(this.name, { size: coerceSize(size) });
+        },
     };
   },
 });

@@ -10,6 +10,9 @@ import { describe, it, expect, beforeEach } from 'bun:test';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { DocumentImage } from './document-image';
+import { SourceTracker, USER_SOURCE_META } from './source-tracker';
+import { TOOLBAR_SOURCE } from '../use-pm-tripwire';
+import { checkPmTransaction } from '../use-pm-tripwire';
 
 describe('DocumentImage extension', () => {
   let editor: Editor;
@@ -34,6 +37,33 @@ describe('DocumentImage extension', () => {
     expect(html).toContain(
       '<figcaption>Ten-year revenue for the global market</figcaption>'
     );
+  });
+
+  it('tags its insert as a toolbar edit so the PM tripwire stays quiet', () => {
+    const tripwireEditor = new Editor({
+      extensions: [StarterKit, SourceTracker, DocumentImage],
+      content: '<p></p>',
+    });
+
+    const violations: string[] = [];
+    tripwireEditor.on('transaction', ({ transaction }) => {
+      const violation = checkPmTransaction(transaction);
+      if (violation) violations.push(violation);
+    });
+
+    let seenSource: unknown = null;
+    tripwireEditor.on('transaction', ({ transaction }) => {
+      if (transaction.docChanged) seenSource = transaction.getMeta(USER_SOURCE_META);
+    });
+
+    tripwireEditor.commands.insertDocumentImage({
+      src: '/api/image/document/img-8',
+      alt: 'Revenue by year',
+    });
+
+    expect(seenSource).toBe(TOOLBAR_SOURCE);
+    expect(violations).toEqual([]);
+    tripwireEditor.destroy();
   });
 
   it('refuses to insert a figure that is not served from our own endpoint', () => {
