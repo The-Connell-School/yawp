@@ -23,6 +23,13 @@ const {
 
 afterAll(() => {
   mock.restore();
+  // mock.restore() does not undo mock.module, and this file's stub is global to
+  // the whole run — so put the real module back for everyone after it, or the
+  // document write path silently keeps a two-export stub. See test-preload.ts.
+  mock.module(
+    '~/domain/documents.server',
+    () => globalThis.__realModules['~/domain/documents.server']
+  );
 });
 
 const classAssignmentWithGroups = (

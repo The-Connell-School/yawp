@@ -111,6 +111,16 @@ if (isWebAppTestFile()) {
     '~/domain/assignments/collaboration': await snapshot(
       '~/domain/assignments/collaboration'
     ),
+    // main's class-insight generation test stubs these two wholesale with no
+    // restore of its own; the assignment-insights route test needs both real,
+    // or its action never reaches the LLM it is asserting on.
+    '~/domain/assignment-insights/class-insight-synthesis.server': await snapshot(
+      '~/domain/assignment-insights/class-insight-synthesis.server'
+    ),
+    '~/domain/assignment-types/assignment-type-grading-config.server':
+      await snapshot(
+        '~/domain/assignment-types/assignment-type-grading-config.server'
+      ),
     '~/domain/documents.server': await snapshot('~/domain/documents.server'),
   };
 }
