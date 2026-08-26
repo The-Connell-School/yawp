@@ -10,6 +10,7 @@ import { useCommentsSelection } from '../comments/selection-context';
 import { Bar } from './editor-bar';
 import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
+import { DocumentImage } from './extensions/document-image';
 import { EmDash } from './extensions/em-dash';
 import { LineHeight } from './extensions/line-height';
 import { TabIndent } from './extensions/tab-indent';
@@ -44,6 +45,7 @@ const extensions = [
   SourceTracker,
   PastedSource,
   EmDash,
+  DocumentImage,
 ];
 
 type Props = {
@@ -51,6 +53,7 @@ type Props = {
   initialHtml: string;
   initialRevision: number;
   isEditable: boolean;
+  canUploadImages?: boolean;
   onBridgeReady: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: SyncStatus) => void;
   onSubmittableContentChange?: (submittable: boolean) => void;
@@ -63,6 +66,7 @@ export function Editor({
   initialHtml,
   initialRevision,
   isEditable,
+  canUploadImages = false,
   onBridgeReady,
   onSyncStatusChange,
   onSubmittableContentChange,
@@ -195,6 +199,7 @@ export function Editor({
             editor={editor}
             documentId={docId}
             isEditable={isEditable}
+            canUploadImages={canUploadImages}
             onCommentCreated={onCommentCreated}
           />
         ) : null}
