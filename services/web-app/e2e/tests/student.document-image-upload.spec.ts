@@ -62,6 +62,13 @@ async function dispatchFiles(
 }
 
 test.describe.serial('Student image upload (GBA 300 expansion report)', () => {
+  test.beforeEach(() => {
+    // Every test here signs in, opens the document editor, and round-trips at
+    // least one upload through the server. The 30s default does not cover
+    // that on a cold runner.
+    test.setTimeout(120_000);
+  });
+
   test('a student uploads a figure and it survives a reload', async ({
     page,
     signIn,
@@ -89,9 +96,12 @@ test.describe.serial('Student image upload (GBA 300 expansion report)', () => {
     await expect(figure).toHaveAttribute('src', /^\/api\/image\/document\//);
     await expect(page.locator('figure.document-image figcaption')).toHaveText(CHART_ALT);
 
-    // Let the sync service flush, then prove the figure came back from the
-    // server rather than from the editor's in-memory document.
-    await page.waitForTimeout(3000);
+    // Wait for the save to actually land rather than sleeping a fixed
+    // interval, then prove the figure came back from the server instead of
+    // from the editor's in-memory document.
+    await expect(page.getByText('Saved', { exact: true })).toBeVisible({
+      timeout: 30000,
+    });
     await page.reload();
     await page.waitForSelector('figure.document-image img', { timeout: 30000 });
 

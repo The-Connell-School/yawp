@@ -440,10 +440,33 @@ export async function seedE2E(): Promise<E2EContext> {
   const imageUploadAssignmentType = await prisma.assignmentType.create({
     data: {
       title: 'E2E Expansion Report',
+      description: 'Report-style assignment whose students may upload figures.',
       position: 5,
       ownerOrgId: org.id,
       allowsImageUploads: true,
       organizationAssignments: { create: { organizationId: org.id } },
+      // A module is not optional decoration: the document route redirects a
+      // document whose assignment type has no active modules straight back to
+      // /app, so a type seeded without one can never open its editor.
+      assignmentModules: {
+        create: [
+          {
+            title: 'Industry Analysis',
+            position: 1,
+            description: 'Analyze the industry and support it with graphics.',
+            instructions: {
+              create: [
+                {
+                  title: 'Draft the section',
+                  prompt: 'Write the industry analysis and add your graphics.',
+                  position: 1,
+                  showChatButton: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
     },
     select: { id: true },
   });
