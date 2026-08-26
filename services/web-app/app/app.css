@@ -233,8 +233,23 @@ figure.document-image img {
 figure.document-image[data-size='half'] {
   @apply mx-auto w-1/2;
 }
+/* w-full matters: the figure is a centering flex column, so a caption sized to
+   its content is zero-width while empty -- invisible, and impossible to click
+   into. Full width plus a min height keeps the empty caption a real target. */
 figure.document-image figcaption {
-  @apply text-muted-foreground text-center text-sm italic;
+  @apply text-muted-foreground min-h-[1.5rem] w-full text-center text-sm italic;
+}
+/* A pasted or dropped figure lands with no caption. Prompt for one rather than
+   leaving an unexplained blank line under the image -- the caption is also the
+   alt text, so an empty one is an accessibility gap, not just a cosmetic one.
+   ProseMirror parks a trailing <br> inside an empty block, so :empty alone
+   never matches inside the editor. */
+.tiptap figure.document-image figcaption:empty::before,
+.tiptap
+  figure.document-image
+  figcaption:has(> br.ProseMirror-trailingBreak:only-child)::before {
+  content: 'Describe this image…';
+  @apply text-muted-foreground/50;
 }
 figure.document-image.ProseMirror-selectednode img {
   @apply ring-primary ring-2 ring-offset-2;

@@ -116,7 +116,7 @@ export function DocumentImageButton({ editor, documentId }: Props) {
 
   return (
     <>
-      <Tooltip text="Add image" delayDuration={300}>
+      <Tooltip text="Add image (or paste / drag one in)" delayDuration={300}>
         <div
           data-testid="editor-add-image"
           role="button"
@@ -156,7 +156,8 @@ export function DocumentImageButton({ editor, documentId }: Props) {
             <DialogTitle>Add an image</DialogTitle>
             <DialogDescription>
               Charts, graphs, photos, and logos you made elsewhere. PNG, JPEG, GIF, or
-              WebP, up to {MAX_MB} MB.
+              WebP, up to {MAX_MB} MB. You can also paste a screenshot or drag an image
+              straight into your report.
             </DialogDescription>
           </DialogHeader>
 

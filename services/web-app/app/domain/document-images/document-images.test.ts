@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  carriesFiles,
+  filesFromDataTransfer,
   DOCUMENT_IMAGE_ALLOWED_CONTENT_TYPES,
   DOCUMENT_IMAGE_MAX_BYTES,
   GBA300_EXPANSION_RUBRIC_NAME,
@@ -176,5 +178,36 @@ describe('document image src round-tripping', () => {
   test('parses the image id back out of a src', () => {
     expect(parseDocumentImageId('/api/image/document/img-1')).toBe('img-1');
     expect(parseDocumentImageId('https://evil.example.com/x.png')).toBe(null);
+  });
+});
+
+describe('filesFromDataTransfer', () => {
+  const png = new File([new Uint8Array([1])], 'chart.png', { type: 'image/png' });
+  const txt = new File([new Uint8Array([1])], 'notes.txt', { type: 'text/plain' });
+
+  test('returns the files a paste or drop carries', () => {
+    expect(filesFromDataTransfer({ files: [png, txt] })).toEqual([png, txt]);
+  });
+
+  test('returns non-image files too, so the student gets a real error', () => {
+    // A dropped PDF must produce "that format is not supported", not silence.
+    expect(filesFromDataTransfer({ files: [txt] })).toEqual([txt]);
+  });
+
+  test('is empty for a paste carrying no files', () => {
+    expect(filesFromDataTransfer({ files: [] })).toEqual([]);
+    expect(filesFromDataTransfer({})).toEqual([]);
+    expect(filesFromDataTransfer(null)).toEqual([]);
+    expect(filesFromDataTransfer(undefined)).toEqual([]);
+  });
+});
+
+describe('carriesFiles', () => {
+  test('is true only when there is at least one file to handle', () => {
+    const png = new File([new Uint8Array([1])], 'chart.png', { type: 'image/png' });
+    expect(carriesFiles({ files: [png] })).toBe(true);
+    // Plain text paste: must fall through to the editor untouched.
+    expect(carriesFiles({ files: [] })).toBe(false);
+    expect(carriesFiles(null)).toBe(false);
   });
 });

@@ -174,3 +174,30 @@ export function parseDocumentImageId(src: string | null | undefined): string | n
   if (!/^[A-Za-z0-9_-]+$/.test(id)) return null;
   return id;
 }
+
+/**
+ * The files carried by a paste or a drop.
+ *
+ * Returns every file, not only the ones with an image media type: a student
+ * who drops a PDF of their chart should be told the format is wrong, not have
+ * the drop silently do nothing. Validation decides what is acceptable; this
+ * only decides whether we are the ones handling the event at all.
+ */
+export function filesFromDataTransfer(
+  data: { files?: ArrayLike<File> | null } | null | undefined
+): File[] {
+  if (!data?.files) return [];
+  return Array.from(data.files as ArrayLike<File>);
+}
+
+/**
+ * Whether a paste or drop is one this feature should intercept.
+ *
+ * A paste carrying no files at all is ordinary text or HTML and must fall
+ * through to the editor's normal handling untouched.
+ */
+export function carriesFiles(
+  data: { files?: ArrayLike<File> | null } | null | undefined
+): boolean {
+  return filesFromDataTransfer(data).length > 0;
+}
