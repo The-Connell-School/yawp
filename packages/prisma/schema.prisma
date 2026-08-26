@@ -390,11 +390,34 @@ model Document {
   pasteAlerts              PasteAlert[]
   revisions                DocumentRevision[]
   submissions              Submission[]
+  images                   DocumentImage[]
 
   @@index([assignmentId])
   @@index([classAssignmentId])
   @@index([assignmentTypeId])
   @@index([membershipId])
+}
+
+/// Student-uploaded figures (charts, photos, logos) embedded in a document.
+///
+/// Stored as a Postgres blob for the same reason AssignmentTypeImage is: the
+/// only S3 bucket this app has is the videos bucket, and adding a new bucket
+/// plus lifecycle rules is infrastructure work this feature does not need at
+/// its current size cap. Serving goes through /api/image/document/:id so a
+/// document's figures inherit the document's own authorization.
+model DocumentImage {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  deletedAt   DateTime? @db.Timestamptz(6)
+  altText     String
+  contentType String
+  byteSize    Int
+  blob        Bytes
+  documentId  String
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
 }
 
 model DocumentClassForensic {
