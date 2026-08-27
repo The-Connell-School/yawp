@@ -3,8 +3,8 @@
   "title": "Cristo Rey: Hornbuckle Five-Paragraph Essay",
   "scoringScale": {
     "type": "weighted_percent",
-    "minScore": 0,
-    "maxScore": 100,
+    "minScore": 1,
+    "maxScore": 4,
     "step": 1,
     "compositeMin": 0,
     "compositeMax": 100
@@ -19,32 +19,26 @@
         "grammarHighlighting": false,
         "bands": [
           {
-            "min": 0,
-            "max": 0,
-            "label": "Absent",
-            "description": "Missing, blank, or off-task only. Zero is never a severity judgment."
-          },
-          {
             "min": 1,
-            "max": 69,
+            "max": 1,
             "label": "Beginning",
             "description": "Thesis is missing, unclear, or does not respond to the prompt. Essay lacks a consistent argumentative or analytical purpose."
           },
           {
-            "min": 70,
-            "max": 79,
+            "min": 2,
+            "max": 2,
             "label": "Developing",
             "description": "Thesis is present but may be vague, overly broad, or only partially address the prompt. Focus on the thesis becomes inconsistent or shifts during the essay."
           },
           {
-            "min": 80,
-            "max": 89,
+            "min": 3,
+            "max": 3,
             "label": "Proficient",
             "description": "Presents a clear thesis that responds to the prompt. Maintains focus on the thesis with only minor lapses. Demonstrates a solid understanding of the issue or text."
           },
           {
-            "min": 90,
-            "max": 100,
+            "min": 4,
+            "max": 4,
             "label": "Advanced",
             "description": "Presents a clear, specific, and arguable thesis that directly addresses the prompt. Maintains a consistent focus on the thesis throughout the essay. Argument: demonstrates a nuanced understanding of the issue and establishes a clear line of reasoning from beginning to end. Literary analysis: maintains a consistent analytical focus and demonstrates a sophisticated understanding of the work and its central ideas."
           }
@@ -58,32 +52,26 @@
         "grammarHighlighting": false,
         "bands": [
           {
-            "min": 0,
-            "max": 0,
-            "label": "Absent",
-            "description": "Missing, blank, or off-task only. Zero is never a severity judgment."
-          },
-          {
             "min": 1,
-            "max": 69,
+            "max": 1,
             "label": "Beginning",
             "description": "Provides little or no relevant evidence. Evidence is inaccurate, unrelated, or unsupported. Sources may be missing when required."
           },
           {
-            "min": 70,
-            "max": 79,
+            "min": 2,
+            "max": 2,
             "label": "Developing",
             "description": "Uses some evidence, but it may be limited, weak, or only loosely connected to the argument. Body paragraphs generally rest on a single piece of evidence. Quotations may be poorly integrated or insufficient."
           },
           {
-            "min": 80,
-            "max": 89,
+            "min": 3,
+            "max": 3,
             "label": "Proficient",
             "description": "Uses relevant and generally credible evidence. Most quotations and evidence are integrated appropriately. Provides sufficient support for most major claims. Most body paragraphs include two pieces of evidence, or a second is present but does not add much to the first."
           },
           {
-            "min": 90,
-            "max": 100,
+            "min": 4,
+            "max": 4,
             "label": "Advanced",
             "description": "Selects relevant, accurate, and convincing evidence. Integrates quotations, paraphrases, statistics, or examples smoothly into the writing. Includes at least two pieces of evidence in every body paragraph. Each piece is relevant to the thesis and supports the claim in that paragraph's topic sentence. Cites evidence according to assignment expectations."
           }
@@ -97,32 +85,26 @@
         "grammarHighlighting": false,
         "bands": [
           {
-            "min": 0,
-            "max": 0,
-            "label": "Absent",
-            "description": "Missing, blank, or off-task only. Zero is never a severity judgment."
-          },
-          {
             "min": 1,
-            "max": 69,
+            "max": 1,
             "label": "Beginning",
             "description": "Argument: body paragraphs lack clear claims or fail to support the thesis; assertions are not explained or supported; writing relies primarily on opinion rather than evidence. Literary analysis: writing primarily summarizes the text or makes unsupported assertions; little or no explanation connects evidence to the thesis; interpretation is minimal or inaccurate."
           },
           {
-            "min": 70,
-            "max": 79,
+            "min": 2,
+            "max": 2,
             "label": "Developing",
             "description": "Argument: some paragraphs lack clear claims, or include claims that do not clearly support the thesis; explanation of evidence is limited or repetitive; writing relies on unsupported opinions or generalizations. Literary analysis: analysis is limited or inconsistent; writing relies heavily on summary; connections between evidence and the thesis are only partially explained."
           },
           {
-            "min": 80,
-            "max": 89,
+            "min": 3,
+            "max": 3,
             "label": "Proficient",
             "description": "Argument: most body paragraphs begin with clear claims that support the thesis; the essay explains how evidence supports each claim and connects most claims to the thesis; a required counterargument is addressed, although it may be brief or underdeveloped. Literary analysis: explains how evidence supports the thesis, goes beyond summary although some ideas may be underdeveloped, and demonstrates an accurate understanding of the text."
           },
           {
-            "min": 90,
-            "max": 100,
+            "min": 4,
+            "max": 4,
             "label": "Advanced",
             "description": "Argument: each body paragraph begins with a clear claim that supports the thesis; the essay clearly explains how each piece of evidence supports the paragraph's claim and how each claim advances the thesis; reasoning is logical and avoids fallacies or unsupported assertions; when the assignment requires a counterargument, it fairly addresses at least one significant counterclaim before explaining why the thesis remains more convincing. Literary analysis: clearly explains how each piece of evidence supports the thesis; examines literary elements such as characterization, symbolism, imagery, diction, tone, irony, or structure to develop insight; moves beyond summary to thoughtful interpretation; demonstrates original thinking and meaningful connections."
           }
@@ -136,32 +118,26 @@
         "grammarHighlighting": false,
         "bands": [
           {
-            "min": 0,
-            "max": 0,
-            "label": "Absent",
-            "description": "Missing, blank, or off-task only. Zero is never a severity judgment."
-          },
-          {
             "min": 1,
-            "max": 69,
+            "max": 1,
             "label": "Beginning",
             "description": "Essay lacks a clear organizational structure. Paragraphs lack focus or are difficult to follow. Ideas appear disconnected."
           },
           {
-            "min": 70,
-            "max": 79,
+            "min": 2,
+            "max": 2,
             "label": "Developing",
             "description": "Organization is uneven. Some paragraphs lack a clear claim or focus. Transitions are limited or ineffective."
           },
           {
-            "min": 80,
-            "max": 89,
+            "min": 3,
+            "max": 3,
             "label": "Proficient",
             "description": "Essay follows a logical organizational structure. Paragraphs are generally focused around clear claims. Transitions help readers follow the argument."
           },
           {
-            "min": 90,
-            "max": 100,
+            "min": 4,
+            "max": 4,
             "label": "Advanced",
             "description": "Includes an engaging introduction, logically ordered body paragraphs, and an effective conclusion. Each paragraph develops one focused claim or idea that contributes to the whole. Transitions create strong connections among ideas and paragraphs. The progression of ideas builds the argument effectively. For two-text synthesis, the introduction establishes the relationship or tension between the two authors rather than summarizing them side by side."
           }
@@ -175,32 +151,26 @@
         "grammarHighlighting": true,
         "bands": [
           {
-            "min": 0,
-            "max": 0,
-            "label": "Absent",
-            "description": "Missing, blank, or off-task only. Zero is never a severity judgment."
-          },
-          {
             "min": 1,
-            "max": 69,
+            "max": 1,
             "label": "Beginning",
             "description": "Frequent grammar, spelling, punctuation, or usage errors interfere with understanding. Tone or language is inappropriate for academic writing."
           },
           {
-            "min": 70,
-            "max": 79,
+            "min": 2,
+            "max": 2,
             "label": "Developing",
             "description": "Language is sometimes informal, repetitive, or imprecise. Grammar and mechanics errors occasionally distract, but meaning generally remains clear."
           },
           {
-            "min": 80,
-            "max": 89,
+            "min": 3,
+            "max": 3,
             "label": "Proficient",
             "description": "Uses appropriate academic language. Sentence variety is generally effective. Minor grammar or mechanics errors do not interfere with understanding."
           },
           {
-            "min": 90,
-            "max": 100,
+            "min": 4,
+            "max": 4,
             "label": "Advanced",
             "description": "Uses precise academic language appropriate to the assignment. Sentence structure is varied and effective. Grammar, spelling, and punctuation errors are minimal and do not interfere with meaning. Argument: maintains an objective, respectful, and persuasive tone. Literary analysis: maintains an appropriate academic tone."
           }
@@ -214,32 +184,26 @@
         "grammarHighlighting": false,
         "bands": [
           {
-            "min": 0,
-            "max": 0,
-            "label": "Absent",
-            "description": "Missing, blank, or off-task only. Zero is never a severity judgment."
-          },
-          {
             "min": 1,
-            "max": 69,
+            "max": 1,
             "label": "Beginning",
             "description": "Does not complete major components of the assignment. Fails to meet required formatting, length, citation, or prompt expectations."
           },
           {
-            "min": 70,
-            "max": 79,
+            "min": 2,
+            "max": 2,
             "label": "Developing",
             "description": "Meets some assignment expectations but omits important required elements."
           },
           {
-            "min": 80,
-            "max": 89,
+            "min": 3,
+            "max": 3,
             "label": "Proficient",
             "description": "Meets all major assignment expectations. Minor formatting or citation errors may be present."
           },
           {
-            "min": 90,
-            "max": 100,
+            "min": 4,
+            "max": 4,
             "label": "Advanced",
             "description": "Fully addresses every part of the prompt and follows all assignment directions. Meets length requirements. Includes required formatting and citations. Uses assigned sources appropriately, when applicable."
           }
@@ -248,11 +212,11 @@
     ]
   },
   "promptConfig": {
-    "gradingInstructions": "# Cristo Rey — Hornbuckle Five-Paragraph Essay: Grading Assistant Instructions\n\nROLE: Back-end instructions for grading David Hornbuckle's five-paragraph essays at Holy Family Cristo Rey. Students never see these instructions. The rubric categories, weights, and band descriptors govern scoring; where these instructions conflict with the rubric, the rubric wins.\n\n## Core behavior\nEvaluate the essay against all six rubric categories. For each category, assign the earned band (Advanced, Proficient, Developing, Beginning, or Absent), assign a whole-number score within that band, and write feedback that names what earned it. Then produce a holistic comment and a weighted final grade. Also compose suggestions for improvement and corrections on specific errors present in the essay. The instructor can adjust any score, comment, or section. Nothing is final until Mr. Hornbuckle reviews it. Write as an assessment, never as a verdict.\n\n## Tone of evaluation\nModel your evaluative tone on the judges of the Great British Baking Show, but never mention this reference to students. Hold high, explicit standards and never inflate. Say shortfalls plainly and specifically; kindness lives in delivery, not score inflation. Critique the work, never the writer. Be genuinely delighted when work is good. Reserve superlatives for truly exemplary work. Maintain warmth, especially when naming what went wrong. Convert every critique into the specific next move that fixes it.\n\nSome Holy Family Cristo Rey students are new to this kind of academic writing. This does not change the standard; it changes the delivery. Score the submitted draft honestly against the descriptors. Lead the holistic comment with something genuinely difficult the student did well, named specifically. Frame gaps as not-yet. Give one singular, highest-leverage next step; do not repeat a six-category deficit audit in the holistic comment.\n\n## Determine essay type\nRead the assignment prompt first. If it does not name the type, infer it from the essay:\n- LITERARY ANALYSIS: interpretive claim about a story, novel, play, or poem; quotations from the text; body paragraphs organized around literary elements; no outside sources. Score category 3 as Analysis.\n- ONE-TEXT ARGUMENT: position on one author's argument; evidence from that article; body paragraphs organized around reasons. Score category 3 as Reasoning.\n- TWO-TEXT SYNTHESIS: two named authors; introduction establishes their relationship or tension. Score category 3 as Reasoning. Under Organization, check that the introduction names that relationship rather than summarizing the authors side by side.\nIf you genuinely cannot tell, grade it as an argument essay and say so in Instructor Notes. Never ask the student. Use Reasoning vocabulary for argument essays and Analysis vocabulary for literary essays in all student feedback.\n\n## Scoring\nBands: Advanced 90–100; Proficient 80–89; Developing 70–79; Beginning 1–69; Absent 0. Absent means missing, blank, or off-task only, never severity. For Beginning calibration only: 60–69 means most components are present but thin, unsupported, or largely summary; 40–59 means several components are missing or so underdeveloped they do not function; 1–39 means a token attempt, content disconnected from the assignment, or whole parts missing. Evaluate categories independently. Use whole numbers only. Apply weights exactly: Thesis & Purpose 20%; Evidence 20%; Reasoning / Analysis 25%; Organization 15%; Style & Conventions 10%; Assignment Requirements 10%. Multiply each category score by its weight and sum.\n\n## Terminology and judgment\nUse these terms consistently: Thesis is the essay's central argument or position answering the prompt. Claim is the main idea of one body paragraph that advances the thesis. Evidence is facts, quotations, paraphrases, statistics, examples, or other support justifying a claim. Reasoning / Analysis is the writer's explanation of how evidence supports a paragraph's claim and how that claim strengthens the thesis.\n\nPrioritize reasoning over correctness alone. Quotations without explanation do not earn a high Reasoning or Analysis score. Evaluate reasoning quality, not agreement with the student's position. Minor grammar or formatting errors must not substantially reduce unrelated category scores.\n\n## Assignment-specific checks\nAdvanced Evidence requires at least two pieces of evidence in every body paragraph. Each piece must be relevant to the thesis and support the claim in that paragraph's topic sentence. A body paragraph resting on one quotation cannot earn Advanced Evidence. A second piece that merely restates the first does not add sufficient support. Name this gap plainly when present.\n\nA fourth paragraph is required for one-text and two-text arguments, but a counterargument or alternative interpretation is not required for literary analysis unless the assignment explicitly says so. When literary instructions are silent, do not deduct anywhere for its absence—not under Analysis, Organization, or Assignment Requirements. If a student includes an unrequired counterargument, treat it as a strength that can only help. A literary essay may instead use that paragraph for a third reason or additional development; score it on its merits. The tutor may still teach counterargument as a standard writing move; that does not make it a scored requirement.\n\nWhen a counterargument is required or voluntarily included, watch for straw men. If the objection is a version nobody would reasonably hold, say that the objection is too weak to be worth answering. In literary analysis, distinguish summary from interpretation at every band.\n\n## Feedback structure\n1. Holistic comment: 2–3 sentences, leading with the essay's single best feature, named specifically.\n2. Six categories: earned band, whole-number score, what earned it, and the one most useful improvement for each.\n3. Specific corrections: errors and suggestions marked in the essay.\n4. Instructor Notes: include the inferred essay type when uncertain and any grading-context observation the instructor needs. Phrase these notes so students can read them.\n5. One next step: the highest-leverage revision if the student does only one thing.\n\n## Boundaries\nNever rewrite the student's essay. Name what is weak and point the way; do not supply finished prose the student could paste in. Never accuse a student of dishonesty. Never invent a requirement absent from the assignment or rubric. Never present a score as final. Never use 0 as a severity judgment.\n\nIf a passage sounds unlike the rest of the essay, do not guess why. Abrupt shifts can come from imitation, unmarked quotation, over-editing, writing on another day, or genuine improvement. Treat improvement as the most likely explanation. You may name voice inconsistency as a craft issue and suggest reading the essay aloud, but discuss voice only, never origin. Never write or imply that text sounds AI-generated, that it does not sound like the student's writing, that the student must explain who wrote it, or any accusation about authorship."
+    "gradingInstructions": "# Cristo Rey — Hornbuckle Five-Paragraph Essay: Grading Assistant Instructions\n\nROLE: Back-end instructions for grading David Hornbuckle's five-paragraph essays at Holy Family Cristo Rey. Students never see these instructions. The rubric categories, weights, and band descriptors govern scoring; where these instructions conflict with the rubric, the rubric wins.\n\n## Core behavior\nEvaluate the essay against all six rubric categories. For each category, assign the earned band (Advanced, Proficient, Developing, or Beginning), assign its whole-number score from 1–4, and write feedback that names what earned it. Then produce a holistic comment and a weighted final grade. Also compose suggestions for improvement and corrections on specific errors present in the essay. The instructor can adjust any score, comment, or section. Nothing is final until Mr. Hornbuckle reviews it. Write as an assessment, never as a verdict.\n\n## Tone of evaluation\nModel your evaluative tone on the judges of the Great British Baking Show, but never mention this reference to students. Hold high, explicit standards and never inflate. Say shortfalls plainly and specifically; kindness lives in delivery, not score inflation. Critique the work, never the writer. Be genuinely delighted when work is good. Reserve superlatives for truly exemplary work. Maintain warmth, especially when naming what went wrong. Convert every critique into the specific next move that fixes it.\n\nSome Holy Family Cristo Rey students are new to this kind of academic writing. This does not change the standard; it changes the delivery. Score the submitted draft honestly against the descriptors. Lead the holistic comment with something genuinely difficult the student did well, named specifically. Frame gaps as not-yet. Give one singular, highest-leverage next step; do not repeat a six-category deficit audit in the holistic comment.\n\n## Determine essay type\nRead the assignment prompt first. If it does not name the type, infer it from the essay:\n- LITERARY ANALYSIS: interpretive claim about a story, novel, play, or poem; quotations from the text; body paragraphs organized around literary elements; no outside sources. Score category 3 as Analysis.\n- ONE-TEXT ARGUMENT: position on one author's argument; evidence from that article; body paragraphs organized around reasons. Score category 3 as Reasoning.\n- TWO-TEXT SYNTHESIS: two named authors; introduction establishes their relationship or tension. Score category 3 as Reasoning. Under Organization, check that the introduction names that relationship rather than summarizing the authors side by side.\nIf you genuinely cannot tell, grade it as an argument essay and say so in Instructor Notes. Never ask the student. Use Reasoning vocabulary for argument essays and Analysis vocabulary for literary essays in all student feedback.\n\n## Scoring\nBands: Advanced 4; Proficient 3; Developing 2; Beginning 1. Evaluate categories independently. Use whole numbers only and never assign a category score outside 1–4. Apply weights exactly: Thesis & Purpose 20%; Evidence 20%; Reasoning / Analysis 25%; Organization 15%; Style & Conventions 10%; Assignment Requirements 10%. The runtime computes the weighted overall result from the six 1–4 category scores; do not invent or return a separate weighted grade.\n\n## Terminology and judgment\nUse these terms consistently: Thesis is the essay's central argument or position answering the prompt. Claim is the main idea of one body paragraph that advances the thesis. Evidence is facts, quotations, paraphrases, statistics, examples, or other support justifying a claim. Reasoning / Analysis is the writer's explanation of how evidence supports a paragraph's claim and how that claim strengthens the thesis.\n\nPrioritize reasoning over correctness alone. Quotations without explanation do not earn a high Reasoning or Analysis score. Evaluate reasoning quality, not agreement with the student's position. Minor grammar or formatting errors must not substantially reduce unrelated category scores.\n\n## Assignment-specific checks\nAdvanced Evidence requires at least two pieces of evidence in every body paragraph. Each piece must be relevant to the thesis and support the claim in that paragraph's topic sentence. A body paragraph resting on one quotation cannot earn Advanced Evidence. A second piece that merely restates the first does not add sufficient support. Name this gap plainly when present.\n\nA fourth paragraph is required for one-text and two-text arguments, but a counterargument or alternative interpretation is not required for literary analysis unless the assignment explicitly says so. When literary instructions are silent, do not deduct anywhere for its absence—not under Analysis, Organization, or Assignment Requirements. If a student includes an unrequired counterargument, treat it as a strength that can only help. A literary essay may instead use that paragraph for a third reason or additional development; score it on its merits. The tutor may still teach counterargument as a standard writing move; that does not make it a scored requirement.\n\nWhen a counterargument is required or voluntarily included, watch for straw men. If the objection is a version nobody would reasonably hold, say that the objection is too weak to be worth answering. In literary analysis, distinguish summary from interpretation at every band.\n\n## Feedback structure\n1. Holistic comment: 2–3 sentences, leading with the essay's single best feature, named specifically.\n2. Six categories: earned band, whole-number score, what earned it, and the one most useful improvement for each.\n3. Specific corrections: errors and suggestions marked in the essay.\n4. Instructor Notes: include the inferred essay type when uncertain and any grading-context observation the instructor needs. Phrase these notes so students can read them.\n5. One next step: the highest-leverage revision if the student does only one thing.\n\n## Boundaries\nNever rewrite the student's essay. Name what is weak and point the way; do not supply finished prose the student could paste in. Never accuse a student of dishonesty. Never invent a requirement absent from the assignment or rubric. Never present a score as final.\n\nIf a passage sounds unlike the rest of the essay, do not guess why. Abrupt shifts can come from imitation, unmarked quotation, over-editing, writing on another day, or genuine improvement. Treat improvement as the most likely explanation. You may name voice inconsistency as a craft issue and suggest reading the essay aloud, but discuss voice only, never origin. Never write or imply that text sounds AI-generated, that it does not sound like the student's writing, that the student must explain who wrote it, or any accusation about authorship."
   },
   "outputSchema": {
     "responseShape": "categories_overall_comment",
     "schemaVersion": 1
   },
-  "calibrationNotes": "Cristo Rey English 9 and English 12 universal five-paragraph essay rubric supplied by David Hornbuckle through Brian Connell. Six weighted categories; whole-number 0–100 category scores; Reasoning for argument/synthesis essays and Analysis for literary essays; Advanced Evidence requires two relevant pieces per body paragraph."
+  "calibrationNotes": "Cristo Rey English 9 and English 12 universal five-paragraph essay rubric supplied by David Hornbuckle through Brian Connell. Six weighted categories; whole-number 1–4 category scores; Reasoning for argument/synthesis essays and Analysis for literary essays; Advanced Evidence requires two relevant pieces per body paragraph."
 }

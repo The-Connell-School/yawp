@@ -32,10 +32,6 @@ const gradingInstructions = sourceInstructions
     'The fourth-paragraph requirement and the counterargument requirement are separate. A fourth paragraph is required for one-text and two-text arguments, but require a counterargument only when the assignment explicitly asks for one. For literary analysis, require neither a fourth paragraph nor a counterargument or alternative interpretation unless the assignment explicitly says so.'
   )
   .replace(
-    'Absent means missing, blank, or off-task only, never severity.',
-    'Absent means missing, blank, or off-task only, never severity. Use 0 for a category only when that category has no scorable evidence because the submission is missing, blank, or contains no relevant attempt. If scorable evidence exists, use 1–69 at minimum, and score Style & Conventions independently even when content is off-task.'
-  )
-  .replace(
     /## Feedback structure[\s\S]*?## Boundaries/,
     `${outputMapping}\n\n## Boundaries`
   );

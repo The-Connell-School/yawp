@@ -156,9 +156,11 @@ describe('rubric schema', () => {
     expect(cristoRey.title).toBe('Cristo Rey: Hornbuckle Five-Paragraph Essay');
     expect(cristoRey.scoringScale).toMatchObject({
       type: 'weighted_percent',
-      minScore: 0,
-      maxScore: 100,
+      minScore: 1,
+      maxScore: 4,
       step: 1,
+      compositeMin: 0,
+      compositeMax: 100,
     });
     expect(cristoRey.rubric.categories.map((category) => category.key)).toEqual(
       [
@@ -174,12 +176,21 @@ describe('rubric schema', () => {
       cristoRey.rubric.categories.map((category) => category.weight)
     ).toEqual([0.2, 0.2, 0.25, 0.15, 0.1, 0.1]);
     expect(
-      cristoRey.rubric.categories.every((category) =>
-        category.bands
-          ?.map((band) => [band.min, band.max])
-          .some(([min, max]) => min === 90 && max === 100)
+      cristoRey.rubric.categories.map((category) =>
+        category.bands?.map((band) => ({
+          score: band.min,
+          max: band.max,
+          label: band.label,
+        }))
       )
-    ).toBe(true);
+    ).toEqual(
+      Array.from({ length: 6 }, () => [
+        { score: 1, max: 1, label: 'Beginning' },
+        { score: 2, max: 2, label: 'Developing' },
+        { score: 3, max: 3, label: 'Proficient' },
+        { score: 4, max: 4, label: 'Advanced' },
+      ])
+    );
     expect(
       cristoRey.rubric.categories
         .find((category) => category.key === 'evidence')
@@ -215,7 +226,13 @@ describe('rubric schema', () => {
       'The fourth-paragraph requirement and the counterargument requirement are separate'
     );
     expect(cristoRey.promptConfig.gradingInstructions).toContain(
-      'Use 0 for a category only when that category has no scorable evidence'
+      'Advanced 4; Proficient 3; Developing 2; Beginning 1'
+    );
+    expect(cristoRey.promptConfig.gradingInstructions).not.toMatch(
+      /90[–-]100|80[–-]89|70[–-]79|1[–-]69|Absent 0/
+    );
+    expect(cristoRey.calibrationNotes).toContain(
+      'whole-number 1–4 category scores'
     );
     expect(cristoRey.promptConfig.gradingInstructions).not.toContain(
       'say so in Instructor Notes'
