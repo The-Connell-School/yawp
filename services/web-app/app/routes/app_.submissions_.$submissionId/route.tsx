@@ -42,6 +42,10 @@ import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
 } from '~/utils/document-exit';
+import {
+  resolveTeacherSchoolYearScope,
+  schoolYearWhere,
+} from '~/utils/school-year-scope.server';
 import { EssayPanel } from './essay-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
 import { SelectionToolbar } from './teacher-grading/selection-toolbar';
@@ -309,6 +313,76 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 
+  // ── Unreleased grading queue (teacher) ──────────────────────────────
+  let queuePrevId: string | null = null;
+  let queueNextId: string | null = null;
+  if (!isOwner && (isTeacher || isAdmin)) {
+    const schoolYearScope = await resolveTeacherSchoolYearScope(
+      request,
+      profile.id
+    );
+    const teacherClasses = await prisma.class.findMany({
+      where: {
+        teachers: { some: { id: profile.id } },
+        isArchived: false,
+        ...schoolYearWhere(schoolYearScope),
+      },
+      select: { id: true },
+    });
+    const teacherClassIds = teacherClasses.map((c) => c.id);
+
+    if (teacherClassIds.length > 0) {
+      const unreleasedQueue = await prisma.submission.findMany({
+        where: {
+          releasedAt: null,
+          unsubmittedAt: null,
+          archivedAt: null,
+          document: {
+            is: {
+              membership: {
+                organizationId: submission.document.membership.organizationId,
+              },
+              OR: [
+                {
+                  classAssignment: { is: { classId: { in: teacherClassIds } } },
+                },
+                {
+                  classAssignment: { is: null },
+                  membership: {
+                    classesAsStudent: { some: { id: { in: teacherClassIds } } },
+                  },
+                },
+              ],
+            },
+          },
+        },
+        select: { id: true, submittedAt: true },
+        orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
+        take: 250,
+      });
+
+      const queue = unreleasedQueue;
+      const idx = queue.findIndex((q) => q.id === submission.id);
+      if (idx >= 0) {
+        queuePrevId = queue[idx - 1]?.id ?? null;
+        queueNextId = queue[idx + 1]?.id ?? null;
+      } else {
+        const pivotTime = submission.submittedAt
+          ? new Date(submission.submittedAt).getTime()
+          : 0;
+        let insertIdx = queue.findIndex((q) => {
+          const t = q.submittedAt ? new Date(q.submittedAt).getTime() : 0;
+          // Queue is sorted desc by submittedAt, so the first item with
+          // submittedAt <= pivot is our insertion point.
+          return t <= pivotTime;
+        });
+        if (insertIdx === -1) insertIdx = queue.length;
+        queuePrevId = queue[insertIdx - 1]?.id ?? null;
+        queueNextId = queue[insertIdx]?.id ?? null;
+      }
+    }
+  }
+
   return {
     submission: {
       ...submission,
@@ -325,6 +399,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isTeacher: isTeacher || isAdmin,
     submissionActivityEnabled,
     ...(activities == null ? {} : { activities, activityHasMore }),
+    queuePrevId,
+    queueNextId,
   };
 }
 
@@ -332,7 +408,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function SubmissionRoute() {
   const loaderData = useLoaderData<typeof loader>();
-  const { submission, isOwner, isTeacher, submissionActivityEnabled } =
+  const {
+    submission,
+    isOwner,
+    isTeacher,
+    submissionActivityEnabled,
+    queuePrevId,
+    queueNextId,
+  } =
     loaderData;
   const activities = 'activities' in loaderData ? loaderData.activities : [];
   const activityHasMore =
@@ -930,13 +1013,37 @@ export default function SubmissionRoute() {
         <div className="h-4 w-px bg-border shrink-0" />
 
         <div className="flex min-w-0 items-center gap-2">
-          {isGradingOther && submission.document.membership.user.name ? (
-            <span className="shrink-0 text-sm text-muted-foreground">
-              {submission.document.membership.user.name}
-            </span>
-          ) : null}
-          {isGradingOther && submission.document.membership.user.name ? (
-            <span className="text-muted-foreground/40 shrink-0">·</span>
+          {isGradingOther ? (
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                asChild={Boolean(queuePrevId)}
+                disabled={!queuePrevId}
+              >
+                {queuePrevId ? (
+                  <Link to={`/app/submissions/${queuePrevId}`}>Prev</Link>
+                ) : (
+                  <span>Prev</span>
+                )}
+              </Button>
+              <span className="shrink-0 text-sm text-muted-foreground">
+                {submission.document.membership.user.name}
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                asChild={Boolean(queueNextId)}
+                disabled={!queueNextId}
+              >
+                {queueNextId ? (
+                  <Link to={`/app/submissions/${queueNextId}`}>Next</Link>
+                ) : (
+                  <span>Next</span>
+                )}
+              </Button>
+              <span className="text-muted-foreground/40 shrink-0">·</span>
+            </>
           ) : null}
           {canEditTitle ? (
             <Input

@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   user: { findUnique: mock() },
-  submission: { findFirst: mock() },
+  submission: { findFirst: mock(), findMany: mock() },
   submissionActivity: { findMany: mock() },
   assignmentType: { findUnique: mock() },
+  class: { findMany: mock() },
 };
 
 const requireUserId = mock();
@@ -19,6 +20,10 @@ mock.module('~/utils/auth.server', () => ({
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
   requireMembership,
+}));
+mock.module('~/utils/school-year-scope.server', () => ({
+  resolveTeacherSchoolYearScope: mock(() => 'all'),
+  schoolYearWhere: () => ({}),
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast: (to: string, payload: unknown) =>
@@ -377,5 +382,130 @@ describe('submission loader — unsubmitted redirect', () => {
       { organizationId: 'org-2' }
     );
     expect(prisma.submissionActivity.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('submission loader — unreleased queue prev/next', () => {
+  beforeEach(() => {
+    prisma.user.findUnique.mockReset();
+    prisma.submission.findFirst.mockReset();
+    prisma.submission.findMany.mockReset();
+    prisma.submissionActivity.findMany.mockReset();
+    prisma.class.findMany?.mockReset?.();
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+  });
+
+  function teacherMembership() {
+    return {
+      id: TEACHER_MEMBERSHIP_ID,
+      role: 'TEACHER',
+      organization: { id: 'org-1' },
+    };
+  }
+
+  function baseSubmission(overrides: Partial<Record<string, unknown>> = {}) {
+    return {
+      id: 'sub-2',
+      title: 'Middle',
+      text: 'body',
+      html: '<p>body</p>',
+      submittedAt: new Date('2026-08-10T00:00:00Z'),
+      score: null,
+      feedback: null,
+      rubricScores: null,
+      overallScore: null,
+      overallComment: null,
+      numericPercentage: null,
+      letterGrade: null,
+      grammarIssues: null,
+      promptConfig: null,
+      aiMeta: null,
+      releasedAt: null,
+      gradedAt: null,
+      gradedByMembershipId: null,
+      archivedAt: null,
+      unsubmittedAt: null,
+      documentId: 'doc-1',
+      document: {
+        id: 'doc-1',
+        title: 'Essay',
+        assignmentTypeId: 'at-1',
+        assignment: null,
+        classAssignment: {
+          class: {
+            id: 'class-1',
+            schoolId: 'school-1',
+            school: { organizationId: 'org-1' },
+            teachers: [{ id: TEACHER_MEMBERSHIP_ID }],
+          },
+        },
+        membership: {
+          id: STUDENT_MEMBERSHIP_ID,
+          organizationId: 'org-1',
+          organization: { submissionActivityEnabled: true },
+          userId: 'user-student',
+          user: { name: 'Student' },
+          classesAsStudent: [
+            {
+              id: 'class-1',
+              schoolId: 'school-1',
+              school: { organizationId: 'org-1' },
+              teachers: [{ id: TEACHER_MEMBERSHIP_ID }],
+            },
+          ],
+        },
+      },
+      comments: [],
+      gradingAssistantRuns: [],
+      ...overrides,
+    };
+  }
+
+  function requestFor(id = 'sub-2') {
+    return new Request(`https://example.test/app/submissions/${id}`);
+  }
+
+  test('returns prev/next ids when current is in the queue', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue(teacherMembership());
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
+    prisma.submission.findFirst.mockResolvedValue(baseSubmission());
+    prisma.class.findMany.mockResolvedValue([{ id: 'class-1' }]);
+    prisma.submission.findMany.mockResolvedValue([
+      { id: 'sub-1', submittedAt: new Date('2026-08-20T00:00:00Z') },
+      { id: 'sub-2', submittedAt: new Date('2026-08-10T00:00:00Z') },
+      { id: 'sub-3', submittedAt: new Date('2026-08-01T00:00:00Z') },
+    ]);
+
+    const result = (await loader({
+      request: requestFor('sub-2'),
+      params: { submissionId: 'sub-2' },
+    })) as any;
+
+    expect(result.queuePrevId).toBe('sub-1');
+    expect(result.queueNextId).toBe('sub-3');
+  });
+
+  test('computes surrounding ids by submittedAt when current was just released', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue(teacherMembership());
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
+    prisma.submission.findFirst.mockResolvedValue(
+      baseSubmission({ releasedAt: new Date('2026-08-11T00:00:00Z') })
+    );
+    prisma.class.findMany.mockResolvedValue([{ id: 'class-1' }]);
+    prisma.submission.findMany.mockResolvedValue([
+      { id: 'sub-1', submittedAt: new Date('2026-08-20T00:00:00Z') },
+      { id: 'sub-3', submittedAt: new Date('2026-08-01T00:00:00Z') },
+    ]);
+
+    const result = (await loader({
+      request: requestFor('sub-2'),
+      params: { submissionId: 'sub-2' },
+    })) as any;
+
+    expect(result.queuePrevId).toBe('sub-1');
+    expect(result.queueNextId).toBe('sub-3');
   });
 });
