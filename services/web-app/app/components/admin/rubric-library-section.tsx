@@ -1,4 +1,3 @@
-import { useFetcher } from 'react-router';
 import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
 import {
@@ -20,20 +19,19 @@ const NO_RUBRIC_VALUE = '__none__';
 
 /** Pick one database-managed rubric and inspect it without editing it. */
 export function RubricLibrarySection({
-  assignmentTypeId,
   rubrics,
   selectedRubricId,
+  onRubricChange,
   gradingInstructions,
   onGradingInstructionsChange,
 }: {
-  assignmentTypeId: string;
   rubrics: RubricOption[];
   selectedRubricId: string | null;
+  onRubricChange: (rubricId: string | null) => void;
   /** Per-assignment-type override layered on top of the resolved rubric's instructions. */
   gradingInstructions: string;
   onGradingInstructionsChange: (value: string) => void;
 }) {
-  const fetcher = useFetcher();
   const selected =
     rubrics.find((rubric) => rubric.id === selectedRubricId) ?? null;
 
@@ -43,17 +41,10 @@ export function RubricLibrarySection({
         <Label htmlFor="rubric-library-select">Rubric</Label>
         <Select
           name="rubricId"
-          defaultValue={selectedRubricId ?? NO_RUBRIC_VALUE}
-          onValueChange={(value) => {
-            const form = new FormData();
-            form.set('intent', 'select');
-            form.set('assignmentTypeId', assignmentTypeId);
-            form.set('rubricId', value === NO_RUBRIC_VALUE ? '' : value);
-            fetcher.submit(form, {
-              method: 'POST',
-              action: '/api/admin/rubrics',
-            });
-          }}
+          value={selectedRubricId ?? NO_RUBRIC_VALUE}
+          onValueChange={(value) =>
+            onRubricChange(value === NO_RUBRIC_VALUE ? null : value)
+          }
         >
           <SelectTrigger
             id="rubric-library-select"
@@ -93,14 +84,6 @@ export function RubricLibrarySection({
         </details>
       ) : null}
 
-      {fetcher.data &&
-      typeof fetcher.data === 'object' &&
-      'error' in fetcher.data ? (
-        <p className="text-sm text-destructive">
-          {String((fetcher.data as { error: unknown }).error)}
-        </p>
-      ) : null}
-
       <div className="space-y-2">
         <Label htmlFor="grading-assistant-instructions">
           Grading assistant instructions
@@ -116,8 +99,8 @@ export function RubricLibrarySection({
           onChange={(event) => onGradingInstructionsChange(event.target.value)}
         />
         <p className="text-sm text-muted-foreground">
-          Optional. Replaces the default grading assistant instructions for
-          this assignment type. The rubric itself stays unchanged.
+          Optional. Replaces the default grading assistant instructions for this
+          assignment type. The rubric itself stays unchanged.
         </p>
       </div>
     </div>

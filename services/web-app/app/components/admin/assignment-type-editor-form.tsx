@@ -42,11 +42,13 @@ function formSnapshot(values: {
   title: string;
   description: string;
   gradingInstructions: string;
+  rubricId: string | null;
 }) {
   return [
     values.title.trim(),
     values.description.trim(),
     values.gradingInstructions.trim(),
+    values.rubricId ?? '',
   ].join('\u0000');
 }
 
@@ -121,20 +123,28 @@ export function AssignmentTypeEditorForm({
   const [gradingInstructions, setGradingInstructions] = useState(
     gradingInstructionsDefaultValue
   );
+  const [rubricId, setRubricId] = useState<string | null>(selectedRubricId);
   const savedSnapshot = useMemo(
     () =>
       formSnapshot({
         title: titleDefaultValue,
         description: descriptionDefaultValue ?? '',
         gradingInstructions: gradingInstructionsDefaultValue,
+        rubricId: selectedRubricId,
       }),
-    [titleDefaultValue, descriptionDefaultValue, gradingInstructionsDefaultValue]
+    [
+      titleDefaultValue,
+      descriptionDefaultValue,
+      gradingInstructionsDefaultValue,
+      selectedRubricId,
+    ]
   );
 
   useEffect(() => {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
     setGradingInstructions(gradingInstructionsDefaultValue);
+    setRubricId(selectedRubricId);
   }, [savedSnapshot]);
 
   useEffect(() => {
@@ -159,8 +169,9 @@ export function AssignmentTypeEditorForm({
         title,
         description,
         gradingInstructions,
+        rubricId,
       }),
-    [title, description, gradingInstructions]
+    [title, description, gradingInstructions, rubricId]
   );
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
@@ -177,6 +188,7 @@ export function AssignmentTypeEditorForm({
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
     setGradingInstructions(gradingInstructionsDefaultValue);
+    setRubricId(selectedRubricId);
     setPreviewUrl(null);
     setHasRemovedImage(false);
     if (imageFileInputRef.current) {
@@ -299,9 +311,9 @@ export function AssignmentTypeEditorForm({
         >
           {assignmentTypeId ? (
             <RubricLibrarySection
-              assignmentTypeId={assignmentTypeId}
               rubrics={rubrics}
-              selectedRubricId={selectedRubricId}
+              selectedRubricId={rubricId}
+              onRubricChange={setRubricId}
               gradingInstructions={gradingInstructions}
               onGradingInstructionsChange={setGradingInstructions}
             />

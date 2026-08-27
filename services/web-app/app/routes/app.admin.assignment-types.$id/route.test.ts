@@ -14,6 +14,7 @@ const prisma = {
   // rubrics on first sight.
   rubric: {
     findMany: mock(() => Promise.resolve([])),
+    findUnique: mock(),
     create: mock(),
   },
 };
@@ -44,6 +45,7 @@ describe('admin assignment type detail action', () => {
     prisma.$transaction.mockReset();
     prisma.assignmentType.findUnique.mockReset();
     prisma.assignmentType.update.mockReset();
+    prisma.rubric.findUnique.mockReset();
     prisma.orgMembership.findMany.mockReset();
     prisma.orgMembership.findUnique.mockReset();
     requireAdmin.mockReset();
@@ -228,6 +230,40 @@ describe('admin assignment type detail action', () => {
       data: {
         title: 'Renamed assignment type',
         description: 'Only the basics changed.',
+      },
+    });
+  });
+
+  test('saves a selected shared rubric with the assignment type update', async () => {
+    prisma.rubric.findUnique.mockResolvedValue({ id: 'rubric-1' });
+
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'Cristo Rey Essay');
+    form.set('rubricId', 'rubric-1');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.rubric.findUnique).toHaveBeenCalledWith({
+      where: { id: 'rubric-1' },
+      select: { id: true },
+    });
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+      data: {
+        title: 'Cristo Rey Essay',
+        description: null,
+        rubricId: 'rubric-1',
       },
     });
   });

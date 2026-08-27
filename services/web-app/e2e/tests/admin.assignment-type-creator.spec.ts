@@ -112,6 +112,8 @@ test.describe('Admin assignment type creator', () => {
       await page
         .getByRole('option', { name: 'Daily Pages engagement' })
         .click();
+      await expect(page.getByRole('button', { name: 'Update' })).toBeEnabled();
+      await page.getByRole('button', { name: 'Update' }).click();
 
       await expect
         .poll(async () => {
