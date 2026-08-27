@@ -91,6 +91,8 @@ describe('rubric schema', () => {
       'daily-pages-engagement',
       'gba300-international-expansion',
       'gba300-international-etiquette',
+      'gba300-nonverbal-rubric-STUDENT',
+      'cristo-rey-hornbuckle-five-paragraph-essay',
     ]);
 
     const thesis = STARTER_RUBRICS[0];
@@ -126,27 +128,21 @@ describe('rubric schema', () => {
 
     const expansion = STARTER_RUBRICS[2];
     expect(expansion.rubric.categories).toHaveLength(9);
-    expect(expansion.rubric.categories.map((category) => category.weight)).toEqual([
-      0.1,
-      0.1,
-      0.2,
-      0.2,
-      0.05,
-      0.05,
-      0.1,
-      0.1,
-      0.1,
-    ]);
+    expect(
+      expansion.rubric.categories.map((category) => category.weight)
+    ).toEqual([0.1, 0.1, 0.2, 0.2, 0.05, 0.05, 0.1, 0.1, 0.1]);
     expect(expansion.rubric.categories[0].bands?.at(-1)?.max).toBe(10);
     expect(expansion.rubric.categories[2].bands?.at(-1)?.max).toBe(20);
 
     const etiquette = STARTER_RUBRICS[3];
-    expect(etiquette.rubric.categories.map((category) => category.key)).toEqual([
-      'introduction',
-      'country_1_its_two_topics',
-      'country_2_its_two_topics',
-      'conclusion',
-    ]);
+    expect(etiquette.rubric.categories.map((category) => category.key)).toEqual(
+      [
+        'introduction',
+        'country_1_its_two_topics',
+        'country_2_its_two_topics',
+        'conclusion',
+      ]
+    );
     expect(
       etiquette.rubric.categories.some((category) =>
         category.key.includes('deduction')
@@ -154,6 +150,78 @@ describe('rubric schema', () => {
     ).toBe(false);
     expect(etiquette.promptConfig.gradingInstructions).toContain(
       'never applies a deduction'
+    );
+
+    const cristoRey = STARTER_RUBRICS[5];
+    expect(cristoRey.title).toBe('Cristo Rey: Hornbuckle Five-Paragraph Essay');
+    expect(cristoRey.scoringScale).toMatchObject({
+      type: 'weighted_percent',
+      minScore: 0,
+      maxScore: 100,
+      step: 1,
+    });
+    expect(cristoRey.rubric.categories.map((category) => category.key)).toEqual(
+      [
+        'thesis_and_purpose',
+        'evidence',
+        'reasoning_or_analysis',
+        'organization',
+        'style_and_conventions',
+        'assignment_requirements',
+      ]
+    );
+    expect(
+      cristoRey.rubric.categories.map((category) => category.weight)
+    ).toEqual([0.2, 0.2, 0.25, 0.15, 0.1, 0.1]);
+    expect(
+      cristoRey.rubric.categories.every((category) =>
+        category.bands
+          ?.map((band) => [band.min, band.max])
+          .some(([min, max]) => min === 90 && max === 100)
+      )
+    ).toBe(true);
+    expect(
+      cristoRey.rubric.categories
+        .find((category) => category.key === 'evidence')
+        ?.bands?.find((band) => band.label === 'Advanced')?.description
+    ).toContain('two pieces of evidence in every body paragraph');
+    expect(
+      cristoRey.rubric.categories
+        .find((category) => category.key === 'reasoning_or_analysis')
+        ?.bands?.find((band) => band.label === 'Advanced')?.description
+    ).toContain('Literary analysis:');
+    expect(cristoRey.promptConfig.gradingInstructions).toContain(
+      'If you genuinely cannot tell, grade it as an argument essay'
+    );
+    expect(cristoRey.promptConfig.gradingInstructions).toContain(
+      "Never rewrite the student's essay."
+    );
+    expect(cristoRey.promptConfig.gradingInstructions).toContain(
+      'categories[].comment'
+    );
+    expect(cristoRey.promptConfig.gradingInstructions).toContain(
+      'overallComment'
+    );
+    expect(cristoRey.promptConfig.gradingInstructions).toContain(
+      'separate specific-corrections pass'
+    );
+    expect(cristoRey.promptConfig.gradingInstructions).not.toContain(
+      'Then produce a holistic comment and a weighted final grade.'
+    );
+    expect(cristoRey.promptConfig.gradingInstructions).not.toContain(
+      'Specific corrections: errors and suggestions marked in the essay.'
+    );
+    expect(cristoRey.promptConfig.gradingInstructions).toContain(
+      'The fourth-paragraph requirement and the counterargument requirement are separate'
+    );
+    expect(cristoRey.promptConfig.gradingInstructions).toContain(
+      'Use 0 for a category only when that category has no scorable evidence'
+    );
+    expect(cristoRey.promptConfig.gradingInstructions).not.toContain(
+      'say so in Instructor Notes'
+    );
+    expect(cristoRey.promptConfig.gradingInstructions).toContain(
+      'or another material grading-context observation'
     );
   });
 });
