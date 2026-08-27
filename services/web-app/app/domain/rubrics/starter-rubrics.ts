@@ -9,6 +9,7 @@ import {
   GBA300_INTERNATIONAL_EXPANSION,
   GBA300_NONVERBAL_RUBRIC_STUDENT,
 } from './gba300-rubrics';
+import { CRISTO_REY_HORNBUCKLE_FIVE_PARAGRAPH_ESSAY } from './cristo-rey-rubrics';
 
 /**
  * Protected rubrics the library starts with. Thesis and Daily Pages preserve
@@ -74,4 +75,5 @@ export const STARTER_RUBRICS: RubricSchema[] = [
   GBA300_INTERNATIONAL_EXPANSION,
   GBA300_INTERNATIONAL_ETIQUETTE,
   GBA300_NONVERBAL_RUBRIC_STUDENT,
+  CRISTO_REY_HORNBUCKLE_FIVE_PARAGRAPH_ESSAY,
 ];
