@@ -89,6 +89,8 @@ test.describe.serial('Admin assignment types', () => {
       ).toBeVisible();
       await page.getByTestId('rubric-library-select').click();
       await page.getByRole('option', { name: rubricTitle }).click();
+      await expect(page.getByRole('button', { name: 'Update' })).toBeEnabled();
+      await page.getByRole('button', { name: 'Update' }).click();
 
       await expect
         .poll(async () => {

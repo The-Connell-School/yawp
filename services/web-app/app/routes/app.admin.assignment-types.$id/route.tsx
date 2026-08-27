@@ -138,6 +138,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const hasGradingInstructionsOverrideField = formData.has(
       'gradingInstructionsOverride'
     );
+    const hasRubricIdField = formData.has('rubricId');
+    const rawRubricId = formData.get('rubricId')?.toString() ?? '';
+    const rubricId =
+      rawRubricId && rawRubricId !== '__none__' ? rawRubricId : null;
 
     if (!assignmentTypeId) {
       throw new Response('Not Found', { status: 404 });
@@ -153,6 +157,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
     if (!existing) {
       throw new Response('Not Found', { status: 404 });
+    }
+
+    if (hasRubricIdField && rubricId) {
+      const rubric = await prisma.rubric.findUnique({
+        where: { id: rubricId },
+        select: { id: true },
+      });
+      if (!rubric) {
+        throw new Response('That rubric no longer exists.', { status: 404 });
+      }
     }
 
     const gradingInstructionsOverrideChanged =
@@ -231,6 +245,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           title,
           description: description || null,
+          ...(hasRubricIdField ? { rubricId } : {}),
           ...gradingConfigData,
         },
       });
