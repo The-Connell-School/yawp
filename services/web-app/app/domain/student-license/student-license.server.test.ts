@@ -5,6 +5,8 @@ import {
   applyStripeWebhookTransition,
   createOrReuseCheckoutSession,
   getUaStudentLicenseConfig,
+  getE2EStripeClientOptions,
+  getUaStudentLicenseNow,
   isUaStudentLicenseSalesClosed,
   isStripePaymentReconciliationEvent,
   paymentIntentIdFromReconciliationEvent,
@@ -51,6 +53,39 @@ describe('UA student license configuration', () => {
       })
     ).toThrow('Invalid UA student billing configuration');
   });
+
+  test('allows a loopback Stripe API override only in E2E', () => {
+    expect(
+      getE2EStripeClientOptions({
+        E2E: 'true',
+        E2E_STRIPE_API_BASE: 'http://127.0.0.1:12111',
+      })
+    ).toEqual({ host: '127.0.0.1', port: 12111, protocol: 'http' });
+    expect(
+      getE2EStripeClientOptions({
+        E2E: 'false',
+        E2E_STRIPE_API_BASE: 'http://127.0.0.1:12111',
+      })
+    ).toBeNull();
+    expect(() =>
+      getE2EStripeClientOptions({
+        E2E: 'true',
+        E2E_STRIPE_API_BASE: 'https://stripe-proxy.example.com',
+      })
+    ).toThrow('Invalid E2E Stripe API base');
+  });
+
+  test('uses a deterministic UA clock only in E2E', () => {
+    expect(
+      getUaStudentLicenseNow({
+        E2E: 'true',
+        E2E_UA_NOW: '2026-08-30T12:00:00.000Z',
+      }).toISOString()
+    ).toBe('2026-08-30T12:00:00.000Z');
+    expect(() =>
+      getUaStudentLicenseNow({ E2E: 'true', E2E_UA_NOW: 'not-a-date' })
+    ).toThrow('Invalid E2E UA clock');
+  });
 });
 
 describe('UA student license access', () => {
@@ -60,7 +95,11 @@ describe('UA student license access', () => {
     expect(
       resolveUaStudentLicenseAccess({
         config,
-        membership: { id: 'teacher', role: 'TEACHER', organizationId: 'org-ua' },
+        membership: {
+          id: 'teacher',
+          role: 'TEACHER',
+          organizationId: 'org-ua',
+        },
         entitlement: null,
         now: new Date('2026-09-01T00:00:00.000Z'),
       })
@@ -69,7 +108,11 @@ describe('UA student license access', () => {
     expect(
       resolveUaStudentLicenseAccess({
         config,
-        membership: { id: 'student', role: 'STUDENT', organizationId: 'org-other' },
+        membership: {
+          id: 'student',
+          role: 'STUDENT',
+          organizationId: 'org-other',
+        },
         entitlement: null,
         now: new Date('2026-09-01T00:00:00.000Z'),
       })
@@ -80,7 +123,11 @@ describe('UA student license access', () => {
     expect(
       resolveUaStudentLicenseAccess({
         config,
-        membership: { id: 'student', role: 'STUDENT', organizationId: 'org-ua' },
+        membership: {
+          id: 'student',
+          role: 'STUDENT',
+          organizationId: 'org-ua',
+        },
         entitlement: null,
         now: new Date('2026-09-01T00:00:00.000Z'),
       })
@@ -92,7 +139,11 @@ describe('UA student license access', () => {
       expect(
         resolveUaStudentLicenseAccess({
           config,
-          membership: { id: 'student', role: 'STUDENT', organizationId: 'org-ua' },
+          membership: {
+            id: 'student',
+            role: 'STUDENT',
+            organizationId: 'org-ua',
+          },
           entitlement: {
             cohort: UA_STUDENT_LICENSE_COHORT,
             source,
@@ -107,7 +158,11 @@ describe('UA student license access', () => {
     expect(
       resolveUaStudentLicenseAccess({
         config,
-        membership: { id: 'student', role: 'STUDENT', organizationId: 'org-ua' },
+        membership: {
+          id: 'student',
+          role: 'STUDENT',
+          organizationId: 'org-ua',
+        },
         entitlement: {
           cohort: UA_STUDENT_LICENSE_COHORT,
           source: 'STRIPE_CHECKOUT',
@@ -124,7 +179,11 @@ describe('UA student license access', () => {
       expect(
         resolveUaStudentLicenseAccess({
           config,
-          membership: { id: 'student', role: 'STUDENT', organizationId: 'org-ua' },
+          membership: {
+            id: 'student',
+            role: 'STUDENT',
+            organizationId: 'org-ua',
+          },
           entitlement: {
             cohort: UA_STUDENT_LICENSE_COHORT,
             source: 'STRIPE_CHECKOUT',
@@ -216,9 +275,123 @@ describe('Checkout return verification', () => {
       })
     ).rejects.toThrow('Checkout Session does not match the UA license');
   });
+
+  test('fails closed for every Checkout identity, amount, price, and ownership mismatch', async () => {
+    const valid = {
+      id: 'cs_valid_shape',
+      mode: 'payment',
+      payment_status: 'paid',
+      amount_total: 5000,
+      currency: 'usd',
+      customer: 'cus_123',
+      payment_intent: 'pi_123',
+      metadata: {
+        membershipId: 'membership-1',
+        organizationId: 'org-ua',
+        cohort: UA_STUDENT_LICENSE_COHORT,
+      },
+      line_items: {
+        data: [{ price: { id: 'price_ua_2026' }, quantity: 1 }],
+      },
+    };
+    const mismatches = [
+      { ...valid, mode: 'subscription' },
+      { ...valid, currency: 'eur' },
+      { ...valid, payment_intent: null },
+      {
+        ...valid,
+        metadata: { ...valid.metadata, organizationId: 'other-org' },
+      },
+      { ...valid, metadata: { ...valid.metadata, cohort: 'other-cohort' } },
+      { ...valid, metadata: { ...valid.metadata, membershipId: '' } },
+      {
+        ...valid,
+        line_items: { data: [{ price: { id: 'wrong-price' }, quantity: 1 }] },
+      },
+      {
+        ...valid,
+        line_items: {
+          data: [{ price: { id: 'price_ua_2026' }, quantity: 2 }],
+        },
+      },
+      {
+        ...valid,
+        line_items: {
+          data: [
+            { price: { id: 'price_ua_2026' }, quantity: 1 },
+            { price: { id: 'extra-price' }, quantity: 1 },
+          ],
+        },
+      },
+    ];
+
+    for (const session of mismatches) {
+      await expect(
+        verifyCheckoutSessionForReturn(session.id, {
+          config: getUaStudentLicenseConfig(enabledEnv),
+          dependencies: {
+            retrieveCheckoutSession: mock().mockResolvedValue(session),
+            findMembership: mock(),
+          },
+        })
+      ).rejects.toThrow('Checkout Session does not match the UA license');
+    }
+
+    await expect(
+      verifyCheckoutSessionForReturn(valid.id, {
+        config: getUaStudentLicenseConfig(enabledEnv),
+        dependencies: {
+          retrieveCheckoutSession: mock().mockResolvedValue(valid),
+          findMembership: mock().mockResolvedValue(null),
+        },
+      })
+    ).rejects.toThrow('Checkout Session membership is not eligible');
+  });
 });
 
 describe('Checkout creation', () => {
+  test('reuses the existing open Checkout Session without creating a second payable Session', async () => {
+    const createCheckoutSession = mock();
+    const prepareAttempt = mock();
+    const result = await createOrReuseCheckoutSession({
+      membershipId: 'membership-1',
+      successUrl: 'https://yawp.school/billing/ua/success',
+      cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
+      config: getUaStudentLicenseConfig(enabledEnv),
+      dependencies: {
+        findMembership: mock().mockResolvedValue({
+          id: 'membership-1',
+          role: 'STUDENT',
+          organizationId: 'org-ua',
+          user: { email: 'student@example.com' },
+        }),
+        findOrCreateLicense: mock().mockResolvedValue({
+          id: 'license-1',
+          status: 'PENDING',
+          validUntil: UA_STUDENT_LICENSE_VALID_UNTIL,
+          checkoutAttempt: 0,
+          stripeCheckoutSessionId: 'cs_open',
+        }),
+        retrieveCheckoutSession: mock().mockResolvedValue({
+          id: 'cs_open',
+          status: 'open',
+          payment_status: 'unpaid',
+          url: 'https://checkout.stripe.test/cs_open',
+        }),
+        prepareAttempt,
+        createCheckoutSession,
+        attachCheckoutSession: mock(),
+      },
+    });
+
+    expect(result).toEqual({
+      kind: 'CHECKOUT',
+      url: 'https://checkout.stripe.test/cs_open',
+    });
+    expect(prepareAttempt).not.toHaveBeenCalled();
+    expect(createCheckoutSession).not.toHaveBeenCalled();
+  });
+
   test('parallel first attempts share one Stripe idempotency key', async () => {
     const membership = {
       id: 'membership-1',
@@ -395,9 +568,7 @@ describe('Checkout creation', () => {
   test('closes sales at the exclusive license cutoff', async () => {
     const findOrCreateLicense = mock();
     expect(
-      isUaStudentLicenseSalesClosed(
-        new Date('2027-01-01T05:59:59.999Z')
-      )
+      isUaStudentLicenseSalesClosed(new Date('2027-01-01T05:59:59.999Z'))
     ).toBe(false);
     expect(isUaStudentLicenseSalesClosed(UA_STUDENT_LICENSE_VALID_UNTIL)).toBe(
       true
@@ -425,6 +596,39 @@ describe('Checkout creation', () => {
     });
     expect(result).toEqual({ kind: 'CLOSED' });
     expect(findOrCreateLicense).not.toHaveBeenCalled();
+  });
+
+  test('fails closed when Stripe omits the hosted Checkout URL', async () => {
+    await expect(
+      createOrReuseCheckoutSession({
+        membershipId: 'membership-1',
+        successUrl: 'https://yawp.school/billing/ua/success',
+        cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
+        config: getUaStudentLicenseConfig(enabledEnv),
+        dependencies: {
+          findMembership: mock().mockResolvedValue({
+            id: 'membership-1',
+            role: 'STUDENT',
+            organizationId: 'org-ua',
+            user: { email: 'student@example.com' },
+          }),
+          findOrCreateLicense: mock().mockResolvedValue({
+            id: 'license-1',
+            status: 'PENDING',
+            validUntil: UA_STUDENT_LICENSE_VALID_UNTIL,
+            checkoutAttempt: 0,
+            stripeCheckoutSessionId: null,
+          }),
+          retrieveCheckoutSession: mock(),
+          prepareAttempt: mock().mockResolvedValue(0),
+          createCheckoutSession: mock().mockResolvedValue({
+            id: 'cs_without_url',
+            url: null,
+          }),
+          attachCheckoutSession: mock(),
+        },
+      })
+    ).rejects.toThrow('Stripe did not return a Checkout URL');
   });
 });
 
@@ -571,11 +775,7 @@ describe('durable Stripe webhook transitions', () => {
       }
     );
 
-    expect(reconcile).toHaveBeenCalledWith(
-      null,
-      'pi_refunded',
-      'REFUNDED'
-    );
+    expect(reconcile).toHaveBeenCalledWith(null, 'pi_refunded', 'REFUNDED');
   });
 
   test('serializes concurrent snapshots so stale ACTIVE cannot commit after REFUNDED', async () => {
@@ -600,7 +800,11 @@ describe('durable Stripe webhook transitions', () => {
             await prior;
             locked = true;
           },
-          reconcile(_checkout: unknown, _paymentIntentId: string, status: string) {
+          reconcile(
+            _checkout: unknown,
+            _paymentIntentId: string,
+            status: string
+          ) {
             pendingStatus = status;
           },
         });
@@ -739,8 +943,20 @@ describe('Stripe payment state reconciliation', () => {
       data: { object: { payment_intent: 'pi_reinstated' } },
     } as any;
     expect(isStripePaymentReconciliationEvent(event.type)).toBe(true);
-    expect(paymentIntentIdFromReconciliationEvent(event)).toBe(
-      'pi_reinstated'
-    );
+    expect(paymentIntentIdFromReconciliationEvent(event)).toBe('pi_reinstated');
+  });
+
+  test('revokes access for every non-successful or structurally invalid payment snapshot', () => {
+    const invalidSnapshots = [
+      { ...paidSnapshot, paymentIntentStatus: 'processing' },
+      { ...paidSnapshot, charge: null },
+      { ...paidSnapshot, charge: { ...paidSnapshot.charge, paid: false } },
+      { ...paidSnapshot, charge: { ...paidSnapshot.charge, amount: 4900 } },
+      { ...paidSnapshot, charge: { ...paidSnapshot.charge, currency: 'eur' } },
+    ];
+
+    for (const snapshot of invalidSnapshots) {
+      expect(resolveStripeLicenseStatus(snapshot)).toBe('REVOKED');
+    }
   });
 });

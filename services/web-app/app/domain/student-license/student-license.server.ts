@@ -61,7 +61,16 @@ export function getUaStudentLicenseConfig(
   };
 }
 
-export function isUaStudentLicenseSalesClosed(now = new Date()) {
+export function getUaStudentLicenseNow(
+  env: Record<string, string | undefined> = process.env
+) {
+  if (env.E2E !== 'true' || !env.E2E_UA_NOW) return new Date();
+  const now = new Date(env.E2E_UA_NOW);
+  if (Number.isNaN(now.getTime())) throw new Error('Invalid E2E UA clock');
+  return now;
+}
+
+export function isUaStudentLicenseSalesClosed(now = getUaStudentLicenseNow()) {
   return now.getTime() >= UA_STUDENT_LICENSE_VALID_UNTIL.getTime();
 }
 
@@ -84,7 +93,7 @@ export function resolveUaStudentLicenseAccess({
   config,
   membership,
   entitlement,
-  now = new Date(),
+  now = getUaStudentLicenseNow(),
 }: {
   config: UaStudentLicenseConfig;
   membership: MembershipForLicense;
@@ -114,7 +123,7 @@ export async function getUaStudentLicenseAccess(
   membership: MembershipForLicense,
   {
     config = getUaStudentLicenseConfig(),
-    now = new Date(),
+    now = getUaStudentLicenseNow(),
   }: { config?: UaStudentLicenseConfig; now?: Date } = {}
 ) {
   if (
@@ -253,16 +262,47 @@ function verifyPaidCheckoutSession(
 
 type CheckoutVerificationDependencies = {
   retrieveCheckoutSession: (id: string) => Promise<CheckoutSessionLike>;
-  findMembership: (membershipId: string, organizationId: string) => Promise<MembershipForLicense | null>;
+  findMembership: (
+    membershipId: string,
+    organizationId: string
+  ) => Promise<MembershipForLicense | null>;
 };
 
 let stripeClient: Stripe | null = null;
 let stripeClientKey: string | null = null;
 
+export function getE2EStripeClientOptions(
+  env: Record<string, string | undefined> = process.env
+) {
+  if (env.E2E !== 'true' || !env.E2E_STRIPE_API_BASE) return null;
+
+  const url = new URL(env.E2E_STRIPE_API_BASE);
+  if (
+    !['127.0.0.1', 'localhost'].includes(url.hostname) ||
+    !['http:', 'https:'].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    (url.pathname !== '/' && url.pathname !== '') ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error('Invalid E2E Stripe API base');
+  }
+
+  return {
+    host: url.hostname,
+    port: Number(url.port || (url.protocol === 'https:' ? 443 : 80)),
+    protocol:
+      url.protocol === 'https:' ? ('https' as const) : ('http' as const),
+  };
+}
+
 function getStripe(config: Extract<UaStudentLicenseConfig, { enabled: true }>) {
-  if (!stripeClient || stripeClientKey !== config.secretKey) {
-    stripeClient = new Stripe(config.secretKey);
-    stripeClientKey = config.secretKey;
+  const e2eOptions = getE2EStripeClientOptions();
+  const clientKey = `${config.secretKey}:${e2eOptions ? `${e2eOptions.protocol}://${e2eOptions.host}:${e2eOptions.port}` : 'stripe'}`;
+  if (!stripeClient || stripeClientKey !== clientKey) {
+    stripeClient = new Stripe(config.secretKey, e2eOptions ?? undefined);
+    stripeClientKey = clientKey;
   }
   return stripeClient;
 }
@@ -356,7 +396,10 @@ type CheckoutCreationDependencies = {
     cancelUrl: string;
     idempotencyKey: string;
   }) => Promise<{ id: string; url: string | null }>;
-  attachCheckoutSession: (licenseId: string, sessionId: string) => Promise<void>;
+  attachCheckoutSession: (
+    licenseId: string,
+    sessionId: string
+  ) => Promise<void>;
 };
 
 function defaultCheckoutCreationDependencies(
@@ -481,7 +524,7 @@ export async function createOrReuseCheckoutSession({
   cancelUrl,
   config = getUaStudentLicenseConfig(),
   dependencies,
-  now = new Date(),
+  now = getUaStudentLicenseNow(),
 }: {
   membershipId: string;
   successUrl: string;
@@ -625,8 +668,7 @@ function defaultWebhookTransitionDependencies(
                   where: {
                     membershipId: checkout.membershipId,
                     cohort: checkout.cohort,
-                    stripeCheckoutSessionId:
-                      checkout.stripeCheckoutSessionId,
+                    stripeCheckoutSessionId: checkout.stripeCheckoutSessionId,
                   },
                   data: reconciliationData(checkout, status),
                 });
@@ -690,9 +732,7 @@ export async function applyStripeWebhookTransition(
         // delayed handler cannot commit a stale pre-lock snapshot last.
         await tx.lockPaymentIntent(transition.paymentIntentId);
         const status = resolveStripeLicenseStatus(
-          await dependencies.retrievePaymentSnapshot(
-            transition.paymentIntentId
-          )
+          await dependencies.retrievePaymentSnapshot(transition.paymentIntentId)
         );
         await tx.reconcile(
           transition.checkout,
@@ -776,9 +816,7 @@ export function resolveStripeLicenseStatus(
   if (snapshot.disputeStatuses.includes('lost')) return 'REVOKED';
   const unresolvedDispute = snapshot.disputeStatuses.some(
     (status) =>
-      status !== 'won' &&
-      status !== 'warning_closed' &&
-      status !== 'prevented'
+      status !== 'won' && status !== 'warning_closed' && status !== 'prevented'
   );
   if (unresolvedDispute) return 'DISPUTED';
   if (charge.disputed && snapshot.disputeStatuses.length === 0) {
