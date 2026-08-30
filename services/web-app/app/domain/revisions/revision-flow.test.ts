@@ -55,6 +55,8 @@ describe('resolveRevisionEntryPath', () => {
 describe('resolveRevisionAccess', () => {
   const allowed = {
     revisionFlowEnabled: true,
+    membershipRole: 'STUDENT' as const,
+    isActiveMembership: true,
     isOwner: true,
     isReleased: true,
     isWithdrawn: false,
@@ -75,6 +77,18 @@ describe('resolveRevisionAccess', () => {
       allowed: false,
       reason: 'not-owner',
     });
+  });
+
+  test('denies a teacher even when the teacher owns the document', () => {
+    expect(
+      resolveRevisionAccess({ ...allowed, membershipRole: 'TEACHER' })
+    ).toEqual({ allowed: false, reason: 'not-student' });
+  });
+
+  test('denies an inactive student membership', () => {
+    expect(
+      resolveRevisionAccess({ ...allowed, isActiveMembership: false })
+    ).toEqual({ allowed: false, reason: 'inactive-membership' });
   });
 
   test('denies a submission whose grade has not been released', () => {
@@ -117,6 +131,18 @@ describe('resolveRevisionDenialRedirect', () => {
   test('reports a non-owner as an error', () => {
     expect(
       resolveRevisionDenialRedirect({ ...ids, reason: 'not-owner' })
+    ).toMatchObject({ path: '/app/submissions/sub-1', type: 'error' });
+  });
+
+  test('reports a non-student membership as an error', () => {
+    expect(
+      resolveRevisionDenialRedirect({ ...ids, reason: 'not-student' })
+    ).toMatchObject({ path: '/app/submissions/sub-1', type: 'error' });
+  });
+
+  test('reports an inactive membership as an error', () => {
+    expect(
+      resolveRevisionDenialRedirect({ ...ids, reason: 'inactive-membership' })
     ).toMatchObject({ path: '/app/submissions/sub-1', type: 'error' });
   });
 });

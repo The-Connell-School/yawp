@@ -44,6 +44,8 @@ export function resolveRevisionEntryPath({
 }
 
 export type RevisionDenialReason =
+  | 'inactive-membership'
+  | 'not-student'
   | 'flag-off'
   | 'not-owner'
   | 'not-released'
@@ -54,6 +56,9 @@ export type RevisionAccess =
   | { allowed: false; reason: RevisionDenialReason };
 
 export type RevisionAccessInput = {
+  /** Only an active student membership may enter the writing surface. */
+  membershipRole: 'STUDENT' | 'TEACHER';
+  isActiveMembership: boolean;
   revisionFlowEnabled: boolean;
   /** The viewer owns the document behind this submission. */
   isOwner: boolean;
@@ -69,11 +74,19 @@ export type RevisionAccessInput = {
  * have.
  */
 export function resolveRevisionAccess({
+  membershipRole,
+  isActiveMembership,
   revisionFlowEnabled,
   isOwner,
   isReleased,
   isWithdrawn,
 }: RevisionAccessInput): RevisionAccess {
+  if (!isActiveMembership) {
+    return { allowed: false, reason: 'inactive-membership' };
+  }
+  if (membershipRole !== 'STUDENT') {
+    return { allowed: false, reason: 'not-student' };
+  }
   if (!revisionFlowEnabled) return { allowed: false, reason: 'flag-off' };
   if (!isOwner) return { allowed: false, reason: 'not-owner' };
   if (isWithdrawn) return { allowed: false, reason: 'withdrawn' };
@@ -102,6 +115,19 @@ export function resolveRevisionDenialRedirect({
   documentId: string;
 }): RevisionDenialRedirect {
   switch (reason) {
+    case 'inactive-membership':
+      return {
+        path: `/app/submissions/${submissionId}`,
+        description:
+          'Your student membership must be active to revise this essay.',
+        type: 'error',
+      };
+    case 'not-student':
+      return {
+        path: `/app/submissions/${submissionId}`,
+        description: 'Only students can use the revision workspace.',
+        type: 'error',
+      };
     case 'flag-off':
       return {
         path: `/app/documents/${documentId}?${LEGACY_REVISE_QUERY}`,

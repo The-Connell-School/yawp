@@ -40,11 +40,17 @@ const TEACHER_MEMBERSHIP_ID = 'membership-teacher';
 function membership(
   id: string,
   role: 'STUDENT' | 'TEACHER',
-  { revisionFlowEnabled = true } = {}
+  {
+    revisionFlowEnabled = true,
+    isActive = true,
+    isOrgOwner = false,
+  } = {}
 ) {
   return {
     id,
     role,
+    isActive,
+    isOrgOwner,
     organization: { id: 'org-1', revisionFlowEnabled },
   };
 }
@@ -139,6 +145,18 @@ describe('revise loader', () => {
     expect(data.submission.html).toBe('<p>body</p>');
     expect(data.document.html).toBe('<p>live draft</p>');
     expect(data.document.revision).toBe(7);
+    expect(prisma.submission.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          document: {
+            is: {
+              membershipId: STUDENT_MEMBERSHIP_ID,
+              membership: { organizationId: 'org-1' },
+            },
+          },
+        }),
+      })
+    );
   });
 
   test('sends the student to the legacy draft editor while the flag is off', async () => {
@@ -174,16 +192,90 @@ describe('revise loader', () => {
     expect(redirect.to).toBe('/app/documents/doc-1?revise=1');
   });
 
-  test('refuses a teacher: revising would write into the student document', async () => {
+  test('refuses a teacher even when the teacher owns the submission document', async () => {
     requireUserId.mockResolvedValue('user-teacher');
     requireMembership.mockResolvedValue(
       membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
+    );
+    prisma.submission.findFirst.mockResolvedValue(
+      buildSubmission({
+        document: {
+          ...(buildSubmission().document as Record<string, unknown>),
+          membership: {
+            id: TEACHER_MEMBERSHIP_ID,
+            userId: 'user-teacher',
+            organizationId: 'org-1',
+          },
+        },
+      })
     );
 
     const redirect = await readRedirect(await call());
 
     expect(redirect.to).toBe('/app/submissions/sub-1');
     expect(redirect.payload.type).toBe('error');
+    expect(prisma.submission.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('refuses another student who does not own the submission document', async () => {
+    requireUserId.mockResolvedValue('user-other-student');
+    requireMembership.mockResolvedValue(
+      membership('membership-other-student', 'STUDENT')
+    );
+
+    const redirect = await readRedirect(await call());
+
+    expect(redirect.to).toBe('/app/submissions/sub-1');
+    expect(redirect.payload.type).toBe('error');
+    expect(prisma.submission.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          document: {
+            is: {
+              membershipId: 'membership-other-student',
+              membership: { organizationId: 'org-1' },
+            },
+          },
+        }),
+      })
+    );
+  });
+
+  test('refuses privileged staff even when they own the submission document', async () => {
+    requireUserId.mockResolvedValue('user-owner');
+    requireMembership.mockResolvedValue(
+      membership('membership-owner', 'TEACHER', { isOrgOwner: true })
+    );
+    prisma.submission.findFirst.mockResolvedValue(
+      buildSubmission({
+        document: {
+          ...(buildSubmission().document as Record<string, unknown>),
+          membership: {
+            id: 'membership-owner',
+            userId: 'user-owner',
+            organizationId: 'org-1',
+          },
+        },
+      })
+    );
+
+    const redirect = await readRedirect(await call());
+
+    expect(redirect.to).toBe('/app/submissions/sub-1');
+    expect(redirect.payload.type).toBe('error');
+    expect(prisma.submission.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('refuses an inactive student membership', async () => {
+    requireMembership.mockResolvedValue(
+      membership(STUDENT_MEMBERSHIP_ID, 'STUDENT', { isActive: false })
+    );
+
+    const redirect = await readRedirect(await call());
+
+    expect(redirect.to).toBe('/app/submissions/sub-1');
+    expect(redirect.payload.type).toBe('error');
+    expect(prisma.submission.findFirst).not.toHaveBeenCalled();
   });
 
   test('reports a missing submission rather than leaking its existence', async () => {

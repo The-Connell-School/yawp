@@ -42,7 +42,6 @@ import {
 } from '~/routes/app_.submissions_.$submissionId/submission-rubric-config.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import { redirectWithToast } from '~/utils/toast.server';
 import type { SyncStatus } from '~/utils/sync-service';
@@ -81,21 +80,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
+  // This route mounts an editable student document. Staff access to the
+  // submission/grading views must never imply access to this writing surface,
+  // even when staff own a document themselves or have organization privileges.
+  if (profile.role !== 'STUDENT' || profile.isActive !== true) {
+    return redirectWithToast(`/app/submissions/${params.submissionId}`, {
+      description:
+        profile.isActive === true
+          ? 'Only students can use the revision workspace.'
+          : 'Your student membership must be active to revise this essay.',
+      type: 'error',
+    });
+  }
+
   const submission = await prisma.submission.findFirst({
     where: {
       id: params.submissionId,
       document: {
         is: {
-          OR: [
-            {
-              membershipId: profile.id,
-              membership: { organizationId: profile.organization.id },
-            },
-            buildTeacherDocumentAccessWhere({
-              membershipId: profile.id,
-              organizationId: profile.organization.id,
-            }),
-          ],
+          membershipId: profile.id,
+          membership: { organizationId: profile.organization.id },
         },
       },
     },
@@ -174,6 +178,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const access = resolveRevisionAccess({
+    membershipRole: profile.role,
+    isActiveMembership: profile.isActive,
     revisionFlowEnabled: profile.organization.revisionFlowEnabled === true,
     isOwner: submission.document.membership.userId === userId,
     isReleased: submission.releasedAt != null,
