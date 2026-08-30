@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { EDITOR_SELECTOR } from '../test-helpers';
+import { createE2EPrismaClient } from '../prisma-client';
 
 /**
  * Student revision flow, V1 (behind Organization.revisionFlowEnabled, on for
@@ -187,6 +188,106 @@ test.describe.serial('Student revises a released essay', () => {
     await expect(
       page.getByTestId('revision-graded-pane')
     ).not.toContainText('Revised in the split screen.');
+  });
+
+  test('submitting a revision preserves the released snapshot and creates exactly one new snapshot', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const marker = `Revision snapshot proof ${Date.now()}`;
+
+    try {
+      const original = await prisma.submission.findUniqueOrThrow({
+        where: { id: e2eContext.gradeId },
+        select: {
+          id: true,
+          documentId: true,
+          title: true,
+          text: true,
+          html: true,
+          releasedAt: true,
+        },
+      });
+      expect(original.releasedAt).toBeInstanceOf(Date);
+
+      const submissionsBefore = await prisma.submission.findMany({
+        where: { documentId: original.documentId },
+        select: { id: true },
+      });
+      const submissionIdsBefore = submissionsBefore.map(({ id }) => id);
+
+      await signIn(e2eContext.userEmail, 'johndoe');
+      await page.goto(`/app/revise/${original.id}`);
+      await expect(page.getByTestId('revision-draft-pane')).toBeVisible({
+        timeout: 15000,
+      });
+      await helpers.waitForEditorReady();
+
+      const editor = page.locator(EDITOR_SELECTOR).first();
+      await editor.click();
+      await page.keyboard.press('End');
+      await page.keyboard.type(` ${marker}`);
+
+      await expect
+        .poll(
+          () =>
+            prisma.document.findUniqueOrThrow({
+              where: { id: original.documentId },
+              select: { text: true },
+            }),
+          { timeout: 15000 }
+        )
+        .toMatchObject({ text: expect.stringContaining(marker) });
+
+      await page.getByTestId('revision-submit').click();
+      await page.getByTestId('revision-title-input').fill('Revision proof');
+      await page.getByTestId('revision-submit-confirm').click();
+      await expect(page).toHaveURL(/\/app\/submissions\/[^/]+$/, {
+        timeout: 15000,
+      });
+
+      await expect
+        .poll(
+          () =>
+            prisma.submission.count({
+              where: { documentId: original.documentId },
+            }),
+          { timeout: 15000 }
+        )
+        .toBe(submissionsBefore.length + 1);
+
+      const unchangedOriginal = await prisma.submission.findUniqueOrThrow({
+        where: { id: original.id },
+        select: {
+          id: true,
+          documentId: true,
+          title: true,
+          text: true,
+          html: true,
+          releasedAt: true,
+        },
+      });
+      expect(unchangedOriginal).toEqual(original);
+
+      const newSubmissions = await prisma.submission.findMany({
+        where: {
+          documentId: original.documentId,
+          id: { notIn: submissionIdsBefore },
+        },
+        select: { id: true, title: true, text: true, html: true },
+      });
+      expect(newSubmissions).toHaveLength(1);
+      expect(newSubmissions[0]).toMatchObject({
+        title: 'Revision proof',
+        text: expect.stringContaining(marker),
+        html: expect.stringContaining(marker),
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   // The two panes are one document seen twice, so a reader compares them line
