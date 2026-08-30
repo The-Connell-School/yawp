@@ -81,6 +81,15 @@ async function waitForDockerPostgresReady(pgUser: string) {
   for (let i = 0; i < 60; i++) {
     try {
       run(getDockerPostgresReadyCommand(pgUser));
+      // The official image starts a temporary bootstrap server, stops it, and
+      // then launches the long-running server. Require readiness to remain
+      // stable across that planned restart before migrations begin.
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      run(getDockerPostgresReadyCommand(pgUser));
+      run(
+        `docker exec ${CONTAINER_NAME} psql -U ${shellEscape(pgUser)} -d postgres -tAc 'SELECT 1'`,
+        { stdio: 'ignore' }
+      );
       return;
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 1000));
