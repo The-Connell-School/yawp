@@ -12,24 +12,38 @@ enum MembershipRole {
   STUDENT
 }
 
+enum StudentLicenseStatus {
+  PENDING
+  ACTIVE
+  REFUNDED
+  DISPUTED
+  REVOKED
+}
+
+enum StudentLicenseSource {
+  STRIPE_CHECKOUT
+  EXISTING_SUBSCRIPTION
+  MANUAL
+}
+
 model Class {
-  id               String            @id @default(cuid())
-  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime          @default(now()) @db.Timestamptz(6)
-  code             String
-  schoolYear       String            @default("2024-2025")
-  period           String?
-  grade            String?
-  title            String?
-  cardGradientKey  String            @default("indigo-purple-pink")
-  classArtIndex    Int?
-  classArtKey      String?
-  isArchived       Boolean           @default(false)
-  students         OrgMembership[]   @relation("ClassStudents")
-  teachers         OrgMembership[]   @relation("ClassTeachers")
-  schoolId         String
-  school           School            @relation(fields: [schoolId], references: [id])
-  classAssignments ClassAssignment[]
+  id                              String                           @id @default(cuid())
+  createdAt                       DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt                       DateTime                         @default(now()) @db.Timestamptz(6)
+  code                            String
+  schoolYear                      String                           @default("2024-2025")
+  period                          String?
+  grade                           String?
+  title                           String?
+  cardGradientKey                 String                           @default("indigo-purple-pink")
+  classArtIndex                   Int?
+  classArtKey                     String?
+  isArchived                      Boolean                          @default(false)
+  students                        OrgMembership[]                  @relation("ClassStudents")
+  teachers                        OrgMembership[]                  @relation("ClassTeachers")
+  schoolId                        String
+  school                          School                           @relation(fields: [schoolId], references: [id])
+  classAssignments                ClassAssignment[]
   writingPracticeClassAssignments WritingPracticeClassAssignment[]
 
   @@unique([schoolId, code])
@@ -610,6 +624,7 @@ model Organization {
   reporterGrowthPlans       ReporterGrowthPlan[]
   aiRequestReservations     AiRequestReservation[]
   submissionActivities      SubmissionActivity[]
+  studentLicenses           StudentLicense[]
 }
 
 model OrganizationAssignmentType {
@@ -624,49 +639,85 @@ model OrganizationAssignmentType {
 }
 
 model OrgMembership {
-  id                            String                         @id @default(cuid())
-  createdAt                     DateTime                       @default(now()) @db.Timestamptz(6)
-  userId                        String
-  user                          User                           @relation(fields: [userId], references: [id])
-  organizationId                String
-  organization                  Organization                   @relation(fields: [organizationId], references: [id])
-  role                          MembershipRole
-  isOrgOwner                    Boolean                        @default(false)
-  isActive                      Boolean                        @default(true)
-  school                        String?
-  schoolTeacher                 String?
-  grade                         String?
-  period                        String?
-  documents                     Document[]
-  documentComments              DocumentComment[]
-  documentCommentResponses      DocumentCommentResponse[]
-  pasteAlerts                   PasteAlert[]
-  submissionsGraded             Submission[]                   @relation("SubmissionGradedBy")
-  submissionsUnsubmitted        Submission[]                   @relation("SubmissionUnsubmittedBy")
-  submissionActivities          SubmissionActivity[]           @relation("SubmissionActivityActor")
-  submissionComments            SubmissionComment[]            @relation("SubmissionCommentProfile")
-  ownedAssignmentTypes          AssignmentType[]               @relation("AssignmentTypeOwner")
-  classesAsTeacher              Class[]                        @relation("ClassTeachers")
-  classesAsStudent              Class[]                        @relation("ClassStudents")
-  schools                       School[]                       @relation("SchoolTeachers")
-  teacherTrainingModuleSessions TeacherTrainingModuleSession[]
-  assignedTeacherTrainings      TeacherTraining[]              @relation("TeacherTrainingAssignments")
-  assignmentTypesCustomized     Boolean                        @default(false)
-  assignmentTypeAssignments     TeacherAssignmentType[]
-  writingPracticeAssignmentsCreated WritingPracticeAssignment[] @relation("WritingPracticeAssignmentCreator")
-  reporterConversations         ReporterConversation[]
-  reporterGrowthPlansOwned      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
-  reporterGrowthPlansAsStudent  ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
-  aiRequestReservations         AiRequestReservation[]
+  id                                String                         @id @default(cuid())
+  createdAt                         DateTime                       @default(now()) @db.Timestamptz(6)
+  userId                            String
+  user                              User                           @relation(fields: [userId], references: [id])
+  organizationId                    String
+  organization                      Organization                   @relation(fields: [organizationId], references: [id])
+  role                              MembershipRole
+  isOrgOwner                        Boolean                        @default(false)
+  isActive                          Boolean                        @default(true)
+  school                            String?
+  schoolTeacher                     String?
+  grade                             String?
+  period                            String?
+  documents                         Document[]
+  documentComments                  DocumentComment[]
+  documentCommentResponses          DocumentCommentResponse[]
+  pasteAlerts                       PasteAlert[]
+  submissionsGraded                 Submission[]                   @relation("SubmissionGradedBy")
+  submissionsUnsubmitted            Submission[]                   @relation("SubmissionUnsubmittedBy")
+  submissionActivities              SubmissionActivity[]           @relation("SubmissionActivityActor")
+  submissionComments                SubmissionComment[]            @relation("SubmissionCommentProfile")
+  ownedAssignmentTypes              AssignmentType[]               @relation("AssignmentTypeOwner")
+  classesAsTeacher                  Class[]                        @relation("ClassTeachers")
+  classesAsStudent                  Class[]                        @relation("ClassStudents")
+  schools                           School[]                       @relation("SchoolTeachers")
+  teacherTrainingModuleSessions     TeacherTrainingModuleSession[]
+  assignedTeacherTrainings          TeacherTraining[]              @relation("TeacherTrainingAssignments")
+  assignmentTypesCustomized         Boolean                        @default(false)
+  assignmentTypeAssignments         TeacherAssignmentType[]
+  writingPracticeAssignmentsCreated WritingPracticeAssignment[]    @relation("WritingPracticeAssignmentCreator")
+  reporterConversations             ReporterConversation[]
+  reporterGrowthPlansOwned          ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
+  reporterGrowthPlansAsStudent      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
+  aiRequestReservations             AiRequestReservation[]
 
   classAssignmentInsightsGenerated ClassAssignmentInsight[]
-  savedThesisPrompts            SavedThesisPrompt[]
-  savedDailyPagesPrompts        SavedDailyPagesPrompt[]
-  savedAssignments              SavedAssignment[]
+  savedThesisPrompts               SavedThesisPrompt[]
+  savedDailyPagesPrompts           SavedDailyPagesPrompt[]
+  savedAssignments                 SavedAssignment[]
+  studentLicenses                  StudentLicense[]
 
   @@unique([userId, organizationId])
   @@unique([id, organizationId])
   @@map("OrgMembership")
+}
+
+model StudentLicense {
+  id                      String               @id @default(cuid())
+  createdAt               DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime             @default(now()) @updatedAt @db.Timestamptz(6)
+  membershipId            String
+  organizationId          String
+  cohort                  String
+  status                  StudentLicenseStatus @default(PENDING)
+  source                  StudentLicenseSource @default(STRIPE_CHECKOUT)
+  validUntil              DateTime             @db.Timestamptz(6)
+  checkoutAttempt         Int                  @default(0)
+  amountPaid              Int?
+  currency                String?
+  stripePriceId           String?
+  stripeCustomerId        String?
+  stripeCheckoutSessionId String?              @unique
+  stripePaymentIntentId   String?              @unique
+  paidAt                  DateTime?            @db.Timestamptz(6)
+  revokedAt               DateTime?            @db.Timestamptz(6)
+  membership              OrgMembership        @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  organization            Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([membershipId, cohort])
+  @@index([organizationId, status, validUntil])
+}
+
+/// Stripe retries webhook delivery and does not guarantee ordering. Recording the
+/// event id in the same transaction as its state transition makes handling durable
+/// and idempotent without trusting a browser redirect.
+model StripeWebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now()) @db.Timestamptz(6)
 }
 
 /// Durable admission record created before an AI provider call. Advisory locks
