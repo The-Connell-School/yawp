@@ -81,14 +81,25 @@ export async function action({ request }: ActionFunctionArgs) {
   const invitationCookie = await invitationCookieStorage.getSession(cookie);
 
   if (type === 'onboard-student') {
-    const { klassId, klassIds, schoolId } = JSON.parse(
-      invitation.metadata ?? '{}'
-    ) as z.infer<typeof StudentOnboardingMetadataSchema>;
+    const parsedMetadata = StudentOnboardingMetadataSchema.safeParse(
+      JSON.parse(invitation.metadata ?? '{}')
+    );
 
-    if (!klassId && (!klassIds || klassIds.length === 0) && !schoolId) {
+    if (!parsedMetadata.success) {
       return validationError({
         fieldErrors: { code: 'Invalid metadata. Please sign up again.' },
       });
+    }
+
+    const metadata = parsedMetadata.data;
+    const isUa = 'partner' in metadata;
+    let klassId: string | undefined;
+    let klassIds: string[] | undefined;
+    let schoolId: string | undefined;
+    if (!isUa) {
+      klassId = metadata.klassId;
+      klassIds = metadata.klassIds;
+      schoolId = metadata.schoolId;
     }
 
     const existingUser = await prisma.user.findFirst({
@@ -108,6 +119,10 @@ export async function action({ request }: ActionFunctionArgs) {
       invitationCookie.set('klassId', klassId);
       invitationCookie.set('klassIds', klassIds);
       invitationCookie.set('schoolId', schoolId);
+      if (isUa) {
+        invitationCookie.set('partner', 'ua');
+        invitationCookie.set('organizationId', metadata.organizationId);
+      }
       invitationCookie.set('email', normalizedTarget);
       return redirect('/auth/inv/onboard-student', {
         headers: {

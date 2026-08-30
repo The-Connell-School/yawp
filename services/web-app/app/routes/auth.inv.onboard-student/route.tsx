@@ -27,12 +27,17 @@ import { FormSelect } from '~/components/rvf-forms/form-select.tsx';
 import { setMembershipId } from '~/cookies/membership-id.server.ts';
 import { normalizeEmail } from '~/utils/normalize-email';
 import { formatClassGradePeriod } from '~/utils/class-display';
+import { requireUaOrganizationId } from '~/utils/ua-partner.server';
 
-export const Schema = z
+export const GenericSchema = z
   .object({
     name: NameSchema,
     classId: z.string().min(1, 'Class is required'),
   })
+  .and(PasswordAndConfirmPasswordSchema);
+
+export const UaSchema = z
+  .object({ name: NameSchema, classId: z.string().optional() })
   .and(PasswordAndConfirmPasswordSchema);
 
 async function requireInvitation(request: Request) {
@@ -44,12 +49,21 @@ async function requireInvitation(request: Request) {
   const klassId = invitation.get('klassId') as string | undefined;
   const klassIds = invitation.get('klassIds') as string[] | undefined;
   const schoolId = invitation.get('schoolId') as string | undefined;
+  const partner = invitation.get('partner') as string | undefined;
+  const organizationId = invitation.get('organizationId') as string | undefined;
 
   const classIds = Array.from(
-    new Set([klassId, ...(Array.isArray(klassIds) ? klassIds : [])].filter(Boolean))
+    new Set(
+      [klassId, ...(Array.isArray(klassIds) ? klassIds : [])].filter(Boolean)
+    )
   ) as string[];
 
-  if (!email || (classIds.length === 0 && !schoolId)) {
+  const isUa =
+    partner === 'ua' &&
+    Boolean(organizationId) &&
+    organizationId === requireUaOrganizationId();
+
+  if (!email || (!isUa && classIds.length === 0 && !schoolId)) {
     throw redirectWithToast(
       '/auth/login',
       {
@@ -65,12 +79,23 @@ async function requireInvitation(request: Request) {
     );
   }
 
-  return { email, classIds, schoolId };
+  return {
+    email,
+    classIds,
+    schoolId,
+    partner: isUa ? ('ua' as const) : null,
+    organizationId,
+  };
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAnonymous(request);
-  const { email, classIds, schoolId } = await requireInvitation(request);
+  const { email, classIds, schoolId, partner } =
+    await requireInvitation(request);
+
+  if (partner === 'ua') {
+    return { email, classes: [], partner };
+  }
 
   const classes = await prisma.class.findMany({
     where: {
@@ -91,11 +116,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         select: { user: { select: { name: true } } },
       },
     },
-    orderBy: [
-      { schoolYear: 'desc' },
-      { grade: 'asc' },
-      { period: 'asc' },
-    ],
+    orderBy: [{ schoolYear: 'desc' }, { grade: 'asc' }, { period: 'asc' }],
   });
 
   if (classes.length === 0) {
@@ -105,28 +126,35 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  return { email, classes };
+  return { email, classes, partner: null };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { email, classIds, schoolId } = await requireInvitation(request);
-  const { data, error } = await parseFormData(request, Schema);
+  const { email, classIds, schoolId, partner, organizationId } =
+    await requireInvitation(request);
+  const { data, error } = await parseFormData(
+    request,
+    partner === 'ua' ? UaSchema : GenericSchema
+  );
   if (error) return validationError(error);
 
-  const klass = await prisma.class.findFirst({
-    where: {
-      id: data.classId,
-      isArchived: false,
-      ...(classIds.length ? { id: { in: classIds } } : {}),
-      ...(schoolId ? { schoolId } : {}),
-    },
-    select: {
-      id: true,
-      school: { select: { organizationId: true } },
-    },
-  });
+  const klass =
+    partner === 'ua'
+      ? null
+      : await prisma.class.findFirst({
+          where: {
+            id: data.classId!,
+            isArchived: false,
+            ...(classIds.length ? { id: { in: classIds } } : {}),
+            ...(schoolId ? { schoolId } : {}),
+          },
+          select: {
+            id: true,
+            school: { select: { organizationId: true } },
+          },
+        });
 
-  if (!klass) {
+  if (partner !== 'ua' && !klass) {
     return validationError({ fieldErrors: { classId: 'Class not found' } });
   }
 
@@ -141,9 +169,13 @@ export async function action({ request }: ActionFunctionArgs) {
           password: { create: { hash: hashedPassword } },
         },
       },
-      organization: { connect: { id: klass.school.organizationId } },
+      organization: {
+        connect: {
+          id: partner === 'ua' ? organizationId! : klass!.school.organizationId,
+        },
+      },
       role: 'STUDENT',
-      classesAsStudent: { connect: { id: klass.id } },
+      ...(klass ? { classesAsStudent: { connect: { id: klass.id } } } : {}),
     },
   });
 
@@ -162,7 +194,7 @@ export async function action({ request }: ActionFunctionArgs) {
   authSession.set(sessionKey, session.id);
 
   return redirectWithToast(
-    '/app',
+    partner === 'ua' ? '/billing/ua' : '/app',
     { title: 'Welcome', description: 'Thanks for signing up!' },
     {
       headers: {
@@ -186,16 +218,17 @@ export default function Route() {
   const data = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
+  const isUa = data.partner === 'ua';
 
-  const showClassSelect = data.classes.length > 1;
+  const showClassSelect = !isUa && data.classes.length > 1;
 
   const form = useForm({
-    schema: Schema,
+    schema: isUa ? UaSchema : GenericSchema,
     method: 'POST',
     submitSource: 'state',
     defaultValues: {
       name: '',
-      classId: showClassSelect ? '' : data.classes[0]!.id,
+      classId: isUa ? '' : showClassSelect ? '' : data.classes[0]!.id,
       password: '',
       confirmPassword: '',
     },
@@ -206,13 +239,24 @@ export default function Route() {
       <div className="mt-8 flex flex-col gap-3 text-center">
         <h1>Let's get started!</h1>
         <p className="text-sm text-muted-foreground">
-          Create your account and join your class.
+          {isUa
+            ? 'Create your account.'
+            : 'Create your account and join your class.'}
         </p>
       </div>
 
       <div className="mx-auto mt-10 w-full max-w-md px-8">
-        <Form method="POST" className="flex flex-col gap-4" {...form.getFormProps()}>
-          <FormInput scope={form.scope('name')} type="text" label="Name" autoFocus />
+        <Form
+          method="POST"
+          className="flex flex-col gap-4"
+          {...form.getFormProps()}
+        >
+          <FormInput
+            scope={form.scope('name')}
+            type="text"
+            label="Name"
+            autoFocus
+          />
           {showClassSelect ? (
             <FormSelect
               scope={form.scope('classId')}
@@ -234,9 +278,9 @@ export default function Route() {
                 })),
               ]}
             />
-          ) : (
+          ) : !isUa ? (
             <input type="hidden" name="classId" value={data.classes[0]!.id} />
-          )}
+          ) : null}
 
           <FormInput
             scope={form.scope('password')}

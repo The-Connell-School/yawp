@@ -73,7 +73,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       if (!seatMembership) {
         return validationError(
           { fieldErrors: { email: 'Invalid email or password' } },
-          data,
+          data
         );
       }
       previewMembershipId = seatMembership.id;
@@ -100,7 +100,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
         },
         previewMembershipId
           ? { 'set-cookie': await setMembershipId(previewMembershipId) }
-          : null,
+          : null
       ),
     });
   } catch (error) {
@@ -134,11 +134,6 @@ export default function LoginPage() {
   return (
     <div className="mx-auto w-full max-w-md">
       <div className="mt-8 flex flex-col gap-3 text-center">
-        <img
-          src="/img/logo_for_light_mode.png"
-          alt="Logo"
-          className="mx-auto mb-8 h-auto w-48 rounded object-cover sm:w-52"
-        />
         <h1>Welcome back!</h1>
         <p>Please enter your details.</p>
       </div>
