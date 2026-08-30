@@ -343,6 +343,50 @@ test.describe.serial('Student revises a released essay', () => {
     ).toHaveCount(0);
   });
 
+  test('mobile keeps feedback, the graded essay, and the editor readable and usable', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+
+    const feedback = page.getByTestId('revision-feedback-panel');
+    const gradedEssay = page
+      .getByTestId('revision-graded-pane')
+      .locator('.submission-essay')
+      .first();
+    const editor = page
+      .getByTestId('revision-draft-pane')
+      .locator(EDITOR_SELECTOR)
+      .first();
+
+    await expect(feedback).toBeVisible({ timeout: 15000 });
+    await expect(gradedEssay).toBeVisible();
+    await expect(editor).toBeVisible();
+
+    const widths = await Promise.all(
+      [feedback, gradedEssay, editor].map((locator) =>
+        locator.evaluate((element) => element.getBoundingClientRect().width)
+      )
+    );
+    for (const width of widths) expect(width).toBeGreaterThanOrEqual(300);
+
+    const horizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth
+    );
+    expect(horizontalOverflow).toBeLessThanOrEqual(1);
+
+    await page.getByTestId('revision-feedback-tab-teacher').click();
+    await expect(
+      feedback.getByText('Strong thesis statement in the opening sentence.')
+    ).toBeVisible();
+    await expect(editor).toHaveAttribute('contenteditable', 'true');
+    await editor.click();
+    await expect(editor).toBeFocused();
+  });
+
   test('an unreleased submission cannot be revised yet', async ({
     page,
     signIn,

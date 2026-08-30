@@ -83,7 +83,7 @@ export function RevisionFeedbackPanel({
 
   if (!isOpen) {
     return (
-      <div className="flex w-11 shrink-0 flex-col items-center gap-2 border-r bg-muted/30 py-2.5">
+      <div className="flex h-11 w-full shrink-0 flex-row items-center gap-2 border-b bg-muted/30 px-2 sm:h-auto sm:w-11 sm:flex-col sm:border-r sm:border-b-0 sm:px-0 sm:py-2.5">
         <Button
           type="button"
           variant="ghost"
@@ -96,7 +96,7 @@ export function RevisionFeedbackPanel({
         >
           <PanelLeftOpen className="h-4 w-4" />
         </Button>
-        <span className="mt-2 text-xs font-medium tracking-wide text-muted-foreground [writing-mode:vertical-rl]">
+        <span className="text-xs font-medium tracking-wide text-muted-foreground sm:mt-2 sm:[writing-mode:vertical-rl]">
           Feedback
         </span>
       </div>
@@ -105,7 +105,7 @@ export function RevisionFeedbackPanel({
 
   return (
     <div
-      className="flex w-[320px] shrink-0 flex-col overflow-hidden border-r bg-white"
+      className="flex h-[45vh] min-h-72 max-h-96 w-full shrink-0 flex-col overflow-hidden border-b bg-white sm:h-auto sm:min-h-0 sm:w-[320px] sm:border-r sm:border-b-0"
       data-testid="revision-feedback-panel"
     >
       {/* Same heights as the panes' header and bar rows (see PANE_HEADER_CLASS
