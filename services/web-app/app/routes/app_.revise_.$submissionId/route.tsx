@@ -256,8 +256,7 @@ const noopGrammarHover = () => {};
  */
 const PANE_HEADER_CLASS =
   'flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5';
-const PANE_BAR_CLASS =
-  'flex shrink-0 items-center gap-3 border-b px-4 p-1';
+const PANE_BAR_CLASS = 'flex shrink-0 items-center gap-3 border-b px-4 p-1';
 
 /** What the marks in the graded essay mean — otherwise the colors are a code. */
 function MarkLegend({
@@ -268,7 +267,10 @@ function MarkLegend({
   assistantCount: number;
 }) {
   return (
-    <div className="flex h-8 items-center gap-4" data-testid="revision-mark-legend">
+    <div
+      className="flex h-8 items-center gap-4"
+      data-testid="revision-mark-legend"
+    >
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <span className="mark-swatch-teacher inline-block h-3 w-4 rounded-sm" />
         Teacher
@@ -338,6 +340,7 @@ export default function ReviseRoute() {
     () => document.title || submission.title || ''
   );
   const editorBridgeRef = useRef<EditorBridge | null>(null);
+  const [editorReady, setEditorReady] = useState(false);
   const [gradedEssayElement, setGradedEssayElement] =
     useState<HTMLDivElement | null>(null);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
@@ -358,9 +361,15 @@ export default function ReviseRoute() {
 
   const auth = useAuthHeartbeat({ documentId: document.id, isEditable: true });
 
+  const handleEditorBridgeReady = useCallback((bridge: EditorBridge | null) => {
+    editorBridgeRef.current = bridge;
+    setEditorReady(bridge !== null);
+  }, []);
+
   const submit = useDocumentSubmit({
     documentId: document.id,
     editorBridgeRef,
+    requireEditorBridge: true,
     onSubmitted: (created) => {
       setIsConfirmOpen(false);
       navigate(`/app/submissions/${created.id}`);
@@ -438,14 +447,12 @@ export default function ReviseRoute() {
     return submission.letterGrade
       ? `${submission.numericPercentage}% (${submission.letterGrade})`
       : `${submission.numericPercentage}%`;
-  }, [
-    submission.numericPercentage,
-    submission.letterGrade,
-    submission.score,
-  ]);
+  }, [submission.numericPercentage, submission.letterGrade, submission.score]);
 
   const canSubmitRevision = isRevisionSubmissionReady({
     editorSubmittable,
+    editorReady,
+    isAuthCheckComplete: auth.isInitialCheckComplete,
     isLocked: auth.isLocked,
     isSubmitting: submit.isSubmitting,
     syncStatus,
@@ -576,9 +583,7 @@ export default function ReviseRoute() {
                 serverUpdatedAt={document.updatedAt}
                 initialRevision={document.revision}
                 isEditable={!auth.isLocked && auth.isInitialCheckComplete}
-                onBridgeReady={(bridge) => {
-                  editorBridgeRef.current = bridge;
-                }}
+                onBridgeReady={handleEditorBridgeReady}
                 onSyncStatusChange={setSyncStatus}
                 onSubmittableContentChange={handleSubmittableContentChange}
               />
@@ -625,8 +630,10 @@ export default function ReviseRoute() {
             </Button>
             <Button
               data-testid="revision-submit-confirm"
-              disabled={submit.isSubmitting}
-              onClick={() => submit.submitNow(revisionTitle.trim() || undefined)}
+              disabled={!canSubmitRevision}
+              onClick={() =>
+                submit.submitNow(revisionTitle.trim() || undefined)
+              }
             >
               {submit.isSubmitting ? 'Submitting…' : 'Submit revision'}
             </Button>

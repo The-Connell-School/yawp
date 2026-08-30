@@ -25,10 +25,12 @@ type SubmitApi = ReturnType<typeof useDocumentSubmit>;
 
 function Harness({
   editorBridgeRef,
+  requireEditorBridge = false,
   onReady,
   onSubmitted,
 }: {
   editorBridgeRef: RefObject<EditorBridge | null>;
+  requireEditorBridge?: boolean;
   onReady: (api: SubmitApi) => void;
   onSubmitted: (submission: {
     id: string;
@@ -40,6 +42,7 @@ function Harness({
     useDocumentSubmit({
       documentId: 'doc-1',
       editorBridgeRef,
+      requireEditorBridge,
       onSubmitted,
     })
   );
@@ -66,7 +69,8 @@ describe('useDocumentSubmit', () => {
   });
 
   async function submitWithSaveStatus(
-    status: 'synced' | 'offline' | 'auth-expired' | 'error' | 'unmounted'
+    status: 'synced' | 'offline' | 'auth-expired' | 'error' | 'unmounted',
+    requireEditorBridge = false
   ) {
     const saveNow = mock(async () =>
       status === 'unmounted' ? 'synced' : status
@@ -100,6 +104,7 @@ describe('useDocumentSubmit', () => {
       root?.render(
         <Harness
           editorBridgeRef={editorBridgeRef}
+          requireEditorBridge={requireEditorBridge}
           onReady={(value) => {
             api = value;
           }}
@@ -148,5 +153,19 @@ describe('useDocumentSubmit', () => {
       title: 'Revision',
       submittedAt: '2026-08-30T12:00:00.000Z',
     });
+  });
+
+  it('blocks Revision Flow submission until its editor bridge is hydrated', async () => {
+    const { saveNow, fetchMock, onSubmitted } = await submitWithSaveStatus(
+      'unmounted',
+      true
+    );
+
+    expect(saveNow).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(onSubmitted).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith(
+      'Your revision is still loading. Wait for the editor to finish loading before submitting.'
+    );
   });
 });

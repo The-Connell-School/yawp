@@ -152,6 +152,8 @@ describe('resolveRevisionDenialRedirect', () => {
 describe('isRevisionSubmissionReady', () => {
   const ready = {
     editorSubmittable: true,
+    editorReady: true,
+    isAuthCheckComplete: true,
     isLocked: false,
     isSubmitting: false,
     syncStatus: 'synced' as SyncStatus,
@@ -159,6 +161,18 @@ describe('isRevisionSubmissionReady', () => {
 
   test('allows submit only when the latest editor state is synced', () => {
     expect(isRevisionSubmissionReady(ready)).toBe(true);
+  });
+
+  test('disables submit until editor hydration exposes its bridge', () => {
+    expect(isRevisionSubmissionReady({ ...ready, editorReady: false })).toBe(
+      false
+    );
+  });
+
+  test('disables submit until the initial auth check completes', () => {
+    expect(
+      isRevisionSubmissionReady({ ...ready, isAuthCheckComplete: false })
+    ).toBe(false);
   });
 
   for (const syncStatus of [

@@ -17,17 +17,23 @@ export const LEGACY_REVISE_QUERY = 'revise=1';
 
 export function isRevisionSubmissionReady({
   editorSubmittable,
+  editorReady,
+  isAuthCheckComplete,
   isLocked,
   isSubmitting,
   syncStatus,
 }: {
   editorSubmittable: boolean;
+  editorReady: boolean;
+  isAuthCheckComplete: boolean;
   isLocked: boolean;
   isSubmitting: boolean;
   syncStatus: SyncStatus;
 }): boolean {
   return (
     editorSubmittable &&
+    editorReady &&
+    isAuthCheckComplete &&
     !isLocked &&
     !isSubmitting &&
     syncStatus === 'synced'
@@ -73,8 +79,7 @@ export type RevisionDenialReason =
   | 'withdrawn';
 
 export type RevisionAccess =
-  | { allowed: true }
-  | { allowed: false; reason: RevisionDenialReason };
+  { allowed: true } | { allowed: false; reason: RevisionDenialReason };
 
 export type RevisionAccessInput = {
   /** Only an active student membership may enter the writing surface. */
