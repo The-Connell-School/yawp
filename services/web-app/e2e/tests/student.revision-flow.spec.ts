@@ -380,13 +380,17 @@ test.describe.serial('Student revises a released essay', () => {
     );
     for (const width of widths) expect(width).toBeGreaterThanOrEqual(300);
 
-    const visibleHeights = await Promise.all(
-      [feedback, gradedEssayScroll, editorScroll].map((locator) =>
-        locator.evaluate((element) => element.getBoundingClientRect().height)
-      )
-    );
-    for (const height of visibleHeights)
-      expect(height).toBeGreaterThanOrEqual(240);
+    const visibleSurfaces = [
+      ['feedback panel', feedback],
+      ['graded essay', gradedEssayScroll],
+      ['draft editor', editorScroll],
+    ] as const;
+    for (const [name, surface] of visibleSurfaces) {
+      const height = await surface.evaluate(
+        (element) => element.getBoundingClientRect().height
+      );
+      expect(height, `${name} visible height`).toBeGreaterThanOrEqual(240);
+    }
 
     await expect
       .poll(() =>

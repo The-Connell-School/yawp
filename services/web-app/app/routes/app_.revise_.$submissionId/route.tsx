@@ -564,21 +564,25 @@ export default function ReviseRoute() {
           {/* The editor's selection toolbar reads this context. V1 shows no
               comment UI of its own, so the provider is only a host. */}
           <CommentsSelectionProvider>
-            <DocumentEditor
-              docId={document.id}
-              // Rendered once above both panes instead.
-              assignment={null}
-              serverHtml={document.html}
-              serverText={document.text}
-              serverUpdatedAt={document.updatedAt}
-              initialRevision={document.revision}
-              isEditable={!auth.isLocked && auth.isInitialCheckComplete}
-              onBridgeReady={(bridge) => {
-                editorBridgeRef.current = bridge;
-              }}
-              onSyncStatusChange={setSyncStatus}
-              onSubmittableContentChange={handleSubmittableContentChange}
-            />
+            {/* DocumentEditor fills this route-owned frame, and its nested
+                Editor fills the remaining mobile height below the toolbar. */}
+            <div className="min-h-0 grow [&>div>div>div]:h-full [&>div]:h-full">
+              <DocumentEditor
+                docId={document.id}
+                // Rendered once above both panes instead.
+                assignment={null}
+                serverHtml={document.html}
+                serverText={document.text}
+                serverUpdatedAt={document.updatedAt}
+                initialRevision={document.revision}
+                isEditable={!auth.isLocked && auth.isInitialCheckComplete}
+                onBridgeReady={(bridge) => {
+                  editorBridgeRef.current = bridge;
+                }}
+                onSyncStatusChange={setSyncStatus}
+                onSubmittableContentChange={handleSubmittableContentChange}
+              />
+            </div>
           </CommentsSelectionProvider>
         </section>
       </div>
