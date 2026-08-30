@@ -17,7 +17,9 @@ import { getDomainUrl } from '~/utils/misc';
 
 async function requirePaymentMembership(request: Request) {
   const userId = await requireUserId(request);
-  const membership = await requireMembership(request, userId);
+  const membership = await requireMembership(request, userId, {
+    allowPaymentRequired: true,
+  });
   const access = await getUaStudentLicenseAccess({
     id: membership.id,
     role: membership.role,

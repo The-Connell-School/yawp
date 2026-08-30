@@ -4,7 +4,9 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const membership = await requireMembership(request, userId);
+  const membership = await requireMembership(request, userId, {
+    allowPaymentRequired: true,
+  });
   const checkoutSessionId = new URL(request.url).searchParams.get('session_id');
   if (!checkoutSessionId) {
     return new Response('Missing Checkout Session', { status: 400 });

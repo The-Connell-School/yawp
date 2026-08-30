@@ -19,6 +19,7 @@ const prisma = {
 const getMembershipId = mock();
 const setMembershipId = mock();
 const getSession = mock();
+const getUaStudentLicenseAccess = mock();
 
 mock.module('./db.server.ts', () => ({ prisma }));
 mock.module('~/cookies/membership-id.server', () => ({
@@ -30,6 +31,9 @@ mock.module('../cookie-session-storages/authentication.server.ts', () => ({
     getSession,
     destroySession: mock(),
   },
+}));
+mock.module('~/domain/student-license/student-license.server', () => ({
+  getUaStudentLicenseAccess,
 }));
 
 const {
@@ -63,6 +67,9 @@ describe('membership auth helpers', () => {
     getMembershipId.mockReset();
     setMembershipId.mockReset();
     getSession.mockReset();
+    getSession.mockResolvedValue({ get: () => undefined });
+    getUaStudentLicenseAccess.mockReset();
+    getUaStudentLicenseAccess.mockResolvedValue('BYPASS');
     prisma.orgMembership.findUnique.mockReset();
     prisma.orgMembership.findFirst.mockReset();
     prisma.user.findFirst.mockReset();
@@ -138,6 +145,45 @@ describe('membership auth helpers', () => {
       },
     });
     expect(membership).toEqual(membershipFixture);
+  });
+
+  test('requireMembership redirects an unpaid UA student to billing', async () => {
+    getMembershipId.mockResolvedValue('membership-1');
+    prisma.orgMembership.findUnique.mockResolvedValue({
+      ...membershipFixture,
+      role: 'STUDENT',
+      organization: { ...membershipFixture.organization, id: 'org-ua' },
+    });
+    getUaStudentLicenseAccess.mockResolvedValue('PAYMENT_REQUIRED');
+
+    await expect(
+      requireMembership(new Request('https://example.com/app'), 'user-1')
+    ).rejects.toMatchObject({ status: 302 });
+
+    expect(getUaStudentLicenseAccess).toHaveBeenCalledWith({
+      id: 'membership-1',
+      role: 'STUDENT',
+      organizationId: 'org-ua',
+    });
+  });
+
+  test('billing routes can resolve the same unpaid membership without a redirect loop', async () => {
+    getMembershipId.mockResolvedValue('membership-1');
+    prisma.orgMembership.findUnique.mockResolvedValue({
+      ...membershipFixture,
+      role: 'STUDENT',
+      organization: { ...membershipFixture.organization, id: 'org-ua' },
+    });
+    getUaStudentLicenseAccess.mockResolvedValue('PAYMENT_REQUIRED');
+
+    const membership = await requireMembership(
+      new Request('https://example.com/billing/ua'),
+      'user-1',
+      { allowPaymentRequired: true }
+    );
+
+    expect(membership.id).toBe('membership-1');
+    expect(getUaStudentLicenseAccess).not.toHaveBeenCalled();
   });
 
   test('requireMembership rejects a cookie-selected inactive membership and clears the scope cookie', async () => {
@@ -292,7 +338,7 @@ describe('membership auth helpers', () => {
 
     try {
       await expect(
-        requireAdmin(new Request('https://example.com/app/admin')),
+        requireAdmin(new Request('https://example.com/app/admin'))
       ).resolves.toBeDefined();
     } finally {
       delete process.env.PREVIEW_ACCESS_GATE;
