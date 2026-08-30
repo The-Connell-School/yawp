@@ -61,6 +61,7 @@ describe('UA student signup', () => {
     } as any)) as Response;
 
     expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toContain('partner=ua');
     expect(prisma.class.findMany).not.toHaveBeenCalled();
     expect(prisma.invitation.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
