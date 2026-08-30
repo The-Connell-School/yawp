@@ -357,10 +357,17 @@ test.describe.serial('Student revises a released essay', () => {
       .getByTestId('revision-graded-pane')
       .locator('.submission-essay')
       .first();
+    const gradedEssayScroll = page
+      .getByTestId('revision-graded-pane')
+      .getByTestId('submission-essay-scroll');
     const editor = page
       .getByTestId('revision-draft-pane')
       .locator(EDITOR_SELECTOR)
       .first();
+    const editorScroll = page
+      .getByTestId('revision-draft-pane')
+      .getByTestId('document-editor-scroll');
+    const feedbackScroll = page.getByTestId('revision-feedback-scroll');
 
     await expect(feedback).toBeVisible({ timeout: 15000 });
     await expect(gradedEssay).toBeVisible();
@@ -372,6 +379,29 @@ test.describe.serial('Student revises a released essay', () => {
       )
     );
     for (const width of widths) expect(width).toBeGreaterThanOrEqual(300);
+
+    const visibleHeights = await Promise.all(
+      [feedback, gradedEssayScroll, editorScroll].map((locator) =>
+        locator.evaluate((element) => element.getBoundingClientRect().height)
+      )
+    );
+    for (const height of visibleHeights)
+      expect(height).toBeGreaterThanOrEqual(240);
+
+    await expect
+      .poll(() =>
+        feedbackScroll.evaluate(
+          (element) => getComputedStyle(element).overflowY
+        )
+      )
+      .toBe('auto');
+    await expect
+      .poll(() =>
+        gradedEssayScroll.evaluate(
+          (element) => getComputedStyle(element).overflowY
+        )
+      )
+      .toBe('scroll');
 
     const horizontalOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth

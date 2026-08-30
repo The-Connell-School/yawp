@@ -155,6 +155,7 @@ export function RevisionFeedbackPanel({
       <div
         ref={scrollRef}
         className="no-scrollbar min-h-0 grow overflow-y-auto"
+        data-testid="revision-feedback-scroll"
       >
         {tab === 'grade' ? <ViewPanel submission={submission} /> : null}
         {tab === 'teacher' ? (
