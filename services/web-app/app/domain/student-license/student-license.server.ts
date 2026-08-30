@@ -422,8 +422,8 @@ function defaultCheckoutCreationDependencies(
         },
       });
     },
-    findOrCreateLicense(membership) {
-      return prisma.studentLicense.upsert({
+    async findOrCreateLicense(membership) {
+      const query = {
         where: {
           membershipId_cohort: {
             membershipId: membership.id,
@@ -446,7 +446,22 @@ function defaultCheckoutCreationDependencies(
           checkoutAttempt: true,
           stripeCheckoutSessionId: true,
         },
-      });
+      } as const;
+      try {
+        return await prisma.studentLicense.upsert(query);
+      } catch (error) {
+        // Prisma's read-then-create upsert can lose a simultaneous first-click
+        // race. The unique membership/cohort key identifies the winner, so all
+        // losing requests safely continue with that same pending license and
+        // therefore the same Stripe idempotency key.
+        if (!isUniqueConstraintError(error)) throw error;
+        const winner = await prisma.studentLicense.findUnique({
+          where: query.where,
+          select: query.select,
+        });
+        if (!winner) throw error;
+        return winner;
+      }
     },
     async retrieveCheckoutSession(id) {
       const session = await stripe.checkout.sessions.retrieve(id);

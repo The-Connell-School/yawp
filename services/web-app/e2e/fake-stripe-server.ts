@@ -3,6 +3,7 @@ import {
   E2E_STRIPE_BASE_URL,
   E2E_STRIPE_PORT,
   E2E_STRIPE_WEBHOOK_SECRET,
+  E2E_UA_ORGANIZATION_ID,
 } from './constants';
 
 type FakeSession = {
@@ -16,6 +17,11 @@ type FakeSession = {
   paymentIntent: string | null;
   metadata: Record<string, string>;
   priceId: string;
+  quantity: number;
+  customerEmail: string;
+  clientReferenceId: string;
+  paymentIntentMetadata: Record<string, string>;
+  idempotencyKey: string;
   successUrl: string;
   cancelUrl: string;
   url: string | null;
@@ -26,7 +32,11 @@ type FakeSession = {
 };
 
 const sessions = new Map<string, FakeSession>();
-let sequence = 0;
+const sessionsByIdempotencyKey = new Map<string, FakeSession>();
+let sessionSequence = 0;
+let eventSequence = 0;
+let activePaymentIntentRequests = 0;
+let maxConcurrentPaymentIntentRequests = 0;
 
 function json(value: unknown, status = 200) {
   return Response.json(value, { status });
@@ -52,12 +62,12 @@ function sessionResponse(session: FakeSession) {
       data: [
         {
           object: 'item',
-          quantity: 1,
+          quantity: session.quantity,
           price: {
             id: session.priceId,
             object: 'price',
             currency: session.currency,
-            unit_amount: session.amountTotal,
+            unit_amount: session.amountTotal / session.quantity,
           },
         },
       ],
@@ -111,7 +121,7 @@ async function deliverWebhook(args: {
   eventId?: string;
   repeat?: number;
 }) {
-  const eventId = args.eventId ?? `evt_e2e_${++sequence}`;
+  const eventId = args.eventId ?? `evt_e2e_${++eventSequence}`;
   const payload = JSON.stringify({
     id: eventId,
     object: 'event',
@@ -128,18 +138,19 @@ async function deliverWebhook(args: {
     secret: E2E_STRIPE_WEBHOOK_SECRET,
   });
 
-  const responses: Array<{ status: number; body: string }> = [];
-  for (let index = 0; index < (args.repeat ?? 1); index++) {
-    const response = await fetch('http://127.0.0.1:5173/api/stripe/webhook', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'stripe-signature': signature,
-      },
-      body: payload,
-    });
-    responses.push({ status: response.status, body: await response.text() });
-  }
+  const responses = await Promise.all(
+    Array.from({ length: args.repeat ?? 1 }, async () => {
+      const response = await fetch('http://127.0.0.1:5173/api/stripe/webhook', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'stripe-signature': signature,
+        },
+        body: payload,
+      });
+      return { status: response.status, body: await response.text() };
+    })
+  );
 
   if (responses.some((response) => response.status !== 200)) {
     throw new Error(`Webhook delivery failed: ${JSON.stringify(responses)}`);
@@ -181,13 +192,37 @@ async function handler(request: Request) {
 
   if (request.method === 'POST' && url.pathname === '/test/reset') {
     sessions.clear();
-    sequence = 0;
+    sessionsByIdempotencyKey.clear();
+    sessionSequence = 0;
+    activePaymentIntentRequests = 0;
+    maxConcurrentPaymentIntentRequests = 0;
     return json({ reset: true });
+  }
+
+  if (request.method === 'POST' && url.pathname === '/test/metrics/reset') {
+    activePaymentIntentRequests = 0;
+    maxConcurrentPaymentIntentRequests = 0;
+    return json({ reset: true });
+  }
+
+  if (request.method === 'GET' && url.pathname === '/test/metrics') {
+    return json({
+      activePaymentIntentRequests,
+      maxConcurrentPaymentIntentRequests,
+    });
   }
 
   if (request.method === 'GET' && url.pathname === '/test/sessions') {
     return json({
-      data: [...sessions.values()].map(sessionResponse),
+      data: [...sessions.values()].map((session) => ({
+        ...sessionResponse(session),
+        test_request: {
+          customer_email: session.customerEmail,
+          client_reference_id: session.clientReferenceId,
+          payment_intent_metadata: session.paymentIntentMetadata,
+          idempotency_key: session.idempotencyKey,
+        },
+      })),
     });
   }
 
@@ -289,24 +324,81 @@ async function handler(request: Request) {
 
   if (request.method === 'POST' && url.pathname === '/v1/checkout/sessions') {
     const body = new URLSearchParams(await request.text());
-    const id = `cs_e2e_${++sequence}`;
+    const idempotencyKey = request.headers.get('idempotency-key') ?? '';
+    const metadata = {
+      membershipId: body.get('metadata[membershipId]') ?? '',
+      organizationId: body.get('metadata[organizationId]') ?? '',
+      cohort: body.get('metadata[cohort]') ?? '',
+    };
+    const paymentIntentMetadata = {
+      membershipId:
+        body.get('payment_intent_data[metadata][membershipId]') ?? '',
+      organizationId:
+        body.get('payment_intent_data[metadata][organizationId]') ?? '',
+      cohort: body.get('payment_intent_data[metadata][cohort]') ?? '',
+    };
+    const quantity = Number(body.get('line_items[0][quantity]'));
+    const priceId = body.get('line_items[0][price]') ?? '';
+    const customerEmail = body.get('customer_email') ?? '';
+    const clientReferenceId = body.get('client_reference_id') ?? '';
+    const successUrl = body.get('success_url') ?? '';
+    const cancelUrl = body.get('cancel_url') ?? '';
+    const errors = [
+      body.get('mode') === 'payment' ? null : 'mode must be payment',
+      priceId === 'price_ua_e2e_2026' ? null : 'unexpected Price',
+      quantity === 1 ? null : 'quantity must be one',
+      customerEmail ? null : 'customer_email is required',
+      clientReferenceId ? null : 'client_reference_id is required',
+      metadata.membershipId === clientReferenceId
+        ? null
+        : 'membership metadata must match client_reference_id',
+      metadata.organizationId === E2E_UA_ORGANIZATION_ID
+        ? null
+        : 'unexpected organization metadata',
+      metadata.cohort === 'ua-2026' ? null : 'unexpected cohort metadata',
+      JSON.stringify(paymentIntentMetadata) === JSON.stringify(metadata)
+        ? null
+        : 'PaymentIntent metadata must match Session metadata',
+      successUrl ===
+      'http://127.0.0.1:5173/billing/ua/success?session_id={CHECKOUT_SESSION_ID}'
+        ? null
+        : 'unexpected success URL',
+      cancelUrl === 'http://127.0.0.1:5173/billing/ua?canceled=1'
+        ? null
+        : 'unexpected cancel URL',
+      idempotencyKey ? null : 'Idempotency-Key is required',
+    ].filter((error): error is string => Boolean(error));
+    if (errors.length > 0) {
+      return json(
+        {
+          error: { type: 'invalid_request_error', message: errors.join('; ') },
+        },
+        400
+      );
+    }
+
+    const existing = sessionsByIdempotencyKey.get(idempotencyKey);
+    if (existing) return json(sessionResponse(existing));
+
+    const id = `cs_e2e_${++sessionSequence}`;
     const session: FakeSession = {
       id,
       mode: 'payment',
       status: 'open',
       paymentStatus: 'unpaid',
-      amountTotal: 5_000,
+      amountTotal: 5_000 * quantity,
       currency: 'usd',
       customer: `cus_${id}`,
       paymentIntent: null,
-      metadata: {
-        membershipId: body.get('metadata[membershipId]') ?? '',
-        organizationId: body.get('metadata[organizationId]') ?? '',
-        cohort: body.get('metadata[cohort]') ?? '',
-      },
-      priceId: body.get('line_items[0][price]') ?? '',
-      successUrl: body.get('success_url') ?? '',
-      cancelUrl: body.get('cancel_url') ?? '',
+      metadata,
+      priceId,
+      quantity,
+      customerEmail,
+      clientReferenceId,
+      paymentIntentMetadata,
+      idempotencyKey,
+      successUrl,
+      cancelUrl,
       url: `${E2E_STRIPE_BASE_URL}/checkout/${id}`,
       amountRefunded: 0,
       disputed: false,
@@ -314,6 +406,7 @@ async function handler(request: Request) {
       lastCheckoutEventId: null,
     };
     sessions.set(id, session);
+    sessionsByIdempotencyKey.set(idempotencyKey, session);
     return json(sessionResponse(session));
   }
 
@@ -332,7 +425,20 @@ async function handler(request: Request) {
       (candidate) => candidate.paymentIntent === retrievePaymentIntent[1]
     );
     if (!session) return json({ error: { message: 'Not found' } }, 404);
-    return json(paymentIntentResponse(session));
+    activePaymentIntentRequests += 1;
+    maxConcurrentPaymentIntentRequests = Math.max(
+      maxConcurrentPaymentIntentRequests,
+      activePaymentIntentRequests
+    );
+    try {
+      // A small overlap window makes the production PostgreSQL advisory lock
+      // observable: concurrent webhook handlers for one PaymentIntent must
+      // serialize before they refresh Stripe's current state.
+      await Bun.sleep(75);
+      return json(paymentIntentResponse(session));
+    } finally {
+      activePaymentIntentRequests -= 1;
+    }
   }
 
   if (request.method === 'GET' && url.pathname === '/v1/disputes') {

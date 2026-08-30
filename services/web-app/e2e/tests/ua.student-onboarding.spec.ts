@@ -3,6 +3,10 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { generateTOTP } from '../../app/utils/totp.server';
 import { E2E_STRIPE_BASE_URL } from '../constants';
+import {
+  createPrismaReconciliationDependencies,
+  reconcileUaExistingSubscriptions,
+} from '../../scripts/reconcile-ua-existing-subscriptions';
 
 const LICENSE_COHORT = 'ua-2026';
 const LICENSE_CUTOFF = new Date('2027-01-01T06:00:00.000Z');
@@ -88,6 +92,12 @@ async function getFakeStripeSessions(page: Page) {
       success_url: string;
       cancel_url: string;
       line_items: { data: Array<{ price: { id: string }; quantity: number }> };
+      test_request: {
+        customer_email: string;
+        client_reference_id: string;
+        payment_intent_metadata: Record<string, string>;
+        idempotency_key: string;
+      };
     }>;
   };
 }
@@ -379,6 +389,65 @@ test.describe.serial('University of Alabama student onboarding', () => {
     }
   });
 
+  test('serializes parallel Checkout starts through PostgreSQL and Stripe idempotency', async ({
+    page,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const { unpaid } = e2eContext.ua;
+    try {
+      await resetFakeStripe(page);
+      await clearStudentClasses(unpaid.membershipId);
+      await replaceLicense(unpaid.membershipId, e2eContext.ua.organizationId, {
+        status: 'NONE',
+      });
+      await signIn(page, unpaid.email, unpaid.password, /\/billing\/ua/);
+
+      const responses = await Promise.all(
+        Array.from({ length: 6 }, () =>
+          page.request.post('http://127.0.0.1:5173/billing/ua', {
+            maxRedirects: 0,
+          })
+        )
+      );
+      expect(responses.every((response) => response.status() === 302)).toBe(
+        true
+      );
+      const locations = new Set(
+        responses.map((response) => response.headers().location)
+      );
+      expect(locations.size).toBe(1);
+
+      const created = await getFakeStripeSessions(page);
+      expect(created.data).toHaveLength(1);
+      expect(created.data[0]!.test_request).toMatchObject({
+        customer_email: unpaid.email,
+        client_reference_id: unpaid.membershipId,
+        payment_intent_metadata: {
+          membershipId: unpaid.membershipId,
+          organizationId: e2eContext.ua.organizationId,
+          cohort: LICENSE_COHORT,
+        },
+      });
+      expect(created.data[0]!.test_request.idempotency_key).toMatch(
+        /^ua-2026:.+:0$/
+      );
+
+      const license = await prisma.studentLicense.findUniqueOrThrow({
+        where: {
+          membershipId_cohort: {
+            membershipId: unpaid.membershipId,
+            cohort: LICENSE_COHORT,
+          },
+        },
+      });
+      expect(license.stripeCheckoutSessionId).toBe(created.data[0]!.id);
+      expect(license.checkoutAttempt).toBe(0);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
   test('completes signed-webhook Checkout and reconciles partial refund and dispute states end to end', async ({
     page,
     e2eContext,
@@ -435,6 +504,15 @@ test.describe.serial('University of Alabama student onboarding', () => {
           price: expect.objectContaining({ id: 'price_ua_e2e_2026' }),
         }),
       ]);
+      expect(created.data[0]!.test_request).toMatchObject({
+        customer_email: unpaid.email,
+        client_reference_id: unpaid.membershipId,
+        payment_intent_metadata: {
+          membershipId: unpaid.membershipId,
+          organizationId: e2eContext.ua.organizationId,
+          cohort: LICENSE_COHORT,
+        },
+      });
 
       await page.getByRole('button', { name: 'Complete test payment' }).click();
       await page.waitForURL(/\/app\/?$/);
@@ -507,6 +585,169 @@ test.describe.serial('University of Alabama student onboarding', () => {
         page.getByRole('heading', { name: 'Complete payment' })
       ).toBeVisible();
     } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test('serializes concurrent webhook refreshes with the real PostgreSQL advisory lock', async ({
+    page,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const { unpaid } = e2eContext.ua;
+    try {
+      await resetFakeStripe(page);
+      await clearStudentClasses(unpaid.membershipId);
+      await replaceLicense(unpaid.membershipId, e2eContext.ua.organizationId, {
+        status: 'NONE',
+      });
+      await signIn(page, unpaid.email, unpaid.password, /\/billing\/ua/);
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
+      const created = await getFakeStripeSessions(page);
+      const sessionId = created.data[0]!.id;
+      await page.getByRole('button', { name: 'Complete test payment' }).click();
+      await page.waitForURL(/\/app\/?$/);
+
+      const metricsReset = await page.request.post(
+        `${E2E_STRIPE_BASE_URL}/test/metrics/reset`
+      );
+      expect(metricsReset.ok()).toBe(true);
+      const [refund, dispute] = await Promise.all([
+        page.request.post(
+          `${E2E_STRIPE_BASE_URL}/test/sessions/${sessionId}/refund?amount=5000&eventId=evt_concurrent_refund`
+        ),
+        page.request.post(
+          `${E2E_STRIPE_BASE_URL}/test/sessions/${sessionId}/dispute?status=under_review&eventId=evt_concurrent_dispute`
+        ),
+      ]);
+      expect(refund.ok()).toBe(true);
+      expect(dispute.ok()).toBe(true);
+
+      const metrics = await page.request.get(
+        `${E2E_STRIPE_BASE_URL}/test/metrics`
+      );
+      expect(metrics.ok()).toBe(true);
+      expect(await metrics.json()).toMatchObject({
+        activePaymentIntentRequests: 0,
+        maxConcurrentPaymentIntentRequests: 1,
+      });
+      expect(
+        await prisma.stripeWebhookEvent.count({
+          where: {
+            id: { in: ['evt_concurrent_refund', 'evt_concurrent_dispute'] },
+          },
+        })
+      ).toBe(2);
+      expect(
+        await prisma.studentLicense.findUniqueOrThrow({
+          where: {
+            membershipId_cohort: {
+              membershipId: unpaid.membershipId,
+              cohort: LICENSE_COHORT,
+            },
+          },
+          select: { status: true },
+        })
+      ).toEqual({ status: 'REFUNDED' });
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test('runs the production subscription importer idempotently against PostgreSQL and rejects cross-student reuse', async ({
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const firstEmail = 'ua.import.one@yawp.test';
+    const secondEmail = 'ua.import.two@yawp.test';
+    const subscriptionId = 'sub_e2e_real_import';
+    const userIds = ['ua-e2e-import-one', 'ua-e2e-import-two'];
+    const membershipIds = userIds.map((id) => `${id}-membership`);
+    const cleanupImportFixtures = async () => {
+      await prisma.studentLicense.deleteMany({
+        where: { membershipId: { in: membershipIds } },
+      });
+      await prisma.orgMembership.deleteMany({
+        where: { userId: { in: userIds } },
+      });
+      await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    };
+    try {
+      await cleanupImportFixtures();
+      for (const [index, email] of [firstEmail, secondEmail].entries()) {
+        await prisma.user.create({
+          data: {
+            id: userIds[index]!,
+            email,
+            name: `Import ${index + 1}`,
+            memberships: {
+              create: {
+                id: `${userIds[index]}-membership`,
+                organizationId: e2eContext.ua.organizationId,
+                role: 'STUDENT',
+              },
+            },
+          },
+        });
+      }
+
+      const databaseDependencies =
+        createPrismaReconciliationDependencies(prisma);
+      const dependencies = {
+        ...databaseDependencies,
+        async retrieveSubscription(id: string) {
+          return {
+            id,
+            status: 'active',
+            customer: 'cus_e2e_import',
+            items: [{ priceId: 'price_ua_e2e_legacy', currency: 'usd' }],
+          };
+        },
+      };
+      const config = {
+        organizationId: e2eContext.ua.organizationId,
+        allowedPriceIds: new Set(['price_ua_e2e_legacy']),
+        cohort: LICENSE_COHORT,
+        validUntil: LICENSE_CUTOFF,
+      };
+      const options = {
+        input: [{ email: firstEmail, subscriptionId }],
+        config,
+        dependencies,
+        apply: true,
+        now: new Date('2026-08-30T12:00:00.000Z'),
+      };
+
+      await expect(reconcileUaExistingSubscriptions(options)).resolves.toEqual([
+        expect.objectContaining({ result: 'APPLIED', subscriptionId }),
+      ]);
+      await expect(reconcileUaExistingSubscriptions(options)).resolves.toEqual([
+        expect.objectContaining({
+          result: 'APPLIED',
+          subscriptionId,
+          existingLicense: 'EXISTING_SUBSCRIPTION',
+        }),
+      ]);
+      expect(
+        await prisma.studentLicense.count({
+          where: { stripeSubscriptionId: subscriptionId },
+        })
+      ).toBe(1);
+
+      await expect(
+        reconcileUaExistingSubscriptions({
+          ...options,
+          input: [{ email: secondEmail, subscriptionId }],
+        })
+      ).rejects.toThrow('already attached to another student license');
+      expect(
+        await prisma.studentLicense.count({
+          where: { membershipId: `${userIds[1]}-membership` },
+        })
+      ).toBe(0);
+    } finally {
+      await cleanupImportFixtures();
       await prisma.$disconnect();
     }
   });

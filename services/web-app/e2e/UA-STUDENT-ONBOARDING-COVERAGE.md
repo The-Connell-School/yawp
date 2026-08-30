@@ -48,25 +48,27 @@ active-license cases remain deterministic after the real cohort expires.
 | Disputed | Access is suspended and a duplicate purchase is unavailable | Browser E2E + domain contract |
 | Revoked/lost | Access is denied and a clean new purchase is allowed | Browser E2E + domain contract |
 | Cutoff | Sales close and access expires at the exclusive January 1 CST boundary | Time-bound route/domain contract |
-| Existing subscribers | Active/trialing allowed-price subscriptions import once and skip Checkout | Import contract + PostgreSQL proof |
+| Existing subscribers | Active/trialing allowed-price subscriptions import idempotently and skip Checkout | Import contract + production adapter against PostgreSQL |
 | Import safety | Bad status, wrong price, duplicate email/subscription, ambiguous membership, and conflicts fail closed | Import contract |
-| Checkout shape | One payment, one $50 USD line item, correct Price, metadata, and canonical callbacks | Browser E2E through Stripe SDK |
+| Import ownership | One Stripe subscription cannot be attached to a second student's license | Production adapter against PostgreSQL |
+| Checkout shape | One payment, one $50 USD line item, correct Price, Session/PaymentIntent metadata, customer/reference, and canonical callbacks | Browser E2E through Stripe SDK; emulator rejects malformed requests |
 | Checkout cancel | Account remains; canceled copy, Retry, and Sign out remain available | Browser E2E |
 | Checkout reuse | Cancel/retry reuses the still-open Session instead of creating another charge | Browser E2E + domain contract |
-| Parallel Checkout | Simultaneous first attempts use one Stripe idempotency key | Concurrency contract |
+| Parallel Checkout | Simultaneous first attempts converge on one license, one Stripe idempotency key, and one hosted Session | Browser E2E through production route + PostgreSQL + Stripe SDK |
 | Delayed webhook | Paid return cannot activate access; UI waits until signed webhook arrives | Browser E2E + success-route contract |
 | Terminal retry | Refunded/revoked attempts never reuse the old Session | Browser E2E + domain contract |
 | Checkout mismatch | Unpaid, wrong amount/currency/mode/Price/quantity/cohort/org/member Sessions fail closed | Exhaustive domain contract |
 | Success ownership | Missing Session or a Session owned by another membership is rejected | Success-route contract |
 | Webhook signature | Missing, invalid, or modified signed payload is rejected | Webhook route contract |
 | Webhook fulfillment | Valid signed completion activates the durable PostgreSQL entitlement | Browser E2E |
-| Webhook duplicate | Same event delivered repeatedly produces one event/state transition | Browser E2E + idempotency contract |
+| Webhook duplicate | Same event delivered concurrently produces one event/state transition | Browser E2E + PostgreSQL unique constraint |
 | Webhook ordering | Current Stripe payment state wins over stale event order | Domain contract |
 | Webhook concurrency | Per-PaymentIntent advisory lock prevents stale ACTIVE after REFUNDED | Concurrency contract + PostgreSQL probe |
 | Partial refund | Explicit policy retains access | Browser E2E + state contract |
 | Full refund | Access is revoked, duplicate event is harmless, and retry is clean | Browser E2E |
 | Open dispute | Access is suspended and another payment is blocked | Browser E2E |
-| Won/prevented dispute | Access restores only if payment and retained funds still qualify | Browser E2E + state contract |
+| Won dispute | Access restores only if payment and retained funds still qualify | Browser E2E + state contract |
+| Prevented/warning-closed dispute | Access restores only if payment and retained funds still qualify | State contract |
 | Lost dispute | Access is revoked | Browser E2E + state contract |
 | Invalid payment | Missing charge, failed intent, wrong amount/currency, or unpaid charge revokes | Exhaustive state contract |
 | Class gate | Paid classless student sees the real inert dashboard under a blocking dialog | Browser E2E |
