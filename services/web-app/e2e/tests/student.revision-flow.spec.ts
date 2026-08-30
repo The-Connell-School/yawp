@@ -385,6 +385,17 @@ test.describe.serial('Student revises a released essay', () => {
     await expect(editor).toHaveAttribute('contenteditable', 'true');
     await editor.click();
     await expect(editor).toBeFocused();
+
+    // At tablet widths the overall view has already split into two panes. The
+    // feedback panel must stay above the graded essay until a half-screen pane
+    // is wide enough to hold both side by side.
+    await page.setViewportSize({ width: 1024, height: 768 });
+    const tabletWidths = await Promise.all(
+      [feedback, gradedEssay, editor].map((locator) =>
+        locator.evaluate((element) => element.getBoundingClientRect().width)
+      )
+    );
+    for (const width of tabletWidths) expect(width).toBeGreaterThanOrEqual(300);
   });
 
   test('an unreleased submission cannot be revised yet', async ({

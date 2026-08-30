@@ -493,7 +493,7 @@ export default function ReviseRoute() {
           className="flex min-h-[60vh] w-full min-w-0 flex-col overflow-hidden border-b bg-white md:h-full md:min-h-0 md:w-1/2 md:border-r md:border-b-0"
           aria-label="Graded essay and feedback"
         >
-          <div className="flex min-h-0 grow flex-col overflow-hidden sm:flex-row">
+          <div className="flex min-h-0 grow flex-col overflow-hidden xl:flex-row">
             <RevisionFeedbackPanel
               submission={submission}
               comments={submission.comments}
@@ -505,7 +505,7 @@ export default function ReviseRoute() {
             {/* The essay column carries the same two rows as the draft pane —
                 and the feedback panel carries its own of equal height — so all
                 three columns begin their content on one line. */}
-            <div className="flex min-h-[60vh] w-full min-w-0 grow flex-col overflow-hidden sm:min-h-0 sm:w-auto">
+            <div className="flex min-h-[60vh] w-full min-w-0 grow flex-col overflow-hidden md:min-h-0 xl:w-auto">
               <div className={PANE_HEADER_CLASS}>
                 <span className="text-sm font-semibold">Graded version</span>
                 {gradeSummaryLabel ? (
