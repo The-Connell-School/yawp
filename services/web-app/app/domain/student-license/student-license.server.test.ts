@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from 'bun:test';
 import {
   UA_STUDENT_LICENSE_COHORT,
   UA_STUDENT_LICENSE_VALID_UNTIL,
+  applyStripeWebhookTransition,
   fulfillCheckoutSession,
   getUaStudentLicenseConfig,
   resolveUaStudentLicenseAccess,
@@ -211,5 +212,94 @@ describe('Checkout fulfillment', () => {
     ).rejects.toThrow('Checkout Session does not match the UA license');
 
     expect(activate).not.toHaveBeenCalled();
+  });
+});
+
+describe('durable Stripe webhook transitions', () => {
+  test('records the event and activation in one transaction', async () => {
+    const recordEvent = mock();
+    const activate = mock();
+    const revoke = mock();
+    const transaction = mock(async (work: (tx: any) => Promise<void>) =>
+      work({ recordEvent, activate, revoke })
+    );
+
+    const result = await applyStripeWebhookTransition(
+      {
+        eventId: 'evt_checkout',
+        eventType: 'checkout.session.completed',
+        transition: {
+          kind: 'ACTIVATE',
+          checkout: {
+            membershipId: 'membership-1',
+            organizationId: 'org-ua',
+            stripeCheckoutSessionId: 'cs_paid',
+            stripePaymentIntentId: 'pi_paid',
+            stripeCustomerId: 'cus_1',
+            stripePriceId: 'price_ua_2026',
+            cohort: UA_STUDENT_LICENSE_COHORT,
+            amountPaid: 5000,
+            currency: 'usd',
+            validUntil: UA_STUDENT_LICENSE_VALID_UNTIL,
+          },
+        },
+      },
+      { transaction }
+    );
+
+    expect(result).toEqual({ duplicate: false, handled: true });
+    expect(recordEvent).toHaveBeenCalledWith(
+      'evt_checkout',
+      'checkout.session.completed'
+    );
+    expect(activate).toHaveBeenCalledTimes(1);
+    expect(revoke).not.toHaveBeenCalled();
+  });
+
+  test('treats a duplicate event id as success without repeating the transition', async () => {
+    const activate = mock();
+    const transaction = mock(async (work: (tx: any) => Promise<void>) =>
+      work({
+        recordEvent: mock(() => {
+          throw Object.assign(new Error('duplicate'), { code: 'P2002' });
+        }),
+        activate,
+        revoke: mock(),
+      })
+    );
+
+    const result = await applyStripeWebhookTransition(
+      {
+        eventId: 'evt_duplicate',
+        eventType: 'checkout.session.completed',
+        transition: { kind: 'IGNORE' },
+      },
+      { transaction }
+    );
+
+    expect(result).toEqual({ duplicate: true, handled: false });
+    expect(activate).not.toHaveBeenCalled();
+  });
+
+  test('revokes access for refunds and disputes by PaymentIntent id', async () => {
+    const revoke = mock();
+    const transaction = mock(async (work: (tx: any) => Promise<void>) =>
+      work({ recordEvent: mock(), activate: mock(), revoke })
+    );
+
+    await applyStripeWebhookTransition(
+      {
+        eventId: 'evt_refund',
+        eventType: 'charge.refunded',
+        transition: {
+          kind: 'REVOKE',
+          paymentIntentId: 'pi_refunded',
+          status: 'REFUNDED',
+        },
+      },
+      { transaction }
+    );
+
+    expect(revoke).toHaveBeenCalledWith('pi_refunded', 'REFUNDED');
   });
 });

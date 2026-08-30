@@ -1,4 +1,3 @@
-import { Prisma } from '@app/prisma';
 import Stripe from 'stripe';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
@@ -510,6 +509,126 @@ export async function createOrReuseCheckoutSession({
 
 type RevocationStatus = 'REFUNDED' | 'DISPUTED' | 'REVOKED';
 
+type StripeWebhookTransition =
+  | { kind: 'IGNORE' }
+  | { kind: 'ACTIVATE'; checkout: VerifiedCheckout }
+  | {
+      kind: 'REVOKE';
+      paymentIntentId: string;
+      status: RevocationStatus;
+    };
+
+type WebhookTransaction = {
+  recordEvent: (eventId: string, eventType: string) => Promise<unknown>;
+  activate: (checkout: VerifiedCheckout) => Promise<unknown>;
+  revoke: (
+    paymentIntentId: string,
+    status: RevocationStatus
+  ) => Promise<unknown>;
+};
+
+type WebhookTransitionDependencies = {
+  transaction: (
+    work: (transaction: WebhookTransaction) => Promise<void>
+  ) => Promise<void>;
+};
+
+function activationCreateData(checkout: VerifiedCheckout) {
+  return {
+    membershipId: checkout.membershipId,
+    organizationId: checkout.organizationId,
+    cohort: checkout.cohort,
+    status: 'ACTIVE' as const,
+    source: 'STRIPE_CHECKOUT' as const,
+    validUntil: checkout.validUntil,
+    amountPaid: checkout.amountPaid,
+    currency: checkout.currency,
+    stripePriceId: checkout.stripePriceId,
+    stripeCustomerId: checkout.stripeCustomerId,
+    stripeCheckoutSessionId: checkout.stripeCheckoutSessionId,
+    stripePaymentIntentId: checkout.stripePaymentIntentId,
+    paidAt: new Date(),
+  };
+}
+
+function activationUpdateData(checkout: VerifiedCheckout) {
+  return { ...activationCreateData(checkout), revokedAt: null };
+}
+
+function defaultWebhookTransitionDependencies(): WebhookTransitionDependencies {
+  return {
+    transaction(work) {
+      return prisma.$transaction(async (tx) => {
+        await work({
+          recordEvent(eventId, eventType) {
+            return tx.stripeWebhookEvent.create({
+              data: { id: eventId, type: eventType },
+            });
+          },
+          activate(checkout) {
+            return tx.studentLicense.upsert({
+              where: {
+                membershipId_cohort: {
+                  membershipId: checkout.membershipId,
+                  cohort: checkout.cohort,
+                },
+              },
+              create: activationCreateData(checkout),
+              update: activationUpdateData(checkout),
+            });
+          },
+          revoke(paymentIntentId, status) {
+            return tx.studentLicense.updateMany({
+              where: { stripePaymentIntentId: paymentIntentId },
+              data: { status, revokedAt: new Date() },
+            });
+          },
+        });
+      });
+    },
+  };
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'P2002'
+  );
+}
+
+export async function applyStripeWebhookTransition(
+  {
+    eventId,
+    eventType,
+    transition,
+  }: {
+    eventId: string;
+    eventType: string;
+    transition: StripeWebhookTransition;
+  },
+  dependencies: WebhookTransitionDependencies =
+    defaultWebhookTransitionDependencies()
+): Promise<{ duplicate: boolean; handled: boolean }> {
+  const handled = transition.kind !== 'IGNORE';
+  try {
+    await dependencies.transaction(async (tx) => {
+      await tx.recordEvent(eventId, eventType);
+      if (transition.kind === 'ACTIVATE') {
+        await tx.activate(transition.checkout);
+      } else if (transition.kind === 'REVOKE') {
+        await tx.revoke(transition.paymentIntentId, transition.status);
+      }
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) return { duplicate: true, handled };
+    throw error;
+  }
+
+  return { duplicate: false, handled };
+}
+
 function paymentIntentIdFromEvent(event: Stripe.Event): string | null {
   if (event.type === 'charge.refunded') {
     return stripeId((event.data.object as Stripe.Charge).payment_intent);
@@ -543,6 +662,12 @@ export async function processStripeWebhook(
     config.webhookSecret
   );
 
+  const alreadyProcessed = await prisma.stripeWebhookEvent.findUnique({
+    where: { id: event.id },
+    select: { id: true },
+  });
+  if (alreadyProcessed) return { duplicate: true, handled: true };
+
   let checkout: VerifiedCheckout | null = null;
   if (
     event.type === 'checkout.session.completed' ||
@@ -552,84 +677,36 @@ export async function processStripeWebhook(
       (event.data.object as Stripe.Checkout.Session).id,
       { expand: ['line_items.data.price'] }
     );
-    checkout = verifyPaidCheckoutSession(session as CheckoutSessionLike, config);
-    const membership = await prisma.orgMembership.findFirst({
-      where: {
-        id: checkout.membershipId,
-        organizationId: config.organizationId,
-        role: 'STUDENT',
-      },
-      select: { id: true },
-    });
-    if (!membership) throw new Error('Checkout Session membership is not eligible');
+    if (session.payment_status === 'paid') {
+      checkout = verifyPaidCheckoutSession(
+        session as CheckoutSessionLike,
+        config
+      );
+      const membership = await prisma.orgMembership.findFirst({
+        where: {
+          id: checkout.membershipId,
+          organizationId: config.organizationId,
+          role: 'STUDENT',
+        },
+        select: { id: true },
+      });
+      if (!membership) {
+        throw new Error('Checkout Session membership is not eligible');
+      }
+    }
   }
 
   const revocationStatus = statusFromEvent(event);
   const paymentIntentId = paymentIntentIdFromEvent(event);
-  const handled = checkout !== null || (revocationStatus !== null && !!paymentIntentId);
+  const transition: StripeWebhookTransition = checkout
+    ? { kind: 'ACTIVATE', checkout }
+    : revocationStatus && paymentIntentId
+      ? { kind: 'REVOKE', paymentIntentId, status: revocationStatus }
+      : { kind: 'IGNORE' };
 
-  try {
-    await prisma.$transaction(async (tx) => {
-      await tx.stripeWebhookEvent.create({
-        data: { id: event.id, type: event.type },
-      });
-
-      if (checkout) {
-        await tx.studentLicense.upsert({
-          where: {
-            membershipId_cohort: {
-              membershipId: checkout.membershipId,
-              cohort: checkout.cohort,
-            },
-          },
-          create: {
-            membershipId: checkout.membershipId,
-            organizationId: checkout.organizationId,
-            cohort: checkout.cohort,
-            status: 'ACTIVE',
-            source: 'STRIPE_CHECKOUT',
-            validUntil: checkout.validUntil,
-            amountPaid: checkout.amountPaid,
-            currency: checkout.currency,
-            stripePriceId: checkout.stripePriceId,
-            stripeCustomerId: checkout.stripeCustomerId,
-            stripeCheckoutSessionId: checkout.stripeCheckoutSessionId,
-            stripePaymentIntentId: checkout.stripePaymentIntentId,
-            paidAt: new Date(),
-          },
-          update: {
-            status: 'ACTIVE',
-            source: 'STRIPE_CHECKOUT',
-            validUntil: checkout.validUntil,
-            amountPaid: checkout.amountPaid,
-            currency: checkout.currency,
-            stripePriceId: checkout.stripePriceId,
-            stripeCustomerId: checkout.stripeCustomerId,
-            stripeCheckoutSessionId: checkout.stripeCheckoutSessionId,
-            stripePaymentIntentId: checkout.stripePaymentIntentId,
-            paidAt: new Date(),
-            revokedAt: null,
-          },
-        });
-      } else if (revocationStatus && paymentIntentId) {
-        await tx.studentLicense.updateMany({
-          where: { stripePaymentIntentId: paymentIntentId },
-          data: {
-            status: revocationStatus,
-            revokedAt: new Date(),
-          },
-        });
-      }
-    });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002'
-    ) {
-      return { duplicate: true, handled };
-    }
-    throw error;
-  }
-
-  return { duplicate: false, handled };
+  return applyStripeWebhookTransition({
+    eventId: event.id,
+    eventType: event.type,
+    transition,
+  });
 }
