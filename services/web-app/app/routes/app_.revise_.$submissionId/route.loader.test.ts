@@ -44,6 +44,7 @@ function membership(
     revisionFlowEnabled = true,
     isActive = true,
     isOrgOwner = false,
+    organizationId = 'org-1',
   } = {}
 ) {
   return {
@@ -51,7 +52,7 @@ function membership(
     role,
     isActive,
     isOrgOwner,
-    organization: { id: 'org-1', revisionFlowEnabled },
+    organization: { id: organizationId, revisionFlowEnabled },
   };
 }
 
@@ -234,6 +235,33 @@ describe('revise loader', () => {
             is: {
               membershipId: 'membership-other-student',
               membership: { organizationId: 'org-1' },
+            },
+          },
+        }),
+      })
+    );
+  });
+
+  test('refuses an active student from another organization without leaking the submission', async () => {
+    requireUserId.mockResolvedValue('user-cross-org-student');
+    requireMembership.mockResolvedValue(
+      membership('membership-cross-org-student', 'STUDENT', {
+        organizationId: 'org-2',
+      })
+    );
+    prisma.submission.findFirst.mockResolvedValue(null);
+
+    const redirect = await readRedirect(await call());
+
+    expect(redirect.to).toBe('/app');
+    expect(redirect.payload.description).toBe('Submission not found.');
+    expect(prisma.submission.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          document: {
+            is: {
+              membershipId: 'membership-cross-org-student',
+              membership: { organizationId: 'org-2' },
             },
           },
         }),
