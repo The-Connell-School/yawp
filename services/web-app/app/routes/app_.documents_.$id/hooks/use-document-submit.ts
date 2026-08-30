@@ -26,16 +26,19 @@ export function useDocumentSubmit({ documentId, editorBridgeRef, onSubmitted }: 
     try {
       // 1. Flush latest editor content to server
       const bridge = editorBridgeRef.current;
-      if (!bridge) {
-        toast.error('The editor is not ready. Wait a moment and try again.');
-        return;
-      }
-      const saveStatus = await bridge.saveNow({ source: 'pre-submit-flush' });
-      if (saveStatus !== 'synced') {
-        toast.error(
-          'Your latest changes could not be saved. Check your connection and try again before submitting.'
-        );
-        return;
+      // On narrow legacy document screens the Editor tab can be unmounted
+      // while Tutor or Comments remains active. In that established flow
+      // there is no mounted editor state to flush, so submit the last saved
+      // server document exactly as before. When an editor is mounted, fail
+      // closed unless its forced save reaches the server.
+      if (bridge) {
+        const saveStatus = await bridge.saveNow({ source: 'pre-submit-flush' });
+        if (saveStatus !== 'synced') {
+          toast.error(
+            'Your latest changes could not be saved. Check your connection and try again before submitting.'
+          );
+          return;
+        }
       }
 
       // 2. POST submit

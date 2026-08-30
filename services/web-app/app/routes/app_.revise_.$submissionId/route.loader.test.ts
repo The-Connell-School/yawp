@@ -223,11 +223,12 @@ describe('revise loader', () => {
     requireMembership.mockResolvedValue(
       membership('membership-other-student', 'STUDENT')
     );
+    prisma.submission.findFirst.mockResolvedValue(null);
 
     const redirect = await readRedirect(await call());
 
-    expect(redirect.to).toBe('/app/submissions/sub-1');
-    expect(redirect.payload.type).toBe('error');
+    expect(redirect.to).toBe('/app');
+    expect(redirect.payload.description).toBe('Submission not found.');
     expect(prisma.submission.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({

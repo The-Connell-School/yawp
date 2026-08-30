@@ -335,7 +335,7 @@ export default function ReviseRoute() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [revisionTitle, setRevisionTitle] = useState(
-    () => submission.title || document.title || ''
+    () => document.title || submission.title || ''
   );
   const editorBridgeRef = useRef<EditorBridge | null>(null);
   const [gradedEssayElement, setGradedEssayElement] =

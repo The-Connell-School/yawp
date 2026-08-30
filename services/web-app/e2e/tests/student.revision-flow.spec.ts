@@ -190,6 +190,42 @@ test.describe.serial('Student revises a released essay', () => {
     ).not.toContainText('Revised in the split screen.');
   });
 
+  test('the revision title defaults to the current document title', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const currentTitle = `Current draft title ${Date.now()}`;
+    const submission = await prisma.submission.findUniqueOrThrow({
+      where: { id: e2eContext.gradeId },
+      select: { documentId: true, document: { select: { title: true } } },
+    });
+
+    try {
+      await prisma.document.update({
+        where: { id: submission.documentId },
+        data: { title: currentTitle },
+      });
+      await signIn(e2eContext.userEmail, 'johndoe');
+      await page.goto(`/app/revise/${e2eContext.gradeId}`);
+      await page.getByTestId('revision-draft-pane').waitFor({
+        state: 'visible',
+        timeout: 15000,
+      });
+      await page.getByTestId('revision-submit').click();
+      await expect(page.getByTestId('revision-title-input')).toHaveValue(
+        currentTitle
+      );
+    } finally {
+      await prisma.document.update({
+        where: { id: submission.documentId },
+        data: { title: submission.document.title },
+      });
+      await prisma.$disconnect();
+    }
+  });
+
   test('submitting a revision preserves the released snapshot and creates exactly one new snapshot', async ({
     page,
     signIn,

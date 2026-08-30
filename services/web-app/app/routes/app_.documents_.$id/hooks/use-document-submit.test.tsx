@@ -66,14 +66,19 @@ describe('useDocumentSubmit', () => {
   });
 
   async function submitWithSaveStatus(
-    status: 'synced' | 'offline' | 'auth-expired' | 'error'
+    status: 'synced' | 'offline' | 'auth-expired' | 'error' | 'unmounted'
   ) {
-    const saveNow = mock(async () => status);
+    const saveNow = mock(async () =>
+      status === 'unmounted' ? 'synced' : status
+    );
     const editorBridgeRef = {
-      current: {
-        getContent: () => ({ html: '<p>latest</p>', text: 'latest' }),
-        saveNow,
-      },
+      current:
+        status === 'unmounted'
+          ? null
+          : {
+              getContent: () => ({ html: '<p>latest</p>', text: 'latest' }),
+              saveNow,
+            },
     } as RefObject<EditorBridge>;
     const onSubmitted = mock();
     const fetchMock = mock(async () =>
@@ -124,6 +129,19 @@ describe('useDocumentSubmit', () => {
   it('submits only after the forced save reports synced', async () => {
     const { fetchMock, onSubmitted } = await submitWithSaveStatus('synced');
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(onSubmitted).toHaveBeenCalledWith({
+      id: 'sub-new',
+      title: 'Revision',
+      submittedAt: '2026-08-30T12:00:00.000Z',
+    });
+  });
+
+  it('keeps flag-off legacy mobile submission working when the editor tab is unmounted', async () => {
+    const { saveNow, fetchMock, onSubmitted } =
+      await submitWithSaveStatus('unmounted');
+
+    expect(saveNow).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(onSubmitted).toHaveBeenCalledWith({
       id: 'sub-new',
