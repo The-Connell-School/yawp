@@ -104,10 +104,10 @@ function actingAs(membershipId: string, organizationId: string) {
   });
 }
 
-function post(fields: Record<string, string>) {
+function post(fields: Record<string, string>, url = 'https://example.com/enter-code') {
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.append(key, value);
-  return new Request('https://example.com/enter-code', {
+  return new Request(url, {
     method: 'POST',
     body: form,
   });
@@ -249,6 +249,49 @@ describe('enter-code authorization', () => {
       expect.objectContaining({
         where: { id: 'membership-a' },
         data: { classesAsStudent: { connect: { id: 'class-a2' } } },
+      })
+    );
+  });
+
+  test('the dashboard modal keeps ambiguous class selection in place', async () => {
+    actingAs('membership-a', 'org-a');
+
+    const response = (await action({
+      request: post(
+        { intent: 'validate-code', code: 'MATH101' },
+        'https://example.com/enter-code?modal=1'
+      ),
+      params: {},
+      context: {} as any,
+    } as any)) as any;
+
+    const payload = response.data ?? response;
+    expect(payload.status).toBe('select');
+    expect(payload.code).toBe('MATH101');
+    expect(payload.classes.map((klass: any) => klass.id)).toEqual([
+      'class-a1',
+      'class-a2',
+    ]);
+    expect(prisma.orgMembership.update).not.toHaveBeenCalled();
+  });
+
+  test('the dashboard modal reports enrollment without navigating away', async () => {
+    actingAs('membership-a', 'org-a');
+
+    const response = (await action({
+      request: post(
+        { intent: 'validate-code', code: 'SECRET' },
+        'https://example.com/enter-code?modal=1'
+      ),
+      params: {},
+      context: {} as any,
+    } as any)) as any;
+
+    const payload = response.data ?? response;
+    expect(payload.status).toBe('enrolled');
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { classesAsStudent: { connect: { id: 'class-a4' } } },
       })
     );
   });
