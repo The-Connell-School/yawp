@@ -27,6 +27,7 @@ import { FormSelect } from '~/components/rvf-forms/form-select.tsx';
 import { setMembershipId } from '~/cookies/membership-id.server.ts';
 import { normalizeEmail } from '~/utils/normalize-email';
 import { formatClassGradePeriod } from '~/utils/class-display';
+import { combineHeaders } from '~/utils/misc';
 import {
   destroyUaPartnerContext,
   requireUaOrganizationId,
@@ -200,16 +201,19 @@ export async function action({ request }: ActionFunctionArgs) {
     partner === 'ua' ? '/billing/ua' : '/app',
     { title: 'Welcome', description: 'Thanks for signing up!' },
     {
-      headers: {
-        'set-cookie': [
-          await authSessionStorage.commitSession(authSession, {
+      headers: combineHeaders(
+        {
+          'set-cookie': await authSessionStorage.commitSession(authSession, {
             expires: session.expirationDate,
           }),
-          await invitationCookieStorage.destroySession(invitationCookie),
-          await destroyUaPartnerContext(request),
-          await setMembershipId(membership.id),
-        ].join(';'),
-      },
+        },
+        {
+          'set-cookie':
+            await invitationCookieStorage.destroySession(invitationCookie),
+        },
+        { 'set-cookie': await destroyUaPartnerContext(request) },
+        { 'set-cookie': await setMembershipId(membership.id) }
+      ),
     }
   );
 }

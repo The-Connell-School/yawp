@@ -117,5 +117,15 @@ describe('UA student onboarding', () => {
       },
     });
     expect(response.headers.get('location')).toBe('/billing/ua');
+
+    const responseInit = redirectWithToast.mock.calls[0]?.[2] as ResponseInit;
+    const setCookies = (responseInit.headers as Headers).getSetCookie();
+    expect(setCookies).toHaveLength(4);
+    expect(setCookies).toEqual([
+      'auth=session',
+      'invitation=; Max-Age=0',
+      'yawp_partner=; Max-Age=0',
+      'membership-id=member-ua',
+    ]);
   });
 });
