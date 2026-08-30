@@ -1,0 +1,739 @@
+import type { Page } from '@playwright/test';
+import { test, expect } from '../test-setup';
+import { createE2EPrismaClient } from '../prisma-client';
+import { generateTOTP } from '../../app/utils/totp.server';
+import { E2E_STRIPE_BASE_URL } from '../constants';
+
+const LICENSE_COHORT = 'ua-2026';
+const LICENSE_CUTOFF = new Date('2027-01-01T06:00:00.000Z');
+
+async function signIn(
+  page: Page,
+  email: string,
+  password: string,
+  expectedPath: RegExp
+) {
+  await page.goto('/auth/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await page.waitForURL(expectedPath, { timeout: 15_000 });
+}
+
+async function clearStudentClasses(membershipId: string) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.orgMembership.update({
+      where: { id: membershipId },
+      data: { classesAsStudent: { set: [] } },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+async function replaceLicense(
+  membershipId: string,
+  organizationId: string,
+  state:
+    | { status: 'NONE' }
+    | {
+        status: 'PENDING' | 'ACTIVE' | 'REFUNDED' | 'DISPUTED' | 'REVOKED';
+        validUntil?: Date;
+      }
+) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.studentLicense.deleteMany({
+      where: { membershipId, cohort: LICENSE_COHORT },
+    });
+    if (state.status !== 'NONE') {
+      await prisma.studentLicense.create({
+        data: {
+          membershipId,
+          organizationId,
+          cohort: LICENSE_COHORT,
+          status: state.status,
+          source: 'STRIPE_CHECKOUT',
+          validUntil: state.validUntil ?? LICENSE_CUTOFF,
+          amountPaid: state.status === 'ACTIVE' ? 5_000 : null,
+          currency: state.status === 'ACTIVE' ? 'usd' : null,
+        },
+      });
+    }
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+async function resetFakeStripe(page: Page) {
+  const response = await page.request.post(`${E2E_STRIPE_BASE_URL}/test/reset`);
+  expect(response.ok()).toBe(true);
+}
+
+async function getFakeStripeSessions(page: Page) {
+  const response = await page.request.get(
+    `${E2E_STRIPE_BASE_URL}/test/sessions`
+  );
+  expect(response.ok()).toBe(true);
+  return (await response.json()) as {
+    data: Array<{
+      id: string;
+      mode: string;
+      status: string;
+      payment_status: string;
+      amount_total: number;
+      currency: string;
+      metadata: Record<string, string>;
+      success_url: string;
+      cancel_url: string;
+      line_items: { data: Array<{ price: { id: string }; quantity: number }> };
+    }>;
+  };
+}
+
+test.describe.serial('University of Alabama student onboarding', () => {
+  test('carries partner context through every student auth screen and creates a classless student', async ({
+    page,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const studentEmail = 'ua.new.student@yawp.test';
+
+    try {
+      await prisma.user.deleteMany({ where: { email: studentEmail } });
+      await prisma.invitation.deleteMany({
+        where: { target: studentEmail, type: 'onboard-student' },
+      });
+
+      await page.goto('/ua');
+      await expect(
+        page.getByRole('heading', { name: 'Welcome to Yawp' })
+      ).toBeVisible();
+      await expect(
+        page.getByAltText('The University of Alabama')
+      ).toBeVisible();
+      await expect(page.getByAltText('Yawp')).toBeVisible();
+
+      await page.getByRole('link', { name: 'Create an account' }).click();
+      await expect(page).toHaveURL(/\/auth\/inv\/signup/);
+      await expect(page.getByLabel('Email')).toBeVisible();
+      await expect(page.getByLabel('Code')).toHaveCount(0);
+      await expect(
+        page.getByAltText('The University of Alabama')
+      ).toBeVisible();
+
+      await page.getByLabel('Email').fill(studentEmail);
+      await page.getByRole('button', { name: 'Submit' }).click();
+      await page.waitForURL(/\/auth\/inv\/verify/);
+
+      const invitation = await expect
+        .poll(
+          () =>
+            prisma.invitation.findUnique({
+              where: {
+                target_type: {
+                  target: studentEmail,
+                  type: 'onboard-student',
+                },
+              },
+            }),
+          { timeout: 5_000 }
+        )
+        .not.toBeNull()
+        .then(() =>
+          prisma.invitation.findUniqueOrThrow({
+            where: {
+              target_type: {
+                target: studentEmail,
+                type: 'onboard-student',
+              },
+            },
+          })
+        );
+
+      expect(JSON.parse(invitation.metadata ?? '{}')).toEqual({
+        partner: 'ua',
+        organizationId: e2eContext.ua.organizationId,
+      });
+      await expect(
+        page.getByAltText('The University of Alabama')
+      ).toBeVisible();
+
+      const { otp } = await generateTOTP({
+        secret: invitation.secret,
+        algorithm: invitation.algorithm as any,
+        period: invitation.period,
+        charSet: invitation.charSet,
+        digits: invitation.digits,
+      });
+      await page.getByLabel('Code').fill(otp);
+      await page.getByRole('button', { name: 'Submit' }).click();
+      await page.waitForURL(/\/auth\/inv\/onboard-student/);
+
+      await expect(
+        page.getByAltText('The University of Alabama')
+      ).toBeVisible();
+      await expect(page.getByLabel('Class')).toHaveCount(0);
+      await page.getByLabel('Name').fill('UA New Student');
+      await page
+        .getByLabel('Password', { exact: true })
+        .fill('strong-password-123');
+      await page.getByLabel('Confirm Password').fill('strong-password-123');
+      await page.getByRole('button', { name: 'Create account' }).click();
+
+      await page.waitForURL(/\/billing\/ua$/);
+      await expect(
+        page.getByRole('heading', { name: 'Complete payment' })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Continue to payment' })
+      ).toBeVisible();
+      await expect(page.getByAltText('The University of Alabama')).toHaveCount(
+        0
+      );
+
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { email: studentEmail },
+        include: {
+          memberships: {
+            include: {
+              classesAsStudent: true,
+            },
+          },
+        },
+      });
+      expect(user.memberships).toHaveLength(1);
+      expect(user.memberships[0]!.organizationId).toBe(
+        e2eContext.ua.organizationId
+      );
+      expect(user.memberships[0]!.role).toBe('STUDENT');
+      expect(user.memberships[0]!.classesAsStudent).toHaveLength(0);
+
+      await page.getByRole('button', { name: 'Sign out' }).click();
+      await page.waitForURL(/\/auth\/login/);
+      await expect(page.getByAltText('The University of Alabama')).toHaveCount(
+        0
+      );
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test('lets an existing account explicitly add only a UA student membership', async ({
+    page,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await prisma.orgMembership.deleteMany({
+        where: {
+          userId: e2eContext.userId,
+          organizationId: e2eContext.ua.organizationId,
+        },
+      });
+
+      await page.goto('/ua');
+      await page.getByRole('link', { name: 'Log in' }).click();
+      await expect(
+        page.getByAltText('The University of Alabama')
+      ).toBeVisible();
+      await page.getByLabel('Email').fill(e2eContext.userEmail);
+      await page.getByLabel('Password').fill('johndoe');
+      await page.getByRole('button', { name: 'Log in' }).click();
+
+      await page.waitForURL(/\/ua$/);
+      await expect(
+        page.getByRole('button', { name: 'Continue as a student' })
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Continue as a student' }).click();
+      await page.waitForURL(/\/billing\/ua$/);
+
+      const membership = await prisma.orgMembership.findUniqueOrThrow({
+        where: {
+          userId_organizationId: {
+            userId: e2eContext.userId,
+            organizationId: e2eContext.ua.organizationId,
+          },
+        },
+      });
+      expect(membership.role).toBe('STUDENT');
+      expect(membership.isOrgOwner).toBe(false);
+    } finally {
+      await prisma.orgMembership.deleteMany({
+        where: {
+          userId: e2eContext.userId,
+          organizationId: e2eContext.ua.organizationId,
+        },
+      });
+      await prisma.$disconnect();
+    }
+  });
+
+  test('gates unpaid students across nested app routes and keeps cancel/retry/sign-out available', async ({
+    page,
+    e2eContext,
+  }) => {
+    const { unpaid } = e2eContext.ua;
+    await replaceLicense(unpaid.membershipId, e2eContext.ua.organizationId, {
+      status: 'NONE',
+    });
+
+    await signIn(page, unpaid.email, unpaid.password, /\/app|\/billing\/ua/);
+    await expect(page).toHaveURL(/\/billing\/ua$/);
+    await expect(
+      page.getByRole('button', { name: 'Continue to payment' })
+    ).toBeVisible();
+
+    await page.goto('/app/my-documents');
+    await expect(page).toHaveURL(/\/billing\/ua$/);
+
+    await page.goto('/billing/ua?canceled=1');
+    await expect(
+      page.getByText(
+        'Checkout was canceled. Retry only if your payment did not complete.'
+      )
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Retry payment' })
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page).toHaveURL(/\/auth\/login/);
+  });
+
+  test('renders every durable billing state without offering duplicate payment during a dispute', async ({
+    page,
+    e2eContext,
+  }) => {
+    const { unpaid } = e2eContext.ua;
+    const states = [
+      {
+        label: 'pending',
+        state: { status: 'PENDING' as const },
+        heading: 'Complete payment',
+        button: 'Continue to payment',
+      },
+      {
+        label: 'disputed',
+        state: { status: 'DISPUTED' as const },
+        heading: 'Payment under review',
+        button: null,
+      },
+      {
+        label: 'refunded',
+        state: { status: 'REFUNDED' as const },
+        heading: 'Complete payment',
+        button: 'Continue to payment',
+      },
+      {
+        label: 'revoked',
+        state: { status: 'REVOKED' as const },
+        heading: 'Complete payment',
+        button: 'Continue to payment',
+      },
+      {
+        label: 'expired active',
+        state: {
+          status: 'ACTIVE' as const,
+          validUntil: new Date('2026-01-01T00:00:00.000Z'),
+        },
+        heading: 'Complete payment',
+        button: 'Continue to payment',
+      },
+    ];
+
+    for (const scenario of states) {
+      await test.step(scenario.label, async () => {
+        await page.context().clearCookies();
+        await replaceLicense(
+          unpaid.membershipId,
+          e2eContext.ua.organizationId,
+          scenario.state
+        );
+        await signIn(
+          page,
+          unpaid.email,
+          unpaid.password,
+          /\/app|\/billing\/ua/
+        );
+        await expect(
+          page.getByRole('heading', { name: scenario.heading })
+        ).toBeVisible();
+        if (scenario.button) {
+          await expect(
+            page.getByRole('button', { name: scenario.button })
+          ).toBeVisible();
+        } else {
+          await expect(
+            page.getByRole('button', { name: /payment/i })
+          ).toHaveCount(0);
+          await expect(
+            page.getByText(/cannot start another payment/i)
+          ).toBeVisible();
+        }
+        await expect(
+          page.getByRole('button', { name: 'Sign out' })
+        ).toBeVisible();
+      });
+    }
+  });
+
+  test('completes signed-webhook Checkout and reconciles partial refund and dispute states end to end', async ({
+    page,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const { unpaid } = e2eContext.ua;
+    try {
+      await resetFakeStripe(page);
+      await clearStudentClasses(unpaid.membershipId);
+      await replaceLicense(unpaid.membershipId, e2eContext.ua.organizationId, {
+        status: 'NONE',
+      });
+
+      const invalidWebhook = await page.request.post(
+        'http://127.0.0.1:5173/api/stripe/webhook',
+        {
+          headers: {
+            'content-type': 'application/json',
+            'stripe-signature': 'invalid-signature',
+          },
+          data: { id: 'evt_tampered', type: 'checkout.session.completed' },
+        }
+      );
+      expect(invalidWebhook.status()).toBe(400);
+
+      await signIn(page, unpaid.email, unpaid.password, /\/billing\/ua/);
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
+      await expect(
+        page.getByRole('heading', { name: 'Test Stripe Checkout' })
+      ).toBeVisible();
+      await expect(page.getByText('One-time $50.00 payment')).toBeVisible();
+
+      const created = await getFakeStripeSessions(page);
+      expect(created.data).toHaveLength(1);
+      expect(created.data[0]).toMatchObject({
+        mode: 'payment',
+        status: 'open',
+        payment_status: 'unpaid',
+        amount_total: 5_000,
+        currency: 'usd',
+        metadata: {
+          membershipId: unpaid.membershipId,
+          organizationId: e2eContext.ua.organizationId,
+          cohort: LICENSE_COHORT,
+        },
+        success_url:
+          'http://127.0.0.1:5173/billing/ua/success?session_id={CHECKOUT_SESSION_ID}',
+        cancel_url: 'http://127.0.0.1:5173/billing/ua?canceled=1',
+      });
+      expect(created.data[0]!.line_items.data).toEqual([
+        expect.objectContaining({
+          quantity: 1,
+          price: expect.objectContaining({ id: 'price_ua_e2e_2026' }),
+        }),
+      ]);
+
+      await page.getByRole('button', { name: 'Complete test payment' }).click();
+      await page.waitForURL(/\/app\/?$/);
+      await expect(page.getByRole('dialog')).toBeVisible();
+
+      const activeLicense = await prisma.studentLicense.findUniqueOrThrow({
+        where: {
+          membershipId_cohort: {
+            membershipId: unpaid.membershipId,
+            cohort: LICENSE_COHORT,
+          },
+        },
+      });
+      expect(activeLicense).toMatchObject({
+        status: 'ACTIVE',
+        source: 'STRIPE_CHECKOUT',
+        amountPaid: 5_000,
+        currency: 'usd',
+        stripePriceId: 'price_ua_e2e_2026',
+      });
+      expect(activeLicense.stripeCheckoutSessionId).toBe(created.data[0]!.id);
+      expect(activeLicense.stripePaymentIntentId).toBe(
+        `pi_${created.data[0]!.id}`
+      );
+
+      const duplicate = await page.request.post(
+        `${E2E_STRIPE_BASE_URL}/test/sessions/${created.data[0]!.id}/webhook?eventId=evt_duplicate_after_activation&repeat=2`
+      );
+      expect(duplicate.ok()).toBe(true);
+      expect(
+        await prisma.stripeWebhookEvent.count({
+          where: { id: 'evt_duplicate_after_activation' },
+        })
+      ).toBe(1);
+
+      const partialRefund = await page.request.post(
+        `${E2E_STRIPE_BASE_URL}/test/sessions/${created.data[0]!.id}/refund?amount=2500`
+      );
+      expect(partialRefund.ok()).toBe(true);
+      await page.goto('/app');
+      await expect(page.getByRole('dialog')).toBeVisible();
+
+      const dispute = await page.request.post(
+        `${E2E_STRIPE_BASE_URL}/test/sessions/${created.data[0]!.id}/dispute?status=under_review`
+      );
+      expect(dispute.ok()).toBe(true);
+      await page.goto('/app');
+      await expect(page).toHaveURL(/\/billing\/ua$/);
+      await expect(
+        page.getByRole('heading', { name: 'Payment under review' })
+      ).toBeVisible();
+      await expect(page.getByRole('button', { name: /payment/i })).toHaveCount(
+        0
+      );
+
+      const won = await page.request.post(
+        `${E2E_STRIPE_BASE_URL}/test/sessions/${created.data[0]!.id}/dispute?status=won`
+      );
+      expect(won.ok()).toBe(true);
+      await page.goto('/app');
+      await expect(page.getByRole('dialog')).toBeVisible();
+
+      const lost = await page.request.post(
+        `${E2E_STRIPE_BASE_URL}/test/sessions/${created.data[0]!.id}/dispute?status=lost`
+      );
+      expect(lost.ok()).toBe(true);
+      await page.goto('/app');
+      await expect(page).toHaveURL(/\/billing\/ua$/);
+      await expect(
+        page.getByRole('heading', { name: 'Complete payment' })
+      ).toBeVisible();
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test('reuses canceled Checkout, waits for a delayed webhook, deduplicates a full refund, and starts a clean retry', async ({
+    page,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const { unpaid } = e2eContext.ua;
+    try {
+      await resetFakeStripe(page);
+      await clearStudentClasses(unpaid.membershipId);
+      await replaceLicense(unpaid.membershipId, e2eContext.ua.organizationId, {
+        status: 'NONE',
+      });
+
+      await signIn(page, unpaid.email, unpaid.password, /\/billing\/ua/);
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
+      const firstSession = (await getFakeStripeSessions(page)).data[0]!;
+
+      await page.getByRole('link', { name: 'Cancel payment' }).click();
+      await page.waitForURL(/\/billing\/ua\?canceled=1$/);
+      await expect(
+        page.getByRole('button', { name: 'Retry payment' })
+      ).toBeVisible();
+
+      await page.getByRole('button', { name: 'Retry payment' }).click();
+      await page.waitForURL(
+        `${E2E_STRIPE_BASE_URL}/checkout/${firstSession.id}`
+      );
+      expect((await getFakeStripeSessions(page)).data).toHaveLength(1);
+
+      await page
+        .getByRole('button', { name: 'Complete payment without webhook' })
+        .click();
+      await page.waitForURL(/\/billing\/ua$/);
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await page.waitForURL(/\/billing\/ua\?processing=1$/);
+      await expect(
+        page.getByText(/Stripe is confirming your payment/i)
+      ).toBeVisible();
+      await expect(page.getByRole('button', { name: /payment/i })).toHaveCount(
+        0
+      );
+
+      const delayed = await page.request.post(
+        `${E2E_STRIPE_BASE_URL}/test/sessions/${firstSession.id}/webhook?eventId=evt_delayed_checkout`
+      );
+      expect(delayed.ok()).toBe(true);
+      await page.goto('/app');
+      await expect(page.getByRole('dialog')).toBeVisible();
+
+      const fullRefund = await page.request.post(
+        `${E2E_STRIPE_BASE_URL}/test/sessions/${firstSession.id}/refund?amount=5000&eventId=evt_full_refund&repeat=2`
+      );
+      expect(fullRefund.ok()).toBe(true);
+      expect(
+        await prisma.stripeWebhookEvent.count({
+          where: { id: 'evt_full_refund' },
+        })
+      ).toBe(1);
+      await page.goto('/app');
+      await expect(page).toHaveURL(/\/billing\/ua$/);
+
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
+      const sessions = (await getFakeStripeSessions(page)).data;
+      expect(sessions).toHaveLength(2);
+      expect(sessions[1]!.id).not.toBe(firstSession.id);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test('recognizes an imported existing subscription and shows the non-dismissible class-code gate', async ({
+    page,
+    e2eContext,
+  }) => {
+    const { paidClassless } = e2eContext.ua;
+    await clearStudentClasses(paidClassless.membershipId);
+
+    await signIn(
+      page,
+      paidClassless.email,
+      paidClassless.password,
+      /\/app|\/billing\/ua/
+    );
+    await expect(page).toHaveURL(/\/app\/?$/);
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await expect(
+      dialog.getByRole('heading', { name: 'Enter your class code' })
+    ).toBeVisible();
+    const dashboard = page.getByTestId('app._index');
+    await expect(dashboard).toHaveClass(/pointer-events-none/);
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    await page.mouse.click(5, 5);
+    await expect(dialog).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(
+      dialog.getByRole('button', { name: 'Sign out' })
+    ).toBeVisible();
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+
+    await dialog.getByLabel('Class code').fill('WRONG');
+    await dialog.getByRole('button', { name: 'Continue' }).click();
+    await expect(dialog.getByRole('alert')).toHaveText('Invalid code.');
+
+    await page.goto('/app/my-documents');
+    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page.getByRole('dialog')).toBeVisible();
+
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Sign out' })
+      .click();
+    await expect(page).toHaveURL(/\/auth\/login/);
+  });
+
+  test('enrolls a paid student in place using a tenant-scoped single class code', async ({
+    page,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const { paidClassless } = e2eContext.ua;
+    try {
+      await clearStudentClasses(paidClassless.membershipId);
+      await signIn(page, paidClassless.email, paidClassless.password, /\/app/);
+
+      const dialog = page.getByRole('dialog');
+      await dialog
+        .getByLabel('Class code')
+        .fill(e2eContext.ua.singleClassCode.toLowerCase());
+      await dialog.getByRole('button', { name: 'Continue' }).click();
+
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(page.getByTestId('app._index')).not.toHaveClass(
+        /pointer-events-none/
+      );
+      const enrolled = await prisma.orgMembership.findUniqueOrThrow({
+        where: { id: paidClassless.membershipId },
+        select: {
+          classesAsStudent: {
+            select: { id: true, school: { select: { organizationId: true } } },
+          },
+        },
+      });
+      expect(enrolled.classesAsStudent.map((klass) => klass.id)).toEqual([
+        e2eContext.ua.singleClassId,
+      ]);
+      expect(enrolled.classesAsStudent[0]!.school.organizationId).toBe(
+        e2eContext.ua.organizationId
+      );
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test('keeps ambiguous class selection inside the dashboard dialog', async ({
+    page,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const { paidClassless } = e2eContext.ua;
+    try {
+      await clearStudentClasses(paidClassless.membershipId);
+      await signIn(page, paidClassless.email, paidClassless.password, /\/app/);
+
+      let dialog = page.getByRole('dialog');
+      await dialog
+        .getByLabel('Class code')
+        .fill(e2eContext.ua.ambiguousClassCode);
+      await dialog.getByRole('button', { name: 'Continue' }).click();
+
+      dialog = page.getByRole('dialog');
+      await expect(
+        dialog.getByRole('heading', { name: 'Select your class' })
+      ).toBeVisible();
+      const classSelect = dialog.getByLabel('Class');
+      await expect(classSelect.locator('option')).toHaveCount(3);
+      await classSelect.selectOption(e2eContext.ua.ambiguousClassIds[1]!);
+      await dialog.getByRole('button', { name: 'Join class' }).click();
+
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      const enrolled = await prisma.orgMembership.findUniqueOrThrow({
+        where: { id: paidClassless.membershipId },
+        select: { classesAsStudent: { select: { id: true } } },
+      });
+      expect(enrolled.classesAsStudent.map((klass) => klass.id)).toEqual([
+        e2eContext.ua.ambiguousClassIds[1],
+      ]);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test('keeps teachers and non-UA memberships out of student billing', async ({
+    page,
+    e2eContext,
+  }) => {
+    await page.goto('/ua');
+    await page.getByRole('link', { name: 'Log in' }).click();
+    await page.getByLabel('Email').fill(e2eContext.ua.teacher.email);
+    await page.getByLabel('Password').fill(e2eContext.ua.teacher.password);
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.waitForURL(/\/app\/?$/);
+    await expect(page.getByTestId('app._index')).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    await page.context().clearCookies();
+    await signIn(page, e2eContext.userEmail, 'johndoe', /\/app/);
+    await expect(page).toHaveURL(/\/app\/?$/);
+    await page.goto('/billing/ua');
+    await expect(page).toHaveURL(/\/app\/?$/);
+
+    await page.context().clearCookies();
+    await page.goto('/auth/inv/signup');
+    await expect(page.getByLabel('Code')).toBeVisible();
+    await expect(page.getByAltText('The University of Alabama')).toHaveCount(0);
+  });
+});

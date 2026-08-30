@@ -4,6 +4,7 @@ import { currentSchoolYear } from '../app/utils/school-year';
 import { createDeployedAssignment } from './db-helpers';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
 import bcrypt from 'bcryptjs';
+import { E2E_UA_ORGANIZATION_ID } from './constants';
 
 let prisma: E2EPrismaClient | null = null;
 
@@ -114,6 +115,32 @@ export type E2EContext = {
   gradeId: string;
   /** Graded but not released; has inline comment (student must not see highlights until release) */
   unreleasedGradedSubmissionId: string;
+  ua: {
+    organizationId: string;
+    schoolId: string;
+    singleClassId: string;
+    singleClassCode: string;
+    ambiguousClassIds: string[];
+    ambiguousClassCode: string;
+    paidClassless: {
+      userId: string;
+      membershipId: string;
+      email: string;
+      password: string;
+    };
+    unpaid: {
+      userId: string;
+      membershipId: string;
+      email: string;
+      password: string;
+    };
+    teacher: {
+      userId: string;
+      membershipId: string;
+      email: string;
+      password: string;
+    };
+  };
 };
 
 export async function seedE2E(): Promise<E2EContext> {
@@ -176,6 +203,143 @@ export async function seedE2E(): Promise<E2EContext> {
     select: { id: true },
   });
 
+  // Deterministic University of Alabama fixtures are deliberately separate from
+  // the default organization so enabling the billing gate in E2E cannot change
+  // any pre-existing student or teacher journey.
+  const uaOrganization = await prisma.organization.create({
+    data: {
+      id: E2E_UA_ORGANIZATION_ID,
+      name: 'University of Alabama',
+    },
+  });
+  const uaSchool = await prisma.school.create({
+    data: {
+      id: 'ua-e2e-school',
+      name: 'UA E2E School',
+      code: 'UA-E2E-SCHOOL',
+      organizationId: uaOrganization.id,
+    },
+  });
+  const uaSecondSchool = await prisma.school.create({
+    data: {
+      id: 'ua-e2e-school-two',
+      name: 'UA E2E School Two',
+      code: 'UA-E2E-SCHOOL-TWO',
+      organizationId: uaOrganization.id,
+    },
+  });
+  const uaSingleClassCode = 'UA-SINGLE';
+  const uaAmbiguousClassCode = 'UA-MULTI';
+  const uaSingleClass = await prisma.class.create({
+    data: {
+      id: 'ua-e2e-single-class',
+      code: uaSingleClassCode,
+      schoolYear: currentSchoolYear(),
+      period: '1st',
+      grade: 'Freshman',
+      schoolId: uaSchool.id,
+    },
+  });
+  // Same code in another organization proves the browser flow remains tenant scoped.
+  await prisma.class.create({
+    data: {
+      id: 'non-ua-e2e-colliding-class',
+      code: uaSingleClassCode,
+      schoolYear: currentSchoolYear(),
+      period: '4th',
+      grade: '9th',
+      schoolId: school.id,
+    },
+  });
+  const uaAmbiguousClasses = await Promise.all([
+    prisma.class.create({
+      data: {
+        id: 'ua-e2e-ambiguous-class-one',
+        code: uaAmbiguousClassCode,
+        schoolYear: currentSchoolYear(),
+        period: '2nd',
+        grade: 'Freshman',
+        schoolId: uaSchool.id,
+      },
+    }),
+    prisma.class.create({
+      data: {
+        id: 'ua-e2e-ambiguous-class-two',
+        code: uaAmbiguousClassCode,
+        schoolYear: currentSchoolYear(),
+        period: '3rd',
+        grade: 'Freshman',
+        schoolId: uaSecondSchool.id,
+      },
+    }),
+  ]);
+
+  const uaPassword = 'ua-e2e-password';
+  const prismaClient = prisma;
+  const createUaUser = async ({
+    id,
+    email,
+    role,
+  }: {
+    id: string;
+    email: string;
+    role: 'STUDENT' | 'TEACHER';
+  }) => {
+    const user = await prismaClient.user.create({
+      data: {
+        id,
+        email,
+        name: email.split('@')[0],
+        password: { create: createPassword(uaPassword) },
+        memberships: {
+          create: {
+            id: `${id}-membership`,
+            organizationId: uaOrganization.id,
+            role,
+          },
+        },
+      },
+      include: { memberships: true },
+    });
+    return {
+      userId: user.id,
+      membershipId: user.memberships[0]!.id,
+      email,
+      password: uaPassword,
+    };
+  };
+
+  const uaPaidClassless = await createUaUser({
+    id: 'ua-e2e-paid-classless',
+    email: 'ua.paid.classless@yawp.test',
+    role: 'STUDENT',
+  });
+  const uaUnpaid = await createUaUser({
+    id: 'ua-e2e-unpaid',
+    email: 'ua.unpaid@yawp.test',
+    role: 'STUDENT',
+  });
+  const uaTeacher = await createUaUser({
+    id: 'ua-e2e-teacher',
+    email: 'ua.teacher@yawp.test',
+    role: 'TEACHER',
+  });
+
+  await prisma.studentLicense.create({
+    data: {
+      id: 'ua-e2e-paid-classless-license',
+      membershipId: uaPaidClassless.membershipId,
+      organizationId: uaOrganization.id,
+      cohort: 'ua-2026',
+      status: 'ACTIVE',
+      source: 'EXISTING_SUBSCRIPTION',
+      validUntil: new Date('2027-01-01T06:00:00.000Z'),
+      stripeSubscriptionId: 'sub_ua_e2e_existing',
+      amountPaid: 5_000,
+      currency: 'usd',
+    },
+  });
+
   // Test users
   const users = [
     {
@@ -184,7 +348,11 @@ export async function seedE2E(): Promise<E2EContext> {
       password: { create: createPassword('johndoe') },
       memberships: {
         create: [
-          { organizationId: org.id, isOrgOwner: false, role: 'STUDENT' as const },
+          {
+            organizationId: org.id,
+            isOrgOwner: false,
+            role: 'STUDENT' as const,
+          },
         ],
       },
     },
@@ -195,7 +363,11 @@ export async function seedE2E(): Promise<E2EContext> {
       password: { create: createPassword('admin-e2e-password') },
       memberships: {
         create: [
-          { organizationId: org.id, isOrgOwner: true, role: 'TEACHER' as const },
+          {
+            organizationId: org.id,
+            isOrgOwner: true,
+            role: 'TEACHER' as const,
+          },
         ],
       },
     },
@@ -403,14 +575,16 @@ export async function seedE2E(): Promise<E2EContext> {
     select: { id: true },
   });
 
-  const { assignment: seededAssignment, classAssignment: seededClassAssignment } =
-    await createDeployedAssignment({
-      prisma,
-      classId: seededClass.id,
-      assignmentTypeId: assignmentType.id,
-      title: 'E2E Class Assignment',
-      prompt: 'E2E prompt for class assignment.',
-    });
+  const {
+    assignment: seededAssignment,
+    classAssignment: seededClassAssignment,
+  } = await createDeployedAssignment({
+    prisma,
+    classId: seededClass.id,
+    assignmentTypeId: assignmentType.id,
+    title: 'E2E Class Assignment',
+    prompt: 'E2E prompt for class assignment.',
+  });
 
   const teacherTraining = await prisma.teacherTraining.create({
     data: {
@@ -674,6 +848,17 @@ export async function seedE2E(): Promise<E2EContext> {
     snapshotId: gradedSubmission.id,
     gradeId: gradedSubmission.id,
     unreleasedGradedSubmissionId: unreleasedGradedSubmission.id,
+    ua: {
+      organizationId: uaOrganization.id,
+      schoolId: uaSchool.id,
+      singleClassId: uaSingleClass.id,
+      singleClassCode: uaSingleClassCode,
+      ambiguousClassIds: uaAmbiguousClasses.map((klass) => klass.id),
+      ambiguousClassCode: uaAmbiguousClassCode,
+      paidClassless: uaPaidClassless,
+      unpaid: uaUnpaid,
+      teacher: uaTeacher,
+    },
   };
 }
 

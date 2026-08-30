@@ -3,6 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
+import {
+  E2E_STRIPE_BASE_URL,
+  E2E_STRIPE_WEBHOOK_SECRET,
+  E2E_UA_ORGANIZATION_ID,
+} from './constants';
 
 const CONTAINER_NAME = 'yawp-e2e-postgres';
 const E2E_DB_NAME = 'yop_e2e';
@@ -118,8 +123,12 @@ type PreparedConnection = {
 async function prepareConnection(e2eDir: string): Promise<PreparedConnection> {
   const pgOwnedPath = path.join(e2eDir, '.pg-owned');
   const providedDbUrl =
-    process.env.E2E_DATABASE_URL || (process.env.CI ? process.env.DATABASE_URL : undefined);
-  if (providedDbUrl?.startsWith('postgres://') || providedDbUrl?.startsWith('postgresql://')) {
+    process.env.E2E_DATABASE_URL ||
+    (process.env.CI ? process.env.DATABASE_URL : undefined);
+  if (
+    providedDbUrl?.startsWith('postgres://') ||
+    providedDbUrl?.startsWith('postgresql://')
+  ) {
     try {
       fs.unlinkSync(pgOwnedPath);
     } catch {}
@@ -165,11 +174,22 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
     SESSION_SECRET: process.env.SESSION_SECRET || 'dev-secret',
     INTERNAL_COMMAND_TOKEN: process.env.INTERNAL_COMMAND_TOKEN || 'dev-token',
     HONEYPOT_SECRET: process.env.HONEYPOT_SECRET || 'dev-honeypot',
-    AWS_S3_BUCKET_FOR_VIDEOS: process.env.AWS_S3_BUCKET_FOR_VIDEOS || 'e2e-bucket',
-    AWS_S3_REGION_FOR_VIDEOS: process.env.AWS_S3_REGION_FOR_VIDEOS || 'us-east-1',
+    AWS_S3_BUCKET_FOR_VIDEOS:
+      process.env.AWS_S3_BUCKET_FOR_VIDEOS || 'e2e-bucket',
+    AWS_S3_REGION_FOR_VIDEOS:
+      process.env.AWS_S3_REGION_FOR_VIDEOS || 'us-east-1',
     E2E: 'true',
     E2E_GRADE_ESSAY_AI_FIXTURE: 'true',
     E2E_ASSIGNMENT_INSIGHTS_FIXTURE: 'true',
+    UA_STUDENT_BILLING_ENABLED: 'true',
+    UA_ORGANIZATION_ID: E2E_UA_ORGANIZATION_ID,
+    STRIPE_SECRET_KEY: 'sk_test_e2e_not_a_real_secret',
+    STRIPE_WEBHOOK_SECRET: E2E_STRIPE_WEBHOOK_SECRET,
+    STRIPE_UA_2026_PRICE_ID: 'price_ua_e2e_2026',
+    STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: 'price_ua_e2e_legacy',
+    YAWP_APP_ORIGIN: 'http://127.0.0.1:5173',
+    E2E_STRIPE_API_BASE: E2E_STRIPE_BASE_URL,
+    E2E_UA_NOW: '2026-08-30T12:00:00.000Z',
     ANTHROPIC_API_KEY: '',
   };
 

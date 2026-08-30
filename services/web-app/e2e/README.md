@@ -21,6 +21,12 @@ bun run test:e2e:smoke
 # Default E2E command (smoke)
 bun run test:e2e
 
+# UA paid-onboarding browser suite (real app + Postgres + signed local Stripe contract)
+bun run test:e2e:ua
+
+# Complete UA ship gate: focused contracts plus auth/UA browser E2E
+bun run test:ua:ship
+
 # Full Playwright suite/projects
 bun run test:e2e:full
 
@@ -40,3 +46,8 @@ bun run test:e2e:debug
 - Prefer deterministic fixtures over random shared state.
 - Keep smoke tests focused on merge-gating user journeys.
 - Add broader coverage in `test:e2e:full` without destabilizing smoke checks.
+
+The UA suite's local Stripe server is test-only, loopback-only, and starts through
+Playwright. It exercises the Stripe SDK HTTP contract and signed webhook route without
+accepting a production API override. See `UA-STUDENT-ONBOARDING-COVERAGE.md` for the
+edge-case matrix and the three deployed Stripe smoke checks that remain environment-bound.
