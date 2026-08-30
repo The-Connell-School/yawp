@@ -22,6 +22,7 @@ type FakeSession = {
   clientReferenceId: string;
   paymentIntentMetadata: Record<string, string>;
   idempotencyKey: string;
+  requestFingerprint: string;
   successUrl: string;
   cancelUrl: string;
   url: string | null;
@@ -343,10 +344,20 @@ async function handler(request: Request) {
     const clientReferenceId = body.get('client_reference_id') ?? '';
     const successUrl = body.get('success_url') ?? '';
     const cancelUrl = body.get('cancel_url') ?? '';
+    const requestFingerprint = JSON.stringify(
+      [...body.entries()].sort(([leftKey, leftValue], [rightKey, rightValue]) =>
+        `${leftKey}\0${leftValue}`.localeCompare(`${rightKey}\0${rightValue}`)
+      )
+    );
+    const hasAdditionalLineItems = [...body.keys()].some((key) => {
+      const match = key.match(/^line_items\[(\d+)\]/);
+      return match ? Number(match[1]) > 0 : false;
+    });
     const errors = [
       body.get('mode') === 'payment' ? null : 'mode must be payment',
       priceId === 'price_ua_e2e_2026' ? null : 'unexpected Price',
       quantity === 1 ? null : 'quantity must be one',
+      hasAdditionalLineItems ? 'exactly one line item is required' : null,
       customerEmail ? null : 'customer_email is required',
       clientReferenceId ? null : 'client_reference_id is required',
       metadata.membershipId === clientReferenceId
@@ -378,7 +389,21 @@ async function handler(request: Request) {
     }
 
     const existing = sessionsByIdempotencyKey.get(idempotencyKey);
-    if (existing) return json(sessionResponse(existing));
+    if (existing) {
+      if (existing.requestFingerprint !== requestFingerprint) {
+        return json(
+          {
+            error: {
+              type: 'idempotency_error',
+              message:
+                'Keys for idempotent requests may only be used with the same parameters',
+            },
+          },
+          400
+        );
+      }
+      return json(sessionResponse(existing));
+    }
 
     const id = `cs_e2e_${++sessionSequence}`;
     const session: FakeSession = {
@@ -397,6 +422,7 @@ async function handler(request: Request) {
       clientReferenceId,
       paymentIntentMetadata,
       idempotencyKey,
+      requestFingerprint,
       successUrl,
       cancelUrl,
       url: `${E2E_STRIPE_BASE_URL}/checkout/${id}`,

@@ -433,6 +433,53 @@ test.describe.serial('University of Alabama student onboarding', () => {
         /^ua-2026:.+:0$/
       );
 
+      const stripeRequest = {
+        mode: 'payment',
+        'line_items[0][price]': 'price_ua_e2e_2026',
+        'line_items[0][quantity]': '1',
+        customer_email: unpaid.email,
+        client_reference_id: unpaid.membershipId,
+        'metadata[membershipId]': unpaid.membershipId,
+        'metadata[organizationId]': e2eContext.ua.organizationId,
+        'metadata[cohort]': LICENSE_COHORT,
+        'payment_intent_data[metadata][membershipId]': unpaid.membershipId,
+        'payment_intent_data[metadata][organizationId]':
+          e2eContext.ua.organizationId,
+        'payment_intent_data[metadata][cohort]': LICENSE_COHORT,
+        success_url:
+          'http://127.0.0.1:5173/billing/ua/success?session_id={CHECKOUT_SESSION_ID}',
+        cancel_url: 'http://127.0.0.1:5173/billing/ua?canceled=1',
+      };
+      const extraLineItem = await page.request.post(
+        `${E2E_STRIPE_BASE_URL}/v1/checkout/sessions`,
+        {
+          headers: { 'idempotency-key': 'ua-e2e-extra-line-item' },
+          form: {
+            ...stripeRequest,
+            'line_items[1][price]': 'price_unexpected_extra',
+            'line_items[1][quantity]': '1',
+          },
+        }
+      );
+      expect(extraLineItem.status()).toBe(400);
+      expect(await extraLineItem.json()).toMatchObject({
+        error: { message: expect.stringContaining('exactly one line item') },
+      });
+
+      const changedIdempotentRequest = await page.request.post(
+        `${E2E_STRIPE_BASE_URL}/v1/checkout/sessions`,
+        {
+          headers: {
+            'idempotency-key': created.data[0]!.test_request.idempotency_key,
+          },
+          form: { ...stripeRequest, customer_email: 'changed@yawp.test' },
+        }
+      );
+      expect(changedIdempotentRequest.status()).toBe(400);
+      expect(await changedIdempotentRequest.json()).toMatchObject({
+        error: { type: 'idempotency_error' },
+      });
+
       const license = await prisma.studentLicense.findUniqueOrThrow({
         where: {
           membershipId_cohort: {
