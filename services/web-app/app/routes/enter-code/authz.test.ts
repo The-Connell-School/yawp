@@ -74,6 +74,12 @@ const CLASSES: ScopedClass[] = [
     isArchived: false,
     organizationId: 'org-a',
   },
+  {
+    id: 'class-a-archived',
+    code: 'OLDCLASS',
+    isArchived: true,
+    organizationId: 'org-a',
+  },
 ];
 
 function classRow(klass: ScopedClass) {
@@ -202,6 +208,18 @@ describe('enter-code authorization', () => {
         classId: 'class-a4',
         code: 'SECRET',
       }),
+      params: {},
+      context: {} as any,
+    } as any);
+
+    expect(prisma.orgMembership.update).not.toHaveBeenCalled();
+  });
+
+  test('an archived class code cannot enroll a student', async () => {
+    actingAs('membership-a', 'org-a');
+
+    await action({
+      request: post({ intent: 'validate-code', code: 'OLDCLASS' }),
       params: {},
       context: {} as any,
     } as any);
