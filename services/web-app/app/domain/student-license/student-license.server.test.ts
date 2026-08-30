@@ -3,6 +3,7 @@ import {
   UA_STUDENT_LICENSE_COHORT,
   UA_STUDENT_LICENSE_VALID_UNTIL,
   applyStripeWebhookTransition,
+  createOrReuseCheckoutSession,
   fulfillCheckoutSession,
   getUaStudentLicenseConfig,
   resolveUaStudentLicenseAccess,
@@ -212,6 +213,63 @@ describe('Checkout fulfillment', () => {
     ).rejects.toThrow('Checkout Session does not match the UA license');
 
     expect(activate).not.toHaveBeenCalled();
+  });
+});
+
+describe('Checkout creation', () => {
+  test('parallel first attempts share one Stripe idempotency key', async () => {
+    const membership = {
+      id: 'membership-1',
+      role: 'STUDENT',
+      organizationId: 'org-ua',
+      user: { email: 'student@example.com' },
+    };
+    const license = {
+      id: 'license-1',
+      status: 'PENDING',
+      validUntil: UA_STUDENT_LICENSE_VALID_UNTIL,
+      checkoutAttempt: 0,
+      stripeCheckoutSessionId: null,
+    };
+    const createCheckoutSession = mock().mockResolvedValue({
+      id: 'cs_shared',
+      url: 'https://checkout.stripe.test/cs_shared',
+    });
+    const dependencies = {
+      findMembership: mock().mockResolvedValue(membership),
+      findOrCreateLicense: mock().mockResolvedValue(license),
+      retrieveCheckoutSession: mock(),
+      prepareAttempt: mock().mockResolvedValue(0),
+      createCheckoutSession,
+      attachCheckoutSession: mock(),
+    };
+
+    await Promise.all([
+      createOrReuseCheckoutSession({
+        membershipId: membership.id,
+        successUrl: 'https://yawp.school/billing/ua/success',
+        cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
+        config: getUaStudentLicenseConfig(enabledEnv),
+        dependencies,
+      }),
+      createOrReuseCheckoutSession({
+        membershipId: membership.id,
+        successUrl: 'https://yawp.school/billing/ua/success',
+        cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
+        config: getUaStudentLicenseConfig(enabledEnv),
+        dependencies,
+      }),
+    ]);
+
+    expect(createCheckoutSession).toHaveBeenCalledTimes(2);
+    expect(createCheckoutSession.mock.calls[0]?.[0]).toMatchObject({
+      attempt: 0,
+      idempotencyKey: 'ua-2026:license-1',
+    });
+    expect(createCheckoutSession.mock.calls[1]?.[0]).toMatchObject({
+      attempt: 0,
+      idempotencyKey: 'ua-2026:license-1',
+    });
   });
 });
 

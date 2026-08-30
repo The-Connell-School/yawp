@@ -340,7 +340,11 @@ type CheckoutCreationDependencies = {
     payment_status: string;
     url: string | null;
   }>;
-  incrementAttempt: (licenseId: string) => Promise<number>;
+  prepareAttempt: (license: {
+    id: string;
+    checkoutAttempt: number;
+    stripeCheckoutSessionId: string | null;
+  }) => Promise<number>;
   createCheckoutSession: (args: {
     membership: MembershipForLicense & { user: { email: string } };
     attempt: number;
@@ -406,16 +410,30 @@ function defaultCheckoutCreationDependencies(
         url: session.url,
       };
     },
-    async incrementAttempt(licenseId) {
-      const license = await prisma.studentLicense.update({
-        where: { id: licenseId },
+    async prepareAttempt(license) {
+      // Parallel first requests intentionally share attempt zero, and therefore
+      // the same Stripe idempotency key. Only an expired/completed prior Session
+      // advances the attempt. The compare-and-swap lets concurrent retries share
+      // the winner's next key instead of creating two payable Sessions.
+      if (!license.stripeCheckoutSessionId) return license.checkoutAttempt;
+
+      await prisma.studentLicense.updateMany({
+        where: {
+          id: license.id,
+          checkoutAttempt: license.checkoutAttempt,
+          stripeCheckoutSessionId: license.stripeCheckoutSessionId,
+        },
         data: {
           checkoutAttempt: { increment: 1 },
           stripeCheckoutSessionId: null,
         },
+      });
+      const prepared = await prisma.studentLicense.findUnique({
+        where: { id: license.id },
         select: { checkoutAttempt: true },
       });
-      return license.checkoutAttempt;
+      if (!prepared) throw new Error('Student license no longer exists');
+      return prepared.checkoutAttempt;
     },
     async createCheckoutSession({
       membership,
@@ -494,7 +512,7 @@ export async function createOrReuseCheckoutSession({
     }
   }
 
-  const attempt = await deps.incrementAttempt(license.id);
+  const attempt = await deps.prepareAttempt(license);
   const session = await deps.createCheckoutSession({
     membership,
     attempt,
