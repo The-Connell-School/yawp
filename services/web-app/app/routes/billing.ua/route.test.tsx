@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const requireUserId = mock();
 const requireMembership = mock();
 const getUaStudentLicenseAccess = mock();
+const getUaStudentLicenseBillingState = mock();
 const getUaStudentLicenseConfig = mock();
 const createOrReuseCheckoutSession = mock();
 
@@ -13,17 +14,25 @@ mock.module('~/utils/auth.server', () => ({
 mock.module('~/domain/student-license/student-license.server', () => ({
   createOrReuseCheckoutSession,
   getUaStudentLicenseAccess,
+  getUaStudentLicenseBillingState,
   getUaStudentLicenseConfig,
   isUaStudentLicenseSalesClosed: () => false,
 }));
 
-const { action, UA_CHECKOUT_CANCELED_MESSAGE } = await import('./route');
+const {
+  action,
+  loader,
+  canStartUaCheckout,
+  UA_CHECKOUT_CANCELED_MESSAGE,
+  UA_DISPUTE_SUSPENDED_MESSAGE,
+} = await import('./route');
 
 describe('UA billing route', () => {
   beforeEach(() => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     getUaStudentLicenseAccess.mockReset();
+    getUaStudentLicenseBillingState.mockReset();
     getUaStudentLicenseConfig.mockReset();
     createOrReuseCheckoutSession.mockReset();
     requireUserId.mockResolvedValue('user-1');
@@ -33,6 +42,7 @@ describe('UA billing route', () => {
       organization: { id: 'org-ua' },
     });
     getUaStudentLicenseAccess.mockResolvedValue('PAYMENT_REQUIRED');
+    getUaStudentLicenseBillingState.mockResolvedValue('PAYMENT_REQUIRED');
     getUaStudentLicenseConfig.mockReturnValue({
       enabled: true,
       organizationId: 'org-ua',
@@ -76,6 +86,34 @@ describe('UA billing route', () => {
       }),
     } as any);
     expect(response.headers.get('location')).toBe('/billing/ua?closed=1');
+  });
+
+  test('shows a dedicated suspended state and never opens a second Checkout during a dispute', async () => {
+    getUaStudentLicenseBillingState.mockResolvedValue('SUSPENDED');
+    const loaded = await loader({
+      request: new Request('https://yawp.school/billing/ua'),
+    } as any);
+    expect(loaded).toMatchObject({ suspended: true });
+
+    createOrReuseCheckoutSession.mockResolvedValue({ kind: 'SUSPENDED' });
+    const response = await action({
+      request: new Request('https://yawp.school/billing/ua', {
+        method: 'POST',
+      }),
+    } as any);
+    expect(response.headers.get('location')).toBe(
+      '/billing/ua?suspended=1'
+    );
+    expect(UA_DISPUTE_SUSPENDED_MESSAGE).toContain(
+      'cannot start another payment'
+    );
+    expect(
+      canStartUaCheckout({
+        closed: false,
+        processing: false,
+        suspended: true,
+      })
+    ).toBe(false);
   });
 
   test('cancellation copy does not claim whether a charge occurred', () => {

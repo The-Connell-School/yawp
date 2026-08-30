@@ -10,6 +10,7 @@ import { Button } from '~/components/ui/button';
 import {
   createOrReuseCheckoutSession,
   getUaStudentLicenseAccess,
+  getUaStudentLicenseBillingState,
   getUaStudentLicenseConfig,
   isUaStudentLicenseSalesClosed,
 } from '~/domain/student-license/student-license.server';
@@ -17,6 +18,20 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 
 export const UA_CHECKOUT_CANCELED_MESSAGE =
   'Checkout was canceled. Retry only if your payment did not complete.';
+export const UA_DISPUTE_SUSPENDED_MESSAGE =
+  'Your previous payment is under review. You cannot start another payment while Stripe resolves it. Access will update automatically when the review closes.';
+
+export function canStartUaCheckout({
+  closed,
+  processing,
+  suspended,
+}: {
+  closed: boolean;
+  processing: boolean;
+  suspended: boolean;
+}) {
+  return !closed && !processing && !suspended;
+}
 
 async function requirePaymentMembership(request: Request) {
   const userId = await requireUserId(request);
@@ -34,12 +49,18 @@ async function requirePaymentMembership(request: Request) {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await requirePaymentMembership(request);
+  const membership = await requirePaymentMembership(request);
   const searchParams = new URL(request.url).searchParams;
+  const billingState = await getUaStudentLicenseBillingState({
+    id: membership.id,
+    role: membership.role,
+    organizationId: membership.organization.id,
+  });
   return {
     canceled: searchParams.get('canceled') === '1',
     processing: searchParams.get('processing') === '1',
     closed: isUaStudentLicenseSalesClosed(),
+    suspended: billingState === 'SUSPENDED',
   };
 }
 
@@ -60,21 +81,31 @@ export async function action({ request }: ActionFunctionArgs) {
   if (checkout.kind === 'PROCESSING') {
     return redirect('/billing/ua?processing=1');
   }
+  if (checkout.kind === 'SUSPENDED') {
+    return redirect('/billing/ua?suspended=1');
+  }
   return redirect(checkout.url);
 }
 
 export default function UaBillingRoute() {
-  const { canceled, closed, processing } = useLoaderData<typeof loader>();
+  const { canceled, closed, processing, suspended } =
+    useLoaderData<typeof loader>();
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-8">
       <div className="w-full space-y-6 text-center">
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">
-            {closed ? 'Payment period closed' : 'Complete payment'}
+            {closed
+              ? 'Payment period closed'
+              : suspended
+                ? 'Payment under review'
+                : 'Complete payment'}
           </h1>
           <p className="text-muted-foreground">
             {closed
               ? 'The 2026 student license ended on December 31, 2026.'
+              : suspended
+                ? UA_DISPUTE_SUSPENDED_MESSAGE
               : 'Pay the one-time $50 semester fee to continue to YAWP. Access runs through December 31, 2026.'}
           </p>
           {canceled ? (
@@ -89,7 +120,7 @@ export default function UaBillingRoute() {
           ) : null}
         </div>
 
-        {!closed && !processing ? (
+        {canStartUaCheckout({ closed, processing, suspended }) ? (
           <Form method="POST">
             <Button className="w-full" type="submit">
               {canceled ? 'Retry payment' : 'Continue to payment'}

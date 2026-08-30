@@ -274,14 +274,14 @@ describe('Checkout creation', () => {
     });
   });
 
-  test('never reuses a terminal license Session and starts a new attempt', async () => {
+  test('never reuses a refunded/revoked Session and starts a new attempt', async () => {
     const membership = {
       id: 'membership-1',
       role: 'STUDENT',
       organizationId: 'org-ua',
       user: { email: 'student@example.com' },
     };
-    for (const status of ['REFUNDED', 'DISPUTED', 'REVOKED']) {
+    for (const status of ['REFUNDED', 'REVOKED']) {
       const retrieveCheckoutSession = mock();
       const createCheckoutSession = mock().mockResolvedValue({
         id: `cs_retry_${status}`,
@@ -317,6 +317,42 @@ describe('Checkout creation', () => {
         expect.objectContaining({ attempt: 4 })
       );
     }
+  });
+
+  test('suspends Checkout while a dispute remains unresolved', async () => {
+    const retrieveCheckoutSession = mock();
+    const prepareAttempt = mock();
+    const createCheckoutSession = mock();
+    const result = await createOrReuseCheckoutSession({
+      membershipId: 'membership-1',
+      successUrl: 'https://yawp.school/billing/ua/success',
+      cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
+      config: getUaStudentLicenseConfig(enabledEnv),
+      dependencies: {
+        findMembership: mock().mockResolvedValue({
+          id: 'membership-1',
+          role: 'STUDENT',
+          organizationId: 'org-ua',
+          user: { email: 'student@example.com' },
+        }),
+        findOrCreateLicense: mock().mockResolvedValue({
+          id: 'license-1',
+          status: 'DISPUTED',
+          validUntil: UA_STUDENT_LICENSE_VALID_UNTIL,
+          checkoutAttempt: 2,
+          stripeCheckoutSessionId: 'cs_disputed',
+        }),
+        retrieveCheckoutSession,
+        prepareAttempt,
+        createCheckoutSession,
+        attachCheckoutSession: mock(),
+      },
+    });
+
+    expect(result).toEqual({ kind: 'SUSPENDED' });
+    expect(retrieveCheckoutSession).not.toHaveBeenCalled();
+    expect(prepareAttempt).not.toHaveBeenCalled();
+    expect(createCheckoutSession).not.toHaveBeenCalled();
   });
 
   test('waits for the signed webhook instead of re-fulfilling a completed Session', async () => {
@@ -393,11 +429,24 @@ describe('Checkout creation', () => {
 });
 
 describe('durable Stripe webhook transitions', () => {
+  const activePayment = {
+    paymentIntentStatus: 'succeeded',
+    charge: {
+      paid: true,
+      amount: 5000,
+      amountRefunded: 0,
+      currency: 'usd',
+      disputed: false,
+    },
+    disputeStatuses: [] as string[],
+  };
+
   test('records the event and current-state reconciliation in one transaction', async () => {
     const recordEvent = mock();
+    const lockPaymentIntent = mock();
     const reconcile = mock();
     const transaction = mock(async (work: (tx: any) => Promise<void>) =>
-      work({ recordEvent, reconcile })
+      work({ recordEvent, lockPaymentIntent, reconcile })
     );
 
     const result = await applyStripeWebhookTransition(
@@ -407,7 +456,6 @@ describe('durable Stripe webhook transitions', () => {
         transition: {
           kind: 'RECONCILE',
           paymentIntentId: 'pi_paid',
-          status: 'ACTIVE',
           checkout: {
             membershipId: 'membership-1',
             organizationId: 'org-ua',
@@ -422,7 +470,11 @@ describe('durable Stripe webhook transitions', () => {
           },
         },
       },
-      { transaction, eventExists: mock().mockResolvedValue(false) }
+      {
+        transaction,
+        eventExists: mock().mockResolvedValue(false),
+        retrievePaymentSnapshot: mock().mockResolvedValue(activePayment),
+      }
     );
 
     expect(result).toEqual({ duplicate: false, handled: true });
@@ -430,6 +482,7 @@ describe('durable Stripe webhook transitions', () => {
       'evt_checkout',
       'checkout.session.completed'
     );
+    expect(lockPaymentIntent).toHaveBeenCalledWith('pi_paid');
     expect(reconcile).toHaveBeenCalledWith(
       expect.objectContaining({ stripeCheckoutSessionId: 'cs_paid' }),
       'pi_paid',
@@ -444,6 +497,7 @@ describe('durable Stripe webhook transitions', () => {
         recordEvent: mock(() => {
           throw Object.assign(new Error('duplicate'), { code: 'P2002' });
         }),
+        lockPaymentIntent: mock(),
         reconcile,
       })
     );
@@ -454,7 +508,11 @@ describe('durable Stripe webhook transitions', () => {
         eventType: 'checkout.session.completed',
         transition: { kind: 'IGNORE' },
       },
-      { transaction, eventExists: mock().mockResolvedValue(true) }
+      {
+        transaction,
+        eventExists: mock().mockResolvedValue(true),
+        retrievePaymentSnapshot: mock(),
+      }
     );
 
     expect(result).toEqual({ duplicate: true, handled: false });
@@ -474,7 +532,11 @@ describe('durable Stripe webhook transitions', () => {
           eventType: 'checkout.session.completed',
           transition: { kind: 'IGNORE' },
         },
-        { transaction, eventExists: mock().mockResolvedValue(false) }
+        {
+          transaction,
+          eventExists: mock().mockResolvedValue(false),
+          retrievePaymentSnapshot: mock(),
+        }
       )
     ).rejects.toBe(error);
   });
@@ -482,7 +544,11 @@ describe('durable Stripe webhook transitions', () => {
   test('reconciles refunds and disputes by PaymentIntent id', async () => {
     const reconcile = mock();
     const transaction = mock(async (work: (tx: any) => Promise<void>) =>
-      work({ recordEvent: mock(), reconcile })
+      work({
+        recordEvent: mock(),
+        lockPaymentIntent: mock(),
+        reconcile,
+      })
     );
 
     await applyStripeWebhookTransition(
@@ -492,11 +558,17 @@ describe('durable Stripe webhook transitions', () => {
         transition: {
           kind: 'RECONCILE',
           paymentIntentId: 'pi_refunded',
-          status: 'REFUNDED',
           checkout: null,
         },
       },
-      { transaction, eventExists: mock().mockResolvedValue(false) }
+      {
+        transaction,
+        eventExists: mock().mockResolvedValue(false),
+        retrievePaymentSnapshot: mock().mockResolvedValue({
+          ...activePayment,
+          charge: { ...activePayment.charge, amountRefunded: 5000 },
+        }),
+      }
     );
 
     expect(reconcile).toHaveBeenCalledWith(
@@ -504,6 +576,81 @@ describe('durable Stripe webhook transitions', () => {
       'pi_refunded',
       'REFUNDED'
     );
+  });
+
+  test('serializes concurrent snapshots so stale ACTIVE cannot commit after REFUNDED', async () => {
+    let lockTail = Promise.resolve();
+    let finalStatus = 'UNSET';
+    let releaseDelayedActive!: () => void;
+    const delayedActive = new Promise<void>((resolve) => {
+      releaseDelayedActive = resolve;
+    });
+    const transaction = async (work: (tx: any) => Promise<void>) => {
+      let unlock = () => {};
+      let locked = false;
+      let pendingStatus: string | null = null;
+      try {
+        await work({
+          recordEvent: mock(),
+          async lockPaymentIntent() {
+            const prior = lockTail;
+            lockTail = new Promise<void>((resolve) => {
+              unlock = resolve;
+            });
+            await prior;
+            locked = true;
+          },
+          reconcile(_checkout: unknown, _paymentIntentId: string, status: string) {
+            pendingStatus = status;
+          },
+        });
+        if (pendingStatus === 'ACTIVE') await delayedActive;
+        finalStatus = pendingStatus ?? 'MISSING';
+      } finally {
+        if (locked) unlock();
+      }
+    };
+    const retrievePaymentSnapshot = mock()
+      .mockResolvedValueOnce(activePayment)
+      .mockResolvedValueOnce({
+        ...activePayment,
+        charge: { ...activePayment.charge, amountRefunded: 5000 },
+      });
+    const dependencies = {
+      transaction,
+      eventExists: mock().mockResolvedValue(false),
+      retrievePaymentSnapshot,
+    };
+    const activeHandler = applyStripeWebhookTransition(
+      {
+        eventId: 'evt_active_race',
+        eventType: 'checkout.session.completed',
+        transition: {
+          kind: 'RECONCILE',
+          paymentIntentId: 'pi_race',
+          checkout: null,
+        },
+      },
+      dependencies
+    );
+    const refundHandler = applyStripeWebhookTransition(
+      {
+        eventId: 'evt_refund_race',
+        eventType: 'charge.refunded',
+        transition: {
+          kind: 'RECONCILE',
+          paymentIntentId: 'pi_race',
+          checkout: null,
+        },
+      },
+      dependencies
+    );
+
+    setTimeout(releaseDelayedActive, 0);
+    await Promise.all([activeHandler, refundHandler]);
+
+    expect(retrievePaymentSnapshot).toHaveBeenCalledTimes(2);
+    expect(finalStatus).toBe('REFUNDED');
   });
 });
 
@@ -553,6 +700,12 @@ describe('Stripe payment state reconciliation', () => {
       resolveStripeLicenseStatus({
         ...paidSnapshot,
         disputeStatuses: ['warning_closed'],
+      })
+    ).toBe('ACTIVE');
+    expect(
+      resolveStripeLicenseStatus({
+        ...paidSnapshot,
+        disputeStatuses: ['prevented'],
       })
     ).toBe('ACTIVE');
     expect(
