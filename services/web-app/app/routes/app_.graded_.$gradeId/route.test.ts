@@ -6,9 +6,10 @@ const prisma = {
 };
 
 const requireUserId = mock();
+const requireMembership = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId }));
+mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 
 const { loader } = await import('./route');
 
@@ -34,6 +35,8 @@ describe('app_.graded_.$gradeId authentication', () => {
     prisma.legacyGradeRedirect.findUnique.mockReset();
     prisma.submission.findUnique.mockReset();
     requireUserId.mockReset();
+    requireMembership.mockReset();
+    requireMembership.mockResolvedValue({ id: 'membership-1' });
 
     prisma.legacyGradeRedirect.findUnique.mockResolvedValue({
       submissionId: 'submission-b',
