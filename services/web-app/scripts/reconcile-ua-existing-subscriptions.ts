@@ -56,6 +56,12 @@ export type MembershipSnapshot = {
 export type LicenseSnapshot = {
   source: string;
   status: string;
+  stripeSubscriptionId: string | null;
+} | null;
+
+export type SubscriptionLicenseOwner = {
+  membershipId: string;
+  cohort: string;
 } | null;
 
 export type ExistingSubscriptionLicensePlan = {
@@ -82,6 +88,9 @@ export type ReconciliationDependencies = {
     membershipId: string;
     cohort: string;
   }): Promise<LicenseSnapshot>;
+  findLicenseBySubscriptionId(
+    subscriptionId: string
+  ): Promise<SubscriptionLicenseOwner>;
   applyExistingSubscriptionLicenses(
     plans: ExistingSubscriptionLicensePlan[]
   ): Promise<void>;
@@ -253,6 +262,26 @@ export async function reconcileUaExistingSubscriptions({
           `Existing ${config.cohort} license for ${email} requires manual review`
         );
       }
+      if (
+        existingLicense?.stripeSubscriptionId &&
+        existingLicense.stripeSubscriptionId !== subscriptionId
+      ) {
+        throw new Error(
+          `Existing ${config.cohort} license for ${email} is attached to another subscription`
+        );
+      }
+
+      const subscriptionOwner =
+        await dependencies.findLicenseBySubscriptionId(subscriptionId);
+      if (
+        subscriptionOwner &&
+        (subscriptionOwner.membershipId !== membership.id ||
+          subscriptionOwner.cohort !== config.cohort)
+      ) {
+        throw new Error(
+          `Subscription ${subscriptionId} is already attached to another student license`
+        );
+      }
 
       const qualifyingPriceIds = [
         ...new Set(qualifyingItems.map((item) => item.priceId)),
@@ -370,7 +399,17 @@ async function runCli() {
         findLicense({ membershipId, cohort }) {
           return prisma.studentLicense.findUnique({
             where: { membershipId_cohort: { membershipId, cohort } },
-            select: { source: true, status: true },
+            select: {
+              source: true,
+              status: true,
+              stripeSubscriptionId: true,
+            },
+          });
+        },
+        findLicenseBySubscriptionId(subscriptionId) {
+          return prisma.studentLicense.findUnique({
+            where: { stripeSubscriptionId: subscriptionId },
+            select: { membershipId: true, cohort: true },
           });
         },
         async applyExistingSubscriptionLicenses(plans) {
@@ -392,6 +431,20 @@ async function runCli() {
                 );
               }
 
+              const subscriptionOwner = await tx.studentLicense.findUnique({
+                where: { stripeSubscriptionId: plan.subscriptionId },
+                select: { membershipId: true, cohort: true },
+              });
+              if (
+                subscriptionOwner &&
+                (subscriptionOwner.membershipId !== plan.membershipId ||
+                  subscriptionOwner.cohort !== plan.cohort)
+              ) {
+                throw new Error(
+                  `Subscription ${plan.subscriptionId} changed ownership during apply`
+                );
+              }
+
               const data = {
                 organizationId: plan.organizationId,
                 status: ACTIVE_LICENSE_STATUS,
@@ -399,6 +452,7 @@ async function runCli() {
                 validUntil: plan.validUntil,
                 stripePriceId: plan.stripePriceId,
                 stripeCustomerId: plan.stripeCustomerId,
+                stripeSubscriptionId: plan.subscriptionId,
                 currency: plan.currency,
                 revokedAt: null,
               } as const;

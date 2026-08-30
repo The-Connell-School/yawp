@@ -700,6 +700,7 @@ model StudentLicense {
   currency                String?
   stripePriceId           String?
   stripeCustomerId        String?
+  stripeSubscriptionId    String?              @unique
   stripeCheckoutSessionId String?              @unique
   stripePaymentIntentId   String?              @unique
   paidAt                  DateTime?            @db.Timestamptz(6)

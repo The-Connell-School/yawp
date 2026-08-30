@@ -20,6 +20,10 @@ function makeDependencies({
   existingLicense = null as LicenseSnapshot,
 } = {}) {
   const applied: ExistingSubscriptionLicensePlan[][] = [];
+  const subscriptionOwners = new Map<
+    string,
+    { membershipId: string; cohort: string }
+  >();
   const dependencies: ReconciliationDependencies = {
     retrieveSubscription: mock(async (id: string) => ({
       id,
@@ -29,12 +33,25 @@ function makeDependencies({
     })),
     findActiveStudentMemberships: mock(async () => memberships),
     findLicense: mock(async () => existingLicense),
+    findLicenseBySubscriptionId: mock(
+      async (subscriptionId) => subscriptionOwners.get(subscriptionId) ?? null
+    ),
     applyExistingSubscriptionLicenses: mock(async (plans) => {
       applied.push(plans);
-      existingLicense = { source: 'EXISTING_SUBSCRIPTION', status: 'ACTIVE' };
+      for (const plan of plans) {
+        subscriptionOwners.set(plan.subscriptionId, {
+          membershipId: plan.membershipId,
+          cohort: plan.cohort,
+        });
+      }
+      existingLicense = {
+        source: 'EXISTING_SUBSCRIPTION',
+        status: 'ACTIVE',
+        stripeSubscriptionId: plans[0]?.subscriptionId ?? null,
+      };
     }),
   };
-  return { dependencies, applied };
+  return { dependencies, applied, subscriptionOwners };
 }
 
 describe('existing subscription input validation', () => {
@@ -132,7 +149,11 @@ describe('existing subscription reconciliation', () => {
     ).rejects.toThrow('has no qualifying price');
 
     const conflict = makeDependencies({
-      existingLicense: { source: 'MANUAL', status: 'ACTIVE' },
+      existingLicense: {
+        source: 'MANUAL',
+        status: 'ACTIVE',
+        stripeSubscriptionId: null,
+      },
     }).dependencies;
     await expect(
       reconcileUaExistingSubscriptions({
@@ -196,5 +217,36 @@ describe('existing subscription reconciliation', () => {
       stripeCustomerId: 'cus_existing',
       currency: 'usd',
     });
+  });
+
+  test('rejects cross-run subscription reuse while allowing the original rerun', async () => {
+    const fixture = makeDependencies();
+    const firstRun = {
+      input,
+      config,
+      dependencies: fixture.dependencies,
+      apply: true,
+      now: new Date('2026-08-30T12:00:00.000Z'),
+    } as const;
+
+    await reconcileUaExistingSubscriptions(firstRun);
+    await expect(reconcileUaExistingSubscriptions(firstRun)).resolves.toHaveLength(
+      1
+    );
+
+    fixture.dependencies.findActiveStudentMemberships = mock(async () => [
+      { id: 'membership-2', organizationId: 'org-ua' },
+    ]);
+    fixture.dependencies.findLicense = mock(async () => null);
+
+    await expect(
+      reconcileUaExistingSubscriptions({
+        ...firstRun,
+        input: [
+          { email: 'other-student@example.edu', subscriptionId: 'sub_123' },
+        ],
+      })
+    ).rejects.toThrow('is already attached to another student license');
+    expect(fixture.applied).toHaveLength(2);
   });
 });

@@ -27,6 +27,7 @@ CREATE TABLE "StudentLicense" (
   "currency" TEXT,
   "stripePriceId" TEXT,
   "stripeCustomerId" TEXT,
+  "stripeSubscriptionId" TEXT,
   "stripeCheckoutSessionId" TEXT,
   "stripePaymentIntentId" TEXT,
   "paidAt" TIMESTAMPTZ(6),
@@ -45,6 +46,8 @@ CREATE TABLE "StripeWebhookEvent" (
 
 CREATE UNIQUE INDEX "StudentLicense_stripeCheckoutSessionId_key"
   ON "StudentLicense"("stripeCheckoutSessionId");
+CREATE UNIQUE INDEX "StudentLicense_stripeSubscriptionId_key"
+  ON "StudentLicense"("stripeSubscriptionId");
 CREATE UNIQUE INDEX "StudentLicense_stripePaymentIntentId_key"
   ON "StudentLicense"("stripePaymentIntentId");
 CREATE UNIQUE INDEX "StudentLicense_membershipId_cohort_key"
