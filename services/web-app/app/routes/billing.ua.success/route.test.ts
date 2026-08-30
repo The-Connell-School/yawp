@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireUserId = mock();
 const requireMembership = mock();
-const fulfillCheckoutSession = mock();
+const verifyCheckoutSessionForReturn = mock();
 
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 mock.module('~/domain/student-license/student-license.server', () => ({
-  fulfillCheckoutSession,
+  verifyCheckoutSessionForReturn,
 }));
 
 const { loader } = await import('./route');
@@ -15,13 +15,15 @@ describe('UA billing success route', () => {
   beforeEach(() => {
     requireUserId.mockReset();
     requireMembership.mockReset();
-    fulfillCheckoutSession.mockReset();
+    verifyCheckoutSessionForReturn.mockReset();
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({ id: 'membership-1' });
   });
 
-  test('server-verifies the Checkout Session before redirecting to the app', async () => {
-    fulfillCheckoutSession.mockResolvedValue({ membershipId: 'membership-1' });
+  test('read-only verifies the Checkout Session before redirecting to the gated app', async () => {
+    verifyCheckoutSessionForReturn.mockResolvedValue({
+      membershipId: 'membership-1',
+    });
 
     const response = await loader({
       request: new Request(
@@ -29,7 +31,7 @@ describe('UA billing success route', () => {
       ),
     } as any);
 
-    expect(fulfillCheckoutSession).toHaveBeenCalledWith('cs_paid');
+    expect(verifyCheckoutSessionForReturn).toHaveBeenCalledWith('cs_paid');
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/app');
   });
@@ -40,7 +42,9 @@ describe('UA billing success route', () => {
     } as any);
     expect(missing.status).toBe(400);
 
-    fulfillCheckoutSession.mockResolvedValue({ membershipId: 'membership-2' });
+    verifyCheckoutSessionForReturn.mockResolvedValue({
+      membershipId: 'membership-2',
+    });
     const wrongOwner = await loader({
       request: new Request(
         'https://yawp.school/billing/ua/success?session_id=cs_other'

@@ -17,6 +17,7 @@ export type UaStudentLicenseConfig =
       priceId: string;
       secretKey: string;
       webhookSecret: string;
+      applicationOrigin: string;
     };
 
 const EnabledConfigSchema = z.object({
@@ -24,6 +25,7 @@ const EnabledConfigSchema = z.object({
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
   STRIPE_UA_2026_PRICE_ID: z.string().min(1),
+  YAWP_APP_ORIGIN: z.string().url(),
 });
 
 export function getUaStudentLicenseConfig(
@@ -36,13 +38,31 @@ export function getUaStudentLicenseConfig(
     throw new Error('Invalid UA student billing configuration');
   }
 
+  const applicationUrl = new URL(parsed.data.YAWP_APP_ORIGIN);
+  if (
+    (applicationUrl.protocol !== 'https:' &&
+      applicationUrl.protocol !== 'http:') ||
+    applicationUrl.username ||
+    applicationUrl.password ||
+    applicationUrl.pathname !== '/' ||
+    applicationUrl.search ||
+    applicationUrl.hash
+  ) {
+    throw new Error('Invalid UA student billing configuration');
+  }
+
   return {
     enabled: true,
     organizationId: parsed.data.UA_ORGANIZATION_ID,
     priceId: parsed.data.STRIPE_UA_2026_PRICE_ID,
     secretKey: parsed.data.STRIPE_SECRET_KEY,
     webhookSecret: parsed.data.STRIPE_WEBHOOK_SECRET,
+    applicationOrigin: applicationUrl.origin,
   };
+}
+
+export function isUaStudentLicenseSalesClosed(now = new Date()) {
+  return now.getTime() >= UA_STUDENT_LICENSE_VALID_UNTIL.getTime();
 }
 
 type MembershipForLicense = {
@@ -208,10 +228,9 @@ function verifyPaidCheckoutSession(
   };
 }
 
-type FulfillmentDependencies = {
+type CheckoutVerificationDependencies = {
   retrieveCheckoutSession: (id: string) => Promise<CheckoutSessionLike>;
   findMembership: (membershipId: string, organizationId: string) => Promise<MembershipForLicense | null>;
-  activate: (checkout: VerifiedCheckout) => Promise<{ id: string }>;
 };
 
 let stripeClient: Stripe | null = null;
@@ -225,9 +244,9 @@ function getStripe(config: Extract<UaStudentLicenseConfig, { enabled: true }>) {
   return stripeClient;
 }
 
-function defaultFulfillmentDependencies(
+function defaultCheckoutVerificationDependencies(
   config: Extract<UaStudentLicenseConfig, { enabled: true }>
-): FulfillmentDependencies {
+): CheckoutVerificationDependencies {
   const stripe = getStripe(config);
   return {
     async retrieveCheckoutSession(id) {
@@ -245,62 +264,25 @@ function defaultFulfillmentDependencies(
         select: { id: true, organizationId: true, role: true },
       });
     },
-    activate(checkout) {
-      const paidAt = new Date();
-      return prisma.studentLicense.upsert({
-        where: {
-          membershipId_cohort: {
-            membershipId: checkout.membershipId,
-            cohort: checkout.cohort,
-          },
-        },
-        create: {
-          membershipId: checkout.membershipId,
-          organizationId: checkout.organizationId,
-          cohort: checkout.cohort,
-          status: 'ACTIVE',
-          source: 'STRIPE_CHECKOUT',
-          validUntil: checkout.validUntil,
-          amountPaid: checkout.amountPaid,
-          currency: checkout.currency,
-          stripePriceId: checkout.stripePriceId,
-          stripeCustomerId: checkout.stripeCustomerId,
-          stripeCheckoutSessionId: checkout.stripeCheckoutSessionId,
-          stripePaymentIntentId: checkout.stripePaymentIntentId,
-          paidAt,
-          revokedAt: null,
-        },
-        update: {
-          status: 'ACTIVE',
-          source: 'STRIPE_CHECKOUT',
-          validUntil: checkout.validUntil,
-          amountPaid: checkout.amountPaid,
-          currency: checkout.currency,
-          stripePriceId: checkout.stripePriceId,
-          stripeCustomerId: checkout.stripeCustomerId,
-          stripeCheckoutSessionId: checkout.stripeCheckoutSessionId,
-          stripePaymentIntentId: checkout.stripePaymentIntentId,
-          paidAt,
-          revokedAt: null,
-        },
-        select: { id: true },
-      });
-    },
   };
 }
 
-export async function fulfillCheckoutSession(
+/**
+ * Verifies the success-return Session and its owner without granting access.
+ * License activation is deliberately restricted to signed Stripe webhooks.
+ */
+export async function verifyCheckoutSessionForReturn(
   checkoutSessionId: string,
   options: {
     config?: UaStudentLicenseConfig;
-    dependencies?: FulfillmentDependencies;
+    dependencies?: CheckoutVerificationDependencies;
   } = {}
 ) {
   const config = options.config ?? getUaStudentLicenseConfig();
   if (!config.enabled) throw new Error('UA student billing is disabled');
 
   const dependencies =
-    options.dependencies ?? defaultFulfillmentDependencies(config);
+    options.dependencies ?? defaultCheckoutVerificationDependencies(config);
   const session = await dependencies.retrieveCheckoutSession(checkoutSessionId);
   const checkout = verifyPaidCheckoutSession(session, config);
   const membership = await dependencies.findMembership(
@@ -316,8 +298,7 @@ export async function fulfillCheckoutSession(
     throw new Error('Checkout Session membership is not eligible');
   }
 
-  const license = await dependencies.activate(checkout);
-  return { licenseId: license.id, membershipId: membership.id };
+  return { membershipId: membership.id };
 }
 
 type CheckoutCreationDependencies = {
@@ -485,11 +466,18 @@ export async function createOrReuseCheckoutSession({
   config?: UaStudentLicenseConfig;
   dependencies?: CheckoutCreationDependencies;
   now?: Date;
-}): Promise<{ kind: 'ACTIVE' } | { kind: 'CHECKOUT'; url: string }> {
+}): Promise<
+  | { kind: 'ACTIVE' }
+  | { kind: 'CLOSED' }
+  | { kind: 'PROCESSING' }
+  | { kind: 'CHECKOUT'; url: string }
+> {
   if (!config.enabled) throw new Error('UA student billing is disabled');
   const deps = dependencies ?? defaultCheckoutCreationDependencies(config);
   const membership = await deps.findMembership(membershipId);
   if (!membership) throw new Error('Membership is not eligible for UA billing');
+
+  if (isUaStudentLicenseSalesClosed(now)) return { kind: 'CLOSED' };
 
   const license = await deps.findOrCreateLicense(membership);
   if (
@@ -499,7 +487,10 @@ export async function createOrReuseCheckoutSession({
     return { kind: 'ACTIVE' };
   }
 
-  if (license.stripeCheckoutSessionId) {
+  const isTerminal = ['REFUNDED', 'DISPUTED', 'REVOKED'].includes(
+    license.status
+  );
+  if (license.stripeCheckoutSessionId && !isTerminal) {
     const existing = await deps.retrieveCheckoutSession(
       license.stripeCheckoutSessionId
     );
@@ -507,8 +498,10 @@ export async function createOrReuseCheckoutSession({
       return { kind: 'CHECKOUT', url: existing.url };
     }
     if (existing.status === 'complete' && existing.payment_status === 'paid') {
-      await fulfillCheckoutSession(existing.id, { config });
-      return { kind: 'ACTIVE' };
+      // The signed webhook is the only activation authority. A completed
+      // browser Session waits for that durable transition instead of granting
+      // access or opening a second charge.
+      return { kind: 'PROCESSING' };
     }
   }
 
@@ -525,23 +518,23 @@ export async function createOrReuseCheckoutSession({
   return { kind: 'CHECKOUT', url: session.url };
 }
 
-type RevocationStatus = 'REFUNDED' | 'DISPUTED' | 'REVOKED';
+type StripeLicenseStatus = 'ACTIVE' | 'REFUNDED' | 'DISPUTED' | 'REVOKED';
 
 type StripeWebhookTransition =
   | { kind: 'IGNORE' }
-  | { kind: 'ACTIVATE'; checkout: VerifiedCheckout }
   | {
-      kind: 'REVOKE';
+      kind: 'RECONCILE';
       paymentIntentId: string;
-      status: RevocationStatus;
+      status: StripeLicenseStatus;
+      checkout: VerifiedCheckout | null;
     };
 
 type WebhookTransaction = {
   recordEvent: (eventId: string, eventType: string) => Promise<unknown>;
-  activate: (checkout: VerifiedCheckout) => Promise<unknown>;
-  revoke: (
+  reconcile: (
+    checkout: VerifiedCheckout | null,
     paymentIntentId: string,
-    status: RevocationStatus
+    status: StripeLicenseStatus
   ) => Promise<unknown>;
 };
 
@@ -549,14 +542,16 @@ type WebhookTransitionDependencies = {
   transaction: (
     work: (transaction: WebhookTransaction) => Promise<void>
   ) => Promise<void>;
+  eventExists: (eventId: string) => Promise<boolean>;
 };
 
-function activationCreateData(checkout: VerifiedCheckout) {
+function reconciliationData(
+  checkout: VerifiedCheckout,
+  status: StripeLicenseStatus
+) {
+  const now = new Date();
   return {
-    membershipId: checkout.membershipId,
-    organizationId: checkout.organizationId,
-    cohort: checkout.cohort,
-    status: 'ACTIVE' as const,
+    status,
     source: 'STRIPE_CHECKOUT' as const,
     validUntil: checkout.validUntil,
     amountPaid: checkout.amountPaid,
@@ -565,12 +560,9 @@ function activationCreateData(checkout: VerifiedCheckout) {
     stripeCustomerId: checkout.stripeCustomerId,
     stripeCheckoutSessionId: checkout.stripeCheckoutSessionId,
     stripePaymentIntentId: checkout.stripePaymentIntentId,
-    paidAt: new Date(),
+    paidAt: now,
+    revokedAt: status === 'ACTIVE' ? null : now,
   };
-}
-
-function activationUpdateData(checkout: VerifiedCheckout) {
-  return { ...activationCreateData(checkout), revokedAt: null };
 }
 
 function defaultWebhookTransitionDependencies(): WebhookTransitionDependencies {
@@ -583,26 +575,38 @@ function defaultWebhookTransitionDependencies(): WebhookTransitionDependencies {
               data: { id: eventId, type: eventType },
             });
           },
-          activate(checkout) {
-            return tx.studentLicense.upsert({
-              where: {
-                membershipId_cohort: {
+          reconcile(checkout, paymentIntentId, status) {
+            if (checkout) {
+              // Checkout can activate only the exact Session currently attached
+              // to this license. A late webhook from a refunded/retried Session
+              // is therefore harmless after a newer attempt has been attached.
+              return tx.studentLicense.updateMany({
+                where: {
                   membershipId: checkout.membershipId,
                   cohort: checkout.cohort,
+                  stripeCheckoutSessionId: checkout.stripeCheckoutSessionId,
                 },
-              },
-              create: activationCreateData(checkout),
-              update: activationUpdateData(checkout),
-            });
-          },
-          revoke(paymentIntentId, status) {
+                data: reconciliationData(checkout, status),
+              });
+            }
             return tx.studentLicense.updateMany({
               where: { stripePaymentIntentId: paymentIntentId },
-              data: { status, revokedAt: new Date() },
+              data: {
+                status,
+                revokedAt: status === 'ACTIVE' ? null : new Date(),
+              },
             });
           },
         });
       });
+    },
+    async eventExists(eventId) {
+      return Boolean(
+        await prisma.stripeWebhookEvent.findUnique({
+          where: { id: eventId },
+          select: { id: true },
+        })
+      );
     },
   };
 }
@@ -633,38 +637,126 @@ export async function applyStripeWebhookTransition(
   try {
     await dependencies.transaction(async (tx) => {
       await tx.recordEvent(eventId, eventType);
-      if (transition.kind === 'ACTIVATE') {
-        await tx.activate(transition.checkout);
-      } else if (transition.kind === 'REVOKE') {
-        await tx.revoke(transition.paymentIntentId, transition.status);
+      if (transition.kind === 'RECONCILE') {
+        await tx.reconcile(
+          transition.checkout,
+          transition.paymentIntentId,
+          transition.status
+        );
       }
     });
   } catch (error) {
-    if (isUniqueConstraintError(error)) return { duplicate: true, handled };
+    if (
+      isUniqueConstraintError(error) &&
+      (await dependencies.eventExists(eventId))
+    ) {
+      return { duplicate: true, handled };
+    }
     throw error;
   }
 
   return { duplicate: false, handled };
 }
 
-function paymentIntentIdFromEvent(event: Stripe.Event): string | null {
+export function paymentIntentIdFromReconciliationEvent(
+  event: Stripe.Event
+): string | null {
   if (event.type === 'charge.refunded') {
     return stripeId((event.data.object as Stripe.Charge).payment_intent);
   }
   if (
     event.type === 'charge.dispute.created' ||
-    event.type === 'charge.dispute.closed'
+    event.type === 'charge.dispute.closed' ||
+    event.type === 'charge.dispute.updated' ||
+    event.type === 'charge.dispute.funds_reinstated' ||
+    event.type === 'charge.dispute.funds_withdrawn'
   ) {
     return stripeId((event.data.object as Stripe.Dispute).payment_intent);
   }
   return null;
 }
 
-function statusFromEvent(event: Stripe.Event): RevocationStatus | null {
-  if (event.type === 'charge.refunded') return 'REFUNDED';
-  if (event.type === 'charge.dispute.created') return 'DISPUTED';
-  if (event.type === 'charge.dispute.closed') return 'REVOKED';
-  return null;
+export function isStripePaymentReconciliationEvent(type: Stripe.Event.Type) {
+  return (
+    type === 'charge.refunded' ||
+    type === 'charge.dispute.created' ||
+    type === 'charge.dispute.closed' ||
+    type === 'charge.dispute.updated' ||
+    type === 'charge.dispute.funds_reinstated' ||
+    type === 'charge.dispute.funds_withdrawn'
+  );
+}
+
+export type StripePaymentSnapshot = {
+  paymentIntentStatus: string;
+  charge: {
+    paid: boolean;
+    amount: number;
+    amountRefunded: number;
+    currency: string;
+    disputed: boolean;
+  } | null;
+  disputeStatuses: string[];
+};
+
+/**
+ * Derives entitlement from Stripe's current payment state, not event order.
+ * Partial refunds intentionally retain access; only a full refund revokes it.
+ */
+export function resolveStripeLicenseStatus(
+  snapshot: StripePaymentSnapshot
+): StripeLicenseStatus {
+  const charge = snapshot.charge;
+  if (
+    snapshot.paymentIntentStatus !== 'succeeded' ||
+    !charge?.paid ||
+    charge.amount !== UA_STUDENT_LICENSE_AMOUNT ||
+    charge.currency.toLowerCase() !== UA_STUDENT_LICENSE_CURRENCY
+  ) {
+    return 'REVOKED';
+  }
+  if (charge.amountRefunded >= charge.amount) return 'REFUNDED';
+
+  if (snapshot.disputeStatuses.includes('lost')) return 'REVOKED';
+  const unresolvedDispute = snapshot.disputeStatuses.some(
+    (status) => status !== 'won' && status !== 'warning_closed'
+  );
+  if (unresolvedDispute) return 'DISPUTED';
+  if (charge.disputed && snapshot.disputeStatuses.length === 0) {
+    return 'DISPUTED';
+  }
+
+  return 'ACTIVE';
+}
+
+async function retrieveStripePaymentSnapshot(
+  stripe: Stripe,
+  paymentIntentId: string
+): Promise<StripePaymentSnapshot> {
+  const [paymentIntent, disputes] = await Promise.all([
+    stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ['latest_charge'],
+    }),
+    stripe.disputes.list({ payment_intent: paymentIntentId, limit: 100 }),
+  ]);
+  const charge =
+    paymentIntent.latest_charge &&
+    typeof paymentIntent.latest_charge !== 'string'
+      ? paymentIntent.latest_charge
+      : null;
+  return {
+    paymentIntentStatus: paymentIntent.status,
+    charge: charge
+      ? {
+          paid: charge.paid,
+          amount: charge.amount,
+          amountRefunded: charge.amount_refunded,
+          currency: charge.currency,
+          disputed: charge.disputed,
+        }
+      : null,
+    disputeStatuses: disputes.data.map((dispute) => dispute.status),
+  };
 }
 
 export async function processStripeWebhook(
@@ -714,12 +806,21 @@ export async function processStripeWebhook(
     }
   }
 
-  const revocationStatus = statusFromEvent(event);
-  const paymentIntentId = paymentIntentIdFromEvent(event);
-  const transition: StripeWebhookTransition = checkout
-    ? { kind: 'ACTIVATE', checkout }
-    : revocationStatus && paymentIntentId
-      ? { kind: 'REVOKE', paymentIntentId, status: revocationStatus }
+  const paymentIntentId =
+    checkout?.stripePaymentIntentId ??
+    paymentIntentIdFromReconciliationEvent(event);
+  const isReconciliationEvent =
+    Boolean(checkout) || isStripePaymentReconciliationEvent(event.type);
+  const transition: StripeWebhookTransition =
+    isReconciliationEvent && paymentIntentId
+      ? {
+          kind: 'RECONCILE',
+          paymentIntentId,
+          status: resolveStripeLicenseStatus(
+            await retrieveStripePaymentSnapshot(stripe, paymentIntentId)
+          ),
+          checkout,
+        }
       : { kind: 'IGNORE' };
 
   return applyStripeWebhookTransition({

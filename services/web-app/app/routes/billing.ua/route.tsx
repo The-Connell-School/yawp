@@ -11,9 +11,12 @@ import {
   createOrReuseCheckoutSession,
   getUaStudentLicenseAccess,
   getUaStudentLicenseConfig,
+  isUaStudentLicenseSalesClosed,
 } from '~/domain/student-license/student-license.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { getDomainUrl } from '~/utils/misc';
+
+export const UA_CHECKOUT_CANCELED_MESSAGE =
+  'Checkout was canceled. Retry only if your payment did not complete.';
 
 async function requirePaymentMembership(request: Request) {
   const userId = await requireUserId(request);
@@ -32,48 +35,67 @@ async function requirePaymentMembership(request: Request) {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requirePaymentMembership(request);
+  const searchParams = new URL(request.url).searchParams;
   return {
-    canceled: new URL(request.url).searchParams.get('canceled') === '1',
+    canceled: searchParams.get('canceled') === '1',
+    processing: searchParams.get('processing') === '1',
+    closed: isUaStudentLicenseSalesClosed(),
   };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   const membership = await requirePaymentMembership(request);
-  const origin = getDomainUrl(request);
+  const config = getUaStudentLicenseConfig();
+  if (!config.enabled) throw new Error('UA student billing is disabled');
+  const origin = config.applicationOrigin;
   const checkout = await createOrReuseCheckoutSession({
     membershipId: membership.id,
     successUrl: `${origin}/billing/ua/success?session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${origin}/billing/ua?canceled=1`,
-    config: getUaStudentLicenseConfig(),
+    config,
   });
 
   if (checkout.kind === 'ACTIVE') return redirect('/app');
+  if (checkout.kind === 'CLOSED') return redirect('/billing/ua?closed=1');
+  if (checkout.kind === 'PROCESSING') {
+    return redirect('/billing/ua?processing=1');
+  }
   return redirect(checkout.url);
 }
 
 export default function UaBillingRoute() {
-  const { canceled } = useLoaderData<typeof loader>();
+  const { canceled, closed, processing } = useLoaderData<typeof loader>();
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-8">
       <div className="w-full space-y-6 text-center">
         <div className="space-y-2">
-          <h1 className="text-2xl font-bold">Complete payment</h1>
+          <h1 className="text-2xl font-bold">
+            {closed ? 'Payment period closed' : 'Complete payment'}
+          </h1>
           <p className="text-muted-foreground">
-            Pay the one-time $50 semester fee to continue to YAWP. Access runs
-            through December 31, 2026.
+            {closed
+              ? 'The 2026 student license ended on December 31, 2026.'
+              : 'Pay the one-time $50 semester fee to continue to YAWP. Access runs through December 31, 2026.'}
           </p>
           {canceled ? (
             <p className="text-sm text-muted-foreground">
-              Checkout was canceled. You have not been charged.
+              {UA_CHECKOUT_CANCELED_MESSAGE}
+            </p>
+          ) : null}
+          {processing ? (
+            <p className="text-sm text-muted-foreground">
+              Stripe is confirming your payment. Refresh this page in a moment.
             </p>
           ) : null}
         </div>
 
-        <Form method="POST">
-          <Button className="w-full" type="submit">
-            {canceled ? 'Retry payment' : 'Continue to payment'}
-          </Button>
-        </Form>
+        {!closed && !processing ? (
+          <Form method="POST">
+            <Button className="w-full" type="submit">
+              {canceled ? 'Retry payment' : 'Continue to payment'}
+            </Button>
+          </Form>
+        ) : null}
 
         <Form action="/auth/logout" method="POST">
           <Button className="w-full" type="submit" variant="ghost">

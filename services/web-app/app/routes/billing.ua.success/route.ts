@@ -1,5 +1,5 @@
 import { redirect, type LoaderFunctionArgs } from 'react-router';
-import { fulfillCheckoutSession } from '~/domain/student-license/student-license.server';
+import { verifyCheckoutSessionForReturn } from '~/domain/student-license/student-license.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -13,8 +13,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   try {
-    const fulfillment = await fulfillCheckoutSession(checkoutSessionId);
-    if (fulfillment.membershipId !== membership.id) {
+    const verification = await verifyCheckoutSessionForReturn(checkoutSessionId);
+    if (verification.membershipId !== membership.id) {
       return new Response('Checkout Session belongs to another membership', {
         status: 403,
       });
