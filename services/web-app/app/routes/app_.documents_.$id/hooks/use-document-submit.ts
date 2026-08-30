@@ -25,8 +25,17 @@ export function useDocumentSubmit({ documentId, editorBridgeRef, onSubmitted }: 
 
     try {
       // 1. Flush latest editor content to server
-      if (editorBridgeRef.current) {
-        await editorBridgeRef.current.saveNow({ source: 'pre-submit-flush' });
+      const bridge = editorBridgeRef.current;
+      if (!bridge) {
+        toast.error('The editor is not ready. Wait a moment and try again.');
+        return;
+      }
+      const saveStatus = await bridge.saveNow({ source: 'pre-submit-flush' });
+      if (saveStatus !== 'synced') {
+        toast.error(
+          'Your latest changes could not be saved. Check your connection and try again before submitting.'
+        );
+        return;
       }
 
       // 2. POST submit

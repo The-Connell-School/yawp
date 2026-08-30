@@ -1,3 +1,5 @@
+import type { SyncStatus } from '~/utils/sync-service';
+
 /**
  * Student revision flow (V1) — routing and access rules.
  *
@@ -12,6 +14,25 @@
  */
 
 export const LEGACY_REVISE_QUERY = 'revise=1';
+
+export function isRevisionSubmissionReady({
+  editorSubmittable,
+  isLocked,
+  isSubmitting,
+  syncStatus,
+}: {
+  editorSubmittable: boolean;
+  isLocked: boolean;
+  isSubmitting: boolean;
+  syncStatus: SyncStatus;
+}): boolean {
+  return (
+    editorSubmittable &&
+    !isLocked &&
+    !isSubmitting &&
+    syncStatus === 'synced'
+  );
+}
 
 export type RevisionEntryInput = {
   /** Organization rollout gate — off means the legacy path, always. */

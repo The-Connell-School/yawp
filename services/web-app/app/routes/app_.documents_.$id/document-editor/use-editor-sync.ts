@@ -9,7 +9,7 @@ export const REVISION_INTERVAL_MS = 5 * 60 * 1000;
 
 export type EditorBridge = {
   getContent: () => { html: string; text: string };
-  saveNow: (options?: { source?: string }) => Promise<void>;
+  saveNow: (options?: { source?: string }) => Promise<SyncStatus>;
 };
 
 type RevisionSchedulerOptions = {
@@ -233,7 +233,9 @@ export function useEditorSync(
           lastSyncError: null,
           contentHash: hash,
         });
-        await syncServiceRef.current?.forceSave({ trigger: options?.source ?? 'manual' });
+        const sync = syncServiceRef.current;
+        if (!sync) return 'error';
+        return sync.forceSave({ trigger: options?.source ?? 'manual' });
       },
     };
 

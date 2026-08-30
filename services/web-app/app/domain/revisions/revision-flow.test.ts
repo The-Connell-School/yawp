@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  isRevisionSubmissionReady,
   resolveRevisionAccess,
   resolveRevisionDenialRedirect,
   resolveRevisionEntryPath,
 } from './revision-flow';
+import type { SyncStatus } from '~/utils/sync-service';
 
 const ids = { submissionId: 'sub-1', documentId: 'doc-1' };
 const legacyPath = '/app/documents/doc-1?revise=1';
@@ -145,4 +147,28 @@ describe('resolveRevisionDenialRedirect', () => {
       resolveRevisionDenialRedirect({ ...ids, reason: 'inactive-membership' })
     ).toMatchObject({ path: '/app/submissions/sub-1', type: 'error' });
   });
+});
+
+describe('isRevisionSubmissionReady', () => {
+  const ready = {
+    editorSubmittable: true,
+    isLocked: false,
+    isSubmitting: false,
+    syncStatus: 'synced' as SyncStatus,
+  };
+
+  test('allows submit only when the latest editor state is synced', () => {
+    expect(isRevisionSubmissionReady(ready)).toBe(true);
+  });
+
+  for (const syncStatus of [
+    'saving',
+    'offline',
+    'auth-expired',
+    'error',
+  ] as const) {
+    test(`disables submit while sync is ${syncStatus}`, () => {
+      expect(isRevisionSubmissionReady({ ...ready, syncStatus })).toBe(false);
+    });
+  }
 });

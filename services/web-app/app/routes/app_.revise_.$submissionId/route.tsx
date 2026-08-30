@@ -26,6 +26,7 @@ import {
 } from '~/domain/grading/grammarIssues';
 import { resolveGrammarHighlightingEnabled } from '~/domain/assignment-types/rubric-category-options';
 import {
+  isRevisionSubmissionReady,
   resolveRevisionAccess,
   resolveRevisionDenialRedirect,
 } from '~/domain/revisions/revision-flow';
@@ -443,8 +444,12 @@ export default function ReviseRoute() {
     submission.score,
   ]);
 
-  const canSubmitRevision =
-    editorSubmittable && !auth.isLocked && !submit.isSubmitting;
+  const canSubmitRevision = isRevisionSubmissionReady({
+    editorSubmittable,
+    isLocked: auth.isLocked,
+    isSubmitting: submit.isSubmitting,
+    syncStatus,
+  });
 
   return (
     <main className="flex h-screen flex-col bg-background">
