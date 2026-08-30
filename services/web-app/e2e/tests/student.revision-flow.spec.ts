@@ -202,13 +202,10 @@ test.describe.serial('Student revises a released essay', () => {
     try {
       const original = await prisma.submission.findUniqueOrThrow({
         where: { id: e2eContext.gradeId },
-        select: {
-          id: true,
-          documentId: true,
-          title: true,
-          text: true,
-          html: true,
-          releasedAt: true,
+        include: {
+          comments: { orderBy: { id: 'asc' } },
+          gradingAssistantRuns: { orderBy: { id: 'asc' } },
+          activities: { orderBy: { id: 'asc' } },
         },
       });
       expect(original.releasedAt).toBeInstanceOf(Date);
@@ -261,13 +258,10 @@ test.describe.serial('Student revises a released essay', () => {
 
       const unchangedOriginal = await prisma.submission.findUniqueOrThrow({
         where: { id: original.id },
-        select: {
-          id: true,
-          documentId: true,
-          title: true,
-          text: true,
-          html: true,
-          releasedAt: true,
+        include: {
+          comments: { orderBy: { id: 'asc' } },
+          gradingAssistantRuns: { orderBy: { id: 'asc' } },
+          activities: { orderBy: { id: 'asc' } },
         },
       });
       expect(unchangedOriginal).toEqual(original);
