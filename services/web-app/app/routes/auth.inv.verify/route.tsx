@@ -302,6 +302,7 @@ export default function Route() {
   const type = (searchParams.get('type') ?? '') as any;
   const code = searchParams.get('code') ?? '';
   const target = searchParams.get('target') ?? '';
+  const isUa = searchParams.get('partner') === 'ua';
 
   const form = useForm({
     schema: Schema,
@@ -335,7 +336,9 @@ export default function Route() {
           </div>
           <div className="px-8 text-center">
             <Button asChild variant="link">
-              <Link to="/auth/login">Back to login</Link>
+              <Link to={isUa ? '/auth/login?redirectTo=%2Fua' : '/auth/login'}>
+                Back to login
+              </Link>
             </Button>
           </div>
         </div>

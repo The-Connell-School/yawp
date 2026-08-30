@@ -27,7 +27,10 @@ import { FormSelect } from '~/components/rvf-forms/form-select.tsx';
 import { setMembershipId } from '~/cookies/membership-id.server.ts';
 import { normalizeEmail } from '~/utils/normalize-email';
 import { formatClassGradePeriod } from '~/utils/class-display';
-import { requireUaOrganizationId } from '~/utils/ua-partner.server';
+import {
+  destroyUaPartnerContext,
+  requireUaOrganizationId,
+} from '~/utils/ua-partner.server';
 
 export const GenericSchema = z
   .object({
@@ -203,6 +206,7 @@ export async function action({ request }: ActionFunctionArgs) {
             expires: session.expirationDate,
           }),
           await invitationCookieStorage.destroySession(invitationCookie),
+          await destroyUaPartnerContext(request),
           await setMembershipId(membership.id),
         ].join(';'),
       },

@@ -124,7 +124,7 @@ export async function action({ request }: ActionFunctionArgs) {
         school: { select: { name: true } },
         teachers: { select: { user: { select: { name: true } } } },
       },
-      take: 20,
+      orderBy: [{ schoolYear: 'desc' }, { grade: 'asc' }, { period: 'asc' }],
     });
 
     if (classes.length === 0) {

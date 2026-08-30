@@ -37,6 +37,13 @@ export async function commitUaPartnerContext() {
   } satisfies UaPartnerContext);
 }
 
+export async function destroyUaPartnerContext(request: Request) {
+  return uaPartnerCookie.serialize('', {
+    expires: new Date(0),
+    maxAge: 0,
+  });
+}
+
 export async function getUaPartnerContext(
   request: Request
 ): Promise<UaPartnerContext | null> {

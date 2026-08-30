@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import {
   commitUaPartnerContext,
+  destroyUaPartnerContext,
   getUaPartnerContext,
   isUaStudentBillingEnabled,
 } from './ua-partner.server';
@@ -41,5 +42,14 @@ describe('UA partner context', () => {
     );
 
     expect(context).toBeNull();
+  });
+
+  test('expires the partner cookie when the UA journey ends', async () => {
+    const header = await destroyUaPartnerContext(
+      new Request('https://yawp.school/auth/logout')
+    );
+
+    expect(header).toContain('yawp_partner=');
+    expect(header).toContain('Max-Age=0');
   });
 });

@@ -99,6 +99,7 @@ export async function action({ request }: ActionFunctionArgs) {
   verifyUrl.searchParams.set('type', type);
   verifyUrl.searchParams.set('target', target);
   verifyUrl.searchParams.set('code', otp);
+  if (isUa) verifyUrl.searchParams.set('partner', 'ua');
 
   const verificationData: Prisma.InvitationCreateInput = {
     type,
@@ -213,7 +214,11 @@ export default function SignupRoute() {
             Submit
           </Button>
           <Button variant="link" asChild className="mx-auto mt-2 w-full">
-            <Link to="/auth/login">Already have an account?</Link>
+            <Link
+              to={isUa ? '/auth/login?redirectTo=%2Fua' : '/auth/login'}
+            >
+              Already have an account?
+            </Link>
           </Button>
         </ValidatedForm>
       </div>

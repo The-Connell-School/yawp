@@ -278,11 +278,6 @@ export default function AppRoute() {
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
 
-  useEffect(() => {
-    // A class-code fetcher revalidates this route after enrollment; keeping the
-    // effect here also makes that transition explicit for custom data adapters.
-  }, [data.requiresClassCode]);
-
   if (isTeacher) {
     const needsGradingCount = data.teacherWorkspaceClassStats.reduce(
       (total, klass) => total + (klass.ungradedCount ?? 0),
