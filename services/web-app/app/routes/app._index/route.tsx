@@ -402,6 +402,7 @@ type ClassCodeFetcherData =
   | { fieldErrors?: { code?: string; classId?: string } };
 
 function ClassCodeGate() {
+  const [isMounted, setIsMounted] = useState(false);
   const fetcher = useFetcher<ClassCodeFetcherData>();
   const revalidator = useRevalidator();
   const result = fetcher.data;
@@ -416,6 +417,13 @@ function ClassCodeGate() {
 
   const fieldErrors =
     result && 'fieldErrors' in result ? result.fieldErrors : undefined;
+
+  useEffect(() => setIsMounted(true), []);
+
+  // Radix portals render under document.body. Waiting until hydration keeps
+  // the server and first client tree identical; the dashboard itself is
+  // already pointer-inert while this mounts.
+  if (!isMounted) return null;
 
   return (
     <Dialog open onOpenChange={() => {}}>
