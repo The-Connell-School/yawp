@@ -102,10 +102,10 @@ model AssignmentType {
   gradingPromptConfigJson            Json?
   gradingOutputSchemaJson            Json?
   gradingCalibrationNotes            String?
-  /// Prototype gate for collaborative drafts. Collaboration is offered only for
-  /// assignment types that opt in, which keeps the pilot to one course rather
-  /// than every kind of writing in the product.
-  collaborationSupported             Boolean                       @default(false)
+  /// Legacy rolling-deploy compatibility field. Runtime collaboration is gated
+  /// per assignment; all assignment types remain true until this column can be
+  /// removed in a later cleanup after old application versions are gone.
+  collaborationSupported             Boolean                       @default(true)
   gradingAssistantVersion            Int                           @default(1)
   gradingAssistantSourceTemplateId   String?
   gradingAssistantSourceTemplateSlug String?
@@ -144,7 +144,7 @@ model Assignment {
   gradingAssistantStrictnessLevel String            @default("intermediate")
   tutorEnabled                    Boolean           @default(true)
   /// The teacher's per-assignment toggle: are students writing one shared
-  /// draft per group. Gated at runtime by Organization.collaborativeDraftsEnabled.
+  /// draft per group. This is the runtime opt-in and defaults to solo writing.
   collaborationEnabled            Boolean           @default(false)
   /// How groups are formed for this assignment: teacher | random | whole-class.
   /// A string rather than an enum, matching gradingAssistantStrictnessLevel.
@@ -873,14 +873,12 @@ model Organization {
   /// (/app/revise/:submissionId). Off keeps the legacy
   /// "Revise Essay" -> document editor path.
   revisionFlowEnabled           Boolean                      @default(false)
-  /// Rollout gate for collaborative drafts: may this organization use the
-  /// feature at all. Distinct from Assignment.collaborationEnabled, which is
-  /// the teacher's per-assignment toggle.
+  /// Legacy rollout field retained for schema compatibility. Collaborative
+  /// assignments are now controlled by Assignment.collaborationEnabled.
   collaborativeDraftsEnabled    Boolean                      @default(false)
-  /// Second gate, for the other road to a shared document: may students start
-  /// their own shared draft and invite classmates. Separate from the gate above
-  /// on purpose -- a school may want teacher-assigned group work without
-  /// students forming their own groups.
+  /// Independent gate for student-created shared drafts and classmate invites.
+  /// A school may allow teacher-assigned group work without allowing students
+  /// to form their own groups.
   studentDocumentSharingEnabled Boolean                      @default(false)
   previewSeatCode               String?                      @unique
   memberships                   OrgMembership[]

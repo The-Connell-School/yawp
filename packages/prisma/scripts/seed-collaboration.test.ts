@@ -494,17 +494,17 @@ describe('the GBA 300 demo plan', () => {
   test('those scores use the assignment type’s own categories and range', async () => {
     // Read from the fixture rather than restated here, so a regenerated rubric
     // fails this test instead of silently orphaning every seeded score.
-    const fixture = (await import(
-      '../fixtures/prod-fidelity/assignment-types.json'
-    )) as unknown as {
-      default: {
-        id: string;
-        collaborationSupported?: boolean;
-        scoringScaleJson?: { minScore?: number; maxScore?: number };
-        rubricJson?: { categories?: { key: string }[] };
-      }[];
-    };
-    const gba = fixture.default.find((type) => type.collaborationSupported);
+    const fixture =
+      (await import('../fixtures/prod-fidelity/assignment-types.json')) as unknown as {
+        default: {
+          id: string;
+          scoringScaleJson?: { minScore?: number; maxScore?: number };
+          rubricJson?: { categories?: { key: string }[] };
+        }[];
+      };
+    const gba = fixture.default.find(
+      (type) => type.id === 'cmnt1bliz0l610qk0r09ug5u6'
+    );
     const keys = (gba?.rubricJson?.categories ?? []).map((c) => c.key);
     const minScore = gba?.scoringScaleJson?.minScore ?? 0;
     const maxScore = gba?.scoringScaleJson?.maxScore ?? 100;

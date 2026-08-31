@@ -7,13 +7,11 @@ import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import {
-  COLLABORATION_GROUP_MODE_OPTIONS,
-  COLLABORATION_GROUP_SIZE_OPTIONS,
   DEFAULT_COLLABORATION_GROUP_MODE,
   DEFAULT_COLLABORATION_GROUP_SIZE,
-  collaborationModeNeedsGroupSize,
   type CollaborationGroupMode,
 } from '~/domain/assignments/collaboration';
+import { AssignmentCollaborationFields } from './assignment-collaboration-fields';
 import {
   Select,
   SelectContent,
@@ -41,17 +39,13 @@ import {
 import { toDateInputValue } from '~/utils/date-only';
 
 export type AssignmentCreationEntryPoint =
-  'dashboard' | 'assignment-type' | 'class';
+  | 'dashboard'
+  | 'assignment-type'
+  | 'class';
 
 export type AssignmentCreationAssignmentType = {
   id: string;
   title: string;
-  /**
-   * Whether this kind of writing is in the collaborative-drafts pilot. Required
-   * rather than optional so a new call site cannot silently drop the toggle: an
-   * absent flag would look exactly like an unsupported type.
-   */
-  collaborationSupported: boolean;
 };
 
 export type AssignmentCreationEditingAssignment = {
@@ -271,12 +265,6 @@ export function AssignmentCreationSheetContent({
   const isExtracting = extractFetcher.state !== 'idle';
   const assignmentTypeId =
     fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
-  // Collaboration is offered per kind of writing, not per organization: only the
-  // assignment types that opt in show the toggle at all.
-  const selectedTypeSupportsCollaboration = Boolean(
-    assignmentTypes.find((type) => type.id === assignmentTypeId)
-      ?.collaborationSupported
-  );
   const hasFixedClass = Boolean(fixedClassId);
   // Every creation entry point uses the same server workflow. In particular,
   // the class page must not silently drop collaboration fields by posting to
@@ -834,120 +822,18 @@ export function AssignmentCreationSheetContent({
           </p>
         </div>
 
-        {/* Collaborative drafts. Hidden entirely unless this kind of writing
-            supports them, and frozen after creation for the same reason the tutor
-            toggle is: students may already have group drafts built around it.
-            Group membership itself is arranged per class afterwards, because an
-            assignment fans out to one ClassAssignment per class. */}
-        {selectedTypeSupportsCollaboration ? (
-          <div className="pt-6">
-            {isEditing ? null : (
-              <input type="hidden" name="collaborationEnabled" value="false" />
-            )}
-            <div className="flex items-center gap-2.5">
-              <Checkbox
-                id="assignment-create-collaboration-enabled"
-                name={isEditing ? undefined : 'collaborationEnabled'}
-                value="true"
-                checked={collaborationEnabled}
-                onCheckedChange={(checked) =>
-                  setCollaborationEnabled(checked === true)
-                }
-                disabled={isSaving || isEditing}
-                className="size-4 shrink-0"
-              />
-              <Label
-                htmlFor="assignment-create-collaboration-enabled"
-                className={
-                  isEditing
-                    ? 'font-normal leading-none text-muted-foreground'
-                    : 'cursor-pointer font-normal leading-none'
-                }
-              >
-                Is this a collaborative assignment?
-              </Label>
-            </div>
-            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-              {isEditing
-                ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
-                : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp creates one shared document for each group.'}
-            </p>
-            {collaborationEnabled && !isEditing ? (
-              <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">
-                <input
-                  type="hidden"
-                  name="collaborationGroupMode"
-                  value={collaborationGroupMode}
-                />
-                <div className="space-y-2">
-                  <Label>How should groups be made?</Label>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {COLLABORATION_GROUP_MODE_OPTIONS.map((option) => {
-                      const selected = collaborationGroupMode === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
-                            selected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background hover:bg-muted'
-                          }`}
-                          aria-pressed={selected}
-                          onClick={() =>
-                            setCollaborationGroupMode(option.value)
-                          }
-                          disabled={isSaving}
-                        >
-                          <span className="block font-medium">
-                            {option.label}
-                          </span>
-                          <span
-                            className={`mt-1 block text-xs ${
-                              selected
-                                ? 'text-primary-foreground/80'
-                                : 'text-muted-foreground'
-                            }`}
-                          >
-                            {option.description}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Whole class has no size to choose: the group is the roster. */}
-                {collaborationModeNeedsGroupSize(collaborationGroupMode) ? (
-                  <div>
-                    <Label
-                      htmlFor="assignment-create-collaboration-group-size"
-                      className="font-normal leading-none"
-                    >
-                      Students per group
-                    </Label>
-                    <select
-                      id="assignment-create-collaboration-group-size"
-                      name="collaborationGroupSize"
-                      value={collaborationGroupSize}
-                      onChange={(event) =>
-                        setCollaborationGroupSize(Number(event.target.value))
-                      }
-                      disabled={isSaving}
-                      className="mt-1 block rounded border px-2 py-1 text-sm"
-                    >
-                      {COLLABORATION_GROUP_SIZE_OPTIONS.map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+        {/* Every assignment may opt in. The setting is still frozen after
+            creation because groups may already own shared drafts. */}
+        <AssignmentCollaborationFields
+          isEditing={isEditing}
+          isSaving={isSaving}
+          enabled={collaborationEnabled}
+          onEnabledChange={setCollaborationEnabled}
+          groupMode={collaborationGroupMode}
+          onGroupModeChange={setCollaborationGroupMode}
+          groupSize={collaborationGroupSize}
+          onGroupSizeChange={setCollaborationGroupSize}
+        />
 
         {SAVED_ASSIGNMENTS_ENABLED && usesBulkCreateApi && !isEditing ? (
           <div className="pt-6">

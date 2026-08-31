@@ -63,6 +63,11 @@ test.describe.serial('AP History library-first assignment flow', () => {
       await expect(dialog.getByText(dbqEntry.title)).toBeVisible();
       await expect(dialog.getByText(dbqEntry.prompt)).toBeVisible();
       await expect(
+        dialog.getByRole('checkbox', {
+          name: 'Is this a collaborative assignment?',
+        })
+      ).toBeVisible();
+      await expect(
         dialog.locator('label').filter({ hasText: /^Prompt$/ })
       ).toHaveCount(0);
       await expect(

@@ -25,9 +25,7 @@ import {
  * personas are spread across the groups so the demo is reachable by logging in as
  * someone already in the picker.
  *
- * Skipped, loudly, when GBA 300 is not in the database. It is the only assignment
- * type with `collaborationSupported`, so without it every road into a room is
- * closed and there is nothing to seed.
+ * Skipped, loudly, when the GBA 300 fixture is not in the database.
  */
 
 type SeedClient = PrismaClient | Prisma.TransactionClient;
@@ -58,15 +56,8 @@ export type CollaborationSeedResult = {
   cohort: { name: string; email: string }[];
 } | null;
 
-/**
- * Looked up by `collaborationSupported` rather than by title.
- *
- * The title moved once already: an upstream fixture regeneration renamed
- * "GBA 300" to "GBA 300: Int'l Expansion Plan", which a title match would have
- * turned into a silently skipped demo rather than a failure. The flag is the
- * thing this actually depends on — it is what `collaborationRoomWhere` gates on
- * — and it is set on exactly one assignment type.
- */
+/** Stable id from the prod-fidelity fixture; its title has changed before. */
+const GBA300_ASSIGNMENT_TYPE_ID = 'cmnt1bliz0l610qk0r09ug5u6';
 const GBA300_TITLE = "GBA 300: Int'l Expansion Plan";
 /** Also the marker that says this organization already has the demo. */
 const GBA300_CLASS_CODE = 'DEV-CLASS-GBA300';
@@ -114,14 +105,13 @@ export async function seedCollaborationDemoData(
   options: CollaborationSeedOptions
 ): Promise<CollaborationSeedResult> {
   const assignmentType = await prisma.assignmentType.findFirst({
-    where: { collaborationSupported: true, archivedAt: null },
-    orderBy: { position: 'asc' },
+    where: { id: GBA300_ASSIGNMENT_TYPE_ID, archivedAt: null },
     select: { id: true, title: true },
   });
 
   if (!assignmentType) {
     console.warn(
-      `⚠️  Skipping the collaboration demo: no assignment type has collaborationSupported set (expected ${GBA300_TITLE}).`
+      `⚠️  Skipping the collaboration demo: ${GBA300_TITLE} (${GBA300_ASSIGNMENT_TYPE_ID}) is missing.`
     );
     return null;
   }

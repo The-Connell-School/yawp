@@ -85,9 +85,8 @@ function idleFetcher(data: Record<string, unknown> | null = null) {
 }
 
 const assignmentTypes = [
-  // type-1 is in the collaborative-drafts pilot; type-2 is not.
-  { id: 'type-1', title: 'Literary Analysis', collaborationSupported: true },
-  { id: 'type-2', title: 'Daily Pages', collaborationSupported: false },
+  { id: 'type-1', title: 'Literary Analysis' },
+  { id: 'type-2', title: 'Daily Pages' },
 ];
 
 const teacherClasses = [
@@ -581,7 +580,7 @@ describe('AssignmentCreationSheetContent', () => {
   });
 
   describe('collaborative drafts', () => {
-    it('offers the toggle for a kind of writing in the pilot', () => {
+    it('offers the toggle for every kind of writing', () => {
       root = renderSheet({
         entryPoint: 'assignment-type',
         fixedAssignmentTypeId: 'type-1',
@@ -592,17 +591,15 @@ describe('AssignmentCreationSheetContent', () => {
       ).not.toBeNull();
     });
 
-    it('hides the toggle for a kind of writing outside the pilot', () => {
-      // Not merely disabled: offering it where nothing downstream would serve a
-      // room is worse than not offering it at all.
+    it('offers the toggle for a kind of writing that was outside the pilot', () => {
       root = renderSheet({
         entryPoint: 'assignment-type',
         fixedAssignmentTypeId: 'type-2',
       }).root;
 
       expect(
-        document.getElementById('assignment-create-collaboration-enabled')
-      ).toBeNull();
+        controlById('assignment-create-collaboration-enabled')
+      ).not.toBeNull();
     });
 
     it('offers every group mode, not just a size', () => {

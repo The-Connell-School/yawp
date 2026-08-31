@@ -193,7 +193,7 @@ describe('api.assignments.create', () => {
         id: 'at-1',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true, collaborationSupported: true },
+      select: { id: true, systemKey: true },
     });
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -476,7 +476,7 @@ describe('api.assignments.create', () => {
         id: 'at-forbidden',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true, collaborationSupported: true },
+      select: { id: true, systemKey: true },
     });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
@@ -602,6 +602,61 @@ describe('api.assignments.create', () => {
       data: expect.objectContaining({ tutorEnabled: false }),
       classIds: ['class-1', 'class-2'],
       deployment: { postAt: null, dueAt: null },
+    });
+  });
+
+  test('creates collaborative AP History assignments and sends the teacher to group setup', async () => {
+    prisma.class.findMany.mockResolvedValue([
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
+    ]);
+    mockAssignmentTypeAvailable({
+      id: 'ap-type-1',
+      systemKey: 'ap_history_essay',
+      collaborationSupported: false,
+    });
+    prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue({
+      externalKey: 'apush-dbq-new-deal-federal-power',
+      course: 'apush',
+      essayType: 'dbq',
+      title: 'New Deal and Federal Power DBQ',
+      prompt:
+        'Evaluate the extent to which the New Deal changed the role of the federal government.',
+      period: '1932-1980',
+      periodNumber: 7,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [],
+    });
+    createAssignmentDeployedToClasses.mockResolvedValue({
+      id: 'ap-assignment',
+    });
+    prisma.classAssignment.findMany.mockResolvedValue([
+      { id: 'ap-class-assignment', classId: 'class-1' },
+    ]);
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'ap-type-1',
+        classIds: ['class-1'],
+        title: 'Collaborative Unit 7 DBQ',
+        apHistoryLibraryEntryId: 'apush-dbq-new-deal-federal-power',
+        collaborationEnabled: 'true',
+        collaborationGroupMode: 'whole-class',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(autoArrangeNewAssignment).toHaveBeenCalledWith({
+      assignmentId: 'ap-assignment',
+      mode: 'whole-class',
+      groupSize: null,
+    });
+    expect(body.nextStep).toEqual({
+      url: '/app/class-assignments/ap-class-assignment/groups',
+      classCount: 1,
     });
   });
 
@@ -739,7 +794,7 @@ describe('api.assignments.create', () => {
         { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
       ]);
     };
-    // The pilot gate lives on the assignment type, not the organization.
+    // The legacy flag values prove creation no longer depends on assignment type.
     const enablePilot = () => {
       singleClass();
       mockAssignmentTypeAvailable({ collaborationSupported: true });
@@ -796,9 +851,7 @@ describe('api.assignments.create', () => {
       expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
     });
 
-    test('forces collaboration off for an assignment type outside the pilot', async () => {
-      // The assignment is still created: a teacher who picks another type gets
-      // ordinary solo work rather than an error.
+    test('stores collaboration for an assignment type outside the former pilot', async () => {
       disablePilot();
 
       const body = await readBody(await createWithCollaboration());
@@ -807,8 +860,9 @@ describe('api.assignments.create', () => {
       expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            collaborationEnabled: false,
-            collaborationGroupSize: null,
+            collaborationEnabled: true,
+            collaborationGroupMode: 'teacher',
+            collaborationGroupSize: 3,
           }),
         })
       );
@@ -898,14 +952,19 @@ describe('api.assignments.create', () => {
       expect(autoArrangeNewAssignment).not.toHaveBeenCalled();
     });
 
-    test('does not arrange when the pilot gate forces collaboration off', async () => {
-      // Otherwise a type outside the pilot would still get groups built for an
-      // assignment whose collaboration was just switched off.
+    test('arranges groups for an assignment type outside the former pilot', async () => {
       disablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
 
       await createWithCollaboration({ collaborationGroupMode: 'random' });
 
-      expect(autoArrangeNewAssignment).not.toHaveBeenCalled();
+      expect(autoArrangeNewAssignment).toHaveBeenCalledWith({
+        assignmentId: 'assignment-1',
+        mode: 'random',
+        groupSize: 3,
+      });
     });
 
     test('sends the teacher on to group setup, because creating is not the end', async () => {

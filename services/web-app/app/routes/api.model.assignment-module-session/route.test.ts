@@ -349,6 +349,11 @@ describe('api.model.assignment-module-session on a shared draft', () => {
     membershipId: null,
     teacherProfileIds: [],
     classAssignmentTeacherProfileIds: ['profile-teacher'],
+    classAssignmentPostAt: null,
+    classAssignmentStudentProfileIds: [
+      'student-profile-1',
+      'student-profile-2',
+    ],
     activeGroupMemberIds: ['student-profile-1', 'student-profile-2'],
   };
 
@@ -367,9 +372,10 @@ describe('api.model.assignment-module-session on a shared draft', () => {
       .mockResolvedValue({ id: 'student-profile-2', role: 'STUDENT' });
 
     prisma.document.findFirst.mockImplementation(async ({ where }: any) => {
-      // The room predicate, told apart by the assignment-type gate no
-      // authorization clause carries.
-      if (where.assignmentType) return { id: DOC_SHARED.id };
+      // The room probe is the query scoped to assignment-group artifacts.
+      if (where.artifactKind === 'ASSIGNMENT_GROUP') {
+        return { id: DOC_SHARED.id };
+      }
       return matchesDocumentWhere(where, DOC_SHARED)
         ? {
             id: DOC_SHARED.id,

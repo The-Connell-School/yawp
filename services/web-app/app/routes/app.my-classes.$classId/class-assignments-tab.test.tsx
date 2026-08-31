@@ -96,9 +96,7 @@ function renderTab(overrides: Record<string, unknown> = {}) {
     <ClassAssignmentsTab
       classOption={{ id: 'class-1', name: 'History · Grade 9 • Period 2' }}
       assignments={ASSIGNMENTS}
-      assignmentTypes={[
-        { id: 'type-1', title: 'DBQ', collaborationSupported: false },
-      ]}
+      assignmentTypes={[{ id: 'type-1', title: 'DBQ' }]}
       classInsightsEnabled
       onViewDocuments={() => {}}
       onSelectAssignment={() => {}}

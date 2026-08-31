@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useFetcher } from 'react-router';
+import { useFetcher, useNavigate } from 'react-router';
+import { AssignmentCollaborationFields } from '~/components/assignments/assignment-collaboration-fields';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -19,6 +20,11 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { formatClassCardTitle } from '~/utils/class-display';
+import {
+  DEFAULT_COLLABORATION_GROUP_MODE,
+  DEFAULT_COLLABORATION_GROUP_SIZE,
+  type CollaborationGroupMode,
+} from '~/domain/assignments/collaboration';
 
 type TeacherClass = {
   id: string;
@@ -30,8 +36,6 @@ type TeacherClass = {
 type Props = {
   assignmentTypeId: string;
   assignmentTypeTitle: string;
-  /** Whether this kind of writing is in the collaborative-drafts pilot. */
-  assignmentTypeCollaborationSupported?: boolean;
   teacherClasses: TeacherClass[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -52,7 +56,6 @@ function classLabel(klass: TeacherClass) {
 export function CreateAssignmentSheet({
   assignmentTypeId,
   assignmentTypeTitle,
-  assignmentTypeCollaborationSupported = false,
   teacherClasses,
   open,
   onOpenChange,
@@ -60,11 +63,22 @@ export function CreateAssignmentSheet({
   titleRequired = false,
   apHistoryEntry = null,
 }: Props) {
-  const fetcher = useFetcher<{ success?: boolean; message?: string }>();
+  const fetcher = useFetcher<{
+    success?: boolean;
+    message?: string;
+    nextStep?: { url: string; classCount: number } | null;
+  }>();
+  const navigate = useNavigate();
   const [selectedClassId, setSelectedClassId] = useState(
     teacherClasses[0]?.id ?? ''
   );
   const [title, setTitle] = useState('');
+  const [collaborationEnabled, setCollaborationEnabled] = useState(false);
+  const [collaborationGroupMode, setCollaborationGroupMode] =
+    useState<CollaborationGroupMode>(DEFAULT_COLLABORATION_GROUP_MODE);
+  const [collaborationGroupSize, setCollaborationGroupSize] = useState(
+    DEFAULT_COLLABORATION_GROUP_SIZE
+  );
 
   const isSaving = fetcher.state !== 'idle';
 
@@ -72,13 +86,17 @@ export function CreateAssignmentSheet({
     if (!open || !apHistoryEntry) return;
     setSelectedClassId(teacherClasses[0]?.id ?? '');
     setTitle('');
+    setCollaborationEnabled(false);
+    setCollaborationGroupMode(DEFAULT_COLLABORATION_GROUP_MODE);
+    setCollaborationGroupSize(DEFAULT_COLLABORATION_GROUP_SIZE);
   }, [open, teacherClasses, apHistoryEntry]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
       onOpenChange(false);
+      if (fetcher.data.nextStep) navigate(fetcher.data.nextStep.url);
     }
-  }, [fetcher.state, fetcher.data, onOpenChange]);
+  }, [fetcher.state, fetcher.data, onOpenChange, navigate]);
 
   if (!apHistoryEntry) {
     return (
@@ -91,7 +109,6 @@ export function CreateAssignmentSheet({
           {
             id: assignmentTypeId,
             title: assignmentTypeTitle,
-            collaborationSupported: assignmentTypeCollaborationSupported,
           },
         ]}
         teacherClasses={teacherClasses}
@@ -173,6 +190,16 @@ export function CreateAssignmentSheet({
               {apHistoryEntry.prompt}
             </p>
           </div>
+
+          <AssignmentCollaborationFields
+            isSaving={isSaving}
+            enabled={collaborationEnabled}
+            onEnabledChange={setCollaborationEnabled}
+            groupMode={collaborationGroupMode}
+            onGroupModeChange={setCollaborationGroupMode}
+            groupSize={collaborationGroupSize}
+            onGroupSizeChange={setCollaborationGroupSize}
+          />
 
           {fetcher.data && !fetcher.data.success ? (
             <p className="text-sm text-destructive">

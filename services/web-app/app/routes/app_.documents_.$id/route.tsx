@@ -260,16 +260,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       title: true,
       html: true,
       text: true,
-      // `group` and `collaborationSupported` answer one question: may this draft
-      // still be turned into a shared one? A draft that already belongs to a
-      // group is already shared, and a kind of writing outside the pilot has no
-      // collaborative page to become.
       group: { select: { id: true } },
       assignmentType: {
         select: {
           id: true,
           title: true,
-          collaborationSupported: true,
         },
       },
       assignment: {
@@ -766,7 +761,8 @@ export default function Route() {
   useEffect(() => {
     if (submissionUnsubmitFetcher.state !== 'idle') return;
     const body = submissionUnsubmitFetcher.data as
-      { success?: boolean } | undefined;
+      | { success?: boolean }
+      | undefined;
     if (body?.success && submissionToUnsubmit) {
       // The loader's shouldRevalidate never reruns for this fetcher (see
       // below), so update local state directly instead of relying on
@@ -1281,7 +1277,8 @@ export default function Route() {
           </DialogHeader>
           {(
             submissionUnsubmitFetcher.data as
-              { success?: boolean; message?: string } | undefined
+              | { success?: boolean; message?: string }
+              | undefined
           )?.success === false ? (
             <p role="alert" className="text-sm text-destructive">
               {(submissionUnsubmitFetcher.data as { message?: string }).message}

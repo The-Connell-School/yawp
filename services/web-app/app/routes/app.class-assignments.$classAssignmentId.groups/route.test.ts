@@ -138,23 +138,24 @@ describe('class assignment groups', () => {
       await expect(get()).rejects.toBeDefined();
     });
 
-    test('the loader 404s when the assignment type is outside the pilot', async () => {
+    test('the loader serves a collaborative assignment regardless of type', async () => {
       prisma.classAssignment.findFirst.mockResolvedValue(
         scoped({ typeSupported: false })
       );
 
-      await expect(get()).rejects.toBeDefined();
+      expect(await readBody(await get())).toEqual(
+        expect.objectContaining({ classAssignmentId: 'ca-1' })
+      );
     });
 
-    test('the action refuses when the assignment type is outside the pilot', async () => {
+    test('the action opens groups regardless of assignment type', async () => {
       prisma.classAssignment.findFirst.mockResolvedValue(
         scoped({ typeSupported: false })
       );
 
-      const result: any = await post({ intent: 'open' });
+      await post({ intent: 'open' });
 
-      expect(openGroups).not.toHaveBeenCalled();
-      expect(result.options.type).toBe('error');
+      expect(openGroups).toHaveBeenCalledWith({ classAssignmentId: 'ca-1' });
     });
   });
 
@@ -517,8 +518,7 @@ describe('class assignment groups', () => {
       expect((await body(result)).message).toMatch(/still has students/);
     });
 
-    test('editing is refused for an assignment type outside the pilot', async () => {
-      // The gate runs before the intent split, so it covers these too.
+    test('editing works regardless of assignment type', async () => {
       prisma.classAssignment.findFirst.mockResolvedValue(
         scoped({ typeSupported: false })
       );
@@ -529,7 +529,7 @@ describe('class assignment groups', () => {
         targetGroupId: 'group-2',
       });
 
-      expect(moveStudentToGroup).not.toHaveBeenCalled();
+      expect(moveStudentToGroup).toHaveBeenCalled();
     });
   });
 

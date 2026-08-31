@@ -391,7 +391,6 @@ describe('class detail loader document visibility', () => {
         id: true,
         title: true,
         systemKey: true,
-        collaborationSupported: true,
       },
       orderBy: { position: 'asc' },
     });
