@@ -1,5 +1,5 @@
 import { expect, test } from '../test-setup';
-import type { Page } from '@playwright/test';
+import type { Page, Response } from '@playwright/test';
 import type { E2EContext } from '../seed-e2e';
 
 /**
@@ -284,6 +284,45 @@ test.describe('collaborative carets', () => {
         riley.locator(`[data-membership-id="${e2eContext.membershipId}"]`)
       ).toHaveAttribute('data-presence-status', 'offline');
       expect(Date.now() - leavingAt).toBeLessThan(3000);
+    } finally {
+      await close();
+    }
+  });
+
+  test('a writer can submit an assignment-owned shared draft', async ({
+    browser,
+    e2eContext,
+  }) => {
+    const { sam, close } = await twoWriters(browser, e2eContext);
+
+    try {
+      const roomUpdate = sam.waitForResponse(
+        (response: Response) =>
+          response.request().method() === 'POST' &&
+          response.url().includes(`/api/collab/${e2eContext.collabDocumentId}/updates`) &&
+          response.ok()
+      );
+      await sam.locator(EDITOR).click();
+      await sam
+        .locator(EDITOR)
+        .pressSequentially('Ready for group submission.', { delay: 20 });
+      await roomUpdate;
+
+      const submitResponse = sam.waitForResponse(
+        (response: Response) =>
+          response.request().method() === 'POST' &&
+          response.url().includes(
+            `/api/collab/${e2eContext.collabDocumentId}/submit`
+          )
+      );
+      await sam.getByRole('button', { name: 'Submit', exact: true }).click();
+
+      const response = await submitResponse;
+      expect(response.status()).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({ success: true });
+      await expect(
+        sam.getByRole('button', { name: 'Submitted', exact: true })
+      ).toBeVisible();
     } finally {
       await close();
     }
