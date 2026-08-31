@@ -263,6 +263,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
         releasedAt: true,
         document: {
           select: {
+            artifactKind: true,
             membership: { select: { organizationId: true } },
             classAssignment: {
               select: {
@@ -285,6 +286,29 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     const submissionData: { html?: string; text?: string } = {};
     if (data.html !== undefined) submissionData.html = data.html;
     if (data.text !== undefined) submissionData.text = data.text;
+
+    if (
+      submission.document.artifactKind === 'ASSIGNMENT_GROUP' &&
+      Object.keys(submissionData).length > 0
+    ) {
+      await prisma.documentWriteJournal.update({
+        where: { id: journal.id },
+        data: {
+          status: 'rejected',
+          failureReason: 'teacher_cannot_rewrite_group_submission',
+        },
+      });
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: 'Teachers cannot rewrite a shared group submission.',
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
     if (Object.keys(submissionData).length === 0) {
       await prisma.documentWriteJournal.update({

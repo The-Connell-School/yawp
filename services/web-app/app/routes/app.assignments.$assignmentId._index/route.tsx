@@ -9,6 +9,7 @@ import {
   useNavigate,
   useSearchParams,
 } from 'react-router';
+import { toCollaborationGroupMode } from '~/domain/assignments/collaboration';
 import { Copy, Pencil, UsersIcon } from 'lucide-react';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -125,6 +126,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           pointValue: true,
           tutorEnabled: true,
           collaborationEnabled: true,
+          collaborationGroupMode: true,
+          collaborationGroupSize: true,
           gradingAssistantStrictnessLevel: true,
           assignmentTypeId: true,
           assignmentType: {
@@ -234,6 +237,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       submitForGrade: active.assignment.submitForGrade,
       pointValue: active.assignment.pointValue,
       tutorEnabled: active.assignment.tutorEnabled,
+      collaborationGroupMode: active.assignment.collaborationGroupMode,
+      collaborationGroupSize: active.assignment.collaborationGroupSize,
       gradingAssistantStrictnessLevel: active.assignment
         .gradingAssistantStrictnessLevel as GradingAssistantStrictnessLevel,
       assignmentTypeId: active.assignment.assignmentTypeId,
@@ -291,7 +296,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (intent === 'create-assignment' || intent === 'update-assignment') {
     const assignmentIdParam = params.assignmentId;
-    const assignmentId = formData.get('assignmentId')?.toString() ?? assignmentIdParam ?? '';
+    const assignmentId =
+      formData.get('assignmentId')?.toString() ?? assignmentIdParam ?? '';
     const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
     const titleRaw = formData.get('title')?.toString() ?? '';
     const promptRaw = formData.get('prompt')?.toString() ?? '';
@@ -332,9 +338,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const selectedAssignmentType = allowedAssignmentTypes.find(
       (type) => type.id === assignmentTypeId
     );
-    if (
-      selectedAssignmentType?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
-    ) {
+    if (selectedAssignmentType?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
       return dataResponse(
         {
           success: false,
@@ -350,10 +354,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    if (
-      intent === 'create-assignment' &&
-      !gradingAssistantStrictnessLevel
-    ) {
+    if (intent === 'create-assignment' && !gradingAssistantStrictnessLevel) {
       return dataResponse(
         {
           success: false,
@@ -446,8 +447,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             prompt,
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
-            gradingAssistantStrictnessLevel:
-              gradingAssistantStrictnessLevel!,
+            gradingAssistantStrictnessLevel: gradingAssistantStrictnessLevel!,
             tutorEnabled: tutorEnabledResult.value,
             ...promptAttachmentData,
           },
@@ -775,6 +775,11 @@ export default function AssignmentDetailRoute() {
           initialSubmitForGrade={assignment.submitForGrade}
           initialPointValue={assignment.pointValue}
           initialTutorEnabled={assignment.tutorEnabled}
+          initialCollaborationEnabled={Boolean(data.collaboration)}
+          initialCollaborationGroupMode={toCollaborationGroupMode(
+            assignment.collaborationGroupMode
+          )}
+          initialCollaborationGroupSize={assignment.collaborationGroupSize}
           initialGradingAssistantStrictnessLevel={
             assignment.gradingAssistantStrictnessLevel
           }

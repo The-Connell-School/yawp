@@ -25,6 +25,7 @@ import {
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
+  AssignmentHasCollaborativeWorkError,
   createAssignmentDeployedToClasses,
   deleteClassAssignmentDeployment,
 } from '~/utils/assignment-deployment.server';
@@ -271,9 +272,36 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    await prisma.assignment.deleteMany({
-      where: { id: { in: assignmentIds } },
+    const protectedDeployment = await prisma.documentGroup.findFirst({
+      where: {
+        documentId: { not: null },
+        classAssignment: { classId, assignmentId: { in: assignmentIds } },
+      },
+      select: { id: true },
     });
+    if (protectedDeployment) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'Assignments with shared group work cannot be deleted.',
+        },
+        { status: 409 }
+      );
+    }
+
+    try {
+      for (const assignmentId of assignmentIds) {
+        await deleteClassAssignmentDeployment({ assignmentId, classId });
+      }
+    } catch (error) {
+      if (error instanceof AssignmentHasCollaborativeWorkError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
 
     return dataResponse({
       success: true,
@@ -305,7 +333,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    await deleteClassAssignmentDeployment({ assignmentId, classId });
+    try {
+      await deleteClassAssignmentDeployment({ assignmentId, classId });
+    } catch (error) {
+      if (error instanceof AssignmentHasCollaborativeWorkError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
 
     return dataResponse({
       success: true,

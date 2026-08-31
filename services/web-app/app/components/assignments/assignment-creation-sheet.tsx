@@ -124,6 +124,7 @@ export type AssignmentCreationSheetProps = {
   initialPointValue?: number | null;
   initialTutorEnabled?: boolean;
   initialCollaborationEnabled?: boolean;
+  initialCollaborationGroupMode?: CollaborationGroupMode;
   initialCollaborationGroupSize?: number | null;
   initialGradingAssistantStrictnessLevel?: GradingAssistantStrictnessLevel;
 };
@@ -210,6 +211,7 @@ export function AssignmentCreationSheetContent({
   initialPointValue = DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
   initialTutorEnabled = true,
   initialCollaborationEnabled = false,
+  initialCollaborationGroupMode = DEFAULT_COLLABORATION_GROUP_MODE,
   initialCollaborationGroupSize = null,
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   initialPostAt,
@@ -245,7 +247,7 @@ export function AssignmentCreationSheetContent({
     initialCollaborationEnabled
   );
   const [collaborationGroupMode, setCollaborationGroupMode] =
-    useState<CollaborationGroupMode>(DEFAULT_COLLABORATION_GROUP_MODE);
+    useState<CollaborationGroupMode>(initialCollaborationGroupMode);
   const [collaborationGroupSize, setCollaborationGroupSize] = useState(
     initialCollaborationGroupSize ?? DEFAULT_COLLABORATION_GROUP_SIZE
   );
@@ -275,8 +277,10 @@ export function AssignmentCreationSheetContent({
       ?.collaborationSupported
   );
   const hasFixedClass = Boolean(fixedClassId);
-  const usesBulkCreateApi =
-    entryPoint === 'dashboard' || entryPoint === 'assignment-type';
+  // Every creation entry point uses the same server workflow. In particular,
+  // the class page must not silently drop collaboration fields by posting to
+  // its older local action. Editing stays on the owning route.
+  const usesBulkCreateApi = !isEditing;
   const formAction = usesBulkCreateApi ? '/api/assignments/create' : undefined;
   const selectedClassCount = hasFixedClass
     ? 1
@@ -328,7 +332,7 @@ export function AssignmentCreationSheetContent({
     setDueAt(toDateInputValue(initialDueAt));
     setTutorEnabled(initialTutorEnabled);
     setCollaborationEnabled(initialCollaborationEnabled);
-    setCollaborationGroupMode(DEFAULT_COLLABORATION_GROUP_MODE);
+    setCollaborationGroupMode(initialCollaborationGroupMode);
     setCollaborationGroupSize(
       initialCollaborationGroupSize ?? DEFAULT_COLLABORATION_GROUP_SIZE
     );
@@ -350,6 +354,7 @@ export function AssignmentCreationSheetContent({
     initialPointValue,
     initialTutorEnabled,
     initialCollaborationEnabled,
+    initialCollaborationGroupMode,
     initialCollaborationGroupSize,
     initialGradingAssistantStrictnessLevel,
     initialPostAt,
@@ -452,7 +457,11 @@ export function AssignmentCreationSheetContent({
             value={editingAssignment.id}
           />
         ) : hasFixedClass ? (
-          <input type="hidden" name="classId" value={fixedClassId} />
+          <input
+            type="hidden"
+            name={usesBulkCreateApi ? 'classIds' : 'classId'}
+            value={fixedClassId}
+          />
         ) : (
           selectedClassIds.map((id) => (
             <input key={id} type="hidden" name="classIds" value={id} />

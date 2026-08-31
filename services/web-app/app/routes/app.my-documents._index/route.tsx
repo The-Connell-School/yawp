@@ -122,13 +122,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
           OR: [
             { membershipId: profile.id },
             {
-              group: {
-                is: {
-                  members: {
-                    some: { membershipId: profile.id, removedAt: null },
+              AND: [
+                {
+                  group: {
+                    is: {
+                      members: {
+                        some: { membershipId: profile.id, removedAt: null },
+                      },
+                    },
                   },
                 },
-              },
+                {
+                  classAssignment: {
+                    is: {
+                      OR: [{ postAt: null }, { postAt: { lte: new Date() } }],
+                    },
+                  },
+                },
+              ],
             },
           ],
         },

@@ -50,6 +50,41 @@ export function buildTeacherClassWhere(
   });
 }
 
+/**
+ * The graded work must be student work, never the grading teacher's own solo
+ * document. Assignment-group artifacts have no student owner, so they match by
+ * explicit artifact kind and remain protected by the separate teacher/class
+ * predicate at every call site.
+ */
+export function buildGradeWriteSubjectWhere({
+  actorUserId,
+  releasedAt,
+}: {
+  actorUserId: string;
+  releasedAt: Date | null;
+}): Prisma.DocumentWhereInput {
+  return {
+    OR: [
+      { artifactKind: 'ASSIGNMENT_GROUP' },
+      {
+        artifactKind: 'STUDENT',
+        membership: {
+          is: {
+            userId: { not: actorUserId },
+            ...(releasedAt == null
+              ? {}
+              : {
+                  organization: {
+                    is: { submissionActivityEnabled: true },
+                  },
+                }),
+          },
+        },
+      },
+    ],
+  };
+}
+
 export function buildTeacherDocumentAccessWhere({
   membershipId,
   organizationId,

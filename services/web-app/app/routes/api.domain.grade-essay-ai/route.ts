@@ -48,6 +48,7 @@ import {
 } from '~/utils/ai-context-audit.server';
 import {
   buildTeacherClassWhere,
+  buildGradeWriteSubjectWhere,
   canManageGrades,
   getGradingActor,
   isGradingOwnDocument,
@@ -969,20 +970,10 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
               is: {
                 deletedAt: null,
                 AND: [
-                  {
-                    membership: {
-                      is: {
-                        userId: { not: actor.userId },
-                        ...(submission.releasedAt == null
-                          ? {}
-                          : {
-                              organization: {
-                                is: { submissionActivityEnabled: true },
-                              },
-                            }),
-                      },
-                    },
-                  },
+                  buildGradeWriteSubjectWhere({
+                    actorUserId: actor.userId,
+                    releasedAt: submission.releasedAt,
+                  }),
                   teacherClassWhere,
                 ],
               },
@@ -1397,20 +1388,10 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
             is: {
               deletedAt: null,
               AND: [
-                {
-                  membership: {
-                    is: {
-                      userId: { not: actor.userId },
-                      ...(submission.releasedAt == null
-                        ? {}
-                        : {
-                            organization: {
-                              is: { submissionActivityEnabled: true },
-                            },
-                          }),
-                    },
-                  },
-                },
+                buildGradeWriteSubjectWhere({
+                  actorUserId: actor.userId,
+                  releasedAt: submission.releasedAt,
+                }),
                 teacherClassWhere,
               ],
             },

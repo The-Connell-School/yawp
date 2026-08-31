@@ -1,3 +1,4 @@
+import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 
 export class AssignmentArtifactError extends Error {}
@@ -22,75 +23,9 @@ export async function createAssignmentGroupArtifact({
   groupId: string;
 }): Promise<{ documentId: string; created: boolean }> {
   try {
-    return await prisma.$transaction(async (tx) => {
-      const group = await tx.documentGroup.findUnique({
-        where: { id: groupId },
-        select: {
-          id: true,
-          documentId: true,
-          classAssignment: {
-            select: {
-              id: true,
-              assignmentId: true,
-              assignment: {
-                select: {
-                  assignmentTypeId: true,
-                  collaborationEnabled: true,
-                  title: true,
-                },
-              },
-            },
-          },
-          members: {
-            where: { removedAt: null },
-            select: { id: true },
-          },
-        },
-      });
-
-      if (!group)
-        throw new AssignmentArtifactError('Document group not found.');
-      if (!group.classAssignment) {
-        throw new AssignmentArtifactError(
-          'A collaborative artifact must belong to a class assignment.'
-        );
-      }
-      if (!group.classAssignment.assignment.collaborationEnabled) {
-        throw new AssignmentArtifactError(
-          'This assignment is not set up for collaborative drafts.'
-        );
-      }
-      if (group.members.length === 0) {
-        throw new AssignmentArtifactError(
-          'A collaborative artifact requires at least one active group member.'
-        );
-      }
-      if (group.documentId) {
-        return { documentId: group.documentId, created: false };
-      }
-
-      const document = await tx.document.create({
-        data: {
-          artifactKind: 'ASSIGNMENT_GROUP',
-          membershipId: null,
-          text: '',
-          html: '',
-          title: group.classAssignment.assignment.title ?? '',
-          assignmentTypeId: group.classAssignment.assignment.assignmentTypeId,
-          assignmentId: group.classAssignment.assignmentId,
-          classAssignmentId: group.classAssignment.id,
-        },
-        select: { id: true },
-      });
-
-      const claimed = await tx.documentGroup.updateMany({
-        where: { id: group.id, documentId: null },
-        data: { documentId: document.id, openedAt: new Date() },
-      });
-
-      if (claimed.count !== 1) throw new ArtifactClaimLost();
-      return { documentId: document.id, created: true };
-    });
+    return await prisma.$transaction((tx) =>
+      createAssignmentGroupArtifactInTransaction(tx, { groupId })
+    );
   } catch (error) {
     if (!(error instanceof ArtifactClaimLost)) throw error;
 
@@ -105,4 +40,77 @@ export async function createAssignmentGroupArtifact({
     }
     return { documentId: winner.documentId, created: false };
   }
+}
+
+/** Same provisioning contract, joined to a caller-owned atomic finalization. */
+export async function createAssignmentGroupArtifactInTransaction(
+  tx: Prisma.TransactionClient,
+  { groupId }: { groupId: string }
+): Promise<{ documentId: string; created: boolean }> {
+  const group = await tx.documentGroup.findUnique({
+    where: { id: groupId },
+    select: {
+      id: true,
+      documentId: true,
+      classAssignment: {
+        select: {
+          id: true,
+          assignmentId: true,
+          assignment: {
+            select: {
+              assignmentTypeId: true,
+              collaborationEnabled: true,
+              title: true,
+            },
+          },
+        },
+      },
+      members: {
+        where: { removedAt: null },
+        select: { id: true },
+      },
+    },
+  });
+
+  if (!group) throw new AssignmentArtifactError('Document group not found.');
+  if (!group.classAssignment) {
+    throw new AssignmentArtifactError(
+      'A collaborative artifact must belong to a class assignment.'
+    );
+  }
+  if (!group.classAssignment.assignment.collaborationEnabled) {
+    throw new AssignmentArtifactError(
+      'This assignment is not set up for collaborative drafts.'
+    );
+  }
+  if (group.members.length === 0) {
+    throw new AssignmentArtifactError(
+      'A collaborative artifact requires at least one active group member.'
+    );
+  }
+  if (group.documentId) {
+    return { documentId: group.documentId, created: false };
+  }
+
+  const document = await tx.document.create({
+    data: {
+      artifactKind: 'ASSIGNMENT_GROUP',
+      membershipId: null,
+      text: '',
+      html: '',
+      title: group.classAssignment.assignment.title ?? '',
+      assignmentTypeId: group.classAssignment.assignment.assignmentTypeId,
+      assignmentId: group.classAssignment.assignmentId,
+      classAssignmentId: group.classAssignment.id,
+    },
+    select: { id: true },
+  });
+
+  const claimed = await tx.documentGroup.updateMany({
+    where: { id: group.id, documentId: null },
+    data: { documentId: document.id, openedAt: new Date() },
+  });
+
+  if (claimed.count !== 1) throw new ArtifactClaimLost();
+  return { documentId: document.id, created: true };
 }

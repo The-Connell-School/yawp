@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  classAssignment: { findFirst: mock() },
+  classAssignment: { findFirst: mock(), findMany: mock() },
   documentGroup: { findMany: mock() },
 };
 
@@ -97,6 +97,7 @@ async function readBody(response: any) {
 describe('class assignment groups', () => {
   beforeEach(() => {
     prisma.classAssignment.findFirst.mockReset();
+    prisma.classAssignment.findMany.mockReset().mockResolvedValue([]);
     prisma.documentGroup.findMany.mockReset().mockResolvedValue([]);
     requireUserId.mockReset().mockResolvedValue('user-1');
     requireMembership.mockReset().mockResolvedValue({
@@ -213,7 +214,29 @@ describe('class assignment groups', () => {
       expect(body.unassigned).toEqual([{ membershipId: 'm1', name: 'Ada' }]);
     });
 
-    test('reports opened once any group has a draft', async () => {
+    test('reports opened once every nonempty group has a draft', async () => {
+      prisma.classAssignment.findFirst.mockResolvedValue(scoped());
+      prisma.documentGroup.findMany.mockResolvedValue([
+        {
+          id: 'g-1',
+          label: 'Group 1',
+          ordinal: 0,
+          openedAt: new Date('2026-08-17T10:00:00Z'),
+          documentId: 'doc-1',
+          members: [
+            { membershipId: 'm1', removedAt: null },
+            { membershipId: 'm2', removedAt: null },
+          ],
+        },
+      ]);
+
+      const body = await readBody(await get());
+
+      expect(body.opened).toBe(true);
+      expect(body.groups[0].documentId).toBe('doc-1');
+    });
+
+    test('keeps setup editable if finalization is incomplete', async () => {
       prisma.classAssignment.findFirst.mockResolvedValue(scoped());
       prisma.documentGroup.findMany.mockResolvedValue([
         {
@@ -224,12 +247,19 @@ describe('class assignment groups', () => {
           documentId: 'doc-1',
           members: [{ membershipId: 'm1', removedAt: null }],
         },
+        {
+          id: 'g-2',
+          label: 'Group 2',
+          ordinal: 1,
+          openedAt: null,
+          documentId: null,
+          members: [{ membershipId: 'm2', removedAt: null }],
+        },
       ]);
 
       const body = await readBody(await get());
 
-      expect(body.opened).toBe(true);
-      expect(body.groups[0].documentId).toBe('doc-1');
+      expect(body.opened).toBe(false);
     });
   });
 
@@ -319,6 +349,16 @@ describe('class assignment groups', () => {
 
       expect(result.options.type).toBe('success');
       expect(result.options.description).toMatch(/already finalized/i);
+    });
+
+    test('advances to the next unfinished class deployment', async () => {
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { id: 'ca-2', documentGroups: [] },
+      ]);
+
+      const result: any = await post({ intent: 'open' });
+
+      expect(result.to).toBe('/app/class-assignments/ca-2/groups');
     });
 
     test('surfaces a refusal to open ungrouped students', async () => {

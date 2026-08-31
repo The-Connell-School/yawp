@@ -26,9 +26,7 @@ describe('groupSetupNextStep', () => {
     });
   });
 
-  test('several classes go to the assignment, which has the class switcher', () => {
-    // Groups are per class, so three sections need three seating charts. The
-    // assignment page is the one place that lists them.
+  test('several classes start a required setup sequence at the first class', () => {
     expect(
       groupSetupNextStep({
         assignmentId: 'a-1',
@@ -39,7 +37,7 @@ describe('groupSetupNextStep', () => {
         ],
       })
     ).toEqual({
-      url: '/app/assignments/a-1?classId=c-1',
+      url: '/app/class-assignments/ca-1/groups',
       classCount: 2,
     });
   });

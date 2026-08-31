@@ -2,7 +2,8 @@
 // `groups.ts`; this module talks to the database.
 
 import { prisma } from '~/utils/db.server';
-import { createAssignmentGroupArtifact } from './assignment-artifact.server';
+import { createAssignmentGroupArtifactInTransaction } from './assignment-artifact.server';
+import { lockClassAssignmentCollaboration } from './class-assignment-lock.server';
 import { groupLabel, planGroups, shuffleMemberships } from './groups';
 
 export class GroupProvisioningError extends Error {}
@@ -29,32 +30,40 @@ export async function arrangeGroups({
   shuffle?: boolean;
   random?: () => number;
 }) {
-  const classAssignment = await prisma.classAssignment.findUnique({
-    where: { id: classAssignmentId },
-    select: {
-      id: true,
-      class: {
-        select: { students: { select: { id: true }, orderBy: { id: 'asc' } } },
+  return prisma.$transaction(async (tx) => {
+    if (!(await lockClassAssignmentCollaboration(tx, classAssignmentId))) {
+      throw new GroupProvisioningError('Class assignment not found.');
+    }
+    const classAssignment = await tx.classAssignment.findUnique({
+      where: { id: classAssignmentId },
+      select: {
+        id: true,
+        class: {
+          select: {
+            students: { select: { id: true }, orderBy: { id: 'asc' } },
+          },
+        },
+        documentGroups: { select: { id: true, openedAt: true } },
       },
-      documentGroups: { select: { id: true, openedAt: true } },
-    },
-  });
+    });
 
-  if (!classAssignment) {
-    throw new GroupProvisioningError('Class assignment not found.');
-  }
+    if (!classAssignment) {
+      throw new GroupProvisioningError('Class assignment not found.');
+    }
+    if (
+      classAssignment.documentGroups.some((group) => group.openedAt !== null)
+    ) {
+      throw new GroupProvisioningError(
+        'Groups have already been opened for this assignment and cannot be rearranged.'
+      );
+    }
 
-  if (classAssignment.documentGroups.some((group) => group.openedAt !== null)) {
-    throw new GroupProvisioningError(
-      'Groups have already been opened for this assignment and cannot be rearranged.'
+    const rosterIds = classAssignment.class.students.map(
+      (student) => student.id
     );
-  }
+    const ordered = shuffle ? shuffleMemberships(rosterIds, random) : rosterIds;
+    const planned = planGroups({ membershipIds: ordered, groupSize });
 
-  const rosterIds = classAssignment.class.students.map((student) => student.id);
-  const ordered = shuffle ? shuffleMemberships(rosterIds, random) : rosterIds;
-  const planned = planGroups({ membershipIds: ordered, groupSize });
-
-  await prisma.$transaction(async (tx) => {
     // Unopened groups hold no documents, so clearing them loses nothing.
     await tx.documentGroup.deleteMany({
       where: { classAssignmentId, openedAt: null },
@@ -72,9 +81,8 @@ export async function arrangeGroups({
         },
       });
     }
+    return { groupCount: planned.length };
   });
-
-  return { groupCount: planned.length };
 }
 
 /**
@@ -92,84 +100,91 @@ export async function openGroups({
 }: {
   classAssignmentId: string;
 }) {
-  const classAssignment = await prisma.classAssignment.findUnique({
-    where: { id: classAssignmentId },
-    select: {
-      id: true,
-      assignmentId: true,
-      assignment: {
-        select: { assignmentTypeId: true, collaborationEnabled: true },
-      },
-      class: { select: { students: { select: { id: true } } } },
-      documentGroups: {
-        orderBy: { ordinal: 'asc' },
-        select: {
-          id: true,
-          documentId: true,
-          openedAt: true,
-          members: {
-            where: { removedAt: null },
-            select: { membershipId: true },
+  return prisma.$transaction(async (tx) => {
+    if (!(await lockClassAssignmentCollaboration(tx, classAssignmentId))) {
+      throw new GroupProvisioningError('Class assignment not found.');
+    }
+    const classAssignment = await tx.classAssignment.findUnique({
+      where: { id: classAssignmentId },
+      select: {
+        id: true,
+        assignmentId: true,
+        assignment: {
+          select: { assignmentTypeId: true, collaborationEnabled: true },
+        },
+        class: { select: { students: { select: { id: true } } } },
+        documentGroups: {
+          orderBy: { ordinal: 'asc' },
+          select: {
+            id: true,
+            documentId: true,
+            openedAt: true,
+            members: {
+              where: { removedAt: null },
+              select: { membershipId: true },
+            },
           },
         },
       },
-    },
-  });
+    });
 
-  if (!classAssignment) {
-    throw new GroupProvisioningError('Class assignment not found.');
-  }
-  if (!classAssignment.assignment.collaborationEnabled) {
-    throw new GroupProvisioningError(
-      'This assignment is not set up for collaborative drafts.'
-    );
-  }
-  if (classAssignment.documentGroups.length === 0) {
-    throw new GroupProvisioningError('Arrange groups before opening them.');
-  }
-
-  // Finalization is the point at which the seating chart becomes durable
-  // access control. Every enrolled student must appear in exactly one active
-  // group; otherwise finalizing would either hide the assignment from someone
-  // or give them access to two assignment-owned artifacts.
-  const rosterIds = new Set(
-    classAssignment.class.students.map((student) => student.id)
-  );
-  const assignmentCounts = new Map<string, number>();
-  for (const group of classAssignment.documentGroups) {
-    for (const member of group.members) {
-      assignmentCounts.set(
-        member.membershipId,
-        (assignmentCounts.get(member.membershipId) ?? 0) + 1
+    if (!classAssignment) {
+      throw new GroupProvisioningError('Class assignment not found.');
+    }
+    if (!classAssignment.assignment.collaborationEnabled) {
+      throw new GroupProvisioningError(
+        'This assignment is not set up for collaborative drafts.'
       );
     }
-  }
+    if (classAssignment.documentGroups.length === 0) {
+      throw new GroupProvisioningError('Arrange groups before opening them.');
+    }
 
-  const hasNonRosterMember = [...assignmentCounts.keys()].some(
-    (membershipId) => !rosterIds.has(membershipId)
-  );
-  const hasMissingOrDuplicateRosterMember = [...rosterIds].some(
-    (membershipId) => assignmentCounts.get(membershipId) !== 1
-  );
-  if (hasNonRosterMember || hasMissingOrDuplicateRosterMember) {
-    throw new GroupProvisioningError(
-      'Assign every enrolled student to exactly one group before finalizing.'
+    // Finalization is the point at which the seating chart becomes durable
+    // access control. Every enrolled student must appear in exactly one active
+    // group; otherwise finalizing would either hide the assignment from someone
+    // or give them access to two assignment-owned artifacts.
+    const rosterIds = new Set(
+      classAssignment.class.students.map((student) => student.id)
     );
-  }
+    const assignmentCounts = new Map<string, number>();
+    for (const group of classAssignment.documentGroups) {
+      for (const member of group.members) {
+        assignmentCounts.set(
+          member.membershipId,
+          (assignmentCounts.get(member.membershipId) ?? 0) + 1
+        );
+      }
+    }
 
-  let provisioned = 0;
+    const hasNonRosterMember = [...assignmentCounts.keys()].some(
+      (membershipId) => !rosterIds.has(membershipId)
+    );
+    const hasMissingOrDuplicateRosterMember = [...rosterIds].some(
+      (membershipId) => assignmentCounts.get(membershipId) !== 1
+    );
+    if (hasNonRosterMember || hasMissingOrDuplicateRosterMember) {
+      throw new GroupProvisioningError(
+        'Assign every enrolled student to exactly one group before finalizing.'
+      );
+    }
 
-  for (const group of classAssignment.documentGroups) {
-    // Already has a draft: leave it alone. This is the idempotency guarantee.
-    if (group.documentId) continue;
+    let provisioned = 0;
 
-    if (group.members.length === 0) continue;
+    for (const group of classAssignment.documentGroups) {
+      // Already has a draft: leave it alone. This is the idempotency guarantee.
+      if (group.documentId) continue;
 
-    const result = await createAssignmentGroupArtifact({ groupId: group.id });
-    if (result.created) provisioned += 1;
-  }
+      if (group.members.length === 0) continue;
 
-  return { provisioned };
+      const result = await createAssignmentGroupArtifactInTransaction(tx, {
+        groupId: group.id,
+      });
+      if (result.created) provisioned += 1;
+    }
+
+    return { provisioned };
+  });
 }
 
 /**

@@ -33,7 +33,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
       ...collaborationRoomWhere(),
       AND: [documentAuthorWhere({ profileId: profile.id, isAdmin })],
     },
-    select: { id: true, title: true, revision: true, html: true, text: true },
+    select: {
+      id: true,
+      title: true,
+      revision: true,
+      html: true,
+      text: true,
+      classAssignment: {
+        select: {
+          class: { select: { school: { select: { organizationId: true } } } },
+        },
+      },
+    },
   });
 
   if (!document) {
@@ -48,6 +59,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       document,
       userId,
       membershipId: profile.id,
+      organizationId:
+        document.classAssignment?.class.school.organizationId ??
+        profile.organization.id,
     });
 
     return dataResponse({

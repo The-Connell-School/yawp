@@ -1,16 +1,21 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const tx = {
+  classAssignment: { findUnique: mock() },
   documentGroup: { create: mock(), delete: mock(), findFirst: mock() },
   documentGroupMember: { updateMany: mock(), upsert: mock() },
 };
 
 const prisma = {
-  classAssignment: { findUnique: mock() },
   $transaction: mock(async (fn: any) => fn(tx)),
 };
 
+const lockClassAssignmentCollaboration = mock();
+
 mock.module('~/utils/db.server', () => ({ prisma }));
+mock.module('./class-assignment-lock.server', () => ({
+  lockClassAssignmentCollaboration,
+}));
 
 const { addGroup, GroupEditingError, moveStudentToGroup, removeEmptyGroup } =
   await import('./group-editing.server');
@@ -39,11 +44,12 @@ const classAssignment = ({
 });
 
 function resetAll() {
-  prisma.classAssignment.findUnique.mockReset().mockResolvedValue(classAssignment());
-  prisma.$transaction.mockReset().mockImplementation(async (fn: any) => fn(tx));
   for (const model of Object.values(tx)) {
     for (const fn of Object.values(model)) fn.mockReset();
   }
+  tx.classAssignment.findUnique.mockResolvedValue(classAssignment());
+  prisma.$transaction.mockReset().mockImplementation(async (fn: any) => fn(tx));
+  lockClassAssignmentCollaboration.mockReset().mockResolvedValue(true);
   tx.documentGroup.create.mockResolvedValue({ id: 'g-new', label: 'Group 3' });
   tx.documentGroupMember.updateMany.mockResolvedValue({ count: 0 });
   tx.documentGroupMember.upsert.mockResolvedValue({});
@@ -113,7 +119,7 @@ describe('moveStudentToGroup', () => {
   test('refuses once groups are opened', async () => {
     // The lifecycle boundary: groups own drafts students have written in, so
     // moving someone would move them between documents holding real content.
-    prisma.classAssignment.findUnique.mockResolvedValue(
+    tx.classAssignment.findUnique.mockResolvedValue(
       classAssignment({ opened: true })
     );
 
@@ -138,7 +144,7 @@ describe('moveStudentToGroup', () => {
   });
 
   test('refuses to overfill a group', async () => {
-    prisma.classAssignment.findUnique.mockResolvedValue(
+    tx.classAssignment.findUnique.mockResolvedValue(
       classAssignment({
         roster: Array.from({ length: 12 }, (_, i) => `s-${i}`),
         groups: [
@@ -154,13 +160,13 @@ describe('moveStudentToGroup', () => {
       })
     );
 
-    await expect(move({ membershipId: 's-0', targetGroupId: 'g-2' })).rejects.toThrow(
-      /at most 8/i
-    );
+    await expect(
+      move({ membershipId: 's-0', targetGroupId: 'g-2' })
+    ).rejects.toThrow(/at most 8/i);
   });
 
   test('refuses a class assignment that does not exist', async () => {
-    prisma.classAssignment.findUnique.mockResolvedValue(null);
+    tx.classAssignment.findUnique.mockResolvedValue(null);
 
     await expect(move()).rejects.toThrow(GroupEditingError);
   });
@@ -181,7 +187,7 @@ describe('addGroup', () => {
   });
 
   test('starts at ordinal 0 when there are no groups yet', async () => {
-    prisma.classAssignment.findUnique.mockResolvedValue(
+    tx.classAssignment.findUnique.mockResolvedValue(
       classAssignment({ groups: [] })
     );
 
@@ -193,7 +199,7 @@ describe('addGroup', () => {
   test('skips ordinals left behind by a deleted group', async () => {
     // [classAssignmentId, ordinal] is unique, so reusing a gap would collide
     // with nothing today but would the moment two groups were deleted.
-    prisma.classAssignment.findUnique.mockResolvedValue(
+    tx.classAssignment.findUnique.mockResolvedValue(
       classAssignment({
         groups: [{ id: 'g-5', ordinal: 5, members: [] }],
       })
@@ -205,7 +211,7 @@ describe('addGroup', () => {
   });
 
   test('refuses once groups are opened', async () => {
-    prisma.classAssignment.findUnique.mockResolvedValue(
+    tx.classAssignment.findUnique.mockResolvedValue(
       classAssignment({ opened: true })
     );
 
@@ -220,7 +226,7 @@ describe('removeEmptyGroup', () => {
     removeEmptyGroup({ classAssignmentId: CA, groupId });
 
   test('deletes a group that has nobody in it', async () => {
-    prisma.classAssignment.findUnique.mockResolvedValue(
+    tx.classAssignment.findUnique.mockResolvedValue(
       classAssignment({
         groups: [
           { id: 'g-1', ordinal: 0, members: [{ membershipId: 's-1' }] },
@@ -249,8 +255,11 @@ describe('removeEmptyGroup', () => {
   });
 
   test('refuses once groups are opened', async () => {
-    prisma.classAssignment.findUnique.mockResolvedValue(
-      classAssignment({ opened: true, groups: [{ id: 'g-3', ordinal: 2, members: [] }] })
+    tx.classAssignment.findUnique.mockResolvedValue(
+      classAssignment({
+        opened: true,
+        groups: [{ id: 'g-3', ordinal: 2, members: [] }],
+      })
     );
 
     await expect(remove()).rejects.toThrow(/opened/i);

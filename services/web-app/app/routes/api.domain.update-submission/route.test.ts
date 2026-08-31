@@ -11,6 +11,7 @@ const getGradingActor = mock();
 const canManageGrades = mock();
 const isGradingOwnDocument = mock();
 const buildTeacherClassWhere = mock();
+const buildGradeWriteSubjectWhere = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/grading-auth.server', () => ({
@@ -18,6 +19,7 @@ mock.module('~/utils/grading-auth.server', () => ({
   canManageGrades,
   isGradingOwnDocument,
   buildTeacherClassWhere,
+  buildGradeWriteSubjectWhere,
 }));
 
 const { action } = await import('./route');
@@ -44,6 +46,28 @@ describe('api.domain.update-submission', () => {
     canManageGrades.mockReset();
     isGradingOwnDocument.mockReset();
     buildTeacherClassWhere.mockReset();
+    buildGradeWriteSubjectWhere.mockReset().mockImplementation(
+      ({ actorUserId, releasedAt }: any) => ({
+        OR: [
+          { artifactKind: 'ASSIGNMENT_GROUP' },
+          {
+            artifactKind: 'STUDENT',
+            membership: {
+              is: {
+                userId: { not: actorUserId },
+                ...(releasedAt == null
+                  ? {}
+                  : {
+                      organization: {
+                        is: { submissionActivityEnabled: true },
+                      },
+                    }),
+              },
+            },
+          },
+        ],
+      })
+    );
 
     getGradingActor.mockResolvedValue({
       userId: 'teacher-user-1',
@@ -468,12 +492,18 @@ describe('api.domain.update-submission', () => {
     expect(updateCall.data.releasedAt).toBeUndefined();
     expect(updateCall.where.updatedAt).toEqual(updatedAt);
     expect(updateCall.where.document.is.AND[0]).toEqual({
-      membership: {
-        is: {
-          userId: { not: 'teacher-user-1' },
-          organization: { is: { submissionActivityEnabled: true } },
+      OR: [
+        { artifactKind: 'ASSIGNMENT_GROUP' },
+        {
+          artifactKind: 'STUDENT',
+          membership: {
+            is: {
+              userId: { not: 'teacher-user-1' },
+              organization: { is: { submissionActivityEnabled: true } },
+            },
+          },
         },
-      },
+      ],
     });
   });
 

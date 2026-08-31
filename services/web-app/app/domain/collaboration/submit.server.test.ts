@@ -3,18 +3,19 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   submission: { findFirst: mock(), create: mock() },
   document: { update: mock() },
+  user: { findUnique: mock() },
+  submissionActivity: { create: mock() },
   documentWriteJournal: { create: mock(), update: mock() },
+  $queryRaw: mock(),
   $transaction: mock(),
 };
 const readRoomState = mock();
 const yUpdateToSnapshot = mock();
 
-const actualRoomStore = globalThis.__realModules[
-  '~/domain/collaboration/room-store.server'
-];
-const actualSnapshot = globalThis.__realModules[
-  '~/domain/collaboration/snapshot'
-];
+const actualRoomStore =
+  globalThis.__realModules['~/domain/collaboration/room-store.server'];
+const actualSnapshot =
+  globalThis.__realModules['~/domain/collaboration/snapshot'];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/domain/collaboration/room-store.server', () => ({
@@ -30,7 +31,10 @@ const { GroupSubmitError, submitGroupDraft } = await import('./submit.server');
 
 afterAll(() => {
   mock.restore();
-  mock.module('~/domain/collaboration/room-store.server', () => actualRoomStore);
+  mock.module(
+    '~/domain/collaboration/room-store.server',
+    () => actualRoomStore
+  );
   mock.module('~/domain/collaboration/snapshot', () => actualSnapshot);
 });
 
@@ -41,6 +45,12 @@ describe('submitGroupDraft', () => {
       .mockReset()
       .mockResolvedValue({ id: 'sub-1', submittedAt: new Date() });
     prisma.document.update.mockReset().mockResolvedValue({});
+    prisma.user.findUnique.mockReset().mockResolvedValue({
+      name: 'Sam Student',
+      email: 'sam@example.com',
+    });
+    prisma.submissionActivity.create.mockReset().mockResolvedValue({});
+    prisma.$queryRaw.mockReset().mockResolvedValue([{ id: 'doc-1' }]);
     prisma.documentWriteJournal.create
       .mockReset()
       .mockResolvedValue({ id: 'journal-1' });
@@ -49,6 +59,9 @@ describe('submitGroupDraft', () => {
       fn({
         submission: prisma.submission,
         document: prisma.document,
+        user: prisma.user,
+        submissionActivity: prisma.submissionActivity,
+        $queryRaw: prisma.$queryRaw,
       })
     );
     readRoomState.mockReset().mockResolvedValue(new Uint8Array([1, 2, 3]));
@@ -69,6 +82,7 @@ describe('submitGroupDraft', () => {
       },
       userId: 'user-1',
       membershipId: 'member-1',
+      organizationId: 'org-1',
       ...overrides,
     });
 
@@ -101,7 +115,10 @@ describe('submitGroupDraft', () => {
 
     const result = await submit();
 
-    expect(result).toMatchObject({ submissionId: 'sub-existing', created: false });
+    expect(result).toMatchObject({
+      submissionId: 'sub-existing',
+      created: false,
+    });
     expect(prisma.submission.create).not.toHaveBeenCalled();
   });
 
@@ -130,21 +147,48 @@ describe('submitGroupDraft', () => {
     expect(data.source).toBe('collab-submit');
   });
 
+  test('records submission creation in the activity ledger', async () => {
+    await submit();
+
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    expect(
+      prisma.submissionActivity.create.mock.calls[0][0].data
+    ).toMatchObject({
+      organizationId: 'org-1',
+      actorMembershipId: 'member-1',
+      eventType: 'submission.created',
+      source: 'collab-submit',
+    });
+  });
+
+  test('rechecks after locking so two members cannot create active submissions', async () => {
+    prisma.submission.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'sub-winner' });
+
+    const result = await submit();
+
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ submissionId: 'sub-winner', created: false });
+    expect(prisma.submission.create).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
   test('marks the journal accepted once the submission is stored', async () => {
     await submit();
 
-    expect(prisma.documentWriteJournal.update.mock.calls[0][0].data.status).toBe(
-      'accepted'
-    );
+    expect(
+      prisma.documentWriteJournal.update.mock.calls[0][0].data.status
+    ).toBe('accepted');
   });
 
   test('marks the journal rejected when storing fails, and rethrows', async () => {
     prisma.$transaction.mockRejectedValue(new Error('deadlock'));
 
     await expect(submit()).rejects.toThrow(/deadlock/);
-    expect(prisma.documentWriteJournal.update.mock.calls[0][0].data.status).toBe(
-      'rejected'
-    );
+    expect(
+      prisma.documentWriteJournal.update.mock.calls[0][0].data.status
+    ).toBe('rejected');
   });
 
   test('a snapshot that cannot be derived is refused rather than submitted blank', async () => {

@@ -45,13 +45,22 @@ import { hasEffectivePlatformAdmin } from './preview-access.server';
  */
 function activeGroupMemberClause(profileId: string): Prisma.DocumentWhereInput {
   return {
-    group: {
-      is: {
-        members: {
-          some: { membershipId: profileId, removedAt: null },
+    AND: [
+      {
+        group: {
+          is: {
+            members: {
+              some: { membershipId: profileId, removedAt: null },
+            },
+          },
         },
       },
-    },
+      {
+        classAssignment: {
+          is: { OR: [{ postAt: null }, { postAt: { lte: new Date() } }] },
+        },
+      },
+    ],
   };
 }
 

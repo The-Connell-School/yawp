@@ -66,6 +66,15 @@ describe('documentAuthorWhere', () => {
     ).toBe(true);
   });
 
+  test('an active member cannot open a scheduled group artifact early', () => {
+    expect(
+      matches(documentAuthorWhere({ profileId: OWNER }), {
+        ...groupDocument,
+        classAssignmentPostAt: new Date(Date.now() + 60_000),
+      })
+    ).toBe(false);
+  });
+
   test('a classmate who is not in the group may not write', () => {
     expect(
       matches(documentAuthorWhere({ profileId: CLASSMATE }), groupDocument)
@@ -130,6 +139,20 @@ describe('documentReadWhere', () => {
     ).toBe(true);
   });
 
+  test('a scheduled group artifact is hidden from students but readable by its teacher', () => {
+    const futureDocument = {
+      ...groupDocument,
+      classAssignmentPostAt: new Date(Date.now() + 60_000),
+    };
+
+    expect(
+      matches(documentReadWhere({ profileId: CO_AUTHOR }), futureDocument)
+    ).toBe(false);
+    expect(
+      matches(documentReadWhere({ profileId: TEACHER }), futureDocument)
+    ).toBe(true);
+  });
+
   test('a classmate outside the group may not read it', () => {
     expect(
       matches(documentReadWhere({ profileId: CLASSMATE }), groupDocument)
@@ -182,7 +205,9 @@ describe('documentAuthorOwnSessionWhere', () => {
           session.document.membershipId === branch.document.is.membershipId
         );
       }
-      const wanted = branch.document.is.group.is.members.some.membershipId;
+      const documentWhere = branch.document.is;
+      const memberClause = documentWhere.AND?.[0] ?? documentWhere;
+      const wanted = memberClause.group.is.members.some.membershipId;
       return (
         session.membershipId === branch.membershipId &&
         session.document.groupMemberIds.includes(wanted)

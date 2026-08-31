@@ -89,13 +89,27 @@ describe('my documents route', () => {
         OR: [
           { membershipId: 'profile-1' },
           {
-            group: {
-              is: {
-                members: {
-                  some: { membershipId: 'profile-1', removedAt: null },
+            AND: [
+              {
+                group: {
+                  is: {
+                    members: {
+                      some: { membershipId: 'profile-1', removedAt: null },
+                    },
+                  },
                 },
               },
-            },
+              {
+                classAssignment: {
+                  is: {
+                    OR: [
+                      { postAt: null },
+                      { postAt: { lte: expect.any(Date) } },
+                    ],
+                  },
+                },
+              },
+            ],
           },
         ],
       },

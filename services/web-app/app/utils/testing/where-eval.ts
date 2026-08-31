@@ -23,6 +23,8 @@ export type ScopedDocument = {
   teacherProfileIds: string[];
   /** Teachers attached to the document's own ClassAssignment. */
   classAssignmentTeacherProfileIds?: string[];
+  /** Scheduled visibility for the document's deployment. */
+  classAssignmentPostAt?: Date | null;
   /**
    * Membership ids of students who co-author this document through its
    * collaboration group and have NOT been removed from it. Absent on a
@@ -80,10 +82,23 @@ export function matchesDocumentWhere(
       case 'classAssignment': {
         const nested = ((value as any)?.is ?? value) as Record<string, unknown>;
         const teacherId = (nested as any)?.class?.teachers?.some?.id;
-        if (typeof teacherId !== 'string') return false;
-        if (!(doc.classAssignmentTeacherProfileIds ?? []).includes(teacherId)) {
-          return false;
+        if (typeof teacherId === 'string') {
+          if (
+            !(doc.classAssignmentTeacherProfileIds ?? []).includes(teacherId)
+          ) {
+            return false;
+          }
+          break;
         }
+        const visibility = (nested as any)?.OR;
+        if (!Array.isArray(visibility)) return false;
+        const postAt = doc.classAssignmentPostAt ?? null;
+        const visible = visibility.some((branch: any) => {
+          if (branch.postAt === null) return postAt === null;
+          const cutoff = branch.postAt?.lte;
+          return cutoff instanceof Date && postAt !== null && postAt <= cutoff;
+        });
+        if (!visible) return false;
         break;
       }
       case 'group': {

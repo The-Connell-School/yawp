@@ -484,55 +484,63 @@ async function seedGroup(
   }
 ): Promise<string> {
   const room = buildCollabRoom(plan.contributions);
-  const document = await prisma.document.create({
-    data: {
-      title: 'International expansion brief',
-      html: room.html,
-      text: room.text,
-      revision: room.updates.length,
-      artifactKind: 'ASSIGNMENT_GROUP',
-      membershipId: null,
-      assignmentTypeId,
-      assignmentId,
-      classAssignmentId,
-      assignmentModuleSessions: {
-        create: plan.members.flatMap((key) =>
-          moduleSessionRows(modules, memberId(key))
-        ),
+  const createOwnedArtifact = async (tx: SeedClient) => {
+    const document = await tx.document.create({
+      data: {
+        title: 'International expansion brief',
+        html: room.html,
+        text: room.text,
+        revision: room.updates.length,
+        artifactKind: 'ASSIGNMENT_GROUP',
+        membershipId: null,
+        assignmentTypeId,
+        assignmentId,
+        classAssignmentId,
+        assignmentModuleSessions: {
+          create: plan.members.flatMap((key) =>
+            moduleSessionRows(modules, memberId(key))
+          ),
+        },
       },
-    },
-  });
+    });
 
-  const group = await prisma.documentGroup.create({
-    data: {
-      kind: 'assignment',
-      classAssignmentId,
-      label: plan.label,
-      ordinal: plan.ordinal,
-      openedAt: daysAgo(6),
-      // The room below is written here rather than by the app, so it is already
-      // seeded. Leaving this null would invite a second seed from the same HTML
-      // and duplicate every paragraph.
-      seededAt: daysAgo(6),
-      documentId: document.id,
-      members: {
-        create: [
-          ...plan.members.map((key) => ({ membershipId: memberId(key) })),
-          // Wrote in the draft, then left the group. `removedAt` is what keeps
-          // them off the roster the contribution table and grade cards read,
-          // while their surviving text still shows up in the draft itself.
-          ...(plan.removedMember
-            ? [
-                {
-                  membershipId: memberId(plan.removedMember),
-                  removedAt: daysAgo(4),
-                },
-              ]
-            : []),
-        ],
+    const group = await tx.documentGroup.create({
+      data: {
+        kind: 'assignment',
+        classAssignmentId,
+        label: plan.label,
+        ordinal: plan.ordinal,
+        openedAt: daysAgo(6),
+        // The room below is written here rather than by the app, so it is already
+        // seeded. Leaving this null would invite a second seed from the same HTML
+        // and duplicate every paragraph.
+        seededAt: daysAgo(6),
+        documentId: document.id,
+        members: {
+          create: [
+            ...plan.members.map((key) => ({ membershipId: memberId(key) })),
+            // Wrote in the draft, then left the group. `removedAt` is what keeps
+            // them off the roster the contribution table and grade cards read,
+            // while their surviving text still shows up in the draft itself.
+            ...(plan.removedMember
+              ? [
+                  {
+                    membershipId: memberId(plan.removedMember),
+                    removedAt: daysAgo(4),
+                  },
+                ]
+              : []),
+          ],
+        },
       },
-    },
-  });
+    });
+    return { document, group };
+  };
+
+  const { document, group } =
+    '$transaction' in prisma
+      ? await prisma.$transaction((tx) => createOwnedArtifact(tx))
+      : await createOwnedArtifact(prisma);
 
   // One row at a time: `seq` is the log's order and an autoincrement column
   // makes no promise about the order of a batch insert.

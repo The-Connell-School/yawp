@@ -194,7 +194,7 @@ model DocumentGroup {
   seededAt          DateTime?                  @db.Timestamptz(6)
   /// The group's shared draft, provisioned when groups are opened.
   documentId        String?                    @unique
-  document          Document?                  @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  document          Document?                  @relation(fields: [documentId], references: [id], onDelete: Restrict)
   members           DocumentGroupMember[]
   memberGrades      DocumentGroupMemberGrade[]
 

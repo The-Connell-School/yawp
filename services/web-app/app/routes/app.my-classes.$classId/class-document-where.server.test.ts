@@ -30,11 +30,19 @@ describe('buildClassDocumentScope', () => {
     ).toEqual({
       OR: [
         {
-          classAssignment: { classId: 'class-1' },
+          classAssignment: {
+            classId: 'class-1',
+          },
           membershipId: 'membership-1',
         },
         {
-          classAssignment: { classId: 'class-1' },
+          classAssignment: {
+            classId: 'class-1',
+            OR: [
+              { postAt: null },
+              { postAt: { lte: expect.any(Date) } },
+            ],
+          },
           group: {
             is: {
               members: {

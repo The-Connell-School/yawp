@@ -1,6 +1,12 @@
 import { createHash } from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
+import {
+  buildSubmissionActivityChanges,
+  buildSubmissionBodyAuditMetadata,
+  recordSubmissionActivity,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 import { readRoomState } from './room-store.server';
 import { yUpdateToSnapshot } from './snapshot';
 
@@ -30,6 +36,7 @@ export async function submitGroupDraft({
   document,
   userId,
   membershipId,
+  organizationId,
   now = new Date(),
 }: {
   document: {
@@ -41,6 +48,7 @@ export async function submitGroupDraft({
   };
   userId: string;
   membershipId: string;
+  organizationId: string;
   now?: Date;
 }): Promise<{ submissionId: string; created: boolean }> {
   // An existing submission wins. Checked before anything is written so a second
@@ -96,7 +104,23 @@ export async function submitGroupDraft({
   });
 
   try {
-    const submission = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
+      // Serialize submitters on the shared artifact. The fast check above keeps
+      // ordinary repeat clicks cheap; this in-transaction check closes the
+      // two-members-at-once race.
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "Document" WHERE "id" = ${document.id} FOR UPDATE
+      `;
+
+      const winner = await tx.submission.findFirst({
+        where: { documentId: document.id, unsubmittedAt: null },
+        orderBy: { submittedAt: 'desc' },
+        select: { id: true },
+      });
+      if (winner) {
+        return { submission: winner, created: false as const };
+      }
+
       const created = await tx.submission.create({
         data: {
           documentId: document.id,
@@ -113,7 +137,27 @@ export async function submitGroupDraft({
         data: { updatedAt: now },
       });
 
-      return created;
+      await recordSubmissionActivity(tx, {
+        submissionId: created.id,
+        organizationId,
+        actorMembershipId: membershipId,
+        actorUserId: userId,
+        eventType: submissionActivityEventTypes.created,
+        source: 'collab-submit',
+        occurredAfterRelease: false,
+        changes: buildSubmissionActivityChanges({
+          before: { title: null, submittedAt: null },
+          after: { title: document.title ?? '', submittedAt: now },
+          fields: ['title', 'submittedAt'],
+        }),
+        metadata: {
+          body: buildSubmissionBodyAuditMetadata({ text, html }),
+          documentId: document.id,
+          collaborative: true,
+        },
+      });
+
+      return { submission: created, created: true as const };
     });
 
     await prisma.documentWriteJournal.update({
@@ -121,7 +165,7 @@ export async function submitGroupDraft({
       data: { status: 'accepted', resultingRevision: document.revision },
     });
 
-    return { submissionId: submission.id, created: true };
+    return { submissionId: result.submission.id, created: result.created };
   } catch (error) {
     await prisma.documentWriteJournal.update({
       where: { id: journal.id },

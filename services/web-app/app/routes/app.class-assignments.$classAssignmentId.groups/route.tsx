@@ -135,6 +135,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     membershipId,
     name: nameFor.get(membershipId) ?? 'Unknown student',
   }));
+  const nonemptyGroups = groups.filter((group) =>
+    group.members.some((member) => member.removedAt === null)
+  );
 
   return dataResponse({
     classAssignmentId: classAssignment.id,
@@ -148,7 +151,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       MIN_COLLABORATION_GROUP_SIZE,
     isWholeClass:
       classAssignment.assignment.collaborationGroupMode === 'whole-class',
-    opened: groups.some((group) => group.openedAt !== null),
+    opened:
+      nonemptyGroups.length > 0 &&
+      unassigned.length === 0 &&
+      nonemptyGroups.every(
+        (group) => group.openedAt !== null && group.documentId !== null
+      ),
     groups: groups.map((group) => ({
       id: group.id,
       label: group.label,
@@ -169,7 +177,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.classAssignmentId, 'No class assignment id provided');
 
-  const { classAssignment } = await requireTeacherClassAssignment(
+  const { profile, classAssignment } = await requireTeacherClassAssignment(
     request,
     params.classAssignmentId
   );
@@ -285,7 +293,33 @@ export async function action({ request, params }: ActionFunctionArgs) {
         classAssignmentId: classAssignment.id,
       });
 
-      return redirectWithToast(backTo, {
+      const remainingDeployments = await prisma.classAssignment.findMany({
+        where: {
+          id: { not: classAssignment.id },
+          assignmentId: classAssignment.assignment.id,
+          class: { teachers: { some: { id: profile.id } } },
+        },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          documentGroups: {
+            where: { members: { some: { removedAt: null } } },
+            select: { documentId: true, openedAt: true },
+          },
+        },
+      });
+      const nextDeployment = remainingDeployments.find(
+        (deployment) =>
+          deployment.documentGroups.length === 0 ||
+          deployment.documentGroups.some(
+            (group) => group.documentId === null || group.openedAt === null
+          )
+      );
+      const nextUrl = nextDeployment
+        ? `/app/class-assignments/${nextDeployment.id}/groups`
+        : backTo;
+
+      return redirectWithToast(nextUrl, {
         type: 'success',
         description:
           provisioned === 0

@@ -16,6 +16,7 @@ mock.module('~/utils/db.server.js', () => ({ prisma: {} }));
 const {
   buildTeacherClassWhere,
   buildTeacherDocumentAccessWhere,
+  buildGradeWriteSubjectWhere,
   canManageGrades,
   isGradingOwnDocument,
 } = await import('./grading-auth.server');
@@ -140,5 +141,24 @@ describe('grading auth helpers', () => {
         'same-user'
       )
     ).toBe(true);
+  });
+
+  test('allows ownerless assignment artifacts through the grade write subject guard', () => {
+    const where = buildGradeWriteSubjectWhere({
+      actorUserId: 'teacher-user-1',
+      releasedAt: null,
+    }) as any;
+
+    expect(where.OR).toContainEqual({ artifactKind: 'ASSIGNMENT_GROUP' });
+    expect(where.OR).toContainEqual(
+      expect.objectContaining({
+        artifactKind: 'STUDENT',
+        membership: {
+          is: expect.objectContaining({
+            userId: { not: 'teacher-user-1' },
+          }),
+        },
+      })
+    );
   });
 });

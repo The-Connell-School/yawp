@@ -84,13 +84,15 @@ describe('assignment-owned collaborative artifact contracts', () => {
       WHERE table_schema = current_schema()
         AND constraint_name IN (
           'Document_artifact_ownership_check',
-          'DocumentGroup_assignment_only_check'
+          'DocumentGroup_assignment_only_check',
+          'DocumentGroup_opened_artifact_check'
         )
       ORDER BY constraint_name
     `);
 
     expect(rows.map((row) => row.constraint_name)).toEqual([
       'DocumentGroup_assignment_only_check',
+      'DocumentGroup_opened_artifact_check',
       'Document_artifact_ownership_check',
     ]);
   });
@@ -147,6 +149,48 @@ describe('assignment-owned collaborative artifact contracts', () => {
         [fixture.documentId]
       );
       expect(artifact.rowCount).toBe(0);
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+  });
+
+  test('an owned artifact cannot be deleted behind its group', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const fixture = await createFixture(client);
+
+      await expect(
+        client.query('DELETE FROM "Document" WHERE id = $1', [
+          fixture.documentId,
+        ])
+      ).rejects.toThrow();
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+  });
+
+  test('a group cannot point at an artifact from a different assignment graph', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const fixture = await createFixture(client);
+      const other = await client.query<{ id: string }>(
+        'SELECT id FROM "ClassAssignment" WHERE id <> $1 ORDER BY id LIMIT 1',
+        [fixture.classAssignmentId]
+      );
+      if (other.rows.length === 0)
+        throw new Error('Need two class assignments');
+
+      await client.query(
+        'UPDATE "Document" SET "classAssignmentId" = $1 WHERE id = $2',
+        [other.rows[0].id, fixture.documentId]
+      );
+      await expect(
+        client.query('SET CONSTRAINTS ALL IMMEDIATE')
+      ).rejects.toThrow(/matching assignment-group artifact|matching assignment group owner/);
     } finally {
       await client.query('ROLLBACK');
       client.release();

@@ -30,9 +30,8 @@ mock.module('~/components/ui/tooltip', () => ({
 
 const { AssignmentCreationSheetContent, assignmentCreationClassLabel } =
   await import('./assignment-creation-sheet');
-const { SAVED_ASSIGNMENTS_ENABLED } = await import(
-  '~/domain/assignments/saved-assignments'
-);
+const { SAVED_ASSIGNMENTS_ENABLED } =
+  await import('~/domain/assignments/saved-assignments');
 
 describe('assignmentCreationClassLabel', () => {
   it('shows grade and period when both are present', () => {
@@ -220,7 +219,7 @@ describe('AssignmentCreationSheetContent', () => {
         entryPoint: 'class' as const,
         fixedClassId: 'class-1',
       },
-      expectedAction: null,
+      expectedAction: '/api/assignments/create',
       expectedAssignmentTypeId: 'type-1',
     },
   ])(
@@ -429,13 +428,13 @@ describe('AssignmentCreationSheetContent', () => {
     expectNoText('cut off');
   });
 
-  it('uses the current class route fields when creating from a class page', () => {
+  it('uses the shared creation API fields when creating from a class page', () => {
     root = renderSheet({
       entryPoint: 'class',
       fixedClassId: 'class-1',
     }).root;
 
-    expect(inputByName('classId').value).toBe('class-1');
+    expect(inputByName('classIds').value).toBe('class-1');
     const classControl = controlById('assignment-create-class-class-1');
     expect(isChecked(classControl)).toBe(true);
     expect((classControl as HTMLButtonElement).disabled).toBe(true);
@@ -516,26 +515,29 @@ describe('AssignmentCreationSheetContent', () => {
     }
   );
 
-  it.skipIf(!SAVED_ASSIGNMENTS_ENABLED)('offers to keep the assignment, off by default, on the bulk-create entry points', () => {
-    root = renderSheet({ entryPoint: 'dashboard' }).root;
+  it.skipIf(!SAVED_ASSIGNMENTS_ENABLED)(
+    'offers to keep the assignment, off by default, on the bulk-create entry points',
+    () => {
+      root = renderSheet({ entryPoint: 'dashboard' }).root;
 
-    expectText('Save to My Saved Assignments');
-    const control = controlById('assignment-create-save-for-reuse');
-    expect(isChecked(control)).toBe(false);
-    // The hidden field is what the action reads when the box is left alone.
-    expect(allInputsByName('saveForReuse')[0].value).toBe('false');
+      expectText('Save to My Saved Assignments');
+      const control = controlById('assignment-create-save-for-reuse');
+      expect(isChecked(control)).toBe(false);
+      // The hidden field is what the action reads when the box is left alone.
+      expect(allInputsByName('saveForReuse')[0].value).toBe('false');
 
-    act(() => {
-      control.click();
-    });
+      act(() => {
+        control.click();
+      });
 
-    expect(isChecked(controlById('assignment-create-save-for-reuse'))).toBe(
-      true
-    );
-    expect(
-      allInputsByName('saveForReuse').map((input) => input.value)
-    ).toContain('true');
-  });
+      expect(isChecked(controlById('assignment-create-save-for-reuse'))).toBe(
+        true
+      );
+      expect(
+        allInputsByName('saveForReuse').map((input) => input.value)
+      ).toContain('true');
+    }
+  );
 
   it('hides the keep-for-reuse option on the class entry point, which cannot save', () => {
     root = renderSheet({ entryPoint: 'class', fixedClassId: 'class-1' }).root;
@@ -556,7 +558,9 @@ describe('AssignmentCreationSheetContent', () => {
 
     expect(inputByName('assignmentTypeId').value).toBe('type-2');
     expect(inputByName('title').value).toBe('Ambition in Macbeth');
-    expect(textareaByName('prompt').value).toBe('A prompt kept from last term.');
+    expect(textareaByName('prompt').value).toBe(
+      'A prompt kept from last term.'
+    );
     expect(isChecked(controlById('assignment-create-submit-for-grade'))).toBe(
       false
     );
@@ -614,7 +618,11 @@ describe('AssignmentCreationSheetContent', () => {
       const labels = Array.from(
         document.querySelectorAll('button[aria-pressed]')
       ).map((button) => button.textContent ?? '');
-      for (const fragment of ['make the groups', 'Group them for me', 'whole class']) {
+      for (const fragment of [
+        'make the groups',
+        'Group them for me',
+        'whole class',
+      ]) {
         expect(labels.some((label) => label.includes(fragment))).toBe(true);
       }
     });
@@ -650,7 +658,10 @@ describe('AssignmentCreationSheetContent', () => {
         fixedAssignmentTypeId: 'type-1',
         createFetcher: idleFetcher({
           success: true,
-          nextStep: { url: '/app/class-assignments/ca-1/groups', classCount: 1 },
+          nextStep: {
+            url: '/app/class-assignments/ca-1/groups',
+            classCount: 1,
+          },
         }),
         navigate: (to: string) => went.push(to),
       }).root;

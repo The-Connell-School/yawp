@@ -8,8 +8,10 @@
 // groups moves them between documents holding real content, so the boundary is
 // enforced here rather than only hidden in the UI.
 
+import type { Prisma } from '@app/prisma';
 import { MAX_COLLABORATION_GROUP_SIZE } from '~/domain/assignments/collaboration';
 import { prisma } from '~/utils/db.server';
+import { lockClassAssignmentCollaboration } from './class-assignment-lock.server';
 import { groupLabel } from './groups';
 
 export class GroupEditingError extends Error {}
@@ -20,8 +22,11 @@ export class GroupEditingError extends Error {}
  * Shared by all three operations because they share every guard: the class
  * assignment has to exist, and its groups have to still be editable.
  */
-async function loadEditableArrangement(classAssignmentId: string) {
-  const classAssignment = await prisma.classAssignment.findUnique({
+async function loadEditableArrangement(
+  tx: Prisma.TransactionClient,
+  classAssignmentId: string
+) {
+  const classAssignment = await tx.classAssignment.findUnique({
     where: { id: classAssignmentId },
     select: {
       id: true,
@@ -74,43 +79,49 @@ export async function moveStudentToGroup({
   membershipId: string;
   targetGroupId: string | null;
 }) {
-  const classAssignment = await loadEditableArrangement(classAssignmentId);
-
-  const onRoster = classAssignment.class.students.some(
-    (student) => student.id === membershipId
-  );
-  if (!onRoster) {
-    throw new GroupEditingError('That student is not in this class.');
-  }
-
-  const target = targetGroupId
-    ? classAssignment.documentGroups.find((group) => group.id === targetGroupId)
-    : null;
-
-  // The group id arrives from the browser, so being on this page is not proof it
-  // names a group on this page.
-  if (targetGroupId && !target) {
-    throw new GroupEditingError('That group is not part of this assignment.');
-  }
-
-  const alreadyThere = target?.members.some(
-    (member) => member.membershipId === membershipId
-  );
-  if (alreadyThere) return { moved: false as const };
-
-  // Dropping an unassigned student back into the unassigned bucket.
-  const currentlyAssigned = classAssignment.documentGroups.some((group) =>
-    group.members.some((member) => member.membershipId === membershipId)
-  );
-  if (!target && !currentlyAssigned) return { moved: false as const };
-
-  if (target && target.members.length >= MAX_COLLABORATION_GROUP_SIZE) {
-    throw new GroupEditingError(
-      `A group can hold at most ${MAX_COLLABORATION_GROUP_SIZE} students.`
+  return prisma.$transaction(async (tx) => {
+    await lockClassAssignmentCollaboration(tx, classAssignmentId);
+    const classAssignment = await loadEditableArrangement(
+      tx,
+      classAssignmentId
     );
-  }
 
-  await prisma.$transaction(async (tx) => {
+    const onRoster = classAssignment.class.students.some(
+      (student) => student.id === membershipId
+    );
+    if (!onRoster) {
+      throw new GroupEditingError('That student is not in this class.');
+    }
+
+    const target = targetGroupId
+      ? classAssignment.documentGroups.find(
+          (group) => group.id === targetGroupId
+        )
+      : null;
+
+    // The group id arrives from the browser, so being on this page is not proof it
+    // names a group on this page.
+    if (targetGroupId && !target) {
+      throw new GroupEditingError('That group is not part of this assignment.');
+    }
+
+    const alreadyThere = target?.members.some(
+      (member) => member.membershipId === membershipId
+    );
+    if (alreadyThere) return { moved: false as const };
+
+    // Dropping an unassigned student back into the unassigned bucket.
+    const currentlyAssigned = classAssignment.documentGroups.some((group) =>
+      group.members.some((member) => member.membershipId === membershipId)
+    );
+    if (!target && !currentlyAssigned) return { moved: false as const };
+
+    if (target && target.members.length >= MAX_COLLABORATION_GROUP_SIZE) {
+      throw new GroupEditingError(
+        `A group can hold at most ${MAX_COLLABORATION_GROUP_SIZE} students.`
+      );
+    }
+
     // Leave first, then join. A student belongs to exactly one group per class
     // assignment, and doing it in this order means a failure between the two
     // leaves them unassigned rather than in two groups at once.
@@ -135,9 +146,8 @@ export async function moveStudentToGroup({
         update: { removedAt: null },
       });
     }
+    return { moved: true as const };
   });
-
-  return { moved: true as const };
 }
 
 /**
@@ -152,25 +162,29 @@ export async function addGroup({
 }: {
   classAssignmentId: string;
 }) {
-  const classAssignment = await loadEditableArrangement(classAssignmentId);
+  return prisma.$transaction(async (tx) => {
+    await lockClassAssignmentCollaboration(tx, classAssignmentId);
+    const classAssignment = await loadEditableArrangement(
+      tx,
+      classAssignmentId
+    );
 
-  const nextOrdinal = classAssignment.documentGroups.reduce(
-    (highest, group) => Math.max(highest, group.ordinal + 1),
-    0
-  );
+    const nextOrdinal = classAssignment.documentGroups.reduce(
+      (highest, group) => Math.max(highest, group.ordinal + 1),
+      0
+    );
 
-  const created = await prisma.$transaction((tx) =>
-    tx.documentGroup.create({
+    const created = await tx.documentGroup.create({
       data: {
         classAssignmentId,
         ordinal: nextOrdinal,
         label: groupLabel(nextOrdinal),
       },
       select: { id: true, label: true },
-    })
-  );
+    });
 
-  return { groupId: created.id, label: created.label };
+    return { groupId: created.id, label: created.label };
+  });
 }
 
 /**
@@ -187,23 +201,27 @@ export async function removeEmptyGroup({
   classAssignmentId: string;
   groupId: string;
 }) {
-  const classAssignment = await loadEditableArrangement(classAssignmentId);
-
-  const group = classAssignment.documentGroups.find(
-    (candidate) => candidate.id === groupId
-  );
-  if (!group) {
-    throw new GroupEditingError('That group is not part of this assignment.');
-  }
-  if (group.members.length > 0) {
-    throw new GroupEditingError(
-      'That group still has students in it. Move them out first.'
+  return prisma.$transaction(async (tx) => {
+    await lockClassAssignmentCollaboration(tx, classAssignmentId);
+    const classAssignment = await loadEditableArrangement(
+      tx,
+      classAssignmentId
     );
-  }
 
-  await prisma.$transaction((tx) =>
-    tx.documentGroup.delete({ where: { id: groupId } })
-  );
+    const group = classAssignment.documentGroups.find(
+      (candidate) => candidate.id === groupId
+    );
+    if (!group) {
+      throw new GroupEditingError('That group is not part of this assignment.');
+    }
+    if (group.members.length > 0) {
+      throw new GroupEditingError(
+        'That group still has students in it. Move them out first.'
+      );
+    }
 
-  return { removed: true as const };
+    await tx.documentGroup.delete({ where: { id: groupId } });
+
+    return { removed: true as const };
+  });
 }

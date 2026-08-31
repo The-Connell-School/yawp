@@ -8,6 +8,7 @@ const prisma = {
   pasteAlert: { findMany: mock() },
   submission: { findMany: mock() },
   document: { findMany: mock() },
+  documentGroup: { findFirst: mock() },
   assignment: {
     findFirst: mock(),
     findMany: mock(),
@@ -24,6 +25,7 @@ const requireMembership = mock();
 const getSubmittedPapersFilter = mock();
 const createAssignmentDeployedToClasses = mock();
 const deleteClassAssignmentDeployment = mock();
+class AssignmentHasCollaborativeWorkError extends Error {}
 const getAvailableAssignmentTypesForScopes = mock();
 const isAssignmentTypeAvailableForEveryScope = mock();
 const uploadAssignmentPromptAttachment = mock();
@@ -56,6 +58,7 @@ mock.module('~/utils/assignment-type-access.server', () => ({
   isAssignmentTypeAvailableForEveryScope,
 }));
 mock.module('~/utils/assignment-deployment.server', () => ({
+  AssignmentHasCollaborativeWorkError,
   createAssignmentDeployedToClasses,
   deleteClassAssignmentDeployment,
 }));
@@ -131,6 +134,7 @@ describe('class detail loader document visibility', () => {
     prisma.pasteAlert.findMany.mockResolvedValue([]);
     prisma.submission.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
+    prisma.documentGroup.findFirst.mockResolvedValue(null);
     prisma.classAssignment.findMany.mockResolvedValue([]);
     prisma.classAssignmentInsight.findMany.mockResolvedValue([]);
     prisma.assignment.findMany.mockResolvedValue([]);
@@ -435,7 +439,6 @@ describe('class detail loader document visibility', () => {
       { id: 'assignment-1' },
       { id: 'assignment-2' },
     ]);
-    prisma.assignment.deleteMany.mockResolvedValue({ count: 2 });
     const form = new FormData();
     form.append('intent', 'delete-assignments');
     form.append('assignmentIds', 'assignment-1');
@@ -461,8 +464,14 @@ describe('class detail loader document visibility', () => {
       },
       select: { id: true },
     });
-    expect(prisma.assignment.deleteMany).toHaveBeenCalledWith({
-      where: { id: { in: ['assignment-1', 'assignment-2'] } },
+    expect(deleteClassAssignmentDeployment).toHaveBeenCalledTimes(2);
+    expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
+      assignmentId: 'assignment-1',
+      classId: 'class-1',
+    });
+    expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
+      assignmentId: 'assignment-2',
+      classId: 'class-1',
     });
   });
 
@@ -487,7 +496,27 @@ describe('class detail loader document visibility', () => {
       success: false,
       message: 'Some assignments were not found.',
     });
-    expect(prisma.assignment.deleteMany).not.toHaveBeenCalled();
+    expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
+  });
+
+  test('bulk deletion protects assignments with shared group work', async () => {
+    prisma.assignment.findMany.mockResolvedValue([{ id: 'assignment-1' }]);
+    prisma.documentGroup.findFirst.mockResolvedValue({ id: 'group-1' });
+    const form = new FormData();
+    form.append('intent', 'delete-assignments');
+    form.append('assignmentIds', 'assignment-1');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.init).toMatchObject({ status: 409 });
+    expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
   });
 
   test('deletes one class deployment without directly changing student documents', async () => {
@@ -970,7 +999,13 @@ describe('class detail loader for students', () => {
       OR: [
         { classAssignment: { classId: 'class-1' }, membershipId: 'student-1' },
         {
-          classAssignment: { classId: 'class-1' },
+          classAssignment: {
+            classId: 'class-1',
+            OR: [
+              { postAt: null },
+              { postAt: { lte: expect.any(Date) } },
+            ],
+          },
           group: {
             is: {
               members: {

@@ -3,6 +3,7 @@ import { prisma } from '~/utils/db.server';
 import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
 import {
   buildTeacherClassWhere,
+  buildGradeWriteSubjectWhere,
   canManageGrades,
   getGradingActor,
   isGradingOwnDocument,
@@ -306,20 +307,10 @@ export async function action({ request }: ActionFunctionArgs) {
             is: {
               deletedAt: null,
               AND: [
-                {
-                  membership: {
-                    is: {
-                      userId: { not: actor.userId },
-                      ...(submission.releasedAt == null
-                        ? {}
-                        : {
-                            organization: {
-                              is: { submissionActivityEnabled: true },
-                            },
-                          }),
-                    },
-                  },
-                },
+                buildGradeWriteSubjectWhere({
+                  actorUserId: actor.userId,
+                  releasedAt: submission.releasedAt,
+                }),
                 teacherClassWhere,
               ],
             },

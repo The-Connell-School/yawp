@@ -6,12 +6,10 @@
  * they happened to be, which is what the sheet did, makes the remaining step
  * invisible and the assignment look finished when it is not.
  *
- * One class has no choice to present, so it goes straight to the seating chart.
- * Several classes need several charts, and the assignment page is the one place
- * that lists them behind its class switcher.
+ * Every deployment needs a seating chart, so creation always goes to the first
+ * one. Finalization advances to the next incomplete deployment.
  */
 export function groupSetupNextStep({
-  assignmentId,
   collaborationEnabled,
   deployments,
 }: {
@@ -21,15 +19,8 @@ export function groupSetupNextStep({
 }): { url: string; classCount: number } | null {
   if (!collaborationEnabled || deployments.length === 0) return null;
 
-  if (deployments.length === 1) {
-    return {
-      url: `/app/class-assignments/${deployments[0].classAssignmentId}/groups`,
-      classCount: 1,
-    };
-  }
-
   return {
-    url: `/app/assignments/${assignmentId}?classId=${deployments[0].classId}`,
+    url: `/app/class-assignments/${deployments[0].classAssignmentId}/groups`,
     classCount: deployments.length,
   };
 }

@@ -11,11 +11,15 @@ const prisma = {
   $transaction: mock(),
 };
 
-const createAssignmentGroupArtifact = mock();
+const createAssignmentGroupArtifactInTransaction = mock();
+const lockClassAssignmentCollaboration = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('./assignment-artifact.server', () => ({
-  createAssignmentGroupArtifact,
+  createAssignmentGroupArtifactInTransaction,
+}));
+mock.module('./class-assignment-lock.server', () => ({
+  lockClassAssignmentCollaboration,
 }));
 
 const {
@@ -55,6 +59,7 @@ const classAssignmentWithGroups = (
 describe('arrangeGroups', () => {
   beforeEach(() => {
     prisma.classAssignment.findUnique.mockReset();
+    lockClassAssignmentCollaboration.mockReset().mockResolvedValue(true);
     prisma.documentGroup.deleteMany.mockReset().mockResolvedValue({ count: 0 });
     prisma.documentGroup.create.mockReset().mockResolvedValue({ id: 'g-new' });
     // Run the callback against the same mock client the module uses.
@@ -172,9 +177,13 @@ describe('arrangeGroups', () => {
 describe('openGroups', () => {
   beforeEach(() => {
     prisma.classAssignment.findUnique.mockReset();
-    createAssignmentGroupArtifact.mockReset();
+    prisma.$transaction
+      .mockReset()
+      .mockImplementation(async (fn: any) => fn(prisma));
+    lockClassAssignmentCollaboration.mockReset().mockResolvedValue(true);
+    createAssignmentGroupArtifactInTransaction.mockReset();
     let counter = 0;
-    createAssignmentGroupArtifact.mockImplementation(async () => {
+    createAssignmentGroupArtifactInTransaction.mockImplementation(async () => {
       counter += 1;
       return { documentId: `doc-${counter}`, created: true };
     });
@@ -201,10 +210,13 @@ describe('openGroups', () => {
     const result = await openGroups({ classAssignmentId: 'ca-1' });
 
     expect(result.provisioned).toBe(2);
-    expect(createAssignmentGroupArtifact).toHaveBeenCalledTimes(2);
-    expect(createAssignmentGroupArtifact.mock.calls[0][0]).toEqual({
-      groupId: 'g-1',
-    });
+    expect(createAssignmentGroupArtifactInTransaction).toHaveBeenCalledTimes(2);
+    expect(createAssignmentGroupArtifactInTransaction.mock.calls[0]).toEqual([
+      prisma,
+      {
+        groupId: 'g-1',
+      },
+    ]);
   });
 
   test('is idempotent: a group that already has a draft is untouched', async () => {
@@ -230,10 +242,13 @@ describe('openGroups', () => {
     const result = await openGroups({ classAssignmentId: 'ca-1' });
 
     expect(result.provisioned).toBe(1);
-    expect(createAssignmentGroupArtifact).toHaveBeenCalledTimes(1);
-    expect(createAssignmentGroupArtifact).toHaveBeenCalledWith({
-      groupId: 'g-2',
-    });
+    expect(createAssignmentGroupArtifactInTransaction).toHaveBeenCalledTimes(1);
+    expect(createAssignmentGroupArtifactInTransaction).toHaveBeenCalledWith(
+      prisma,
+      {
+        groupId: 'g-2',
+      }
+    );
   });
 
   test('does not assign any group member as the document owner', async () => {
@@ -250,9 +265,12 @@ describe('openGroups', () => {
 
     await openGroups({ classAssignmentId: 'ca-1' });
 
-    expect(createAssignmentGroupArtifact).toHaveBeenCalledWith({
-      groupId: 'g-1',
-    });
+    expect(createAssignmentGroupArtifactInTransaction).toHaveBeenCalledWith(
+      prisma,
+      {
+        groupId: 'g-1',
+      }
+    );
   });
 
   test('does not count a group when another request already claimed it', async () => {
@@ -266,7 +284,7 @@ describe('openGroups', () => {
         },
       ])
     );
-    createAssignmentGroupArtifact.mockResolvedValue({
+    createAssignmentGroupArtifactInTransaction.mockResolvedValue({
       documentId: 'winner-doc',
       created: false,
     });
@@ -274,7 +292,7 @@ describe('openGroups', () => {
     const result = await openGroups({ classAssignmentId: 'ca-1' });
 
     expect(result.provisioned).toBe(0);
-    expect(createAssignmentGroupArtifact).toHaveBeenCalledTimes(1);
+    expect(createAssignmentGroupArtifactInTransaction).toHaveBeenCalledTimes(1);
   });
 
   test('skips a group with no active members', async () => {
@@ -287,7 +305,7 @@ describe('openGroups', () => {
     const result = await openGroups({ classAssignmentId: 'ca-1' });
 
     expect(result.provisioned).toBe(0);
-    expect(createAssignmentGroupArtifact).not.toHaveBeenCalled();
+    expect(createAssignmentGroupArtifactInTransaction).not.toHaveBeenCalled();
   });
 
   test('refuses when the assignment is not collaborative', async () => {
@@ -308,7 +326,7 @@ describe('openGroups', () => {
     await expect(openGroups({ classAssignmentId: 'ca-1' })).rejects.toThrow(
       GroupProvisioningError
     );
-    expect(createAssignmentGroupArtifact).not.toHaveBeenCalled();
+    expect(createAssignmentGroupArtifactInTransaction).not.toHaveBeenCalled();
   });
 
   test('refuses when no groups have been arranged', async () => {
@@ -339,7 +357,7 @@ describe('openGroups', () => {
     await expect(openGroups({ classAssignmentId: 'ca-1' })).rejects.toThrow(
       /every enrolled student to exactly one group/i
     );
-    expect(createAssignmentGroupArtifact).not.toHaveBeenCalled();
+    expect(createAssignmentGroupArtifactInTransaction).not.toHaveBeenCalled();
   });
 
   test('refuses to finalize when a student appears in two groups', async () => {
@@ -366,7 +384,36 @@ describe('openGroups', () => {
     await expect(openGroups({ classAssignmentId: 'ca-1' })).rejects.toThrow(
       /every enrolled student to exactly one group/i
     );
-    expect(createAssignmentGroupArtifact).not.toHaveBeenCalled();
+    expect(createAssignmentGroupArtifactInTransaction).not.toHaveBeenCalled();
+  });
+
+  test('provisions every group inside one transaction', async () => {
+    prisma.classAssignment.findUnique.mockResolvedValue(
+      classAssignmentWithGroups([
+        {
+          id: 'g-1',
+          documentId: null,
+          openedAt: null,
+          members: [{ membershipId: 'm1' }],
+        },
+        {
+          id: 'g-2',
+          documentId: null,
+          openedAt: null,
+          members: [{ membershipId: 'm2' }],
+        },
+      ])
+    );
+    createAssignmentGroupArtifactInTransaction
+      .mockResolvedValueOnce({ documentId: 'doc-1', created: true })
+      .mockRejectedValueOnce(new Error('provisioning failed'));
+
+    await expect(openGroups({ classAssignmentId: 'ca-1' })).rejects.toThrow(
+      /provisioning failed/
+    );
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(createAssignmentGroupArtifactInTransaction).toHaveBeenCalledTimes(2);
   });
 });
 
