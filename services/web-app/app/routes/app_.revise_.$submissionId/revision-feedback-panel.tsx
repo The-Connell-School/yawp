@@ -28,6 +28,7 @@ type Props = {
   submission: ViewPanelSubmission & { id: string; text: string | null };
   comments: FeedbackComment[];
   grammarIssues: GrammarIssue[];
+  grammarHighlightingEnabled: boolean;
   activeCommentId: string | null;
   onSelectComment: (id: string) => void;
   /**
@@ -52,6 +53,7 @@ export function RevisionFeedbackPanel({
   submission,
   comments,
   grammarIssues,
+  grammarHighlightingEnabled,
   activeCommentId,
   onSelectComment,
   focusRequest = null,
@@ -137,19 +139,21 @@ export function RevisionFeedbackPanel({
         <TabButton
           isActive={tab === 'teacher'}
           onClick={() => setTab('teacher')}
-          testId="revision-feedback-tab-teacher"
+          testId="revision-feedback-tab-comments"
           count={comments.length}
         >
-          Teacher
+          Comments
         </TabButton>
-        <TabButton
-          isActive={tab === 'assistant'}
-          onClick={() => setTab('assistant')}
-          testId="revision-feedback-tab-assistant"
-          count={grammarIssues.length}
-        >
-          Assistant
-        </TabButton>
+        {grammarHighlightingEnabled ? (
+          <TabButton
+            isActive={tab === 'assistant'}
+            onClick={() => setTab('assistant')}
+            testId="revision-feedback-tab-grammar"
+            count={grammarIssues.length}
+          >
+            Grammar
+          </TabButton>
+        ) : null}
       </div>
 
       <div
@@ -166,6 +170,7 @@ export function RevisionFeedbackPanel({
             readOnly
             activeGradeCommentId={activeCommentId}
             onSelectGradeComment={onSelectComment}
+            heading="Teacher comments"
           />
         ) : null}
         {tab === 'assistant' ? (
@@ -206,7 +211,9 @@ function TabButton({
     >
       {children}
       {count != null && count > 0 ? (
-        <span className="ml-1 text-[10px] text-muted-foreground">{count}</span>
+        <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground/10 px-1 text-[10px] leading-none text-foreground">
+          {count}
+        </span>
       ) : null}
     </button>
   );
@@ -226,7 +233,7 @@ function AssistantNotes({
   if (grammarIssues.length === 0) {
     return (
       <p className="p-4 text-sm italic text-muted-foreground">
-        The writing assistant left no notes on this draft.
+        No grammar or style notes on this draft.
       </p>
     );
   }

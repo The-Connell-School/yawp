@@ -469,6 +469,7 @@ export default function ReviseRoute() {
               submission={submission}
               comments={submission.comments}
               grammarIssues={grammarIssues}
+              grammarHighlightingEnabled={grammarHighlightingEnabled}
               activeCommentId={activeCommentId}
               onSelectComment={setActiveCommentId}
               focusRequest={focusRequest}

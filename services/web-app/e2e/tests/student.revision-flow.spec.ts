@@ -65,12 +65,22 @@ test.describe.serial('Student revises a released essay', () => {
       feedbackPanel.getByText('Good effort with room for improvement.')
     ).toBeVisible();
 
-    await page.getByTestId('revision-feedback-tab-teacher').click();
+    const commentsTab = page.getByTestId('revision-feedback-tab-comments');
+    await expect(commentsTab).toContainText('Comments');
+    const commentCountBadge = commentsTab.locator('span');
+    const commentCount = Number(await commentCountBadge.textContent());
+    expect(commentCount).toBeGreaterThan(0);
+    await expect(commentCountBadge).toHaveClass(/rounded-full/);
+    await commentsTab.click();
     await expect(
       gradedPane.getByText('Strong thesis statement in the opening sentence.')
     ).toBeVisible();
+    await expect(gradedPane.getByText('Teacher comments')).toBeVisible();
+    expect(
+      await gradedPane.locator('[data-grade-comment-card]').count()
+    ).toBe(commentCount);
 
-    await page.getByTestId('revision-feedback-tab-assistant').click();
+    await page.getByTestId('revision-feedback-tab-grammar').click();
     await expect(
       gradedPane.getByText('E2E grammar highlight for student toggle.')
     ).toBeVisible();
@@ -117,10 +127,9 @@ test.describe.serial('Student revises a released essay', () => {
     await page.locator('.grade-comment-mark').first().click();
 
     await expect(page.getByTestId('revision-feedback-panel')).toBeVisible();
-    await expect(page.getByTestId('revision-feedback-tab-teacher')).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    );
+    await expect(
+      page.getByTestId('revision-feedback-tab-comments')
+    ).toHaveAttribute('aria-pressed', 'true');
     await expect(
       page
         .getByTestId('revision-feedback-panel')
@@ -128,7 +137,7 @@ test.describe.serial('Student revises a released essay', () => {
     ).toBeInViewport();
   });
 
-  test('clicking an assistant mark reopens the panel on that note', async ({
+  test('clicking a grammar mark reopens the panel on that note', async ({
     page,
     signIn,
     e2eContext,
@@ -146,13 +155,62 @@ test.describe.serial('Student revises a released essay', () => {
 
     await expect(page.getByTestId('revision-feedback-panel')).toBeVisible();
     await expect(
-      page.getByTestId('revision-feedback-tab-assistant')
+      page.getByTestId('revision-feedback-tab-grammar')
     ).toHaveAttribute('aria-pressed', 'true');
     await expect(
       page
         .getByTestId('revision-feedback-panel')
         .getByText('E2E grammar highlight for student toggle.')
     ).toBeInViewport();
+  });
+
+  test('hides grammar feedback when the rubric disables highlighting', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const assignmentType = await prisma.assignmentType.findUniqueOrThrow({
+      where: { id: e2eContext.assignmentTypeId },
+      select: { rubricJson: true },
+    });
+    const rubric = assignmentType.rubricJson as {
+      categories: Array<Record<string, unknown>>;
+    };
+    const disabledRubric = {
+      ...rubric,
+      categories: rubric.categories.map((category) => ({
+        ...category,
+        grammarHighlighting: false,
+      })),
+    };
+
+    try {
+      await prisma.assignmentType.update({
+        where: { id: e2eContext.assignmentTypeId },
+        data: { rubricJson: disabledRubric as never },
+      });
+
+      await signIn(e2eContext.userEmail, 'johndoe');
+      await page.goto(`/app/revise/${e2eContext.gradeId}`);
+      await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+        timeout: 15000,
+      });
+
+      await expect(
+        page.getByTestId('revision-feedback-tab-grammar')
+      ).toHaveCount(0);
+      await expect(page.locator('.grammar-issue-mark')).toHaveCount(0);
+      await expect(
+        page.getByTestId('revision-feedback-tab-comments')
+      ).toBeVisible();
+    } finally {
+      await prisma.assignmentType.update({
+        where: { id: e2eContext.assignmentTypeId },
+        data: { rubricJson: assignmentType.rubricJson as never },
+      });
+      await prisma.$disconnect();
+    }
   });
 
   test('the draft pane is editable and the graded pane is not', async ({
@@ -437,7 +495,7 @@ test.describe.serial('Student revises a released essay', () => {
     );
     expect(horizontalOverflow).toBeLessThanOrEqual(1);
 
-    await page.getByTestId('revision-feedback-tab-teacher').click();
+    await page.getByTestId('revision-feedback-tab-comments').click();
     await expect(
       feedback.getByText('Strong thesis statement in the opening sentence.')
     ).toBeVisible();
