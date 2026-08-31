@@ -18,6 +18,7 @@ import type { E2EContext } from '../seed-e2e';
 
 const CARET = '.collaboration-cursor__caret';
 const CARET_LABEL = '.collaboration-cursor__label';
+const SELECTION = '.collaboration-cursor__selection';
 const EDITOR = '[data-testid="collab-editor-surface"] .ProseMirror';
 
 /** Signs in on a page of our own rather than the fixture's shared one. */
@@ -105,6 +106,7 @@ test.describe('collaborative carets', () => {
 
     try {
       await sam.locator(EDITOR).click();
+      const startedAt = Date.now();
       await sam.locator(EDITOR).pressSequentially('We start here.', {
         delay: 30,
       });
@@ -113,24 +115,96 @@ test.describe('collaborative carets', () => {
       await expect(riley.locator(EDITOR)).toContainText('We start here.', {
         timeout: 20000,
       });
+      test.info().annotations.push({
+        type: 'collaboration-latency-ms',
+        description: String(Date.now() - startedAt),
+      });
 
       // And now so does the person writing it.
       const caret = riley.locator(CARET).first();
       await expect(caret).toBeVisible({ timeout: 20000 });
 
-      // The name is revealed on hover, so the label must not merely exist —
-      // asserting on a label at opacity 0 would pass while a reader saw
-      // nothing. Playwright counts a transparent element as visible, so this
-      // checks the property that actually decides whether it can be read.
+      // The name stays visible, like Google Docs, rather than requiring a
+      // precision hover over a two-pixel caret.
       const label = caret.locator(CARET_LABEL);
-      await expect(label).toHaveCSS('opacity', '0');
-      await hoverCaret(riley);
-      await expect(label).toHaveCSS('opacity', '1');
+      await expect(label).not.toHaveCSS('opacity', '0');
       await expect(label).toHaveText('John Doe');
+
+      await expect(
+        riley.locator(
+          `[data-membership-id="${e2eContext.membershipId}"][data-presence-status="editing"]`
+        )
+      ).toBeVisible();
 
       // Sam sees no caret of his own: y-prosemirror filters out the local
       // client, so nobody watches their own cursor duplicated.
       await expect(sam.locator(CARET)).toHaveCount(0);
+    } finally {
+      await close();
+    }
+  });
+
+  test('a teammate selection is visible, not only their insertion point', async ({
+    browser,
+    e2eContext,
+  }) => {
+    const { sam, riley, close } = await twoWriters(browser, e2eContext);
+
+    try {
+      await sam.locator(EDITOR).click();
+      await sam.locator(EDITOR).pressSequentially('Select these words', {
+        delay: 20,
+      });
+      await expect(riley.locator(EDITOR)).toContainText('Select these words', {
+        timeout: 20000,
+      });
+      await sam.locator(EDITOR).press('Shift+ArrowLeft');
+      await sam.locator(EDITOR).press('Shift+ArrowLeft');
+      await sam.locator(EDITOR).press('Shift+ArrowLeft');
+
+      await expect(riley.locator(SELECTION).first()).toBeVisible({
+        timeout: 20000,
+      });
+    } finally {
+      await close();
+    }
+  });
+
+  test('the roster distinguishes a background tab from an offline teammate', async ({
+    browser,
+    e2eContext,
+  }) => {
+    const { sam, riley, close } = await twoWriters(browser, e2eContext);
+    const samPresence = riley.locator(
+      `[data-membership-id="${e2eContext.membershipId}"]`
+    );
+
+    try {
+      await expect(samPresence).not.toHaveAttribute(
+        'data-presence-status',
+        'offline',
+        { timeout: 20000 }
+      );
+
+      await sam.evaluate(() => {
+        Object.defineProperty(document, 'visibilityState', {
+          configurable: true,
+          value: 'hidden',
+        });
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await expect(samPresence).toHaveAttribute(
+        'data-presence-status',
+        'background',
+        { timeout: 20000 }
+      );
+
+      await sam.goto('/app');
+      await expect(samPresence).toHaveAttribute(
+        'data-presence-status',
+        'offline',
+        { timeout: 20000 }
+      );
     } finally {
       await close();
     }
@@ -147,9 +221,13 @@ test.describe('collaborative carets', () => {
 
     try {
       await sam.locator(EDITOR).click();
-      await sam.locator(EDITOR).pressSequentially('Colour check.', { delay: 30 });
+      await sam
+        .locator(EDITOR)
+        .pressSequentially('Colour check.', { delay: 30 });
 
-      await expect(riley.locator(CARET).first()).toBeVisible({ timeout: 20000 });
+      await expect(riley.locator(CARET).first()).toBeVisible({
+        timeout: 20000,
+      });
       await hoverCaret(riley);
       const label = riley.locator(CARET_LABEL).first();
       await expect(label).toHaveCSS('opacity', '1');
@@ -179,12 +257,19 @@ test.describe('collaborative carets', () => {
 
     try {
       await sam.locator(EDITOR).click();
-      await sam.locator(EDITOR).pressSequentially('Leaving soon.', { delay: 30 });
-      await expect(riley.locator(CARET).first()).toBeVisible({ timeout: 20000 });
+      await sam
+        .locator(EDITOR)
+        .pressSequentially('Leaving soon.', { delay: 30 });
+      await expect(riley.locator(CARET).first()).toBeVisible({
+        timeout: 20000,
+      });
 
       await sam.goto('/app');
 
       await expect(riley.locator(CARET)).toHaveCount(0, { timeout: 20000 });
+      await expect(
+        riley.locator(`[data-membership-id="${e2eContext.membershipId}"]`)
+      ).toHaveAttribute('data-presence-status', 'offline');
     } finally {
       await close();
     }
@@ -203,7 +288,9 @@ test.describe('students cannot start their own shared drafts', () => {
     // that used to carry the link. Hidden, not removed — the route behind it is
     // still built and still tested.
     await signIn('jdoe@brock.software', 'johndoe');
-    await page.goto(`/app/assignment-types/${e2eContext.collabAssignmentTypeId}`);
+    await page.goto(
+      `/app/assignment-types/${e2eContext.collabAssignmentTypeId}`
+    );
     await page.waitForLoadState('networkidle');
 
     // Prove we are on the page before proving something is missing from it. The

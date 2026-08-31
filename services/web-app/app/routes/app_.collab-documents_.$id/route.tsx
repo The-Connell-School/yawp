@@ -1,6 +1,6 @@
 import { invariant } from '@epic-web/invariant';
 import { ArrowLeft } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   data as dataResponse,
   useFetcher,
@@ -11,6 +11,7 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 import { Button } from '~/components/ui/button';
+import { Tooltip } from '~/components/ui/tooltip';
 import { CollabPromptPanel } from './collab-prompt-panel';
 import {
   DraftCommentError,
@@ -35,6 +36,30 @@ import {
   buildAuthorColorScale,
   UNATTRIBUTED_COLOR,
 } from '~/domain/collaboration/author-colors';
+import type { CollabPresence } from '~/domain/collaboration/http-provider';
+import type { PresenceActivity } from '~/domain/collaboration/presence';
+
+type RosterPresence = PresenceActivity | 'offline';
+
+const PRESENCE_PRIORITY: Record<PresenceActivity, number> = {
+  background: 1,
+  viewing: 2,
+  editing: 3,
+};
+
+const PRESENCE_LABEL: Record<RosterPresence, string> = {
+  editing: 'Editing this document',
+  viewing: 'Tab open',
+  background: 'Tab in background',
+  offline: 'Tab closed or disconnected',
+};
+
+const PRESENCE_DOT: Record<RosterPresence, string> = {
+  editing: 'bg-emerald-500',
+  viewing: 'bg-sky-500',
+  background: 'bg-amber-400',
+  offline: 'bg-slate-300',
+};
 
 /**
  * The collaborative draft page: `/app/collab-documents/:id`.
@@ -338,6 +363,7 @@ export default function CollabDocumentRoute() {
   const [mobilePanel, setMobilePanel] = useState<'draft' | 'tutor' | 'details'>(
     'draft'
   );
+  const [presence, setPresence] = useState<CollabPresence[]>([]);
 
   const groupMemberCount = doc.group?.members.length ?? 0;
 
@@ -354,6 +380,19 @@ export default function CollabDocumentRoute() {
   const colorScale = buildAuthorColorScale(
     members.map((member) => member.membershipId)
   );
+  const presenceByMember = useMemo(() => {
+    const byMember = new Map<string, PresenceActivity>();
+    for (const person of presence) {
+      const current = byMember.get(person.membershipId);
+      if (
+        !current ||
+        PRESENCE_PRIORITY[person.activity] > PRESENCE_PRIORITY[current]
+      ) {
+        byMember.set(person.membershipId, person.activity);
+      }
+    }
+    return byMember;
+  }, [presence]);
 
   return (
     /* The page shell is deliberately the same shape as the solo editor's:
@@ -417,22 +456,34 @@ export default function CollabDocumentRoute() {
         >
           {members.map((member) => {
             const name = member.membership.user.name?.trim() || 'Student';
+            const memberPresence =
+              presenceByMember.get(member.membershipId) ?? 'offline';
             return (
-              <li
+              <Tooltip
                 key={member.membershipId}
-                title={name}
-                aria-label={name}
-                className="grid h-7 w-7 place-items-center rounded-full text-[10px] font-medium text-white ring-2 ring-white"
-                style={{
-                  backgroundColor: colorScale.get(member.membershipId),
-                }}
+                delayDuration={100}
+                text={`${name} · ${PRESENCE_LABEL[memberPresence]}`}
               >
-                {name
-                  .split(/\s+/)
-                  .slice(0, 2)
-                  .map((part) => part[0]?.toUpperCase() ?? '')
-                  .join('')}
-              </li>
+                <li
+                  aria-label={`${name} — ${PRESENCE_LABEL[memberPresence]}`}
+                  data-membership-id={member.membershipId}
+                  data-presence-status={memberPresence}
+                  className="relative grid h-7 w-7 place-items-center rounded-full text-[10px] font-medium text-white ring-2 ring-white"
+                  style={{
+                    backgroundColor: colorScale.get(member.membershipId),
+                  }}
+                >
+                  {name
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((part) => part[0]?.toUpperCase() ?? '')
+                    .join('')}
+                  <span
+                    aria-hidden="true"
+                    className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${PRESENCE_DOT[memberPresence]}`}
+                  />
+                </li>
+              </Tooltip>
             );
           })}
         </ul>
@@ -524,9 +575,11 @@ export default function CollabDocumentRoute() {
           // What this browser publishes about its own cursor. Grey for a
           // teacher, who is not in the scale and never publishes one anyway.
           user={{
+            membershipId,
             name: userName,
             color: colorScale.get(membershipId) ?? UNATTRIBUTED_COLOR,
           }}
+          onPresenceChange={setPresence}
         />
         {/* Prompt and teacher comments share a column: both are things to read
             while writing, and neither should take width from the draft. */}

@@ -319,12 +319,9 @@ code {
 
    The caret itself is always there — that is the feature, and its colour is the
    one its owner's initials carry in the header, so colour alone answers "who".
-   The name is revealed on hover instead, because a label pinned above the caret
-   sits on top of the previous line: at this editor's line height it covered the
-   words a student was reading, which costs more than it explains. Hovering needs
-   a pointer target, so the caret takes events; a click on a 2px sliver still
-   resolves to the text position under it, since ProseMirror places the selection
-   from the coordinates. */
+   The name stays visible, matching the orientation Google Docs gives a writer:
+   colour answers quickly and the label removes ambiguity without requiring a
+   precision hover over a two-pixel target. */
 .collaboration-cursor__caret {
   border-left: 1px solid;
   border-right: 1px solid;
@@ -355,7 +352,7 @@ code {
   font-weight: 600;
   left: -1px;
   line-height: normal;
-  opacity: 0;
+  opacity: 0.94;
   padding: 1px 5px;
   pointer-events: none;
   position: absolute;

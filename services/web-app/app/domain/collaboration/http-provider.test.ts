@@ -61,7 +61,9 @@ function fakeServer() {
       failNext = null;
       return new Response('nope', { status: 500 });
     }
-    const since = Number(new URL(href, 'https://x.test').searchParams.get('since') ?? 0);
+    const since = Number(
+      new URL(href, 'https://x.test').searchParams.get('since') ?? 0
+    );
     const rows = log.filter((row) => row.seq > since);
     return Response.json({
       success: true,
@@ -413,6 +415,93 @@ describe('carets', () => {
     ada.provider.destroy();
   });
 
+  test('shares whether a teammate is editing, viewing, or in the background', async () => {
+    const server = fakeServer();
+    const { make } = pair(server);
+    const sam = make();
+    const ada = make();
+    await Promise.all([sam.provider.start(), ada.provider.start()]);
+
+    sam.provider.awareness.setLocalState({
+      user: {
+        membershipId: 'member-sam',
+        name: 'Sam',
+        color: '#3F6212',
+      },
+      cursor: cursorAt(4),
+    });
+    sam.provider.setPresenceActivity('editing');
+    await tick(40);
+
+    expect(ada.provider.getPresence()).toContainEqual(
+      expect.objectContaining({
+        membershipId: 'member-sam',
+        name: 'Sam',
+        activity: 'editing',
+        hasCursor: true,
+      })
+    );
+
+    sam.provider.setPresenceActivity('background');
+    await tick(40);
+    expect(ada.provider.getPresence()).toContainEqual(
+      expect.objectContaining({
+        membershipId: 'member-sam',
+        activity: 'background',
+      })
+    );
+
+    sam.provider.destroy();
+    ada.provider.destroy();
+  });
+
+  test('notifies the UI when a teammate opens or closes the draft', async () => {
+    const server = fakeServer();
+    const snapshots: string[][] = [];
+    const samDoc = new Y.Doc();
+    const adaDoc = new Y.Doc();
+    const sam = new CollabHttpProvider({
+      documentId: 'doc-1',
+      ydoc: samDoc,
+      canWrite: true,
+      fetchImpl: server.fetchImpl,
+      pollIntervalMs: 5,
+      presenceDebounceMs: 1,
+      presenceHeartbeatMs: 10_000,
+    });
+    const ada = new CollabHttpProvider({
+      documentId: 'doc-1',
+      ydoc: adaDoc,
+      canWrite: true,
+      fetchImpl: server.fetchImpl,
+      pollIntervalMs: 5,
+      presenceDebounceMs: 1,
+      presenceHeartbeatMs: 10_000,
+      onPresenceChange: (presence) =>
+        snapshots.push(presence.map((person) => person.membershipId)),
+    });
+
+    sam.awareness.setLocalState({
+      user: {
+        membershipId: 'member-sam',
+        name: 'Sam',
+        color: '#3F6212',
+      },
+      activity: 'viewing',
+    });
+    await Promise.all([sam.start(), ada.start()]);
+    await tick(40);
+    expect(snapshots.some((snapshot) => snapshot.includes('member-sam'))).toBe(
+      true
+    );
+
+    sam.destroy();
+    await tick(40);
+    expect(snapshots.at(-1)).not.toContain('member-sam');
+
+    ada.destroy();
+  });
+
   test('a caret never enters the document log', async () => {
     // The whole reason presence has its own endpoint. A cursor in the update
     // log would be replayed to everyone who ever opens the draft and folded
@@ -484,7 +573,9 @@ describe('carets', () => {
     teacher.provider.awareness.setLocalState({ user: {}, cursor: cursorAt(9) });
     await tick(40);
 
-    expect(server.presence.has(teacher.provider.awareness.clientID)).toBe(false);
+    expect(server.presence.has(teacher.provider.awareness.clientID)).toBe(
+      false
+    );
     expect(
       teacher.provider.awareness
         .getStates()

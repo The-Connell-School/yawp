@@ -49,6 +49,13 @@ export const PRESENCE_HEARTBEAT_MS = 5_000;
  */
 export const MAX_PRESENCE_BYTES = 4 * 1024;
 
+/** What the browser can truthfully say about an open collaborative tab. */
+export type PresenceActivity = 'editing' | 'viewing' | 'background';
+
+export function isPresenceActivity(value: unknown): value is PresenceActivity {
+  return value === 'editing' || value === 'viewing' || value === 'background';
+}
+
 /** One client's slot in an awareness update. `state: null` means it left. */
 export type AwarenessEntry = {
   clientId: number;
@@ -84,9 +91,10 @@ export function readAwarenessUpdate(update: Uint8Array): AwarenessEntry[] {
   for (let index = 0; index < length; index += 1) {
     const clientId = decoding.readVarUint(decoder);
     const clock = decoding.readVarUint(decoder);
-    const state = JSON.parse(decoding.readVarString(decoder)) as
-      | Record<string, unknown>
-      | null;
+    const state = JSON.parse(decoding.readVarString(decoder)) as Record<
+      string,
+      unknown
+    > | null;
     entries.push({ clientId, clock, state });
   }
 
@@ -135,10 +143,10 @@ function isRelativePosition(value: unknown): boolean {
  * sees and believes, and a browser is free to put anything in them — including
  * a classmate's name. The server knows who posted, so it says so.
  *
- * Everything except the cursor is dropped. An awareness state is free-form and
- * is relayed to everyone in the group; whitelisting the two fields that draw a
- * caret means a future extension cannot quietly start broadcasting something
- * else through this channel.
+ * Everything except the cursor and the small tab-activity enum is dropped. An
+ * awareness state is free-form and relayed to everyone in the group;
+ * whitelisting the fields we render means a future extension cannot quietly
+ * start broadcasting something else through this channel.
  *
  * A state with no usable cursor is kept rather than discarded: it means someone
  * has the draft open but has not put their cursor in it, which is true and
@@ -158,12 +166,14 @@ export function attributePresence(
       isRelativePosition(cursor) &&
       isRelativePosition(cursor?.anchor) &&
       isRelativePosition(cursor?.head);
+    const activity = entry.state.activity;
 
     return {
       ...entry,
       state: {
         user: identity,
         ...(keepsCursor ? { cursor } : {}),
+        ...(isPresenceActivity(activity) ? { activity } : {}),
       },
     };
   });

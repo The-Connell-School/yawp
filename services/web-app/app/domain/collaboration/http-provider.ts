@@ -5,7 +5,11 @@ import {
   removeAwarenessStates,
 } from 'y-protocols/awareness';
 import * as Y from 'yjs';
-import { PRESENCE_HEARTBEAT_MS } from './presence';
+import {
+  isPresenceActivity,
+  PRESENCE_HEARTBEAT_MS,
+  type PresenceActivity,
+} from './presence';
 
 /**
  * A minimal Yjs provider that syncs over ordinary HTTP requests.
@@ -56,12 +60,23 @@ export type CollabProviderOptions = {
   presenceHeartbeatMs?: number;
   fetchImpl?: FetchLike;
   onStatusChange?: (status: CollabStatus) => void;
+  onPresenceChange?: (presence: CollabPresence[]) => void;
 };
 
 export type CollabStatus =
   | { kind: 'connecting' }
   | { kind: 'live' }
   | { kind: 'error'; message: string };
+
+/** Browser-safe view of an awareness state for the roster UI. */
+export type CollabPresence = {
+  clientId: number;
+  membershipId: string;
+  name: string;
+  color: string;
+  activity: PresenceActivity;
+  hasCursor: boolean;
+};
 
 /**
  * 250ms of batching turns a burst of keystrokes into one request without being
@@ -86,6 +101,7 @@ export class CollabHttpProvider {
   private readonly presenceHeartbeatMs: number;
   private readonly fetchImpl: FetchLike;
   private readonly onStatusChange?: (status: CollabStatus) => void;
+  private readonly onPresenceChange?: (presence: CollabPresence[]) => void;
 
   /**
    * The caret channel, exposed because TipTap's `CollaborationCursor` takes a
@@ -107,11 +123,15 @@ export class CollabHttpProvider {
   private sending = false;
   private polling = false;
 
-  private readonly handleLocalUpdate: (update: Uint8Array, origin: unknown) => void;
+  private readonly handleLocalUpdate: (
+    update: Uint8Array,
+    origin: unknown
+  ) => void;
   private readonly handleAwarenessUpdate: (
     changes: { added: number[]; updated: number[]; removed: number[] },
     origin: unknown
   ) => void;
+  private readonly handleAwarenessChange: () => void;
 
   constructor(options: CollabProviderOptions) {
     this.documentId = options.documentId;
@@ -132,6 +152,7 @@ export class CollabHttpProvider {
     this.fetchImpl =
       options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
     this.onStatusChange = options.onStatusChange;
+    this.onPresenceChange = options.onPresenceChange;
 
     this.handleLocalUpdate = (update, origin) => {
       // Anything we just applied from the server must not be sent back, or two
@@ -150,9 +171,60 @@ export class CollabHttpProvider {
       if (!touched.includes(this.awareness.clientID)) return;
       this.schedulePresenceSend();
     };
+    this.handleAwarenessChange = () => {
+      this.onPresenceChange?.(this.getPresence());
+    };
 
     this.ydoc.on('update', this.handleLocalUpdate);
     this.awareness.on('update', this.handleAwarenessUpdate);
+    this.awareness.on('change', this.handleAwarenessChange);
+  }
+
+  /**
+   * Updates the local tab's human-readable state without disturbing TipTap's
+   * cursor or selection fields. The server still constrains this value before
+   * teammates receive it.
+   */
+  setPresenceActivity(activity: PresenceActivity) {
+    if (this.destroyed || !this.canWrite) return;
+    this.awareness.setLocalStateField('activity', activity);
+  }
+
+  /** Current people reported by Yjs awareness, normalized for the roster. */
+  getPresence(): CollabPresence[] {
+    const presence: CollabPresence[] = [];
+
+    for (const [clientId, state] of this.awareness.getStates()) {
+      const user = state.user;
+      if (typeof user !== 'object' || user === null || Array.isArray(user)) {
+        continue;
+      }
+
+      const candidate = user as Record<string, unknown>;
+      if (
+        typeof candidate.membershipId !== 'string' ||
+        typeof candidate.name !== 'string' ||
+        typeof candidate.color !== 'string'
+      ) {
+        continue;
+      }
+
+      presence.push({
+        clientId,
+        membershipId: candidate.membershipId,
+        name: candidate.name,
+        color: candidate.color,
+        activity: isPresenceActivity(state.activity)
+          ? state.activity
+          : 'viewing',
+        hasCursor:
+          typeof state.cursor === 'object' &&
+          state.cursor !== null &&
+          !Array.isArray(state.cursor),
+      });
+    }
+
+    return presence;
   }
 
   private get endpoint() {
@@ -382,6 +454,7 @@ export class CollabHttpProvider {
     this.destroyed = true;
     this.ydoc.off('update', this.handleLocalUpdate);
     this.awareness.off('update', this.handleAwarenessUpdate);
+    this.awareness.off('change', this.handleAwarenessChange);
 
     if (this.sendTimer) clearTimeout(this.sendTimer);
     if (this.pollTimer) clearTimeout(this.pollTimer);

@@ -7,7 +7,6 @@ const prisma = {
   orgMembership: { update: mock(), create: mock() },
   invitation: { findFirst: mock(), delete: mock(), create: mock() },
   organization: { findUnique: mock() },
-  $transaction: mock(),
 };
 
 const generateTOTP = mock();

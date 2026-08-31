@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Y from 'yjs';
 import {
   CollabHttpProvider,
+  type CollabPresence,
   type CollabStatus,
 } from '~/domain/collaboration/http-provider';
 import {
@@ -57,10 +58,17 @@ type Props = {
    * placeholder, and so the two would still agree if that rewrite were ever
    * relaxed.
    */
-  user: { name: string; color: string };
+  user: { membershipId: string; name: string; color: string };
+  onPresenceChange?: (presence: CollabPresence[]) => void;
 };
 
-export function CollabEditor({ docId, canWrite, user, className }: Props) {
+export function CollabEditor({
+  docId,
+  canWrite,
+  user,
+  className,
+  onPresenceChange,
+}: Props) {
   const [status, setStatus] = useState<CollabStatus>({ kind: 'connecting' });
   const [staleSchema, setStaleSchema] = useState(false);
 
@@ -87,6 +95,7 @@ export function CollabEditor({ docId, canWrite, user, className }: Props) {
       ydoc,
       canWrite,
       onStatusChange: setStatus,
+      onPresenceChange,
     });
     setProvider(connection);
 
@@ -116,7 +125,7 @@ export function CollabEditor({ docId, canWrite, user, className }: Props) {
       // writer's caret off their teammates' screens at once.
       void connection.flush().finally(() => connection.destroy());
     };
-  }, [docId, ydoc, canWrite]);
+  }, [docId, ydoc, canWrite, onPresenceChange]);
 
   const extensions = useMemo(
     () => [
@@ -128,12 +137,12 @@ export function CollabEditor({ docId, canWrite, user, className }: Props) {
         ? [
             CollaborationCursor.configure({
               provider,
-              user: { name: user.name, color: user.color },
+              user,
             }),
           ]
         : []),
     ],
-    [ydoc, provider, user.name, user.color]
+    [ydoc, provider, user.membershipId, user.name, user.color]
   );
 
   const editable = canWrite && status.kind === 'live' && !staleSchema;
@@ -158,6 +167,35 @@ export function CollabEditor({ docId, canWrite, user, className }: Props) {
   useEffect(() => {
     editor?.setEditable(editable);
   }, [editor, editable]);
+
+  useEffect(() => {
+    if (!provider || !canWrite) return;
+
+    const publishActivity = () => {
+      if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+        provider.setPresenceActivity('background');
+      } else if (editor?.isFocused) {
+        provider.setPresenceActivity('editing');
+      } else {
+        provider.setPresenceActivity('viewing');
+      }
+    };
+
+    document.addEventListener('visibilitychange', publishActivity);
+    window.addEventListener('focus', publishActivity);
+    window.addEventListener('blur', publishActivity);
+    editor?.on('focus', publishActivity);
+    editor?.on('blur', publishActivity);
+    publishActivity();
+
+    return () => {
+      document.removeEventListener('visibilitychange', publishActivity);
+      window.removeEventListener('focus', publishActivity);
+      window.removeEventListener('blur', publishActivity);
+      editor?.off('focus', publishActivity);
+      editor?.off('blur', publishActivity);
+    };
+  }, [provider, editor, canWrite]);
 
   const focusEditorFromPaneClick = useCallback(
     (event: React.MouseEvent) => {

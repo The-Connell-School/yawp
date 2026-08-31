@@ -60,7 +60,10 @@ describe('reading and writing awareness updates', () => {
   });
 
   test('what it writes, a real Yjs client can apply', () => {
-    const { update, clientId } = browserUpdate({ user: { name: 'Sam' }, cursor });
+    const { update, clientId } = browserUpdate({
+      user: { name: 'Sam' },
+      cursor,
+    });
     const rewritten = writeAwarenessUpdate(
       attributePresence(readAwarenessUpdate(update), identity)
     );
@@ -98,7 +101,9 @@ describe('reading and writing awareness updates', () => {
   });
 
   test('refuses bytes that are not an awareness update', () => {
-    expect(() => readAwarenessUpdate(new Uint8Array([255, 255, 255]))).toThrow();
+    expect(() =>
+      readAwarenessUpdate(new Uint8Array([255, 255, 255]))
+    ).toThrow();
   });
 });
 
@@ -137,6 +142,30 @@ describe('attributePresence', () => {
     });
   });
 
+  test('keeps only a recognized tab activity state', () => {
+    const entries: AwarenessEntry[] = [
+      {
+        clientId: 7,
+        clock: 1,
+        state: { cursor, activity: 'background', user: {} },
+      },
+      {
+        clientId: 8,
+        clock: 1,
+        state: { activity: 'pretending-to-be-the-teacher', user: {} },
+      },
+    ];
+
+    expect(attributePresence(entries, identity)[0]!.state).toEqual({
+      user: identity,
+      cursor,
+      activity: 'background',
+    });
+    expect(attributePresence(entries, identity)[1]!.state).toEqual({
+      user: identity,
+    });
+  });
+
   test('keeps a state with no cursor, which is someone present but idle', () => {
     const entries: AwarenessEntry[] = [
       { clientId: 7, clock: 1, state: { user: {} } },
@@ -170,7 +199,12 @@ describe('livePresence', () => {
 
   test('keeps rows still inside the TTL', () => {
     const rows = [
-      { clientId: '1', membershipId: 'a', state: new Uint8Array([1]), updatedAt: at(0) },
+      {
+        clientId: '1',
+        membershipId: 'a',
+        state: new Uint8Array([1]),
+        updatedAt: at(0),
+      },
       {
         clientId: '2',
         membershipId: 'b',
