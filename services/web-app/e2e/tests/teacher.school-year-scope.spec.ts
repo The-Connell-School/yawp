@@ -2,6 +2,8 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { currentSchoolYear } from '../../app/utils/school-year';
 import bcrypt from 'bcryptjs';
+import { createTeacherInvitation } from '../db-helpers';
+import { E2E_UA_ORGANIZATION_ID } from '../constants';
 
 function createPassword(password: string) {
   return { hash: bcrypt.hashSync(password, 10) };
@@ -12,6 +14,116 @@ function createPassword(password: string) {
  * the school year scopes what teachers see, and students keep their old work.
  */
 test.describe('School year scope', () => {
+  test('a newly invited UA teacher does not inherit the previous account school year', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString().slice(-8);
+    const email = `ua-invited-teacher-${suffix}@yawp.test`;
+    const password = 'ua-invited-teacher-password';
+    const incidentYear = currentSchoolYear(
+      new Date('2026-08-31T12:00:00.000Z')
+    );
+    const currentYear = currentSchoolYear();
+    const currentStart = Number(currentYear.slice(0, 4));
+    const priorYear = `${currentStart - 1}-${currentStart}`;
+
+    expect(incidentYear).toBe('2026-2027');
+
+    try {
+      // Reproduce the same-browser identity boundary from production: the
+      // prior teacher selected last year, then logged out before accepting the
+      // University of Alabama invitation as a brand-new user.
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      const selectPriorYear = await page.request.post('/api/school-year', {
+        form: { year: priorYear },
+      });
+      expect(selectPriorYear.ok()).toBe(true);
+
+      await page.goto('/app');
+      await page.getByText('Settings', { exact: true }).click();
+      await expect(page.getByTestId('school-year-scope')).toContainText(
+        priorYear.replace('-', '–')
+      );
+
+      await page.getByRole('button', { name: 'Logout' }).click();
+      await page.waitForURL('**/auth/login');
+
+      expect(await prisma.user.count({ where: { email } })).toBe(0);
+
+      const { otp } = await createTeacherInvitation({
+        prisma,
+        email,
+        organizationId: E2E_UA_ORGANIZATION_ID,
+      });
+      const verifySearch = new URLSearchParams({
+        type: 'onboard-teacher',
+        target: email,
+      });
+
+      await page.goto(`/auth/inv/verify?${verifySearch}`);
+      await page.getByRole('textbox', { name: /code/i }).first().fill(otp);
+      await page.getByRole('button', { name: /submit/i }).click();
+      await page.waitForURL('**/auth/inv/onboard-teacher**');
+
+      await page.locator('input[name="name"]').fill('Invited UA Teacher');
+      await page.locator('button[role="combobox"]').first().click();
+      await page
+        .getByRole('option', { name: 'UA E2E School', exact: true })
+        .click();
+      await page.locator('input[name="password"]').fill(password);
+      await page.locator('input[name="confirmPassword"]').fill(password);
+      await page.getByRole('button', { name: /create an account/i }).click();
+      await page.waitForURL('**/app**');
+
+      const createdTeacher = await prisma.user.findUnique({
+        where: { email },
+        select: {
+          memberships: {
+            where: { organizationId: E2E_UA_ORGANIZATION_ID },
+            select: {
+              role: true,
+              schools: { select: { id: true } },
+              _count: { select: { classesAsTeacher: true } },
+            },
+          },
+        },
+      });
+
+      expect(createdTeacher?.memberships).toHaveLength(1);
+      expect(createdTeacher?.memberships[0]?.role).toBe('TEACHER');
+      expect(createdTeacher?.memberships[0]?.schools).toEqual([
+        { id: 'ua-e2e-school' },
+      ]);
+      expect(createdTeacher?.memberships[0]?._count.classesAsTeacher).toBe(0);
+
+      const inheritedScope = (await page.context().cookies()).find(
+        (cookie) => cookie.name === 'school-year'
+      );
+      expect(inheritedScope).toBeUndefined();
+
+      await page.getByText('Settings', { exact: true }).click();
+      await expect(
+        page.getByText('University of Alabama', { exact: true })
+      ).toBeVisible();
+      await expect(page.getByTestId('school-year-scope')).toContainText(
+        currentYear.replace('-', '–')
+      );
+    } finally {
+      await prisma.invitation.deleteMany({ where: { target: email } });
+      await prisma.orgMembership.deleteMany({
+        where: {
+          organizationId: E2E_UA_ORGANIZATION_ID,
+          user: { email },
+        },
+      });
+      await prisma.user.deleteMany({ where: { email } });
+      await prisma.$disconnect();
+    }
+  });
+
   test('a returning teacher with no current-year class lands on their newest class year', async ({
     page,
     e2eContext,
@@ -137,7 +249,8 @@ test.describe('School year scope', () => {
       await Promise.all([
         page.waitForResponse(
           (response) =>
-            response.url().includes('/api/school-year') && response.status() < 400
+            response.url().includes('/api/school-year') &&
+            response.status() < 400
         ),
         page.getByRole('option', { name: 'All years' }).click(),
       ]);
@@ -157,7 +270,8 @@ test.describe('School year scope', () => {
       await Promise.all([
         page.waitForResponse(
           (response) =>
-            response.url().includes('/api/school-year') && response.status() < 400
+            response.url().includes('/api/school-year') &&
+            response.status() < 400
         ),
         page.getByRole('option', { name: currentYearLabel }).click(),
       ]);
