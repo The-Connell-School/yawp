@@ -43,6 +43,7 @@ import { ErrorBoundary } from '../app_.documents_.$id/document-editor/error-boun
 
 type Props = {
   docId: string;
+  className?: string;
   /** False for a teacher: they follow the draft and comment, never write in it. */
   canWrite: boolean;
   /**
@@ -59,7 +60,7 @@ type Props = {
   user: { name: string; color: string };
 };
 
-export function CollabEditor({ docId, canWrite, user }: Props) {
+export function CollabEditor({ docId, canWrite, user, className }: Props) {
   const [status, setStatus] = useState<CollabStatus>({ kind: 'connecting' });
   const [staleSchema, setStaleSchema] = useState(false);
 
@@ -97,7 +98,10 @@ export function CollabEditor({ docId, canWrite, user }: Props) {
       const meta = ydoc.getMap<number>(COLLAB_META_MAP);
       const roomVersion = meta.get(COLLAB_SCHEMA_VERSION_KEY);
 
-      if (typeof roomVersion === 'number' && roomVersion > COLLAB_SCHEMA_VERSION) {
+      if (
+        typeof roomVersion === 'number' &&
+        roomVersion > COLLAB_SCHEMA_VERSION
+      ) {
         setStaleSchema(true);
         return;
       }
@@ -168,15 +172,17 @@ export function CollabEditor({ docId, canWrite, user }: Props) {
 
   return (
     <ErrorBoundary>
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden md:h-full">
+      <div
+        className={`${className ?? 'flex'} min-w-0 flex-1 flex-col overflow-hidden md:h-full`}
+      >
         {staleSchema ? (
           <div
             role="alert"
             className="border-b bg-amber-50 px-4 py-2 text-sm text-amber-900"
           >
             This draft was opened with a newer version of the editor. Reload the
-            page to get the latest version — until then it is read-only, so nothing
-            your group wrote can be lost.
+            page to get the latest version — until then it is read-only, so
+            nothing your group wrote can be lost.
           </div>
         ) : null}
 

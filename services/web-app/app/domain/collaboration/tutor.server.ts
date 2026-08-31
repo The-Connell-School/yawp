@@ -11,9 +11,9 @@ import { prisma } from '~/utils/db.server';
  * on the row, every student in the group would be typing into one transcript,
  * and one of them finishing a module would advance it for everybody.
  *
- * So sessions on a shared draft carry a `membershipId` and solo sessions keep
- * theirs null, meaning "the document's owner". That is what makes this additive:
- * no existing row changes, and no existing query has to learn anything.
+ * Sessions on a shared draft carry a `membershipId`; solo sessions keep theirs
+ * null, meaning "the document's owner". Assignment-owned artifacts are created
+ * without any eager session, so no transcript ever needs a nominal owner.
  *
  * The draft stays shared; only the coaching is individual. That is the right
  * split — they are writing one document, but a question one student wants to ask
@@ -43,38 +43,16 @@ export function memberSessionWhere({
  * Idempotent, and it backfills: a module added to the assignment type after the
  * group started writing appears for a student who already has the others.
  *
- * `ownerMembershipId` is the document's own `membershipId` — the student a
- * pre-share transcript belongs to. It is needed because the null rows on a
- * document that has just become a shared draft are not orphans: they are that
- * student's conversation, written before anyone else was in the room.
  */
 export async function ensureMemberModuleSessions({
   documentId,
   assignmentTypeId,
   membershipId,
-  ownerMembershipId,
 }: {
   documentId: string;
   assignmentTypeId: string;
   membershipId: string;
-  ownerMembershipId?: string | null;
 }): Promise<boolean> {
-  // A student can share a draft they have been working on for days, tutor and
-  // all. Those sessions carry a null membershipId, which meant "the document's
-  // owner" right up until the document acquired other authors — from then on
-  // nothing matches them and the student's own history vanishes from their own
-  // page. Naming the owner on the rows makes them findable again.
-  //
-  // Deliberately before the count below, not alongside it: counting first would
-  // see this member with no sessions and create a second, empty set beside the
-  // one it was about to adopt.
-  if (ownerMembershipId && ownerMembershipId === membershipId) {
-    await prisma.assignmentModuleSession.updateMany({
-      where: { documentId, membershipId: null, deletedAt: null },
-      data: { membershipId },
-    });
-  }
-
   const [modules, existing] = await Promise.all([
     prisma.assignmentModule.findMany({
       where: { assignmentTypeId, deletedAt: null },
@@ -95,17 +73,34 @@ export async function ensureMemberModuleSessions({
   const missing = modules.filter((module) => !have.has(module.id));
   if (missing.length === 0) return false;
 
-  await prisma.document.update({
-    where: { id: documentId },
-    data: {
-      assignmentModuleSessions: {
-        create: buildAssignmentModuleSessionCreateData(missing).map((row) => ({
-          ...row,
-          membershipId,
-        })),
+  try {
+    await prisma.document.update({
+      where: { id: documentId },
+      data: {
+        assignmentModuleSessions: {
+          create: buildAssignmentModuleSessionCreateData(missing).map(
+            (row) => ({
+              ...row,
+              membershipId,
+            })
+          ),
+        },
       },
-    },
-  });
+    });
+  } catch (error) {
+    // A second tab can provision the same member at the same time. The database
+    // uniqueness contract makes one request the winner; the loser observes the
+    // already-created sessions as success rather than surfacing a 500.
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'P2002'
+    ) {
+      return false;
+    }
+    throw error;
+  }
 
   return true;
 }

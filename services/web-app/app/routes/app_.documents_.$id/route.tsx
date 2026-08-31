@@ -23,7 +23,6 @@ import {
   Clock,
   EllipsisVertical,
   Printer,
-  Users,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -60,7 +59,6 @@ import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ensureAssignmentModuleSessionsForDocument } from '~/domain/documents.server';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
-import { studentStartedSharedDraftsEnabled } from '~/domain/assignments/collaboration';
 import { documentReadWhere } from '~/utils/document-access.server';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
@@ -220,6 +218,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const collaborative = await prisma.document.findFirst({
     where: {
       id: params.id,
+      artifactKind: 'STUDENT',
       ...collaborationRoomWhere(),
       AND: [documentReadWhere({ profileId: profile.id, isAdmin })],
     },
@@ -340,15 +339,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  if (!doc) {
+  if (!doc || !doc.membership) {
     return redirectWithToast('/app', {
       description: 'Document not found.',
       type: 'error',
     });
   }
+  const ownerMembership = doc.membership;
 
   const submissions = doc.submissions;
-  const isOwner = doc.membership.id === profile.id;
+  const isOwner = ownerMembership.id === profile.id;
   const wantsDraftEditor =
     url.searchParams.get('revise') === '1' ||
     url.searchParams.get('spa') === '1';
@@ -460,6 +460,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     doc: {
       ...doc,
+      membership: ownerMembership,
       assignmentModuleSessions: orderedModuleSessions,
       comments: sortedComments,
     },
@@ -473,19 +474,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       isOwner &&
       profile.role === 'STUDENT' &&
       !hasEffectivePlatformAdmin(user?.isAdmin),
-    // Offering a student the chance to write this with a classmate. Their own
-    // draft only, a kind of writing in the pilot only, and not one that is
-    // already shared — sharing a shared draft would fork the group's work.
-    //
-    // Gated first on whether students may form their own groups at all, which
-    // they currently may not. Answered in the loader rather than hidden in the
-    // menu so the flag decides once, server-side, for every client.
-    canShareWithClassmates:
-      studentStartedSharedDraftsEnabled() &&
-      isOwner &&
-      profile.role === 'STUDENT' &&
-      doc.group === null &&
-      doc.assignmentType?.collaborationSupported === true,
   });
 }
 
@@ -778,8 +766,7 @@ export default function Route() {
   useEffect(() => {
     if (submissionUnsubmitFetcher.state !== 'idle') return;
     const body = submissionUnsubmitFetcher.data as
-      | { success?: boolean }
-      | undefined;
+      { success?: boolean } | undefined;
     if (body?.success && submissionToUnsubmit) {
       // The loader's shouldRevalidate never reruns for this fetcher (see
       // below), so update local state directly instead of relying on
@@ -916,7 +903,10 @@ export default function Route() {
                                 </Badge>
                               ) : null}
                               {isWithdrawn ? (
-                                <Badge variant="secondary" className="text-[10px]">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px]"
+                                >
                                   Withdrawn
                                 </Badge>
                               ) : (
@@ -1070,25 +1060,6 @@ export default function Route() {
                     <Printer className="h-4 w-4" />
                     Print
                   </DropdownMenuItem>
-                  {/* The one collaboration touchpoint on this page. It links out
-                      rather than opening a picker here: choosing classmates and
-                      copying the draft already exist, tested, on the shared-draft
-                      page, and this file is deliberately kept out of the
-                      collaborative write path. */}
-                  {data.canShareWithClassmates ? (
-                    <DropdownMenuItem
-                      className="gap-2"
-                      data-testid="document-action-share-with-classmates"
-                      onSelect={() =>
-                        navigate(
-                          `/app/shared-drafts/new?sourceDocumentId=${data.doc.id}`
-                        )
-                      }
-                    >
-                      <Users className="h-4 w-4" />
-                      Write with a classmate
-                    </DropdownMenuItem>
-                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -1310,8 +1281,7 @@ export default function Route() {
           </DialogHeader>
           {(
             submissionUnsubmitFetcher.data as
-              | { success?: boolean; message?: string }
-              | undefined
+              { success?: boolean; message?: string } | undefined
           )?.success === false ? (
             <p role="alert" className="text-sm text-destructive">
               {(submissionUnsubmitFetcher.data as { message?: string }).message}

@@ -33,15 +33,13 @@ const deleteAssignmentPromptAttachment = mock();
 const saveAssignmentForReuse = mock();
 const autoArrangeNewAssignment = mock();
 class AssignmentPromptAttachmentError extends Error {}
-const actualAssignmentPromptAttachment = await import(
-  '~/domain/assignments/assignment-prompt-attachment.server'
-);
+const actualAssignmentPromptAttachment =
+  await import('~/domain/assignments/assignment-prompt-attachment.server');
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
 // before any file could mock.module() this path (see comment there).
-const actualAssignmentTypeAccess = globalThis.__realModules[
-  '~/utils/assignment-type-access.server'
-];
+const actualAssignmentTypeAccess =
+  globalThis.__realModules['~/utils/assignment-type-access.server'];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -58,16 +56,13 @@ mock.module('~/utils/assignment-type-access.server', () => ({
   ...actualAssignmentTypeAccess,
   isAssignmentTypeAvailableForEveryScope,
 }));
-mock.module(
-  '~/domain/assignments/assignment-prompt-attachment.server',
-  () => ({
-    ...actualAssignmentPromptAttachment,
-    AssignmentPromptAttachmentError,
-    assignmentPromptAttachmentRequestTooLarge: () => false,
-    deleteAssignmentPromptAttachment,
-    uploadAssignmentPromptAttachment,
-  })
-);
+mock.module('~/domain/assignments/assignment-prompt-attachment.server', () => ({
+  ...actualAssignmentPromptAttachment,
+  AssignmentPromptAttachmentError,
+  assignmentPromptAttachmentRequestTooLarge: () => false,
+  deleteAssignmentPromptAttachment,
+  uploadAssignmentPromptAttachment,
+}));
 
 mock.module('~/domain/assignments/saved-assignments.server', () => ({
   SAVED_ASSIGNMENTS_ENABLED: true,
@@ -132,7 +127,9 @@ describe('api.assignments.create', () => {
     uploadAssignmentPromptAttachment.mockReset();
     deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
     saveAssignmentForReuse.mockReset().mockResolvedValue({ id: 'saved-1' });
-    autoArrangeNewAssignment.mockReset().mockResolvedValue({ arranged: 1, failed: 0 });
+    autoArrangeNewAssignment
+      .mockReset()
+      .mockResolvedValue({ arranged: 1, failed: 0 });
     prisma.classAssignment.findMany
       .mockReset()
       .mockResolvedValue([{ id: 'ca-1', classId: 'class-1' }]);
@@ -842,7 +839,9 @@ describe('api.assignments.create', () => {
 
     test('arranges groups at creation for the modes that describe one', async () => {
       enablePilot();
-      createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
 
       await createWithCollaboration({ collaborationGroupMode: 'random' });
 
@@ -857,7 +856,9 @@ describe('api.assignments.create', () => {
       // The group is the roster, so a size would be meaningless -- and the
       // stepper is hidden for this mode, so a posted one is stale.
       enablePilot();
-      createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
 
       await createWithCollaboration({ collaborationGroupMode: 'whole-class' });
 
@@ -897,7 +898,9 @@ describe('api.assignments.create', () => {
       // The sheet used to just close, leaving a collaborative assignment looking
       // finished while its groups did not exist and no student could see it.
       enablePilot();
-      createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
       prisma.classAssignment.findMany.mockResolvedValue([
         { id: 'ca-1', classId: 'class-1' },
       ]);
@@ -912,14 +915,16 @@ describe('api.assignments.create', () => {
 
     test('says plainly that students cannot see it yet', async () => {
       enablePilot();
-      createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
       prisma.classAssignment.findMany.mockResolvedValue([
         { id: 'ca-1', classId: 'class-1' },
       ]);
 
       const body = await readBody(await createWithCollaboration());
 
-      expect(body.message).toMatch(/cannot see it until you open groups/i);
+      expect(body.message).toMatch(/cannot see it until you finalize groups/i);
     });
 
     test('a solo assignment has no next step and keeps its old message', async () => {
@@ -953,9 +958,7 @@ describe('api.assignments.create', () => {
 
       expect(responseStatus(response)).toBe(400);
       expect(body.success).toBe(false);
-      expect(body.message).toBe(
-        'Group size must be between 2 and 8 students.'
-      );
+      expect(body.message).toBe('Group size must be between 2 and 8 students.');
       expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
     });
   });

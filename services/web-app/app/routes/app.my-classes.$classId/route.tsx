@@ -411,10 +411,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    if (
-      intent === 'create-assignment' &&
-      !gradingAssistantStrictnessLevel
-    ) {
+    if (intent === 'create-assignment' && !gradingAssistantStrictnessLevel) {
       return dataResponse(
         {
           success: false,
@@ -507,8 +504,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             prompt,
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
-            gradingAssistantStrictnessLevel:
-              gradingAssistantStrictnessLevel!,
+            gradingAssistantStrictnessLevel: gradingAssistantStrictnessLevel!,
             tutorEnabled: tutorEnabledResult.value,
             ...promptAttachmentData,
           },
@@ -858,7 +854,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       : { enrolledMembershipIds: klass.students.map((student) => student.id) }
   );
 
-
   // Get all submissions for this class
   const submissions = await prisma.submission.findMany({
     where: {
@@ -912,6 +907,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               },
             },
           },
+          group: {
+            select: {
+              id: true,
+              label: true,
+              members: {
+                where: { removedAt: null },
+                orderBy: { membershipId: 'asc' },
+                select: {
+                  membershipId: true,
+                  membership: {
+                    select: {
+                      id: true,
+                      user: { select: { id: true, name: true, email: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
           assignmentModuleSessions: studentModuleSessionSingleSelect,
         },
       },
@@ -948,6 +962,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             select: {
               name: true,
               email: true,
+            },
+          },
+        },
+      },
+      group: {
+        select: {
+          id: true,
+          label: true,
+          members: {
+            where: { removedAt: null },
+            orderBy: { membershipId: 'asc' },
+            select: {
+              membershipId: true,
+              membership: {
+                select: {
+                  id: true,
+                  user: { select: { id: true, name: true, email: true } },
+                },
+              },
             },
           },
         },
@@ -1178,6 +1211,7 @@ type ClassDocumentRow = {
     id: string;
     user: { name: string | null; email: string };
   };
+  group: TeacherDocumentWorkRow['group'];
   assignment: {
     id: string;
     title: string | null;
@@ -1493,11 +1527,19 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
     const byDocumentId = new Map<string, ClassDocumentRow>();
 
     for (const document of data.inProgressDocuments) {
+      const subject = document.membership ?? {
+        id: `group:${document.group?.id ?? document.id}`,
+        user: {
+          name: document.group?.label ?? 'Collaborative group',
+          email: '',
+        },
+      };
       byDocumentId.set(document.id, {
         id: document.id,
         title: document.title,
         updatedAt: new Date(document.updatedAt),
-        membership: document.membership,
+        membership: subject,
+        group: document.group,
         assignment: document.assignment,
         submissions: [],
         latestSubmission: null,
@@ -1506,11 +1548,19 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
 
     for (const submission of allSubmissions) {
       const existing = byDocumentId.get(submission.documentId);
+      const subject = submission.document.membership ?? {
+        id: `group:${submission.document.group?.id ?? submission.documentId}`,
+        user: {
+          name: submission.document.group?.label ?? 'Collaborative group',
+          email: '',
+        },
+      };
       const row: ClassDocumentRow = existing ?? {
         id: submission.documentId,
         title: submission.document.title,
         updatedAt: new Date(submission.submittedAt ?? submission.createdAt),
-        membership: submission.document.membership,
+        membership: subject,
+        group: submission.document.group,
         assignment: submission.document.assignment,
         submissions: [],
         latestSubmission: null,
@@ -2242,11 +2292,21 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                   {paginatedData.map((s) => {
                     const studentDocumentCount =
                       data.inProgressDocuments.filter(
-                        (doc) => doc.membership.id === s.id
+                        (doc) =>
+                          doc.membership?.id === s.id ||
+                          doc.group?.members.some(
+                            (member) => member.membershipId === s.id
+                          )
                       ).length +
                       new Set(
                         allSubmissions
-                          .filter((sub) => sub.document.membership.id === s.id)
+                          .filter(
+                            (sub) =>
+                              sub.document.membership?.id === s.id ||
+                              sub.document.group?.members.some(
+                                (member) => member.membershipId === s.id
+                              )
+                          )
                           .map((sub) => sub.documentId)
                       ).size;
 
@@ -2259,7 +2319,9 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                     return (
                       <TableRow
                         key={s.id}
-                        className={cn(studentSheetAvailable && 'cursor-pointer')}
+                        className={cn(
+                          studentSheetAvailable && 'cursor-pointer'
+                        )}
                         onClick={() => {
                           if (!studentSheetAvailable) return;
                           setGrowthPlanStudent({

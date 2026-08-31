@@ -12,6 +12,16 @@ enum MembershipRole {
   STUDENT
 }
 
+/// The durable ownership model for a writing artifact.
+///
+/// Student artifacts belong to one student. Assignment-group artifacts belong
+/// to a teacher-created group inside one ClassAssignment; group membership is
+/// access, not ownership.
+enum DocumentArtifactKind {
+  STUDENT          @map("student")
+  ASSIGNMENT_GROUP @map("assignment-group")
+}
+
 model Class {
   id                              String                           @id @default(cuid())
   createdAt                       DateTime                         @default(now()) @db.Timestamptz(6)
@@ -168,20 +178,16 @@ model DocumentGroup {
   id                String                     @id @default(cuid())
   createdAt         DateTime                   @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime                   @default(now()) @updatedAt @db.Timestamptz(6)
-  /// Which road produced this group: `assignment` for teacher-arranged group
-  /// work, `student-share` for a student who started their own shared draft.
-  /// Both converge on the same document, membership and authorization machinery;
-  /// the difference is only who may create one and which gate permits it.
+  /// Assignment groups are teacher-created. The database constrains this field
+  /// to `assignment`; it remains explicit for safe forward migration from the
+  /// abandoned student-sharing prototype.
   kind              String                     @default("assignment")
-  /// Null for a student share, which belongs to no class assignment. Postgres
-  /// treats NULLs as distinct in a unique index, so many student-share groups
-  /// can coexist at ordinal 0.
-  classAssignmentId String?
-  classAssignment   ClassAssignment?           @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  classAssignmentId String
+  classAssignment   ClassAssignment            @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
   label             String
   ordinal           Int
-  /// Set when the group's draft becomes reachable: when a teacher opens groups,
-  /// or immediately for a student share. Null means still editable.
+  /// Set when the teacher finalizes the group and its artifact becomes reachable.
+  /// Null means the teacher may still edit the arrangement.
   openedAt          DateTime?                  @db.Timestamptz(6)
   /// Set once the room has been seeded from the document's existing HTML.
   /// Durable guard against seeding twice, which would duplicate the content.
@@ -591,6 +597,7 @@ model AssignmentModuleSession {
   membership            OrgMembership?                   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   messages              AssignmentModuleSessionMessage[]
 
+  @@unique([documentId, membershipId, assignmentModuleId])
   @@index([documentId, membershipId])
 }
 
@@ -616,8 +623,11 @@ model Document {
   title                    String                    @default("Untitled")
   text                     String?
   html                     String?
-  membership               OrgMembership             @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  membershipId             String
+  artifactKind             DocumentArtifactKind      @default(STUDENT)
+  /// The owner of a solo student artifact. Assignment-group artifacts have no
+  /// student owner; their active DocumentGroupMember rows grant collaboration.
+  membership               OrgMembership?            @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membershipId             String?
   assignmentTypeId         String
   assignmentType           AssignmentType            @relation(fields: [assignmentTypeId], references: [id], onDelete: Restrict)
   assignmentId             String?

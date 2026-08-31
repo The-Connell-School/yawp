@@ -23,6 +23,18 @@ export function buildSubmissionTitleEditWhere(params: {
             },
           },
           {
+            group: {
+              is: {
+                members: {
+                  some: {
+                    membershipId: params.membershipId,
+                    removedAt: null,
+                  },
+                },
+              },
+            },
+          },
+          {
             ...buildTeacherDocumentAccessWhere({
               membershipId: params.membershipId,
               organizationId: params.organizationId,
@@ -52,6 +64,13 @@ export async function findSubmissionForTitleEdit(params: {
       document: {
         select: {
           membership: { select: { organizationId: true } },
+          classAssignment: {
+            select: {
+              class: {
+                select: { school: { select: { organizationId: true } } },
+              },
+            },
+          },
         },
       },
     },

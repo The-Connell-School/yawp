@@ -61,7 +61,6 @@ export function buildTeacherDocumentAccessWhere({
 }): Prisma.DocumentWhereInput {
   if (isAdmin) return {};
   return {
-    membership: { organizationId },
     OR: [
       {
         classAssignment: {
@@ -83,13 +82,16 @@ export function buildTeacherDocumentAccessWhere({
         // from an unrelated class of the same student read the submission.
         classAssignment: { is: null },
         membership: {
-          classesAsStudent: {
-            some: {
-              school: { organizationId },
-              teachers: {
-                some: {
-                  id: membershipId,
-                  isActive: true,
+          is: {
+            organizationId,
+            classesAsStudent: {
+              some: {
+                school: { organizationId },
+                teachers: {
+                  some: {
+                    id: membershipId,
+                    isActive: true,
+                  },
                 },
               },
             },
@@ -103,12 +105,13 @@ export function buildTeacherDocumentAccessWhere({
 /** Document owner must never use teacher grading flows on that submission, including admins. */
 export function isGradingOwnDocument(
   actorMembershipId: string,
-  documentMembershipId: string,
+  documentMembershipId: string | null,
   actorUserId?: string,
   documentOwnerUserId?: string
 ): boolean {
   return (
-    actorMembershipId === documentMembershipId ||
+    (documentMembershipId != null &&
+      actorMembershipId === documentMembershipId) ||
     (actorUserId != null && actorUserId === documentOwnerUserId)
   );
 }

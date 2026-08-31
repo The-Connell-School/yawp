@@ -305,8 +305,6 @@ describe('app_.documents_.$id loader', () => {
       request: new Request('https://example.test/app/documents/doc-1'),
       params: { id: 'doc-1' },
     } as never)) as any;
-
-    expect(response.data.canShareWithClassmates).toBe(false);
   });
 
   test('selects and returns immutable AP History assignment snapshots', async () => {

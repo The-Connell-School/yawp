@@ -9,11 +9,9 @@ import { type Prisma } from '@app/prisma';
  * token endpoint hands out access it should not, while a stale copy in the
  * dual-write silently stops persisting a group's work.
  *
- * A document qualifies only if it has an opened group, its assignment type opts
- * into collaboration, and its group's road is permitted:
- *
- * - `assignment` — teacher-arranged group work. Needs the assignment's own toggle.
- * - `student-share` — a student's own shared draft, which has no assignment at all.
+ * A document qualifies only if it is explicitly an assignment-group artifact,
+ * has an opened teacher-created group, and both its assignment and assignment
+ * type opt into collaboration.
  *
  * `AssignmentType.collaborationSupported` is the prototype gate and applies to both
  * roads. It replaces the organization-level flags in this predicate: those default
@@ -26,14 +24,9 @@ import { type Prisma } from '@app/prisma';
  */
 export function collaborationRoomWhere(): Prisma.DocumentWhereInput {
   return {
+    artifactKind: 'ASSIGNMENT_GROUP',
     group: { is: { openedAt: { not: null } } },
     assignmentType: { is: { collaborationSupported: true } },
-    OR: [
-      {
-        group: { is: { kind: 'assignment' } },
-        assignment: { is: { collaborationEnabled: true } },
-      },
-      { group: { is: { kind: 'student-share' } } },
-    ],
+    assignment: { is: { collaborationEnabled: true } },
   };
 }

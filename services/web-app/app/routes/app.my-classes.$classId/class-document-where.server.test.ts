@@ -33,6 +33,19 @@ describe('buildClassDocumentScope', () => {
           classAssignment: { classId: 'class-1' },
           membershipId: 'membership-1',
         },
+        {
+          classAssignment: { classId: 'class-1' },
+          group: {
+            is: {
+              members: {
+                some: {
+                  membershipId: 'membership-1',
+                  removedAt: null,
+                },
+              },
+            },
+          },
+        },
         { classAssignmentId: null, membershipId: 'membership-1' },
       ],
     });

@@ -13,9 +13,9 @@ import { hasEffectivePlatformAdmin } from './preview-access.server';
  *
  * Three rules exist, and they are not interchangeable:
  *
- * - READ scope (`documentReadWhere`) — the student who owns the document, its active
- *   co-authors, plus any teacher of a class the owning student is enrolled in. Teachers
- *   legitimately read student work; grading depends on it.
+ * - READ scope (`documentReadWhere`) — the student who owns a solo document, active
+ *   group members, plus the teacher of the artifact's ClassAssignment. The legacy
+ *   enrollment branch remains for assignmentless solo documents.
  * - AUTHOR scope (`documentAuthorWhere`) — the owner and the document's active
  *   co-authors. This is the collaborative write scope: it guards the shared draft
  *   itself. Teachers are excluded for the same reason they are excluded from owner
@@ -69,6 +69,11 @@ export function documentReadWhere({
       { membershipId: profileId },
       activeGroupMemberClause(profileId),
       {
+        classAssignment: {
+          is: { class: { teachers: { some: { id: profileId } } } },
+        },
+      },
+      {
         membership: {
           classesAsStudent: {
             some: { teachers: { some: { id: profileId } } },
@@ -109,7 +114,7 @@ export function documentOwnerWhere({
 }): Prisma.DocumentWhereInput {
   if (hasEffectivePlatformAdmin(isAdmin)) return {};
 
-  return { membershipId: profileId };
+  return { artifactKind: 'STUDENT', membershipId: profileId };
 }
 
 /**
@@ -144,7 +149,9 @@ export function documentAuthorOwnSessionWhere({
       // it. Unchanged from documentOwnerSessionWhere.
       {
         membershipId: null,
-        document: { is: { membershipId: profileId } },
+        document: {
+          is: { artifactKind: 'STUDENT', membershipId: profileId },
+        },
       },
       // Shared: the session names its student, and they must also still be an
       // active member of the group that owns the draft.
@@ -165,7 +172,11 @@ export function documentOwnerSessionWhere({
 }): Prisma.AssignmentModuleSessionWhereInput {
   if (hasEffectivePlatformAdmin(isAdmin)) return {};
 
-  return { document: { is: { membershipId: profileId } } };
+  return {
+    document: {
+      is: { artifactKind: 'STUDENT', membershipId: profileId },
+    },
+  };
 }
 
 /**

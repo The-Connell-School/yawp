@@ -29,9 +29,8 @@ const isAssignmentTypeAvailableForEveryScope = mock();
 const uploadAssignmentPromptAttachment = mock();
 const deleteAssignmentPromptAttachment = mock();
 class AssignmentPromptAttachmentError extends Error {}
-const actualAssignmentPromptAttachment = await import(
-  '~/domain/assignments/assignment-prompt-attachment.server'
-);
+const actualAssignmentPromptAttachment =
+  await import('~/domain/assignments/assignment-prompt-attachment.server');
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -49,9 +48,8 @@ mock.module('~/utils/cookies.server', () => ({
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
 // before any file could mock.module() this path (see comment there).
-const actualAssignmentTypeAccess = globalThis.__realModules[
-  '~/utils/assignment-type-access.server'
-];
+const actualAssignmentTypeAccess =
+  globalThis.__realModules['~/utils/assignment-type-access.server'];
 mock.module('~/utils/assignment-type-access.server', () => ({
   ...actualAssignmentTypeAccess,
   getAvailableAssignmentTypesForScopes,
@@ -61,16 +59,13 @@ mock.module('~/utils/assignment-deployment.server', () => ({
   createAssignmentDeployedToClasses,
   deleteClassAssignmentDeployment,
 }));
-mock.module(
-  '~/domain/assignments/assignment-prompt-attachment.server',
-  () => ({
-    ...actualAssignmentPromptAttachment,
-    AssignmentPromptAttachmentError,
-    assignmentPromptAttachmentRequestTooLarge: () => false,
-    deleteAssignmentPromptAttachment,
-    uploadAssignmentPromptAttachment,
-  })
-);
+mock.module('~/domain/assignments/assignment-prompt-attachment.server', () => ({
+  ...actualAssignmentPromptAttachment,
+  AssignmentPromptAttachmentError,
+  assignmentPromptAttachmentRequestTooLarge: () => false,
+  deleteAssignmentPromptAttachment,
+  uploadAssignmentPromptAttachment,
+}));
 
 const {
   action: routeAction,
@@ -176,9 +171,9 @@ describe('class detail loader document visibility', () => {
         deletedAt: null,
       },
     });
-    expect(prisma.submission.findMany.mock.calls[0][0].where.unsubmittedAt).toBe(
-      null
-    );
+    expect(
+      prisma.submission.findMany.mock.calls[0][0].where.unsubmittedAt
+    ).toBe(null);
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       ...expectedScope,
       deletedAt: null,
@@ -232,7 +227,10 @@ describe('class detail loader document visibility', () => {
         organization: { classInsightsEnabled: true, reporterEnabled: true },
       },
       students: [
-        { id: 'student-1', user: { name: 'Ada Lovelace', email: 'ada@x.test' } },
+        {
+          id: 'student-1',
+          user: { name: 'Ada Lovelace', email: 'ada@x.test' },
+        },
       ],
     });
     prisma.reporterGrowthPlan.findMany.mockResolvedValue([
@@ -293,8 +291,14 @@ describe('class detail loader document visibility', () => {
         organization: { classInsightsEnabled: false, reporterEnabled: false },
       },
       students: [
-        { id: 'student-1', user: { name: 'Ada Lovelace', email: 'ada@x.test' } },
-        { id: 'student-2', user: { name: 'Grace Hopper', email: 'grace@x.test' } },
+        {
+          id: 'student-1',
+          user: { name: 'Ada Lovelace', email: 'ada@x.test' },
+        },
+        {
+          id: 'student-2',
+          user: { name: 'Grace Hopper', email: 'grace@x.test' },
+        },
       ],
     });
     prisma.pasteAlert.findMany.mockResolvedValue([
@@ -368,7 +372,12 @@ describe('class detail loader document visibility', () => {
           teacherProfileId: 'teacher-1',
         },
       ],
-      select: { id: true, title: true, systemKey: true },
+      select: {
+        id: true,
+        title: true,
+        systemKey: true,
+        collaborationSupported: true,
+      },
       orderBy: { position: 'asc' },
     });
     expect(data.assignmentTypes).toEqual([
@@ -805,7 +814,8 @@ describe('class detail loader document visibility', () => {
 
     expect(response.data).toMatchObject({
       success: false,
-      message: 'Point value must be a positive whole number no greater than 1000.',
+      message:
+        'Point value must be a positive whole number no greater than 1000.',
     });
     expect(response.init).toMatchObject({ status: 400 });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
@@ -959,6 +969,16 @@ describe('class detail loader for students', () => {
       archivedAt: null,
       OR: [
         { classAssignment: { classId: 'class-1' }, membershipId: 'student-1' },
+        {
+          classAssignment: { classId: 'class-1' },
+          group: {
+            is: {
+              members: {
+                some: { membershipId: 'student-1', removedAt: null },
+              },
+            },
+          },
+        },
         { classAssignmentId: null, membershipId: 'student-1' },
       ],
     });

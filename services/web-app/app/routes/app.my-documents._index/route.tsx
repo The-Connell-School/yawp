@@ -34,7 +34,9 @@ import {
 export const handle = { breadcrumb: 'My Documents' };
 
 function orderDocumentTileModuleSessions<
-  T extends { assignmentModuleSessions: AssignmentModuleSessionResumeCandidate[] },
+  T extends {
+    assignmentModuleSessions: AssignmentModuleSessionResumeCandidate[];
+  },
 >(documents: T[]) {
   return documents.map((document) => ({
     ...document,
@@ -44,8 +46,18 @@ function orderDocumentTileModuleSessions<
   }));
 }
 
-const documentInclude = {
+const documentInclude = (membershipId: string) => ({
   assignment: { select: { id: true, title: true } },
+  group: {
+    select: {
+      id: true,
+      label: true,
+      members: {
+        where: { removedAt: null },
+        select: { membershipId: true },
+      },
+    },
+  },
   classAssignment: {
     select: {
       class: {
@@ -54,6 +66,9 @@ const documentInclude = {
     },
   },
   assignmentModuleSessions: {
+    where: {
+      OR: [{ membershipId: null }, { membershipId }],
+    },
     include: {
       assignmentModule: {
         include: { instructions: { select: { id: true } } },
@@ -75,7 +90,7 @@ const documentInclude = {
       unsubmittedAt: true,
     },
   },
-} as const;
+});
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -100,19 +115,38 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const documents = await prisma.document.findMany({
     orderBy: { createdAt: 'desc' },
     where: {
-      membershipId: profile.id,
       deletedAt: null,
       archivedAt: null,
-      ...(schoolYearScope === ALL_SCHOOL_YEARS
-        ? {}
-        : {
-            OR: [
-              { classAssignment: { class: { schoolYear: schoolYearScope } } },
-              { classAssignment: { is: null } },
-            ],
-          }),
+      AND: [
+        {
+          OR: [
+            { membershipId: profile.id },
+            {
+              group: {
+                is: {
+                  members: {
+                    some: { membershipId: profile.id, removedAt: null },
+                  },
+                },
+              },
+            },
+          ],
+        },
+        ...(schoolYearScope === ALL_SCHOOL_YEARS
+          ? []
+          : [
+              {
+                OR: [
+                  {
+                    classAssignment: { class: { schoolYear: schoolYearScope } },
+                  },
+                  { classAssignment: { is: null } },
+                ],
+              },
+            ]),
+      ],
     },
-    include: documentInclude,
+    include: documentInclude(profile.id),
   });
 
   const ordered = orderDocumentTileModuleSessions(documents);
@@ -168,10 +202,7 @@ export default function MyDocumentsRoute() {
 
   const updateFilters = (updates: Partial<StudentDocumentFilters>) => {
     setSearchParams(
-      serializeStudentDocumentFilters(
-        { ...filters, ...updates },
-        searchParams
-      ),
+      serializeStudentDocumentFilters({ ...filters, ...updates }, searchParams),
       { replace: true }
     );
   };

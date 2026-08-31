@@ -152,6 +152,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       membership: {
         select: { user: { select: { name: true, email: true } } },
       },
+      group: { select: { label: true } },
       submissions: {
         where: { gradedAt: { not: null } },
         orderBy: { submittedAt: 'desc' },
@@ -178,6 +179,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const snippet = toSnippet(raw);
     if (!snippet) continue;
     const studentName =
+      doc.group?.label?.trim() ||
       doc.membership?.user?.name?.trim() ||
       doc.membership?.user?.email?.trim() ||
       'Unknown student';

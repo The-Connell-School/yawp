@@ -8,26 +8,28 @@ import { buildStudentClassDocumentsScope } from '~/utils/class-assignment-scope.
  *
  * Everything here is scoped to one student in one class: the class lookup only
  * matches when the student is enrolled, and the documents query only ever
- * returns that student's own work. Nothing on this surface exposes the roster,
- * other students' documents, grading controls, or paste alerts — the teacher
- * view (`route.tsx`) owns those.
+ * returns that student's own work plus assignment-owned artifacts they actively
+ * collaborate on. Nothing exposes another group's work or private tutor data.
  */
 export type StudentClassDetail = NonNullable<
   Awaited<ReturnType<typeof loadStudentClassDetail>>
 >;
 
-const STUDENT_DOCUMENT_INCLUDE = {
+const studentDocumentInclude = (membershipId: string) => ({
+  assignment: { select: { id: true, title: true } },
+  group: { select: { id: true, label: true } },
   assignmentModuleSessions: {
+    where: { OR: [{ membershipId: null }, { membershipId }] },
     include: {
       assignmentModule: {
         include: { instructions: { select: { id: true } } },
       },
     },
-    orderBy: { assignmentModule: { position: 'desc' } },
+    orderBy: { assignmentModule: { position: 'desc' as const } },
   },
   submissions: {
     where: { archivedAt: null, unsubmittedAt: null },
-    orderBy: { submittedAt: 'desc' },
+    orderBy: { submittedAt: 'desc' as const },
     select: {
       id: true,
       title: true,
@@ -35,7 +37,7 @@ const STUDENT_DOCUMENT_INCLUDE = {
       submittedAt: true,
     },
   },
-} as const;
+});
 
 /**
  * Loads one class for one student, or `null` when that student is not enrolled
@@ -103,6 +105,7 @@ export async function loadStudentClassDetail({
             id: true,
             title: true,
             prompt: true,
+            collaborationEnabled: true,
             assignmentType: { select: { id: true, title: true } },
           },
         },
@@ -125,7 +128,7 @@ export async function loadStudentClassDetail({
         archivedAt: null,
         ...buildStudentClassDocumentsScope({ classId: klass.id, membershipId }),
       },
-      include: STUDENT_DOCUMENT_INCLUDE,
+      include: studentDocumentInclude(membershipId),
       orderBy: { createdAt: 'desc' },
     }),
   ]);

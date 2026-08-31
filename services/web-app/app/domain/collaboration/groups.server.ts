@@ -2,7 +2,7 @@
 // `groups.ts`; this module talks to the database.
 
 import { prisma } from '~/utils/db.server';
-import { createDocumentForAssignmentType } from '~/domain/documents.server';
+import { createAssignmentGroupArtifact } from './assignment-artifact.server';
 import { groupLabel, planGroups, shuffleMemberships } from './groups';
 
 export class GroupProvisioningError extends Error {}
@@ -33,7 +33,9 @@ export async function arrangeGroups({
     where: { id: classAssignmentId },
     select: {
       id: true,
-      class: { select: { students: { select: { id: true }, orderBy: { id: 'asc' } } } },
+      class: {
+        select: { students: { select: { id: true }, orderBy: { id: 'asc' } } },
+      },
       documentGroups: { select: { id: true, openedAt: true } },
     },
   });
@@ -85,7 +87,11 @@ export async function arrangeGroups({
  * replaced loses whatever the students wrote in the first one. Every group that
  * already has a document is left exactly as it is.
  */
-export async function openGroups({ classAssignmentId }: { classAssignmentId: string }) {
+export async function openGroups({
+  classAssignmentId,
+}: {
+  classAssignmentId: string;
+}) {
   const classAssignment = await prisma.classAssignment.findUnique({
     where: { id: classAssignmentId },
     select: {
@@ -94,6 +100,7 @@ export async function openGroups({ classAssignmentId }: { classAssignmentId: str
       assignment: {
         select: { assignmentTypeId: true, collaborationEnabled: true },
       },
+      class: { select: { students: { select: { id: true } } } },
       documentGroups: {
         orderBy: { ordinal: 'asc' },
         select: {
@@ -103,7 +110,6 @@ export async function openGroups({ classAssignmentId }: { classAssignmentId: str
           members: {
             where: { removedAt: null },
             select: { membershipId: true },
-            orderBy: { membershipId: 'asc' },
           },
         },
       },
@@ -122,47 +128,45 @@ export async function openGroups({ classAssignmentId }: { classAssignmentId: str
     throw new GroupProvisioningError('Arrange groups before opening them.');
   }
 
+  // Finalization is the point at which the seating chart becomes durable
+  // access control. Every enrolled student must appear in exactly one active
+  // group; otherwise finalizing would either hide the assignment from someone
+  // or give them access to two assignment-owned artifacts.
+  const rosterIds = new Set(
+    classAssignment.class.students.map((student) => student.id)
+  );
+  const assignmentCounts = new Map<string, number>();
+  for (const group of classAssignment.documentGroups) {
+    for (const member of group.members) {
+      assignmentCounts.set(
+        member.membershipId,
+        (assignmentCounts.get(member.membershipId) ?? 0) + 1
+      );
+    }
+  }
+
+  const hasNonRosterMember = [...assignmentCounts.keys()].some(
+    (membershipId) => !rosterIds.has(membershipId)
+  );
+  const hasMissingOrDuplicateRosterMember = [...rosterIds].some(
+    (membershipId) => assignmentCounts.get(membershipId) !== 1
+  );
+  if (hasNonRosterMember || hasMissingOrDuplicateRosterMember) {
+    throw new GroupProvisioningError(
+      'Assign every enrolled student to exactly one group before finalizing.'
+    );
+  }
+
   let provisioned = 0;
 
   for (const group of classAssignment.documentGroups) {
     // Already has a draft: leave it alone. This is the idempotency guarantee.
     if (group.documentId) continue;
 
-    if (group.members.length === 0) {
-      // An empty group would produce a document nobody can open, since
-      // Document.membershipId has to be someone.
-      continue;
-    }
+    if (group.members.length === 0) continue;
 
-    // The lowest membership id becomes the nominal owner. Deterministic on
-    // purpose: Document.membershipId is required and single-valued, so one member
-    // has to hold it, and a stable choice keeps repeated runs identical. Everyone
-    // else reaches the draft through the group, which is what documentAuthorWhere
-    // checks.
-    const ownerMembershipId = group.members[0].membershipId;
-
-    const created = await createDocumentForAssignmentType({
-      membershipId: ownerMembershipId,
-      assignmentTypeId: classAssignment.assignment.assignmentTypeId,
-      assignmentId: classAssignment.assignmentId,
-      classAssignmentId: classAssignment.id,
-    });
-
-    // Guarded update: only claim the group if it still has no document, so two
-    // concurrent opens cannot both attach one.
-    const claimed = await prisma.documentGroup.updateMany({
-      where: { id: group.id, documentId: null },
-      data: { documentId: created.documentId, openedAt: new Date() },
-    });
-
-    if (claimed.count === 0) {
-      // Another request won the race. Drop the document we just made rather than
-      // leaving it orphaned and invisible.
-      await prisma.document.delete({ where: { id: created.documentId } });
-      continue;
-    }
-
-    provisioned += 1;
+    const result = await createAssignmentGroupArtifact({ groupId: group.id });
+    if (result.created) provisioned += 1;
   }
 
   return { provisioned };

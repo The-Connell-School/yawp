@@ -99,7 +99,14 @@ export async function action({ request }: ActionFunctionArgs) {
                 select: {
                   id: true,
                   schoolId: true,
-                  school: { select: { organizationId: true } },
+                  school: {
+                    select: {
+                      organizationId: true,
+                      organization: {
+                        select: { submissionActivityEnabled: true },
+                      },
+                    },
+                  },
                   teachers: { select: { id: true } },
                 },
               },
@@ -117,7 +124,14 @@ export async function action({ request }: ActionFunctionArgs) {
                 select: {
                   id: true,
                   schoolId: true,
-                  school: { select: { organizationId: true } },
+                  school: {
+                    select: {
+                      organizationId: true,
+                      organization: {
+                        select: { submissionActivityEnabled: true },
+                      },
+                    },
+                  },
                   teachers: { select: { id: true } },
                 },
               },
@@ -150,7 +164,7 @@ export async function action({ request }: ActionFunctionArgs) {
       actor.membershipId,
       submission.document.membershipId,
       actor.userId,
-      submission.document.membership.userId
+      submission.document.membership?.userId
     )
   ) {
     return Response.json(
@@ -160,15 +174,19 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const organizationId =
-    submission.document.membership.organizationId ?? actor.organizationId;
+    submission.document.classAssignment?.class?.school?.organizationId ??
+    submission.document.membership?.organizationId ??
+    actor.organizationId;
   const gradeActorMembershipId = resolveSubmissionActivityActorMembershipId({
     actorMembershipId: actor.membershipId,
     actorOrganizationId: actor.organizationId,
     submissionOrganizationId: organizationId,
   });
   const submissionActivityEnabled =
-    submission.document.membership.organization?.submissionActivityEnabled ===
-    true;
+    (submission.document.classAssignment?.class?.school?.organization
+      ?.submissionActivityEnabled ??
+      submission.document.membership?.organization
+        ?.submissionActivityEnabled) === true;
 
   if (!actor.isAdmin && organizationId !== actor.organizationId) {
     return Response.json(

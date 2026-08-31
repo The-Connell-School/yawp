@@ -531,7 +531,8 @@ export function AssignmentCreationSheetContent({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="assignment-create-post-at">
-              Post date <span className="text-muted-foreground">(optional)</span>
+              Post date{' '}
+              <span className="text-muted-foreground">(optional)</span>
             </Label>
             <Input
               id="assignment-create-post-at"
@@ -843,13 +844,13 @@ export function AssignmentCreationSheetContent({
                     : 'cursor-pointer font-normal leading-none'
                 }
               >
-                Collaborative draft
+                Is this a collaborative assignment?
               </Label>
             </div>
             <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
               {isEditing
                 ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
-                : 'Students write together in one shared document per group. You review the groups for each class and open them when you are ready.'}
+                : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp creates one shared document for each group.'}
             </p>
             {collaborationEnabled && !isEditing ? (
               <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">
@@ -873,7 +874,9 @@ export function AssignmentCreationSheetContent({
                               : 'border-border bg-background hover:bg-muted'
                           }`}
                           aria-pressed={selected}
-                          onClick={() => setCollaborationGroupMode(option.value)}
+                          onClick={() =>
+                            setCollaborationGroupMode(option.value)
+                          }
                           disabled={isSaving}
                         >
                           <span className="block font-medium">

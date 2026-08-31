@@ -7,6 +7,15 @@ export type ClassScopedDocumentWhere = {
 export type StudentClassDocumentsWhere = {
   OR: Array<
     | (ClassScopedDocumentWhere & { membershipId: string })
+    | (ClassScopedDocumentWhere & {
+        group: {
+          is: {
+            members: {
+              some: { membershipId: string; removedAt: null };
+            };
+          };
+        };
+      })
     | {
         classAssignmentId: null;
         membershipId: string;
@@ -69,6 +78,19 @@ export function buildStudentClassDocumentsScope(params: {
       {
         ...buildClassAssignmentDocumentScope(params.classId),
         membershipId: params.membershipId,
+      },
+      {
+        ...buildClassAssignmentDocumentScope(params.classId),
+        group: {
+          is: {
+            members: {
+              some: {
+                membershipId: params.membershipId,
+                removedAt: null,
+              },
+            },
+          },
+        },
       },
       {
         classAssignmentId: null,

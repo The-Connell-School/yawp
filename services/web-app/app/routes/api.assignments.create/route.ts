@@ -38,7 +38,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     return dataResponse(
       { success: false, message: 'Only teachers can create assignments.' },
       { status: 403 }
@@ -273,8 +273,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const promptAttachment = formData.get('promptAttachment');
   let promptAttachmentData:
-    | Awaited<ReturnType<typeof uploadAssignmentPromptAttachment>>
-    | undefined;
+    Awaited<ReturnType<typeof uploadAssignmentPromptAttachment>> | undefined;
   if (promptAttachment instanceof File && promptAttachment.size > 0) {
     try {
       promptAttachmentData =
@@ -389,7 +388,7 @@ export async function action({ request }: ActionFunctionArgs) {
   return dataResponse({
     success: true,
     message: nextStep
-      ? 'Assignment created. Students cannot see it until you open groups.'
+      ? 'Assignment created. Students cannot see it until you finalize groups.'
       : 'Assignment created and applied to classes.',
     nextStep,
   });

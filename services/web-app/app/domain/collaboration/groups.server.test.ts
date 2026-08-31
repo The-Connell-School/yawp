@@ -2,16 +2,20 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   classAssignment: { findUnique: mock() },
-  documentGroup: { deleteMany: mock(), create: mock(), updateMany: mock(), findFirst: mock() },
-  document: { delete: mock() },
+  documentGroup: {
+    deleteMany: mock(),
+    create: mock(),
+    updateMany: mock(),
+    findFirst: mock(),
+  },
   $transaction: mock(),
 };
 
-const createDocumentForAssignmentType = mock();
+const createAssignmentGroupArtifact = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/domain/documents.server', () => ({
-  createDocumentForAssignmentType,
+mock.module('./assignment-artifact.server', () => ({
+  createAssignmentGroupArtifact,
 }));
 
 const {
@@ -23,13 +27,6 @@ const {
 
 afterAll(() => {
   mock.restore();
-  // mock.restore() does not undo mock.module, and this file's stub is global to
-  // the whole run — so put the real module back for everyone after it, or the
-  // document write path silently keeps a two-export stub. See test-preload.ts.
-  mock.module(
-    '~/domain/documents.server',
-    () => globalThis.__realModules['~/domain/documents.server']
-  );
 });
 
 const classAssignmentWithGroups = (
@@ -39,11 +36,19 @@ const classAssignmentWithGroups = (
     openedAt: Date | null;
     members: { membershipId: string }[];
   }[],
-  { collaborationEnabled = true } = {}
+  {
+    collaborationEnabled = true,
+    roster = [
+      ...new Set(
+        groups.flatMap((group) => group.members.map((m) => m.membershipId))
+      ),
+    ],
+  }: { collaborationEnabled?: boolean; roster?: string[] } = {}
 ) => ({
   id: 'ca-1',
   assignmentId: 'a-1',
   assignment: { assignmentTypeId: 'at-1', collaborationEnabled },
+  class: { students: roster.map((id) => ({ id })) },
   documentGroups: groups,
 });
 
@@ -53,17 +58,24 @@ describe('arrangeGroups', () => {
     prisma.documentGroup.deleteMany.mockReset().mockResolvedValue({ count: 0 });
     prisma.documentGroup.create.mockReset().mockResolvedValue({ id: 'g-new' });
     // Run the callback against the same mock client the module uses.
-    prisma.$transaction.mockReset().mockImplementation(async (fn: any) => fn(prisma));
+    prisma.$transaction
+      .mockReset()
+      .mockImplementation(async (fn: any) => fn(prisma));
   });
 
   test('creates one group row per planned group, ordinal-numbered', async () => {
     prisma.classAssignment.findUnique.mockResolvedValue({
       id: 'ca-1',
-      class: { students: [{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }, { id: 'm4' }] },
+      class: {
+        students: [{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }, { id: 'm4' }],
+      },
       documentGroups: [],
     });
 
-    const result = await arrangeGroups({ classAssignmentId: 'ca-1', groupSize: 2 });
+    const result = await arrangeGroups({
+      classAssignmentId: 'ca-1',
+      groupSize: 2,
+    });
 
     expect(result.groupCount).toBe(2);
     expect(prisma.documentGroup.create).toHaveBeenCalledTimes(2);
@@ -109,7 +121,9 @@ describe('arrangeGroups', () => {
   test('shuffles only when asked, and deterministically under a fixed source', async () => {
     prisma.classAssignment.findUnique.mockResolvedValue({
       id: 'ca-1',
-      class: { students: [{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }, { id: 'm4' }] },
+      class: {
+        students: [{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }, { id: 'm4' }],
+      },
       documentGroups: [],
     });
 
@@ -136,10 +150,15 @@ describe('arrangeGroups', () => {
       documentGroups: [],
     });
 
-    const result = await arrangeGroups({ classAssignmentId: 'ca-1', groupSize: null });
+    const result = await arrangeGroups({
+      classAssignmentId: 'ca-1',
+      groupSize: null,
+    });
 
     expect(result.groupCount).toBe(1);
-    expect(prisma.documentGroup.create.mock.calls[0][0].data.members.create).toHaveLength(3);
+    expect(
+      prisma.documentGroup.create.mock.calls[0][0].data.members.create
+    ).toHaveLength(3);
   });
 
   test('throws when the class assignment does not exist', async () => {
@@ -153,32 +172,39 @@ describe('arrangeGroups', () => {
 describe('openGroups', () => {
   beforeEach(() => {
     prisma.classAssignment.findUnique.mockReset();
-    prisma.documentGroup.updateMany.mockReset().mockResolvedValue({ count: 1 });
-    prisma.document.delete.mockReset().mockResolvedValue({});
-    createDocumentForAssignmentType.mockReset();
+    createAssignmentGroupArtifact.mockReset();
     let counter = 0;
-    createDocumentForAssignmentType.mockImplementation(async () => {
+    createAssignmentGroupArtifact.mockImplementation(async () => {
       counter += 1;
-      return { documentId: `doc-${counter}` };
+      return { documentId: `doc-${counter}`, created: true };
     });
   });
 
   test('provisions one document per group and stamps openedAt', async () => {
     prisma.classAssignment.findUnique.mockResolvedValue(
       classAssignmentWithGroups([
-        { id: 'g-1', documentId: null, openedAt: null, members: [{ membershipId: 'm1' }, { membershipId: 'm2' }] },
-        { id: 'g-2', documentId: null, openedAt: null, members: [{ membershipId: 'm3' }] },
+        {
+          id: 'g-1',
+          documentId: null,
+          openedAt: null,
+          members: [{ membershipId: 'm1' }, { membershipId: 'm2' }],
+        },
+        {
+          id: 'g-2',
+          documentId: null,
+          openedAt: null,
+          members: [{ membershipId: 'm3' }],
+        },
       ])
     );
 
     const result = await openGroups({ classAssignmentId: 'ca-1' });
 
     expect(result.provisioned).toBe(2);
-    expect(createDocumentForAssignmentType).toHaveBeenCalledTimes(2);
-    const update = prisma.documentGroup.updateMany.mock.calls[0][0];
-    expect(update.where).toEqual({ id: 'g-1', documentId: null });
-    expect(update.data.documentId).toBe('doc-1');
-    expect(update.data.openedAt).toBeInstanceOf(Date);
+    expect(createAssignmentGroupArtifact).toHaveBeenCalledTimes(2);
+    expect(createAssignmentGroupArtifact.mock.calls[0][0]).toEqual({
+      groupId: 'g-1',
+    });
   });
 
   test('is idempotent: a group that already has a draft is untouched', async () => {
@@ -186,49 +212,69 @@ describe('openGroups', () => {
     // have been writing in.
     prisma.classAssignment.findUnique.mockResolvedValue(
       classAssignmentWithGroups([
-        { id: 'g-1', documentId: 'existing-doc', openedAt: new Date('2026-08-17'), members: [{ membershipId: 'm1' }] },
-        { id: 'g-2', documentId: null, openedAt: null, members: [{ membershipId: 'm2' }] },
+        {
+          id: 'g-1',
+          documentId: 'existing-doc',
+          openedAt: new Date('2026-08-17'),
+          members: [{ membershipId: 'm1' }],
+        },
+        {
+          id: 'g-2',
+          documentId: null,
+          openedAt: null,
+          members: [{ membershipId: 'm2' }],
+        },
       ])
     );
 
     const result = await openGroups({ classAssignmentId: 'ca-1' });
 
     expect(result.provisioned).toBe(1);
-    expect(createDocumentForAssignmentType).toHaveBeenCalledTimes(1);
-    expect(prisma.documentGroup.updateMany).toHaveBeenCalledTimes(1);
-    expect(prisma.documentGroup.updateMany.mock.calls[0][0].where.id).toBe('g-2');
+    expect(createAssignmentGroupArtifact).toHaveBeenCalledTimes(1);
+    expect(createAssignmentGroupArtifact).toHaveBeenCalledWith({
+      groupId: 'g-2',
+    });
   });
 
   test('does not assign any group member as the document owner', async () => {
     prisma.classAssignment.findUnique.mockResolvedValue(
       classAssignmentWithGroups([
-        { id: 'g-1', documentId: null, openedAt: null, members: [{ membershipId: 'm2' }, { membershipId: 'm9' }] },
+        {
+          id: 'g-1',
+          documentId: null,
+          openedAt: null,
+          members: [{ membershipId: 'm2' }, { membershipId: 'm9' }],
+        },
       ])
     );
 
     await openGroups({ classAssignmentId: 'ca-1' });
 
-    const input = createDocumentForAssignmentType.mock.calls[0][0];
-    expect(input.membershipId).toBeNull();
-    expect(input.assignmentTypeId).toBe('at-1');
-    expect(input.assignmentId).toBe('a-1');
-    expect(input.classAssignmentId).toBe('ca-1');
+    expect(createAssignmentGroupArtifact).toHaveBeenCalledWith({
+      groupId: 'g-1',
+    });
   });
 
-  test('discards the document if another request claimed the group first', async () => {
-    // Concurrency guard: the update is conditional on documentId still being
-    // null, so a loser must not leave an orphaned document behind.
+  test('does not count a group when another request already claimed it', async () => {
     prisma.classAssignment.findUnique.mockResolvedValue(
       classAssignmentWithGroups([
-        { id: 'g-1', documentId: null, openedAt: null, members: [{ membershipId: 'm1' }] },
+        {
+          id: 'g-1',
+          documentId: null,
+          openedAt: null,
+          members: [{ membershipId: 'm1' }],
+        },
       ])
     );
-    prisma.documentGroup.updateMany.mockResolvedValue({ count: 0 });
+    createAssignmentGroupArtifact.mockResolvedValue({
+      documentId: 'winner-doc',
+      created: false,
+    });
 
     const result = await openGroups({ classAssignmentId: 'ca-1' });
 
     expect(result.provisioned).toBe(0);
-    expect(prisma.document.delete).toHaveBeenCalledWith({ where: { id: 'doc-1' } });
+    expect(createAssignmentGroupArtifact).toHaveBeenCalledTimes(1);
   });
 
   test('skips a group with no active members', async () => {
@@ -241,13 +287,20 @@ describe('openGroups', () => {
     const result = await openGroups({ classAssignmentId: 'ca-1' });
 
     expect(result.provisioned).toBe(0);
-    expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
+    expect(createAssignmentGroupArtifact).not.toHaveBeenCalled();
   });
 
   test('refuses when the assignment is not collaborative', async () => {
     prisma.classAssignment.findUnique.mockResolvedValue(
       classAssignmentWithGroups(
-        [{ id: 'g-1', documentId: null, openedAt: null, members: [{ membershipId: 'm1' }] }],
+        [
+          {
+            id: 'g-1',
+            documentId: null,
+            openedAt: null,
+            members: [{ membershipId: 'm1' }],
+          },
+        ],
         { collaborationEnabled: false }
       )
     );
@@ -255,7 +308,7 @@ describe('openGroups', () => {
     await expect(openGroups({ classAssignmentId: 'ca-1' })).rejects.toThrow(
       GroupProvisioningError
     );
-    expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
+    expect(createAssignmentGroupArtifact).not.toHaveBeenCalled();
   });
 
   test('refuses when no groups have been arranged', async () => {
@@ -266,6 +319,54 @@ describe('openGroups', () => {
     await expect(openGroups({ classAssignmentId: 'ca-1' })).rejects.toThrow(
       /Arrange groups/
     );
+  });
+
+  test('refuses to finalize while any enrolled student is unassigned', async () => {
+    prisma.classAssignment.findUnique.mockResolvedValue(
+      classAssignmentWithGroups(
+        [
+          {
+            id: 'g-1',
+            documentId: null,
+            openedAt: null,
+            members: [{ membershipId: 'm1' }],
+          },
+        ],
+        { roster: ['m1', 'm2'] }
+      )
+    );
+
+    await expect(openGroups({ classAssignmentId: 'ca-1' })).rejects.toThrow(
+      /every enrolled student to exactly one group/i
+    );
+    expect(createAssignmentGroupArtifact).not.toHaveBeenCalled();
+  });
+
+  test('refuses to finalize when a student appears in two groups', async () => {
+    prisma.classAssignment.findUnique.mockResolvedValue(
+      classAssignmentWithGroups(
+        [
+          {
+            id: 'g-1',
+            documentId: null,
+            openedAt: null,
+            members: [{ membershipId: 'm1' }],
+          },
+          {
+            id: 'g-2',
+            documentId: null,
+            openedAt: null,
+            members: [{ membershipId: 'm1' }],
+          },
+        ],
+        { roster: ['m1'] }
+      )
+    );
+
+    await expect(openGroups({ classAssignmentId: 'ca-1' })).rejects.toThrow(
+      /every enrolled student to exactly one group/i
+    );
+    expect(createAssignmentGroupArtifact).not.toHaveBeenCalled();
   });
 });
 
@@ -281,14 +382,20 @@ describe('findStudentGroupDocument', () => {
     });
 
     await expect(
-      findStudentGroupDocument({ classAssignmentId: 'ca-1', membershipId: 'm1' })
+      findStudentGroupDocument({
+        classAssignmentId: 'ca-1',
+        membershipId: 'm1',
+      })
     ).resolves.toEqual({ documentId: 'doc-7' });
   });
 
   test('only matches an opened group the student is actively in', async () => {
     prisma.documentGroup.findFirst.mockResolvedValue(null);
 
-    await findStudentGroupDocument({ classAssignmentId: 'ca-1', membershipId: 'm1' });
+    await findStudentGroupDocument({
+      classAssignmentId: 'ca-1',
+      membershipId: 'm1',
+    });
 
     const where = prisma.documentGroup.findFirst.mock.calls[0][0].where;
     expect(where.openedAt).toEqual({ not: null });
@@ -302,7 +409,10 @@ describe('findStudentGroupDocument', () => {
     prisma.documentGroup.findFirst.mockResolvedValue(null);
 
     await expect(
-      findStudentGroupDocument({ classAssignmentId: 'ca-1', membershipId: 'm1' })
+      findStudentGroupDocument({
+        classAssignmentId: 'ca-1',
+        membershipId: 'm1',
+      })
     ).resolves.toBeNull();
   });
 });

@@ -17,10 +17,12 @@ class GroupProvisioningError extends Error {}
 class GroupEditingError extends Error {}
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
-const actualGroups = globalThis.__realModules[
-  '~/domain/collaboration/groups.server'
-];
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
+const actualGroups =
+  globalThis.__realModules['~/domain/collaboration/groups.server'];
 mock.module('~/domain/collaboration/groups.server', () => ({
   ...actualGroups,
   arrangeGroups,
@@ -104,7 +106,9 @@ describe('class assignment groups', () => {
     arrangeGroups.mockReset().mockResolvedValue({ groupCount: 2 });
     openGroups.mockReset().mockResolvedValue({ provisioned: 2 });
     moveStudentToGroup.mockReset().mockResolvedValue({ moved: true });
-    addGroup.mockReset().mockResolvedValue({ groupId: 'g-new', label: 'Group 3' });
+    addGroup
+      .mockReset()
+      .mockResolvedValue({ groupId: 'g-new', label: 'Group 3' });
     removeEmptyGroup.mockReset().mockResolvedValue({ removed: true });
     redirectWithToast
       .mockReset()
@@ -303,7 +307,7 @@ describe('class assignment groups', () => {
 
       expect(openGroups).toHaveBeenCalledWith({ classAssignmentId: 'ca-1' });
       expect(result.options.type).toBe('success');
-      expect(result.options.description).toMatch(/Opened 2 groups/);
+      expect(result.options.description).toMatch(/Finalized 2 groups/);
     });
 
     test('a repeat open reports already-open rather than an error', async () => {
@@ -314,7 +318,7 @@ describe('class assignment groups', () => {
       const result: any = await post({ intent: 'open' });
 
       expect(result.options.type).toBe('success');
-      expect(result.options.description).toMatch(/already open/i);
+      expect(result.options.description).toMatch(/already finalized/i);
     });
 
     test('surfaces a refusal to open ungrouped students', async () => {

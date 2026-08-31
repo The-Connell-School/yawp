@@ -331,13 +331,6 @@ export async function seedCollaborationDemoData(
     );
   }
 
-  await seedStudentShare(prisma, {
-    assignmentTypeId: assignmentType.id,
-    modules,
-    ownerMembershipId: memberId('student'),
-    partnerMembershipId: memberId('student-graded'),
-  });
-
   return {
     classId: gbaClass.id,
     classAssignmentId: classAssignment.id,
@@ -491,18 +484,14 @@ async function seedGroup(
   }
 ): Promise<string> {
   const room = buildCollabRoom(plan.contributions);
-  // Single-valued by database necessity, so it names the first member. Everyone
-  // else reaches the draft through their group membership, which is the whole
-  // reason `documentAuthorWhere` exists.
-  const ownerMembershipId = memberId(plan.members[0]!);
-
   const document = await prisma.document.create({
     data: {
       title: 'International expansion brief',
       html: room.html,
       text: room.text,
       revision: room.updates.length,
-      membershipId: ownerMembershipId,
+      artifactKind: 'ASSIGNMENT_GROUP',
+      membershipId: null,
       assignmentTypeId,
       assignmentId,
       classAssignmentId,
@@ -669,106 +658,4 @@ async function seedGroup(
   });
 
   return group.id;
-}
-
-/**
- * The other road into a room: a student sharing their own draft, with no
- * assignment behind it at all.
- *
- * Worth seeding separately because it is the case with no class assignment, no
- * teacher-arranged group and no ordinal to speak of — the shape most likely to
- * break a query written with only teacher-arranged group work in mind.
- */
-async function seedStudentShare(
-  prisma: SeedClient,
-  {
-    assignmentTypeId,
-    modules,
-    ownerMembershipId,
-    partnerMembershipId,
-  }: {
-    assignmentTypeId: string;
-    modules: { id: string; instructions: { id: string; prompt: string }[] }[];
-    ownerMembershipId: string;
-    partnerMembershipId: string;
-  }
-) {
-  const room = buildCollabRoom([
-    {
-      author: 'owner',
-      paragraphs: [
-        'Shared draft: we are writing the reflection together because we did the fieldwork together.',
-        'The interview notes are in the appendix, and the quotations below are all from the second visit.',
-      ],
-    },
-    {
-      author: 'partner',
-      paragraphs: [
-        'Adding my half: the second interview contradicted the first on the question of who actually decides, and I think that is the finding.',
-      ],
-    },
-  ]);
-
-  const membershipFor = (author: string) =>
-    author === 'owner' ? ownerMembershipId : partnerMembershipId;
-
-  const document = await prisma.document.create({
-    data: {
-      title: 'Fieldwork reflection',
-      html: room.html,
-      text: room.text,
-      revision: room.updates.length,
-      membershipId: ownerMembershipId,
-      assignmentTypeId,
-      assignmentModuleSessions: {
-        create: [ownerMembershipId, partnerMembershipId].flatMap(
-          (membershipId) => moduleSessionRows(modules, membershipId)
-        ),
-      },
-    },
-  });
-
-  await prisma.documentGroup.create({
-    data: {
-      kind: 'student-share',
-      // No class assignment: this draft belongs to no assignment at all. The
-      // unique index on (classAssignmentId, ordinal) tolerates it because
-      // Postgres treats NULLs as distinct.
-      classAssignmentId: null,
-      label: 'Shared draft',
-      ordinal: 0,
-      openedAt: daysAgo(4),
-      seededAt: daysAgo(4),
-      documentId: document.id,
-      members: {
-        create: [
-          { membershipId: ownerMembershipId },
-          { membershipId: partnerMembershipId },
-        ],
-      },
-    },
-  });
-
-  for (const row of room.updates) {
-    await prisma.documentCollabUpdate.create({
-      data: {
-        documentId: document.id,
-        update: Buffer.from(row.update),
-        membershipId: membershipFor(row.author),
-      },
-    });
-  }
-
-  await prisma.documentCollabAuthor.createMany({
-    data: room.authors.map((author) => ({
-      documentId: document.id,
-      clientId: author.clientId,
-      membershipId: membershipFor(author.author),
-      firstSeenAt: daysAgo(4),
-      lastSeenAt: daysAgo(2),
-      updateCount: author.updateCount,
-      charsInserted: author.charsInserted,
-      charsDeleted: author.charsDeleted,
-    })),
-  });
 }

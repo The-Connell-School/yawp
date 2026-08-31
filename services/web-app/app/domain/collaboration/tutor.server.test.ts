@@ -70,7 +70,6 @@ describe('ensureMemberModuleSessions', () => {
       documentId: 'doc-1',
       assignmentTypeId: 'at-1',
       membershipId: 'member-2',
-      ownerMembershipId: 'member-1',
       ...overrides,
     });
 
@@ -134,9 +133,14 @@ describe('ensureMemberModuleSessions', () => {
     await expect(ensure()).resolves.toBe(false);
     expect(prisma.document.update).not.toHaveBeenCalled();
   });
+
+  test('a concurrent provisioner that loses the uniqueness race is idempotent', async () => {
+    prisma.document.update.mockRejectedValue({ code: 'P2002' });
+    await expect(ensure()).resolves.toBe(false);
+  });
 });
 
-describe('ensureMemberModuleSessions, adopting the pre-share transcript', () => {
+describe('ensureMemberModuleSessions on an assignment-owned artifact', () => {
   beforeEach(() => {
     prisma.assignmentModuleSession.findMany
       .mockReset()
@@ -159,7 +163,6 @@ describe('ensureMemberModuleSessions, adopting the pre-share transcript', () => 
       documentId: 'doc-1',
       assignmentTypeId: 'at-1',
       membershipId,
-      ownerMembershipId: 'member-1',
     });
 
   test('an assignment-owned shared artifact never adopts a nominal owner transcript', async () => {
@@ -168,57 +171,8 @@ describe('ensureMemberModuleSessions, adopting the pre-share transcript', () => 
     expect(prisma.assignmentModuleSession.updateMany).not.toHaveBeenCalled();
   });
 
-  test('the owner keeps the tutor history their document already had', async () => {
-    // A student who shares their own draft had been talking to the tutor for
-    // days. Those rows carry a null membershipId — "the document's owner" —
-    // which stops matching the moment the document becomes a shared draft. Left
-    // alone, their whole conversation disappears from their own page.
-    await ensureFor('member-1');
-
-    expect(prisma.assignmentModuleSession.updateMany).toHaveBeenCalledWith({
-      where: { documentId: 'doc-1', membershipId: null, deletedAt: null },
-      data: { membershipId: 'member-1' },
-    });
-  });
-
-  test('a classmate never inherits the owner’s conversation', async () => {
-    // The whole point of a session per member: claiming the orphan rows for
-    // whoever opened the page first would hand the owner's transcript to
-    // someone else.
+  test('a classmate never inherits another member’s conversation', async () => {
     await ensureFor('member-2');
-
-    expect(prisma.assignmentModuleSession.updateMany).not.toHaveBeenCalled();
-  });
-
-  test('adoption runs before the missing-module count', async () => {
-    // Counting first would see zero sessions for the owner and create a second,
-    // empty set beside the one it was about to adopt.
-    const order: string[] = [];
-    prisma.assignmentModuleSession.updateMany.mockImplementation(async () => {
-      order.push('adopt');
-      return { count: 2 };
-    });
-    prisma.assignmentModuleSession.findMany.mockImplementation(async () => {
-      order.push('count');
-      return [
-        { assignmentModuleId: 'module-1' },
-        { assignmentModuleId: 'module-2' },
-      ];
-    });
-
-    await ensureFor('member-1');
-
-    expect(order).toEqual(['adopt', 'count']);
-    expect(prisma.document.update).not.toHaveBeenCalled();
-  });
-
-  test('a document with no owner on record adopts nothing', async () => {
-    await ensureMemberModuleSessions({
-      documentId: 'doc-1',
-      assignmentTypeId: 'at-1',
-      membershipId: 'member-1',
-      ownerMembershipId: null,
-    });
 
     expect(prisma.assignmentModuleSession.updateMany).not.toHaveBeenCalled();
   });

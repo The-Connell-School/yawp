@@ -8,7 +8,7 @@ type RecentDocumentForClassActivity = {
   classAssignmentId: string | null;
   classAssignment: { classId: string } | null;
   assignmentId: string | null;
-  membership: { classesAsStudent: { id: string }[] };
+  membership: { classesAsStudent: { id: string }[] } | null;
 };
 
 export function resolveDocumentClassIds(params: {
@@ -40,7 +40,7 @@ export function resolveDocumentClassIds(params: {
     params.document.classAssignmentId === null &&
     params.document.assignmentId === null
   ) {
-    for (const klass of params.document.membership.classesAsStudent) {
+    for (const klass of params.document.membership?.classesAsStudent ?? []) {
       if (params.teacherClassIdSet.has(klass.id)) {
         classIds.add(klass.id);
       }

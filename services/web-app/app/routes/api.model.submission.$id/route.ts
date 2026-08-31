@@ -85,7 +85,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         if (update.count !== 1) throw new SubmissionTitleConflictError();
 
         const organizationId =
-          submission.document.membership.organizationId ??
+          submission.document.membership?.organizationId ??
           profile.organization.id;
         await recordSubmissionActivity(tx, {
           submissionId: submission.id,

@@ -345,8 +345,10 @@ describe('api.model.assignment-module-session', () => {
 describe('api.model.assignment-module-session on a shared draft', () => {
   const DOC_SHARED: ScopedDocument = {
     id: 'document-shared',
-    membershipId: 'student-profile-1',
-    teacherProfileIds: ['profile-teacher'],
+    artifactKind: 'ASSIGNMENT_GROUP',
+    membershipId: null,
+    teacherProfileIds: [],
+    classAssignmentTeacherProfileIds: ['profile-teacher'],
     activeGroupMemberIds: ['student-profile-1', 'student-profile-2'],
   };
 
@@ -431,9 +433,8 @@ describe('api.model.assignment-module-session on a shared draft', () => {
   });
 
   test('lets a co-author who does not own the document start their own session', async () => {
-    // The document belongs to student 1 by database necessity — one column, one
-    // value — but student 2 writes in it too, so owner scope would leave them
-    // with no tutor at all.
+    // The assignment owns the artifact; active group membership is what gives
+    // student 2 access to their own tutor conversation.
     prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
     prisma.assignmentModuleSession.create.mockResolvedValue({ id: 'cms-mine' });
     prisma.assignmentModuleSession.findUnique.mockResolvedValue({

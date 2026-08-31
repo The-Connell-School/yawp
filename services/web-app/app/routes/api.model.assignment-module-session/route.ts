@@ -81,7 +81,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'No document found.' }, { status: 404 });
   }
 
-  if (!document.membershipId) {
+  if (!document.membershipId && !document.group) {
     return dataResponse(
       { error: 'No student membership found.' },
       { status: 404 }

@@ -44,7 +44,23 @@ export async function action({ request }: ActionFunctionArgs) {
           id: data.submissionId,
           unsubmittedAt: null,
           document: {
-            is: { membershipId: actor.membershipId },
+            is: {
+              OR: [
+                { membershipId: actor.membershipId },
+                {
+                  group: {
+                    is: {
+                      members: {
+                        some: {
+                          membershipId: actor.membershipId,
+                          removedAt: null,
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
           },
         },
         select: {
@@ -56,6 +72,15 @@ export async function action({ request }: ActionFunctionArgs) {
           document: {
             select: {
               membership: { select: { organizationId: true } },
+              classAssignment: {
+                select: {
+                  class: {
+                    select: {
+                      school: { select: { organizationId: true } },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -83,7 +108,23 @@ export async function action({ request }: ActionFunctionArgs) {
           gradedAt: null,
           releasedAt: null,
           document: {
-            is: { membershipId: actor.membershipId },
+            is: {
+              OR: [
+                { membershipId: actor.membershipId },
+                {
+                  group: {
+                    is: {
+                      members: {
+                        some: {
+                          membershipId: actor.membershipId,
+                          removedAt: null,
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
           },
         },
         data: {
@@ -96,16 +137,17 @@ export async function action({ request }: ActionFunctionArgs) {
         throw new UnsubmitConflictError();
       }
 
+      const submissionOrganizationId =
+        submission.document.classAssignment?.class?.school?.organizationId ??
+        submission.document.membership?.organizationId ??
+        actor.organizationId;
       await recordSubmissionActivity(tx, {
         submissionId: submission.id,
-        organizationId:
-          submission.document.membership.organizationId ?? actor.organizationId,
+        organizationId: submissionOrganizationId,
         actorMembershipId: resolveSubmissionActivityActorMembershipId({
           actorMembershipId: actor.membershipId,
           actorOrganizationId: actor.organizationId,
-          submissionOrganizationId:
-            submission.document.membership.organizationId ??
-            actor.organizationId,
+          submissionOrganizationId,
         }),
         actorUserId: actor.userId,
         eventType: submissionActivityEventTypes.unsubmitted,

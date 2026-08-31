@@ -38,6 +38,17 @@ export type TeacherDocumentWorkRow = {
     id: string;
     user: { id?: string; name: string | null; email: string };
   };
+  group?: {
+    id: string;
+    label: string;
+    members: Array<{
+      membershipId: string;
+      membership: {
+        id: string;
+        user: { id?: string; name: string | null; email: string };
+      };
+    }>;
+  } | null;
   assignment: {
     id: string;
     title: string | null;
@@ -90,6 +101,10 @@ export function getTeacherDocumentWorkDetailLink(params: {
 
   if (params.document.latestSubmission?.id) {
     return `/app/submissions/${params.document.latestSubmission.id}?edit=1&exitTo=${encodedExitTo}`;
+  }
+
+  if (params.document.group) {
+    return `/app/group-drafts/${params.document.id}?exitTo=${encodedExitTo}`;
   }
 
   return `/app/documents/${params.document.id}?left=tutor&exitTo=${encodedExitTo}`;

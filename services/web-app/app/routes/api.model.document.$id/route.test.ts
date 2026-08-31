@@ -269,7 +269,10 @@ describe('api.model.document.$id', () => {
     expect(
       prisma.submission.findFirst.mock.calls[0][0].where.document.is.AND
     ).toContainEqual({
-      membership: { is: { userId: { not: 'user-1' } } },
+      OR: [
+        { artifactKind: 'ASSIGNMENT_GROUP' },
+        { membership: { is: { userId: { not: 'user-1' } } } },
+      ],
     });
     expect(prisma.submission.updateMany).not.toHaveBeenCalled();
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
@@ -294,7 +297,14 @@ describe('api.model.document.$id', () => {
       prisma.submission.findFirst.mock.calls[0][0].where.document.is
     ).toEqual({
       deletedAt: null,
-      AND: [{ membership: { is: { userId: { not: 'user-1' } } } }],
+      AND: [
+        {
+          OR: [
+            { artifactKind: 'ASSIGNMENT_GROUP' },
+            { membership: { is: { userId: { not: 'user-1' } } } },
+          ],
+        },
+      ],
     });
     expect(prisma.submission.updateMany).not.toHaveBeenCalled();
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();

@@ -99,6 +99,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: params.submissionId,
       document: {
         is: {
+          artifactKind: 'STUDENT',
           membershipId: profile.id,
           membership: { organizationId: profile.organization.id },
         },
@@ -171,7 +172,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  if (!submission) {
+  if (!submission || !submission.document.membership) {
     return redirectWithToast('/app', {
       description: 'Submission not found.',
       type: 'error',

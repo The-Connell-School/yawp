@@ -201,7 +201,11 @@ export async function seedE2E(): Promise<E2EContext> {
       password: { create: createPassword('johndoe') },
       memberships: {
         create: [
-          { organizationId: org.id, isOrgOwner: false, role: 'STUDENT' as const },
+          {
+            organizationId: org.id,
+            isOrgOwner: false,
+            role: 'STUDENT' as const,
+          },
         ],
       },
     },
@@ -212,7 +216,11 @@ export async function seedE2E(): Promise<E2EContext> {
       password: { create: createPassword('admin-e2e-password') },
       memberships: {
         create: [
-          { organizationId: org.id, isOrgOwner: true, role: 'TEACHER' as const },
+          {
+            organizationId: org.id,
+            isOrgOwner: true,
+            role: 'TEACHER' as const,
+          },
         ],
       },
     },
@@ -420,14 +428,16 @@ export async function seedE2E(): Promise<E2EContext> {
     select: { id: true },
   });
 
-  const { assignment: seededAssignment, classAssignment: seededClassAssignment } =
-    await createDeployedAssignment({
-      prisma,
-      classId: seededClass.id,
-      assignmentTypeId: assignmentType.id,
-      title: 'E2E Class Assignment',
-      prompt: 'E2E prompt for class assignment.',
-    });
+  const {
+    assignment: seededAssignment,
+    classAssignment: seededClassAssignment,
+  } = await createDeployedAssignment({
+    prisma,
+    classId: seededClass.id,
+    assignmentTypeId: assignmentType.id,
+    title: 'E2E Class Assignment',
+    prompt: 'E2E prompt for class assignment.',
+  });
 
   const teacherTraining = await prisma.teacherTraining.create({
     data: {
@@ -728,8 +738,8 @@ export async function seedE2E(): Promise<E2EContext> {
       title: 'E2E Shared Draft',
       text: '',
       html: '<p></p>',
-      // Single-valued on a group draft, so it names the first member.
-      membershipId: membership.id,
+      artifactKind: 'ASSIGNMENT_GROUP',
+      membershipId: null,
       assignmentTypeId: collabAssignmentType.id,
       assignmentId: collabAssignment.id,
       classAssignmentId: collabClassAssignment.id,

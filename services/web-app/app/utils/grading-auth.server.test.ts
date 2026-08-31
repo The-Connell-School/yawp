@@ -32,7 +32,6 @@ describe('grading auth helpers', () => {
         isAdmin: false,
       })
     ).toEqual({
-      membership: { organizationId: 'org-1' },
       OR: [
         {
           classAssignment: {
@@ -50,13 +49,16 @@ describe('grading auth helpers', () => {
         {
           classAssignment: { is: null },
           membership: {
-            classesAsStudent: {
-              some: {
-                school: { organizationId: 'org-1' },
-                teachers: {
-                  some: {
-                    id: 'teacher-membership-1',
-                    isActive: true,
+            is: {
+              organizationId: 'org-1',
+              classesAsStudent: {
+                some: {
+                  school: { organizationId: 'org-1' },
+                  teachers: {
+                    some: {
+                      id: 'teacher-membership-1',
+                      isActive: true,
+                    },
                   },
                 },
               },
@@ -73,15 +75,18 @@ describe('grading auth helpers', () => {
       organizationId: 'org-1',
     }) as any;
 
-    expect(where.membership).toEqual({ organizationId: 'org-1' });
+    expect(where.membership).toBeUndefined();
     expect(where.OR[1]).toEqual(
       expect.objectContaining({
         classAssignment: { is: null },
         membership: {
-          classesAsStudent: {
-            some: expect.objectContaining({
-              school: { organizationId: 'org-1' },
-            }),
+          is: {
+            organizationId: 'org-1',
+            classesAsStudent: {
+              some: expect.objectContaining({
+                school: { organizationId: 'org-1' },
+              }),
+            },
           },
         },
       })

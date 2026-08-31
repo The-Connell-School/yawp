@@ -16,10 +16,13 @@
 
 export type ScopedDocument = {
   id: string;
+  artifactKind?: 'STUDENT' | 'ASSIGNMENT_GROUP';
   /** Membership id of the student who owns the document. */
-  membershipId: string;
+  membershipId: string | null;
   /** Membership ids of teachers who teach a class this student is enrolled in. */
   teacherProfileIds: string[];
+  /** Teachers attached to the document's own ClassAssignment. */
+  classAssignmentTeacherProfileIds?: string[];
   /**
    * Membership ids of students who co-author this document through its
    * collaboration group and have NOT been removed from it. Absent on a
@@ -48,6 +51,9 @@ export function matchesDocumentWhere(
       case 'membershipId':
         if (value !== doc.membershipId) return false;
         break;
+      case 'artifactKind':
+        if (value !== (doc.artifactKind ?? 'STUDENT')) return false;
+        break;
       case 'OR':
         if (
           !Array.isArray(value) ||
@@ -71,6 +77,15 @@ export function matchesDocumentWhere(
         if (!doc.teacherProfileIds.includes(teacherId)) return false;
         break;
       }
+      case 'classAssignment': {
+        const nested = ((value as any)?.is ?? value) as Record<string, unknown>;
+        const teacherId = (nested as any)?.class?.teachers?.some?.id;
+        if (typeof teacherId !== 'string') return false;
+        if (!(doc.classAssignmentTeacherProfileIds ?? []).includes(teacherId)) {
+          return false;
+        }
+        break;
+      }
       case 'group': {
         // Co-authorship through the document's collaboration group. `removedAt`
         // is checked rather than ignored: a predicate that omits it would keep
@@ -78,8 +93,7 @@ export function matchesDocumentWhere(
         // omission has to be observable as a failing test.
         const nested = ((value as any)?.is ?? value) as Record<string, unknown>;
         const some = (nested?.members as any)?.some as
-          | Record<string, unknown>
-          | undefined;
+          Record<string, unknown> | undefined;
         if (!some || typeof some !== 'object') return false;
         if (!('removedAt' in some) || some.removedAt !== null) return false;
         const memberId = some.membershipId;

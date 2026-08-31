@@ -96,8 +96,57 @@ describe('api.domain.unsubmit-submission', () => {
     expect(lookup.where).toEqual({
       id: 'sub-1',
       unsubmittedAt: null,
-      document: { is: { membershipId: 'student-1' } },
+      document: {
+        is: {
+          OR: [
+            { membershipId: 'student-1' },
+            {
+              group: {
+                is: {
+                  members: {
+                    some: { membershipId: 'student-1', removedAt: null },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
     });
+  });
+
+  test('allows an active group member to unsubmit the shared submission', async () => {
+    prisma.submission.findFirst.mockResolvedValue(
+      ownedSubmission({
+        document: {
+          membershipId: null,
+          membership: null,
+          classAssignment: {
+            class: { school: { organizationId: 'org-1' } },
+          },
+        },
+      })
+    );
+
+    const response = (await action({
+      request: makeRequest('sub-1'),
+    } as any)) as ActionResponse;
+
+    expect(response.data.success).toBe(true);
+    expect(
+      prisma.submission.findFirst.mock.calls[0][0].where.document.is.OR[1]
+    ).toEqual({
+      group: {
+        is: {
+          members: {
+            some: { membershipId: 'student-1', removedAt: null },
+          },
+        },
+      },
+    });
+    expect(
+      prisma.submissionActivity.create.mock.calls[0][0].data.organizationId
+    ).toBe('org-1');
   });
 
   test('fails closed when the required unsubmit audit write is unavailable', async () => {
@@ -170,7 +219,22 @@ describe('api.domain.unsubmit-submission', () => {
       'Submission not found, already unsubmitted, or you do not have permission to unsubmit it.'
     );
     expect(prisma.submission.findFirst.mock.calls[0][0].where.document).toEqual(
-      { is: { membershipId: 'student-1' } }
+      {
+        is: {
+          OR: [
+            { membershipId: 'student-1' },
+            {
+              group: {
+                is: {
+                  members: {
+                    some: { membershipId: 'student-1', removedAt: null },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      }
     );
     expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });
@@ -240,7 +304,22 @@ describe('api.domain.unsubmit-submission', () => {
       unsubmittedAt: null,
       gradedAt: null,
       releasedAt: null,
-      document: { is: { membershipId: 'student-1' } },
+      document: {
+        is: {
+          OR: [
+            { membershipId: 'student-1' },
+            {
+              group: {
+                is: {
+                  members: {
+                    some: { membershipId: 'student-1', removedAt: null },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
     });
     expect(call.data).toEqual({
       unsubmittedAt: expect.any(Date),

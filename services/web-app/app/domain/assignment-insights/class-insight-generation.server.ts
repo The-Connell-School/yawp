@@ -89,12 +89,10 @@ async function recordClassInsightFailure(input: {
       },
     });
   } catch (error) {
-    if (
-      !(
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      )
-    ) {
+    if (!(
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    )) {
       throw error;
     }
   }
@@ -108,6 +106,7 @@ async function loadDifferentiationInputs(classAssignmentId: string) {
       membership: {
         select: { user: { select: { name: true, email: true } } },
       },
+      group: { select: { label: true } },
       submissions: {
         where: { gradedAt: { not: null } },
         orderBy: { submittedAt: 'desc' },
@@ -124,6 +123,7 @@ async function loadDifferentiationInputs(classAssignmentId: string) {
       {
         submissionId: submission.id,
         studentName:
+          doc.group?.label?.trim() ||
           doc.membership?.user?.name?.trim() ||
           doc.membership?.user?.email?.trim() ||
           null,
@@ -188,8 +188,8 @@ export async function generateClassAssignmentInsight(input: {
   });
   const hasReadyInsight = Boolean(
     existingInsight?.status === 'ready' &&
-      existingInsight.summaryJson &&
-      existingInsight.generatedAt
+    existingInsight.summaryJson &&
+    existingInsight.generatedAt
   );
   if (hasReadyInsight) {
     const cooldown = getClassInsightRegenerationCooldown(

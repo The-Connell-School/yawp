@@ -5,7 +5,10 @@ import {
   documentOwnerWhere,
   documentReadWhere,
 } from './document-access.server';
-import { matchesDocumentWhere, type ScopedDocument } from './testing/where-eval';
+import {
+  matchesDocumentWhere,
+  type ScopedDocument,
+} from './testing/where-eval';
 
 const OWNER = 'membership-owner';
 const CO_AUTHOR = 'membership-co-author';
@@ -21,13 +24,14 @@ const soloDocument: ScopedDocument = {
 };
 
 /**
- * A document owned by OWNER and co-authored by CO_AUTHOR. MOVED_AWAY was in the
- * group and has been removed; CLASSMATE is in the same class but never joined.
+ * An assignment-owned artifact shared by OWNER and CO_AUTHOR. MOVED_AWAY was in
+ * the group and has been removed; CLASSMATE is in the class but never joined.
  */
 const groupDocument: ScopedDocument = {
   id: 'doc-group',
-  membershipId: OWNER,
-  teacherProfileIds: [TEACHER],
+  membershipId: null,
+  teacherProfileIds: [],
+  classAssignmentTeacherProfileIds: [TEACHER],
   activeGroupMemberIds: [OWNER, CO_AUTHOR],
   removedGroupMemberIds: [MOVED_AWAY],
 };
@@ -56,7 +60,7 @@ describe('documentAuthorWhere', () => {
     ).toBe(true);
   });
 
-  test('the owner may still write to the group document', () => {
+  test('another active member may write to the group document', () => {
     expect(
       matches(documentAuthorWhere({ profileId: OWNER }), groupDocument)
     ).toBe(true);
@@ -93,17 +97,14 @@ describe('documentAuthorWhere', () => {
   });
 });
 
-describe('documentOwnerWhere is unchanged by collaboration', () => {
-  test('a co-author does not gain owner-scoped access', () => {
-    // Owner scope guards the student's own record — tutor conversations and
-    // module progress. Widening it to co-authors would let one student write
-    // dialogue attributed to their partner.
+describe('documentOwnerWhere', () => {
+  test('an assignment-owned artifact has no student owner', () => {
     expect(
       matches(documentOwnerWhere({ profileId: CO_AUTHOR }), groupDocument)
     ).toBe(false);
     expect(
       matches(documentOwnerWhere({ profileId: OWNER }), groupDocument)
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 
@@ -160,7 +161,7 @@ describe('documentAuthorOwnSessionWhere', () => {
   const sharedSession = (member: string) => ({
     membershipId: member,
     document: {
-      membershipId: 'owner-1',
+      membershipId: null,
       groupMemberIds: ['owner-1', 'partner-1'],
     },
   });
@@ -170,7 +171,7 @@ describe('documentAuthorOwnSessionWhere', () => {
     where: any,
     session: {
       membershipId: string | null;
-      document: { membershipId: string; groupMemberIds: string[] };
+      document: { membershipId: string | null; groupMemberIds: string[] };
     }
   ) {
     if (Object.keys(where).length === 0) return true;
@@ -220,7 +221,7 @@ describe('documentAuthorOwnSessionWhere', () => {
   test('a removed group member loses their sessions', () => {
     const removed = {
       membershipId: 'partner-1',
-      document: { membershipId: 'owner-1', groupMemberIds: ['owner-1'] },
+      document: { membershipId: null, groupMemberIds: ['owner-1'] },
     };
 
     expect(matches(forProfile('partner-1'), removed)).toBe(false);

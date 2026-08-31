@@ -289,8 +289,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
         type: 'success',
         description:
           provisioned === 0
-            ? 'Groups were already open.'
-            : `Opened ${provisioned} ${provisioned === 1 ? 'group' : 'groups'}. Students can start writing.`,
+            ? 'Groups were already finalized.'
+            : `Finalized ${provisioned} ${provisioned === 1 ? 'group' : 'groups'}. Students can start writing.`,
       });
     }
   } catch (error) {
@@ -350,7 +350,7 @@ export default function GroupsRoute() {
             className="mb-6 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
             role="status"
           >
-            Groups are open and each one has its own draft. Rearranging is
+            Groups are finalized and each one has its own draft. Rearranging is
             turned off now — moving a student would move them between documents
             their group has already written in.
           </p>
@@ -399,12 +399,16 @@ export default function GroupsRoute() {
             {data.opened ? null : (
               <Form method="post" className="mt-8 border-t pt-6">
                 <input type="hidden" name="intent" value="open" />
-                <Button type="submit" disabled={busy}>
-                  Open groups
+                <Button
+                  type="submit"
+                  disabled={busy || data.unassigned.length > 0}
+                >
+                  Finalize groups
                 </Button>
                 <p className="mt-2 text-xs text-gray-600">
-                  This creates one shared draft per group and lets students
-                  start writing. Group arrangements are locked afterwards.
+                  {data.unassigned.length > 0
+                    ? 'Assign every student to a group before finalizing.'
+                    : 'This creates one shared draft per group and lets students start writing. Group arrangements are locked afterwards.'}
                 </p>
               </Form>
             )}

@@ -1,5 +1,6 @@
 import { invariant } from '@epic-web/invariant';
 import { ArrowLeft } from 'lucide-react';
+import { useState } from 'react';
 import {
   data as dataResponse,
   useFetcher,
@@ -67,9 +68,6 @@ import {
  *
  * 1. NO GRADE PANEL on this page. Grades are shown to the group on the drafts
  *    list and to the teacher on the group-drafts page, not here.
- * 2. NO MOBILE LAYOUT. Three columns and no tab switcher, so the tutor is
- *    hidden below `md` and the prompt column still crowds the draft.
- *
  * The two-browser proof is no longer only by hand: `collab-carets.spec.ts`
  * drives two logged-in students into one draft and asserts that the text
  * arrives, that the writer's named caret arrives with it in the colour their
@@ -130,10 +128,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       title: true,
       assignmentTypeId: true,
-      // The nominal owner: `Document.membershipId` is single-valued, so on a
-      // group draft it names the first member. Needed so a student who shared a
-      // draft they had already been tutored on keeps that conversation.
-      membershipId: true,
       submissions: {
         where: { unsubmittedAt: null },
         orderBy: { submittedAt: 'desc' },
@@ -197,7 +191,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       documentId: doc.id,
       assignmentTypeId: doc.assignmentTypeId,
       membershipId: profile.id,
-      ownerMembershipId: doc.membershipId,
     });
   }
 
@@ -313,9 +306,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
  * importing anything from that module would pull its loader — and everything
  * server-only it depends on — into this page's client bundle.
  *
- * A shared draft with no assignment (a student sharing their own writing) has no
- * flag to read, and gets the tutor, which is what the same student sees when
- * writing alone.
+ * Assignment-owned artifacts always have an assignment. The nullable input is
+ * retained only for defensive rendering while a lifecycle operation settles.
  */
 function isTutorEnabled(assignment: { tutorEnabled?: boolean } | null) {
   return assignment?.tutorEnabled !== false;
@@ -343,6 +335,9 @@ export default function CollabDocumentRoute() {
       : '';
   const [searchParams] = useSearchParams();
   const exitTarget = searchParams.get('exitTo') || '/app';
+  const [mobilePanel, setMobilePanel] = useState<'draft' | 'tutor' | 'details'>(
+    'draft'
+  );
 
   const groupMemberCount = doc.group?.members.length ?? 0;
 
@@ -381,9 +376,8 @@ export default function CollabDocumentRoute() {
 
         <div className="flex min-w-0 flex-1 flex-col md:flex-row md:items-baseline md:gap-3">
           <span className="truncate font-bold">
-            {/* Documents are created with an empty-string title, which `??` does
-                not catch — the header rendered blank for every student-shared
-                draft. */}
+            {/* `??` does not catch a historical empty-string title, so prefer the
+                assignment title and then the document fallback explicitly. */}
             {doc.assignment?.title?.trim() ||
               doc.title?.trim() ||
               'Untitled document'}
@@ -395,9 +389,9 @@ export default function CollabDocumentRoute() {
           </span>
         </div>
 
-        {/* Any member may submit for the group, which is what the group agreed
-            when they asked for it. Pressing twice is harmless: the route returns
-            the existing submission rather than creating a second. */}
+        {/* Any active member may submit the teacher-assigned group artifact.
+            Pressing twice is harmless: the route returns the existing submission
+            rather than creating a second. */}
         {canWrite ? (
           <submitFetcher.Form
             method="post"
@@ -453,6 +447,47 @@ export default function CollabDocumentRoute() {
         </p>
       ) : null}
 
+      <div
+        className="grid grid-cols-3 border-b bg-muted/40 p-1 md:hidden"
+        role="tablist"
+        aria-label="Shared document panels"
+      >
+        {tutor ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={mobilePanel === 'tutor' ? 'secondary' : 'ghost'}
+            role="tab"
+            aria-selected={mobilePanel === 'tutor'}
+            onClick={() => setMobilePanel('tutor')}
+          >
+            Tutor
+          </Button>
+        ) : (
+          <span />
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant={mobilePanel === 'draft' ? 'secondary' : 'ghost'}
+          role="tab"
+          aria-selected={mobilePanel === 'draft'}
+          onClick={() => setMobilePanel('draft')}
+        >
+          Draft
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={mobilePanel === 'details' ? 'secondary' : 'ghost'}
+          role="tab"
+          aria-selected={mobilePanel === 'details'}
+          onClick={() => setMobilePanel('details')}
+        >
+          Prompt
+        </Button>
+      </div>
+
       <div className="mx-auto flex min-h-0 w-full max-w-screen-2xl flex-1 overflow-hidden">
         {/* Same order as the solo editor — tutor, then the writing, then what
             there is to read — so a student who moves between the two pages finds
@@ -461,11 +496,12 @@ export default function CollabDocumentRoute() {
             The width lives here rather than on the Tutor: its own `md:w-3/5` is
             sized for the solo editor's three columns, and at 60% of this page it
             left the draft as the smaller half. Overriding it from the outside
-            keeps the solo layout untouched. Hidden below `md` because this page
-            has no mobile tab switcher yet; a third column there would squeeze
-            the draft to nothing. */}
+            keeps the solo layout untouched. On mobile, the three panels become
+            tabs so the editor keeps the whole viewport width. */}
         {tutor ? (
-          <div className="hidden shrink-0 md:flex md:w-[360px] lg:w-[420px] [&>div]:!w-full">
+          <div
+            className={`${mobilePanel === 'tutor' ? 'flex' : 'hidden'} min-h-0 w-full shrink-0 md:flex md:w-[360px] lg:w-[420px] [&>div]:!w-full`}
+          >
             <Tutor
               docId={doc.id}
               cms={tutor as any}
@@ -484,6 +520,7 @@ export default function CollabDocumentRoute() {
         <CollabEditor
           docId={doc.id}
           canWrite={canWrite}
+          className={mobilePanel === 'draft' ? 'flex' : 'hidden md:flex'}
           // What this browser publishes about its own cursor. Grey for a
           // teacher, who is not in the scale and never publishes one anyway.
           user={{
@@ -493,7 +530,9 @@ export default function CollabDocumentRoute() {
         />
         {/* Prompt and teacher comments share a column: both are things to read
             while writing, and neither should take width from the draft. */}
-        <div className="flex w-full shrink-0 flex-col overflow-y-auto border-l md:w-[340px] lg:w-[380px]">
+        <div
+          className={`${mobilePanel === 'details' ? 'flex' : 'hidden'} min-h-0 w-full shrink-0 flex-col overflow-y-auto border-l md:flex md:w-[340px] lg:w-[380px]`}
+        >
           <CollabPromptPanel assignment={doc.assignment} />
           {comments.length > 0 || canWrite ? (
             <div className="p-3">

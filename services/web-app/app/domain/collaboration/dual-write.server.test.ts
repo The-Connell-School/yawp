@@ -28,7 +28,9 @@ describe('applyCollabSnapshot', () => {
   beforeEach(() => {
     prisma.document.findFirst.mockReset().mockResolvedValue(collabDocument());
     prisma.document.update.mockReset().mockResolvedValue({ revision: 5 });
-    prisma.documentWriteJournal.create.mockReset().mockResolvedValue({ id: 'j-1' });
+    prisma.documentWriteJournal.create
+      .mockReset()
+      .mockResolvedValue({ id: 'j-1' });
     prisma.documentWriteJournal.update.mockReset().mockResolvedValue({});
     prisma.documentRevision.findFirst.mockReset().mockResolvedValue(null);
     prisma.documentRevision.create.mockReset().mockResolvedValue({});
@@ -56,11 +58,9 @@ describe('applyCollabSnapshot', () => {
 
     const where = prisma.document.findFirst.mock.calls[0][0].where;
     expect(where.id).toBe('doc-1');
+    expect(where.artifactKind).toBe('ASSIGNMENT_GROUP');
     expect(where.group).toEqual({ is: { openedAt: { not: null } } });
-    expect(where.OR.map((branch: any) => branch.group.is.kind)).toEqual([
-      'assignment',
-      'student-share',
-    ]);
+    expect(where.assignment).toEqual({ is: { collaborationEnabled: true } });
   });
 
   test('skips a document that is not a collaborative draft', async () => {
@@ -222,6 +222,8 @@ describe('applyCollabSnapshot', () => {
     // state, which is why the solo save route is not reused.
     await applyCollabSnapshot({ documentId: 'doc-1', snapshot: SNAPSHOT });
 
-    expect(prisma.document.update.mock.calls[0][0].where).toEqual({ id: 'doc-1' });
+    expect(prisma.document.update.mock.calls[0][0].where).toEqual({
+      id: 'doc-1',
+    });
   });
 });
