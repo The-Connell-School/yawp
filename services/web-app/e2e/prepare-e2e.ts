@@ -203,6 +203,11 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
     E2E_STRIPE_API_BASE: E2E_STRIPE_BASE_URL,
     E2E_UA_NOW: '2026-08-30T12:00:00.000Z',
     ANTHROPIC_API_KEY: '',
+    // Marketing Studio is off unless an operator names a demo render target.
+    // The e2e app is exactly that: seeded fixtures, no real student work.
+    MARKETING_STUDIO_ENABLED: 'on',
+    MARKETING_RENDER_TARGET_URL: 'http://127.0.0.1:5173',
+    MARKETING_RENDER_TARGET_IS_DEMO: 'confirmed',
   };
 
   const lines = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);

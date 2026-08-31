@@ -8,6 +8,9 @@ WORKDIR /app
 COPY package.json bun.lockb ./
 COPY services/web-app ./services/web-app
 COPY packages/prisma ./packages/prisma
+# The marketing studio routes import this package by relative path, so the
+# server build cannot resolve without it in the image.
+COPY packages/marketing-media ./packages/marketing-media
 RUN bun install --ignore-scripts
 RUN bun prisma generate
 
