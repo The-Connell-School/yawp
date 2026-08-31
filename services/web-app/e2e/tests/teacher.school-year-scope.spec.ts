@@ -23,9 +23,7 @@ test.describe('School year scope', () => {
     const suffix = Date.now().toString().slice(-8);
     const email = `ua-invited-teacher-${suffix}@yawp.test`;
     const password = 'ua-invited-teacher-password';
-    const currentYear = currentSchoolYear(
-      new Date('2026-08-31T12:00:00.000Z')
-    );
+    const currentYear = currentSchoolYear(new Date('2026-08-31T12:00:00.000Z'));
     const priorYear = '2025-2026';
 
     expect(currentYear).toBe('2026-2027');
@@ -242,7 +240,8 @@ test.describe('School year scope', () => {
       await Promise.all([
         page.waitForResponse(
           (response) =>
-            response.url().includes('/api/school-year') && response.status() < 400
+            response.url().includes('/api/school-year') &&
+            response.status() < 400
         ),
         page.getByRole('option', { name: 'All years' }).click(),
       ]);
@@ -262,7 +261,8 @@ test.describe('School year scope', () => {
       await Promise.all([
         page.waitForResponse(
           (response) =>
-            response.url().includes('/api/school-year') && response.status() < 400
+            response.url().includes('/api/school-year') &&
+            response.status() < 400
         ),
         page.getByRole('option', { name: currentYearLabel }).click(),
       ]);

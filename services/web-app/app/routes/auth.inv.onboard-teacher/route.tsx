@@ -26,7 +26,10 @@ import { validationError, parseFormData, useForm } from '@rvf/react-router';
 import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { FormSelect } from '~/components/rvf-forms/form-select.tsx';
 import { setMembershipId } from '~/cookies/membership-id.server';
+import { setSchoolYearScope } from '~/cookies/school-year.server';
+import { combineHeaders } from '~/utils/misc';
 import { normalizeEmail } from '~/utils/normalize-email';
+import { currentSchoolYear } from '~/utils/school-year';
 
 export const Schema = z
   .object({ name: NameSchema, schoolId: z.string() })
@@ -111,15 +114,19 @@ export async function action({ request }: ActionFunctionArgs) {
     '/app',
     { title: 'Welcome', description: 'Thanks for signing up!' },
     {
-      headers: {
-        'set-cookie': [
-          await authSessionStorage.commitSession(authSession, {
+      headers: combineHeaders(
+        {
+          'set-cookie': await authSessionStorage.commitSession(authSession, {
             expires: session.expirationDate,
           }),
-          await invitationCookieStorage.destroySession(invitationCookie),
-          await setMembershipId(membership.id),
-        ].join(';'),
-      },
+        },
+        {
+          'set-cookie':
+            await invitationCookieStorage.destroySession(invitationCookie),
+        },
+        { 'set-cookie': await setMembershipId(membership.id) },
+        { 'set-cookie': await setSchoolYearScope(currentSchoolYear()) }
+      ),
     }
   );
 }
