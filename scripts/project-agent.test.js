@@ -1,0 +1,66 @@
+import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import {
+  capabilities,
+  parseEnvFile,
+  selectCompatibleNode,
+} from "./project-agent.mjs";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+describe("Yawp project agent CLI", () => {
+  test("selects the first Node runtime meeting the declared minimum", () => {
+    const selected = selectCompatibleNode(["old", "current", "new"], (candidate) => ({
+      old: "v16.2.0",
+      current: "v20.19.1",
+      new: "v22.22.0",
+    })[candidate]);
+    expect(selected).toEqual({ executable: "current", version: "20.19.1" });
+  });
+
+  test("parses the generated worktree configuration without evaluating shell", () => {
+    expect(parseEnvFile("PG_PORT=47001\nDATABASE_URL=postgresql://localhost/test\n# ignored\n")).toEqual({
+      PG_PORT: "47001",
+      DATABASE_URL: "postgresql://localhost/test",
+    });
+  });
+
+  test("advertises stable commands, fixtures, proof profiles, and next actions", () => {
+    const contract = capabilities();
+    expect(contract.schemaVersion).toBe("project.capabilities/v1");
+    expect(contract.commands.doctor).toBe("./bin/project doctor --json");
+    expect(contract.fixtures).toContain("local-dev");
+    expect(contract.proofProfiles).toContain("qa-smoke");
+    expect(contract.nextCommands.length).toBeGreaterThan(2);
+  });
+
+  test("extensionless bin entrypoint returns machine-readable capabilities", () => {
+    const result = spawnSync(path.join(root, "bin", "project"), ["capabilities", "--json"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout).schemaVersion).toBe("project.capabilities/v1");
+  });
+
+  test("command families expose help and structured recovery", () => {
+    const help = spawnSync(path.join(root, "bin", "project"), ["test", "--help"], { cwd: root, encoding: "utf8" });
+    expect(help.status).toBe(0);
+    expect(help.stdout).toContain("--profile");
+    const unknown = spawnSync(path.join(root, "bin", "project"), ["invent", "--json"], { cwd: root, encoding: "utf8" });
+    expect(unknown.status).not.toBe(0);
+    const error = JSON.parse(unknown.stderr);
+    expect(error.code).toBe("unknown_command");
+    expect(error.suggestedCommands).toContain("./bin/project doctor --json");
+  });
+
+  test("bootstrap uses an immutable lockfile install", () => {
+    const setup = fs.readFileSync(path.join(root, "scripts", "worktree-local-setup.sh"), "utf8");
+    expect(setup).toContain("bun install --frozen-lockfile");
+    expect(setup).not.toMatch(/^\s*bun install\s*$/m);
+  });
+});

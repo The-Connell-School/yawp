@@ -31,20 +31,26 @@ ensure_config() {
   mkdir -p "$CONFIG_DIR"
 
   if [[ -f "$CONFIG_FILE" ]]; then
-  # shellcheck disable=SC1090
-  source "$CONFIG_FILE"
-  LTI_MOCK_PORT="${LTI_MOCK_PORT:-$((DEV_PORT + 4297))}"
-  return
+    # shellcheck disable=SC1090
+    source "$CONFIG_FILE"
+  else
+    local slot
+    slot="$(hash_slot "$SLUG" 70)"
+    PG_PORT=$((54320 + slot))
+    DEV_PORT=$((5176 + slot))
+    LTI_MOCK_PORT=$((9473 + slot))
+    CONTAINER_NAME="yawp-${SLUG}-postgres"
+    VOLUME_NAME="yawp-${SLUG}-postgres-data"
+    DB_NAME="yawp_${SLUG}"
+    PG_USER=postgres
+    PG_PASSWORD=password
   fi
 
-  local slot
-  slot="$(hash_slot "$SLUG" 70)"
-  PG_PORT=$((54320 + slot))
-  DEV_PORT=$((5176 + slot))
-  LTI_MOCK_PORT=$((9473 + slot))
-  CONTAINER_NAME="yawp-${SLUG}-postgres"
-  VOLUME_NAME="yawp-${SLUG}-postgres-data"
-  DB_NAME="yawp_${SLUG}"
+  PG_PORT="${RECORD_PORT_DATABASE:-$PG_PORT}"
+  DEV_PORT="${RECORD_PORT_APP:-$DEV_PORT}"
+  LTI_MOCK_PORT="${RECORD_PORT_LTI_MOCK:-${LTI_MOCK_PORT:-$((DEV_PORT + 4297))}}"
+  PG_USER="${PG_USER:-postgres}"
+  PG_PASSWORD="${PG_PASSWORD:-password}"
 
   cat >"$CONFIG_FILE" <<EOF
 SLUG=$SLUG
@@ -171,7 +177,7 @@ database_seeded() {
 migrate_and_seed() {
   (
     cd "$ROOT"
-    bun install
+    bun install --frozen-lockfile
     bun prisma:generate
     bun run --cwd packages/prisma prisma migrate deploy
     bun run --cwd packages/prisma backfill-class-art-key
