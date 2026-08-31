@@ -150,13 +150,33 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page).toHaveURL(`${UA_APP_ORIGIN}/`);
       await expect(
         page.getByRole('heading', { name: 'Welcome to Yawp' })
-      ).toBeVisible();
-      await expect(
-        page.getByAltText('The University of Alabama')
-      ).toBeVisible();
-      await expect(page.getByAltText('Yawp')).toBeVisible();
+      ).toHaveCount(0);
 
-      await page.getByRole('link', { name: 'Create an account' }).click();
+      const uaLogo = page.getByAltText('The University of Alabama');
+      const yawpLogo = page.getByAltText('Yawp');
+      const createAccount = page.getByRole('link', {
+        name: 'Create an Account',
+      });
+
+      await expect(uaLogo).toBeVisible();
+      await expect(yawpLogo).toBeVisible();
+      await expect(createAccount).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Log In' })).toBeVisible();
+
+      const [uaBox, yawpBox, createAccountBox] = await Promise.all([
+        uaLogo.boundingBox(),
+        yawpLogo.boundingBox(),
+        createAccount.boundingBox(),
+      ]);
+      expect(uaBox).not.toBeNull();
+      expect(yawpBox).not.toBeNull();
+      expect(createAccountBox).not.toBeNull();
+      expect(uaBox!.width).toBeGreaterThan(240);
+      expect(yawpBox!.width).toBeGreaterThan(160);
+      expect(uaBox!.y).toBeLessThan(yawpBox!.y);
+      expect(yawpBox!.y).toBeLessThan(createAccountBox!.y);
+
+      await createAccount.click();
       await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/inv/signup`);
       await expect(page.getByLabel('Email')).toBeVisible();
       await expect(page.getByLabel('Code')).toHaveCount(0);
