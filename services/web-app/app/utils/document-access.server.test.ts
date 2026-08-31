@@ -134,6 +134,22 @@ describe('documentReadWhere', () => {
       matches(documentReadWhere({ profileId: CLASSMATE }), groupDocument)
     ).toBe(false);
   });
+
+  test('teacher management of a shared artifact derives from its class assignment', () => {
+    const where = documentReadWhere({ profileId: TEACHER });
+
+    expect(where).toEqual(
+      expect.objectContaining({
+        OR: expect.arrayContaining([
+          {
+            classAssignment: {
+              is: { class: { teachers: { some: { id: TEACHER } } } },
+            },
+          },
+        ]),
+      })
+    );
+  });
 });
 
 describe('documentAuthorOwnSessionWhere', () => {

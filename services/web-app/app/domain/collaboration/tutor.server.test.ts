@@ -162,6 +162,12 @@ describe('ensureMemberModuleSessions, adopting the pre-share transcript', () => 
       ownerMembershipId: 'member-1',
     });
 
+  test('an assignment-owned shared artifact never adopts a nominal owner transcript', async () => {
+    await ensureFor('member-1');
+
+    expect(prisma.assignmentModuleSession.updateMany).not.toHaveBeenCalled();
+  });
+
   test('the owner keeps the tutor history their document already had', async () => {
     // A student who shares their own draft had been talking to the tutor for
     // days. Those rows carry a null membershipId — "the document's owner" —

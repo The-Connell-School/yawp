@@ -189,6 +189,16 @@ describe('loadStudentClassDetail', () => {
           classAssignment: { classId: 'class-1' },
           membershipId: 'student-1',
         },
+        {
+          classAssignment: { classId: 'class-1' },
+          group: {
+            is: {
+              members: {
+                some: { membershipId: 'student-1', removedAt: null },
+              },
+            },
+          },
+        },
         { classAssignmentId: null, membershipId: 'student-1' },
       ],
     });

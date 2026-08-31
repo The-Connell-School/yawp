@@ -199,7 +199,7 @@ describe('openGroups', () => {
     expect(prisma.documentGroup.updateMany.mock.calls[0][0].where.id).toBe('g-2');
   });
 
-  test('picks the lowest membership id as the nominal document owner', async () => {
+  test('does not assign any group member as the document owner', async () => {
     prisma.classAssignment.findUnique.mockResolvedValue(
       classAssignmentWithGroups([
         { id: 'g-1', documentId: null, openedAt: null, members: [{ membershipId: 'm2' }, { membershipId: 'm9' }] },
@@ -208,14 +208,11 @@ describe('openGroups', () => {
 
     await openGroups({ classAssignmentId: 'ca-1' });
 
-    expect(createDocumentForAssignmentType).toHaveBeenCalledWith(
-      expect.objectContaining({
-        membershipId: 'm2',
-        assignmentTypeId: 'at-1',
-        assignmentId: 'a-1',
-        classAssignmentId: 'ca-1',
-      })
-    );
+    const input = createDocumentForAssignmentType.mock.calls[0][0];
+    expect(input.membershipId).toBeNull();
+    expect(input.assignmentTypeId).toBe('at-1');
+    expect(input.assignmentId).toBe('a-1');
+    expect(input.classAssignmentId).toBe('ca-1');
   });
 
   test('discards the document if another request claimed the group first', async () => {
