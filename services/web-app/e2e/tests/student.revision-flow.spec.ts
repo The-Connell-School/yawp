@@ -52,12 +52,9 @@ test.describe.serial('Student revises a released essay', () => {
     await expect(draftPane.locator('.grade-comment-mark')).toHaveCount(0);
     await expect(draftPane.locator('.grammar-issue-mark')).toHaveCount(0);
 
-    // The legend explains the colors but is not itself a mark: chips carrying
-    // the mark classes would make "the first mark in the essay" select a chip.
-    const legend = page.getByTestId('revision-mark-legend');
-    await expect(legend).toBeVisible();
-    await expect(legend.locator('.grade-comment-mark')).toHaveCount(0);
-    await expect(legend.locator('.grammar-issue-mark')).toHaveCount(0);
+    // The essay marks explain themselves through interaction; the old color
+    // guide above the graded text is intentionally absent.
+    await expect(page.getByTestId('revision-mark-legend')).toHaveCount(0);
 
     // Grade tab is the default view of the feedback panel. Scoped to the panel
     // because the pane header also carries the grade, so a student who has
@@ -320,10 +317,9 @@ test.describe.serial('Student revises a released essay', () => {
     }
   });
 
-  // The two panes are one document seen twice, so a reader compares them line
-  // by line. Both columns carry the same two rows of chrome to make that work,
-  // and a change to either one's height would quietly break it.
-  test('both panes start their text on the same line', async ({
+  // With the color guide removed, the graded essay should use that space
+  // instead of leaving an empty toolbar-height row above the text.
+  test('the graded essay begins directly below its header with no guide row', async ({
     page,
     signIn,
     e2eContext,
@@ -333,19 +329,18 @@ test.describe.serial('Student revises a released essay', () => {
     await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
       timeout: 15000,
     });
-    await page.locator(EDITOR_SELECTOR).first().waitFor({ timeout: 15000 });
+    const gradedPane = page.getByTestId('revision-graded-pane');
+    await expect(gradedPane.getByTestId('revision-mark-legend')).toHaveCount(0);
 
-    const topOf = (locator: ReturnType<typeof page.locator>) =>
-      locator.first().evaluate((el) => el.getBoundingClientRect().top);
+    const headerBottom = await gradedPane
+      .getByText('Graded version', { exact: true })
+      .evaluate((el) => el.parentElement!.getBoundingClientRect().bottom);
+    const textTop = await gradedPane
+      .locator('.submission-essay p')
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().top);
 
-    const gradedTop = await topOf(
-      page.getByTestId('revision-graded-pane').locator('.submission-essay p')
-    );
-    const draftTop = await topOf(
-      page.getByTestId('revision-draft-pane').locator(`${EDITOR_SELECTOR} p`)
-    );
-
-    expect(Math.abs(draftTop - gradedTop)).toBeLessThanOrEqual(2);
+    expect(textTop - headerBottom).toBeLessThanOrEqual(32);
   });
 
   // The prompt describes the assignment both drafts answer, so it spans the

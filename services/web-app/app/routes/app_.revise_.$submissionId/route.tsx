@@ -241,49 +241,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 /** Hover tints the mark through the overlay's own CSS; nothing else. */
 const noopGrammarHover = () => {};
 
-/*
- * The two panes read as one document seen twice, so their text has to start on
- * the same line. Both columns therefore carry the same two rows of chrome, and
- * these classes are what keep the heights equal without anyone measuring:
- *
- *   header — px-4 py-2.5 around text-sm, plus a border: 41px
- *   bar    — p-1 around h-8 content, plus a border: 41px, which is exactly what
- *            the editor's own toolbar (p-1 + h-8 buttons) comes to
- *
- * The editor toolbar is the right pane's second row, so the left pane's second
- * row has to match it. If the toolbar's padding or button height ever changes,
- * change these with it.
- */
 const PANE_HEADER_CLASS =
   'flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5';
-const PANE_BAR_CLASS = 'flex shrink-0 items-center gap-3 border-b px-4 p-1';
-
-/** What the marks in the graded essay mean — otherwise the colors are a code. */
-function MarkLegend({
-  teacherCount,
-  assistantCount,
-}: {
-  teacherCount: number;
-  assistantCount: number;
-}) {
-  return (
-    <div
-      className="flex h-8 items-center gap-4"
-      data-testid="revision-mark-legend"
-    >
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span className="mark-swatch-teacher inline-block h-3 w-4 rounded-sm" />
-        Teacher
-        <span className="font-medium text-foreground">{teacherCount}</span>
-      </span>
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span className="mark-swatch-assistant inline-block h-3 w-4 rounded-sm" />
-        Assistant
-        <span className="font-medium text-foreground">{assistantCount}</span>
-      </span>
-    </div>
-  );
-}
 
 /**
  * The assignment prompt, spanning both panes. Collapsible and collapsed-by-
@@ -514,9 +473,6 @@ export default function ReviseRoute() {
               onSelectComment={setActiveCommentId}
               focusRequest={focusRequest}
             />
-            {/* The essay column carries the same two rows as the draft pane —
-                and the feedback panel carries its own of equal height — so all
-                three columns begin their content on one line. */}
             <div className="flex min-h-[60vh] w-full min-w-0 grow flex-col overflow-hidden md:min-h-0 xl:w-auto">
               <div className={PANE_HEADER_CLASS}>
                 <span className="text-sm font-semibold">Graded version</span>
@@ -525,12 +481,6 @@ export default function ReviseRoute() {
                     {gradeSummaryLabel}
                   </span>
                 ) : null}
-              </div>
-              <div className={PANE_BAR_CLASS}>
-                <MarkLegend
-                  teacherCount={submission.comments.length}
-                  assistantCount={grammarIssues.length}
-                />
               </div>
               <EssayPanel
                 ref={setGradedEssayElement}

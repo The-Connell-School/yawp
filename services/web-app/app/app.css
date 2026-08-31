@@ -311,21 +311,6 @@ code {
   background-color: #d8b4fe80;
 }
 
-/*
- * Legend swatches for the revision screen. Deliberately NOT the mark classes
- * themselves: those are how code finds real marks inside an essay, and a
- * decorative chip answering the same selector makes "click the first mark"
- * click a legend instead. Keep these colors in step with the two rules above.
- */
-.mark-swatch-teacher {
-  background-color: #fff30b38;
-  border-bottom: 2px dotted #f9e055fc;
-}
-.mark-swatch-assistant {
-  background-color: #d8b4fe50;
-  border-bottom: 2px dotted #a855f7;
-}
-
 @keyframes highlight-mark-active {
   0% {
     background-color: #f9e055fc;

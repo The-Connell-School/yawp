@@ -8,12 +8,11 @@ describe('revision mark styles', () => {
     expect(css).not.toMatch(/border-bottom\s*:[^;]*\bwavy\b/);
   });
 
-  test('keeps assistant marks and their legend swatch visibly keyed together', () => {
+  test('keeps assistant marks visibly keyed with a purple dotted underline', () => {
     expect(css).toMatch(
       /\.grammar-issue-mark\s*\{[^}]*border-bottom:\s*2px dotted #a855f7;/s
     );
-    expect(css).toMatch(
-      /\.mark-swatch-assistant\s*\{[^}]*border-bottom:\s*2px dotted #a855f7;/s
-    );
+    expect(css).not.toContain('.mark-swatch-teacher');
+    expect(css).not.toContain('.mark-swatch-assistant');
   });
 });
