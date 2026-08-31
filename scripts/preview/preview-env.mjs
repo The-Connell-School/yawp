@@ -207,6 +207,7 @@ export function buildPreviewEnv({
     throw new Error('PREVIEW_DB_PASSWORD must be a 32-character URL-safe secret');
   }
   const hostname = `${slug}.${safeDomain}`;
+  const uaHostname = `ua-${slug}.${safeDomain}`;
   const blackboardHostname = safePrNumber
     ? `blackboard-pr-${safePrNumber}.${safeDomain}`
     : `blackboard-${slug}.${safeDomain}`;
@@ -233,8 +234,12 @@ export function buildPreviewEnv({
     databasePassword: resolvedDatabasePassword,
     templateDatabaseName,
     hostname,
+    uaHostname,
     blackboardHostname,
     url,
+    uaUrl: directPort
+      ? `http://127.0.0.1:${directPort}`
+      : `${scheme}://${uaHostname}`,
     blackboardUrl: directPort
       ? `http://127.0.0.1:${directPort}`
       : `${scheme}://${blackboardHostname}`,

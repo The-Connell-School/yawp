@@ -350,7 +350,9 @@ describe('worktree local setup contract', () => {
       'resource "aws_cloudfront_distribution" "web_edge"'
     );
     expect(infra).toContain('aliases');
-    expect(infra).toContain('[var.production_domain_name]');
+    expect(infra).toContain(
+      'distinct([var.production_domain_name, var.ua_partner_hostname])'
+    );
     expect(infra).toContain('domain_name = local.apprunner_origin_domain');
     expect(infra).toContain('origin_protocol_policy = "https-only"');
     expect(infra).toContain('"Managed-AllViewer"');
@@ -629,7 +631,7 @@ describe('PR preview deployment contract', () => {
 
     expect(routerConfig).toContain('v8_middleware: true');
     expect(rootRoute).toContain(
-      'export const middleware = [previewAccessMiddleware]'
+      'export const middleware = [previewAccessMiddleware, uaPartnerMiddleware]'
     );
     expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
     expect(gate).toContain("'/api/healthcheck'");
@@ -637,6 +639,11 @@ describe('PR preview deployment contract', () => {
     expect(compose).toContain('requirePreviewAccessSeats(accessSeats)');
     expect(compose).toContain('requirePreviewAccessSecret(accessSecret)');
     expect(compose).toContain('requirePreviewSessionSecret(sessionSecret)');
+  });
+
+  test('production CloudFront preserves the live 120-second origin timeout', () => {
+    const terraform = readRepoFile('infra/main.tf');
+    expect(terraform).toMatch(/origin_read_timeout\s*=\s*120/);
   });
 
   test('preview cleanup removes closed PR resources and is scheduled', () => {
@@ -792,7 +799,9 @@ describe('PR preview deployment contract', () => {
     const bootstrap = readRepoFile('scripts/preview/bootstrap-host.sh');
     const wakeServer = readRepoFile('scripts/preview/wake-server.mjs');
     const ingressServer = readRepoFile('scripts/preview/ingress-server.mjs');
-    const certificateManager = readRepoFile('scripts/preview/certificate-manager.mjs');
+    const certificateManager = readRepoFile(
+      'scripts/preview/certificate-manager.mjs'
+    );
     const wakeScript = readRepoFile('scripts/preview/wake-preview.sh');
     const wakeProof = readRepoFile('scripts/preview/prove-wake.sh');
 
@@ -813,8 +822,12 @@ describe('PR preview deployment contract', () => {
     expect(ingressServer).toContain("service === 'blackboard'");
     expect(ingressServer).toContain('yawp-pr-${pr}-blackboard-lti-mock-1');
     expect(ingressServer).toContain('createWebSocketUpgradeHandler');
-    expect(ingressServer).toContain('authorizeWake(parsed.pr, request.url, request)');
-    expect(ingressServer).toContain("upstreamResponse.headers['x-yawp-preview-authorized']");
+    expect(ingressServer).toContain(
+      'authorizeWake(parsed.pr, request.url, request)'
+    );
+    expect(ingressServer).toContain(
+      "upstreamResponse.headers['x-yawp-preview-authorized']"
+    );
     expect(certificateManager).toContain("type === 'http-01'");
     expect(wakeScript).toContain('docker compose');
     expect(wakeScript).toContain(' start');
@@ -954,6 +967,57 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('[[ -n "$PREVIEW_LOGIN_PASSWORD" ]]');
     expect(previewWorkflow).toContain('sanitized-production)');
     expect(previewWorkflow).toContain('PREVIEW_SANITIZED_DUMP_VERSION');
+  });
+
+  test('preview and production deployments have complete UA Stripe configuration paths', () => {
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+    const infra = readRepoFile('infra/main.tf');
+    const variables = readRepoFile('infra/variables.tf');
+    const runbook = readRepoFile('docs/runbooks/ua-student-billing.md');
+
+    for (const name of [
+      'PREVIEW_UA_STUDENT_BILLING_ENABLED',
+      'PREVIEW_UA_ORGANIZATION_ID',
+      'PREVIEW_UA_PARTNER_CODE',
+      'PREVIEW_STRIPE_SECRET_KEY',
+      'PREVIEW_STRIPE_WEBHOOK_SECRET',
+      'PREVIEW_STRIPE_UA_2026_PRICE_ID',
+    ]) {
+      expect(previewWorkflow).toContain(name);
+    }
+
+    for (const name of [
+      'ua_student_billing_enabled',
+      'ua_stripe_credentials_configured',
+      'ua_organization_id',
+      'ua_partner_code',
+      'ua_partner_hostname',
+      'stripe_secret_key',
+      'stripe_webhook_secret',
+      'stripe_ua_2026_price_id',
+    ]) {
+      expect(variables).toContain(`variable "${name}"`);
+    }
+    expect(infra).toContain('runtime_environment_secrets = merge({');
+    expect(infra).toContain('STRIPE_SECRET_KEY');
+    expect(infra).toContain('STRIPE_WEBHOOK_SECRET');
+    expect(infra).toContain('UA_STUDENT_BILLING_ENABLED');
+    expect(infra).toContain('UA_PARTNER_CODE');
+    expect(infra).toContain('UA_PARTNER_HOSTNAME');
+    expect(infra).toContain('YAWP_APP_ORIGIN');
+    expect(infra).toContain('subject_alternative_names');
+    expect(infra).toContain(
+      'count = var.ua_stripe_credentials_configured ? 1 : 0'
+    );
+    expect(infra).toContain(
+      'var.ua_student_billing_enabled ? var.ua_stripe_credentials_configured : true'
+    );
+    expect(runbook).toContain('ua_stripe_credentials_configured=true');
+    expect(runbook).toContain('ua_partner_code=<student-facing-code>');
+    expect(runbook).toContain('ua_student_billing_enabled=false');
+    expect(runbook).toContain('ua_student_billing_enabled=true');
   });
 
   test('preview workflow does not require runner AWS credentials for dump restores', () => {
@@ -1136,9 +1200,13 @@ describe('PR preview deployment contract', () => {
     expect(bootstrapScript).toContain(
       'connect_container_to_preview_network preview-postgres'
     );
-    expect(ingressScript).toContain('NetworkSettings?.Networks?.preview?.IPAddress');
+    expect(ingressScript).toContain(
+      'NetworkSettings?.Networks?.preview?.IPAddress'
+    );
     expect(ingressScript).toContain("socketPath = '/var/run/docker.sock'");
-    expect(bootstrapScript).not.toContain('connect_container_to_preview_network traefik');
+    expect(bootstrapScript).not.toContain(
+      'connect_container_to_preview_network traefik'
+    );
   });
 
   test('preview GitHub config can publish dump location and login smoke secrets', () => {
@@ -1196,7 +1264,9 @@ describe('PR preview deployment contract', () => {
 
     expect(compose).toContain('blackboard-lti-mock:');
     expect(compose).toContain('BLACKBOARD_LTI_MOCK_ENABLED: "true"');
-    expect(compose).toContain('BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"');
+    expect(compose).toContain(
+      'BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"'
+    );
     expect(deploy).toContain('start_blackboard_lti_mock_if_present');
     expect(deploy).toContain('blackboard-lti-mock:');
     expect(deploy).toContain('BLACKBOARD_HOSTNAME');

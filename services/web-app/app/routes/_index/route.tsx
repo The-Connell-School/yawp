@@ -1,4 +1,15 @@
-import type { MetaFunction } from 'react-router';
+import {
+  useLoaderData,
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+  type MetaFunction,
+} from 'react-router';
+import { UaPartnerEntry } from '~/components/ua-partner-entry';
+import {
+  loadUaPartnerEntry,
+  submitUaPartnerEntry,
+} from '~/domain/ua-partner-entry.server';
+import { isUaPartnerHost } from '~/utils/ua-partner.server';
 
 export const meta: MetaFunction = () => [
   { title: 'Welcome to YAWP! | Student and Teacher Login' },
@@ -25,7 +36,31 @@ const infoUrl = '/info';
 const accessibilityUrl = '/accessibility';
 const itemNumber = '[Item #: AP1030]';
 
+export async function loader({ request }: LoaderFunctionArgs) {
+  if (!isUaPartnerHost(request)) return { partner: null as null };
+  return loadUaPartnerEntry(request);
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  if (!isUaPartnerHost(request)) {
+    throw new Response('Method not allowed', { status: 405 });
+  }
+  return submitUaPartnerEntry(request);
+}
+
 export default function IndexRoute() {
+  const loaderData = useLoaderData<typeof loader>();
+  if (loaderData.partner === 'ua') {
+    return (
+      <UaPartnerEntry
+        authenticated={loaderData.authenticated}
+        codeAccepted={loaderData.codeAccepted}
+        signupHref="/auth/inv/signup"
+        loginHref="/auth/login?redirectTo=%2F"
+      />
+    );
+  }
+
   return (
     <main className="yawp-entry">
       <section className="yawp-entry-shell">

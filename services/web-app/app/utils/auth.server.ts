@@ -69,9 +69,7 @@ function isMutationRequest(request: Request) {
 }
 
 function isAllowedReadOnlySessionMutation(request: Request) {
-  return readOnlySessionAllowedMutationPaths.has(
-    new URL(request.url).pathname
-  );
+  return readOnlySessionAllowedMutationPaths.has(new URL(request.url).pathname);
 }
 
 export async function getImpersonationState(request: Request) {
@@ -102,7 +100,6 @@ export async function requireMutableRequest(request: Request) {
       { status: 403 }
     );
   }
-
 }
 
 export async function getUserId(request: Request) {
@@ -148,7 +145,8 @@ export async function requireUserId(
 
 export async function requireMembership(
   request: Request,
-  userId: string
+  userId: string,
+  { allowPaymentRequired = false }: { allowPaymentRequired?: boolean } = {}
 ): Promise<RequiredMembership> {
   const membershipId = await getMembershipId(request);
 
@@ -164,7 +162,7 @@ export async function requireMembership(
       });
     }
 
-    return membership;
+    return requireLicensedMembership(request, membership, allowPaymentRequired);
   }
 
   const membership = await prisma.orgMembership.findFirst({
@@ -177,6 +175,30 @@ export async function requireMembership(
     throw redirect('/no-membership');
   }
 
+  return requireLicensedMembership(request, membership, allowPaymentRequired);
+}
+
+async function requireLicensedMembership(
+  request: Request,
+  membership: RequiredMembership,
+  allowPaymentRequired: boolean
+) {
+  if (allowPaymentRequired) return membership;
+
+  // Support/admin read-only impersonation must remain able to inspect a broken
+  // or unpaid account without mutating its billing state.
+  const impersonation = await getImpersonationState(request);
+  if (impersonation.isReadOnly) return membership;
+
+  const { getUaStudentLicenseAccess } =
+    await import('~/domain/student-license/student-license.server');
+  const access = await getUaStudentLicenseAccess({
+    id: membership.id,
+    role: membership.role,
+    organizationId: membership.organization.id,
+  });
+
+  if (access === 'PAYMENT_REQUIRED') throw redirect('/billing/ua');
   return membership;
 }
 

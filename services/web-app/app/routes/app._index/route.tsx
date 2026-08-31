@@ -1,10 +1,12 @@
+import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
-  type LoaderFunctionArgs,
-  data as dataResponse,
-  redirect,
+  Form,
+  useFetcher,
+  useLoaderData,
+  useRevalidator,
+  useRouteLoaderData,
 } from 'react-router';
-import { useLoaderData, useRouteLoaderData } from 'react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
@@ -27,6 +29,14 @@ import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
 import { formatClassLabel } from '~/utils/class-display';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -48,24 +58,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     profile
   );
 
-  const studentClassCount =
-    useStudentExperience
-      ? ((
-          await prisma.orgMembership.findUnique({
-            where: { id: profile.id },
-            select: { _count: { select: { classesAsStudent: true } } },
-          })
-        )?._count.classesAsStudent ?? 0)
-      : 0;
+  const studentClassCount = useStudentExperience
+    ? ((
+        await prisma.orgMembership.findUnique({
+          where: { id: profile.id },
+          select: { _count: { select: { classesAsStudent: true } } },
+        })
+      )?._count.classesAsStudent ?? 0)
+    : 0;
 
   const isStudentOnlyWithNoClasses =
-    useStudentExperience &&
-    !profile.isOrgOwner &&
-    studentClassCount === 0;
-
-  if (isStudentOnlyWithNoClasses) {
-    return redirect('/enter-code');
-  }
+    useStudentExperience && !profile.isOrgOwner && studentClassCount === 0;
 
   // Student assignment types were only used for the retired "Write something new"
   // entry point. Students now start writing only from a class assignment.
@@ -102,10 +105,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
           }))
         )
     : [];
-  const assignmentsEnabled =
-    useStudentExperience
-      ? studentAssignmentClassIds.length > 0
-      : teacherAssignmentClassScopes.length > 0;
+  const assignmentsEnabled = useStudentExperience
+    ? studentAssignmentClassIds.length > 0
+    : teacherAssignmentClassScopes.length > 0;
 
   const enrolledClasses = useStudentExperience
     ? await getStudentEnrolledClasses(profile.id, schoolYearScope)
@@ -168,13 +170,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const teacherClassStatsById = !useStudentExperience
     ? new Map(
         await Promise.all(
-          teacherClasses.map(async (klass) => [
-            klass.id,
-            {
-              stats: await getTeacherClassCardStats(klass.id),
-              assignments: klass._count.classAssignments,
-            },
-          ] as const)
+          teacherClasses.map(
+            async (klass) =>
+              [
+                klass.id,
+                {
+                  stats: await getTeacherClassCardStats(klass.id),
+                  assignments: klass._count.classAssignments,
+                },
+              ] as const
+          )
         )
       )
     : new Map<
@@ -245,6 +250,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }));
 
   return dataResponse({
+    requiresClassCode: isStudentOnlyWithNoClasses,
     enrolledClasses,
     teacherClasses: teacherClassesOrdered,
     assignmentsEnabled,
@@ -340,38 +346,170 @@ export default function AppRoute() {
   }
 
   return (
-    <section
-      data-testid="app._index"
-      className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
-    >
-      <div className="flex w-full justify-between border-b bg-secondary">
-        <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <div className="flex flex-col">
-            <h2>Welcome, {user.name}!</h2>
-            <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-              Welcome to your dashboard. Open a class to see your assignments
-              and continue your writing.
-            </p>
+    <>
+      <section
+        data-testid="app._index"
+        className={`no-scrollbar flex h-full w-full flex-col overflow-y-scroll ${
+          data.requiresClassCode ? 'pointer-events-none select-none' : ''
+        }`}
+      >
+        <div className="flex w-full justify-between border-b bg-secondary">
+          <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+            <div className="flex flex-col">
+              <h2>Welcome, {user.name}!</h2>
+              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
+                Welcome to your dashboard. Open a class to see your assignments
+                and continue your writing.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
-        <div className="flex flex-col">
-          <p className="my-2 text-foreground/60">Classes</p>
-          {data.enrolledClasses.length > 0 ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-              {data.enrolledClasses.map((klass) => (
-                <StudentClassCard key={klass.id} klass={klass} />
-              ))}
-            </div>
-          ) : (
-            <NoDataPlaceholder
-              title="No classes yet"
-              subtitle="When your teacher adds you to a class, it will appear here."
-            />
-          )}
+        <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
+          <div className="flex flex-col">
+            <p className="my-2 text-foreground/60">Classes</p>
+            {data.enrolledClasses.length > 0 ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {data.enrolledClasses.map((klass) => (
+                  <StudentClassCard key={klass.id} klass={klass} />
+                ))}
+              </div>
+            ) : (
+              <NoDataPlaceholder
+                title="No classes yet"
+                subtitle="When your teacher adds you to a class, it will appear here."
+              />
+            )}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+      {data.requiresClassCode ? <ClassCodeGate /> : null}
+    </>
+  );
+}
+
+type ClassCodeFetcherData =
+  | {
+      status: 'select';
+      code: string;
+      classes: Array<{ id: string; label: string }>;
+    }
+  | { status: 'enrolled' }
+  | { fieldErrors?: { code?: string; classId?: string } };
+
+function ClassCodeGate() {
+  const [isMounted, setIsMounted] = useState(false);
+  const fetcher = useFetcher<ClassCodeFetcherData>();
+  const revalidator = useRevalidator();
+  const result = fetcher.data;
+  const needsSelection =
+    result && 'status' in result && result.status === 'select';
+
+  useEffect(() => {
+    if (result && 'status' in result && result.status === 'enrolled') {
+      revalidator.revalidate();
+    }
+  }, [result, revalidator]);
+
+  const fieldErrors =
+    result && 'fieldErrors' in result ? result.fieldErrors : undefined;
+
+  useEffect(() => setIsMounted(true), []);
+
+  // Radix portals render under document.body. Waiting until hydration keeps
+  // the server and first client tree identical; the dashboard itself is
+  // already pointer-inert while this mounts.
+  if (!isMounted) return null;
+
+  return (
+    <Dialog open onOpenChange={() => {}}>
+      <DialogContent
+        hideClose
+        overlayClassName="bg-background/50 backdrop-blur-sm"
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>
+            {needsSelection ? 'Select your class' : 'Enter your class code'}
+          </DialogTitle>
+          <DialogDescription>
+            {needsSelection
+              ? 'Multiple classes use this code. Choose the class you are joining.'
+              : 'Enter the code from your teacher to finish setting up your dashboard.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <fetcher.Form
+          method="post"
+          action="/enter-code?modal=1"
+          className="space-y-4"
+        >
+          {needsSelection ? (
+            <>
+              <input type="hidden" name="intent" value="assign-class" />
+              <input type="hidden" name="code" value={result.code} />
+              <label className="block space-y-2 text-sm font-medium">
+                <span>Class</span>
+                <select
+                  name="classId"
+                  required
+                  autoFocus
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    Select a class
+                  </option>
+                  {result.classes.map((klass) => (
+                    <option key={klass.id} value={klass.id}>
+                      {klass.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          ) : (
+            <>
+              <input type="hidden" name="intent" value="validate-code" />
+              <label className="block space-y-2 text-sm font-medium">
+                <span>Class code</span>
+                <input
+                  name="code"
+                  required
+                  autoFocus
+                  autoComplete="off"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
+              </label>
+            </>
+          )}
+          {fieldErrors?.code || fieldErrors?.classId ? (
+            <p className="text-sm text-destructive" role="alert">
+              {fieldErrors.code ?? fieldErrors.classId}
+            </p>
+          ) : null}
+          <Button
+            className="w-full"
+            type="submit"
+            disabled={fetcher.state !== 'idle'}
+          >
+            {fetcher.state !== 'idle'
+              ? 'Checking…'
+              : needsSelection
+                ? 'Join class'
+                : 'Continue'}
+          </Button>
+        </fetcher.Form>
+
+        <DialogFooter>
+          <Form method="post" action="/auth/logout" className="w-full">
+            <Button variant="outline" className="w-full" type="submit">
+              Sign out
+            </Button>
+          </Form>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

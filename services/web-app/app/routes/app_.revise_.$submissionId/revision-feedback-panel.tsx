@@ -2,7 +2,10 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '~/components/ui/button';
-import type { GrammarIssue } from '~/domain/grading/grammarIssues';
+import {
+  sortGrammarIssuesByDocumentOrder,
+  type GrammarIssue,
+} from '~/domain/grading/grammarIssues';
 import { GradingCommentsSidebar } from '~/routes/app_.submissions_.$submissionId/teacher-grading/grading-comments-sidebar';
 import {
   ViewPanel,
@@ -112,19 +115,24 @@ export function RevisionFeedbackPanel({
     >
       {/* Same heights as the panes' header and bar rows (see PANE_HEADER_CLASS
           in route.tsx), so all three columns start their content on one line. */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2.5">
-        <span className="text-sm font-semibold">Feedback</span>
+      <div
+        className="flex shrink-0 items-center justify-between gap-8 border-b py-1 pl-4 pr-2"
+        data-testid="revision-feedback-header"
+      >
+        <div className="flex h-[32px] w-full min-w-0 items-center">
+          <span className="text-sm font-semibold">Feedback</span>
+        </div>
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
+          size="icon-sm"
+          className="min-w-8"
           aria-label="Hide feedback"
           aria-expanded={true}
           data-testid="revision-feedback-toggle"
           onClick={() => setIsOpen(false)}
         >
-          <PanelLeftClose className="h-4 w-4" />
+          <PanelLeftClose className="h-4 w-4" strokeWidth={1.5} />
         </Button>
       </div>
 
@@ -176,6 +184,7 @@ export function RevisionFeedbackPanel({
         {tab === 'assistant' ? (
           <AssistantNotes
             grammarIssues={grammarIssues}
+            sourceText={submission.text ?? ''}
             focusedGrammarIssueId={focusedNoteId}
           />
         ) : null}
@@ -205,8 +214,8 @@ function TabButton({
       onClick={onClick}
       className={`flex h-8 flex-1 items-center justify-center rounded-md px-2 text-xs font-medium transition ${
         isActive
-          ? 'bg-muted text-foreground'
-          : 'text-muted-foreground hover:bg-muted/60'
+          ? 'bg-popover text-foreground shadow-sm ring-1 ring-black/10'
+          : 'text-muted-foreground hover:bg-popover/70 hover:text-foreground'
       }`}
     >
       {children}
@@ -225,9 +234,11 @@ function TabButton({
  */
 function AssistantNotes({
   grammarIssues,
+  sourceText,
   focusedGrammarIssueId,
 }: {
   grammarIssues: GrammarIssue[];
+  sourceText: string;
   focusedGrammarIssueId: string | null;
 }) {
   if (grammarIssues.length === 0) {
@@ -238,9 +249,14 @@ function AssistantNotes({
     );
   }
 
+  const sortedGrammarIssues = sortGrammarIssuesByDocumentOrder(
+    grammarIssues,
+    sourceText
+  );
+
   return (
     <ul className="divide-y">
-      {grammarIssues.map((issue) => (
+      {sortedGrammarIssues.map((issue) => (
         <li
           key={issue.id}
           data-testid={`revision-assistant-note-${issue.id}`}
