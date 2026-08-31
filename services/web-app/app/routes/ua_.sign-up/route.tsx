@@ -57,7 +57,7 @@ export default function UaSignUpRoute() {
   const { codeAccepted, codeError } = useLoaderData<typeof loader>();
   return (
     <div className="min-h-screen py-8">
-      <AuthBrandLockup partner="ua" />
+      <AuthBrandLockup />
       <StudentSignupForm
         partner="ua"
         codeAccepted={codeAccepted}

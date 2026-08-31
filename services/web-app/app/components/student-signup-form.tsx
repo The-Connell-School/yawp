@@ -45,9 +45,9 @@ export function StudentSignupForm({
 
   return (
     <div className="mx-auto mt-10 w-full max-w-md rounded-xl border bg-white p-8 shadow-sm">
-      <div className="flex flex-col gap-3 text-center">
-        <h1>Let's get started!</h1>
-        <p>
+      <div className="flex flex-col items-start gap-2 text-left">
+        <h1 className="text-lg font-semibold">Let's get started!</h1>
+        <p className="text-muted-foreground">
           {isUa
             ? 'Please enter your email.'
             : 'Please enter your email & passcode.'}

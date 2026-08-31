@@ -32,9 +32,9 @@ export function LoginForm({
 
   return (
     <div className="mx-auto mt-10 w-full max-w-md rounded-xl border bg-white p-8 shadow-sm">
-      <div className="flex flex-col gap-3 text-center">
-        <h1>Welcome back!</h1>
-        <p>Please enter your details.</p>
+      <div className="flex flex-col items-start gap-2 text-left">
+        <h1 className="text-lg font-semibold">Welcome back!</h1>
+        <p className="text-muted-foreground">Please enter your details.</p>
       </div>
       <div className="mt-8 w-full">
         <Form {...form.getFormProps()} className="flex flex-col gap-3">

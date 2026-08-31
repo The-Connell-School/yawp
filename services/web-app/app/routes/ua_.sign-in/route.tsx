@@ -39,7 +39,7 @@ export async function action(args: ActionFunctionArgs) {
 export default function UaSignInRoute() {
   return (
     <div className="min-h-screen py-8">
-      <AuthBrandLockup partner="ua" />
+      <AuthBrandLockup />
       <LoginForm redirectTo="/ua" signupHref="/ua/sign-up" />
     </div>
   );
