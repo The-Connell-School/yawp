@@ -1,0 +1,78 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-08-31T22:56:13Z",
+  "phase": null,
+  "phase_name": "collaboration-any-assignment-type",
+  "phase_dir": ".planning",
+  "plan": 1,
+  "task": 6,
+  "total_tasks": 6,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Map collaboration gates and acceptance criteria",
+      "status": "done",
+      "commit": "e354eab4"
+    },
+    {
+      "id": 2,
+      "name": "Add failing coverage for unsupported assignment types",
+      "status": "done",
+      "commit": "e354eab4"
+    },
+    {
+      "id": 3,
+      "name": "Remove type gates and support bespoke creation flows",
+      "status": "done",
+      "commit": "e354eab4"
+    },
+    {
+      "id": 4,
+      "name": "Verify migration, tests, typecheck, and build",
+      "status": "done",
+      "commit": "e354eab4"
+    },
+    {
+      "id": 5,
+      "name": "Run independent review and browser QA",
+      "status": "done",
+      "commit": "e354eab4"
+    },
+    {
+      "id": 6,
+      "name": "Commit and checkpoint in Record",
+      "status": "done",
+      "commit": "e354eab4"
+    }
+  ],
+  "remaining_tasks": [],
+  "blockers": [],
+  "human_actions_pending": [
+    {
+      "action": "Choose whether to merge and deploy commit e354eab4",
+      "context": "Implementation and proof are complete; no push, merge, or deployment was authorized.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Offer collaboration as an unchecked per-assignment opt-in for every assignment type.",
+      "rationale": "The feature must not be scoped to GBA 300, while existing solo assignment behavior must remain unchanged.",
+      "phase": null
+    },
+    {
+      "decision": "Retain and backfill the legacy assignment-type flag true during rolling deploys.",
+      "rationale": "Current runtime ignores the field, while older mixed-version pods remain permissive until the column can be removed later.",
+      "phase": null
+    },
+    {
+      "decision": "Keep GBA 300 only as the stable local demo fixture.",
+      "rationale": "Demo data remains useful without making the fixture a product capability gate.",
+      "phase": null
+    }
+  ],
+  "uncommitted_files": [],
+  "next_action": "Inspect commit e354eab4 and, only with Bryant's authorization, merge and deploy it to demo and production.",
+  "context_notes": "Implementation is release-ready, independently reviewed, recorded as yawp-collaboration-any-assignment-type v2, and intentionally paused before any remote action."
+}
