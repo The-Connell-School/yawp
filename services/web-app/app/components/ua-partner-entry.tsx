@@ -58,7 +58,7 @@ export function UaPartnerEntry({
             </Form>
           </div>
         ) : (
-          <div className="mx-auto mt-10 flex w-full max-w-sm flex-col gap-3">
+          <div className="mx-auto mt-14 flex w-full max-w-sm flex-col gap-3">
             <Link className={button({ className: 'w-full' })} to={signupHref}>
               Create an Account
             </Link>

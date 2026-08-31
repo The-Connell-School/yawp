@@ -10,7 +10,7 @@ export function AuthBrandLockup({
       <div
         className={
           prominent
-            ? 'mx-auto flex w-full max-w-lg flex-col items-center justify-center gap-7 px-4'
+            ? 'mx-auto flex w-full max-w-lg flex-col items-center justify-center gap-10 px-4'
             : 'mx-auto flex max-w-md items-center justify-center gap-4 px-6'
         }
         aria-label="The University of Alabama and Yawp"
