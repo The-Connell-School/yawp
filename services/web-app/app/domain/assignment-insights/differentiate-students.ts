@@ -1,16 +1,14 @@
 import {
-  defaultInsightRubricCategories,
-  type InsightRubricCategory,
-} from './insight-rubric-categories';
-import {
   readRubricEntryScore,
   type GradedSubmissionInput,
 } from './aggregate-rubric-performance';
-
-/** Scores at or below this suggest a student needs support in a category. */
-const LOW_SCORE_THRESHOLD = 2;
-/** Scores at or above this mark a student as strong in a category. */
-const HIGH_SCORE_THRESHOLD = 4;
+import {
+  DEFAULT_INSIGHT_RUBRIC,
+  isHighScore,
+  isLowScore,
+  type InsightRubric,
+  type InsightRubricCategory,
+} from './insight-rubric';
 /** Keep the panel a starting point, not a report: cap the groups shown. */
 const MAX_FOCUS_GROUPS = 3;
 /** Cap individual callouts so the section stays scannable. */
@@ -64,12 +62,12 @@ function toStudent(input: DifferentiationInput): DifferentiationStudent {
 
 function buildProfiles(
   inputs: DifferentiationInput[],
-  rubricCategories: InsightRubricCategory[]
+  rubric: InsightRubric
 ): StudentProfile[] {
   const profiles: StudentProfile[] = [];
   for (const input of inputs) {
     const scores = new Map<string, number>();
-    for (const category of rubricCategories) {
+    for (const category of rubric.categories) {
       const score = readRubricEntryScore(input.rubricScores?.[category.key]);
       if (score !== null) scores.set(category.key, score);
     }
@@ -94,17 +92,32 @@ function buildProfiles(
  */
 export function buildDifferentiation(
   inputs: DifferentiationInput[],
-  rubricCategories: InsightRubricCategory[] = defaultInsightRubricCategories()
+  /** The rubric the class was actually graded on. */
+  rubric: InsightRubric = DEFAULT_INSIGHT_RUBRIC
 ): DifferentiationSummary | null {
-  const profiles = buildProfiles(inputs, rubricCategories);
+  const profiles = buildProfiles(inputs, rubric);
   if (profiles.length < 2) return null;
 
+  // Whether a score is low or strong is read against the range its own category
+  // is marked in, so a 25 out of 100 and a 2 out of 5 are the same judgement.
+  const categoryOf = new Map<string, InsightRubricCategory>(
+    rubric.categories.map((category) => [category.key, category])
+  );
+  const lowFor = (key: string, score: number) => {
+    const category = categoryOf.get(key);
+    return category ? isLowScore(category, score) : false;
+  };
+  const highFor = (key: string, score: number) => {
+    const category = categoryOf.get(key);
+    return category ? isHighScore(category, score) : false;
+  };
+
   const focusGroups: DifferentiationGroup[] = [];
-  for (const category of rubricCategories) {
+  for (const category of rubric.categories) {
     const scored = profiles.filter((p) => p.scores.has(category.key));
     const low = scored
-      .filter(
-        (p) => (p.scores.get(category.key) as number) <= LOW_SCORE_THRESHOLD
+      .filter((p) =>
+        isLowScore(category, p.scores.get(category.key) as number)
       )
       .sort(
         (a, b) =>
@@ -127,8 +140,8 @@ export function buildDifferentiation(
 
   const support = profiles
     .filter((p) => {
-      const lowCount = [...p.scores.values()].filter(
-        (score) => score <= LOW_SCORE_THRESHOLD
+      const lowCount = [...p.scores.entries()].filter(([key, score]) =>
+        lowFor(key, score)
       ).length;
       // Low in at least two categories and in half or more of what was
       // scored: the pattern is the student, not a single skill.
@@ -139,11 +152,11 @@ export function buildDifferentiation(
       (p): DifferentiationFlag => ({
         kind: 'support',
         student: p.student,
-        categoryLabels: rubricCategories
-          .filter(
-            (category) =>
-              (p.scores.get(category.key) ?? Infinity) <= LOW_SCORE_THRESHOLD
-          )
+        categoryLabels: rubric.categories
+          .filter((category) => {
+            const score = p.scores.get(category.key);
+            return score !== undefined && isLowScore(category, score);
+          })
           .map((category) => category.label),
       })
     );
@@ -152,14 +165,14 @@ export function buildDifferentiation(
     .filter(
       (p) =>
         p.scores.size >= 2 &&
-        [...p.scores.values()].every((score) => score >= HIGH_SCORE_THRESHOLD)
+        [...p.scores.entries()].every(([key, score]) => highFor(key, score))
     )
     .sort((a, b) => b.averageScore - a.averageScore)
     .map(
       (p): DifferentiationFlag => ({
         kind: 'extension',
         student: p.student,
-        categoryLabels: rubricCategories
+        categoryLabels: rubric.categories
           .filter((category) => p.scores.has(category.key))
           .map((category) => category.label),
       })

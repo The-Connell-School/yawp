@@ -1,4 +1,5 @@
 import { prisma } from '~/utils/db.server.js';
+import { studentVisibleClassAssignmentWhere } from '~/domain/collaboration/visibility';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { buildStudentClassDocumentsScope } from '~/utils/class-assignment-scope.server';
 
@@ -80,7 +81,18 @@ export async function loadStudentClassDetail({
     prisma.classAssignment.findMany({
       where: {
         classId: klass.id,
-        OR: [{ postAt: null }, { postAt: { lte: new Date() } }],
+        // Two independent rules, both of which must hold — kept in an AND rather
+        // than spread side by side, because each is expressed as an `OR` and one
+        // would silently overwrite the other at that key. Losing the first shows
+        // a student a group assignment they cannot open; losing the second shows
+        // them an assignment before its post date.
+        AND: [
+          // A collaborative assignment has nothing for this student to open
+          // until their teacher opens groups, so it stays off the list until
+          // then rather than sitting there refusing the click.
+          studentVisibleClassAssignmentWhere(membershipId),
+          { OR: [{ postAt: null }, { postAt: { lte: new Date() } }] },
+        ],
       },
       select: {
         id: true,

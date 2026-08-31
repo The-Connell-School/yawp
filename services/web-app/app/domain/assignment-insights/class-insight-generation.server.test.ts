@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  classAssignment: { findFirst: mock() },
+  classAssignment: { findFirst: mock(), findUnique: mock() },
   document: { findMany: mock() },
   classAssignmentInsight: {
     findUnique: mock(),
@@ -27,6 +27,26 @@ mock.module('~/utils/ai-admission.server', () => ({
   reserveAiRequest,
   AiRateLimitError: class AiRateLimitError extends Error {},
 }));
+
+// bun's mock.module is global to the whole test run and mock.restore() does not
+// undo it, so stubbing these two here silently disarms every later file that
+// needs them real — the assignment-insights route test among them, whose action
+// then never reaches the LLM it asserts on. Restore from the pristine copies
+// test-preload.ts captured (see the comment there).
+const actualSynthesis = globalThis.__realModules[
+  '~/domain/assignment-insights/class-insight-synthesis.server'
+];
+const actualGradingConfig = globalThis.__realModules[
+  '~/domain/assignment-types/assignment-type-grading-config.server'
+];
+
+afterAll(() => {
+  mock.module('./class-insight-synthesis.server', () => actualSynthesis);
+  mock.module(
+    '~/domain/assignment-types/assignment-type-grading-config.server',
+    () => actualGradingConfig
+  );
+});
 
 const { generateClassAssignmentInsight } = await import(
   './class-insight-generation.server'
@@ -109,8 +129,21 @@ describe('generateClassAssignmentInsight rubric scoping', () => {
     });
     prisma.classAssignmentInsight.findUnique.mockResolvedValue(null);
     mockGradedDocuments();
+    // The rubric is now read from the class assignment, through the same path
+    // the grading assistant uses, so the summary aggregates the categories the
+    // scores were actually written under. `minScore`/`maxScore` are part of
+    // that config's contract; a one-to-six scale here also keeps this test on
+    // the non-default range, which is the case the thresholds exist for.
+    prisma.classAssignment.findUnique.mockResolvedValue({
+      assignment: {
+        assignmentTypeId: 'act-writing-type',
+        assignmentType: { kind: 'act_writing', title: 'ACT Writing' },
+      },
+    });
     resolveAssignmentTypeGradingConfig.mockResolvedValue({
       rubricCategories: ACT_RUBRIC_CATEGORIES,
+      minScore: 1,
+      maxScore: 6,
     });
     generateClassInsight.mockResolvedValue({
       summary: {

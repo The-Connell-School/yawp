@@ -16,7 +16,7 @@ import {
   ACT_WRITING_SCORING_TYPE,
   rubricScaleGradeFields,
 } from '~/domain/grading/recorded-grade';
-import { firstNameFromFullName } from '~/domain/grading/personalize';
+import { gradingAddressee } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
@@ -572,6 +572,9 @@ export async function action({ request }: ActionFunctionArgs) {
         id: true,
         membershipId: true,
         assignmentTypeId: true,
+        // Only to tell a group brief from a solo essay when deciding who the
+        // feedback is addressed to; see `gradingAddressee`.
+        group: { select: { label: true } },
         assignmentType: {
           select: {
             id: true,
@@ -754,9 +757,13 @@ export async function action({ request }: ActionFunctionArgs) {
       .gradingInstructionsOverride === 'string'
       ? resolvedGradingConfig.promptConfigSnapshot.gradingInstructionsOverride.trim()
       : '';
-  const studentFirstName = firstNameFromFullName(
-    submission.document.membership?.user?.name
-  );
+  // A group brief is addressed to the group. `Document.membershipId` names
+  // whichever member is first in it, so addressing the student here put one
+  // name on feedback about work the whole group wrote.
+  const studentFirstName = gradingAddressee({
+    studentName: submission.document.membership?.user?.name,
+    groupLabel: submission.document.group?.label,
+  });
   // The prompt is derived from the rubric itself: how many judgments it asks
   // for, which words each score carries, and whether it wants per-category
   // feedback or overall feedback alone. No assignment type is named here.

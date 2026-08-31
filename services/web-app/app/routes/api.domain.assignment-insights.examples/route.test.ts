@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  classAssignment: { findFirst: mock() },
+  classAssignment: { findFirst: mock(), findUnique: mock() },
+  assignmentType: { findUnique: mock() },
   document: { findMany: mock() },
 };
 
@@ -50,6 +51,10 @@ const ACTOR = {
 describe('api.domain.assignment-insights.examples', () => {
   beforeEach(() => {
     prisma.classAssignment.findFirst.mockReset();
+    // No assignment type resolves: the rubric falls back to the five default
+    // categories, which is what these fixtures are scored against.
+    prisma.classAssignment.findUnique.mockReset().mockResolvedValue(null);
+    prisma.assignmentType.findUnique.mockReset().mockResolvedValue(null);
     prisma.document.findMany.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
@@ -78,7 +83,70 @@ describe('api.domain.assignment-insights.examples', () => {
     expect(response.data.examples).toEqual([]);
   });
 
-  test('rejects an unknown rubric category', async () => {
+  test('accepts a category from the assignment type’s own rubric', async () => {
+    // The whole point: an assignment type carries its own categories, and
+    // `budget` is not on the default rubric this route used to check against.
+    prisma.classAssignment.findUnique.mockResolvedValue({
+      assignment: {
+        assignmentTypeId: 'at-1',
+        assignmentType: { kind: null, title: 'GBA 300' },
+      },
+    });
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'GBA 300',
+      kind: null,
+      scoringScaleJson: { type: 'rubric_points', minScore: 0, maxScore: 100, step: 1 },
+      rubricJson: {
+        categories: [
+          { key: 'budget', label: 'Budget', weight: 0.5, description: 'Costs.' },
+          {
+            key: 'recommendation',
+            label: 'Recommendation',
+            weight: 0.5,
+            description: 'The call.',
+          },
+        ],
+      },
+      gradingPromptConfigJson: null,
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      rubric: null,
+    });
+    prisma.document.findMany.mockResolvedValue([
+      {
+        id: 'doc-1',
+        membership: { user: { name: 'Sol Bramante', email: 'sol@x.com' } },
+        submissions: [
+          {
+            id: 'sub-1',
+            text: 'JPY 4.2 million in year one, most of it freight.',
+            html: '',
+            rubricScores: { budget: { score: 88 } },
+          },
+        ],
+      },
+    ]);
+
+    const response = payloadOf(
+      await loader({
+        request: getRequest({
+          classAssignmentId: 'ca-1',
+          category: 'budget',
+          status: 'strength',
+        }),
+      } as never)
+    );
+
+    expect(response.init?.status).toBeUndefined();
+    expect(response.data.examples).toHaveLength(1);
+    expect(response.data.examples[0]!.score).toBe(88);
+  });
+
+  test('rejects a category that is not on this assignment’s rubric', async () => {
     const response = payloadOf(
       await loader({
         request: getRequest({

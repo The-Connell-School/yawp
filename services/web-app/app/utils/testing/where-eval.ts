@@ -20,6 +20,18 @@ export type ScopedDocument = {
   membershipId: string;
   /** Membership ids of teachers who teach a class this student is enrolled in. */
   teacherProfileIds: string[];
+  /**
+   * Membership ids of students who co-author this document through its
+   * collaboration group and have NOT been removed from it. Absent on a
+   * single-author document, which is the shape every existing document has.
+   */
+  activeGroupMemberIds?: string[];
+  /**
+   * Membership ids that were once in the group and have since been removed.
+   * Kept separate so a predicate that forgets `removedAt: null` fails the
+   * test rather than silently keeping a moved student's write access.
+   */
+  removedGroupMemberIds?: string[];
 };
 
 export function matchesDocumentWhere(
@@ -57,6 +69,22 @@ export function matchesDocumentWhere(
           ?.id;
         if (typeof teacherId !== 'string') return false;
         if (!doc.teacherProfileIds.includes(teacherId)) return false;
+        break;
+      }
+      case 'group': {
+        // Co-authorship through the document's collaboration group. `removedAt`
+        // is checked rather than ignored: a predicate that omits it would keep
+        // write access for a student the teacher moved to another group, so the
+        // omission has to be observable as a failing test.
+        const nested = ((value as any)?.is ?? value) as Record<string, unknown>;
+        const some = (nested?.members as any)?.some as
+          | Record<string, unknown>
+          | undefined;
+        if (!some || typeof some !== 'object') return false;
+        if (!('removedAt' in some) || some.removedAt !== null) return false;
+        const memberId = some.membershipId;
+        if (typeof memberId !== 'string') return false;
+        if (!(doc.activeGroupMemberIds ?? []).includes(memberId)) return false;
         break;
       }
       default:

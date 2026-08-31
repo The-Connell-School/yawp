@@ -552,7 +552,10 @@ describe('app index loader assignments', () => {
       },
     ]);
     expect(data.assignmentCreationTypes).toEqual([
-      { id: 'type-1', title: 'Daily Pages' },
+      // Defaulted rather than omitted: the sheet reads this to decide whether to
+      // offer collaborative drafts, and an absent flag would read as supported
+      // nowhere but be indistinguishable from a select that forgot to ask.
+      { id: 'type-1', title: 'Daily Pages', collaborationSupported: false },
     ]);
   });
 

@@ -3,7 +3,8 @@ import {
   readRubricEntryScore,
   type SubmissionRubricEntry,
 } from '~/domain/assignment-insights/aggregate-rubric-performance';
-import { rubricKeys } from '~/domain/grading/rubric';
+import { readInsightRubric } from '~/domain/assignment-insights/insight-rubric.server';
+import { midpointScore } from '~/domain/assignment-insights/insight-rubric';
 import { prisma } from '~/utils/db.server';
 import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
 
@@ -11,8 +12,6 @@ import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
 const MAX_EXAMPLES = 3;
 /** Trim snippets so the panel stays scannable. */
 const SNIPPET_MAX_CHARS = 240;
-
-const rubricKeySet = new Set<string>(rubricKeys);
 
 type CategoryStatus = 'strength' | 'mixed' | 'gap';
 
@@ -40,12 +39,15 @@ function toSnippet(raw: string): string {
  * Rank submissions by how well they exemplify a category's status: strongest
  * scores first for a strength, weakest first for a gap, closest-to-middle for
  * a mixed category.
+ *
+ * "Middle" is the middle of the category's own range — a 3 on the default
+ * five-point rubric, a 50 on a hundred-point one.
  */
-function exemplarComparator(status: CategoryStatus) {
+function exemplarComparator(status: CategoryStatus, middle: number) {
   return (a: { score: number }, b: { score: number }) => {
     if (status === 'gap') return a.score - b.score;
     if (status === 'strength') return b.score - a.score;
-    return Math.abs(a.score - 3) - Math.abs(b.score - 3);
+    return Math.abs(a.score - middle) - Math.abs(b.score - middle);
   };
 }
 
@@ -72,7 +74,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     typeof classAssignmentId !== 'string' ||
     !classAssignmentId.trim() ||
     typeof category !== 'string' ||
-    !rubricKeySet.has(category)
+    !category.trim()
   ) {
     return dataResponse(
       {
@@ -118,6 +120,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return dataResponse(
       { examples: [], message: 'Class insights are not enabled.' },
       { status: 404 }
+    );
+  }
+
+  // The category has to be one this assignment is actually graded on, and that
+  // is only knowable once the class assignment is loaded — an assignment type
+  // carries its own rubric, so there is no fixed list to check against.
+  const rubric = await readInsightRubric({
+    classAssignmentId: classAssignment.id,
+  });
+  const rubricCategory = rubric.categories.find(
+    (entry) => entry.key === category
+  );
+  if (!rubricCategory) {
+    return dataResponse(
+      {
+        examples: [],
+        message: 'That category is not on this assignment’s rubric.',
+      },
+      { status: 400 }
     );
   }
 
@@ -168,7 +189,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  scored.sort(exemplarComparator(status));
+  scored.sort(exemplarComparator(status, midpointScore(rubricCategory)));
 
   const examples: ClassInsightExample[] = scored.slice(0, MAX_EXAMPLES);
 

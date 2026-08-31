@@ -58,6 +58,70 @@ if (isWebAppTestFile()) {
     '~/domain/daily-pages-prompts/saved-prompts.server': await snapshot(
       '~/domain/daily-pages-prompts/saved-prompts.server'
     ),
+    // The class-assignment start test stubs findStudentGroupDocument, which would
+    // otherwise leave arrangeGroups/openGroups missing for the groups-route test
+    // that runs after it.
+    '~/domain/collaboration/groups.server': await snapshot(
+      '~/domain/collaboration/groups.server'
+    ),
+    // The shared-drafts test stubs both of these wholesale to keep the loader
+    // off the database; without a pristine copy every later file would see the
+    // two-export stub instead of the real modules.
+    '~/utils/school-year-scope.server': await snapshot(
+      '~/utils/school-year-scope.server'
+    ),
+    '~/utils/student-assignment-type-scopes.server': await snapshot(
+      '~/utils/student-assignment-type-scopes.server'
+    ),
+    // The auto-arrange test stubs arrangeGroups, which the groups-route test
+    // also needs real.
+    '~/domain/collaboration/auto-arrange.server': await snapshot(
+      '~/domain/collaboration/auto-arrange.server'
+    ),
+    // The contribution read model stubs these two; other files need them real.
+    '~/domain/collaboration/room-store.server': await snapshot(
+      '~/domain/collaboration/room-store.server'
+    ),
+    '~/domain/collaboration/authorship.server': await snapshot(
+      '~/domain/collaboration/authorship.server'
+    ),
+    // The group-draft route stubs getIsPlatformAdmin and needs the read/author
+    // scope predicates from the same module left real.
+    '~/utils/document-access.server': await snapshot(
+      '~/utils/document-access.server'
+    ),
+    // The group-draft route stubs these wholesale; other files need them real.
+    '~/domain/collaboration/group-grade.server': await snapshot(
+      '~/domain/collaboration/group-grade.server'
+    ),
+    '~/domain/collaboration/member-grades.server': await snapshot(
+      '~/domain/collaboration/member-grades.server'
+    ),
+    // The group-submit test stubs yUpdateToSnapshot; the updates-route test
+    // asserts on the real dual-written snapshot and needs it back.
+    '~/domain/collaboration/snapshot': await snapshot(
+      '~/domain/collaboration/snapshot'
+    ),
+    '~/domain/collaboration/comments.server': await snapshot(
+      '~/domain/collaboration/comments.server'
+    ),
+    // The shared-drafts test drives both sides of the student-shared-draft gate
+    // by stubbing `studentStartedSharedDraftsEnabled`; every other file needs
+    // the group-mode constants in this module real.
+    '~/domain/assignments/collaboration': await snapshot(
+      '~/domain/assignments/collaboration'
+    ),
+    // main's class-insight generation test stubs these two wholesale with no
+    // restore of its own; the assignment-insights route test needs both real,
+    // or its action never reaches the LLM it is asserting on.
+    '~/domain/assignment-insights/class-insight-synthesis.server': await snapshot(
+      '~/domain/assignment-insights/class-insight-synthesis.server'
+    ),
+    '~/domain/assignment-types/assignment-type-grading-config.server':
+      await snapshot(
+        '~/domain/assignment-types/assignment-type-grading-config.server'
+      ),
+    '~/domain/documents.server': await snapshot('~/domain/documents.server'),
   };
 }
 

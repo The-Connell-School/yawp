@@ -32,7 +32,7 @@ jobs:
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       # The root-owned-build-output test needs the image the preview host itself runs.
       - name: 🐳 Pull the preview runtime image
@@ -72,7 +72,7 @@ jobs:
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       # bunfig.toml preloads services/web-app/test-preload.ts for every `bun test` run in
       # this repo, and that preload imports ~/utils/auth.server, which imports @app/prisma.
@@ -121,6 +121,24 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma assignment-type-release-gate
 
+      # Last, because it truncates every table before it writes.
+      #
+      # The seed is what a preview runs against a fresh database, and until now
+      # nothing ran it before a preview did. `packages/prisma/scripts` is outside
+      # the web app's tsconfig, so typecheck does not reach it either — a call
+      # that no longer matches its function surfaced as a failed deploy rather
+      # than a failed check. This runs the same sequence against the same kind of
+      # database.
+      #
+      # It does not catch everything the deploy can hit: a package the Prisma
+      # workspace imports without declaring resolves fine here, because a plain
+      # install hoists it to the root, and only fails where node_modules is laid
+      # out differently. Declaring what the seed imports is the guard for that.
+      - name: 🌱 Seed local-dev data
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun run --cwd packages/prisma seed-local-dev
+
   typecheck-web-app:
     name: ʦ TypeScript
     runs-on: ubuntu-22.04
@@ -137,7 +155,7 @@ jobs:
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: ⚙️ Generate Prisma Client
         run: bun prisma generate
@@ -150,6 +168,11 @@ jobs:
   e2e-web-app:
     name: 🧪 E2E Tests (Playwright)
     runs-on: ubuntu-22.04
+    # The browser download hung for five hours on 2026-08-18 and would have run
+    # to GitHub's six-hour default before failing. Nothing about this job is
+    # worth half a day of a runner: the tests themselves take about seven
+    # minutes, so anything past half an hour is wedged, not slow.
+    timeout-minutes: 30
     needs: [typecheck-web-app, validate-prisma-migrations]
     services:
       postgres:
@@ -177,16 +200,44 @@ jobs:
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: ⚙️ Generate Prisma Client
         run: bun prisma generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
 
+      # Keyed on the resolved version rather than a hardcoded one, so a bump in
+      # package.json invalidates the cache instead of restoring browsers that no
+      # longer match the runner.
+      - name: 🔖 Resolve Playwright version
+        id: playwright-version
+        run: |
+          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: 💾 Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      # Chromium only. `test:e2e:smoke` runs `--project=chromium` and the
+      # preview-access config defines a single chromium project, so Firefox was
+      # downloaded on every run and never launched.
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         working-directory: services/web-app
-        run: npx --yes playwright install --with-deps chromium firefox
+        timeout-minutes: 10
+        run: npx --yes playwright install --with-deps chromium
+
+      # The cache holds the browsers, not the apt packages they link against, so
+      # a restored cache still needs the system libraries putting back.
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: services/web-app
+        timeout-minutes: 10
+        run: npx --yes playwright install-deps chromium
 
       - name: 🧪 Run Playwright tests
         working-directory: services/web-app
