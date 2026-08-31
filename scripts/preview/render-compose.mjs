@@ -121,6 +121,13 @@ ${tlsLabels}
     : '';
   const uaStudentBillingEnabled =
     optionalEnv('PREVIEW_UA_STUDENT_BILLING_ENABLED', 'false') === 'true';
+  const previewProductionTestPromotionCodeId = optionalEnv(
+    'PREVIEW_STRIPE_UA_PRODUCTION_TEST_PROMOTION_CODE_ID'
+  );
+  const previewProductionTestPromotionEnvironment =
+    previewProductionTestPromotionCodeId
+      ? `      STRIPE_UA_PRODUCTION_TEST_PROMOTION_CODE_ID: ${q(previewProductionTestPromotionCodeId)}\n`
+      : '';
   const uaStudentBillingEnvironment = uaStudentBillingEnabled
     ? `      UA_STUDENT_BILLING_ENABLED: "true"
       UA_ORGANIZATION_ID: ${q(optionalEnv('PREVIEW_UA_ORGANIZATION_ID'))}
@@ -129,7 +136,7 @@ ${tlsLabels}
       STRIPE_SECRET_KEY: ${q(optionalEnv('PREVIEW_STRIPE_SECRET_KEY'))}
       STRIPE_WEBHOOK_SECRET: ${q(optionalEnv('PREVIEW_STRIPE_WEBHOOK_SECRET'))}
       STRIPE_UA_2026_PRICE_ID: ${q(optionalEnv('PREVIEW_STRIPE_UA_2026_PRICE_ID'))}
-      STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: ${q(optionalEnv('PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS'))}
+${previewProductionTestPromotionEnvironment}      STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: ${q(optionalEnv('PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS'))}
       YAWP_APP_ORIGIN: ${q(env.uaUrl)}
 `
     : '      UA_STUDENT_BILLING_ENABLED: "false"\n';

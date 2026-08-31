@@ -528,6 +528,100 @@ describe('Checkout return verification', () => {
 });
 
 describe('Checkout creation', () => {
+  test('rejects an unrecognized production-test code before creating a Checkout Session', async () => {
+    const findOrCreateLicense = mock();
+    const createCheckoutSession = mock();
+    const validateProductionTestPromotionCode = mock().mockResolvedValue(null);
+
+    const result = await createOrReuseCheckoutSession({
+      membershipId: 'membership-1',
+      successUrl: 'https://ua.yawp.school/billing/ua/success',
+      cancelUrl: 'https://ua.yawp.school/billing/ua?canceled=1',
+      productionTestCode: 'wrong-code',
+      config: getUaStudentLicenseConfig(enabledEnv),
+      dependencies: {
+        findMembership: mock().mockResolvedValue({
+          id: 'membership-1',
+          role: 'STUDENT',
+          organizationId: 'org-ua',
+          user: { email: 'student@example.com' },
+        }),
+        findOrCreateLicense,
+        validateConfiguredPrice: mock().mockResolvedValue({
+          productId: 'prod_ua',
+          livemode: false,
+        }),
+        validateProductionTestPromotionCode,
+        retrieveCheckoutSession: mock(),
+        expireCheckoutSession: mock(),
+        prepareAttempt: mock(),
+        createCheckoutSession,
+        attachCheckoutSession: mock(),
+      },
+    });
+
+    expect(result).toEqual({ kind: 'INVALID_PROMOTION_CODE' });
+    expect(validateProductionTestPromotionCode).toHaveBeenCalledWith({
+      code: 'wrong-code',
+      productId: 'prod_ua',
+      livemode: false,
+    });
+    expect(findOrCreateLicense).not.toHaveBeenCalled();
+    expect(createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  test('applies only the configured promotion ID after server-side code validation', async () => {
+    const createCheckoutSession = mock().mockResolvedValue({
+      id: 'cs_free',
+      url: 'https://checkout.stripe.test/cs_free',
+    });
+
+    const result = await createOrReuseCheckoutSession({
+      membershipId: 'membership-1',
+      successUrl: 'https://ua.yawp.school/billing/ua/success',
+      cancelUrl: 'https://ua.yawp.school/billing/ua?canceled=1',
+      productionTestCode: 'correct-high-entropy-code',
+      config: getUaStudentLicenseConfig(enabledEnv),
+      dependencies: {
+        findMembership: mock().mockResolvedValue({
+          id: 'membership-1',
+          role: 'STUDENT',
+          organizationId: 'org-ua',
+          user: { email: 'student@example.com' },
+        }),
+        findOrCreateLicense: mock().mockResolvedValue({
+          id: 'license-1',
+          status: 'PENDING',
+          validUntil: UA_STUDENT_LICENSE_VALID_UNTIL,
+          checkoutAttempt: 0,
+          stripeCheckoutSessionId: null,
+        }),
+        validateConfiguredPrice: mock().mockResolvedValue({
+          productId: 'prod_ua',
+          livemode: false,
+        }),
+        validateProductionTestPromotionCode: mock().mockResolvedValue(
+          'promo_ua_production_test'
+        ),
+        retrieveCheckoutSession: mock(),
+        expireCheckoutSession: mock(),
+        prepareAttempt: mock().mockResolvedValue(0),
+        createCheckoutSession,
+        attachCheckoutSession: mock(),
+      },
+    });
+
+    expect(result).toEqual({
+      kind: 'CHECKOUT',
+      url: 'https://checkout.stripe.test/cs_free',
+    });
+    expect(createCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        promotionCodeId: 'promo_ua_production_test',
+      })
+    );
+  });
+
   test('rejects a misconfigured Stripe price before opening Checkout', async () => {
     const createCheckoutSession = mock();
     await expect(

@@ -58,7 +58,7 @@ active-license cases remain deterministic after the real cohort expires.
 | Import safety | Bad status, wrong price, duplicate email/subscription, ambiguous membership, and conflicts fail closed | Import contract |
 | Import ownership | One Stripe subscription cannot be attached to a second student's license | Production adapter against PostgreSQL |
 | Checkout shape | One payment, one $50 USD line item, correct Price, Session/PaymentIntent metadata, customer/reference, and canonical callbacks | Browser E2E through Stripe SDK; emulator rejects malformed requests |
-| Production test promotion | The hosted field is enabled only with a configured Stripe `promo_` object ID; an invalid code stays in Checkout | Browser E2E through Stripe SDK |
+| Production test promotion | Yawp validates only the configured Stripe `promo_` object; an invalid code creates no Session, while the exact code creates an explicitly discounted $0 Session | Browser E2E through production route + Stripe SDK |
 | Zero-cost fulfillment | The exact configured promotion produces a $50 subtotal, $50 discount, $0 total, `no_payment_required`, and no PaymentIntent | Browser E2E + signed-webhook/domain contract |
 | Promotion mismatch | Wrong promotion object, subtotal, discount, total, Price, or PaymentIntent shape fails closed | Exhaustive domain contract |
 | Checkout cancel | Account remains; canceled copy, Retry, and Sign out remain available | Browser E2E |

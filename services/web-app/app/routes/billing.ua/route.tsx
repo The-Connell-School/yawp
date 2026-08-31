@@ -1,12 +1,14 @@
 import {
   Form,
   redirect,
+  useActionData,
   useLoaderData,
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
   type MetaFunction,
 } from 'react-router';
 import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
 import {
   createOrReuseCheckoutSession,
   getUaStudentLicenseAccess,
@@ -20,6 +22,8 @@ export const UA_CHECKOUT_CANCELED_MESSAGE =
   'Checkout was canceled. Retry only if your payment did not complete.';
 export const UA_DISPUTE_SUSPENDED_MESSAGE =
   'Your previous payment is under review. You cannot start another payment while Stripe resolves it. Access will update automatically when the review closes.';
+export const UA_INVALID_PROMOTION_CODE_MESSAGE =
+  'That promotion code is invalid or unavailable.';
 
 export function canStartUaCheckout({
   closed,
@@ -50,6 +54,7 @@ async function requirePaymentMembership(request: Request) {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const membership = await requirePaymentMembership(request);
+  const config = getUaStudentLicenseConfig();
   const searchParams = new URL(request.url).searchParams;
   const billingState = await getUaStudentLicenseBillingState({
     id: membership.id,
@@ -61,6 +66,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     processing: searchParams.get('processing') === '1',
     closed: isUaStudentLicenseSalesClosed(),
     suspended: billingState === 'SUSPENDED',
+    productionTestCodeEnabled:
+      config.enabled && Boolean(config.productionTestPromotionCodeId),
   };
 }
 
@@ -68,11 +75,23 @@ export async function action({ request }: ActionFunctionArgs) {
   const membership = await requirePaymentMembership(request);
   const config = getUaStudentLicenseConfig();
   if (!config.enabled) throw new Error('UA student billing is disabled');
+  const contentType = request.headers.get('content-type') ?? '';
+  const submittedCode =
+    contentType.includes('application/x-www-form-urlencoded') ||
+    contentType.includes('multipart/form-data')
+      ? (await request.formData()).get('productionTestCode')
+      : null;
+  const productionTestCode =
+    typeof submittedCode === 'string' ? submittedCode.trim() : '';
+  if (productionTestCode.length > 128) {
+    return { promotionCodeError: UA_INVALID_PROMOTION_CODE_MESSAGE };
+  }
   const origin = config.applicationOrigin;
   const checkout = await createOrReuseCheckoutSession({
     membershipId: membership.id,
     successUrl: `${origin}/billing/ua/success?session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${origin}/billing/ua?canceled=1`,
+    ...(productionTestCode ? { productionTestCode } : {}),
     config,
   });
 
@@ -84,12 +103,16 @@ export async function action({ request }: ActionFunctionArgs) {
   if (checkout.kind === 'SUSPENDED') {
     return redirect('/billing/ua?suspended=1');
   }
+  if (checkout.kind === 'INVALID_PROMOTION_CODE') {
+    return { promotionCodeError: UA_INVALID_PROMOTION_CODE_MESSAGE };
+  }
   return redirect(checkout.url);
 }
 
 export default function UaBillingRoute() {
-  const { canceled, closed, processing, suspended } =
+  const { canceled, closed, processing, suspended, productionTestCodeEnabled } =
     useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-8">
       <div className="w-full space-y-6 text-center">
@@ -121,7 +144,31 @@ export default function UaBillingRoute() {
         </div>
 
         {canStartUaCheckout({ closed, processing, suspended }) ? (
-          <Form method="POST">
+          <Form className="space-y-4" method="POST">
+            {productionTestCodeEnabled ? (
+              <div className="space-y-2 text-left">
+                <label className="text-sm font-medium" htmlFor="production-test-code">
+                  Promotion code <span className="font-normal text-muted-foreground">(optional)</span>
+                </label>
+                <Input
+                  aria-describedby="production-test-code-error"
+                  autoComplete="off"
+                  id="production-test-code"
+                  maxLength={128}
+                  name="productionTestCode"
+                  spellCheck={false}
+                />
+                {actionData && 'promotionCodeError' in actionData ? (
+                  <p
+                    className="text-sm text-destructive"
+                    id="production-test-code-error"
+                    role="alert"
+                  >
+                    {actionData.promotionCodeError}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <Button className="w-full" type="submit">
               {canceled ? 'Retry payment' : 'Continue to payment'}
             </Button>

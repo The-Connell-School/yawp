@@ -990,6 +990,7 @@ describe('PR preview deployment contract', () => {
       'PREVIEW_STRIPE_SECRET_KEY',
       'PREVIEW_STRIPE_WEBHOOK_SECRET',
       'PREVIEW_STRIPE_UA_2026_PRICE_ID',
+      'PREVIEW_STRIPE_UA_PRODUCTION_TEST_PROMOTION_CODE_ID',
     ]) {
       expect(previewWorkflow).toContain(name);
     }

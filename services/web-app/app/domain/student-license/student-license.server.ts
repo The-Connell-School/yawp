@@ -415,7 +415,15 @@ export async function verifyCheckoutSessionForReturn(
 }
 
 type CheckoutCreationDependencies = {
-  validateConfiguredPrice?: () => Promise<void>;
+  validateConfiguredPrice?: () => Promise<{
+    productId: string;
+    livemode: boolean;
+  }>;
+  validateProductionTestPromotionCode?: (args: {
+    code: string;
+    productId: string;
+    livemode: boolean;
+  }) => Promise<string | null>;
   findMembership: (membershipId: string) => Promise<
     | (MembershipForLicense & {
         user: { email: string };
@@ -434,7 +442,9 @@ type CheckoutCreationDependencies = {
     status: string | null;
     payment_status: string;
     url: string | null;
+    promotionCodeId?: string | null;
   }>;
+  expireCheckoutSession?: (id: string) => Promise<void>;
   prepareAttempt: (license: {
     id: string;
     checkoutAttempt: number;
@@ -446,6 +456,7 @@ type CheckoutCreationDependencies = {
     successUrl: string;
     cancelUrl: string;
     idempotencyKey: string;
+    promotionCodeId?: string;
   }) => Promise<{ id: string; url: string | null }>;
   attachCheckoutSession: (
     licenseId: string,
@@ -461,16 +472,56 @@ function defaultCheckoutCreationDependencies(
     async validateConfiguredPrice() {
       const price = await stripe.prices.retrieve(config.priceId);
       assertStripeModeAllowed(price.livemode);
+      const productId = stripeId(price.product);
       if (
         !price.active ||
         price.type !== 'one_time' ||
         price.currency.toLowerCase() !== 'usd' ||
-        price.unit_amount !== 5000
+        price.unit_amount !== 5000 ||
+        !productId
       ) {
         throw new Error(
           'Configured Stripe price must be active, one-time, USD 50'
         );
       }
+      return { productId, livemode: price.livemode };
+    },
+    async validateProductionTestPromotionCode({
+      code,
+      productId,
+      livemode,
+    }) {
+      if (!config.productionTestPromotionCodeId) return null;
+      const promotionCode = await stripe.promotionCodes.retrieve(
+        config.productionTestPromotionCodeId,
+        { expand: ['promotion.coupon'] }
+      );
+      const coupon = promotionCode.promotion.coupon;
+      if (!coupon || typeof coupon === 'string' || 'deleted' in coupon) {
+        return null;
+      }
+      assertStripeModeAllowed(promotionCode.livemode);
+      const now = Math.floor(getUaStudentLicenseNow().getTime() / 1000);
+      const isValid =
+        promotionCode.livemode === livemode &&
+        coupon.livemode === livemode &&
+        promotionCode.active &&
+        promotionCode.code.toLowerCase() === code.toLowerCase() &&
+        promotionCode.expires_at !== null &&
+        promotionCode.expires_at > now &&
+        promotionCode.max_redemptions === 1 &&
+        promotionCode.times_redeemed === 0 &&
+        promotionCode.customer === null &&
+        promotionCode.customer_account === null &&
+        promotionCode.restrictions.first_time_transaction === false &&
+        promotionCode.restrictions.minimum_amount === null &&
+        coupon.valid &&
+        coupon.percent_off === 100 &&
+        coupon.amount_off === null &&
+        coupon.duration === 'once' &&
+        coupon.applies_to?.products.length === 1 &&
+        coupon.applies_to.products[0] === productId;
+      return isValid ? promotionCode.id : null;
     },
     findMembership(membershipId) {
       return prisma.orgMembership.findFirst({
@@ -529,13 +580,22 @@ function defaultCheckoutCreationDependencies(
       }
     },
     async retrieveCheckoutSession(id) {
-      const session = await stripe.checkout.sessions.retrieve(id);
+      const session = await stripe.checkout.sessions.retrieve(id, {
+        expand: ['discounts.promotion_code'],
+      });
       return {
         id: session.id,
         status: session.status,
         payment_status: session.payment_status,
         url: session.url,
+        promotionCodeId:
+          session.discounts
+            ?.map((discount) => stripeId(discount.promotion_code))
+            .find((promotionCodeId) => Boolean(promotionCodeId)) ?? null,
       };
+    },
+    async expireCheckoutSession(id) {
+      await stripe.checkout.sessions.expire(id);
     },
     async prepareAttempt(license) {
       // Parallel first requests intentionally share attempt zero, and therefore
@@ -568,6 +628,7 @@ function defaultCheckoutCreationDependencies(
       successUrl,
       cancelUrl,
       idempotencyKey,
+      promotionCodeId,
     }) {
       const metadata = {
         membershipId: membership.id,
@@ -577,8 +638,8 @@ function defaultCheckoutCreationDependencies(
       const session = await stripe.checkout.sessions.create(
         {
           mode: 'payment',
-          ...(config.productionTestPromotionCodeId
-            ? { allow_promotion_codes: true }
+          ...(promotionCodeId
+            ? { discounts: [{ promotion_code: promotionCodeId }] }
             : {}),
           line_items: [{ price: config.priceId, quantity: 1 }],
           customer_email: membership.user.email,
@@ -605,6 +666,7 @@ export async function createOrReuseCheckoutSession({
   membershipId,
   successUrl,
   cancelUrl,
+  productionTestCode,
   config = getUaStudentLicenseConfig(),
   dependencies,
   now = getUaStudentLicenseNow(),
@@ -612,6 +674,7 @@ export async function createOrReuseCheckoutSession({
   membershipId: string;
   successUrl: string;
   cancelUrl: string;
+  productionTestCode?: string;
   config?: UaStudentLicenseConfig;
   dependencies?: CheckoutCreationDependencies;
   now?: Date;
@@ -620,6 +683,7 @@ export async function createOrReuseCheckoutSession({
   | { kind: 'CLOSED' }
   | { kind: 'PROCESSING' }
   | { kind: 'SUSPENDED' }
+  | { kind: 'INVALID_PROMOTION_CODE' }
   | { kind: 'CHECKOUT'; url: string }
 > {
   if (!config.enabled) throw new Error('UA student billing is disabled');
@@ -628,6 +692,31 @@ export async function createOrReuseCheckoutSession({
   if (!membership) throw new Error('Membership is not eligible for UA billing');
 
   if (isUaStudentLicenseSalesClosed(now)) return { kind: 'CLOSED' };
+
+  const submittedProductionTestCode = productionTestCode?.trim();
+  let productionTestPromotionCodeId: string | undefined;
+  let configuredPrice:
+    | { productId: string; livemode: boolean }
+    | undefined;
+  if (submittedProductionTestCode) {
+    if (
+      submittedProductionTestCode.length > 128 ||
+      !config.productionTestPromotionCodeId ||
+      !deps.validateConfiguredPrice ||
+      !deps.validateProductionTestPromotionCode
+    ) {
+      return { kind: 'INVALID_PROMOTION_CODE' };
+    }
+    configuredPrice = await deps.validateConfiguredPrice();
+    productionTestPromotionCodeId =
+      (await deps.validateProductionTestPromotionCode({
+        code: submittedProductionTestCode,
+        ...configuredPrice,
+      })) ?? undefined;
+    if (!productionTestPromotionCodeId) {
+      return { kind: 'INVALID_PROMOTION_CODE' };
+    }
+  }
 
   const license = await deps.findOrCreateLicense(membership);
   if (
@@ -647,8 +736,14 @@ export async function createOrReuseCheckoutSession({
       license.stripeCheckoutSessionId
     );
     if (existing.status === 'open' && existing.url) {
-      await deps.validateConfiguredPrice?.();
-      return { kind: 'CHECKOUT', url: existing.url };
+      const existingPromotionCodeId = existing.promotionCodeId ?? null;
+      const requestedPromotionCodeId =
+        productionTestPromotionCodeId ?? null;
+      if (existingPromotionCodeId === requestedPromotionCodeId) {
+        if (!configuredPrice) await deps.validateConfiguredPrice?.();
+        return { kind: 'CHECKOUT', url: existing.url };
+      }
+      await deps.expireCheckoutSession?.(existing.id);
     }
     if (
       existing.status === 'complete' &&
@@ -661,7 +756,7 @@ export async function createOrReuseCheckoutSession({
     }
   }
 
-  await deps.validateConfiguredPrice?.();
+  if (!configuredPrice) await deps.validateConfiguredPrice?.();
   const attempt = await deps.prepareAttempt(license);
   const session = await deps.createCheckoutSession({
     membership,
@@ -669,6 +764,9 @@ export async function createOrReuseCheckoutSession({
     successUrl,
     cancelUrl,
     idempotencyKey: `${UA_STUDENT_LICENSE_COHORT}:${license.id}`,
+    ...(productionTestPromotionCodeId
+      ? { promotionCodeId: productionTestPromotionCodeId }
+      : {}),
   });
   if (!session.url) throw new Error('Stripe did not return a Checkout URL');
   await deps.attachCheckoutSession(license.id, session.id);

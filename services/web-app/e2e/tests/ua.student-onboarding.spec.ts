@@ -136,6 +136,7 @@ async function getFakeStripeSessions(page: Page) {
         payment_intent_metadata: Record<string, string>;
         idempotency_key: string;
         allow_promotion_codes: boolean;
+        promotion_code: string | null;
       };
     }>;
   };
@@ -646,18 +647,21 @@ test.describe.serial('University of Alabama student onboarding', () => {
       });
 
       await signIn(page, unpaid.email, unpaid.password, /\/billing\/ua/);
-      await page.getByRole('button', { name: 'Continue to payment' }).click();
-      await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
-
       await expect(page.getByLabel('Promotion code')).toBeVisible();
       await page.getByLabel('Promotion code').fill('NOT-THE-TEST-CODE');
-      await page.getByRole('button', { name: 'Complete test payment' }).click();
-      await expect(page.getByText('Invalid promotion code')).toBeVisible();
-      await expect(page).toHaveURL(
-        new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`)
-      );
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await expect(
+        page.getByText('That promotion code is invalid or unavailable.')
+      ).toBeVisible();
+      await expect(page).toHaveURL(/\/billing\/ua/);
+
+      const invalidSessions = await getFakeStripeSessions(page);
+      expect(invalidSessions.data).toHaveLength(0);
 
       await page.getByLabel('Promotion code').fill(E2E_UA_PRODUCTION_TEST_CODE);
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
+      await expect(page.getByLabel('Promotion code')).toHaveCount(0);
       await page.getByRole('button', { name: 'Complete test payment' }).click();
       await page.waitForURL(/\/app\/?$/);
       await expect(page.getByRole('dialog')).toBeVisible();
@@ -671,6 +675,10 @@ test.describe.serial('University of Alabama student onboarding', () => {
         amount_total: 0,
         total_details: { amount_discount: 5_000 },
         discounts: [{ promotion_code: 'promo_ua_e2e_production_test' }],
+        test_request: {
+          allow_promotion_codes: false,
+          promotion_code: 'promo_ua_e2e_production_test',
+        },
       });
 
       const activeLicense = await prisma.studentLicense.findUniqueOrThrow({

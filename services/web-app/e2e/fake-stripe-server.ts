@@ -182,10 +182,8 @@ function checkoutHtml(session: FakeSession, error?: string) {
   <body>
     <main>
       <h1>Test Stripe Checkout</h1>
-      <p>One-time $50.00 payment</p>
+      <p>${session.promotionCodeId ? 'Promotion applied: $0.00 due' : 'One-time $50.00 payment'}</p>
       <form method="post" action="/checkout/${session.id}/pay">
-        <label for="promotion-code">Promotion code</label>
-        <input id="promotion-code" name="promotionCode" autocomplete="off">
         ${error ? `<p role="alert">${error}</p>` : ''}
         <button name="delivery" value="webhook" type="submit">Complete test payment</button>
         <button name="delivery" value="delayed" type="submit">Complete payment without webhook</button>
@@ -241,6 +239,7 @@ async function handler(request: Request) {
           payment_intent_metadata: session.paymentIntentMetadata,
           idempotency_key: session.idempotencyKey,
           allow_promotion_codes: session.allowPromotionCodes,
+          promotion_code: session.promotionCodeId,
         },
       })),
     });
@@ -256,17 +255,13 @@ async function handler(request: Request) {
     const session = requiredSession(checkoutPay[1]!);
     const form = await request.formData();
     const delivery = form.get('delivery');
-    const promotionCode = String(form.get('promotionCode') ?? '').trim();
-    if (promotionCode && promotionCode !== 'YAWP-E2E-100-OFF') {
-      return checkoutHtml(session, 'Invalid promotion code');
-    }
-    const isNoCost = promotionCode === 'YAWP-E2E-100-OFF';
+    const isNoCost =
+      session.promotionCodeId === 'promo_ua_e2e_production_test';
     session.status = 'complete';
     session.paymentStatus = isNoCost ? 'no_payment_required' : 'paid';
     session.amountTotal = isNoCost ? 0 : session.amountSubtotal;
     session.amountDiscount = isNoCost ? session.amountSubtotal : 0;
     session.paymentIntent = isNoCost ? null : `pi_${session.id}`;
-    session.promotionCodeId = isNoCost ? 'promo_ua_e2e_production_test' : null;
     session.url = null;
 
     if (delivery !== 'delayed') {
@@ -372,6 +367,7 @@ async function handler(request: Request) {
     const successUrl = body.get('success_url') ?? '';
     const cancelUrl = body.get('cancel_url') ?? '';
     const allowPromotionCodes = body.get('allow_promotion_codes') === 'true';
+    const promotionCodeId = body.get('discounts[0][promotion_code]');
     const requestFingerprint = JSON.stringify(
       [...body.entries()].sort(([leftKey, leftValue], [rightKey, rightValue]) =>
         `${leftKey}\0${leftValue}`.localeCompare(`${rightKey}\0${rightValue}`)
@@ -406,7 +402,10 @@ async function handler(request: Request) {
         ? null
         : 'unexpected cancel URL',
       idempotencyKey ? null : 'Idempotency-Key is required',
-      allowPromotionCodes ? null : 'promotion codes must be enabled',
+      allowPromotionCodes ? 'hosted promotion codes must remain disabled' : null,
+      promotionCodeId && promotionCodeId !== 'promo_ua_e2e_production_test'
+        ? 'unexpected promotion code'
+        : null,
     ].filter((error): error is string => Boolean(error));
     if (errors.length > 0) {
       return json(
@@ -441,12 +440,12 @@ async function handler(request: Request) {
       status: 'open',
       paymentStatus: 'unpaid',
       amountSubtotal: 5_000 * quantity,
-      amountTotal: 5_000 * quantity,
-      amountDiscount: 0,
+      amountTotal: promotionCodeId ? 0 : 5_000 * quantity,
+      amountDiscount: promotionCodeId ? 5_000 * quantity : 0,
       currency: 'usd',
       customer: `cus_${id}`,
       paymentIntent: null,
-      promotionCodeId: null,
+      promotionCodeId,
       metadata,
       priceId,
       quantity,
@@ -481,6 +480,53 @@ async function handler(request: Request) {
       livemode: false,
       type: 'one_time',
       unit_amount: 5000,
+      product: 'prod_ua_e2e_2026',
+    });
+  }
+
+  if (
+    request.method === 'GET' &&
+    url.pathname === '/v1/promotion_codes/promo_ua_e2e_production_test'
+  ) {
+    return json({
+      id: 'promo_ua_e2e_production_test',
+      object: 'promotion_code',
+      active: true,
+      code: 'YAWP-E2E-100-OFF',
+      created: Math.floor(Date.now() / 1000),
+      customer: null,
+      customer_account: null,
+      expires_at: Math.floor(Date.now() / 1000) + 3_600,
+      livemode: false,
+      max_redemptions: 1,
+      metadata: {},
+      promotion: {
+        type: 'coupon',
+        coupon: {
+          id: 'coupon_ua_e2e_production_test',
+          object: 'coupon',
+          amount_off: null,
+          applies_to: { products: ['prod_ua_e2e_2026'] },
+          created: Math.floor(Date.now() / 1000),
+          currency: null,
+          duration: 'once',
+          duration_in_months: null,
+          livemode: false,
+          max_redemptions: 1,
+          metadata: {},
+          name: 'UA E2E production test',
+          percent_off: 100,
+          redeem_by: Math.floor(Date.now() / 1000) + 3_600,
+          times_redeemed: 0,
+          valid: true,
+        },
+      },
+      restrictions: {
+        first_time_transaction: false,
+        minimum_amount: null,
+        minimum_amount_currency: null,
+      },
+      times_redeemed: 0,
     });
   }
 

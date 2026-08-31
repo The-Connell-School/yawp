@@ -25,6 +25,7 @@ const {
   canStartUaCheckout,
   UA_CHECKOUT_CANCELED_MESSAGE,
   UA_DISPUTE_SUSPENDED_MESSAGE,
+  UA_INVALID_PROMOTION_CODE_MESSAGE,
 } = await import('./route');
 
 describe('UA billing route', () => {
@@ -73,9 +74,58 @@ describe('UA billing route', () => {
         cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
       })
     );
-    expect(response.headers.get('location')).toBe(
+    expect((response as Response).headers.get('location')).toBe(
       'https://checkout.stripe.test/cs_1'
     );
+  });
+
+  test('passes the app-owned promotion code to billing and returns an inline invalid-code error', async () => {
+    getUaStudentLicenseConfig.mockReturnValue({
+      enabled: true,
+      organizationId: 'org-ua',
+      priceId: 'price_ua',
+      secretKey: 'sk_test',
+      webhookSecret: 'whsec_test',
+      applicationOrigin: 'https://yawp.school',
+      productionTestPromotionCodeId: 'promo_private',
+    });
+    createOrReuseCheckoutSession.mockResolvedValue({
+      kind: 'INVALID_PROMOTION_CODE',
+    });
+
+    const response = await action({
+      request: new Request('https://yawp.school/billing/ua', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ productionTestCode: 'specific-code' }),
+      }),
+    } as any);
+
+    expect(createOrReuseCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({ productionTestCode: 'specific-code' })
+    );
+    expect(response).toEqual({
+      promotionCodeError: UA_INVALID_PROMOTION_CODE_MESSAGE,
+    });
+  });
+
+  test('exposes only whether the private production-test field is enabled', async () => {
+    getUaStudentLicenseConfig.mockReturnValue({
+      enabled: true,
+      organizationId: 'org-ua',
+      priceId: 'price_ua',
+      secretKey: 'sk_test',
+      webhookSecret: 'whsec_test',
+      applicationOrigin: 'https://yawp.school',
+      productionTestPromotionCodeId: 'promo_private',
+    });
+
+    const loaded = await loader({
+      request: new Request('https://yawp.school/billing/ua'),
+    } as any);
+
+    expect(loaded).toMatchObject({ productionTestCodeEnabled: true });
+    expect(JSON.stringify(loaded)).not.toContain('promo_private');
   });
 
   test('renders the closed-sales state without opening Checkout', async () => {
@@ -85,7 +135,9 @@ describe('UA billing route', () => {
         method: 'POST',
       }),
     } as any);
-    expect(response.headers.get('location')).toBe('/billing/ua?closed=1');
+    expect((response as Response).headers.get('location')).toBe(
+      '/billing/ua?closed=1'
+    );
   });
 
   test('shows a dedicated suspended state and never opens a second Checkout during a dispute', async () => {
@@ -101,7 +153,7 @@ describe('UA billing route', () => {
         method: 'POST',
       }),
     } as any);
-    expect(response.headers.get('location')).toBe(
+    expect((response as Response).headers.get('location')).toBe(
       '/billing/ua?suspended=1'
     );
     expect(UA_DISPUTE_SUSPENDED_MESSAGE).toContain(

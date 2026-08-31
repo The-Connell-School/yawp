@@ -130,18 +130,23 @@ Configure only its non-secret Stripe object ID and apply Terraform:
 stripe_ua_production_test_promotion_code_id=<live promo_ object ID>
 ```
 
-That setting enables Stripe's hosted promotion-code field. Yawp accepts a
-zero-cost completion only when the signed Session uses that exact Promotion
-Code, retains the configured $50 UA Price and quantity, reports a $50 subtotal
-and discount with a $0 total, and has no PaymentIntent. Normal and invalid-code
-checkouts remain $50.
+That setting enables Yawp's optional promotion-code field. Yawp retrieves that
+exact Stripe object, validates the typed code and its live-mode, expiry,
+single-redemption, 100%-off, one-time, and UA Product restrictions, and only
+then creates Checkout with the exact `promo_` ID. Stripe's account-wide hosted
+promotion field stays disabled, so another valid account promotion cannot
+charge a discounted amount that Yawp would reject. A zero-cost completion is
+accepted only when the signed Session retains the configured $50 UA Price and
+quantity, reports a $50 subtotal and discount with a $0 total, uses the exact
+Promotion Code, and has no PaymentIntent. Normal and invalid-code checkouts
+remain $50; an invalid code creates no Checkout Session.
 
 Complete the smoke with a disposable new UA student, verify the license is
 active with `amountPaid=0` and no PaymentIntent, and confirm no Charge exists.
 Deactivate the Promotion Code immediately after the smoke, then clear
 `stripe_ua_production_test_promotion_code_id` in the next routine Terraform
 apply. Deactivation is the immediate kill switch; clearing runtime configuration
-removes the hosted code field on the subsequent App Runner revision.
+removes Yawp's code field on the subsequent App Runner revision.
 
 ## Cancellation, refunds, and disputes
 
