@@ -190,6 +190,11 @@ export async function addGroup({
       tx,
       classAssignmentId
     );
+    if (classAssignment.assignment.collaborationGroupMode === 'whole-class') {
+      throw new GroupEditingError(
+        'A whole-class assignment must use its single shared group.'
+      );
+    }
     if (
       classAssignment.documentGroups.some((group) => group.openedAt !== null)
     ) {
@@ -280,6 +285,12 @@ export async function createLateStudentGroup({
       tx,
       classAssignmentId
     );
+
+    if (classAssignment.assignment.collaborationGroupMode === 'whole-class') {
+      throw new GroupEditingError(
+        'Place the student into the existing whole-class group.'
+      );
+    }
 
     if (
       !classAssignment.class.students.some(

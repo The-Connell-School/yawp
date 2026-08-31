@@ -107,6 +107,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 is: {
                   class: {
                     school: { organizationId: profile.organization.id },
+                    students: { some: { id: profile.id } },
                   },
                 },
               },

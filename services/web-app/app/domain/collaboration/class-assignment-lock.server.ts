@@ -1,6 +1,25 @@
 import type { Prisma } from '@app/prisma';
 
 /**
+ * Serializes roster writers per student. Always acquire these locks before
+ * class-assignment locks so organization-owner and teacher roster operations
+ * cannot observe or overwrite a stale class list.
+ */
+export async function lockStudentRosters(
+  tx: Prisma.TransactionClient,
+  membershipIds: string[]
+) {
+  for (const membershipId of [...new Set(membershipIds)].sort()) {
+    await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "OrgMembership"
+      WHERE "id" = ${membershipId}
+      FOR UPDATE
+    `;
+  }
+}
+
+/**
  * Finalization and every seating-chart mutation serialize on the deployment
  * row. Reading `openedAt` without this lock leaves a window where a teacher can
  * move a student while another request is attaching live artifacts.

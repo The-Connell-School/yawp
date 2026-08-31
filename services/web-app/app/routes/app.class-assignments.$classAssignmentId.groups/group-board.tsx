@@ -411,7 +411,7 @@ export function GroupBoard({
         board
       )}
 
-      {disabled || frozenMembers ? null : (
+      {disabled || frozenMembers || wholeClass ? null : (
         <fetcher.Form method="post">
           <input type="hidden" name="intent" value="add-group" />
           <Button type="submit" variant="outline" size="sm">

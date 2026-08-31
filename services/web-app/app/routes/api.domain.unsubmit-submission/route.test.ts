@@ -108,6 +108,14 @@ describe('api.domain.unsubmit-submission', () => {
                   },
                 },
               },
+              classAssignment: {
+                is: {
+                  class: {
+                    school: { organizationId: 'org-1' },
+                    students: { some: { id: 'student-1' } },
+                  },
+                },
+              },
             },
           ],
         },
@@ -140,6 +148,14 @@ describe('api.domain.unsubmit-submission', () => {
         is: {
           members: {
             some: { membershipId: 'student-1', removedAt: null },
+          },
+        },
+      },
+      classAssignment: {
+        is: {
+          class: {
+            school: { organizationId: 'org-1' },
+            students: { some: { id: 'student-1' } },
           },
         },
       },
@@ -231,6 +247,14 @@ describe('api.domain.unsubmit-submission', () => {
                   },
                 },
               },
+              classAssignment: {
+                is: {
+                  class: {
+                    school: { organizationId: 'org-1' },
+                    students: { some: { id: 'student-1' } },
+                  },
+                },
+              },
             },
           ],
         },
@@ -313,6 +337,14 @@ describe('api.domain.unsubmit-submission', () => {
                 is: {
                   members: {
                     some: { membershipId: 'student-1', removedAt: null },
+                  },
+                },
+              },
+              classAssignment: {
+                is: {
+                  class: {
+                    school: { organizationId: 'org-1' },
+                    students: { some: { id: 'student-1' } },
                   },
                 },
               },

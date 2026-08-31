@@ -110,7 +110,11 @@ export async function openGroups({
         id: true,
         assignmentId: true,
         assignment: {
-          select: { assignmentTypeId: true, collaborationEnabled: true },
+          select: {
+            assignmentTypeId: true,
+            collaborationEnabled: true,
+            collaborationGroupMode: true,
+          },
         },
         class: { select: { students: { select: { id: true } } } },
         documentGroups: {
@@ -138,6 +142,14 @@ export async function openGroups({
     }
     if (classAssignment.documentGroups.length === 0) {
       throw new GroupProvisioningError('Arrange groups before opening them.');
+    }
+    if (
+      classAssignment.assignment.collaborationGroupMode === 'whole-class' &&
+      classAssignment.documentGroups.length !== 1
+    ) {
+      throw new GroupProvisioningError(
+        'A whole-class assignment must have exactly one shared group.'
+      );
     }
 
     // Finalization is the point at which the seating chart becomes durable

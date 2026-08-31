@@ -51,7 +51,11 @@ const classAssignmentWithGroups = (
 ) => ({
   id: 'ca-1',
   assignmentId: 'a-1',
-  assignment: { assignmentTypeId: 'at-1', collaborationEnabled },
+  assignment: {
+    assignmentTypeId: 'at-1',
+    collaborationEnabled,
+    collaborationGroupMode: 'teacher',
+  },
   class: { students: roster.map((id) => ({ id })) },
   documentGroups: groups,
 });
@@ -337,6 +341,30 @@ describe('openGroups', () => {
     await expect(openGroups({ classAssignmentId: 'ca-1' })).rejects.toThrow(
       /Arrange groups/
     );
+  });
+
+  test('refuses to finalize more than one group in whole-class mode', async () => {
+    const fixture = classAssignmentWithGroups([
+      {
+        id: 'g-1',
+        documentId: null,
+        openedAt: null,
+        members: [{ membershipId: 'm1' }],
+      },
+      {
+        id: 'g-2',
+        documentId: null,
+        openedAt: null,
+        members: [{ membershipId: 'm2' }],
+      },
+    ]);
+    fixture.assignment.collaborationGroupMode = 'whole-class';
+    prisma.classAssignment.findUnique.mockResolvedValue(fixture);
+
+    await expect(openGroups({ classAssignmentId: 'ca-1' })).rejects.toThrow(
+      /exactly one shared group/i
+    );
+    expect(createAssignmentGroupArtifactInTransaction).not.toHaveBeenCalled();
   });
 
   test('refuses to finalize while any enrolled student is unassigned', async () => {

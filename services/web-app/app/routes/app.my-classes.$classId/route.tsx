@@ -133,7 +133,10 @@ import {
   lookupStudentEmailForClass,
   sendStudentClassInvite,
 } from './class-student-enrollment.server';
-import { lockClassCollaborationDeployments } from '~/domain/collaboration/class-assignment-lock.server';
+import {
+  lockClassCollaborationDeployments,
+  lockStudentRosters,
+} from '~/domain/collaboration/class-assignment-lock.server';
 import { filterClassStudentsByQuery } from './class-students-search';
 import {
   StudentGrowthPlansSheet,
@@ -714,6 +717,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     await prisma.$transaction(async (tx) => {
+      await lockStudentRosters(tx, studentProfileIds);
       await lockClassCollaborationDeployments(tx, classId);
       await tx.documentGroupMember.updateMany({
         where: {
@@ -783,6 +787,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     await prisma.$transaction(async (tx) => {
+      await lockStudentRosters(tx, studentProfileIds);
       for (const lockedClassId of [classId, targetClassId].sort()) {
         await lockClassCollaborationDeployments(tx, lockedClassId);
       }

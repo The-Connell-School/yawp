@@ -429,8 +429,8 @@ export default function GroupsRoute() {
           >
             Groups are finalized and each one has its own draft. Existing
             members stay with their original artifact. If a student joins the
-            class later, place that student into an existing group or create a
-            new group for them below.
+            class later, place that student into an existing group
+            {data.isWholeClass ? '.' : ' or create a new group for them below.'}
           </p>
         ) : (
           <Form method="post" className="mb-6 flex flex-wrap items-end gap-3">
@@ -476,7 +476,9 @@ export default function GroupsRoute() {
               wholeClass={data.isWholeClass}
             />
 
-            {data.finalized && data.unassigned.length > 0 ? (
+            {data.finalized &&
+            data.unassigned.length > 0 &&
+            !data.isWholeClass ? (
               <div className="mt-6 rounded border p-4">
                 <h2 className="text-sm font-semibold">New students</h2>
                 <p className="mt-1 text-xs text-muted-foreground">

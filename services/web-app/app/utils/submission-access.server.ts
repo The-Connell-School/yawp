@@ -33,6 +33,14 @@ export function buildSubmissionTitleEditWhere(params: {
                 },
               },
             },
+            classAssignment: {
+              is: {
+                class: {
+                  school: { organizationId: params.organizationId },
+                  students: { some: { id: params.membershipId } },
+                },
+              },
+            },
           },
           {
             ...buildTeacherDocumentAccessWhere({

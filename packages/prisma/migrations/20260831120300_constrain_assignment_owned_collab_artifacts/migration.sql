@@ -2,6 +2,19 @@
 SET lock_timeout = '5s';
 SET statement_timeout = '5min';
 
+-- Keep the compatibility guards visible until the permanent constraints and
+-- triggers are ready to become visible in the same commit.
+BEGIN;
+
+DROP TRIGGER "DocumentGroup_compat_graph_check" ON "DocumentGroup";
+DROP FUNCTION validate_assignment_group_compat_write();
+DROP TRIGGER "Document_compat_graph_check" ON "Document";
+DROP FUNCTION validate_assignment_document_compat_write();
+DROP TRIGGER "Assignment_compat_type_check" ON "Assignment";
+DROP FUNCTION protect_assignment_type_compat_write();
+DROP TRIGGER "ClassAssignment_compat_owner_check" ON "ClassAssignment";
+DROP FUNCTION protect_deployment_owner_compat_write();
+
 ALTER TABLE "DocumentGroup"
   ALTER COLUMN "classAssignmentId" SET NOT NULL,
   ADD CONSTRAINT "DocumentGroup_assignment_only_check"
@@ -200,3 +213,5 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER "Assignment_delete_owned_artifacts"
 BEFORE DELETE ON "Assignment"
 FOR EACH ROW EXECUTE FUNCTION delete_assignment_group_artifacts();
+
+COMMIT;

@@ -58,6 +58,14 @@ export async function action({ request }: ActionFunctionArgs) {
                       },
                     },
                   },
+                  classAssignment: {
+                    is: {
+                      class: {
+                        school: { organizationId: actor.organizationId },
+                        students: { some: { id: actor.membershipId } },
+                      },
+                    },
+                  },
                 },
               ],
             },
@@ -119,6 +127,14 @@ export async function action({ request }: ActionFunctionArgs) {
                           membershipId: actor.membershipId,
                           removedAt: null,
                         },
+                      },
+                    },
+                  },
+                  classAssignment: {
+                    is: {
+                      class: {
+                        school: { organizationId: actor.organizationId },
+                        students: { some: { id: actor.membershipId } },
                       },
                     },
                   },

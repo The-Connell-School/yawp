@@ -38,14 +38,24 @@ const OPENED_AT = new Date('2026-08-17T12:00:00Z');
 
 const classAssignment = ({
   opened = false,
+  mode = 'teacher',
   roster = ['s-1', 's-2', 's-3'],
   groups = [
     { id: 'g-1', ordinal: 0, members: [{ membershipId: 's-1' }] },
     { id: 'g-2', ordinal: 1, members: [{ membershipId: 's-2' }] },
   ] as { id: string; ordinal: number; members: { membershipId: string }[] }[],
+}: {
+  opened?: boolean;
+  mode?: string;
+  roster?: string[];
+  groups?: {
+    id: string;
+    ordinal: number;
+    members: { membershipId: string }[];
+  }[];
 } = {}) => ({
   id: CA,
-  assignment: { collaborationGroupMode: 'teacher' },
+  assignment: { collaborationGroupMode: mode },
   class: { students: roster.map((id) => ({ id })) },
   documentGroups: groups.map((group) => ({
     ...group,
@@ -246,6 +256,15 @@ describe('addGroup', () => {
 
     await expect(add()).rejects.toThrow(/finalized/i);
   });
+
+  test('refuses to create a second group for whole-class collaboration', async () => {
+    tx.classAssignment.findUnique.mockResolvedValue(
+      classAssignment({ mode: 'whole-class' })
+    );
+
+    await expect(add()).rejects.toThrow(/single shared group/i);
+    expect(tx.documentGroup.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('createLateStudentGroup', () => {
@@ -274,6 +293,20 @@ describe('createLateStudentGroup', () => {
       { groupId: 'g-new' }
     );
     expect(result.documentId).toBe('doc-new');
+  });
+
+  test('requires a late student to join the existing whole-class group', async () => {
+    tx.classAssignment.findUnique.mockResolvedValue(
+      classAssignment({ opened: true, mode: 'whole-class' })
+    );
+
+    await expect(
+      createLateStudentGroup({
+        classAssignmentId: CA,
+        membershipId: 's-3',
+      })
+    ).rejects.toThrow(/existing whole-class group/i);
+    expect(tx.documentGroup.create).not.toHaveBeenCalled();
   });
 });
 
