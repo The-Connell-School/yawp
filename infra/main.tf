@@ -3,6 +3,7 @@ data "aws_availability_zones" "available" {}
 locals {
   production_edge_enabled = var.env == "production" && var.production_domain_name != ""
   production_domain_zone  = "${trim(var.production_domain_name, ".")}."
+  production_edge_aliases = distinct([var.production_domain_name, var.ua_partner_hostname])
   apprunner_origin_domain = trimsuffix(replace(replace(aws_apprunner_service.web.service_url, "https://", ""), "http://", ""), "/")
 }
 
@@ -482,6 +483,7 @@ resource "aws_apprunner_service" "web" {
           UA_STUDENT_BILLING_ENABLED                = tostring(var.ua_student_billing_enabled)
           UA_ORGANIZATION_ID                        = var.ua_organization_id
           UA_PARTNER_CODE                           = var.ua_partner_code
+          UA_PARTNER_HOSTNAME                       = var.ua_partner_hostname
           STRIPE_UA_2026_PRICE_ID                   = var.stripe_ua_2026_price_id
           STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS = join(",", var.stripe_ua_existing_subscription_price_ids)
           YAWP_APP_ORIGIN                           = var.yawp_app_origin
@@ -539,12 +541,13 @@ resource "aws_apprunner_service" "web" {
       condition = !var.ua_student_billing_enabled || (
         trimspace(var.ua_organization_id) != "" &&
         trimspace(var.ua_partner_code) != "" &&
+        trimspace(var.ua_partner_hostname) != "" &&
         trimspace(var.stripe_secret_key) != "" &&
         trimspace(var.stripe_webhook_secret) != "" &&
         trimspace(var.stripe_ua_2026_price_id) != "" &&
-        can(regex("^https://", var.yawp_app_origin))
+        var.yawp_app_origin == "https://${var.ua_partner_hostname}"
       )
-      error_message = "UA billing requires the organization ID, partner code, Stripe key, webhook secret, price ID, and an HTTPS app origin."
+      error_message = "UA billing requires the organization ID, partner code, partner hostname, Stripe key, webhook secret, price ID, and a matching HTTPS UA app origin."
     }
   }
 }
@@ -552,6 +555,7 @@ resource "aws_apprunner_service" "web" {
 resource "aws_acm_certificate" "web_edge" {
   count             = local.production_edge_enabled ? 1 : 0
   domain_name       = var.production_domain_name
+  subject_alternative_names = var.ua_partner_hostname == var.production_domain_name ? [] : [var.ua_partner_hostname]
   validation_method = "DNS"
 
   lifecycle {
@@ -592,7 +596,7 @@ resource "aws_cloudfront_distribution" "web_edge" {
   enabled         = true
   is_ipv6_enabled = true
   comment         = "${var.app_name}-${var.env} TLS 1.3 edge"
-  aliases         = [var.production_domain_name]
+  aliases         = local.production_edge_aliases
 
   origin {
     domain_name = local.apprunner_origin_domain
@@ -662,6 +666,34 @@ resource "aws_route53_record" "production_domain_aaaa" {
   }
 }
 
+resource "aws_route53_record" "ua_domain_a" {
+  count           = local.production_edge_enabled ? 1 : 0
+  allow_overwrite = true
+  name            = var.ua_partner_hostname
+  type            = "A"
+  zone_id         = data.aws_route53_zone.production_domain[0].zone_id
+
+  alias {
+    name                   = aws_cloudfront_distribution.web_edge[0].domain_name
+    zone_id                = aws_cloudfront_distribution.web_edge[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "ua_domain_aaaa" {
+  count           = local.production_edge_enabled ? 1 : 0
+  allow_overwrite = true
+  name            = var.ua_partner_hostname
+  type            = "AAAA"
+  zone_id         = data.aws_route53_zone.production_domain[0].zone_id
+
+  alias {
+    name                   = aws_cloudfront_distribution.web_edge[0].domain_name
+    zone_id                = aws_cloudfront_distribution.web_edge[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
 # -----------------------
 # S3 bucket for videos/files
 # -----------------------
@@ -704,6 +736,7 @@ resource "aws_s3_bucket_cors_configuration" "videos" {
       "http://localhost:5173",
       "https://${aws_apprunner_service.web.service_url}",
       "https://yawp.school",
+      "https://${var.ua_partner_hostname}",
     ]
     allowed_headers = ["*"]
     expose_headers  = ["ETag", "x-amz-request-id", "x-amz-id-2"]

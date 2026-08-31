@@ -22,6 +22,7 @@ export type UaStudentLicenseConfig =
 
 const EnabledConfigSchema = z.object({
   UA_ORGANIZATION_ID: z.string().min(1),
+  UA_PARTNER_HOSTNAME: z.string().min(1),
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
   STRIPE_UA_2026_PRICE_ID: z.string().min(1),
@@ -44,6 +45,8 @@ export function getUaStudentLicenseConfig(
       applicationUrl.protocol !== 'http:') ||
     applicationUrl.username ||
     applicationUrl.password ||
+    applicationUrl.hostname.toLowerCase() !==
+      parsed.data.UA_PARTNER_HOSTNAME.toLowerCase() ||
     applicationUrl.pathname !== '/' ||
     applicationUrl.search ||
     applicationUrl.hash

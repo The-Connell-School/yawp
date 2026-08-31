@@ -127,10 +127,16 @@ variable "ua_partner_code" {
   default     = ""
 }
 
+variable "ua_partner_hostname" {
+  type        = string
+  description = "Dedicated hostname for the University of Alabama partner experience."
+  default     = "ua.yawp.school"
+}
+
 variable "yawp_app_origin" {
   type        = string
   description = "Public origin Stripe uses for checkout success and cancellation redirects."
-  default     = "https://yawp.school"
+  default     = "https://ua.yawp.school"
 }
 
 variable "stripe_secret_key" {

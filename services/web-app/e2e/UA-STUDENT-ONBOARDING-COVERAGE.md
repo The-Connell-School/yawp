@@ -25,7 +25,9 @@ active-license cases remain deterministic after the real cohort expires.
 
 | Area | Edge case | Proof |
 | --- | --- | --- |
-| Partner entry | A valid `organizationCode` on `/ua`, `/ua/sign-in`, or `/ua/sign-up` is remembered and removed from the URL (`code` remains a compatible alias) | Browser E2E + route contract |
+| Partner entry | A valid `organizationCode` on any `ua.yawp.school` route is remembered in a signed host-only cookie and removed from the URL (`code` remains a production-compatible alias) | Browser E2E + request-boundary contract |
+| Host isolation | `ua.yawp.school` and `yawp.school` use the same auth routes but keep separate branding, partner context, and login sessions | Browser E2E + cookie contract |
+| Checkout return | Stripe success and cancellation return to the UA hostname while the server-to-server webhook remains on the default host | Browser E2E + deployment contract |
 | Partner entry | A bare `/ua` URL does not silently accept an organization code | Route contract |
 | Partner entry | The accepted code survives refresh until the student explicitly clears it | Browser E2E + cookie contract |
 | Partner entry | Clearing the accepted code makes UA signup require the code again | Browser E2E + route contract |

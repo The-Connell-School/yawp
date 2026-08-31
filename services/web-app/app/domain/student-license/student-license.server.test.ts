@@ -21,7 +21,8 @@ const enabledEnv = {
   STRIPE_SECRET_KEY: 'sk_test_example',
   STRIPE_WEBHOOK_SECRET: 'whsec_example',
   STRIPE_UA_2026_PRICE_ID: 'price_ua_2026',
-  YAWP_APP_ORIGIN: 'https://yawp.school',
+  UA_PARTNER_HOSTNAME: 'ua.yawp.school',
+  YAWP_APP_ORIGIN: 'https://ua.yawp.school',
 };
 
 describe('UA student license configuration', () => {
@@ -38,12 +39,18 @@ describe('UA student license configuration', () => {
   test('requires a canonical application origin without a path', () => {
     expect(getUaStudentLicenseConfig(enabledEnv)).toMatchObject({
       enabled: true,
-      applicationOrigin: 'https://yawp.school',
+      applicationOrigin: 'https://ua.yawp.school',
     });
     expect(() =>
       getUaStudentLicenseConfig({
         ...enabledEnv,
         YAWP_APP_ORIGIN: 'https://yawp.school/untrusted-path',
+      })
+    ).toThrow('Invalid UA student billing configuration');
+    expect(() =>
+      getUaStudentLicenseConfig({
+        ...enabledEnv,
+        YAWP_APP_ORIGIN: 'https://yawp.school',
       })
     ).toThrow('Invalid UA student billing configuration');
     expect(() =>
