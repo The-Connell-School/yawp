@@ -258,7 +258,7 @@ async function waitForUrl(url, timeoutMs = 90000) {
 async function devStart({ json }) {
   if (!config()) bootstrap({ fresh: false, json });
   const local = requireConfig();
-  const url = `http://127.0.0.1:${local.DEV_PORT}/`;
+  const url = `http://localhost:${local.DEV_PORT}/`;
   if (fs.existsSync(DEV_PID_FILE)) {
     const pid = Number(fs.readFileSync(DEV_PID_FILE, "utf8").trim());
     if (pidLive(pid) && await httpReady(url)) return { schemaVersion: "project.dev/v1", status: "ready", reused: true, pid, url, log: DEV_LOG_FILE };
@@ -285,7 +285,7 @@ async function devStart({ json }) {
 function devStatus() {
   const local = requireConfig();
   const pid = fs.existsSync(DEV_PID_FILE) ? Number(fs.readFileSync(DEV_PID_FILE, "utf8").trim()) : null;
-  return { schemaVersion: "project.dev/v1", status: pidLive(pid) ? "running" : "stopped", pid, url: `http://127.0.0.1:${local.DEV_PORT}/`, log: DEV_LOG_FILE };
+  return { schemaVersion: "project.dev/v1", status: pidLive(pid) ? "running" : "stopped", pid, url: `http://localhost:${local.DEV_PORT}/`, log: DEV_LOG_FILE };
 }
 
 function devStop() {
