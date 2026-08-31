@@ -136,6 +136,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                   classAssignment: {
                     is: {
                       OR: [{ postAt: null }, { postAt: { lte: new Date() } }],
+                      class: { students: { some: { id: profile.id } } },
                     },
                   },
                 },

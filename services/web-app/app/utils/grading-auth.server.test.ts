@@ -161,4 +161,26 @@ describe('grading auth helpers', () => {
       })
     );
   });
+
+  test('rechecks the activity-ledger feature before changing a released shared grade', () => {
+    const where = buildGradeWriteSubjectWhere({
+      actorUserId: 'teacher-user-1',
+      releasedAt: new Date('2026-08-31T12:00:00.000Z'),
+    }) as any;
+
+    expect(where.OR).toContainEqual({
+      artifactKind: 'ASSIGNMENT_GROUP',
+      classAssignment: {
+        is: {
+          class: {
+            school: {
+              organization: {
+                is: { submissionActivityEnabled: true },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
 });

@@ -133,6 +133,7 @@ import {
   lookupStudentEmailForClass,
   sendStudentClassInvite,
 } from './class-student-enrollment.server';
+import { lockClassCollaborationDeployments } from '~/domain/collaboration/class-assignment-lock.server';
 import { filterClassStudentsByQuery } from './class-students-search';
 import {
   StudentGrowthPlansSheet,
@@ -712,12 +713,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    for (const student of students) {
-      await prisma.orgMembership.update({
-        where: { id: student.id },
-        data: { classesAsStudent: { disconnect: { id: classId } } },
+    await prisma.$transaction(async (tx) => {
+      await lockClassCollaborationDeployments(tx, classId);
+      await tx.documentGroupMember.updateMany({
+        where: {
+          membershipId: { in: studentProfileIds },
+          removedAt: null,
+          group: { classAssignment: { classId } },
+        },
+        data: { removedAt: new Date() },
       });
-    }
+      for (const student of students) {
+        await tx.orgMembership.update({
+          where: { id: student.id },
+          data: { classesAsStudent: { disconnect: { id: classId } } },
+        });
+      }
+    });
 
     return dataResponse({ success: true });
   }
@@ -770,17 +782,30 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    for (const student of students) {
-      await prisma.orgMembership.update({
-        where: { id: student.id },
-        data: {
-          classesAsStudent: {
-            disconnect: { id: classId },
-            connect: { id: targetClassId },
-          },
+    await prisma.$transaction(async (tx) => {
+      for (const lockedClassId of [classId, targetClassId].sort()) {
+        await lockClassCollaborationDeployments(tx, lockedClassId);
+      }
+      await tx.documentGroupMember.updateMany({
+        where: {
+          membershipId: { in: studentProfileIds },
+          removedAt: null,
+          group: { classAssignment: { classId } },
         },
+        data: { removedAt: new Date() },
       });
-    }
+      for (const student of students) {
+        await tx.orgMembership.update({
+          where: { id: student.id },
+          data: {
+            classesAsStudent: {
+              disconnect: { id: classId },
+              connect: { id: targetClassId },
+            },
+          },
+        });
+      }
+    });
 
     return dataResponse({ success: true });
   }
@@ -1059,6 +1084,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             documents: true,
           },
         },
+        documentGroups: {
+          where: { documentId: { not: null } },
+          take: 1,
+          select: { id: true },
+        },
       },
       orderBy: [{ createdAt: 'desc' }],
     }),
@@ -1133,6 +1163,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ),
     _count: classAssignment._count,
     insight: insightByClassAssignmentId.get(classAssignment.id) ?? null,
+    hasSharedWork: classAssignment.documentGroups.length > 0,
   }));
 
   const teacherClasses = await prisma.class.findMany({

@@ -15,6 +15,7 @@ import {
 } from '~/domain/assignments/collaboration';
 import {
   addGroup,
+  createLateStudentGroup,
   GroupEditingError,
   moveStudentToGroup,
   removeEmptyGroup,
@@ -138,6 +139,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const nonemptyGroups = groups.filter((group) =>
     group.members.some((member) => member.removedAt === null)
   );
+  const finalized = groups.some(
+    (group) => group.openedAt !== null || group.documentId !== null
+  );
+  const complete =
+    finalized &&
+    nonemptyGroups.length > 0 &&
+    unassigned.length === 0 &&
+    nonemptyGroups.every(
+      (group) => group.openedAt !== null && group.documentId !== null
+    );
 
   return dataResponse({
     classAssignmentId: classAssignment.id,
@@ -151,12 +162,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       MIN_COLLABORATION_GROUP_SIZE,
     isWholeClass:
       classAssignment.assignment.collaborationGroupMode === 'whole-class',
-    opened:
-      nonemptyGroups.length > 0 &&
-      unassigned.length === 0 &&
-      nonemptyGroups.every(
-        (group) => group.openedAt !== null && group.documentId !== null
-      ),
+    finalized,
+    complete,
     groups: groups.map((group) => ({
       id: group.id,
       label: group.label,
@@ -202,7 +209,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
   // they answer with data the page reads inline rather than a redirect+toast. A
   // fetcher that receives a redirect navigates the whole app, which would throw
   // the teacher off the page mid-arrangement.
-  const editIntents = ['move-student', 'add-group', 'remove-group'];
+  const editIntents = [
+    'move-student',
+    'add-group',
+    'remove-group',
+    'create-late-group',
+  ];
   if (intent && editIntents.includes(intent)) {
     try {
       if (intent === 'move-student') {
@@ -237,6 +249,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
         await removeEmptyGroup({
           classAssignmentId: classAssignment.id,
           groupId,
+        });
+      }
+
+      if (intent === 'create-late-group') {
+        const membershipId = formData.get('membershipId')?.toString();
+        if (!membershipId) {
+          return dataResponse(
+            { success: false, message: 'No student to assign.' },
+            { status: 400 }
+          );
+        }
+        await createLateStudentGroup({
+          classAssignmentId: classAssignment.id,
+          membershipId,
         });
       }
 
@@ -302,19 +328,36 @@ export async function action({ request, params }: ActionFunctionArgs) {
         orderBy: { createdAt: 'asc' },
         select: {
           id: true,
+          class: { select: { students: { select: { id: true } } } },
           documentGroups: {
-            where: { members: { some: { removedAt: null } } },
-            select: { documentId: true, openedAt: true },
+            select: {
+              documentId: true,
+              openedAt: true,
+              members: {
+                where: { removedAt: null },
+                select: { membershipId: true },
+              },
+            },
           },
         },
       });
-      const nextDeployment = remainingDeployments.find(
-        (deployment) =>
-          deployment.documentGroups.length === 0 ||
-          deployment.documentGroups.some(
-            (group) => group.documentId === null || group.openedAt === null
+      const nextDeployment = remainingDeployments.find((deployment) => {
+        const roster = new Set(
+          deployment.class.students.map((student) => student.id)
+        );
+        const assigned = new Set(
+          deployment.documentGroups.flatMap((group) =>
+            group.openedAt !== null && group.documentId !== null
+              ? group.members.map((member) => member.membershipId)
+              : []
           )
-      );
+        );
+        return (
+          roster.size === 0 ||
+          assigned.size !== roster.size ||
+          [...roster].some((membershipId) => !assigned.has(membershipId))
+        );
+      });
       const nextUrl = nextDeployment
         ? `/app/class-assignments/${nextDeployment.id}/groups`
         : backTo;
@@ -379,14 +422,15 @@ export default function GroupsRoute() {
           </p>
         </header>
 
-        {data.opened ? (
+        {data.finalized ? (
           <p
             className="mb-6 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
             role="status"
           >
-            Groups are finalized and each one has its own draft. Rearranging is
-            turned off now — moving a student would move them between documents
-            their group has already written in.
+            Groups are finalized and each one has its own draft. Existing
+            members stay with their original artifact. If a student joins the
+            class later, place that student into an existing group or create a
+            new group for them below.
           </p>
         ) : (
           <Form method="post" className="mb-6 flex flex-wrap items-end gap-3">
@@ -427,10 +471,56 @@ export default function GroupsRoute() {
             <GroupBoard
               groups={data.groups}
               unassigned={data.unassigned}
-              disabled={data.opened}
+              disabled={data.complete}
+              frozenMembers={data.finalized}
+              wholeClass={data.isWholeClass}
             />
 
-            {data.opened ? null : (
+            {data.finalized && data.unassigned.length > 0 ? (
+              <div className="mt-6 rounded border p-4">
+                <h2 className="text-sm font-semibold">New students</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Drag a student into a group above, or give them a new shared
+                  draft without changing any existing group.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {data.unassigned.map((student) => (
+                    <Form method="post" key={student.membershipId}>
+                      <input
+                        type="hidden"
+                        name="intent"
+                        value="create-late-group"
+                      />
+                      <input
+                        type="hidden"
+                        name="membershipId"
+                        value={student.membershipId}
+                      />
+                      <Button type="submit" variant="outline" size="sm">
+                        New group for {student.name}
+                      </Button>
+                    </Form>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {data.finalized &&
+            !data.complete &&
+            data.unassigned.length === 0 ? (
+              <Form method="post" className="mt-6 border-t pt-6">
+                <input type="hidden" name="intent" value="open" />
+                <Button type="submit" disabled={busy}>
+                  Finish finalization
+                </Button>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  This safely creates any missing group drafts without replacing
+                  artifacts that already exist.
+                </p>
+              </Form>
+            ) : null}
+
+            {data.finalized ? null : (
               <Form method="post" className="mt-8 border-t pt-6">
                 <input type="hidden" name="intent" value="open" />
                 <Button

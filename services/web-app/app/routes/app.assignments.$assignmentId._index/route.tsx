@@ -242,6 +242,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       gradingAssistantStrictnessLevel: active.assignment
         .gradingAssistantStrictnessLevel as GradingAssistantStrictnessLevel,
       assignmentTypeId: active.assignment.assignmentTypeId,
+      assignmentTypeLocked: deployments.some((deployment) =>
+        deployment.documentGroups.some((group) => group.openedAt !== null)
+      ),
       assignmentType: active.assignment.assignmentType,
       documentCount: active._count.documents,
       gradedCount,
@@ -491,6 +494,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { success: false, message: 'Assignment not found.' },
         { status: 404 }
       );
+    }
+
+    if (assignmentTypeId !== existingAssignment.assignmentTypeId) {
+      const sharedArtifact = await prisma.documentGroup.findFirst({
+        where: {
+          documentId: { not: null },
+          classAssignment: { assignmentId: existingAssignment.id },
+        },
+        select: { id: true },
+      });
+      if (sharedArtifact) {
+        return dataResponse(
+          {
+            success: false,
+            message:
+              'Assignment type cannot change after shared group drafts are created.',
+          },
+          { status: 409 }
+        );
+      }
     }
 
     try {
@@ -766,6 +789,7 @@ export default function AssignmentDetailRoute() {
           editingAssignment={{
             id: assignment.id,
             promptAttachmentName: assignment.promptAttachmentName,
+            assignmentTypeLocked: assignment.assignmentTypeLocked,
           }}
           initialAssignmentTypeId={assignment.assignmentTypeId}
           initialTitle={assignment.title ?? ''}

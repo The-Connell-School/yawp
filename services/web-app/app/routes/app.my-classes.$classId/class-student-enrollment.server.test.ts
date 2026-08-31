@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  $transaction: mock(async (fn: any) => fn(prisma)),
+  $queryRaw: mock(),
   user: { findFirst: mock() },
   orgMembership: { update: mock(), create: mock() },
   invitation: { findFirst: mock(), delete: mock(), create: mock() },
@@ -228,6 +230,10 @@ describe('lookupStudentEmailForClass', () => {
 
 describe('enrollExistingStudentInClass', () => {
   beforeEach(() => {
+    prisma.$transaction
+      .mockReset()
+      .mockImplementation(async (fn: any) => fn(prisma));
+    prisma.$queryRaw.mockReset().mockResolvedValue([]);
     prisma.user.findFirst.mockReset();
     prisma.orgMembership.update.mockReset();
     prisma.orgMembership.create.mockReset();
@@ -258,6 +264,7 @@ describe('enrollExistingStudentInClass', () => {
       where: { id: 'student-1' },
       data: { classesAsStudent: { connect: { id: 'class-1' } } },
     });
+    expect(prisma.$queryRaw).toHaveBeenCalled();
   });
 
   test('adds a student who is already in another class without removing that class', async () => {

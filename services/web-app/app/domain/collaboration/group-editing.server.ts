@@ -13,11 +13,12 @@ import { MAX_COLLABORATION_GROUP_SIZE } from '~/domain/assignments/collaboration
 import { prisma } from '~/utils/db.server';
 import { lockClassAssignmentCollaboration } from './class-assignment-lock.server';
 import { groupLabel } from './groups';
+import { createAssignmentGroupArtifactInTransaction } from './assignment-artifact.server';
 
 export class GroupEditingError extends Error {}
 
 /**
- * Loads the roster and current arrangement, refusing anything already opened.
+ * Loads the roster and current arrangement.
  *
  * Shared by all three operations because they share every guard: the class
  * assignment has to exist, and its groups have to still be editable.
@@ -30,6 +31,7 @@ async function loadEditableArrangement(
     where: { id: classAssignmentId },
     select: {
       id: true,
+      assignment: { select: { collaborationGroupMode: true } },
       class: {
         select: { students: { select: { id: true }, orderBy: { id: 'asc' } } },
       },
@@ -39,6 +41,7 @@ async function loadEditableArrangement(
           id: true,
           ordinal: true,
           openedAt: true,
+          documentId: true,
           members: {
             where: { removedAt: null },
             select: { membershipId: true },
@@ -50,12 +53,6 @@ async function loadEditableArrangement(
 
   if (!classAssignment) {
     throw new GroupEditingError('Class assignment not found.');
-  }
-
-  if (classAssignment.documentGroups.some((group) => group.openedAt !== null)) {
-    throw new GroupEditingError(
-      'Groups have already been opened for this assignment and cannot be rearranged.'
-    );
   }
 
   return classAssignment;
@@ -114,9 +111,34 @@ export async function moveStudentToGroup({
     const currentlyAssigned = classAssignment.documentGroups.some((group) =>
       group.members.some((member) => member.membershipId === membershipId)
     );
+    const finalized = classAssignment.documentGroups.some(
+      (group) => group.openedAt !== null
+    );
+
+    // Once real drafts exist, historical members stay attached to the artifact
+    // they authored. The only legal change is placing a newly enrolled,
+    // currently unassigned student into an already-open group.
+    if (finalized) {
+      if (currentlyAssigned) {
+        throw new GroupEditingError(
+          'Finalized group members cannot be moved between shared drafts.'
+        );
+      }
+      if (!target) return { moved: false as const };
+      if (target.openedAt === null || target.documentId === null) {
+        throw new GroupEditingError(
+          'New students can only join a group with an existing shared draft.'
+        );
+      }
+    }
+
     if (!target && !currentlyAssigned) return { moved: false as const };
 
-    if (target && target.members.length >= MAX_COLLABORATION_GROUP_SIZE) {
+    if (
+      target &&
+      classAssignment.assignment.collaborationGroupMode !== 'whole-class' &&
+      target.members.length >= MAX_COLLABORATION_GROUP_SIZE
+    ) {
       throw new GroupEditingError(
         `A group can hold at most ${MAX_COLLABORATION_GROUP_SIZE} students.`
       );
@@ -168,6 +190,13 @@ export async function addGroup({
       tx,
       classAssignmentId
     );
+    if (
+      classAssignment.documentGroups.some((group) => group.openedAt !== null)
+    ) {
+      throw new GroupEditingError(
+        'Groups have already been finalized. Create a group for a new student instead.'
+      );
+    }
 
     const nextOrdinal = classAssignment.documentGroups.reduce(
       (highest, group) => Math.max(highest, group.ordinal + 1),
@@ -207,6 +236,13 @@ export async function removeEmptyGroup({
       tx,
       classAssignmentId
     );
+    if (
+      classAssignment.documentGroups.some((group) => group.openedAt !== null)
+    ) {
+      throw new GroupEditingError(
+        'Finalized shared-draft groups cannot be removed.'
+      );
+    }
 
     const group = classAssignment.documentGroups.find(
       (candidate) => candidate.id === groupId
@@ -223,5 +259,69 @@ export async function removeEmptyGroup({
     await tx.documentGroup.delete({ where: { id: groupId } });
 
     return { removed: true as const };
+  });
+}
+
+/**
+ * Gives one late-enrolled student a new assignment-owned artifact without
+ * reopening or rearranging any existing group. The group, membership and
+ * document are committed atomically under the same deployment lock.
+ */
+export async function createLateStudentGroup({
+  classAssignmentId,
+  membershipId,
+}: {
+  classAssignmentId: string;
+  membershipId: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    await lockClassAssignmentCollaboration(tx, classAssignmentId);
+    const classAssignment = await loadEditableArrangement(
+      tx,
+      classAssignmentId
+    );
+
+    if (
+      !classAssignment.class.students.some(
+        (student) => student.id === membershipId
+      )
+    ) {
+      throw new GroupEditingError('That student is not in this class.');
+    }
+    if (
+      !classAssignment.documentGroups.some((group) => group.openedAt !== null)
+    ) {
+      throw new GroupEditingError(
+        'Finalize the initial group arrangement before adding a late student.'
+      );
+    }
+    if (
+      classAssignment.documentGroups.some((group) =>
+        group.members.some((member) => member.membershipId === membershipId)
+      )
+    ) {
+      throw new GroupEditingError(
+        'That student is already assigned to a group.'
+      );
+    }
+
+    const nextOrdinal = classAssignment.documentGroups.reduce(
+      (highest, group) => Math.max(highest, group.ordinal + 1),
+      0
+    );
+    const group = await tx.documentGroup.create({
+      data: {
+        classAssignmentId,
+        ordinal: nextOrdinal,
+        label: groupLabel(nextOrdinal),
+        members: { create: { membershipId } },
+      },
+      select: { id: true, label: true },
+    });
+    const artifact = await createAssignmentGroupArtifactInTransaction(tx, {
+      groupId: group.id,
+    });
+
+    return { groupId: group.id, documentId: artifact.documentId };
   });
 }

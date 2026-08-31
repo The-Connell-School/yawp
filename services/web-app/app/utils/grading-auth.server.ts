@@ -65,7 +65,24 @@ export function buildGradeWriteSubjectWhere({
 }): Prisma.DocumentWhereInput {
   return {
     OR: [
-      { artifactKind: 'ASSIGNMENT_GROUP' },
+      {
+        artifactKind: 'ASSIGNMENT_GROUP',
+        ...(releasedAt == null
+          ? {}
+          : {
+              classAssignment: {
+                is: {
+                  class: {
+                    school: {
+                      organization: {
+                        is: { submissionActivityEnabled: true },
+                      },
+                    },
+                  },
+                },
+              },
+            }),
+      },
       {
         artifactKind: 'STUDENT',
         membership: {

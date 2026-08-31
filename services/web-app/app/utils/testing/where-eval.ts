@@ -25,6 +25,8 @@ export type ScopedDocument = {
   classAssignmentTeacherProfileIds?: string[];
   /** Scheduled visibility for the document's deployment. */
   classAssignmentPostAt?: Date | null;
+  /** Students currently enrolled in the document's deployment class. */
+  classAssignmentStudentProfileIds?: string[];
   /**
    * Membership ids of students who co-author this document through its
    * collaboration group and have NOT been removed from it. Absent on a
@@ -89,6 +91,13 @@ export function matchesDocumentWhere(
             return false;
           }
           break;
+        }
+        const studentId = (nested as any)?.class?.students?.some?.id;
+        if (
+          typeof studentId === 'string' &&
+          !(doc.classAssignmentStudentProfileIds ?? []).includes(studentId)
+        ) {
+          return false;
         }
         const visibility = (nested as any)?.OR;
         if (!Array.isArray(visibility)) return false;

@@ -17,3 +17,24 @@ export async function lockClassAssignmentCollaboration(
   `;
   return rows.length === 1;
 }
+
+/**
+ * Serializes roster changes with group finalization for every collaborative
+ * deployment in a class. Call once per class, in sorted class-id order when a
+ * mutation spans classes, before connecting or disconnecting students.
+ */
+export async function lockClassCollaborationDeployments(
+  tx: Prisma.TransactionClient,
+  classId: string
+) {
+  return tx.$queryRaw<Array<{ id: string }>>`
+    SELECT deployment."id"
+    FROM "ClassAssignment" AS deployment
+    JOIN "Assignment" AS assignment
+      ON assignment."id" = deployment."assignmentId"
+    WHERE deployment."classId" = ${classId}
+      AND assignment."collaborationEnabled" = true
+    ORDER BY deployment."id"
+    FOR UPDATE OF deployment
+  `;
+}

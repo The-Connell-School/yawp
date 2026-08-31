@@ -11,14 +11,23 @@ const prisma = {
 };
 
 const lockClassAssignmentCollaboration = mock();
+const createAssignmentGroupArtifactInTransaction = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('./class-assignment-lock.server', () => ({
   lockClassAssignmentCollaboration,
 }));
+mock.module('./assignment-artifact.server', () => ({
+  createAssignmentGroupArtifactInTransaction,
+}));
 
-const { addGroup, GroupEditingError, moveStudentToGroup, removeEmptyGroup } =
-  await import('./group-editing.server');
+const {
+  addGroup,
+  createLateStudentGroup,
+  GroupEditingError,
+  moveStudentToGroup,
+  removeEmptyGroup,
+} = await import('./group-editing.server');
 
 afterAll(() => {
   mock.restore();
@@ -36,10 +45,12 @@ const classAssignment = ({
   ] as { id: string; ordinal: number; members: { membershipId: string }[] }[],
 } = {}) => ({
   id: CA,
+  assignment: { collaborationGroupMode: 'teacher' },
   class: { students: roster.map((id) => ({ id })) },
   documentGroups: groups.map((group) => ({
     ...group,
     openedAt: opened ? OPENED_AT : null,
+    documentId: opened ? `doc-${group.id}` : null,
   })),
 });
 
@@ -50,6 +61,9 @@ function resetAll() {
   tx.classAssignment.findUnique.mockResolvedValue(classAssignment());
   prisma.$transaction.mockReset().mockImplementation(async (fn: any) => fn(tx));
   lockClassAssignmentCollaboration.mockReset().mockResolvedValue(true);
+  createAssignmentGroupArtifactInTransaction
+    .mockReset()
+    .mockResolvedValue({ documentId: 'doc-new', created: true });
   tx.documentGroup.create.mockResolvedValue({ id: 'g-new', label: 'Group 3' });
   tx.documentGroupMember.updateMany.mockResolvedValue({ count: 0 });
   tx.documentGroupMember.upsert.mockResolvedValue({});
@@ -123,8 +137,23 @@ describe('moveStudentToGroup', () => {
       classAssignment({ opened: true })
     );
 
-    await expect(move()).rejects.toThrow(/opened/i);
+    await expect(move()).rejects.toThrow(/finalized/i);
     expect(tx.documentGroupMember.upsert).not.toHaveBeenCalled();
+  });
+
+  test('places a late-enrolled unassigned student into an existing finalized group', async () => {
+    tx.classAssignment.findUnique.mockResolvedValue(
+      classAssignment({ opened: true })
+    );
+
+    await move({ membershipId: 's-3', targetGroupId: 'g-2' });
+
+    expect(tx.documentGroupMember.updateMany).toHaveBeenCalled();
+    expect(tx.documentGroupMember.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: { groupId: 'g-2', membershipId: 's-3' },
+      })
+    );
   });
 
   test('refuses a student who is not on this class roster', async () => {
@@ -215,7 +244,36 @@ describe('addGroup', () => {
       classAssignment({ opened: true })
     );
 
-    await expect(add()).rejects.toThrow(/opened/i);
+    await expect(add()).rejects.toThrow(/finalized/i);
+  });
+});
+
+describe('createLateStudentGroup', () => {
+  beforeEach(resetAll);
+
+  test('atomically creates and opens a new artifact for an unassigned late student', async () => {
+    tx.classAssignment.findUnique.mockResolvedValue(
+      classAssignment({ opened: true })
+    );
+
+    const result = await createLateStudentGroup({
+      classAssignmentId: CA,
+      membershipId: 's-3',
+    });
+
+    expect(tx.documentGroup.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          classAssignmentId: CA,
+          members: { create: { membershipId: 's-3' } },
+        }),
+      })
+    );
+    expect(createAssignmentGroupArtifactInTransaction).toHaveBeenCalledWith(
+      tx,
+      { groupId: 'g-new' }
+    );
+    expect(result.documentId).toBe('doc-new');
   });
 });
 
@@ -262,6 +320,6 @@ describe('removeEmptyGroup', () => {
       })
     );
 
-    await expect(remove()).rejects.toThrow(/opened/i);
+    await expect(remove()).rejects.toThrow(/finalized/i);
   });
 });

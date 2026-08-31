@@ -172,6 +172,100 @@ describe('assignment-owned collaborative artifact contracts', () => {
     }
   });
 
+  test('a finalized group cannot detach or replace its owned artifact', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const fixture = await createFixture(client);
+
+      await client.query(
+        'UPDATE "DocumentGroup" SET "documentId" = NULL, "openedAt" = NULL WHERE id = $1',
+        [fixture.groupId]
+      );
+      await expect(
+        client.query('SET CONSTRAINTS ALL IMMEDIATE')
+      ).rejects.toThrow(
+        /cannot detach or replace|must have exactly one matching assignment group owner/i
+      );
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+  });
+
+  test('an owned artifact cannot be retyped as student work', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const fixture = await createFixture(client);
+
+      await client.query(
+        `UPDATE "Document"
+         SET "artifactKind" = 'student', "membershipId" = $1
+         WHERE id = $2`,
+        [fixture.membershipId, fixture.documentId]
+      );
+      await expect(
+        client.query('SET CONSTRAINTS ALL IMMEDIATE')
+      ).rejects.toThrow(
+        /cannot be retyped|must reference its matching assignment-group artifact/i
+      );
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+  });
+
+  test('an assignment with shared artifacts cannot change assignment type', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const fixture = await createFixture(client);
+      const otherType = await client.query<{ id: string }>(
+        `SELECT id FROM "AssignmentType"
+         WHERE id <> (SELECT "assignmentTypeId" FROM "Assignment" WHERE id = $1)
+         ORDER BY id LIMIT 1`,
+        [fixture.assignmentId]
+      );
+      if (otherType.rows.length === 0)
+        throw new Error('Need two assignment types');
+
+      await expect(
+        client.query(
+          'UPDATE "Assignment" SET "assignmentTypeId" = $1 WHERE id = $2',
+          [otherType.rows[0].id, fixture.assignmentId]
+        )
+      ).rejects.toThrow(/cannot change type/i);
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+  });
+
+  test('a deployment with shared artifacts cannot change assignment owner', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const fixture = await createFixture(client);
+      const otherAssignment = await client.query<{ id: string }>(
+        'SELECT id FROM "Assignment" WHERE id <> $1 ORDER BY id LIMIT 1',
+        [fixture.assignmentId]
+      );
+      if (otherAssignment.rows.length === 0)
+        throw new Error('Need two assignments');
+
+      await expect(
+        client.query(
+          'UPDATE "ClassAssignment" SET "assignmentId" = $1 WHERE id = $2',
+          [otherAssignment.rows[0].id, fixture.classAssignmentId]
+        )
+      ).rejects.toThrow(/cannot change owner/i);
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+  });
+
   test('a group cannot point at an artifact from a different assignment graph', async () => {
     const client = await pool.connect();
     try {
@@ -190,7 +284,9 @@ describe('assignment-owned collaborative artifact contracts', () => {
       );
       await expect(
         client.query('SET CONSTRAINTS ALL IMMEDIATE')
-      ).rejects.toThrow(/matching assignment-group artifact|matching assignment group owner/);
+      ).rejects.toThrow(
+        /matching assignment-group artifact|matching assignment group owner/
+      );
     } finally {
       await client.query('ROLLBACK');
       client.release();

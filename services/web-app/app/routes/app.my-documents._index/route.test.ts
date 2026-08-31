@@ -106,6 +106,9 @@ describe('my documents route', () => {
                       { postAt: null },
                       { postAt: { lte: expect.any(Date) } },
                     ],
+                    class: {
+                      students: { some: { id: 'profile-1' } },
+                    },
                   },
                 },
               },

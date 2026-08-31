@@ -57,6 +57,7 @@ export type AssignmentCreationAssignmentType = {
 export type AssignmentCreationEditingAssignment = {
   id: string;
   promptAttachmentName?: string | null;
+  assignmentTypeLocked?: boolean;
 };
 
 export type AssignmentCreationClassOption = {
@@ -473,7 +474,11 @@ export function AssignmentCreationSheetContent({
           <Select
             value={assignmentTypeId}
             onValueChange={setSelectedAssignmentTypeId}
-            disabled={isSaving || Boolean(fixedAssignmentTypeId)}
+            disabled={
+              isSaving ||
+              Boolean(fixedAssignmentTypeId) ||
+              Boolean(editingAssignment?.assignmentTypeLocked)
+            }
           >
             <SelectTrigger>
               <SelectValue placeholder="Select an assignment type" />
@@ -486,6 +491,12 @@ export function AssignmentCreationSheetContent({
               ))}
             </SelectContent>
           </Select>
+          {editingAssignment?.assignmentTypeLocked ? (
+            <p className="text-xs text-muted-foreground">
+              Assignment type is fixed because shared group drafts already
+              exist.
+            </p>
+          ) : null}
         </div>
 
         <div className={isEditing ? 'hidden' : 'space-y-2'}>

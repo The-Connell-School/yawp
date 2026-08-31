@@ -60,7 +60,9 @@ const UNASSIGNED = 'unassigned';
  */
 const boardCollisionDetection: CollisionDetection = (args) => {
   const pointerCollisions = pointerWithin(args);
-  return pointerCollisions.length > 0 ? pointerCollisions : closestCorners(args);
+  return pointerCollisions.length > 0
+    ? pointerCollisions
+    : closestCorners(args);
 };
 
 function initials(name: string) {
@@ -128,11 +130,7 @@ function DropZone({
       ref={setNodeRef}
       data-testid={testId}
       className={`${className} ${
-        isOver
-          ? full
-            ? 'ring-2 ring-amber-400'
-            : 'ring-2 ring-primary'
-          : ''
+        isOver ? (full ? 'ring-2 ring-amber-400' : 'ring-2 ring-primary') : ''
       }`}
     >
       {children}
@@ -144,11 +142,17 @@ export function GroupBoard({
   groups: groupsFromServer,
   unassigned: unassignedFromServer,
   disabled,
+  frozenMembers = false,
+  wholeClass = false,
 }: {
   groups: BoardGroup[];
   unassigned: BoardStudent[];
   /** True once groups are opened: the arrangement is frozen from then on. */
   disabled: boolean;
+  /** Existing artifact membership is immutable; only unassigned students move. */
+  frozenMembers?: boolean;
+  /** The one whole-class group has no eight-student ceiling. */
+  wholeClass?: boolean;
 }) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   const [groups, setGroups] = useState(groupsFromServer);
@@ -166,13 +170,17 @@ export function GroupBoard({
   useEffect(() => setGroups(groupsFromServer), [groupsFromServer]);
   useEffect(() => setUnassigned(unassignedFromServer), [unassignedFromServer]);
 
-  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor));
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor)
+  );
 
   const studentsById = useMemo(() => {
     const map = new Map<string, BoardStudent>();
     for (const student of unassigned) map.set(student.membershipId, student);
     for (const group of groups) {
-      for (const student of group.members) map.set(student.membershipId, student);
+      for (const student of group.members)
+        map.set(student.membershipId, student);
     }
     return map;
   }, [groups, unassigned]);
@@ -203,13 +211,17 @@ export function GroupBoard({
         ? overId
         : String(over.data.current?.containerId ?? UNASSIGNED);
 
-    if (from === to) return;
+    if (from === to || (frozenMembers && from !== UNASSIGNED)) return;
 
     const student = studentsById.get(membershipId);
     if (!student) return;
 
     const targetGroup = groups.find((group) => group.id === to);
-    if (targetGroup && targetGroup.members.length >= MAX_COLLABORATION_GROUP_SIZE) {
+    if (
+      targetGroup &&
+      !wholeClass &&
+      targetGroup.members.length >= MAX_COLLABORATION_GROUP_SIZE
+    ) {
       // Refused locally as well as on the server, so the chip does not visibly
       // land in a group it is about to be bounced out of.
       lastAction.current = `${targetGroup.label} is full.`;
@@ -256,6 +268,7 @@ export function GroupBoard({
     <>
       <DropZone
         id={UNASSIGNED}
+        full={frozenMembers}
         className="mb-6 rounded border border-dashed p-4"
         testId="group-board-unassigned"
       >
@@ -270,7 +283,9 @@ export function GroupBoard({
           ) : null}
         </div>
         {unassigned.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Everyone is in a group.</p>
+          <p className="text-sm text-muted-foreground">
+            Everyone is in a group.
+          </p>
         ) : (
           <ul className="flex flex-wrap gap-2">
             {unassigned.map((student) => (
@@ -287,7 +302,8 @@ export function GroupBoard({
 
       <ul className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {groups.map((group) => {
-          const full = group.members.length >= MAX_COLLABORATION_GROUP_SIZE;
+          const full =
+            !wholeClass && group.members.length >= MAX_COLLABORATION_GROUP_SIZE;
           return (
             <li key={group.id}>
               <DropZone
@@ -300,9 +316,15 @@ export function GroupBoard({
                   <h2 className="text-sm font-semibold">{group.label}</h2>
                   <span className="flex items-center gap-2 text-xs text-muted-foreground">
                     {group.members.length}
-                    {group.members.length === 0 && !disabled ? (
+                    {group.members.length === 0 &&
+                    !disabled &&
+                    !frozenMembers ? (
                       <fetcher.Form method="post">
-                        <input type="hidden" name="intent" value="remove-group" />
+                        <input
+                          type="hidden"
+                          name="intent"
+                          value="remove-group"
+                        />
                         <input type="hidden" name="groupId" value={group.id} />
                         <button
                           type="submit"
@@ -326,7 +348,7 @@ export function GroupBoard({
                         key={student.membershipId}
                         student={student}
                         containerId={group.id}
-                        disabled={disabled || !mounted}
+                        disabled={disabled || frozenMembers || !mounted}
                       />
                     ))}
                   </ul>
@@ -389,7 +411,7 @@ export function GroupBoard({
         board
       )}
 
-      {disabled ? null : (
+      {disabled || frozenMembers ? null : (
         <fetcher.Form method="post">
           <input type="hidden" name="intent" value="add-group" />
           <Button type="submit" variant="outline" size="sm">

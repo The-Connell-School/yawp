@@ -12,6 +12,7 @@ const openGroups = mock();
 const moveStudentToGroup = mock();
 const addGroup = mock();
 const removeEmptyGroup = mock();
+const createLateStudentGroup = mock();
 const redirectWithToast = mock();
 class GroupProvisioningError extends Error {}
 class GroupEditingError extends Error {}
@@ -33,6 +34,7 @@ mock.module('~/domain/collaboration/group-editing.server', () => ({
   moveStudentToGroup,
   addGroup,
   removeEmptyGroup,
+  createLateStudentGroup,
   GroupEditingError,
 }));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast }));
@@ -111,6 +113,9 @@ describe('class assignment groups', () => {
       .mockReset()
       .mockResolvedValue({ groupId: 'g-new', label: 'Group 3' });
     removeEmptyGroup.mockReset().mockResolvedValue({ removed: true });
+    createLateStudentGroup
+      .mockReset()
+      .mockResolvedValue({ groupId: 'g-new', documentId: 'doc-new' });
     redirectWithToast
       .mockReset()
       .mockImplementation((to: string, options: any) => ({ to, options }));
@@ -176,7 +181,8 @@ describe('class assignment groups', () => {
       expect(body.unassigned).toEqual([
         { membershipId: 'm2', name: 'bo@example.com' },
       ]);
-      expect(body.opened).toBe(false);
+      expect(body.finalized).toBe(false);
+      expect(body.complete).toBe(false);
     });
 
     test('falls back to email when a student has no name', async () => {
@@ -232,7 +238,8 @@ describe('class assignment groups', () => {
 
       const body = await readBody(await get());
 
-      expect(body.opened).toBe(true);
+      expect(body.finalized).toBe(true);
+      expect(body.complete).toBe(true);
       expect(body.groups[0].documentId).toBe('doc-1');
     });
 
@@ -259,7 +266,8 @@ describe('class assignment groups', () => {
 
       const body = await readBody(await get());
 
-      expect(body.opened).toBe(false);
+      expect(body.finalized).toBe(true);
+      expect(body.complete).toBe(false);
     });
   });
 
@@ -353,7 +361,11 @@ describe('class assignment groups', () => {
 
     test('advances to the next unfinished class deployment', async () => {
       prisma.classAssignment.findMany.mockResolvedValue([
-        { id: 'ca-2', documentGroups: [] },
+        {
+          id: 'ca-2',
+          class: { students: [{ id: 'm1' }] },
+          documentGroups: [],
+        },
       ]);
 
       const result: any = await post({ intent: 'open' });
@@ -463,6 +475,19 @@ describe('class assignment groups', () => {
       const result: any = await post({ intent: 'add-group' });
 
       expect(addGroup).toHaveBeenCalledWith({ classAssignmentId: 'ca-1' });
+      expect(await body(result)).toEqual({ success: true });
+    });
+
+    test('creates a new finalized group for a late-enrolled student', async () => {
+      const result: any = await post({
+        intent: 'create-late-group',
+        membershipId: 'student-3',
+      });
+
+      expect(createLateStudentGroup).toHaveBeenCalledWith({
+        classAssignmentId: 'ca-1',
+        membershipId: 'student-3',
+      });
       expect(await body(result)).toEqual({ success: true });
     });
 

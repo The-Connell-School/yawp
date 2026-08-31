@@ -1,10 +1,17 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  $transaction: mock(async (fn: any) => fn(prisma)),
+  $queryRaw: mock(),
   class: { findFirst: mock(), findMany: mock() },
   documentClassForensic: { findMany: mock() },
   assignmentType: { findMany: mock() },
-  orgMembership: { findUnique: mock(), findMany: mock() },
+  orgMembership: {
+    findUnique: mock(),
+    findMany: mock(),
+    update: mock(),
+  },
+  documentGroupMember: { updateMany: mock() },
   pasteAlert: { findMany: mock() },
   submission: { findMany: mock() },
   document: { findMany: mock() },
@@ -102,6 +109,10 @@ describe('class detail loader document visibility', () => {
     isAssignmentTypeAvailableForEveryScope.mockReset();
     uploadAssignmentPromptAttachment.mockReset();
     deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
+    prisma.$transaction
+      .mockReset()
+      .mockImplementation(async (fn: any) => fn(prisma));
+    prisma.$queryRaw.mockReset().mockResolvedValue([]);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -408,6 +419,7 @@ describe('class detail loader document visibility', () => {
           _count: { classAssignments: 2 },
         },
         _count: { documents: 2 },
+        documentGroups: [],
       },
     ]);
 
@@ -472,6 +484,38 @@ describe('class detail loader document visibility', () => {
     expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
       assignmentId: 'assignment-2',
       classId: 'class-1',
+    });
+  });
+
+  test('removing a student withdraws shared-artifact access before enrollment', async () => {
+    prisma.orgMembership.findMany.mockResolvedValue([{ id: 'student-1' }]);
+    prisma.documentGroupMember.updateMany.mockResolvedValue({ count: 2 });
+    prisma.orgMembership.update.mockResolvedValue({});
+    const form = new FormData();
+    form.append('intent', 'remove-students');
+    form.append('studentProfileIds', 'student-1');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toEqual({ success: true });
+    expect(prisma.documentGroupMember.updateMany).toHaveBeenCalledWith({
+      where: {
+        membershipId: { in: ['student-1'] },
+        removedAt: null,
+        group: { classAssignment: { classId: 'class-1' } },
+      },
+      data: { removedAt: expect.any(Date) },
+    });
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith({
+      where: { id: 'student-1' },
+      data: { classesAsStudent: { disconnect: { id: 'class-1' } } },
     });
   });
 
@@ -1001,10 +1045,7 @@ describe('class detail loader for students', () => {
         {
           classAssignment: {
             classId: 'class-1',
-            OR: [
-              { postAt: null },
-              { postAt: { lte: expect.any(Date) } },
-            ],
+            OR: [{ postAt: null }, { postAt: { lte: expect.any(Date) } }],
           },
           group: {
             is: {

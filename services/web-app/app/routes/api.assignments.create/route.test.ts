@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   class: {
     findMany: mock(),
+    findFirst: mock(),
   },
   assignmentType: {
     findFirst: mock(),
@@ -117,6 +118,7 @@ function mockAssignmentTypeAvailable({
 describe('api.assignments.create', () => {
   beforeEach(() => {
     prisma.class.findMany.mockReset();
+    prisma.class.findFirst.mockReset().mockResolvedValue(null);
     prisma.assignmentType.findFirst.mockReset();
     prisma.organizationAssignmentType.findMany.mockReset();
     prisma.school.findMany.mockReset();
@@ -780,6 +782,18 @@ describe('api.assignments.create', () => {
           }),
         })
       );
+    });
+
+    test('rejects collaborative creation when a selected class has no students', async () => {
+      enablePilot();
+      prisma.class.findFirst.mockResolvedValue({ id: 'class-1' });
+
+      const response = await createWithCollaboration();
+      const body = await readBody(response);
+
+      expect(responseStatus(response)).toBe(400);
+      expect(body.message).toMatch(/add students/i);
+      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
     });
 
     test('forces collaboration off for an assignment type outside the pilot', async () => {

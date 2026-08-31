@@ -57,7 +57,10 @@ function activeGroupMemberClause(profileId: string): Prisma.DocumentWhereInput {
       },
       {
         classAssignment: {
-          is: { OR: [{ postAt: null }, { postAt: { lte: new Date() } }] },
+          is: {
+            OR: [{ postAt: null }, { postAt: { lte: new Date() } }],
+            class: { students: { some: { id: profileId } } },
+          },
         },
       },
     ],

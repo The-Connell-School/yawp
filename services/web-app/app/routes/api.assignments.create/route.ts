@@ -211,6 +211,23 @@ export async function action({ request }: ActionFunctionArgs) {
     assignmentType.collaborationSupported
   );
 
+  if (collaboration.collaborationEnabled) {
+    const emptyClass = await prisma.class.findFirst({
+      where: { id: { in: classIds }, students: { none: {} } },
+      select: { id: true },
+    });
+    if (emptyClass) {
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'Add students to every selected class before creating a collaborative assignment.',
+        },
+        { status: 400 }
+      );
+    }
+  }
+
   const deployClassIds = classes.map((klass) => klass.id);
 
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {

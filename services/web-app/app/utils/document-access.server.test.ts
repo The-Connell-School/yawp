@@ -32,6 +32,7 @@ const groupDocument: ScopedDocument = {
   membershipId: null,
   teacherProfileIds: [],
   classAssignmentTeacherProfileIds: [TEACHER],
+  classAssignmentStudentProfileIds: [OWNER, CO_AUTHOR, CLASSMATE],
   activeGroupMemberIds: [OWNER, CO_AUTHOR],
   removedGroupMemberIds: [MOVED_AWAY],
 };
@@ -84,6 +85,15 @@ describe('documentAuthorWhere', () => {
   test('a student removed from the group loses write access', () => {
     expect(
       matches(documentAuthorWhere({ profileId: MOVED_AWAY }), groupDocument)
+    ).toBe(false);
+  });
+
+  test('a stale active group row does not preserve access after class removal', () => {
+    expect(
+      matches(documentAuthorWhere({ profileId: CO_AUTHOR }), {
+        ...groupDocument,
+        classAssignmentStudentProfileIds: [OWNER, CLASSMATE],
+      })
     ).toBe(false);
   });
 

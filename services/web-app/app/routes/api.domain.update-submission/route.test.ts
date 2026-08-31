@@ -46,10 +46,28 @@ describe('api.domain.update-submission', () => {
     canManageGrades.mockReset();
     isGradingOwnDocument.mockReset();
     buildTeacherClassWhere.mockReset();
-    buildGradeWriteSubjectWhere.mockReset().mockImplementation(
-      ({ actorUserId, releasedAt }: any) => ({
+    buildGradeWriteSubjectWhere
+      .mockReset()
+      .mockImplementation(({ actorUserId, releasedAt }: any) => ({
         OR: [
-          { artifactKind: 'ASSIGNMENT_GROUP' },
+          {
+            artifactKind: 'ASSIGNMENT_GROUP',
+            ...(releasedAt == null
+              ? {}
+              : {
+                  classAssignment: {
+                    is: {
+                      class: {
+                        school: {
+                          organization: {
+                            is: { submissionActivityEnabled: true },
+                          },
+                        },
+                      },
+                    },
+                  },
+                }),
+          },
           {
             artifactKind: 'STUDENT',
             membership: {
@@ -66,8 +84,7 @@ describe('api.domain.update-submission', () => {
             },
           },
         ],
-      })
-    );
+      }));
 
     getGradingActor.mockResolvedValue({
       userId: 'teacher-user-1',
@@ -493,7 +510,20 @@ describe('api.domain.update-submission', () => {
     expect(updateCall.where.updatedAt).toEqual(updatedAt);
     expect(updateCall.where.document.is.AND[0]).toEqual({
       OR: [
-        { artifactKind: 'ASSIGNMENT_GROUP' },
+        {
+          artifactKind: 'ASSIGNMENT_GROUP',
+          classAssignment: {
+            is: {
+              class: {
+                school: {
+                  organization: {
+                    is: { submissionActivityEnabled: true },
+                  },
+                },
+              },
+            },
+          },
+        },
         {
           artifactKind: 'STUDENT',
           membership: {

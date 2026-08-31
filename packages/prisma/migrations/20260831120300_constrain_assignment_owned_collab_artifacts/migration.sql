@@ -20,7 +20,12 @@ ALTER TABLE "Document"
       AND "assignmentId" IS NOT NULL
       AND "classAssignmentId" IS NOT NULL
     )
-  );
+  ) NOT VALID;
+
+-- NOT VALID avoids holding an ACCESS EXCLUSIVE lock for the table scan. The
+-- validation takes the lighter lock intended for online constraint rollout.
+ALTER TABLE "Document"
+  VALIDATE CONSTRAINT "Document_artifact_ownership_check";
 
 ALTER TABLE "DocumentGroup"
   DROP CONSTRAINT "DocumentGroup_documentId_fkey",
@@ -32,6 +37,16 @@ CREATE OR REPLACE FUNCTION validate_assignment_group_document()
 RETURNS TRIGGER AS $$
 DECLARE matching_graphs integer;
 BEGIN
+  IF TG_OP = 'UPDATE'
+     AND OLD."artifactKind" = 'assignment-group'
+     AND NEW."artifactKind" <> 'assignment-group'
+     AND EXISTS (
+       SELECT 1 FROM "DocumentGroup" WHERE "documentId" = OLD."id"
+     ) THEN
+    RAISE EXCEPTION
+      'owned assignment-group document % cannot be retyped', OLD."id";
+  END IF;
+
   IF NEW."artifactKind" <> 'assignment-group' THEN RETURN NEW; END IF;
 
   SELECT count(*) INTO matching_graphs
@@ -63,6 +78,13 @@ CREATE OR REPLACE FUNCTION validate_document_group_artifact()
 RETURNS TRIGGER AS $$
 DECLARE matching_graphs integer;
 BEGIN
+  IF TG_OP = 'UPDATE'
+     AND OLD."documentId" IS NOT NULL
+     AND NEW."documentId" IS DISTINCT FROM OLD."documentId" THEN
+    RAISE EXCEPTION
+      'document group % cannot detach or replace its owned artifact', OLD."id";
+  END IF;
+
   IF NEW."documentId" IS NULL THEN RETURN NEW; END IF;
 
   SELECT count(*) INTO matching_graphs
@@ -90,6 +112,49 @@ AFTER INSERT OR UPDATE OF "documentId", "classAssignmentId"
 ON "DocumentGroup"
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION validate_document_group_artifact();
+
+CREATE OR REPLACE FUNCTION protect_assignment_group_assignment_type()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."assignmentTypeId" IS DISTINCT FROM OLD."assignmentTypeId"
+     AND EXISTS (
+       SELECT 1
+       FROM "ClassAssignment" AS deployment
+       JOIN "DocumentGroup" AS group_row
+         ON group_row."classAssignmentId" = deployment."id"
+       WHERE deployment."assignmentId" = OLD."id"
+         AND group_row."documentId" IS NOT NULL
+     ) THEN
+    RAISE EXCEPTION
+      'assignment % cannot change type after shared artifacts are created', OLD."id";
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "Assignment_protect_owned_artifact_type"
+BEFORE UPDATE OF "assignmentTypeId" ON "Assignment"
+FOR EACH ROW EXECUTE FUNCTION protect_assignment_group_assignment_type();
+
+CREATE OR REPLACE FUNCTION protect_document_group_deployment_owner()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF (NEW."assignmentId" IS DISTINCT FROM OLD."assignmentId"
+      OR NEW."classId" IS DISTINCT FROM OLD."classId")
+     AND EXISTS (
+       SELECT 1 FROM "DocumentGroup"
+       WHERE "classAssignmentId" = OLD."id" AND "documentId" IS NOT NULL
+     ) THEN
+    RAISE EXCEPTION
+      'class assignment % cannot change owner after shared artifacts are created', OLD."id";
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "ClassAssignment_protect_owned_artifact_owner"
+BEFORE UPDATE OF "assignmentId", "classId" ON "ClassAssignment"
+FOR EACH ROW EXECUTE FUNCTION protect_document_group_deployment_owner();
 
 CREATE OR REPLACE FUNCTION delete_document_group_artifact()
 RETURNS TRIGGER AS $$

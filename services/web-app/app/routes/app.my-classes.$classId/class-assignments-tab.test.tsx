@@ -30,10 +30,8 @@ mock.module('~/components/assignments/assignment-creation-sheet', () => ({
 }));
 
 const { MemoryRouter } = actualReactRouter;
-const {
-  ClassAssignmentsTab,
-  clampAssignmentPaginationSkip,
-} = await import('./class-assignments-tab');
+const { ClassAssignmentsTab, clampAssignmentPaginationSkip } =
+  await import('./class-assignments-tab');
 type ClassAssignmentsTabAssignment =
   import('./class-assignments-tab').ClassAssignmentsTabAssignment;
 
@@ -53,6 +51,7 @@ const ASSIGNMENTS: ClassAssignmentsTabAssignment[] = [
     },
     gradedCount: 5,
     documentCount: 12,
+    hasSharedWork: false,
     otherClassCount: 1,
     insight: null,
   },
@@ -71,6 +70,7 @@ const ASSIGNMENTS: ClassAssignmentsTabAssignment[] = [
     },
     gradedCount: 2,
     documentCount: 7,
+    hasSharedWork: false,
     otherClassCount: 0,
     insight: null,
   },
@@ -140,9 +140,7 @@ describe('ClassAssignmentsTab', () => {
     expect(creationProps).toMatchObject({
       entryPoint: 'class',
       fixedClassId: 'class-1',
-      teacherClasses: [
-        { id: 'class-1', name: 'History · Grade 9 • Period 2' },
-      ],
+      teacherClasses: [{ id: 'class-1', name: 'History · Grade 9 • Period 2' }],
     });
   });
 

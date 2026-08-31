@@ -1,6 +1,9 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  class: { findFirst: mock() },
+  assignment: { findFirst: mock(), update: mock() },
+  documentGroup: { findFirst: mock() },
   classAssignment: { findMany: mock() },
   classAssignmentInsight: { findUnique: mock() },
   submission: { count: mock() },
@@ -13,18 +16,20 @@ const getAvailableAssignmentTypesForScopes = mock();
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
 // before any file could mock.module() this path (see comment there).
-const actualAssignmentTypeAccess = globalThis.__realModules[
-  '~/utils/assignment-type-access.server'
-];
+const actualAssignmentTypeAccess =
+  globalThis.__realModules['~/utils/assignment-type-access.server'];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
 mock.module('~/utils/assignment-type-access.server', () => ({
   ...actualAssignmentTypeAccess,
   getAvailableAssignmentTypesForScopes,
 }));
 
-const { loader } = await import('./route');
+const { action, loader } = await import('./route');
 
 afterAll(() => {
   mock.restore();
@@ -82,10 +87,18 @@ describe('app.assignments.$assignmentId loader', () => {
     requireMembership
       .mockReset()
       .mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
-    prisma.classAssignment.findMany.mockReset().mockResolvedValue([deployment()]);
-    prisma.classAssignmentInsight.findUnique.mockReset().mockResolvedValue(null);
+    prisma.classAssignment.findMany
+      .mockReset()
+      .mockResolvedValue([deployment()]);
+    prisma.classAssignmentInsight.findUnique
+      .mockReset()
+      .mockResolvedValue(null);
     prisma.submission.count.mockReset().mockResolvedValue(0);
     getAvailableAssignmentTypesForScopes.mockReset().mockResolvedValue([]);
+    prisma.class.findFirst.mockReset();
+    prisma.assignment.findFirst.mockReset();
+    prisma.assignment.update.mockReset();
+    prisma.documentGroup.findFirst.mockReset();
   });
 
   test('scopes deployments to classes this teacher actually teaches', async () => {
@@ -118,7 +131,10 @@ describe('app.assignments.$assignmentId loader', () => {
 
       const data: any = await get();
 
-      expect(data.collaboration).toEqual({ groupCount: 0, groupsOpened: false });
+      expect(data.collaboration).toEqual({
+        groupCount: 0,
+        groupsOpened: false,
+      });
     });
 
     test('reports arranged-but-unopened groups', async () => {
@@ -132,7 +148,10 @@ describe('app.assignments.$assignmentId loader', () => {
 
       const data: any = await get();
 
-      expect(data.collaboration).toEqual({ groupCount: 2, groupsOpened: false });
+      expect(data.collaboration).toEqual({
+        groupCount: 2,
+        groupsOpened: false,
+      });
     });
 
     test('reports opened groups', async () => {
@@ -174,5 +193,44 @@ describe('app.assignments.$assignmentId loader', () => {
       expect(data.assignment.classAssignmentId).toBe('class-assignment-2');
       expect(data.collaboration).toEqual({ groupCount: 1, groupsOpened: true });
     });
+  });
+
+  test('refuses to change assignment type after a shared artifact exists', async () => {
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      school: { id: 'school-1', organizationId: 'org-1' },
+    });
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-2', systemKey: null },
+    ]);
+    prisma.assignment.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+      assignmentTypeId: 'at-1',
+      promptAttachmentKey: null,
+      assignmentType: { systemKey: null },
+    });
+    prisma.documentGroup.findFirst.mockResolvedValue({ id: 'group-1' });
+    const form = new FormData();
+    form.set('intent', 'update-assignment');
+    form.set('assignmentId', 'assignment-1');
+    form.set('assignmentTypeId', 'at-2');
+    form.set('title', 'Expansion Plan');
+    form.set('prompt', 'Write it.');
+    form.set('submitForGrade', 'true');
+    form.set('pointValue', '100');
+
+    const response: any = await action({
+      request: new Request(
+        'https://example.com/app/assignments/assignment-1?classId=class-1',
+        { method: 'POST', body: form }
+      ),
+      params: { assignmentId: 'assignment-1' },
+    } as any);
+
+    expect(response.status ?? response.init?.status).toBe(409);
+    expect(response.data?.message ?? (await response.json()).message).toMatch(
+      /cannot change/i
+    );
+    expect(prisma.assignment.update).not.toHaveBeenCalled();
   });
 });
