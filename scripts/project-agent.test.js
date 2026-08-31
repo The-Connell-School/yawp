@@ -79,5 +79,8 @@ describe("Yawp project agent CLI", () => {
     expect(setup).not.toMatch(/^\s*bun install\s*$/m);
     expect(setup).toContain("CLASS_INSIGHT_MOCK_MODE=fixture");
     expect(setup).not.toContain("copy_optional_env_value ANTHROPIC_API_KEY");
+    const ci = fs.readFileSync(path.join(root, ".github", "workflows", "ci.yml"), "utf8");
+    expect(ci).not.toMatch(/node-version:\s*20\b/);
+    expect(ci).toMatch(/node-version:\s*22\b/);
   });
 });

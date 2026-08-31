@@ -149,7 +149,7 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@v3
         with:
-          node-version: 20
+          node-version: 22
 
       - name: 📥 Download deps
         uses: oven-sh/setup-bun@v1
@@ -194,7 +194,7 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@v3
         with:
-          node-version: 20
+          node-version: 22
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@v1
