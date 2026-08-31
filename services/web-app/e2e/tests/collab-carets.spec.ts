@@ -89,6 +89,15 @@ async function twoWriters(browser: any, ctx: E2EContext) {
     sam,
     riley,
     close: async () => {
+      // Give each tab a normal route exit before closing its browser context.
+      // A hard context close deliberately exercises the 15-second crash TTL;
+      // leaving those rows behind would make the next test look like extra tabs
+      // from the same writers are still open.
+      await Promise.allSettled([
+        sam.isClosed() ? Promise.resolve() : sam.goto('/app'),
+        riley.isClosed() ? Promise.resolve() : riley.goto('/app'),
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 250));
       await first.close();
       await second.close();
     },
