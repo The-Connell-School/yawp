@@ -55,6 +55,7 @@ const membershipFixture = {
     classInsightsEnabled: false,
     writingPracticeEnabled: false,
     submissionActivityEnabled: false,
+    revisionFlowEnabled: false,
   },
 };
 
@@ -101,6 +102,7 @@ describe('membership auth helpers', () => {
             classInsightsEnabled: true,
             writingPracticeEnabled: true,
             submissionActivityEnabled: true,
+            revisionFlowEnabled: true,
           },
         },
       },
@@ -133,6 +135,7 @@ describe('membership auth helpers', () => {
             classInsightsEnabled: true,
             writingPracticeEnabled: true,
             submissionActivityEnabled: true,
+            revisionFlowEnabled: true,
           },
         },
       },

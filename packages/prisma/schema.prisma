@@ -600,6 +600,10 @@ model Organization {
   classInsightsEnabled      Boolean                      @default(false)
   writingPracticeEnabled    Boolean                      @default(false)
   submissionActivityEnabled Boolean                      @default(false)
+  /// Rollout gate for the student split-screen revision flow
+  /// (/app/revise/:submissionId). Off keeps the legacy
+  /// "Revise Essay" -> document editor path.
+  revisionFlowEnabled       Boolean                      @default(false)
   previewSeatCode           String?                      @unique
   memberships               OrgMembership[]
   invitations               Invitation[]

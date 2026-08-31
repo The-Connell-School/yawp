@@ -68,6 +68,7 @@ function organizationFixture() {
     classInsightsEnabled: false,
     writingPracticeEnabled: false,
     submissionActivityEnabled: false,
+    revisionFlowEnabled: false,
     accessExpiresAt: null,
     memberships: [],
     assignmentTypeAssignments: [],
@@ -238,6 +239,47 @@ describe('admin organization detail route', () => {
 
     expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
       writingPracticeEnabled: false,
+    });
+  });
+
+  test('updates the revision flow rollout gate independently', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+    form.set('revisionFlowEnabled', 'true');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      revisionFlowEnabled: true,
+      submissionActivityEnabled: false,
+      reporterEnabled: false,
+      classInsightsEnabled: false,
+      writingPracticeEnabled: false,
+    });
+  });
+
+  test('leaves the revision flow gate off when the checkbox is absent', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      revisionFlowEnabled: false,
     });
   });
 
