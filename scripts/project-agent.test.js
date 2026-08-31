@@ -44,6 +44,7 @@ describe("Yawp project agent CLI", () => {
     expect(contract.commands.doctor).toBe("./bin/project doctor --json");
     expect(contract.fixtures).toContain("local-dev");
     expect(contract.proofProfiles).toContain("qa-smoke");
+    expect(contract.proofProfiles).toContain("collaboration-presence");
     expect(contract.nextCommands.length).toBeGreaterThan(2);
   });
 

@@ -129,9 +129,9 @@ function bounded(value) {
   return text.length <= MAX_CAPTURE_BYTES ? text : text.slice(-MAX_CAPTURE_BYTES);
 }
 
-function execute(command, args, { json = false, env = runtime().env, timeout = 15 * 60 * 1000 } = {}) {
+function execute(command, args, { json = false, env = runtime().env, timeout = 15 * 60 * 1000, cwd = ROOT } = {}) {
   const result = spawnSync(command, args, {
-    cwd: ROOT,
+    cwd,
     env,
     encoding: "utf8",
     timeout,
@@ -166,7 +166,7 @@ export function capabilities() {
       qa: "./bin/project qa prepare --json",
     },
     fixtures: ["local-dev"],
-    proofProfiles: ["project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "changed"],
+    proofProfiles: ["project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "collaboration-presence", "changed"],
     nextCommands: [
       "./bin/project doctor --json",
       "./bin/project fixture verify local-dev --json",
@@ -356,8 +356,11 @@ function changedPaths() {
 function runTestProfile(profile, { json }) {
   const selected = runtime();
   const executeBun = (args, timeout = 15 * 60 * 1000) => execute(selected.bun, args, { json, env: selected.env, timeout });
+  const webAppRoot = path.join(ROOT, "services", "web-app");
+  const executeWebAppBun = (args, timeout = 15 * 60 * 1000) => execute(selected.bun, args, { json, env: selected.env, timeout, cwd: webAppRoot });
   const results = [];
   const run = (id, args, timeout) => { results.push({ id, ...executeBun(args, timeout) }); };
+  const runWebApp = (id, args, timeout) => { results.push({ id, ...executeWebAppBun(args, timeout) }); };
   let chosen = profile;
   let paths = [];
   if (profile === "changed") {
@@ -374,6 +377,27 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "typecheck") run("typecheck", ["run", "web-app:typecheck"]);
   else if (chosen === "build") run("build", ["run", "web-app:build"]);
   else if (chosen === "qa-smoke") run("qa-smoke", ["run", "web-app:test:e2e:smoke"], 30 * 60 * 1000);
+  else if (chosen === "collaboration-presence") {
+    runWebApp("presence-contracts", [
+      "test",
+      "app/domain/collaboration/presence.test.ts",
+      "app/domain/collaboration/presence.server.test.ts",
+      "app/domain/collaboration/http-provider.test.ts",
+      "app/routes/api.collab.$id.presence/route.test.ts",
+      "app/routes/api.collab.$id.updates/route.test.ts",
+    ], 120000);
+    run("typecheck", ["run", "web-app:typecheck"]);
+    run("build", ["run", "web-app:build"]);
+    results.push({
+      id: "two-browser-presence",
+      ...execute(path.join(webAppRoot, "node_modules", ".bin", "playwright"), [
+        "test",
+        "--project=chromium",
+        "e2e/tests/collab-carets.spec.ts",
+        "--reporter=line",
+      ], { json, env: selected.env, timeout: 5 * 60 * 1000, cwd: webAppRoot }),
+    });
+  }
   else if (chosen === "backend") {
     run("unit", ["run", "--cwd", "services/web-app", "test"]);
     run("typecheck", ["run", "web-app:typecheck"]);
@@ -411,10 +435,10 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
-    test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke> [--json]\n",
+    test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
   };
   return pages[topic] || pages.root;
