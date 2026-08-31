@@ -50,6 +50,58 @@ export function buildTeacherClassWhere(
   });
 }
 
+/**
+ * The graded work must be student work, never the grading teacher's own solo
+ * document. Assignment-group artifacts have no student owner, so they match by
+ * explicit artifact kind and remain protected by the separate teacher/class
+ * predicate at every call site.
+ */
+export function buildGradeWriteSubjectWhere({
+  actorUserId,
+  releasedAt,
+}: {
+  actorUserId: string;
+  releasedAt: Date | null;
+}): Prisma.DocumentWhereInput {
+  return {
+    OR: [
+      {
+        artifactKind: 'ASSIGNMENT_GROUP',
+        ...(releasedAt == null
+          ? {}
+          : {
+              classAssignment: {
+                is: {
+                  class: {
+                    school: {
+                      organization: {
+                        is: { submissionActivityEnabled: true },
+                      },
+                    },
+                  },
+                },
+              },
+            }),
+      },
+      {
+        artifactKind: 'STUDENT',
+        membership: {
+          is: {
+            userId: { not: actorUserId },
+            ...(releasedAt == null
+              ? {}
+              : {
+                  organization: {
+                    is: { submissionActivityEnabled: true },
+                  },
+                }),
+          },
+        },
+      },
+    ],
+  };
+}
+
 export function buildTeacherDocumentAccessWhere({
   membershipId,
   organizationId,
@@ -61,7 +113,6 @@ export function buildTeacherDocumentAccessWhere({
 }): Prisma.DocumentWhereInput {
   if (isAdmin) return {};
   return {
-    membership: { organizationId },
     OR: [
       {
         classAssignment: {
@@ -83,13 +134,16 @@ export function buildTeacherDocumentAccessWhere({
         // from an unrelated class of the same student read the submission.
         classAssignment: { is: null },
         membership: {
-          classesAsStudent: {
-            some: {
-              school: { organizationId },
-              teachers: {
-                some: {
-                  id: membershipId,
-                  isActive: true,
+          is: {
+            organizationId,
+            classesAsStudent: {
+              some: {
+                school: { organizationId },
+                teachers: {
+                  some: {
+                    id: membershipId,
+                    isActive: true,
+                  },
                 },
               },
             },
@@ -103,12 +157,13 @@ export function buildTeacherDocumentAccessWhere({
 /** Document owner must never use teacher grading flows on that submission, including admins. */
 export function isGradingOwnDocument(
   actorMembershipId: string,
-  documentMembershipId: string,
+  documentMembershipId: string | null,
   actorUserId?: string,
   documentOwnerUserId?: string
 ): boolean {
   return (
-    actorMembershipId === documentMembershipId ||
+    (documentMembershipId != null &&
+      actorMembershipId === documentMembershipId) ||
     (actorUserId != null && actorUserId === documentOwnerUserId)
   );
 }

@@ -9,7 +9,8 @@ import {
   useNavigate,
   useSearchParams,
 } from 'react-router';
-import { Copy, Pencil } from 'lucide-react';
+import { toCollaborationGroupMode } from '~/domain/assignments/collaboration';
+import { Copy, Pencil, UsersIcon } from 'lucide-react';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { Button } from '~/components/ui/button';
@@ -124,6 +125,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           submitForGrade: true,
           pointValue: true,
           tutorEnabled: true,
+          collaborationEnabled: true,
+          collaborationGroupMode: true,
+          collaborationGroupSize: true,
           gradingAssistantStrictnessLevel: true,
           assignmentTypeId: true,
           assignmentType: {
@@ -132,6 +136,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
       _count: { select: { documents: true } },
+      documentGroups: { select: { openedAt: true } },
     },
     orderBy: [{ createdAt: 'asc' }],
   });
@@ -170,6 +175,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: string;
       title: string;
       systemKey: string | null;
+      collaborationSupported: boolean;
     }>({
       scopes: [
         {
@@ -178,7 +184,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           teacherProfileId: profile.id,
         },
       ],
-      select: { id: true, title: true, systemKey: true },
+      select: {
+        id: true,
+        title: true,
+        systemKey: true,
+        collaborationSupported: true,
+      },
       orderBy: { position: 'asc' },
     }),
   ]);
@@ -200,6 +211,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classInsightsEnabled,
     assignmentTypes,
     activeClassId: active.classId,
+    // Group setup is per class, because the roster is: one assignment pushed to
+    // three sections needs three seating charts. `groupsOpened` decides whether
+    // the button offers to set them up or to review what is already running.
+    collaboration: active.assignment.collaborationEnabled
+      ? {
+          groupCount: active.documentGroups.length,
+          groupsOpened: active.documentGroups.some(
+            (group) => group.openedAt !== null
+          ),
+        }
+      : null,
     classes: deployments.map((deployment) => ({
       id: deployment.classId,
       name: formatClassLabel(deployment.class),
@@ -215,9 +237,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       submitForGrade: active.assignment.submitForGrade,
       pointValue: active.assignment.pointValue,
       tutorEnabled: active.assignment.tutorEnabled,
+      collaborationGroupMode: active.assignment.collaborationGroupMode,
+      collaborationGroupSize: active.assignment.collaborationGroupSize,
       gradingAssistantStrictnessLevel: active.assignment
         .gradingAssistantStrictnessLevel as GradingAssistantStrictnessLevel,
       assignmentTypeId: active.assignment.assignmentTypeId,
+      assignmentTypeLocked: active.assignment.collaborationEnabled,
       assignmentType: active.assignment.assignmentType,
       documentCount: active._count.documents,
       gradedCount,
@@ -272,7 +297,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (intent === 'create-assignment' || intent === 'update-assignment') {
     const assignmentIdParam = params.assignmentId;
-    const assignmentId = formData.get('assignmentId')?.toString() ?? assignmentIdParam ?? '';
+    const assignmentId =
+      formData.get('assignmentId')?.toString() ?? assignmentIdParam ?? '';
     const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
     const titleRaw = formData.get('title')?.toString() ?? '';
     const promptRaw = formData.get('prompt')?.toString() ?? '';
@@ -313,9 +339,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const selectedAssignmentType = allowedAssignmentTypes.find(
       (type) => type.id === assignmentTypeId
     );
-    if (
-      selectedAssignmentType?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
-    ) {
+    if (selectedAssignmentType?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
       return dataResponse(
         {
           success: false,
@@ -331,10 +355,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    if (
-      intent === 'create-assignment' &&
-      !gradingAssistantStrictnessLevel
-    ) {
+    if (intent === 'create-assignment' && !gradingAssistantStrictnessLevel) {
       return dataResponse(
         {
           success: false,
@@ -427,8 +448,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             prompt,
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
-            gradingAssistantStrictnessLevel:
-              gradingAssistantStrictnessLevel!,
+            gradingAssistantStrictnessLevel: gradingAssistantStrictnessLevel!,
             tutorEnabled: tutorEnabledResult.value,
             ...promptAttachmentData,
           },
@@ -463,6 +483,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       select: {
         id: true,
         assignmentTypeId: true,
+        collaborationEnabled: true,
         promptAttachmentKey: true,
         assignmentType: { select: { systemKey: true } },
       },
@@ -472,6 +493,40 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { success: false, message: 'Assignment not found.' },
         { status: 404 }
       );
+    }
+
+    if (
+      assignmentTypeId !== existingAssignment.assignmentTypeId &&
+      existingAssignment.collaborationEnabled
+    ) {
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'Assignment type cannot change on a collaborative assignment.',
+        },
+        { status: 409 }
+      );
+    }
+
+    if (assignmentTypeId !== existingAssignment.assignmentTypeId) {
+      const sharedArtifact = await prisma.documentGroup.findFirst({
+        where: {
+          documentId: { not: null },
+          classAssignment: { assignmentId: existingAssignment.id },
+        },
+        select: { id: true },
+      });
+      if (sharedArtifact) {
+        return dataResponse(
+          {
+            success: false,
+            message:
+              'Assignment type cannot change after shared group drafts are created.',
+          },
+          { status: 409 }
+        );
+      }
     }
 
     try {
@@ -570,7 +625,7 @@ export default function AssignmentDetailRoute() {
     );
   }
 
-  const { assignment, activeClassId, classes } = data;
+  const { assignment, activeClassId, classes, collaboration } = data;
   const backHref = `/app/my-classes/${activeClassId}?tab=assignments`;
 
   /**
@@ -687,6 +742,21 @@ export default function AssignmentDetailRoute() {
                     </SelectContent>
                   </Select>
                 ) : null}
+                {collaboration ? (
+                  <Button asChild variant="outline">
+                    <Link
+                      to={`/app/class-assignments/${assignment.classAssignmentId}/groups`}
+                      data-testid="assignment-detail-groups-link"
+                    >
+                      <UsersIcon className="mr-2 h-4 w-4" />
+                      {collaboration.groupsOpened
+                        ? 'Groups'
+                        : collaboration.groupCount > 0
+                          ? 'Finish setting up groups'
+                          : 'Set up groups'}
+                    </Link>
+                  </Button>
+                ) : null}
                 {canEdit ? (
                   <>
                     <Button
@@ -732,6 +802,7 @@ export default function AssignmentDetailRoute() {
           editingAssignment={{
             id: assignment.id,
             promptAttachmentName: assignment.promptAttachmentName,
+            assignmentTypeLocked: assignment.assignmentTypeLocked,
           }}
           initialAssignmentTypeId={assignment.assignmentTypeId}
           initialTitle={assignment.title ?? ''}
@@ -741,6 +812,11 @@ export default function AssignmentDetailRoute() {
           initialSubmitForGrade={assignment.submitForGrade}
           initialPointValue={assignment.pointValue}
           initialTutorEnabled={assignment.tutorEnabled}
+          initialCollaborationEnabled={Boolean(data.collaboration)}
+          initialCollaborationGroupMode={toCollaborationGroupMode(
+            assignment.collaborationGroupMode
+          )}
+          initialCollaborationGroupSize={assignment.collaborationGroupSize}
           initialGradingAssistantStrictnessLevel={
             assignment.gradingAssistantStrictnessLevel
           }

@@ -30,6 +30,8 @@ type TeacherClass = {
 type Props = {
   assignmentTypeId: string;
   assignmentTypeTitle: string;
+  /** Whether this kind of writing is in the collaborative-drafts pilot. */
+  assignmentTypeCollaborationSupported?: boolean;
   teacherClasses: TeacherClass[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -50,6 +52,7 @@ function classLabel(klass: TeacherClass) {
 export function CreateAssignmentSheet({
   assignmentTypeId,
   assignmentTypeTitle,
+  assignmentTypeCollaborationSupported = false,
   teacherClasses,
   open,
   onOpenChange,
@@ -84,7 +87,13 @@ export function CreateAssignmentSheet({
         onOpenChange={onOpenChange}
         entryPoint="assignment-type"
         fixedAssignmentTypeId={assignmentTypeId}
-        assignmentTypes={[{ id: assignmentTypeId, title: assignmentTypeTitle }]}
+        assignmentTypes={[
+          {
+            id: assignmentTypeId,
+            title: assignmentTypeTitle,
+            collaborationSupported: assignmentTypeCollaborationSupported,
+          },
+        ]}
         teacherClasses={teacherClasses}
         initialPrompt={initialPrompt}
         titleRequired={titleRequired}

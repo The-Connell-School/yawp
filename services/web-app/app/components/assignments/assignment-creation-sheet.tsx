@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as React from 'react';
-import { useFetcher } from 'react-router';
+import { useFetcher, useNavigate } from 'react-router';
 import { FileUp, Loader2 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import {
+  COLLABORATION_GROUP_MODE_OPTIONS,
+  COLLABORATION_GROUP_SIZE_OPTIONS,
+  DEFAULT_COLLABORATION_GROUP_MODE,
+  DEFAULT_COLLABORATION_GROUP_SIZE,
+  collaborationModeNeedsGroupSize,
+  type CollaborationGroupMode,
+} from '~/domain/assignments/collaboration';
 import {
   Select,
   SelectContent,
@@ -38,11 +46,18 @@ export type AssignmentCreationEntryPoint =
 export type AssignmentCreationAssignmentType = {
   id: string;
   title: string;
+  /**
+   * Whether this kind of writing is in the collaborative-drafts pilot. Required
+   * rather than optional so a new call site cannot silently drop the toggle: an
+   * absent flag would look exactly like an unsupported type.
+   */
+  collaborationSupported: boolean;
 };
 
 export type AssignmentCreationEditingAssignment = {
   id: string;
   promptAttachmentName?: string | null;
+  assignmentTypeLocked?: boolean;
 };
 
 export type AssignmentCreationClassOption = {
@@ -56,6 +71,12 @@ export type AssignmentCreationClassOption = {
 type CreateFetcherData = {
   success?: boolean;
   message?: string;
+  /**
+   * Where the teacher still has to go. Present only for collaborative
+   * assignments, which are not finished at creation: students see nothing until
+   * groups are opened.
+   */
+  nextStep?: { url: string; classCount: number } | null;
 };
 
 type ExtractFetcherData = CreateFetcherData & {
@@ -103,12 +124,17 @@ export type AssignmentCreationSheetProps = {
   initialSubmitForGrade?: boolean;
   initialPointValue?: number | null;
   initialTutorEnabled?: boolean;
+  initialCollaborationEnabled?: boolean;
+  initialCollaborationGroupMode?: CollaborationGroupMode;
+  initialCollaborationGroupSize?: number | null;
   initialGradingAssistantStrictnessLevel?: GradingAssistantStrictnessLevel;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
   createFetcher: AssignmentCreationFetcher<CreateFetcherData>;
   extractFetcher: AssignmentCreationFetcher<ExtractFetcherData>;
+  /** Injectable so the content is testable without a router. */
+  navigate?: (to: string) => void;
   renderSheet?: boolean;
 };
 
@@ -156,12 +182,14 @@ export function AssignmentCreationSheet({
 }: AssignmentCreationSheetProps) {
   const createFetcher = useFetcher<CreateFetcherData>();
   const extractFetcher = useFetcher<ExtractFetcherData>();
+  const navigate = useNavigate();
 
   return (
     <AssignmentCreationSheetContent
       {...props}
       createFetcher={createFetcher}
       extractFetcher={extractFetcher}
+      navigate={navigate}
     />
   );
 }
@@ -183,11 +211,15 @@ export function AssignmentCreationSheetContent({
   initialSubmitForGrade = true,
   initialPointValue = DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
   initialTutorEnabled = true,
+  initialCollaborationEnabled = false,
+  initialCollaborationGroupMode = DEFAULT_COLLABORATION_GROUP_MODE,
+  initialCollaborationGroupSize = null,
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   initialPostAt,
   initialDueAt,
   createFetcher,
   extractFetcher,
+  navigate = () => {},
   renderSheet = true,
 }: AssignmentCreationSheetContentProps) {
   const [selectedAssignmentTypeId, setSelectedAssignmentTypeId] = useState(
@@ -212,6 +244,14 @@ export function AssignmentCreationSheetContent({
   const [postAt, setPostAt] = useState<string>('');
   const [dueAt, setDueAt] = useState<string>('');
   const [tutorEnabled, setTutorEnabled] = useState(initialTutorEnabled);
+  const [collaborationEnabled, setCollaborationEnabled] = useState(
+    initialCollaborationEnabled
+  );
+  const [collaborationGroupMode, setCollaborationGroupMode] =
+    useState<CollaborationGroupMode>(initialCollaborationGroupMode);
+  const [collaborationGroupSize, setCollaborationGroupSize] = useState(
+    initialCollaborationGroupSize ?? DEFAULT_COLLABORATION_GROUP_SIZE
+  );
   const [saveForReuse, setSaveForReuse] = useState(false);
   const [gradingAssistantStrictnessLevel, setGradingAssistantStrictnessLevel] =
     useState<GradingAssistantStrictnessLevel>(
@@ -231,9 +271,17 @@ export function AssignmentCreationSheetContent({
   const isExtracting = extractFetcher.state !== 'idle';
   const assignmentTypeId =
     fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
+  // Collaboration is offered per kind of writing, not per organization: only the
+  // assignment types that opt in show the toggle at all.
+  const selectedTypeSupportsCollaboration = Boolean(
+    assignmentTypes.find((type) => type.id === assignmentTypeId)
+      ?.collaborationSupported
+  );
   const hasFixedClass = Boolean(fixedClassId);
-  const usesBulkCreateApi =
-    entryPoint === 'dashboard' || entryPoint === 'assignment-type';
+  // Every creation entry point uses the same server workflow. In particular,
+  // the class page must not silently drop collaboration fields by posting to
+  // its older local action. Editing stays on the owning route.
+  const usesBulkCreateApi = !isEditing;
   const formAction = usesBulkCreateApi ? '/api/assignments/create' : undefined;
   const selectedClassCount = hasFixedClass
     ? 1
@@ -284,6 +332,11 @@ export function AssignmentCreationSheetContent({
     setPostAt(toDateInputValue(initialPostAt));
     setDueAt(toDateInputValue(initialDueAt));
     setTutorEnabled(initialTutorEnabled);
+    setCollaborationEnabled(initialCollaborationEnabled);
+    setCollaborationGroupMode(initialCollaborationGroupMode);
+    setCollaborationGroupSize(
+      initialCollaborationGroupSize ?? DEFAULT_COLLABORATION_GROUP_SIZE
+    );
     setSaveForReuse(false);
     setGradingAssistantStrictnessLevel(initialGradingAssistantStrictnessLevel);
     setAttachmentFile(null);
@@ -301,6 +354,9 @@ export function AssignmentCreationSheetContent({
     initialSubmitForGrade,
     initialPointValue,
     initialTutorEnabled,
+    initialCollaborationEnabled,
+    initialCollaborationGroupMode,
+    initialCollaborationGroupSize,
     initialGradingAssistantStrictnessLevel,
     initialPostAt,
     initialDueAt,
@@ -309,10 +365,14 @@ export function AssignmentCreationSheetContent({
   ]);
 
   useEffect(() => {
-    if (createFetcher.state === 'idle' && createFetcher.data?.success) {
-      onOpenChange(false);
-    }
-  }, [createFetcher.state, createFetcher.data, onOpenChange]);
+    if (createFetcher.state !== 'idle' || !createFetcher.data?.success) return;
+    onOpenChange(false);
+    // Closing the sheet used to be the whole ending, which left a collaborative
+    // assignment looking done while its groups did not exist yet. `navigate` is
+    // injectable so this is testable without a router.
+    const nextStep = createFetcher.data.nextStep;
+    if (nextStep) navigate(nextStep.url);
+  }, [createFetcher.state, createFetcher.data, onOpenChange, navigate]);
 
   useEffect(() => {
     if (!extractFetcher.data?.success) return;
@@ -398,7 +458,11 @@ export function AssignmentCreationSheetContent({
             value={editingAssignment.id}
           />
         ) : hasFixedClass ? (
-          <input type="hidden" name="classId" value={fixedClassId} />
+          <input
+            type="hidden"
+            name={usesBulkCreateApi ? 'classIds' : 'classId'}
+            value={fixedClassId}
+          />
         ) : (
           selectedClassIds.map((id) => (
             <input key={id} type="hidden" name="classIds" value={id} />
@@ -410,7 +474,11 @@ export function AssignmentCreationSheetContent({
           <Select
             value={assignmentTypeId}
             onValueChange={setSelectedAssignmentTypeId}
-            disabled={isSaving || Boolean(fixedAssignmentTypeId)}
+            disabled={
+              isSaving ||
+              Boolean(fixedAssignmentTypeId) ||
+              Boolean(editingAssignment?.assignmentTypeLocked)
+            }
           >
             <SelectTrigger>
               <SelectValue placeholder="Select an assignment type" />
@@ -423,6 +491,12 @@ export function AssignmentCreationSheetContent({
               ))}
             </SelectContent>
           </Select>
+          {editingAssignment?.assignmentTypeLocked ? (
+            <p className="text-xs text-muted-foreground">
+              Assignment type is fixed because shared group drafts already
+              exist.
+            </p>
+          ) : null}
         </div>
 
         <div className={isEditing ? 'hidden' : 'space-y-2'}>
@@ -477,7 +551,8 @@ export function AssignmentCreationSheetContent({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="assignment-create-post-at">
-              Post date <span className="text-muted-foreground">(optional)</span>
+              Post date{' '}
+              <span className="text-muted-foreground">(optional)</span>
             </Label>
             <Input
               id="assignment-create-post-at"
@@ -758,6 +833,121 @@ export function AssignmentCreationSheetContent({
               : "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."}
           </p>
         </div>
+
+        {/* Collaborative drafts. Hidden entirely unless this kind of writing
+            supports them, and frozen after creation for the same reason the tutor
+            toggle is: students may already have group drafts built around it.
+            Group membership itself is arranged per class afterwards, because an
+            assignment fans out to one ClassAssignment per class. */}
+        {selectedTypeSupportsCollaboration ? (
+          <div className="pt-6">
+            {isEditing ? null : (
+              <input type="hidden" name="collaborationEnabled" value="false" />
+            )}
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                id="assignment-create-collaboration-enabled"
+                name={isEditing ? undefined : 'collaborationEnabled'}
+                value="true"
+                checked={collaborationEnabled}
+                onCheckedChange={(checked) =>
+                  setCollaborationEnabled(checked === true)
+                }
+                disabled={isSaving || isEditing}
+                className="size-4 shrink-0"
+              />
+              <Label
+                htmlFor="assignment-create-collaboration-enabled"
+                className={
+                  isEditing
+                    ? 'font-normal leading-none text-muted-foreground'
+                    : 'cursor-pointer font-normal leading-none'
+                }
+              >
+                Is this a collaborative assignment?
+              </Label>
+            </div>
+            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+              {isEditing
+                ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
+                : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp creates one shared document for each group.'}
+            </p>
+            {collaborationEnabled && !isEditing ? (
+              <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">
+                <input
+                  type="hidden"
+                  name="collaborationGroupMode"
+                  value={collaborationGroupMode}
+                />
+                <div className="space-y-2">
+                  <Label>How should groups be made?</Label>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {COLLABORATION_GROUP_MODE_OPTIONS.map((option) => {
+                      const selected = collaborationGroupMode === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
+                            selected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-background hover:bg-muted'
+                          }`}
+                          aria-pressed={selected}
+                          onClick={() =>
+                            setCollaborationGroupMode(option.value)
+                          }
+                          disabled={isSaving}
+                        >
+                          <span className="block font-medium">
+                            {option.label}
+                          </span>
+                          <span
+                            className={`mt-1 block text-xs ${
+                              selected
+                                ? 'text-primary-foreground/80'
+                                : 'text-muted-foreground'
+                            }`}
+                          >
+                            {option.description}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Whole class has no size to choose: the group is the roster. */}
+                {collaborationModeNeedsGroupSize(collaborationGroupMode) ? (
+                  <div>
+                    <Label
+                      htmlFor="assignment-create-collaboration-group-size"
+                      className="font-normal leading-none"
+                    >
+                      Students per group
+                    </Label>
+                    <select
+                      id="assignment-create-collaboration-group-size"
+                      name="collaborationGroupSize"
+                      value={collaborationGroupSize}
+                      onChange={(event) =>
+                        setCollaborationGroupSize(Number(event.target.value))
+                      }
+                      disabled={isSaving}
+                      className="mt-1 block rounded border px-2 py-1 text-sm"
+                    >
+                      {COLLABORATION_GROUP_SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {SAVED_ASSIGNMENTS_ENABLED && usesBulkCreateApi && !isEditing ? (
           <div className="pt-6">

@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { Prisma } from '@app/prisma';
 
 const prisma = {
-  classAssignment: { findFirst: mock() },
+  classAssignment: { findFirst: mock(), findUnique: mock() },
+  assignmentType: { findUnique: mock() },
   document: { findMany: mock() },
   classAssignmentInsight: {
     findUnique: mock(),
@@ -110,6 +111,10 @@ describe('api.domain.assignment-insights', () => {
   beforeEach(() => {
     process.env.CLASS_INSIGHT_MOCK_MODE = 'live';
     prisma.classAssignment.findFirst.mockReset();
+    // The rubric this class was graded on. Null resolves to the five default
+    // categories, which is what these fixtures score against.
+    prisma.classAssignment.findUnique.mockReset().mockResolvedValue(null);
+    prisma.assignmentType.findUnique.mockReset().mockResolvedValue(null);
     prisma.document.findMany.mockReset();
     prisma.classAssignmentInsight.findUnique.mockReset().mockResolvedValue(null);
     prisma.classAssignmentInsight.upsert.mockReset();
@@ -245,6 +250,140 @@ describe('api.domain.assignment-insights', () => {
     const summary = (payload.data.insight as any).summary;
     expect(summary.overview).toContain('strong theses');
     expect(summary.nextSteps[0].rubricCategory).toBe('evidence_and_support');
+  });
+
+  test('summarizes against the assignment type’s own rubric', async () => {
+    // The bug this closes: the summary walked the five default categories no
+    // matter what the class was graded on, so a GBA brief scored on `budget`
+    // and `recommendation` came back with every category unscored — a summary
+    // of nothing, indistinguishable from an ungraded class.
+    prisma.classAssignment.findUnique.mockResolvedValue({
+      assignment: {
+        assignmentTypeId: 'at-gba',
+        assignmentType: { kind: null, title: 'GBA 300' },
+      },
+    });
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-gba',
+      title: 'GBA 300',
+      kind: null,
+      scoringScaleJson: {
+        type: 'rubric_points',
+        minScore: 0,
+        maxScore: 100,
+        step: 1,
+      },
+      rubricJson: {
+        categories: [
+          { key: 'budget', label: 'Budget', weight: 0.5, description: 'Costs.' },
+          {
+            key: 'recommendation',
+            label: 'Recommendation',
+            weight: 0.5,
+            description: 'The call.',
+          },
+        ],
+      },
+      gradingPromptConfigJson: null,
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      rubric: null,
+    });
+    prisma.document.findMany.mockResolvedValue([
+      {
+        id: 'doc-1',
+        membership: { user: { name: 'Sol Bramante', email: 'sol@school.test' } },
+        submissions: [
+          {
+            id: 'sub-1',
+            rubricScores: {
+              budget: { score: 88, comment: 'Costed honestly.' },
+              recommendation: { score: 20, comment: 'No decision.' },
+            },
+            overallComment: null,
+          },
+        ],
+      },
+      {
+        id: 'doc-2',
+        membership: { user: { name: 'Tao Nguyen', email: 'tao@school.test' } },
+        submissions: [
+          {
+            id: 'sub-2',
+            rubricScores: {
+              budget: { score: 92, comment: '' },
+              recommendation: { score: 15, comment: '' },
+            },
+            overallComment: null,
+          },
+        ],
+      },
+      // Two who did commit, so the pair above is a group to pull aside rather
+      // than the whole class needing reteaching.
+      {
+        id: 'doc-3',
+        membership: { user: { name: 'Uma Beckett', email: 'uma@school.test' } },
+        submissions: [
+          {
+            id: 'sub-3',
+            rubricScores: {
+              budget: { score: 84, comment: '' },
+              recommendation: { score: 90, comment: '' },
+            },
+            overallComment: null,
+          },
+        ],
+      },
+      {
+        id: 'doc-4',
+        membership: { user: { name: 'Mia Sokolov', email: 'mia@school.test' } },
+        submissions: [
+          {
+            id: 'sub-4',
+            rubricScores: {
+              budget: { score: 80, comment: '' },
+              recommendation: { score: 86, comment: '' },
+            },
+            overallComment: null,
+          },
+        ],
+      },
+    ]);
+    getLLMCompletion.mockResolvedValue(
+      JSON.stringify({
+        overview: 'Costing is strong; the recommendation is not.',
+        categories: [
+          { key: 'recommendation', status: 'gap', summary: 'Nobody commits.' },
+        ],
+        nextSteps: [
+          {
+            title: 'Demand a decision',
+            detail: 'Model a brief that ends in one.',
+            rubricCategory: 'recommendation',
+          },
+        ],
+      })
+    );
+
+    const response = await action({ request: postRequest('ca-1') } as any);
+    const payload = payloadOf(response);
+
+    const { system, messages } = getLLMCompletion.mock.calls[0][0];
+    expect(system).toContain('budget, recommendation');
+    expect(system).not.toContain('thesis_and_content');
+    // Averages and thresholds in the range the class was actually marked in.
+    expect(messages[0].content).toContain('avg 86.00 / 100');
+    expect(messages[0].content).toContain('strong (>=75)');
+
+    const summary = (payload.data.insight as any).summary;
+    expect(summary.nextSteps[0].rubricCategory).toBe('recommendation');
+    // Read against the right rubric there is a real gap to group around.
+    expect(summary.differentiation.focusGroups[0].category).toBe(
+      'recommendation'
+    );
   });
 
   test('stores differentiation starting points with the summary, without sending names to the LLM', async () => {

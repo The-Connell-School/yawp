@@ -30,12 +30,17 @@ export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
   documentCount: number;
   otherClassCount: number;
   insight: ClassInsight | null;
+  hasSharedWork: boolean;
 };
 
 type ClassAssignmentsTabProps = {
   classOption: { id: string; name: string };
   assignments: ClassAssignmentsTabAssignment[];
-  assignmentTypes: { id: string; title: string }[];
+  assignmentTypes: {
+    id: string;
+    title: string;
+    collaborationSupported: boolean;
+  }[];
   /** Gated on the organization's classInsightsEnabled flag. */
   classInsightsEnabled: boolean;
   onViewDocuments: (assignmentId: string) => void;
@@ -125,6 +130,11 @@ export function ClassAssignmentsTab({
   }, [filteredAssignments, setSelectedAssignmentIds]);
 
   const hasSelection = selectedAssignmentIds.length > 0;
+  const selectionHasSharedWork = selectedAssignmentIds.some((id) =>
+    assignments.some(
+      (assignment) => assignment.id === id && assignment.hasSharedWork
+    )
+  );
   const handleCreateSheetOpenChange = useCallback((open: boolean) => {
     setIsCreateSheetOpen(open);
   }, []);
@@ -166,20 +176,20 @@ export function ClassAssignmentsTab({
             >
               <input type="hidden" name="intent" value="delete-assignments" />
               {selectedAssignmentIds.map((id) => (
-                <input
-                  key={id}
-                  type="hidden"
-                  name="assignmentIds"
-                  value={id}
-                />
+                <input key={id} type="hidden" name="assignmentIds" value={id} />
               ))}
               <Tooltip
-                text={`Delete ${selectedAssignmentIds.length} assignment(s)`}
+                text={
+                  selectionHasSharedWork
+                    ? 'Shared group work is protected and cannot be deleted.'
+                    : `Delete ${selectedAssignmentIds.length} assignment(s)`
+                }
               >
                 <Button
                   type="submit"
                   size="icon-sm"
                   variant="outline"
+                  disabled={selectionHasSharedWork}
                   aria-label={`Delete ${selectedAssignmentIds.length} assignment(s)`}
                 >
                   <Trash2 className="h-4 w-4" />

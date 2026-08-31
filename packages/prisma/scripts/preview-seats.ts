@@ -6,6 +6,7 @@ import {
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './local-dev/dev-personas';
+import { seedCollaborationDemoData } from './local-dev/seed-collaboration';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
 import { loadProdFidelityBundle } from './local-dev/import-prod-fidelity-fixtures';
 import {
@@ -156,6 +157,8 @@ export async function createPreviewSeat(
     teacherTrainingIds,
   });
 
+  await seedCollaborationDemoForSeat(transaction, seat);
+
   const [insights] = await enableClassInsightsForOrganizations(transaction, [
     seat.organizationId,
   ]);
@@ -166,10 +169,70 @@ export async function createPreviewSeat(
   }
 }
 
+/**
+ * Whether this environment is a disposable per-PR preview.
+ *
+ * Read from the database name, which `preview-env.mjs` derives from the slug:
+ * `yawp_pr_267` for a pull request, `yawp_demo` for the named demo box. That is a
+ * roundabout-looking source for it, and the reason is worth writing down.
+ *
+ * The preview control plane — everything under `scripts/preview/` — is checked out
+ * from the default branch on purpose, so that a pull request cannot change what
+ * runs on the shared preview host. A flag set there would therefore do nothing
+ * for the branch that added it and would only start working once merged, which is
+ * exactly when nobody needs it any more. This file runs from the PR's own source,
+ * so it has to derive the answer from what the container already gives it.
+ *
+ * What it gates: whether a seat whose organization already exists may be topped
+ * up with data the branch added after that database was created. A per-PR preview
+ * is disposable and belongs to one branch, so it should show that branch's data.
+ * The demo box is long-lived and someone demos from it — redeploying it ships code
+ * and not data, and "reseeding an existing seat performs zero writes and preserves
+ * divergence" stays true there.
+ */
+function seatTopUpEnabled() {
+  const explicit = process.env.PREVIEW_SEAT_TOP_UP;
+  if (explicit) return explicit === '1';
+  return /\/yawp_pr_\d+(\?|$)/.test(process.env.DATABASE_URL ?? '');
+}
+
+/**
+ * The collaborative GBA 300 demo for one seat.
+ *
+ * Runs at creation and, on a disposable preview, on later deploys too. It
+ * resolves what it needs by persona email and no-ops once the class is there, so
+ * it is safe to run repeatedly and safe to retry after a failure part-way.
+ *
+ * Same reasoning as the persona cast above: a seat missing the group work is a
+ * seat where the thing under review cannot be reviewed.
+ */
+export async function seedCollaborationDemoForSeat(
+  prisma: PreviewSeatClient,
+  seat: PreviewSeatDefinition
+) {
+  const seeded = await seedCollaborationDemoData(prisma, {
+    organizationId: seat.organizationId,
+    schoolCode: seat.schoolCodes[0],
+    personas: seat.personas,
+    emailSuffix: seat.number === 1 ? '' : `.seat-${seat.number}`,
+  });
+
+  // Every path through this says what it did. A step that writes data silently
+  // cannot be checked from the deploy log, and the deploy log is the only view
+  // anyone has of a preview's database — the environment itself is behind an
+  // access gate and there is no console.
+  if (seeded) {
+    console.log(
+      `Collaboration demo seeded for ${seat.label}: ${seeded.groupIds.length} groups, ${seeded.cohort.length} students.`
+    );
+  }
+}
+
 export async function ensurePreviewSeats(
   prisma: PrismaClient,
   seats = buildPreviewSeatDefinitions(),
-  createSeat: PreviewSeatCreator = createPreviewSeat
+  createSeat: PreviewSeatCreator = createPreviewSeat,
+  topUpSeat: PreviewSeatCreator = seedCollaborationDemoForSeat
 ) {
   const results: Array<{
     organizationId: string;
@@ -182,6 +245,7 @@ export async function ensurePreviewSeats(
       select: { id: true },
     });
     if (existing) {
+      if (seatTopUpEnabled()) await topUpSeat(prisma, seat);
       results.push({
         organizationId: seat.organizationId,
         status: seat.adoptExisting ? 'adopted' : 'existing',
@@ -292,7 +356,8 @@ export async function createRuntimePreviewSeat(
     generateCode?: () => string;
     maxAttempts?: number;
   } = {},
-  createSeat: PreviewSeatCreator = createPreviewSeat
+  createSeat: PreviewSeatCreator = createPreviewSeat,
+  topUpSeat: PreviewSeatCreator = seedCollaborationDemoForSeat
 ) {
   const {
     reservedCodes = [],
@@ -302,46 +367,50 @@ export async function createRuntimePreviewSeat(
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      return await prisma.$transaction(async (transaction) => {
-        const organizations = await transaction.organization.findMany({
-          select: { id: true, previewSeatCode: true },
-        });
-        const highestSeatNumber = organizations.reduce(
-          (highest, organization) => {
-            if (organization.id === adoptedOrganizationId()) {
-              return Math.max(highest, 1);
-            }
-            const match = /^preview-seat-([1-9][0-9]*)$/.exec(organization.id);
-            return match ? Math.max(highest, Number(match[1])) : highest;
-          },
-          1
-        );
-        const previewSeatCode = generateUniquePreviewAccessCode(
-          [
-            ...reservedCodes,
-            ...organizations.flatMap(({ previewSeatCode }) =>
-              previewSeatCode ? [previewSeatCode] : []
-            ),
-          ],
-          generateCode
-        );
-        const seat = buildPreviewSeatDefinition(highestSeatNumber + 1, {
-          previewSeatCode,
-        });
+      return await prisma.$transaction(
+        async (transaction) => {
+          const organizations = await transaction.organization.findMany({
+            select: { id: true, previewSeatCode: true },
+          });
+          const highestSeatNumber = organizations.reduce(
+            (highest, organization) => {
+              if (organization.id === adoptedOrganizationId()) {
+                return Math.max(highest, 1);
+              }
+              const match = /^preview-seat-([1-9][0-9]*)$/.exec(
+                organization.id
+              );
+              return match ? Math.max(highest, Number(match[1])) : highest;
+            },
+            1
+          );
+          const previewSeatCode = generateUniquePreviewAccessCode(
+            [
+              ...reservedCodes,
+              ...organizations.flatMap(({ previewSeatCode }) =>
+                previewSeatCode ? [previewSeatCode] : []
+              ),
+            ],
+            generateCode
+          );
+          const seat = buildPreviewSeatDefinition(highestSeatNumber + 1, {
+            previewSeatCode,
+          });
 
-        await createSeat(transaction, seat);
-        return {
-          organizationId: seat.organizationId,
-          label: seat.label,
-          organizationName: seat.organizationName,
-          previewSeatCode,
-        };
-      },
-      // Seeding a seat loads the prod-fidelity bundle and writes an entire organization.
-      // The deploy path fits inside Prisma's five-second default, but this one runs
-      // inside a web request on a shared preview box, where the margin is thin enough
-      // that a timeout would abort the seat halfway.
-      { maxWait: 10_000, timeout: 120_000 });
+          await createSeat(transaction, seat);
+          return {
+            organizationId: seat.organizationId,
+            label: seat.label,
+            organizationName: seat.organizationName,
+            previewSeatCode,
+          };
+        },
+        // Seeding a seat loads the prod-fidelity bundle and writes an entire organization.
+        // The deploy path fits inside Prisma's five-second default, but this one runs
+        // inside a web request on a shared preview box, where the margin is thin enough
+        // that a timeout would abort the seat halfway.
+        { maxWait: 10_000, timeout: 120_000 }
+      );
     } catch (error) {
       if (!isUniqueConstraintError(error) || attempt === maxAttempts - 1) {
         throw error;

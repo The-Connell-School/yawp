@@ -33,7 +33,10 @@ mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
   requireMembership,
 }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
 
 const { action } = await import('./route');
 
@@ -169,6 +172,30 @@ describe('api.model.document.$id authorization ordering', () => {
 
     expect(response?.status).toBe(200);
     expect(prisma.document.update).toHaveBeenCalledTimes(1);
+  });
+
+  test('a teacher may read but cannot mutate an assignment-owned shared artifact', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'profile-teacher',
+      role: 'TEACHER',
+    });
+    const sharedDocument: ScopedDocument = {
+      id: DOC_B.id,
+      artifactKind: 'ASSIGNMENT_GROUP',
+      membershipId: null,
+      teacherProfileIds: [],
+      classAssignmentTeacherProfileIds: ['profile-teacher'],
+      activeGroupMemberIds: ['profile-b'],
+    };
+    prisma.document.findFirst.mockImplementation(async ({ where }: any) =>
+      matchesDocumentWhere(where, sharedDocument) ? documentRow : null
+    );
+
+    const response = await callAction({ html: '<p>teacher edit</p>' });
+
+    expect(response?.status).toBe(404);
+    expect(prisma.documentWriteJournal.create).not.toHaveBeenCalled();
+    expect(prisma.document.update).not.toHaveBeenCalled();
   });
 
   test('a platform admin can still save', async () => {

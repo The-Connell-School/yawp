@@ -10,6 +10,10 @@
 import { createHash } from 'node:crypto';
 import type { SavedAssignment } from '~/domain/assignments/saved-assignments';
 import {
+  toCollaborationGroupMode,
+  type CollaborationGroupMode,
+} from '~/domain/assignments/collaboration';
+import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
@@ -53,6 +57,9 @@ type SavedAssignmentRow = {
   pointValue: number | null;
   gradingAssistantStrictnessLevel: string;
   tutorEnabled: boolean;
+  collaborationEnabled: boolean;
+  collaborationGroupMode: string;
+  collaborationGroupSize: number | null;
   createdAt: Date;
   assignmentType: { id: string; title: string };
 };
@@ -65,6 +72,9 @@ const rowSelect = {
   pointValue: true,
   gradingAssistantStrictnessLevel: true,
   tutorEnabled: true,
+  collaborationEnabled: true,
+  collaborationGroupMode: true,
+  collaborationGroupSize: true,
   createdAt: true,
   assignmentType: { select: { id: true, title: true } },
 } as const;
@@ -85,6 +95,11 @@ function toSavedAssignment(row: SavedAssignmentRow): SavedAssignment {
         ? row.gradingAssistantStrictnessLevel
         : DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
     tutorEnabled: row.tutorEnabled,
+    collaborationEnabled: row.collaborationEnabled,
+    // Stored as a plain string; anything unrecognised reads as the default so a
+    // bad mode cannot reach group formation.
+    collaborationGroupMode: toCollaborationGroupMode(row.collaborationGroupMode),
+    collaborationGroupSize: row.collaborationGroupSize,
     assignmentTypeId: row.assignmentType.id,
     assignmentTypeTitle: row.assignmentType.title,
     savedAt: row.createdAt.toISOString(),
@@ -100,6 +115,9 @@ export async function saveAssignmentForReuse(params: {
   pointValue: number | null;
   gradingAssistantStrictnessLevel: GradingAssistantStrictnessLevel;
   tutorEnabled: boolean;
+  collaborationEnabled?: boolean;
+  collaborationGroupMode?: CollaborationGroupMode;
+  collaborationGroupSize?: number | null;
   source?: string;
 }): Promise<SavedAssignment> {
   const prompt = params.prompt.trim();
@@ -123,6 +141,11 @@ export async function saveAssignmentForReuse(params: {
     pointValue,
     gradingAssistantStrictnessLevel: params.gradingAssistantStrictnessLevel,
     tutorEnabled: params.tutorEnabled,
+    // Default to solo so an existing caller that does not pass collaboration
+    // settings keeps saving ordinary single-author assignments.
+    collaborationEnabled: params.collaborationEnabled ?? false,
+    collaborationGroupMode: params.collaborationGroupMode ?? 'teacher',
+    collaborationGroupSize: params.collaborationGroupSize ?? null,
   };
 
   const row = await prisma.savedAssignment.upsert({

@@ -16,6 +16,7 @@ mock.module('~/utils/db.server.js', () => ({ prisma: {} }));
 const {
   buildTeacherClassWhere,
   buildTeacherDocumentAccessWhere,
+  buildGradeWriteSubjectWhere,
   canManageGrades,
   isGradingOwnDocument,
 } = await import('./grading-auth.server');
@@ -32,7 +33,6 @@ describe('grading auth helpers', () => {
         isAdmin: false,
       })
     ).toEqual({
-      membership: { organizationId: 'org-1' },
       OR: [
         {
           classAssignment: {
@@ -50,13 +50,16 @@ describe('grading auth helpers', () => {
         {
           classAssignment: { is: null },
           membership: {
-            classesAsStudent: {
-              some: {
-                school: { organizationId: 'org-1' },
-                teachers: {
-                  some: {
-                    id: 'teacher-membership-1',
-                    isActive: true,
+            is: {
+              organizationId: 'org-1',
+              classesAsStudent: {
+                some: {
+                  school: { organizationId: 'org-1' },
+                  teachers: {
+                    some: {
+                      id: 'teacher-membership-1',
+                      isActive: true,
+                    },
                   },
                 },
               },
@@ -73,15 +76,18 @@ describe('grading auth helpers', () => {
       organizationId: 'org-1',
     }) as any;
 
-    expect(where.membership).toEqual({ organizationId: 'org-1' });
+    expect(where.membership).toBeUndefined();
     expect(where.OR[1]).toEqual(
       expect.objectContaining({
         classAssignment: { is: null },
         membership: {
-          classesAsStudent: {
-            some: expect.objectContaining({
-              school: { organizationId: 'org-1' },
-            }),
+          is: {
+            organizationId: 'org-1',
+            classesAsStudent: {
+              some: expect.objectContaining({
+                school: { organizationId: 'org-1' },
+              }),
+            },
           },
         },
       })
@@ -135,5 +141,46 @@ describe('grading auth helpers', () => {
         'same-user'
       )
     ).toBe(true);
+  });
+
+  test('allows ownerless assignment artifacts through the grade write subject guard', () => {
+    const where = buildGradeWriteSubjectWhere({
+      actorUserId: 'teacher-user-1',
+      releasedAt: null,
+    }) as any;
+
+    expect(where.OR).toContainEqual({ artifactKind: 'ASSIGNMENT_GROUP' });
+    expect(where.OR).toContainEqual(
+      expect.objectContaining({
+        artifactKind: 'STUDENT',
+        membership: {
+          is: expect.objectContaining({
+            userId: { not: 'teacher-user-1' },
+          }),
+        },
+      })
+    );
+  });
+
+  test('rechecks the activity-ledger feature before changing a released shared grade', () => {
+    const where = buildGradeWriteSubjectWhere({
+      actorUserId: 'teacher-user-1',
+      releasedAt: new Date('2026-08-31T12:00:00.000Z'),
+    }) as any;
+
+    expect(where.OR).toContainEqual({
+      artifactKind: 'ASSIGNMENT_GROUP',
+      classAssignment: {
+        is: {
+          class: {
+            school: {
+              organization: {
+                is: { submissionActivityEnabled: true },
+              },
+            },
+          },
+        },
+      },
+    });
   });
 });

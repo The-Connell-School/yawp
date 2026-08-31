@@ -13,8 +13,7 @@ import {
   type DifferentiationInput,
 } from '~/domain/assignment-insights/differentiate-students';
 import type { ClassInsightSummary } from '~/domain/assignment-insights/class-insight-synthesis';
-import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
-import { insightRubricCategoriesFromAssignmentType } from '~/domain/assignment-insights/insight-rubric-categories';
+import { readInsightRubric } from '~/domain/assignment-insights/insight-rubric.server';
 import { prisma } from '~/utils/db.server';
 import {
   AiRateLimitError,
@@ -90,12 +89,10 @@ async function recordClassInsightFailure(input: {
       },
     });
   } catch (error) {
-    if (
-      !(
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      )
-    ) {
+    if (!(
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    )) {
       throw error;
     }
   }
@@ -109,6 +106,7 @@ async function loadDifferentiationInputs(classAssignmentId: string) {
       membership: {
         select: { user: { select: { name: true, email: true } } },
       },
+      group: { select: { label: true } },
       submissions: {
         where: { gradedAt: { not: null } },
         orderBy: { submittedAt: 'desc' },
@@ -125,6 +123,7 @@ async function loadDifferentiationInputs(classAssignmentId: string) {
       {
         submissionId: submission.id,
         studentName:
+          doc.group?.label?.trim() ||
           doc.membership?.user?.name?.trim() ||
           doc.membership?.user?.email?.trim() ||
           null,
@@ -154,13 +153,7 @@ export async function generateClassAssignmentInsight(input: {
     },
     select: {
       id: true,
-      assignment: {
-        select: {
-          title: true,
-          assignmentTypeId: true,
-          assignmentType: { select: { title: true, kind: true } },
-        },
-      },
+      assignment: { select: { title: true } },
       class: {
         select: {
           grade: true,
@@ -195,8 +188,8 @@ export async function generateClassAssignmentInsight(input: {
   });
   const hasReadyInsight = Boolean(
     existingInsight?.status === 'ready' &&
-      existingInsight.summaryJson &&
-      existingInsight.generatedAt
+    existingInsight.summaryJson &&
+    existingInsight.generatedAt
   );
   if (hasReadyInsight) {
     const cooldown = getClassInsightRegenerationCooldown(
@@ -236,18 +229,13 @@ export async function generateClassAssignmentInsight(input: {
     };
   }
 
-  const gradingConfig = await resolveAssignmentTypeGradingConfig({
-    assignmentTypeId: classAssignment.assignment.assignmentTypeId,
-    assignmentTypeKind: classAssignment.assignment.assignmentType.kind,
-    assignmentTypeTitle: classAssignment.assignment.assignmentType.title,
+  // The rubric the class was graded on, not the five default categories. Read
+  // against the wrong rubric every category comes back "not scored", and the
+  // summary is a summary of nothing.
+  const rubric = await readInsightRubric({
+    classAssignmentId: classAssignment.id,
   });
-  const insightRubricCategories = insightRubricCategoriesFromAssignmentType(
-    gradingConfig.rubricCategories
-  );
-  const aggregate = aggregateRubricPerformance(
-    differentiationInputs,
-    insightRubricCategories
-  );
+  const aggregate = aggregateRubricPerformance(differentiationInputs, rubric);
   const generatedAt = new Date();
 
   if (input.generatedByMembershipId) {
@@ -285,6 +273,7 @@ export async function generateClassAssignmentInsight(input: {
         assignmentTitle: classAssignment.assignment.title,
         className: classLabel(classAssignment.class),
       },
+      rubric,
       metadata: { classAssignmentId: classAssignment.id },
     });
   } catch {
@@ -321,10 +310,7 @@ export async function generateClassAssignmentInsight(input: {
     };
   }
 
-  const differentiation = buildDifferentiation(
-    differentiationInputs,
-    insightRubricCategories
-  );
+  const differentiation = buildDifferentiation(differentiationInputs, rubric);
   const enrichedSummary = differentiation
     ? { ...summary, differentiation }
     : summary;

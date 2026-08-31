@@ -49,11 +49,21 @@ describe('student class detail visibility', () => {
       classId: 'class-1',
     });
 
+    // The gate moved into an `AND` when the collaborative-drafts branch added a
+    // second one: both are expressed as an `OR`, so side by side one would
+    // silently overwrite the other. The rule asserted here is unchanged.
     const where = prisma.classAssignment.findMany.mock.calls[0][0].where;
     expect(where).toEqual(
       expect.objectContaining({
         classId: 'class-1',
-        OR: [{ postAt: null }, { postAt: expect.objectContaining({ lte: expect.any(Date) }) }],
+        AND: expect.arrayContaining([
+          {
+            OR: [
+              { postAt: null },
+              { postAt: expect.objectContaining({ lte: expect.any(Date) }) },
+            ],
+          },
+        ]),
       })
     );
   });

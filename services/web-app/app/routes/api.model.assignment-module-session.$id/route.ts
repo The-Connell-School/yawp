@@ -6,7 +6,7 @@ import { zfd } from 'zod-form-data';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import {
-  documentOwnerSessionWhere,
+  documentAuthorOwnSessionWhere,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 import omit from 'lodash/omit';
@@ -48,13 +48,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, validator);
   if (error) return validationError(error);
 
-  // Owner-scoped: this advances the module and appends user/assistant messages to the
-  // student's own transcript, and the response carries every message back. Teachers read
-  // student work elsewhere; nobody but the student writes into it here.
+  // Scoped to the caller's OWN session, which on a solo document is the owner's
+  // and on a shared draft is that one student's. Not owner-scope: a co-author
+  // would 404 on a group draft. Not author-scope either: that would let one
+  // student write into their partner's transcript. Teachers read student work
+  // elsewhere; nobody but the student writes into it here.
   const cms = await prisma.assignmentModuleSession.findFirst({
     where: {
       id: params.id,
-      ...documentOwnerSessionWhere({ profileId: profile.id, isAdmin }),
+      ...documentAuthorOwnSessionWhere({ profileId: profile.id, isAdmin }),
     },
     include: {
       assignmentModule: {

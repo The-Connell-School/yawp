@@ -2,6 +2,7 @@
 // The database work lives in `saved-assignments.server.ts`; this module holds
 // only what a component can safely import.
 
+import type { CollaborationGroupMode } from '~/domain/assignments/collaboration';
 import type { GradingAssistantStrictnessLevel } from '~/domain/grading/grading-assistant-strictness';
 
 /**
@@ -26,6 +27,9 @@ export type SavedAssignment = {
   pointValue: number | null;
   gradingAssistantStrictnessLevel: GradingAssistantStrictnessLevel;
   tutorEnabled: boolean;
+  collaborationEnabled: boolean;
+  collaborationGroupMode: CollaborationGroupMode;
+  collaborationGroupSize: number | null;
   assignmentTypeId: string;
   assignmentTypeTitle: string;
   savedAt: string;

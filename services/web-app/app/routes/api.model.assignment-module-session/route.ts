@@ -4,10 +4,13 @@ import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import {
+  documentAuthorWhere,
   documentOwnerWhere,
   documentReadWhere,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
+import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
+import { memberSessionWhere } from '~/domain/collaboration/tutor.server';
 
 const POST = z.object({
   assignmentModuleId: z.string(),
@@ -57,6 +60,10 @@ export async function action({ request }: ActionFunctionArgs) {
       select: {
         id: true,
         membershipId: true,
+        // Only to decide whether the member scope below applies at all: every
+        // document that predates shared drafts has no group, so it skips the
+        // extra query entirely.
+        group: { select: { id: true } },
       },
     }),
     prisma.assignmentModule.findUnique({
@@ -74,18 +81,37 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'No document found.' }, { status: 404 });
   }
 
-  if (!document.membershipId) {
+  if (!document.membershipId && !document.group) {
     return dataResponse(
       { error: 'No student membership found.' },
       { status: 404 }
     );
   }
 
+  // A shared draft has several authors and one tutor conversation each, so
+  // "the most recent session for this module" stops being a safe lookup: it can
+  // be a classmate's, and the id it returns is the one the tutor endpoint posts
+  // into. Asked as the room predicate rather than re-derived here so there is
+  // one definition of what a collaboration room is.
+  const isShared = document.group
+    ? Boolean(
+        await prisma.document.findFirst({
+          where: { id: document.id, ...collaborationRoomWhere() },
+          select: { id: true },
+        })
+      )
+    : false;
+  const memberScope = memberSessionWhere({
+    membershipId: profile.id,
+    isShared,
+  });
+
   const existing = await prisma.assignmentModuleSession.findFirst({
     where: {
       documentId: data.documentId,
       assignmentModuleId: data.assignmentModuleId,
       deletedAt: null,
+      ...memberScope,
     },
     orderBy: { createdAt: 'desc' },
     select: { id: true },
@@ -107,15 +133,20 @@ export async function action({ request }: ActionFunctionArgs) {
   // editor, so only the student who owns the document (or a platform admin) may do it.
   // Expressed as a second scoped query rather than a field comparison so the rule stays
   // in the database predicate.
-  const ownedDocument = await prisma.document.findFirst({
+  // On a shared draft the scope is author, not owner: `Document.membershipId`
+  // is one column with one value, so it names the first member of the group and
+  // nobody else. Owner scope would leave every other co-author without a tutor.
+  const authorizedDocument = await prisma.document.findFirst({
     where: {
       id: document.id,
-      ...documentOwnerWhere({ profileId: profile.id, isAdmin }),
+      ...(isShared
+        ? documentAuthorWhere({ profileId: profile.id, isAdmin })
+        : documentOwnerWhere({ profileId: profile.id, isAdmin })),
     },
     select: { id: true },
   });
 
-  if (!ownedDocument) {
+  if (!authorizedDocument) {
     return dataResponse(
       {
         error:
@@ -135,6 +166,9 @@ export async function action({ request }: ActionFunctionArgs) {
       updatedAt,
       instructionsCompleted: 0,
       assignmentModuleId: assignmentModule.id,
+      // Null on a solo document, which is what "the document's owner" has always
+      // meant; named on a shared draft, where it has to say which author.
+      membershipId: isShared ? profile.id : null,
       ...(firstInstruction && {
         messages: {
           create: [
