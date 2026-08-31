@@ -331,6 +331,48 @@ test.describe.serial('University of Alabama student onboarding', () => {
     await expect(page.getByLabel('Code')).toHaveCount(0);
   });
 
+  test('guides a regular Yawp member away from the UA sign-in', async ({
+    page,
+    e2eContext,
+  }) => {
+    await page.goto(`${UA_APP_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(e2eContext.userEmail);
+    await page.getByLabel('Password').fill('johndoe');
+    await page.getByRole('button', { name: 'Log in' }).click();
+
+    const callout = page.getByRole('alert');
+    await expect(callout).toContainText('This account signs in at yawp.school');
+    await expect(
+      callout.getByRole('link', { name: 'Continue to yawp.school' })
+    ).toHaveAttribute('href', 'https://yawp.school/auth/login');
+    await expect(page.getByLabel('Email')).toHaveValue(e2eContext.userEmail);
+    await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/login`);
+  });
+
+  test('guides a UA-only member to the UA sign-in from yawp.school', async ({
+    page,
+    e2eContext,
+  }) => {
+    await page.goto(`${APP_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(e2eContext.ua.paidClassless.email);
+    await page
+      .getByLabel('Password')
+      .fill(e2eContext.ua.paidClassless.password);
+    await page.getByRole('button', { name: 'Log in' }).click();
+
+    const callout = page.getByRole('alert');
+    await expect(callout).toContainText(
+      'This account signs in at ua.yawp.school'
+    );
+    await expect(
+      callout.getByRole('link', { name: 'Continue to ua.yawp.school' })
+    ).toHaveAttribute('href', 'https://ua.yawp.school/auth/login');
+    await expect(page.getByLabel('Email')).toHaveValue(
+      e2eContext.ua.paidClassless.email
+    );
+    await expect(page).toHaveURL(`${APP_ORIGIN}/auth/login`);
+  });
+
   test('keeps UA and regular Yawp login sessions separate by hostname', async ({
     page,
     e2eContext,
