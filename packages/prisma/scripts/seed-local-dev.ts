@@ -14,6 +14,8 @@ import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
   LOCAL_DEV_PERSONAS,
+  UA_PREVIEW_ORG_ID,
+  UA_PREVIEW_ORG_NAME,
 } from './local-dev/dev-personas';
 
 assertLocalSeedTarget();
@@ -36,6 +38,14 @@ try {
       numOfTeacherSeats: 40,
       reporterEnabled: true,
       classInsightsEnabled: false,
+    },
+  });
+  await prisma.organization.create({
+    data: {
+      id: UA_PREVIEW_ORG_ID,
+      name: UA_PREVIEW_ORG_NAME,
+      numOfStudentSeats: 500,
+      numOfTeacherSeats: 0,
     },
   });
   await enableClassInsightsForOrganizations(prisma, [LOCAL_DEV_ORG_ID]);

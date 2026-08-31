@@ -956,6 +956,39 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('PREVIEW_SANITIZED_DUMP_VERSION');
   });
 
+  test('preview and production deployments have complete UA Stripe configuration paths', () => {
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+    const infra = readRepoFile('infra/main.tf');
+    const variables = readRepoFile('infra/variables.tf');
+
+    for (const name of [
+      'PREVIEW_UA_STUDENT_BILLING_ENABLED',
+      'PREVIEW_UA_ORGANIZATION_ID',
+      'PREVIEW_STRIPE_SECRET_KEY',
+      'PREVIEW_STRIPE_WEBHOOK_SECRET',
+      'PREVIEW_STRIPE_UA_2026_PRICE_ID',
+    ]) {
+      expect(previewWorkflow).toContain(name);
+    }
+
+    for (const name of [
+      'ua_student_billing_enabled',
+      'ua_organization_id',
+      'stripe_secret_key',
+      'stripe_webhook_secret',
+      'stripe_ua_2026_price_id',
+    ]) {
+      expect(variables).toContain(`variable "${name}"`);
+    }
+    expect(infra).toContain('runtime_environment_secrets = merge({');
+    expect(infra).toContain('STRIPE_SECRET_KEY');
+    expect(infra).toContain('STRIPE_WEBHOOK_SECRET');
+    expect(infra).toContain('UA_STUDENT_BILLING_ENABLED');
+    expect(infra).toContain('YAWP_APP_ORIGIN');
+  });
+
   test('preview workflow does not require runner AWS credentials for dump restores', () => {
     const previewWorkflow = readRepoFile(
       '.github/workflows/preview-environments.yml'
