@@ -23,10 +23,14 @@ test.describe('School year scope', () => {
     const suffix = Date.now().toString().slice(-8);
     const email = `ua-invited-teacher-${suffix}@yawp.test`;
     const password = 'ua-invited-teacher-password';
-    const currentYear = currentSchoolYear(new Date('2026-08-31T12:00:00.000Z'));
-    const priorYear = '2025-2026';
+    const incidentYear = currentSchoolYear(
+      new Date('2026-08-31T12:00:00.000Z')
+    );
+    const currentYear = currentSchoolYear();
+    const currentStart = Number(currentYear.slice(0, 4));
+    const priorYear = `${currentStart - 1}-${currentStart}`;
 
-    expect(currentYear).toBe('2026-2027');
+    expect(incidentYear).toBe('2026-2027');
 
     try {
       // Reproduce the same-browser identity boundary from production: the
