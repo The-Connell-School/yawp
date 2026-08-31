@@ -975,6 +975,7 @@ describe('PR preview deployment contract', () => {
     );
     const infra = readRepoFile('infra/main.tf');
     const variables = readRepoFile('infra/variables.tf');
+    const runbook = readRepoFile('docs/runbooks/ua-student-billing.md');
 
     for (const name of [
       'PREVIEW_UA_STUDENT_BILLING_ENABLED',
@@ -1013,6 +1014,10 @@ describe('PR preview deployment contract', () => {
     expect(infra).toContain(
       'var.ua_student_billing_enabled ? var.ua_stripe_credentials_configured : true'
     );
+    expect(runbook).toContain('ua_stripe_credentials_configured=true');
+    expect(runbook).toContain('ua_partner_code=<student-facing-code>');
+    expect(runbook).toContain('ua_student_billing_enabled=false');
+    expect(runbook).toContain('ua_student_billing_enabled=true');
   });
 
   test('preview workflow does not require runner AWS credentials for dump restores', () => {

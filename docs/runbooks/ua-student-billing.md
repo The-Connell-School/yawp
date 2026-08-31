@@ -67,11 +67,17 @@ same application and database.
 
 Create a live-mode one-time $50 price and a live webhook endpoint at
 `https://yawp.school/api/stripe/webhook` with the same event list. Then provide
-these Terraform inputs through the existing protected deployment secret path:
+the inputs through the existing protected deployment secret path in two
+separate applies. Production rejects test-mode Prices and webhook events even
+when their signatures are valid.
+
+Stage the live credentials first while the student gate remains off:
 
 ```text
-ua_student_billing_enabled=true
+ua_stripe_credentials_configured=true
+ua_student_billing_enabled=false
 ua_organization_id=<production University of Alabama Organization.id>
+ua_partner_code=<student-facing-code>
 ua_partner_hostname=ua.yawp.school
 yawp_app_origin=https://ua.yawp.school
 stripe_secret_key=<live Stripe secret key>
@@ -80,19 +86,33 @@ stripe_ua_2026_price_id=<live one-time Price.id>
 stripe_ua_existing_subscription_price_ids=[<legacy recurring Price.id>, ...]
 ```
 
-Terraform stores the two Stripe secrets in AWS Secrets Manager and passes only
-their ARNs to App Runner. The other values are ordinary runtime configuration.
-The App Runner update fails before deployment if billing is enabled with an
-incomplete configuration.
+Apply and verify that the two Stripe secrets exist in AWS Secrets Manager, that
+the live Price is active and still $50, and that normal `yawp.school` sign-in is
+unchanged. This stage does not pass the Stripe secrets to App Runner and leaves
+`UA_STUDENT_BILLING_ENABLED=false` at runtime.
+
+Run database migrations and the existing-subscription reconciliation dry run.
+Review the counts, apply any approved imports, and verify the resulting license
+records. Only then perform a second apply with the same inputs except:
+
+```text
+ua_stripe_credentials_configured=true
+ua_student_billing_enabled=true
+```
+
+Terraform then passes only the two secret ARNs to App Runner and turns on the
+UA student gate. The other values are ordinary runtime configuration. The App
+Runner update fails before deployment if credentials or billing are enabled
+with an incomplete configuration.
 
 Terraform also adds `ua.yawp.school` to the CloudFront aliases and ACM
 certificate and creates Route 53 A/AAAA aliases. The production Stripe webhook
 continues to use `https://yawp.school/api/stripe/webhook`; no second endpoint is
 required for the UA browser hostname.
 
-Before enabling checkout, run the existing-subscription reconciliation script
-in dry-run mode, review its counts, and then apply it. This prevents a student
-with a qualifying prior subscription from paying again.
+Never combine the initial credential staging and billing enablement into one
+unreviewed apply. The two-stage switch prevents existing UA students from being
+gated before migration and reconciliation are complete.
 
 ## Cancellation, refunds, and disputes
 

@@ -3,6 +3,7 @@ import {
   UA_STUDENT_LICENSE_COHORT,
   UA_STUDENT_LICENSE_VALID_UNTIL,
   applyStripeWebhookTransition,
+  assertStripeModeAllowed,
   createOrReuseCheckoutSession,
   getUaStudentLicenseConfig,
   getE2EStripeClientOptions,
@@ -92,6 +93,18 @@ describe('UA student license configuration', () => {
     expect(() =>
       getUaStudentLicenseNow({ E2E: 'true', E2E_UA_NOW: 'not-a-date' })
     ).toThrow('Invalid E2E UA clock');
+  });
+
+  test('rejects Stripe test-mode prices and events in production', () => {
+    expect(() =>
+      assertStripeModeAllowed(true, { NODE_ENV: 'production' })
+    ).not.toThrow();
+    expect(() =>
+      assertStripeModeAllowed(false, { NODE_ENV: 'production' })
+    ).toThrow('Stripe test-mode data is not allowed in production');
+    expect(() =>
+      assertStripeModeAllowed(false, { NODE_ENV: 'development' })
+    ).not.toThrow();
   });
 });
 

@@ -77,6 +77,15 @@ export function isUaStudentLicenseSalesClosed(now = getUaStudentLicenseNow()) {
   return now.getTime() >= UA_STUDENT_LICENSE_VALID_UNTIL.getTime();
 }
 
+export function assertStripeModeAllowed(
+  livemode: boolean,
+  env: Record<string, string | undefined> = process.env
+) {
+  if (env.NODE_ENV === 'production' && !livemode) {
+    throw new Error('Stripe test-mode data is not allowed in production');
+  }
+}
+
 type MembershipForLicense = {
   id: string;
   role: string;
@@ -413,6 +422,7 @@ function defaultCheckoutCreationDependencies(
   return {
     async validateConfiguredPrice() {
       const price = await stripe.prices.retrieve(config.priceId);
+      assertStripeModeAllowed(price.livemode);
       if (
         !price.active ||
         price.type !== 'one_time' ||
@@ -902,6 +912,7 @@ export async function processStripeWebhook(
     signature,
     config.webhookSecret
   );
+  assertStripeModeAllowed(event.livemode);
 
   const alreadyProcessed = await prisma.stripeWebhookEvent.findUnique({
     where: { id: event.id },

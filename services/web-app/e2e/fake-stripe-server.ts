@@ -447,6 +447,7 @@ async function handler(request: Request) {
       object: 'price',
       active: true,
       currency: 'usd',
+      livemode: false,
       type: 'one_time',
       unit_amount: 5000,
     });
