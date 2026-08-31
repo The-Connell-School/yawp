@@ -206,10 +206,11 @@ describe('app.assignments.$assignmentId loader', () => {
     prisma.assignment.findFirst.mockResolvedValue({
       id: 'assignment-1',
       assignmentTypeId: 'at-1',
+      collaborationEnabled: true,
       promptAttachmentKey: null,
       assignmentType: { systemKey: null },
     });
-    prisma.documentGroup.findFirst.mockResolvedValue({ id: 'group-1' });
+    prisma.documentGroup.findFirst.mockResolvedValue(null);
     const form = new FormData();
     form.set('intent', 'update-assignment');
     form.set('assignmentId', 'assignment-1');
@@ -229,7 +230,7 @@ describe('app.assignments.$assignmentId loader', () => {
 
     expect(response.status ?? response.init?.status).toBe(409);
     expect(response.data?.message ?? (await response.json()).message).toMatch(
-      /cannot change/i
+      /collaborative assignment/i
     );
     expect(prisma.assignment.update).not.toHaveBeenCalled();
   });

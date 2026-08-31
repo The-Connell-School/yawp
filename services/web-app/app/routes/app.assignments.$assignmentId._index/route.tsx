@@ -242,9 +242,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       gradingAssistantStrictnessLevel: active.assignment
         .gradingAssistantStrictnessLevel as GradingAssistantStrictnessLevel,
       assignmentTypeId: active.assignment.assignmentTypeId,
-      assignmentTypeLocked: deployments.some((deployment) =>
-        deployment.documentGroups.some((group) => group.openedAt !== null)
-      ),
+      assignmentTypeLocked: active.assignment.collaborationEnabled,
       assignmentType: active.assignment.assignmentType,
       documentCount: active._count.documents,
       gradedCount,
@@ -485,6 +483,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       select: {
         id: true,
         assignmentTypeId: true,
+        collaborationEnabled: true,
         promptAttachmentKey: true,
         assignmentType: { select: { systemKey: true } },
       },
@@ -493,6 +492,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return dataResponse(
         { success: false, message: 'Assignment not found.' },
         { status: 404 }
+      );
+    }
+
+    if (
+      assignmentTypeId !== existingAssignment.assignmentTypeId &&
+      existingAssignment.collaborationEnabled
+    ) {
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'Assignment type cannot change on a collaborative assignment.',
+        },
+        { status: 409 }
       );
     }
 

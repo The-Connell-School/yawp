@@ -117,16 +117,19 @@ CREATE OR REPLACE FUNCTION protect_assignment_group_assignment_type()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW."assignmentTypeId" IS DISTINCT FROM OLD."assignmentTypeId"
-     AND EXISTS (
+     AND (
+       OLD."collaborationEnabled" = true
+       OR EXISTS (
        SELECT 1
        FROM "ClassAssignment" AS deployment
        JOIN "DocumentGroup" AS group_row
          ON group_row."classAssignmentId" = deployment."id"
        WHERE deployment."assignmentId" = OLD."id"
          AND group_row."documentId" IS NOT NULL
+       )
      ) THEN
     RAISE EXCEPTION
-      'assignment % cannot change type after shared artifacts are created', OLD."id";
+      'assignment % cannot change type while collaboration is enabled or shared artifacts exist', OLD."id";
   END IF;
   RETURN NEW;
 END;

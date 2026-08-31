@@ -242,6 +242,53 @@ describe('assignment-owned collaborative artifact contracts', () => {
     }
   });
 
+  test('a collaborative assignment cannot change type before finalization', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const source = await client.query<{
+        assignment_id: string;
+        assignment_type_id: string;
+      }>(`
+        SELECT assignment.id AS assignment_id,
+               assignment."assignmentTypeId" AS assignment_type_id
+        FROM "Assignment" AS assignment
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM "ClassAssignment" AS deployment
+          JOIN "DocumentGroup" AS group_row
+            ON group_row."classAssignmentId" = deployment.id
+          WHERE deployment."assignmentId" = assignment.id
+            AND group_row."documentId" IS NOT NULL
+        )
+        ORDER BY assignment.id
+        LIMIT 1
+      `);
+      if (source.rows.length === 0)
+        throw new Error('Need an assignment without shared artifacts');
+      const otherType = await client.query<{ id: string }>(
+        'SELECT id FROM "AssignmentType" WHERE id <> $1 ORDER BY id LIMIT 1',
+        [source.rows[0].assignment_type_id]
+      );
+      if (otherType.rows.length === 0)
+        throw new Error('Need two assignment types');
+
+      await client.query(
+        'UPDATE "Assignment" SET "collaborationEnabled" = true WHERE id = $1',
+        [source.rows[0].assignment_id]
+      );
+      await expect(
+        client.query(
+          'UPDATE "Assignment" SET "assignmentTypeId" = $1 WHERE id = $2',
+          [otherType.rows[0].id, source.rows[0].assignment_id]
+        )
+      ).rejects.toThrow(/cannot change type/i);
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+  });
+
   test('a deployment with shared artifacts cannot change assignment owner', async () => {
     const client = await pool.connect();
     try {
