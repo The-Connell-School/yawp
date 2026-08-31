@@ -538,7 +538,7 @@ describe('collaborative submission activity tenant guard', () => {
         client,
         submissionId: source.submissionId,
         organizationId: fixture.organizationId,
-        source: 'student-document-concurrency-contract',
+        source: 'db-proof',
       });
       await client.query('COMMIT');
 
@@ -586,7 +586,7 @@ describe('collaborative submission activity tenant guard', () => {
         client,
         submissionId: source.submissionId,
         organizationId: fixture.organizationId,
-        source: 'student-submission-concurrency-contract',
+        source: 'db-proof',
       });
       await client.query('COMMIT');
 
