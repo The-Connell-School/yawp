@@ -102,7 +102,108 @@ async function createGroupSubmission(
     [submissionId, documentId]
   );
 
-  return { submissionId };
+  return { documentId, groupId, submissionId };
+}
+
+async function createStudentSubmission(client: Client, fixture: Fixture) {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const documentId = `student-submit-document-${suffix}`;
+  const submissionId = `student-submit-submission-${suffix}`;
+
+  await client.query(
+    `INSERT INTO "Document" (
+       id, "artifactKind", "membershipId", "assignmentTypeId",
+       title, text, html
+     ) VALUES (
+       $1, 'student', $2, $3,
+       'Student Essay', 'Student draft', '<p>Student draft</p>'
+     )`,
+    [documentId, fixture.membershipId, fixture.assignmentTypeId]
+  );
+  await client.query(
+    `INSERT INTO "Submission" (
+       id, title, text, html, "submittedAt", "documentId"
+     ) VALUES (
+       $1, 'Student Essay', 'Student draft', '<p>Student draft</p>',
+       CURRENT_TIMESTAMP, $2
+     )`,
+    [submissionId, documentId]
+  );
+
+  return { documentId, submissionId };
+}
+
+async function createOtherTenantFixture(
+  client: Client,
+  source: Fixture
+): Promise<Fixture> {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const organizationId = `tenant-contract-org-${suffix}`;
+  const schoolId = `tenant-contract-school-${suffix}`;
+  const classId = `tenant-contract-class-${suffix}`;
+  const assignmentId = `tenant-contract-assignment-${suffix}`;
+  const classAssignmentId = `tenant-contract-deployment-${suffix}`;
+
+  await client.query(
+    `INSERT INTO "Organization" (id, name)
+     VALUES ($1, 'Tenant contract organization')`,
+    [organizationId]
+  );
+  await client.query(
+    `INSERT INTO "School" (id, name, code, "organizationId")
+     VALUES ($1, 'Tenant contract school', $2, $3)`,
+    [schoolId, `TENANT-${suffix}`, organizationId]
+  );
+  await client.query(
+    `INSERT INTO "Class" (id, code, "schoolId") VALUES ($1, $2, $3)`,
+    [classId, `CLASS-${suffix}`, schoolId]
+  );
+  await client.query(
+    `INSERT INTO "Assignment" (
+       id, "assignmentTypeId", title, prompt, "collaborationEnabled"
+     ) VALUES ($1, $2, 'Tenant contract assignment', 'Write together.', true)`,
+    [assignmentId, source.assignmentTypeId]
+  );
+  await client.query(
+    `INSERT INTO "ClassAssignment" (id, "assignmentId", "classId")
+     VALUES ($1, $2, $3)`,
+    [classAssignmentId, assignmentId, classId]
+  );
+
+  return {
+    assignmentId,
+    assignmentTypeId: source.assignmentTypeId,
+    classAssignmentId,
+    membershipId: source.membershipId,
+    organizationId,
+  };
+}
+
+async function insertActivity({
+  client,
+  submissionId,
+  organizationId,
+  source,
+}: {
+  client: Client;
+  submissionId: string;
+  organizationId: string;
+  source: string;
+}) {
+  return client.query(
+    `INSERT INTO "SubmissionActivity" (
+       id, "submissionId", "organizationId", "actorType",
+       "eventType", source, changes
+     ) VALUES (
+       $1, $2, $3, 'system', 'submission.created', $4, '{}'::jsonb
+     )`,
+    [
+      `submission-activity-${Date.now()}-${Math.random()}`,
+      submissionId,
+      organizationId,
+      source,
+    ]
+  );
 }
 
 beforeAll(() => {
@@ -173,6 +274,129 @@ describe('collaborative submission activity tenant guard', () => {
           ]
         )
       ).rejects.toThrow(/organization must match submission tenant/i);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
+  test('preserves the student-document tenant path', async () => {
+    try {
+      await client.query('BEGIN');
+      const fixture = await findFixture(client);
+      const { submissionId } = await createStudentSubmission(client, fixture);
+
+      await expect(
+        insertActivity({
+          client,
+          submissionId,
+          organizationId: fixture.organizationId,
+          source: 'student-submit-contract',
+        })
+      ).resolves.toBeDefined();
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
+  test('still rejects a cross-tenant student activity', async () => {
+    try {
+      await client.query('BEGIN');
+      const fixture = await findFixture(client);
+      const otherOrganization = await client.query<{ id: string }>(
+        `SELECT id FROM "Organization" WHERE id <> $1 ORDER BY id LIMIT 1`,
+        [fixture.organizationId]
+      );
+      if (otherOrganization.rows.length === 0) {
+        throw new Error('Database needs two organizations for tenant proof');
+      }
+      const { submissionId } = await createStudentSubmission(client, fixture);
+
+      await expect(
+        insertActivity({
+          client,
+          submissionId,
+          organizationId: otherOrganization.rows[0].id,
+          source: 'cross-tenant-student-submit-contract',
+        })
+      ).rejects.toThrow(/organization must match submission tenant/i);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
+  test('rejects moving an audited group submission to another tenant document', async () => {
+    try {
+      await client.query('BEGIN');
+      const sourceFixture = await findFixture(client);
+      const targetFixture = await createOtherTenantFixture(
+        client,
+        sourceFixture
+      );
+      const source = await createGroupSubmission(client, sourceFixture);
+      const target = await createGroupSubmission(client, targetFixture);
+      await insertActivity({
+        client,
+        submissionId: source.submissionId,
+        organizationId: sourceFixture.organizationId,
+        source: 'group-submit-handoff-contract',
+      });
+
+      await expect(
+        client.query(
+          `UPDATE "Submission" SET "documentId" = $1 WHERE id = $2`,
+          [target.documentId, source.submissionId]
+        )
+      ).rejects.toThrow(/cannot move an audited submission/i);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
+  test('rejects reparenting an audited group document into another tenant', async () => {
+    try {
+      await client.query('BEGIN');
+      const sourceFixture = await findFixture(client);
+      const targetFixture = await createOtherTenantFixture(
+        client,
+        sourceFixture
+      );
+      const source = await createGroupSubmission(client, sourceFixture);
+      await insertActivity({
+        client,
+        submissionId: source.submissionId,
+        organizationId: sourceFixture.organizationId,
+        source: 'group-document-reparent-contract',
+      });
+
+      await client.query(
+        `UPDATE "DocumentGroup"
+         SET "classAssignmentId" = $1,
+             ordinal = (
+               SELECT COALESCE(MAX(ordinal), 0) + 200000
+               FROM "DocumentGroup"
+               WHERE "classAssignmentId" = $1
+             )
+         WHERE id = $2`,
+        [targetFixture.classAssignmentId, source.groupId]
+      );
+
+      await expect(
+        client.query(
+          `UPDATE "Document"
+           SET "classAssignmentId" = $1,
+               "assignmentId" = $2,
+               "assignmentTypeId" = $3
+           WHERE id = $4`,
+          [
+            targetFixture.classAssignmentId,
+            targetFixture.assignmentId,
+            targetFixture.assignmentTypeId,
+            source.documentId,
+          ]
+        )
+      ).rejects.toThrow(
+        /cannot move a document with durable submission activity/i
+      );
     } finally {
       await client.query('ROLLBACK');
     }
