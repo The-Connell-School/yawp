@@ -1,0 +1,17 @@
+#!/usr/bin/env bun
+
+import { main } from "../scripts/project-agent.mjs";
+
+main().catch((error) => {
+  const wantsJson = process.argv.includes("--json");
+  const result = {
+    status: "error",
+    code: error.code || "project_command_failed",
+    error: error.message,
+    diagnostic: [error.stderr, error.stdout].filter(Boolean).join("\n").slice(-4096) || undefined,
+    suggestedCommands: ["./bin/project doctor --json", "./bin/project help"],
+  };
+  if (wantsJson) process.stderr.write(`${JSON.stringify(result, null, 2)}\n`);
+  else process.stderr.write(`project: ${result.error}\nTry: ${result.suggestedCommands.join(" | ")}\n`);
+  process.exitCode = 1;
+});
