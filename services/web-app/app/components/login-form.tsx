@@ -10,6 +10,7 @@ export const LoginSchema = z.object({
   email: EmailSchema,
   password: PasswordSchema,
   redirectTo: z.string().nullish(),
+  siteMismatch: z.enum(['main', 'ua']).optional(),
 });
 
 export function LoginForm({
@@ -29,6 +30,21 @@ export function LoginForm({
       whenSubmitted: 'onSubmit',
     },
   });
+  const siteMismatch = form.error('siteMismatch');
+  const mismatchDestination =
+    siteMismatch === 'main'
+      ? {
+          hostname: 'yawp.school',
+          href: 'https://yawp.school/auth/login',
+          detail: 'Your organization uses the main Yawp site.',
+        }
+      : siteMismatch === 'ua'
+        ? {
+            hostname: 'ua.yawp.school',
+            href: 'https://ua.yawp.school/auth/login',
+            detail: 'Your University of Alabama account uses the UA Yawp site.',
+          }
+        : null;
 
   return (
     <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
@@ -38,6 +54,25 @@ export function LoginForm({
           Please enter your details.
         </p>
       </div>
+      {mismatchDestination ? (
+        <div
+          role="alert"
+          className="mt-5 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950"
+        >
+          <p className="font-semibold">
+            This account signs in at {mismatchDestination.hostname}
+          </p>
+          <p className="mt-1 text-sm text-pretty">
+            {mismatchDestination.detail}
+          </p>
+          <a
+            href={mismatchDestination.href}
+            className="mt-3 inline-flex text-sm font-semibold underline underline-offset-4 hover:no-underline"
+          >
+            Continue to {mismatchDestination.hostname}
+          </a>
+        </div>
+      ) : null}
       <div className="mt-6 w-full">
         <Form {...form.getFormProps()} className="flex flex-col gap-4">
           <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />

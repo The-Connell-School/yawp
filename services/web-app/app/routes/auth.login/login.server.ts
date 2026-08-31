@@ -17,6 +17,41 @@ import {
 } from '~/utils/preview-access.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { combineHeaders } from '~/utils/misc';
+import {
+  getUaPartnerContext,
+  isUaPartnerHost,
+} from '~/utils/ua-partner.server';
+
+type LoginSiteMismatch = 'main' | 'ua';
+
+async function getLoginSiteMismatch(
+  request: Request,
+  userId: string
+): Promise<LoginSiteMismatch | null> {
+  const uaOrganizationId = process.env.UA_ORGANIZATION_ID?.trim();
+  if (!uaOrganizationId) return null;
+
+  const memberships = await prisma.orgMembership.findMany({
+    where: { userId, isActive: true },
+    select: { organizationId: true },
+  });
+  const hasUaMembership = memberships.some(
+    ({ organizationId }) => organizationId === uaOrganizationId
+  );
+  const hasNonUaMembership = memberships.some(
+    ({ organizationId }) => organizationId !== uaOrganizationId
+  );
+
+  if (isUaPartnerHost(request)) {
+    if (!hasUaMembership && hasNonUaMembership) {
+      const partnerContext = await getUaPartnerContext(request);
+      return partnerContext ? null : 'main';
+    }
+    return null;
+  }
+
+  return hasUaMembership && !hasNonUaMembership ? 'ua' : null;
+}
 
 export async function loginAction({ request }: ActionFunctionArgs) {
   await requireAnonymous(request);
@@ -35,7 +70,8 @@ export async function loginAction({ request }: ActionFunctionArgs) {
     }
 
     let previewMembershipId: string | null = null;
-    if (isIsolatedPreviewSeatMode()) {
+    const isolatedPreviewSeatMode = isIsolatedPreviewSeatMode();
+    if (isolatedPreviewSeatMode) {
       const seat = await getPreviewAccessSeat(request);
       const seatMembership = seat
         ? await prisma.orgMembership.findFirst({
@@ -54,6 +90,16 @@ export async function loginAction({ request }: ActionFunctionArgs) {
         );
       }
       previewMembershipId = seatMembership.id;
+    }
+
+    const siteMismatch = isolatedPreviewSeatMode
+      ? null
+      : await getLoginSiteMismatch(request, user.id);
+    if (siteMismatch) {
+      return validationError(
+        { fieldErrors: { siteMismatch } },
+        { email, password: '', redirectTo: data.redirectTo }
+      );
     }
 
     const session = await prisma.session.create({

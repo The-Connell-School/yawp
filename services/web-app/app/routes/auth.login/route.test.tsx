@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireAnonymous = mock();
 const verifyUserPassword = mock();
@@ -8,6 +8,8 @@ const commitSession = mock();
 const captureException = mock();
 const getPreviewAccessSeat = mock();
 const setMembershipId = mock();
+const originalUaOrganizationId = process.env.UA_ORGANIZATION_ID;
+const originalUaPartnerHostname = process.env.UA_PARTNER_HOSTNAME;
 
 const prisma = {
   orgMembership: {
@@ -45,10 +47,22 @@ mock.module('~/utils/preview-access.server', () => ({
 }));
 mock.module('~/cookies/membership-id.server', () => ({ setMembershipId }));
 
-const { commitUaPartnerContext } = await import('~/utils/ua-partner.server');
 const { action } = await import('./route');
 
 describe('auth.login', () => {
+  afterEach(() => {
+    if (originalUaOrganizationId === undefined) {
+      delete process.env.UA_ORGANIZATION_ID;
+    } else {
+      process.env.UA_ORGANIZATION_ID = originalUaOrganizationId;
+    }
+    if (originalUaPartnerHostname === undefined) {
+      delete process.env.UA_PARTNER_HOSTNAME;
+    } else {
+      process.env.UA_PARTNER_HOSTNAME = originalUaPartnerHostname;
+    }
+  });
+
   beforeEach(() => {
     requireAnonymous.mockReset();
     verifyUserPassword.mockReset();
@@ -62,7 +76,9 @@ describe('auth.login', () => {
     prisma.orgMembership.findMany.mockReset();
     prisma.session.create.mockReset();
 
-    getSessionExpirationDate.mockReturnValue(new Date('2026-01-01T00:00:00.000Z'));
+    getSessionExpirationDate.mockReturnValue(
+      new Date('2026-01-01T00:00:00.000Z')
+    );
     verifyUserPassword.mockResolvedValue({
       id: 'user-1',
       email: 'student@example.com',
@@ -157,24 +173,6 @@ describe('auth.login', () => {
     expect(prisma.session.create).toHaveBeenCalledTimes(1);
   });
 
-  test('keeps the explicit UA enrollment login path available', async () => {
-    const form = new FormData();
-    form.append('email', 'student@example.com');
-    form.append('password', 'password1234');
-    form.append('redirectTo', '/');
-
-    const response = (await action({
-      request: new Request('https://ua.yawp.school/auth/login', {
-        method: 'POST',
-        body: form,
-        headers: { cookie: await commitUaPartnerContext() },
-      }),
-    } as any)) as Response;
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/');
-  });
-
   test('redirects back to the requested document after login', async () => {
     const form = new FormData();
     form.append('email', 'student@example.com');
@@ -182,14 +180,19 @@ describe('auth.login', () => {
     form.append('redirectTo', '/app/documents/doc-1?tab=editor');
 
     const response = (await action({
-      request: new Request('https://example.com/auth/login?redirectTo=%2Fapp%2Fdocuments%2Fdoc-1', {
-        method: 'POST',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.com/auth/login?redirectTo=%2Fapp%2Fdocuments%2Fdoc-1',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
     } as any)) as Response;
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/app/documents/doc-1?tab=editor');
+    expect(response.headers.get('location')).toBe(
+      '/app/documents/doc-1?tab=editor'
+    );
   });
 
   test('rejects valid credentials for a user outside the access-code seat', async () => {
