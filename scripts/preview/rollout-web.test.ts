@@ -124,6 +124,7 @@ printf 'node base=%q script=%q\n' "\${PREVIEW_BASE_URL:-}" "\${1:-}" >> "$COMMAN
       PREVIEW_COMPOSE_FILE: composeFile,
       PREVIEW_ROUTER_FILE: routerFile,
       PREVIEW_HOSTNAME: 'demo.preview.yawp.school',
+      PREVIEW_ADDITIONAL_HOSTNAMES: 'ua-demo.preview.yawp.school',
       PREVIEW_PUBLIC_URL: 'https://demo.preview.yawp.school',
       PREVIEW_LOGIN_SMOKE_SCRIPT: loginScript,
       PREVIEW_ACCESS_CODE: 'brave-otter-4193',
@@ -168,6 +169,9 @@ describe('demo web rollout', () => {
     );
     expect(await readFile(harness.routerFile, 'utf8')).toContain(
       'http://yawp-demo-web-2:8080'
+    );
+    expect(await readFile(harness.routerFile, 'utf8')).toContain(
+      'Host(`demo.preview.yawp.school`) || Host(`ua-demo.preview.yawp.school`)'
     );
 
     const commands = await readFile(harness.commandLog, 'utf8');

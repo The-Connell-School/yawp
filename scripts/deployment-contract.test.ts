@@ -1375,6 +1375,28 @@ describe('demo environment deployment contract', () => {
     expect(missing).toEqual([]);
   });
 
+  test('demo deploys can enable the UA Stripe sandbox without changing demo data', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+
+    for (const name of [
+      'PREVIEW_UA_STUDENT_BILLING_ENABLED',
+      'PREVIEW_UA_ORGANIZATION_ID',
+      'PREVIEW_UA_PARTNER_CODE',
+      'PREVIEW_STRIPE_SECRET_KEY',
+      'PREVIEW_STRIPE_WEBHOOK_SECRET',
+      'PREVIEW_STRIPE_UA_2026_PRICE_ID',
+      'PREVIEW_RESEND_FROM_EMAIL',
+      'PREVIEW_RESEND_API_KEY',
+    ]) {
+      expect(workflow).toContain(name);
+    }
+    expect(workflow).toContain(
+      'UA demo host did not render the partner landing'
+    );
+    expect(workflow).toContain('reset_data:');
+    expect(workflow).toContain('default: false');
+  });
+
   test('the demo deploy proves the in-app gate blocks data before trusting a code', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
 
