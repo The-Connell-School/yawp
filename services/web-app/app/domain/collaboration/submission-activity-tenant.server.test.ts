@@ -206,6 +206,116 @@ async function insertActivity({
   );
 }
 
+async function waitForMembershipAdvisoryLock(
+  probe: Client,
+  backendPid: number,
+  membershipId: string
+) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const lock = await probe.query<{ held: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM pg_locks
+         WHERE pid = $1
+           AND locktype = 'advisory'
+           AND classid = 81202
+           AND objid = (
+             (hashtext($2)::bigint + 4294967296) % 4294967296
+           )
+           AND granted
+       ) AS held`,
+      [backendPid, membershipId]
+    );
+    if (lock.rows[0]?.held) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('Timed out waiting for the membership advisory lock');
+}
+
+async function expectNoMembershipLockDeadlock({
+  guardClient,
+  membershipClient,
+  guardQuery,
+  membershipId,
+}: {
+  guardClient: Client;
+  membershipClient: Client;
+  guardQuery: () => Promise<unknown>;
+  membershipId: string;
+}) {
+  await guardClient.query(`SET LOCAL deadlock_timeout = '100ms'`);
+  await guardClient.query(`SET LOCAL statement_timeout = '3s'`);
+  await membershipClient.query(`SET LOCAL deadlock_timeout = '100ms'`);
+  await membershipClient.query(`SET LOCAL statement_timeout = '3s'`);
+  await membershipClient.query(
+    `SELECT id FROM "OrgMembership" WHERE id = $1 FOR UPDATE`,
+    [membershipId]
+  );
+
+  const backend = await guardClient.query<{ pid: number }>(
+    `SELECT pg_backend_pid() AS pid`
+  );
+  const guardedUpdate = guardQuery();
+  await waitForMembershipAdvisoryLock(
+    client,
+    backend.rows[0].pid,
+    membershipId
+  );
+  const membershipUpdate = membershipClient.query(
+    `UPDATE "OrgMembership"
+     SET "organizationId" = "organizationId"
+     WHERE id = $1`,
+    [membershipId]
+  );
+
+  const errors: Error[] = [];
+  try {
+    await guardedUpdate;
+    await guardClient.query('COMMIT');
+  } catch (error) {
+    errors.push(error as Error);
+    await guardClient.query('ROLLBACK');
+  }
+  try {
+    await membershipUpdate;
+    await membershipClient.query('ROLLBACK');
+  } catch (error) {
+    errors.push(error as Error);
+    await membershipClient.query('ROLLBACK');
+  }
+
+  expect(errors.map((error) => error.message)).toEqual([]);
+}
+
+async function cleanupStudentSubmissions(
+  submissionIds: string[],
+  documentIds: string[]
+) {
+  await client.query('BEGIN');
+  try {
+    await client.query(
+      `SET LOCAL yawp.submission_activity_cleanup = 'on'`
+    );
+    await client.query(
+      `DELETE FROM "SubmissionActivity"
+       WHERE "submissionId" = ANY($1::text[])`,
+      [submissionIds]
+    );
+    await client.query(
+      `DELETE FROM "Submission" WHERE id = ANY($1::text[])`,
+      [submissionIds]
+    );
+    await client.query(
+      `DELETE FROM "Document" WHERE id = ANY($1::text[])`,
+      [documentIds]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  }
+}
+
 beforeAll(() => {
   if (!DATABASE_URL?.trim()) throw new Error('DATABASE_URL is required');
   client = new Client({ connectionString: DATABASE_URL });
@@ -399,6 +509,112 @@ describe('collaborative submission activity tenant guard', () => {
       );
     } finally {
       await client.query('ROLLBACK');
+    }
+  });
+
+  test('does not deadlock a student document move with a membership update', async () => {
+    const guardClient = new Client({ connectionString: DATABASE_URL });
+    const membershipClient = new Client({ connectionString: DATABASE_URL });
+    const submissionIds: string[] = [];
+    const documentIds: string[] = [];
+    try {
+      await client.query('BEGIN');
+      const fixture = await findFixture(client);
+      const peer = await client.query<{ id: string }>(
+        `SELECT id
+         FROM "OrgMembership"
+         WHERE "organizationId" = $1 AND id <> $2
+         ORDER BY id
+         LIMIT 1`,
+        [fixture.organizationId, fixture.membershipId]
+      );
+      if (!peer.rows[0]) {
+        throw new Error('Database needs two same-tenant memberships');
+      }
+      const source = await createStudentSubmission(client, fixture);
+      submissionIds.push(source.submissionId);
+      documentIds.push(source.documentId);
+      await insertActivity({
+        client,
+        submissionId: source.submissionId,
+        organizationId: fixture.organizationId,
+        source: 'student-document-concurrency-contract',
+      });
+      await client.query('COMMIT');
+
+      await Promise.all([guardClient.connect(), membershipClient.connect()]);
+      await Promise.all([
+        guardClient.query('BEGIN'),
+        membershipClient.query('BEGIN'),
+      ]);
+      await expectNoMembershipLockDeadlock({
+        guardClient,
+        membershipClient,
+        membershipId: fixture.membershipId,
+        guardQuery: () =>
+          guardClient.query(
+            `UPDATE "Document" SET "membershipId" = $1 WHERE id = $2`,
+            [peer.rows[0].id, source.documentId]
+          ),
+      });
+    } finally {
+      await Promise.allSettled([
+        guardClient.query('ROLLBACK'),
+        membershipClient.query('ROLLBACK'),
+      ]);
+      await Promise.allSettled([
+        guardClient.end(),
+        membershipClient.end(),
+      ]);
+      await cleanupStudentSubmissions(submissionIds, documentIds);
+    }
+  });
+
+  test('does not deadlock a student submission handoff with a membership update', async () => {
+    const guardClient = new Client({ connectionString: DATABASE_URL });
+    const membershipClient = new Client({ connectionString: DATABASE_URL });
+    const submissionIds: string[] = [];
+    const documentIds: string[] = [];
+    try {
+      await client.query('BEGIN');
+      const fixture = await findFixture(client);
+      const source = await createStudentSubmission(client, fixture);
+      const target = await createStudentSubmission(client, fixture);
+      submissionIds.push(source.submissionId, target.submissionId);
+      documentIds.push(source.documentId, target.documentId);
+      await insertActivity({
+        client,
+        submissionId: source.submissionId,
+        organizationId: fixture.organizationId,
+        source: 'student-submission-concurrency-contract',
+      });
+      await client.query('COMMIT');
+
+      await Promise.all([guardClient.connect(), membershipClient.connect()]);
+      await Promise.all([
+        guardClient.query('BEGIN'),
+        membershipClient.query('BEGIN'),
+      ]);
+      await expectNoMembershipLockDeadlock({
+        guardClient,
+        membershipClient,
+        membershipId: fixture.membershipId,
+        guardQuery: () =>
+          guardClient.query(
+            `UPDATE "Submission" SET "documentId" = $1 WHERE id = $2`,
+            [target.documentId, source.submissionId]
+          ),
+      });
+    } finally {
+      await Promise.allSettled([
+        guardClient.query('ROLLBACK'),
+        membershipClient.query('ROLLBACK'),
+      ]);
+      await Promise.allSettled([
+        guardClient.end(),
+        membershipClient.end(),
+      ]);
+      await cleanupStudentSubmissions(submissionIds, documentIds);
     }
   });
 });
