@@ -911,7 +911,7 @@ export async function processStripeWebhook(
 ): Promise<{ duplicate: boolean; handled: boolean }> {
   if (!config.enabled) throw new Error('UA student billing is disabled');
   const stripe = getStripe(config);
-  const event = stripe.webhooks.constructEvent(
+  const event = await stripe.webhooks.constructEventAsync(
     rawBody,
     signature,
     config.webhookSecret
