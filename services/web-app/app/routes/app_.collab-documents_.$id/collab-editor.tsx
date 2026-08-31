@@ -138,6 +138,12 @@ export function CollabEditor({
             CollaborationCursor.configure({
               provider,
               user,
+              selectionRender: (collaborator) => ({
+                class: 'collaboration-cursor__selection',
+                // Keep selected text readable while making the exact range
+                // unmistakable. The final byte is CSS hex alpha (22%).
+                style: `background-color: ${collaborator.color}38`,
+              }),
             }),
           ]
         : []),

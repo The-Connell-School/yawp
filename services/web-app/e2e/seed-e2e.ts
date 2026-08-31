@@ -897,39 +897,46 @@ export async function seedE2E(): Promise<E2EContext> {
   });
   const secondStudentMembership = secondStudent.memberships[0];
 
-  const collabDoc = await prisma.document.create({
-    data: {
-      title: 'E2E Shared Draft',
-      text: '',
-      html: '<p></p>',
-      artifactKind: 'ASSIGNMENT_GROUP',
-      membershipId: null,
-      assignmentTypeId: collabAssignmentType.id,
-      assignmentId: collabAssignment.id,
-      classAssignmentId: collabClassAssignment.id,
-    },
-    select: { id: true },
-  });
-
-  const collabGroup = await prisma.documentGroup.create({
-    data: {
-      kind: 'assignment',
-      classAssignmentId: collabClassAssignment.id,
-      label: 'Group 1',
-      ordinal: 0,
-      // Opened and already seeded: an empty room needs no seeding, and stamping
-      // it keeps the server from copying an empty document into itself.
-      openedAt: new Date(),
-      seededAt: new Date(),
-      documentId: collabDoc.id,
-      members: {
-        create: [
-          { membershipId: membership.id },
-          { membershipId: secondStudentMembership.id },
-        ],
+  // The ownership graph is enforced by deferred database triggers: neither the
+  // document nor the group is valid on its own, but the pair is valid at commit.
+  // Keep fixture creation inside the same transaction as production finalization.
+  const { collabDoc, collabGroup } = await prisma.$transaction(async (tx) => {
+    const collabDoc = await tx.document.create({
+      data: {
+        title: 'E2E Shared Draft',
+        text: '',
+        html: '<p></p>',
+        artifactKind: 'ASSIGNMENT_GROUP',
+        membershipId: null,
+        assignmentTypeId: collabAssignmentType.id,
+        assignmentId: collabAssignment.id,
+        classAssignmentId: collabClassAssignment.id,
       },
-    },
-    select: { id: true },
+      select: { id: true },
+    });
+
+    const collabGroup = await tx.documentGroup.create({
+      data: {
+        kind: 'assignment',
+        classAssignmentId: collabClassAssignment.id,
+        label: 'Group 1',
+        ordinal: 0,
+        // Opened and already seeded: an empty room needs no seeding, and stamping
+        // it keeps the server from copying an empty document into itself.
+        openedAt: new Date(),
+        seededAt: new Date(),
+        documentId: collabDoc.id,
+        members: {
+          create: [
+            { membershipId: membership.id },
+            { membershipId: secondStudentMembership.id },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+
+    return { collabDoc, collabGroup };
   });
 
   return {
