@@ -350,7 +350,9 @@ describe('worktree local setup contract', () => {
       'resource "aws_cloudfront_distribution" "web_edge"'
     );
     expect(infra).toContain('aliases');
-    expect(infra).toContain('[var.production_domain_name]');
+    expect(infra).toContain(
+      'distinct([var.production_domain_name, var.ua_partner_hostname])'
+    );
     expect(infra).toContain('domain_name = local.apprunner_origin_domain');
     expect(infra).toContain('origin_protocol_policy = "https-only"');
     expect(infra).toContain('"Managed-AllViewer"');
@@ -629,7 +631,7 @@ describe('PR preview deployment contract', () => {
 
     expect(routerConfig).toContain('v8_middleware: true');
     expect(rootRoute).toContain(
-      'export const middleware = [previewAccessMiddleware]'
+      'export const middleware = [previewAccessMiddleware, uaPartnerMiddleware]'
     );
     expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
     expect(gate).toContain("'/api/healthcheck'");
@@ -978,6 +980,7 @@ describe('PR preview deployment contract', () => {
       'ua_student_billing_enabled',
       'ua_organization_id',
       'ua_partner_code',
+      'ua_partner_hostname',
       'stripe_secret_key',
       'stripe_webhook_secret',
       'stripe_ua_2026_price_id',
@@ -989,7 +992,9 @@ describe('PR preview deployment contract', () => {
     expect(infra).toContain('STRIPE_WEBHOOK_SECRET');
     expect(infra).toContain('UA_STUDENT_BILLING_ENABLED');
     expect(infra).toContain('UA_PARTNER_CODE');
+    expect(infra).toContain('UA_PARTNER_HOSTNAME');
     expect(infra).toContain('YAWP_APP_ORIGIN');
+    expect(infra).toContain('subject_alternative_names');
   });
 
   test('preview workflow does not require runner AWS credentials for dump restores', () => {

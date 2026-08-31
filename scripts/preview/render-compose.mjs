@@ -65,14 +65,15 @@ export function renderPreviewCompose({
     ? `\n    ports:\n      - ${q(`127.0.0.1:${env.directPort}:8080`)}`
     : '';
   const routerBase = env.composeProject;
+  const hostRule = `Host(\`${env.hostname}\`) || Host(\`${env.uaHostname}\`)`;
   const tlsLabels = enableTls
-    ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=Host(\`${env.hostname}\`)`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}`
+    ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=${hostRule}`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}`
     : '';
   const legacyTraefikLabels = (!env.prNumber || !customIngressActive)
     ? `    labels:
       - "traefik.enable=true"
       - "traefik.docker.network=preview"
-      - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
+      - ${q(`traefik.http.routers.${routerBase}-http.rule=${hostRule}`)}
       - ${q(`traefik.http.routers.${routerBase}-http.entrypoints=web`)}
       - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}
 ${tlsLabels}
@@ -124,11 +125,12 @@ ${tlsLabels}
     ? `      UA_STUDENT_BILLING_ENABLED: "true"
       UA_ORGANIZATION_ID: ${q(optionalEnv('PREVIEW_UA_ORGANIZATION_ID'))}
       UA_PARTNER_CODE: ${q(optionalEnv('PREVIEW_UA_PARTNER_CODE'))}
+      UA_PARTNER_HOSTNAME: ${q(env.directPort ? '127.0.0.1' : env.uaHostname)}
       STRIPE_SECRET_KEY: ${q(optionalEnv('PREVIEW_STRIPE_SECRET_KEY'))}
       STRIPE_WEBHOOK_SECRET: ${q(optionalEnv('PREVIEW_STRIPE_WEBHOOK_SECRET'))}
       STRIPE_UA_2026_PRICE_ID: ${q(optionalEnv('PREVIEW_STRIPE_UA_2026_PRICE_ID'))}
       STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: ${q(optionalEnv('PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS'))}
-      YAWP_APP_ORIGIN: ${q(`${enableTls ? 'https' : 'http'}://${env.hostname}`)}
+      YAWP_APP_ORIGIN: ${q(env.uaUrl)}
 `
     : '      UA_STUDENT_BILLING_ENABLED: "false"\n';
 

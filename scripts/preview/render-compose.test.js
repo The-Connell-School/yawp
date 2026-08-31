@@ -269,6 +269,9 @@ describe('renderPreviewCompose', () => {
         'UA_ORGANIZATION_ID: "university-of-alabama-preview"'
       );
       expect(compose).toContain('UA_PARTNER_CODE: "UA-PREVIEW-2026"');
+      expect(compose).toContain(
+        'UA_PARTNER_HOSTNAME: "ua-pr-142.preview.yawp.school"'
+      );
       expect(compose).toContain('STRIPE_SECRET_KEY: "rk_test_preview"');
       expect(compose).toContain('STRIPE_WEBHOOK_SECRET: "whsec_preview"');
       expect(compose).toContain(
@@ -278,7 +281,7 @@ describe('renderPreviewCompose', () => {
         'STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: "price_legacy"'
       );
       expect(compose).toContain(
-        'YAWP_APP_ORIGIN: "https://pr-142.preview.yawp.school"'
+        'YAWP_APP_ORIGIN: "https://ua-pr-142.preview.yawp.school"'
       );
     } finally {
       for (const name of names) {
