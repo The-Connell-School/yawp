@@ -25,7 +25,7 @@ active-license cases remain deterministic after the real cohort expires.
 
 | Area | Edge case | Proof |
 | --- | --- | --- |
-| Partner entry | A valid code on `/ua`, `/ua/sign-in`, or `/ua/sign-up` is remembered and removed from the URL | Browser E2E + route contract |
+| Partner entry | A valid `organizationCode` on `/ua`, `/ua/sign-in`, or `/ua/sign-up` is remembered and removed from the URL (`code` remains a compatible alias) | Browser E2E + route contract |
 | Partner entry | A bare `/ua` URL does not silently accept an organization code | Route contract |
 | Partner entry | The accepted code survives refresh until the student explicitly clears it | Browser E2E + cookie contract |
 | Partner entry | Clearing the accepted code makes UA signup require the code again | Browser E2E + route contract |

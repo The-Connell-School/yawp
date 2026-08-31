@@ -37,10 +37,19 @@ describe('UA partner context', () => {
     expect(
       getUaPartnerCodeCapture(
         new Request(
-          'https://yawp.school/ua/sign-up?code=roll-tide-2026&from=email'
+          'https://yawp.school/ua/sign-up?organizationCode=roll-tide-2026&from=email'
         )
       )
     ).toEqual({ accepted: true, redirectTo: '/ua/sign-up?from=email' });
+  });
+
+  test('keeps the shorter code parameter as a compatible alias', () => {
+    process.env.UA_PARTNER_CODE = 'Roll-Tide-2026';
+    expect(
+      getUaPartnerCodeCapture(
+        new Request('https://yawp.school/ua?code=roll-tide-2026')
+      )
+    ).toEqual({ accepted: true, redirectTo: '/ua' });
   });
 
   test('round-trips a signed, http-only UA context cookie', async () => {

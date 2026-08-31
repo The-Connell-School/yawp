@@ -40,9 +40,15 @@ export function isValidUaPartnerCode(value: string | null | undefined) {
 
 export function getUaPartnerCodeCapture(request: Request) {
   const url = new URL(request.url);
-  if (!url.searchParams.has('code')) return null;
+  const parameterName = url.searchParams.has('organizationCode')
+    ? 'organizationCode'
+    : url.searchParams.has('code')
+      ? 'code'
+      : null;
+  if (!parameterName) return null;
 
-  const accepted = isValidUaPartnerCode(url.searchParams.get('code'));
+  const accepted = isValidUaPartnerCode(url.searchParams.get(parameterName));
+  url.searchParams.delete('organizationCode');
   url.searchParams.delete('code');
 
   return {

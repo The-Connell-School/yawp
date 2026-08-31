@@ -116,7 +116,9 @@ test.describe.serial('University of Alabama student onboarding', () => {
         where: { target: studentEmail, type: 'onboard-student' },
       });
 
-      await page.goto(`/ua?code=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`);
+      await page.goto(
+        `/ua?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
+      );
       await expect(page).toHaveURL(/\/ua$/);
       await expect(
         page.getByRole('heading', { name: 'Welcome to Yawp' })
@@ -238,7 +240,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
     page,
   }) => {
     await page.goto(
-      `/ua/sign-up?code=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
+      `/ua/sign-up?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
     );
     await expect(page).toHaveURL(/\/ua\/sign-up$/);
     await expect(
@@ -284,7 +286,9 @@ test.describe.serial('University of Alabama student onboarding', () => {
         },
       });
 
-      await page.goto(`/ua?code=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`);
+      await page.goto(
+        `/ua?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
+      );
       await expect(page).toHaveURL(/\/ua$/);
       await page.getByRole('link', { name: 'Log in' }).click();
       await expect(
