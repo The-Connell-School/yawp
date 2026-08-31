@@ -67,6 +67,8 @@ jobs:
       PREVIEW_STRIPE_WEBHOOK_SECRET: ${{ secrets.DEMO_STRIPE_WEBHOOK_SECRET }}
       PREVIEW_STRIPE_UA_2026_PRICE_ID: ${{ vars.DEMO_STRIPE_UA_2026_PRICE_ID }}
       PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: ${{ vars.DEMO_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS }}
+      PREVIEW_RESEND_FROM_EMAIL: ${{ vars.DEMO_RESEND_FROM_EMAIL || 'info@yawp.school' }}
+      PREVIEW_RESEND_API_KEY: ${{ secrets.DEMO_RESEND_API_KEY }}
       PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.DEMO_LOGIN_EMAIL || secrets.PREVIEW_LOGIN_EMAIL }}
       PREVIEW_LOGIN_PASSWORD: ${{ secrets.DEMO_LOGIN_PASSWORD || secrets.PREVIEW_LOGIN_PASSWORD }}
@@ -93,6 +95,7 @@ jobs:
             test -n "$PREVIEW_STRIPE_SECRET_KEY" || { echo "Missing demo secret DEMO_STRIPE_SECRET_KEY"; exit 1; }
             test -n "$PREVIEW_STRIPE_WEBHOOK_SECRET" || { echo "Missing demo secret DEMO_STRIPE_WEBHOOK_SECRET"; exit 1; }
             test -n "$PREVIEW_STRIPE_UA_2026_PRICE_ID" || { echo "Missing demo variable DEMO_STRIPE_UA_2026_PRICE_ID"; exit 1; }
+            test -n "$PREVIEW_RESEND_API_KEY" || { echo "Missing demo secret DEMO_RESEND_API_KEY"; exit 1; }
           fi
           if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[1-9][0-9]{0,2}$ ]] \
             || (( DEMO_BACKUP_RETENTION < 1 || DEMO_BACKUP_RETENTION > 365 )); then
@@ -233,6 +236,8 @@ jobs:
             "PREVIEW_STRIPE_WEBHOOK_SECRET=$(shell_quote "$PREVIEW_STRIPE_WEBHOOK_SECRET")"
             "PREVIEW_STRIPE_UA_2026_PRICE_ID=$(shell_quote "$PREVIEW_STRIPE_UA_2026_PRICE_ID")"
             "PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS=$(shell_quote "$PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS")"
+            "PREVIEW_RESEND_FROM_EMAIL=$(shell_quote "$PREVIEW_RESEND_FROM_EMAIL")"
+            "PREVIEW_RESEND_API_KEY=$(shell_quote "$PREVIEW_RESEND_API_KEY")"
             "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
