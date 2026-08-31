@@ -115,9 +115,12 @@ test.describe('collaborative carets', () => {
       await expect(riley.locator(EDITOR)).toContainText('We start here.', {
         timeout: 20000,
       });
+      const observedLatencyMs = Date.now() - startedAt;
+      expect(observedLatencyMs).toBeLessThan(3000);
+      console.log(`collaboration-latency-ms=${observedLatencyMs}`);
       test.info().annotations.push({
         type: 'collaboration-latency-ms',
-        description: String(Date.now() - startedAt),
+        description: String(observedLatencyMs),
       });
 
       // And now so does the person writing it.
