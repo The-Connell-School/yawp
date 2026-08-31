@@ -1,3 +1,5 @@
+import { latestVisibleStudentSubmission } from './student-document-status';
+
 export type DocumentLinkSubmission = {
   id: string;
   releasedAt: Date | string | null;
@@ -48,10 +50,10 @@ export function resolveDocumentLinkTarget({
   const encodedExitTo = encodeURIComponent(exitTo);
 
   if (isStudentView) {
-    const latestReleasedSubmission = pickLatestReleasedSubmission(submissions);
+    const latestSubmission = latestVisibleStudentSubmission(submissions);
 
-    if (latestReleasedSubmission) {
-      return `/app/submissions/${latestReleasedSubmission.id}?exitTo=${encodedExitTo}`;
+    if (latestSubmission) {
+      return `/app/submissions/${latestSubmission.id}?exitTo=${encodedExitTo}`;
     }
   }
 

@@ -475,7 +475,10 @@ export default function ReviseRoute() {
               focusRequest={focusRequest}
             />
             <div className="flex min-h-[60vh] w-full min-w-0 grow flex-col overflow-hidden md:min-h-0 xl:w-auto">
-              <div className={PANE_HEADER_CLASS}>
+              <div
+                className={PANE_HEADER_CLASS}
+                data-testid="revision-graded-header"
+              >
                 <span className="text-sm font-semibold">Graded version</span>
                 {gradeSummaryLabel ? (
                   <span className="text-xs text-muted-foreground">
@@ -513,7 +516,10 @@ export default function ReviseRoute() {
           className="draft-comments-hidden flex min-h-[60vh] w-full min-w-0 grow flex-col overflow-hidden bg-white md:h-full md:min-h-0 md:w-1/2"
           aria-label="Your revision"
         >
-          <div className={PANE_HEADER_CLASS}>
+          <div
+            className={PANE_HEADER_CLASS}
+            data-testid="revision-draft-header"
+          >
             <span className="text-sm font-semibold">Your revision</span>
             <span className="text-xs text-muted-foreground">
               Edits save automatically
