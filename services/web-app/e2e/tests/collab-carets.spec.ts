@@ -267,12 +267,14 @@ test.describe('collaborative carets', () => {
         timeout: 20000,
       });
 
+      const leavingAt = Date.now();
       await sam.goto('/app');
 
       await expect(riley.locator(CARET)).toHaveCount(0, { timeout: 20000 });
       await expect(
         riley.locator(`[data-membership-id="${e2eContext.membershipId}"]`)
       ).toHaveAttribute('data-presence-status', 'offline');
+      expect(Date.now() - leavingAt).toBeLessThan(3000);
     } finally {
       await close();
     }

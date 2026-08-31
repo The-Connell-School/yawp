@@ -227,6 +227,34 @@ export class CollabHttpProvider {
     return presence;
   }
 
+  /**
+   * Says goodbye immediately while leaving the provider alive long enough to
+   * finish a queued document flush. Route cleanup must not make the ephemeral
+   * roster wait behind durable writes.
+   */
+  leave() {
+    if (this.destroyed || !this.canWrite) return;
+    this.awareness.setLocalState(null);
+
+    // A route transition may cancel ordinary fetch work even with keepalive.
+    // sendBeacon exists for exactly this small, same-origin goodbye and carries
+    // the session cookie while the old page is already yielding control.
+    const beacon = globalThis.navigator?.sendBeacon;
+    if (typeof beacon === 'function') {
+      const update = encodeAwarenessUpdate(this.awareness, [
+        this.awareness.clientID,
+      ]);
+      const queued = beacon.call(
+        globalThis.navigator,
+        this.presenceEndpoint,
+        JSON.stringify({ awareness: bytesToBase64(update) })
+      );
+      if (queued) return;
+    }
+
+    void this.sendPresence({ keepalive: true });
+  }
+
   private get endpoint() {
     return `/api/collab/${encodeURIComponent(this.documentId)}/updates`;
   }

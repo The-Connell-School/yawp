@@ -560,6 +560,22 @@ describe('carets', () => {
     expect(server.presence.size).toBe(0);
   });
 
+  test('announces departure before a route waits for its final edit flush', async () => {
+    const server = fakeServer();
+    const { make } = pair(server);
+    const sam = make();
+    await sam.provider.start();
+    sam.provider.awareness.setLocalState({ user: {}, cursor: cursorAt(3) });
+    await tick(20);
+    expect(server.presence.size).toBe(1);
+
+    sam.provider.leave();
+    await tick(20);
+
+    expect(server.presence.size).toBe(0);
+    sam.provider.destroy();
+  });
+
   test('a reader publishes nothing, but still sees the writers', async () => {
     // The teacher's side of the page: they follow a group writing without
     // standing in the draft, and the endpoint would refuse them anyway.

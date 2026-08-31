@@ -98,6 +98,8 @@ export function CollabEditor({
       onPresenceChange,
     });
     setProvider(connection);
+    const announcePageExit = () => connection.leave();
+    window.addEventListener('pagehide', announcePageExit);
 
     void connection.start().then(() => {
       // Schema-version handshake, once the room has loaded. A room written by a
@@ -121,8 +123,10 @@ export function CollabEditor({
 
     return () => {
       // Send anything still queued before tearing down, so closing the tab mid
-      // sentence does not lose it. `destroy` also says goodbye, which takes this
-      // writer's caret off their teammates' screens at once.
+      // sentence does not lose it. Presence says goodbye first because an
+      // ephemeral roster update must not wait behind a durable document write.
+      window.removeEventListener('pagehide', announcePageExit);
+      connection.leave();
       void connection.flush().finally(() => connection.destroy());
     };
   }, [docId, ydoc, canWrite, onPresenceChange]);
