@@ -1,6 +1,6 @@
 import { type Document } from '@app/prisma';
 import { Link, useFetcher } from 'react-router';
-import { EllipsisVertical } from 'lucide-react';
+import { EllipsisVertical, Users } from 'lucide-react';
 import { timeAgo } from '../utils/timeAgo';
 import { Button } from './ui/button';
 import {
@@ -21,6 +21,8 @@ type Props = {
   doc: Document & {
     assignmentModuleSessions: { assignmentModule: { title: string } }[];
     submissions?: DocumentLinkSubmission[];
+    assignment?: { title?: string | null } | null;
+    group?: { id: string; label: string } | null;
   };
   isArchived?: boolean;
   isStudentView?: boolean;
@@ -49,12 +51,14 @@ export const DocumentLink = ({
     latestSubmission.releasedAt == null &&
     gradedSubmissions.length > 0;
   const showSubmittedBadge = isStudentView && isSubmitted && !showGradedBadge;
-  const targetPath = resolveDocumentLinkTarget({
-    documentId: doc.id,
-    exitTo,
-    isStudentView,
-    submissions,
-  });
+  const targetPath = doc.group
+    ? `/app/collab-documents/${doc.id}?exitTo=${encodeURIComponent(exitTo)}`
+    : resolveDocumentLinkTarget({
+        documentId: doc.id,
+        exitTo,
+        isStudentView,
+        submissions,
+      });
 
   return (
     <Link
@@ -62,6 +66,12 @@ export const DocumentLink = ({
       to={targetPath}
       className="relative flex h-48 flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all hover:border-primary/50"
     >
+      {doc.group ? (
+        <span className="absolute left-2 top-2 z-20 inline-flex items-center gap-1 rounded-full border bg-background/95 px-2 py-0.5 text-xs font-medium text-foreground shadow-sm">
+          <Users className="h-3.5 w-3.5" aria-hidden="true" />
+          Shared
+        </span>
+      ) : null}
       <div className="absolute right-0 top-0 z-20 flex flex-col items-end gap-1">
         {showGradedBadge ? (
           <span className="rounded-bl-lg rounded-tr-lg border border-green-600 bg-green-50 px-2 py-0.5 text-xs text-green-900 dark:bg-green-950/80 dark:text-green-100">
@@ -99,7 +109,7 @@ export const DocumentLink = ({
       )}
       <div className="flex items-center justify-between border-t bg-muted p-2 text-sm">
         <div className="flex flex-col">
-          <h4>{doc.title || 'Untitled document'}</h4>
+          <h4>{doc.title || doc.assignment?.title || 'Untitled document'}</h4>
           <Tooltip
             delayDuration={200}
             text={new Date(doc.updatedAt).toLocaleString('en-US', {
@@ -117,38 +127,40 @@ export const DocumentLink = ({
             </p>
           </Tooltip>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger>
-            <Button
-              size="icon-sm"
-              variant="outline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <EllipsisVertical size={16} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <archiveFetcher.Form
-              method="POST"
-              action={`/api/model/document/${doc.id}`}
-            >
-              <input
-                type="hidden"
-                name="action"
-                value={isArchived ? 'unarchive' : 'archive'}
-              />
-              <DropdownMenuItem asChild>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {isArchived ? 'Unarchive' : 'Archive'}
-                </Button>
-              </DropdownMenuItem>
-            </archiveFetcher.Form>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {!doc.group ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger>
+              <Button
+                size="icon-sm"
+                variant="outline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <EllipsisVertical size={16} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <archiveFetcher.Form
+                method="POST"
+                action={`/api/model/document/${doc.id}`}
+              >
+                <input
+                  type="hidden"
+                  name="action"
+                  value={isArchived ? 'unarchive' : 'archive'}
+                />
+                <DropdownMenuItem asChild>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {isArchived ? 'Unarchive' : 'Archive'}
+                  </Button>
+                </DropdownMenuItem>
+              </archiveFetcher.Form>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
     </Link>
   );

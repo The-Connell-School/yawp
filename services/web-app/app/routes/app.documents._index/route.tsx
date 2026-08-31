@@ -58,7 +58,7 @@ function resolveDocumentClass(
     } | null;
     membership: {
       classesAsStudent: TeacherDocumentWorkClassSummary[];
-    };
+    } | null;
   },
   options: {
     teacherClassIds: Set<string>;
@@ -73,14 +73,14 @@ function resolveDocumentClass(
     return options.fallbackClass;
   }
 
-  const enrolledTeacherClass = document.membership.classesAsStudent.find(
+  const enrolledTeacherClass = document.membership?.classesAsStudent.find(
     (klass) => options.teacherClassIds.has(klass.id)
   );
   if (enrolledTeacherClass) {
     return enrolledTeacherClass;
   }
 
-  return document.membership.classesAsStudent[0] ?? null;
+  return document.membership?.classesAsStudent[0] ?? null;
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -206,6 +206,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
       },
+      group: {
+        select: {
+          id: true,
+          label: true,
+          members: {
+            where: { removedAt: null },
+            orderBy: { membershipId: 'asc' },
+            select: {
+              membershipId: true,
+              membership: {
+                select: {
+                  id: true,
+                  user: { select: { id: true, name: true, email: true } },
+                },
+              },
+            },
+          },
+        },
+      },
       submissions: {
         where: { unsubmittedAt: null },
         orderBy: { submittedAt: 'desc' },
@@ -237,7 +256,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
       id: document.id,
       title: document.title,
       updatedAt: new Date(document.updatedAt),
-      membership: document.membership,
+      // Teacher worklists render a group as a group. The compatibility-shaped
+      // subject below is a view model only; it is never persisted as ownership.
+      membership:
+        document.membership ??
+        ({
+          id: `group:${document.group?.id ?? document.id}`,
+          user: {
+            id: `group:${document.group?.id ?? document.id}`,
+            name: document.group?.label ?? 'Collaborative group',
+            email: '',
+          },
+          classesAsStudent: [],
+        } as const),
+      group: document.group,
       assignment: document.assignment,
       resolvedClass: resolveDocumentClass(document, {
         teacherClassIds,

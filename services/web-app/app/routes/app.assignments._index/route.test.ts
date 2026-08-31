@@ -3,10 +3,12 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   classAssignment: { findMany: mock() },
   class: { findMany: mock(), findFirst: mock() },
+  documentGroup: { findFirst: mock() },
 };
 const requireUserId = mock();
 const requireMembership = mock();
 const deleteClassAssignmentDeployment = mock();
+class AssignmentHasCollaborativeWorkError extends Error {}
 const listSavedAssignments = mock();
 const archiveSavedAssignment = mock();
 const getAvailableAssignmentTypesForScopes = mock();
@@ -19,6 +21,7 @@ const actualAssignmentTypeAccess = globalThis.__realModules[
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/assignment-deployment.server', () => ({
+  AssignmentHasCollaborativeWorkError,
   deleteClassAssignmentDeployment,
 }));
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
@@ -64,6 +67,7 @@ function removeRequest(body: Record<string, string>) {
 describe('My Assignments loader', () => {
   beforeEach(() => {
     prisma.classAssignment.findMany.mockReset();
+    prisma.documentGroup.findFirst.mockReset().mockResolvedValue(null);
     prisma.class.findMany.mockReset().mockResolvedValue([]);
     listSavedAssignments.mockReset().mockResolvedValue([]);
     archiveSavedAssignment.mockReset().mockResolvedValue(true);
@@ -330,6 +334,7 @@ describe('My Assignments action', () => {
     archiveSavedAssignment.mockReset().mockResolvedValue(true);
     deleteClassAssignmentDeployment.mockReset().mockResolvedValue('ca-1');
     prisma.classAssignment.findMany.mockReset().mockResolvedValue([]);
+    prisma.documentGroup.findFirst.mockReset().mockResolvedValue(null);
     requireUserId.mockReset().mockResolvedValue('user-1');
     requireMembership.mockReset();
   });
@@ -397,6 +402,23 @@ describe('My Assignments action', () => {
 
       expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
       expect(response.init?.status ?? response.status).toBe(404);
+    });
+
+    test('protects assignments that already own shared group work', async () => {
+      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { assignmentId: 'assignment-1', classId: 'class-1' },
+      ]);
+      prisma.documentGroup.findFirst.mockResolvedValue({ id: 'group-1' });
+
+      const response = (await action({
+        request: deleteRequest(['assignment-1']),
+        params: {},
+        context: {},
+      } as any)) as any;
+
+      expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
+      expect(response.init?.status ?? response.status).toBe(409);
     });
 
     test('refuses a non-teacher', async () => {

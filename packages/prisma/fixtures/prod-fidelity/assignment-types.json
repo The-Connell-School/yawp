@@ -239,7 +239,8 @@
     "gradingCalibrationNotes": null,
     "gradingAssistantVersion": 5,
     "gradingAssistantSourceTemplateId": null,
-    "gradingAssistantSourceTemplateSlug": null
+    "gradingAssistantSourceTemplateSlug": null,
+    "collaborationSupported": true
   },
   {
     "id": "cmpphw7w303lh01l15z0pr6nd",

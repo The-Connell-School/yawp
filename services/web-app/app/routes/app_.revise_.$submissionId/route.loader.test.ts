@@ -11,7 +11,10 @@ const resolveGrammarHighlightingForAssignmentType = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/db.server.js', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
   requireMembership,
@@ -151,6 +154,7 @@ describe('revise loader', () => {
         where: expect.objectContaining({
           document: {
             is: {
+              artifactKind: 'STUDENT',
               membershipId: STUDENT_MEMBERSHIP_ID,
               membership: { organizationId: 'org-1' },
             },
@@ -234,6 +238,7 @@ describe('revise loader', () => {
         where: expect.objectContaining({
           document: {
             is: {
+              artifactKind: 'STUDENT',
               membershipId: 'membership-other-student',
               membership: { organizationId: 'org-1' },
             },
@@ -261,6 +266,7 @@ describe('revise loader', () => {
         where: expect.objectContaining({
           document: {
             is: {
+              artifactKind: 'STUDENT',
               membershipId: 'membership-cross-org-student',
               membership: { organizationId: 'org-2' },
             },

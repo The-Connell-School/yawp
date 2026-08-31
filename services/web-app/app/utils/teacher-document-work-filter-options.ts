@@ -27,16 +27,16 @@ export function serializeDocumentWorkFilterIds(ids: string[]): string | null {
 export function dedupeFilterOptionsById<T extends { id: string }>(
   options: T[]
 ): T[] {
-  return Array.from(new Map(options.map((option) => [option.id, option])).values());
+  return Array.from(
+    new Map(options.map((option) => [option.id, option])).values()
+  );
 }
 
 function studentFilterLabel(membership: {
   user: { name: string | null; email: string };
 }) {
   return (
-    membership.user.name?.trim() ||
-    membership.user.email ||
-    'Unknown student'
+    membership.user.name?.trim() || membership.user.email || 'Unknown student'
   );
 }
 
@@ -46,6 +46,15 @@ export function buildStudentFilterOptionsFromDocuments(
       id: string;
       user: { id?: string; name: string | null; email: string };
     };
+    group?: {
+      members: Array<{
+        membershipId: string;
+        membership: {
+          id: string;
+          user: { id?: string; name: string | null; email: string };
+        };
+      }>;
+    } | null;
   }>
 ): TeacherDocumentWorkFilterOption[] {
   const byUserKey = new Map<
@@ -59,21 +68,26 @@ export function buildStudentFilterOptionsFromDocuments(
   >();
 
   for (const document of documents) {
-    const userKey = document.membership.user.id ?? document.membership.id;
-    const label = studentFilterLabel(document.membership);
-    const existing = byUserKey.get(userKey);
+    const participants = document.group?.members.map(
+      (row) => row.membership
+    ) ?? [document.membership];
+    for (const participant of participants) {
+      const userKey = participant.user.id ?? participant.id;
+      const label = studentFilterLabel(participant);
+      const existing = byUserKey.get(userKey);
 
-    if (existing) {
-      existing.membershipIds.add(document.membership.id);
-      continue;
+      if (existing) {
+        existing.membershipIds.add(participant.id);
+        continue;
+      }
+
+      byUserKey.set(userKey, {
+        id: userKey,
+        label,
+        email: participant.user.email,
+        membershipIds: new Set([participant.id]),
+      });
     }
-
-    byUserKey.set(userKey, {
-      id: userKey,
-      label,
-      email: document.membership.user.email,
-      membershipIds: new Set([document.membership.id]),
-    });
   }
 
   const students = Array.from(byUserKey.values()).map(
@@ -108,21 +122,44 @@ export function studentMatchesStudentFilters(
       id: string;
       user: { id?: string };
     };
+    group?: {
+      members: Array<{
+        membershipId: string;
+        membership: { id: string; user: { id?: string } };
+      }>;
+    } | null;
   },
   selectedStudentIds: string[],
   studentOptions: TeacherDocumentWorkFilterOption[] = []
 ) {
   if (selectedStudentIds.length === 0) return true;
 
-  const membershipId = document.membership.id;
-  const userId = document.membership.user.id;
+  const participants = document.group?.members.map((row) => row.membership) ?? [
+    document.membership,
+  ];
 
-  if (selectedStudentIds.includes(membershipId)) return true;
-  if (userId && selectedStudentIds.includes(userId)) return true;
+  if (
+    participants.some(
+      (participant) =>
+        selectedStudentIds.includes(participant.id) ||
+        Boolean(
+          participant.user.id &&
+          selectedStudentIds.includes(participant.user.id)
+        )
+    )
+  ) {
+    return true;
+  }
 
   for (const option of studentOptions) {
     if (!selectedStudentIds.includes(option.id)) continue;
-    if (option.membershipIds?.includes(membershipId)) return true;
+    if (
+      participants.some((participant) =>
+        option.membershipIds?.includes(participant.id)
+      )
+    ) {
+      return true;
+    }
   }
 
   return false;

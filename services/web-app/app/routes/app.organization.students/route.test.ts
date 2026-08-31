@@ -5,21 +5,27 @@ const requireMembership = mock(async () => ({
   organization: { id: 'org-1' },
 }));
 const getPasswordHash = mock(async (password: string) => `hashed:${password}`);
+const replaceStudentClassRoster = mock();
 
 mock.module('~/utils/auth.server', () => ({
   requireOwner,
   requireMembership,
   getPasswordHash,
 }));
+mock.module('~/domain/collaboration/student-roster.server', () => ({
+  replaceStudentClassRoster,
+}));
 
 const prisma = {
   class: {
     findFirst: mock(),
+    findMany: mock(),
   },
   user: {
     findUnique: mock(),
   },
   orgMembership: {
+    findFirst: mock(),
     update: mock(),
     create: mock(),
   },
@@ -48,11 +54,47 @@ describe('app.organization.students action', () => {
     requireMembership.mockClear();
     getPasswordHash.mockClear();
     prisma.class.findFirst.mockReset();
+    prisma.class.findMany.mockReset();
     prisma.user.findUnique.mockReset();
     prisma.orgMembership.update.mockReset();
+    prisma.orgMembership.findFirst.mockReset();
     prisma.orgMembership.create.mockReset();
 
     prisma.class.findFirst.mockResolvedValue({ id: 'class-1' });
+    replaceStudentClassRoster
+      .mockReset()
+      .mockResolvedValue({ id: 'student-1' });
+  });
+
+  test('edits a roster through the collaboration-safe replacement boundary', async () => {
+    prisma.orgMembership.findFirst.mockResolvedValue({
+      id: 'student-1',
+      classesAsStudent: [{ id: 'class-a' }, { id: 'class-b' }],
+    });
+    prisma.class.findMany.mockResolvedValue([
+      { id: 'class-b' },
+      { id: 'class-c' },
+    ]);
+    const body = new URLSearchParams();
+    body.set('intent', 'edit-student');
+    body.set('studentId', 'student-1');
+    body.append('classIds', 'class-b');
+    body.append('classIds', 'class-c');
+
+    const response = (await action({
+      request: new Request('https://example.com/app/organization/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }),
+    } as any)) as { data: { success: boolean } };
+
+    expect(response.data.success).toBe(true);
+    expect(replaceStudentClassRoster).toHaveBeenCalledWith({
+      membershipId: 'student-1',
+      nextClassIds: ['class-b', 'class-c'],
+    });
+    expect(prisma.orgMembership.update).not.toHaveBeenCalled();
   });
 
   test('bulk import enrolls an existing organization student from an email-only row', async () => {

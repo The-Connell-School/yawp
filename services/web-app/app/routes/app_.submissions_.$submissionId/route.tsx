@@ -102,6 +102,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               membership: { organizationId: profile.organization.id },
             },
             {
+              group: {
+                is: {
+                  members: {
+                    some: { membershipId: profile.id, removedAt: null },
+                  },
+                },
+              },
+              classAssignment: {
+                is: {
+                  class: {
+                    school: { organizationId: profile.organization.id },
+                    students: { some: { id: profile.id } },
+                  },
+                },
+              },
+            },
+            {
               ...buildTeacherDocumentAccessWhere({
                 membershipId: profile.id,
                 organizationId: profile.organization.id,
@@ -153,7 +170,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 select: {
                   id: true,
                   schoolId: true,
-                  school: { select: { organizationId: true } },
+                  school: {
+                    select: {
+                      organizationId: true,
+                      organization: {
+                        select: { submissionActivityEnabled: true },
+                      },
+                    },
+                  },
                   teachers: { select: { id: true } },
                 },
               },
@@ -191,6 +215,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               score: true,
             },
           },
+          group: {
+            select: {
+              id: true,
+              label: true,
+              members: {
+                where: { removedAt: null },
+                select: { membershipId: true },
+              },
+            },
+          },
         },
       },
       comments: {
@@ -222,7 +256,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   // Determine if viewer is the owner (student) or a teacher
-  const isOwner = submission.document.membership.userId === userId;
+  const isOwner =
+    submission.document.membership?.userId === userId ||
+    Boolean(
+      submission.document.group?.members.some(
+        (member) => member.membershipId === profile.id
+      )
+    );
 
   const isCurrentClassTeacher =
     submission.document.classAssignment?.class?.school.organizationId ===
@@ -232,28 +272,36 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     );
   const isLegacyClassTeacher =
     submission.document.classAssignment == null &&
-    submission.document.membership.classesAsStudent.some(
-      (klass) =>
-        klass.school.organizationId === profile.organization.id &&
-        klass.teachers.some((teacher) => teacher.id === profile.id)
+    Boolean(
+      submission.document.membership?.classesAsStudent.some(
+        (klass) =>
+          klass.school.organizationId === profile.organization.id &&
+          klass.teachers.some((teacher) => teacher.id === profile.id)
+      )
     );
   const isTeacher =
     !isOwner &&
     profile.role === 'TEACHER' &&
-    submission.document.membership.organizationId === profile.organization.id &&
+    (submission.document.classAssignment?.class?.school?.organizationId ??
+      submission.document.membership?.organizationId) ===
+      profile.organization.id &&
     (isCurrentClassTeacher || isLegacyClassTeacher);
 
   const submissionActivityEnabled =
-    submission.document.membership.organization.submissionActivityEnabled ===
-    true;
+    (submission.document.classAssignment?.class?.school?.organization
+      ?.submissionActivityEnabled ??
+      submission.document.membership?.organization
+        ?.submissionActivityEnabled) === true;
 
-  // Unsubmitting is student-initiated and owner-only — /api/domain/unsubmit-
-  // submission refuses teachers and admins — so the only way an owner reaches
-  // an unsubmitted submission is that they withdrew it themselves. Once
-  // withdrawn it stops counting as turned in, so send them back to the
-  // document, which is untouched and open to a new submission.
+  // Unsubmitting is student-initiated: the solo owner or any active member of
+  // the assigned group may withdraw, while teachers and admins are refused.
+  // Once withdrawn it stops counting as turned in, so send the student back to
+  // the untouched solo or shared artifact for revision and resubmission.
   if (isOwner && submission.unsubmittedAt) {
-    return redirectWithToast(`/app/documents/${submission.documentId}`, {
+    const documentPath = submission.document.group
+      ? `/app/collab-documents/${submission.documentId}`
+      : `/app/documents/${submission.documentId}`;
+    return redirectWithToast(documentPath, {
       description:
         'You unsubmitted this document. You can revise and resubmit it.',
       type: 'message',
@@ -282,7 +330,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ? await prisma.submissionActivity.findMany({
           where: {
             submissionId: submission.id,
-            organizationId: submission.document.membership.organizationId,
+            organizationId:
+              submission.document.classAssignment?.class?.school
+                ?.organizationId ??
+              submission.document.membership?.organizationId ??
+              profile.organization.id,
           },
           select: {
             id: true,
@@ -935,22 +987,28 @@ export default function SubmissionRoute() {
   }, [submission.id]);
 
   // ── Paths ──────────────────────────────────────────────────────────
-  const revisePath = resolveRevisionEntryPath({
-    revisionFlowEnabled,
-    submissionId: submission.id,
-    documentId: submission.documentId,
-    isReleased: isReleased,
-    isWithdrawn,
-  });
+  const revisePath = submission.document.group
+    ? `/app/collab-documents/${submission.documentId}`
+    : resolveRevisionEntryPath({
+        revisionFlowEnabled,
+        submissionId: submission.id,
+        documentId: submission.documentId,
+        isReleased: isReleased,
+        isWithdrawn,
+      });
   const opensRevisionFlow = revisePath.startsWith('/app/revise/');
   const viewDocumentHref = useMemo(() => {
     const returnUrl = `${location.pathname}${location.search}${location.hash}`;
-    return `/app/documents/${submission.documentId}?exitTo=${encodeURIComponent(returnUrl)}`;
+    const documentPath = submission.document.group
+      ? `/app/collab-documents/${submission.documentId}`
+      : `/app/documents/${submission.documentId}`;
+    return `${documentPath}?exitTo=${encodeURIComponent(returnUrl)}`;
   }, [
     location.pathname,
     location.search,
     location.hash,
     submission.documentId,
+    submission.document.group,
   ]);
 
   return (
@@ -970,12 +1028,17 @@ export default function SubmissionRoute() {
         <div className="h-4 w-px bg-border shrink-0" />
 
         <div className="flex min-w-0 items-center gap-2">
-          {isGradingOther && submission.document.membership.user.name ? (
+          {isGradingOther &&
+          (submission.document.group?.label ||
+            submission.document.membership?.user.name) ? (
             <span className="shrink-0 text-sm text-muted-foreground">
-              {submission.document.membership.user.name}
+              {submission.document.group?.label ??
+                submission.document.membership?.user.name}
             </span>
           ) : null}
-          {isGradingOther && submission.document.membership.user.name ? (
+          {isGradingOther &&
+          (submission.document.group?.label ||
+            submission.document.membership?.user.name) ? (
             <span className="text-muted-foreground/40 shrink-0">·</span>
           ) : null}
           {canEditTitle ? (
@@ -1102,13 +1165,16 @@ export default function SubmissionRoute() {
                 : 'Show grammar highlights'}
             </Button>
           ) : null}
-          {/* Student revision entry point */}
+          {/* Shared artifacts stay on their collaborative editor; the solo
+              revision flow assumes one student owner and must not be reused. */}
           {isOwner ? (
             <Button size="sm" variant="outline" asChild>
               <Link to={revisePath} data-testid="submission-revise-essay">
-                {opensRevisionFlow
-                  ? 'Revise with feedback'
-                  : 'Open document editor'}
+                {submission.document.group
+                  ? 'Open shared draft'
+                  : opensRevisionFlow
+                    ? 'Revise with feedback'
+                    : 'Open document editor'}
               </Link>
             </Button>
           ) : null}

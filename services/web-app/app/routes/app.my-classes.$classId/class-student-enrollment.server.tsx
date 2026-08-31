@@ -5,6 +5,10 @@ import { sendEmail } from '~/utils/email.server';
 import { getDomainUrl } from '~/utils/misc';
 import { normalizeEmail } from '~/utils/normalize-email';
 import { generateTOTP } from '~/utils/totp.server';
+import {
+  lockClassCollaborationDeployments,
+  lockStudentRosters,
+} from '~/domain/collaboration/class-assignment-lock.server';
 
 export type StudentEmailLookupResult =
   | { status: 'existing'; email: string }
@@ -169,9 +173,13 @@ export async function enrollExistingStudentInClass({
     };
   }
 
-  await prisma.orgMembership.update({
-    where: { id: orgMembership.id },
-    data: { classesAsStudent: { connect: { id: classId } } },
+  await prisma.$transaction(async (tx) => {
+    await lockStudentRosters(tx, [orgMembership.id]);
+    await lockClassCollaborationDeployments(tx, classId);
+    await tx.orgMembership.update({
+      where: { id: orgMembership.id },
+      data: { classesAsStudent: { connect: { id: classId } } },
+    });
   });
 
   return { status: 'enrolled' };

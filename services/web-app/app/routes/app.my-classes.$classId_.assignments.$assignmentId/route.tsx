@@ -21,9 +21,7 @@ import {
 } from '~/components/ui/table';
 import { CaretLeftIcon } from '~/components/icons';
 import { timeAgo } from '~/utils/timeAgo';
-import {
-  getClassCardHeading,
-} from '~/utils/class-display';
+import { getClassCardHeading } from '~/utils/class-display';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { Loader2 } from 'lucide-react';
 import { postFormWithFallbackRetry } from '~/utils/llm-retry-ui';
@@ -168,6 +166,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                     user: { select: { name: true, email: true } },
                   },
                 },
+                group: { select: { id: true, label: true } },
               },
             },
           },
@@ -194,6 +193,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 user: { select: { name: true, email: true } },
               },
             },
+            group: { select: { id: true, label: true } },
           },
           orderBy: { updatedAt: 'desc' },
         })
@@ -245,6 +245,14 @@ export default function AssignmentSubmissionsRoute() {
   );
 
   const backUrl = `/app/my-classes/${klass.id}?tab=assignments`;
+  const artifactLabel = (document: {
+    membership: { user: { name: string | null; email: string } } | null;
+    group: { label: string } | null;
+  }) =>
+    document.group?.label ??
+    document.membership?.user.name ??
+    document.membership?.user.email ??
+    'Student';
 
   // Submissions that haven't finished grading yet (filter out 'done' ones)
   const visibleSubmissions = useMemo(
@@ -465,12 +473,14 @@ export default function AssignmentSubmissionsRoute() {
                 <TableBody>
                   {inProgressDocuments.map((doc) => (
                     <TableRow key={doc.id}>
-                      <TableCell>
-                        {doc.membership.user.name ?? doc.membership.user.email}
-                      </TableCell>
+                      <TableCell>{artifactLabel(doc)}</TableCell>
                       <TableCell>
                         <Link
-                          to={`/app/documents/${doc.id}?left=tutor`}
+                          to={
+                            doc.group
+                              ? `/app/group-drafts/${doc.id}`
+                              : `/app/documents/${doc.id}?left=tutor`
+                          }
                           className="text-primary hover:underline"
                         >
                           {doc.title || 'Untitled'}
@@ -543,10 +553,7 @@ export default function AssignmentSubmissionsRoute() {
                             aria-label="Select submission"
                           />
                         </TableCell>
-                        <TableCell>
-                          {sub.document.membership.user.name ??
-                            sub.document.membership.user.email}
-                        </TableCell>
+                        <TableCell>{artifactLabel(sub.document)}</TableCell>
                         <TableCell>
                           <Link
                             to={`/app/submissions/${sub.id}?${
@@ -661,10 +668,7 @@ export default function AssignmentSubmissionsRoute() {
                           aria-label="Select submission"
                         />
                       </TableCell>
-                      <TableCell>
-                        {sub.document.membership.user.name ??
-                          sub.document.membership.user.email}
-                      </TableCell>
+                      <TableCell>{artifactLabel(sub.document)}</TableCell>
                       <TableCell>
                         <Link
                           to={`/app/submissions/${sub.id}?${
@@ -715,10 +719,7 @@ export default function AssignmentSubmissionsRoute() {
                 <TableBody>
                   {submissions.map((sub) => (
                     <TableRow key={sub.id}>
-                      <TableCell>
-                        {sub.document.membership.user.name ??
-                          sub.document.membership.user.email}
-                      </TableCell>
+                      <TableCell>{artifactLabel(sub.document)}</TableCell>
                       <TableCell>
                         <Link
                           to={`/app/submissions/${sub.id}?${

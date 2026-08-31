@@ -19,6 +19,8 @@ import {
   saveAssignmentForReuse,
 } from '~/domain/assignments/saved-assignments.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
+import { autoArrangeNewAssignment } from '~/domain/collaboration/auto-arrange.server';
+import { groupSetupNextStep } from '~/domain/collaboration/next-step';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -26,13 +28,17 @@ import {
   DEFAULT_ASSIGNMENT_POINT_VALUE,
   parseAssignmentGradingIntent,
 } from '~/utils/assignment-grading-intent.server';
+import {
+  applyCollaborationRolloutGate,
+  parseAssignmentCollaboration,
+} from '~/utils/assignment-collaboration.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     return dataResponse(
       { success: false, message: 'Only teachers can create assignments.' },
       { status: 403 }
@@ -104,6 +110,14 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   const tutorEnabled = tutorEnabledResult.value;
 
+  const collaborationResult = parseAssignmentCollaboration(formData);
+  if (!collaborationResult.success) {
+    return dataResponse(
+      { success: false, message: collaborationResult.message },
+      { status: 400 }
+    );
+  }
+
   // Optional deployment dates (applied to each selected class)
   let postAt: Date | null = null;
   let dueAt: Date | null = null;
@@ -138,7 +152,12 @@ export async function action({ request }: ActionFunctionArgs) {
     },
     select: {
       id: true,
-      school: { select: { id: true, organizationId: true } },
+      school: {
+        select: {
+          id: true,
+          organizationId: true,
+        },
+      },
     },
   });
 
@@ -171,7 +190,7 @@ export async function action({ request }: ActionFunctionArgs) {
       id: assignmentTypeId,
       archivedAt: null,
     },
-    select: { id: true, systemKey: true },
+    select: { id: true, systemKey: true, collaborationSupported: true },
   });
 
   if (!assignmentTypeAvailable || !assignmentType) {
@@ -182,6 +201,31 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       { status: 400 }
     );
+  }
+
+  // Rollout gate. Applied here rather than at parse time because it needs the
+  // resolved assignment type, and it forces collaboration off rather than
+  // failing: a type outside the pilot yields an ordinary solo assignment.
+  const collaboration = applyCollaborationRolloutGate(
+    collaborationResult.value,
+    assignmentType.collaborationSupported
+  );
+
+  if (collaboration.collaborationEnabled) {
+    const emptyClass = await prisma.class.findFirst({
+      where: { id: { in: classIds }, students: { none: {} } },
+      select: { id: true },
+    });
+    if (emptyClass) {
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'Add students to every selected class before creating a collaborative assignment.',
+        },
+        { status: 400 }
+      );
+    }
   }
 
   const deployClassIds = classes.map((klass) => klass.id);
@@ -205,7 +249,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    await createAssignmentDeployedToClasses({
+    const createdApAssignment = await createAssignmentDeployedToClasses({
       data: {
         ...buildAssignmentCreateInputFromApHistoryEntry({
           assignmentTypeId: assignmentType.id,
@@ -214,10 +258,22 @@ export async function action({ request }: ActionFunctionArgs) {
           gradingAssistantStrictnessLevel,
         }),
         tutorEnabled,
+        ...collaboration,
       },
       classIds: deployClassIds,
       deployment: { postAt, dueAt },
     });
+
+    // Unreachable while AP History is outside the pilot, which forces
+    // collaboration off above. Here anyway so flagging that type later cannot
+    // quietly leave this one branch without an arrangement.
+    if (collaboration.collaborationEnabled) {
+      await autoArrangeNewAssignment({
+        assignmentId: createdApAssignment.id,
+        mode: collaboration.collaborationGroupMode,
+        groupSize: collaboration.collaborationGroupSize,
+      });
+    }
 
     return dataResponse({
       success: true,
@@ -234,8 +290,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const promptAttachment = formData.get('promptAttachment');
   let promptAttachmentData:
-    | Awaited<ReturnType<typeof uploadAssignmentPromptAttachment>>
-    | undefined;
+    Awaited<ReturnType<typeof uploadAssignmentPromptAttachment>> | undefined;
   if (promptAttachment instanceof File && promptAttachment.size > 0) {
     try {
       promptAttachmentData =
@@ -251,14 +306,17 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   }
 
+  let nextStep: ReturnType<typeof groupSetupNextStep> = null;
+
   try {
-    await createAssignmentDeployedToClasses({
+    const createdAssignment = await createAssignmentDeployedToClasses({
       data: {
         assignmentTypeId: assignmentType.id,
         title,
         prompt,
         gradingAssistantStrictnessLevel,
         tutorEnabled,
+        ...collaboration,
         ...promptAttachmentData,
         ...(gradingIntent?.success
           ? {
@@ -270,6 +328,35 @@ export async function action({ request }: ActionFunctionArgs) {
       classIds: deployClassIds,
       deployment: { postAt, dueAt },
     });
+
+    // "Group them for me" and "one doc for the whole class" describe an
+    // arrangement completely, so it is formed now rather than making the
+    // teacher press Shuffle to reach the answer they already chose. Nothing is
+    // opened, so it stays editable.
+    if (collaboration.collaborationEnabled) {
+      await autoArrangeNewAssignment({
+        assignmentId: createdAssignment.id,
+        mode: collaboration.collaborationGroupMode,
+        groupSize: collaboration.collaborationGroupSize,
+      });
+
+      // Creating is not the end of the job: students see nothing until groups
+      // are opened, so the teacher is sent to finish it rather than left on
+      // whatever page they started from with no sign anything is outstanding.
+      const deployments = await prisma.classAssignment.findMany({
+        where: { assignmentId: createdAssignment.id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, classId: true },
+      });
+      nextStep = groupSetupNextStep({
+        assignmentId: createdAssignment.id,
+        collaborationEnabled: true,
+        deployments: deployments.map((deployment) => ({
+          classAssignmentId: deployment.id,
+          classId: deployment.classId,
+        })),
+      });
+    }
   } catch (error) {
     if (promptAttachmentData?.promptAttachmentKey) {
       await deleteAssignmentPromptAttachment(
@@ -303,18 +390,23 @@ export async function action({ request }: ActionFunctionArgs) {
           : DEFAULT_ASSIGNMENT_POINT_VALUE,
         gradingAssistantStrictnessLevel,
         tutorEnabled,
+        ...collaboration,
       });
     } catch {
       return dataResponse({
         success: true,
         message:
           'Assignment created and applied to classes, but it could not be saved for reuse.',
+        nextStep,
       });
     }
   }
 
   return dataResponse({
     success: true,
-    message: 'Assignment created and applied to classes.',
+    message: nextStep
+      ? 'Assignment created. Students cannot see it until you finalize groups.'
+      : 'Assignment created and applied to classes.',
+    nextStep,
   });
 }

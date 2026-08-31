@@ -97,7 +97,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     },
   });
 
-  if (!document) {
+  if (!document || !document.membership) {
     return redirectWithToast('/app/courses', {
       description: 'Document not found.',
       type: 'error',
@@ -114,6 +114,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   const html = document.html ?? '';
   const text = document.text ?? '';
   const now = new Date();
+  const documentOrganizationId = document.membership.organizationId;
 
   const journal = await prisma.documentWriteJournal.create({
     data: {
@@ -170,13 +171,12 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
 
         await recordSubmissionActivity(tx, {
           submissionId: submission.id,
-          organizationId:
-            document.membership.organizationId ?? profile.organization.id,
+          organizationId: documentOrganizationId ?? profile.organization.id,
           actorMembershipId: resolveSubmissionActivityActorMembershipId({
             actorMembershipId: profile.id,
             actorOrganizationId: profile.organization.id,
             submissionOrganizationId:
-              document.membership.organizationId ?? profile.organization.id,
+              documentOrganizationId ?? profile.organization.id,
           }),
           actorUserId: userId,
           eventType: submissionActivityEventTypes.created,
