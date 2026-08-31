@@ -11,7 +11,10 @@
 import type { Prisma } from '@app/prisma';
 import { MAX_COLLABORATION_GROUP_SIZE } from '~/domain/assignments/collaboration';
 import { prisma } from '~/utils/db.server';
-import { lockClassAssignmentCollaboration } from './class-assignment-lock.server';
+import {
+  lockClassAssignmentCollaboration,
+  lockStudentRosters,
+} from './class-assignment-lock.server';
 import { groupLabel } from './groups';
 import { createAssignmentGroupArtifactInTransaction } from './assignment-artifact.server';
 
@@ -280,6 +283,7 @@ export async function createLateStudentGroup({
   membershipId: string;
 }) {
   return prisma.$transaction(async (tx) => {
+    await lockStudentRosters(tx, [membershipId]);
     await lockClassAssignmentCollaboration(tx, classAssignmentId);
     const classAssignment = await loadEditableArrangement(
       tx,

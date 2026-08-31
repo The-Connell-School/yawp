@@ -228,3 +228,92 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER "ClassAssignment_compat_owner_check"
 BEFORE UPDATE OF "assignmentId", "classId" ON "ClassAssignment"
 FOR EACH ROW EXECUTE FUNCTION protect_deployment_owner_compat_write();
+
+-- Reconcile once more *after* every compatibility guard is active. Any legacy
+-- write that committed between the first backfill and trigger installation is
+-- now either transformed here or rejected by the final assertions; later writes
+-- are protected until phase 4 atomically replaces these guards.
+UPDATE "AssignmentModuleSession" AS session
+SET "membershipId" = document."membershipId"
+FROM "Document" AS document
+JOIN "DocumentGroup" AS group_row
+  ON group_row."documentId" = document."id"
+WHERE session."documentId" = document."id"
+  AND session."membershipId" IS NULL
+  AND document."membershipId" IS NOT NULL;
+
+UPDATE "Document" AS document
+SET "artifactKind" = 'assignment-group',
+    "membershipId" = NULL,
+    "assignmentId" = deployment."assignmentId",
+    "classAssignmentId" = group_row."classAssignmentId",
+    "assignmentTypeId" = assignment."assignmentTypeId"
+FROM "DocumentGroup" AS group_row
+JOIN "ClassAssignment" AS deployment
+  ON deployment."id" = group_row."classAssignmentId"
+JOIN "Assignment" AS assignment
+  ON assignment."id" = deployment."assignmentId"
+WHERE group_row."documentId" = document."id";
+
+UPDATE "DocumentGroup"
+SET "openedAt" = COALESCE("openedAt", "createdAt")
+WHERE "documentId" IS NOT NULL;
+
+UPDATE "DocumentGroup"
+SET "openedAt" = NULL
+WHERE "documentId" IS NULL;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM "DocumentGroup" AS group_row
+    LEFT JOIN "ClassAssignment" AS deployment
+      ON deployment."id" = group_row."classAssignmentId"
+    LEFT JOIN "Assignment" AS assignment
+      ON assignment."id" = deployment."assignmentId"
+    LEFT JOIN "Document" AS document
+      ON document."id" = group_row."documentId"
+    WHERE group_row."kind" <> 'assignment'
+       OR group_row."classAssignmentId" IS NULL
+       OR ((group_row."openedAt" IS NULL) <> (group_row."documentId" IS NULL))
+       OR (
+         group_row."documentId" IS NOT NULL
+         AND (
+           document."id" IS NULL
+           OR document."artifactKind" <> 'assignment-group'
+           OR document."membershipId" IS NOT NULL
+           OR document."classAssignmentId" <> group_row."classAssignmentId"
+           OR document."assignmentId" <> deployment."assignmentId"
+           OR document."assignmentTypeId" <> assignment."assignmentTypeId"
+         )
+       )
+  ) THEN
+    RAISE EXCEPTION 'Protected assignment-owned artifact reconciliation failed';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM "Document" AS document
+    WHERE (document."artifactKind" = 'student' AND document."membershipId" IS NULL)
+       OR (
+         document."artifactKind" = 'assignment-group'
+         AND NOT EXISTS (
+           SELECT 1 FROM "DocumentGroup"
+           WHERE "documentId" = document."id"
+         )
+       )
+  ) THEN
+    RAISE EXCEPTION 'Protected reconciliation left an invalid or orphaned artifact';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM "AssignmentModuleSession"
+    WHERE "membershipId" IS NOT NULL
+    GROUP BY "documentId", "membershipId", "assignmentModuleId"
+    HAVING count(*) > 1
+  ) THEN
+    RAISE EXCEPTION 'Protected tutor-session reconciliation produced duplicate keys';
+  END IF;
+END $$;

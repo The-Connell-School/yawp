@@ -3,7 +3,10 @@
 
 import { prisma } from '~/utils/db.server';
 import { createAssignmentGroupArtifactInTransaction } from './assignment-artifact.server';
-import { lockClassAssignmentCollaboration } from './class-assignment-lock.server';
+import {
+  lockClassAssignmentCollaboration,
+  lockStudentRosters,
+} from './class-assignment-lock.server';
 import { groupLabel, planGroups, shuffleMemberships } from './groups';
 
 export class GroupProvisioningError extends Error {}
@@ -31,6 +34,17 @@ export async function arrangeGroups({
   random?: () => number;
 }) {
   return prisma.$transaction(async (tx) => {
+    const roster = await tx.classAssignment.findUnique({
+      where: { id: classAssignmentId },
+      select: { class: { select: { students: { select: { id: true } } } } },
+    });
+    if (!roster) {
+      throw new GroupProvisioningError('Class assignment not found.');
+    }
+    await lockStudentRosters(
+      tx,
+      roster.class.students.map(({ id }) => id)
+    );
     if (!(await lockClassAssignmentCollaboration(tx, classAssignmentId))) {
       throw new GroupProvisioningError('Class assignment not found.');
     }

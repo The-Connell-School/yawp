@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  $queryRaw: mock(),
   classAssignment: { findUnique: mock() },
   documentGroup: {
     deleteMany: mock(),
@@ -12,14 +13,10 @@ const prisma = {
 };
 
 const createAssignmentGroupArtifactInTransaction = mock();
-const lockClassAssignmentCollaboration = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('./assignment-artifact.server', () => ({
   createAssignmentGroupArtifactInTransaction,
-}));
-mock.module('./class-assignment-lock.server', () => ({
-  lockClassAssignmentCollaboration,
 }));
 
 const {
@@ -63,7 +60,7 @@ const classAssignmentWithGroups = (
 describe('arrangeGroups', () => {
   beforeEach(() => {
     prisma.classAssignment.findUnique.mockReset();
-    lockClassAssignmentCollaboration.mockReset().mockResolvedValue(true);
+    prisma.$queryRaw.mockReset().mockResolvedValue([{ id: 'locked' }]);
     prisma.documentGroup.deleteMany.mockReset().mockResolvedValue({ count: 0 });
     prisma.documentGroup.create.mockReset().mockResolvedValue({ id: 'g-new' });
     // Run the callback against the same mock client the module uses.
@@ -184,7 +181,7 @@ describe('openGroups', () => {
     prisma.$transaction
       .mockReset()
       .mockImplementation(async (fn: any) => fn(prisma));
-    lockClassAssignmentCollaboration.mockReset().mockResolvedValue(true);
+    prisma.$queryRaw.mockReset().mockResolvedValue([{ id: 'locked' }]);
     createAssignmentGroupArtifactInTransaction.mockReset();
     let counter = 0;
     createAssignmentGroupArtifactInTransaction.mockImplementation(async () => {
