@@ -99,6 +99,11 @@ test.describe('School year scope', () => {
       ]);
       expect(createdTeacher?.memberships[0]?._count.classesAsTeacher).toBe(0);
 
+      const inheritedScope = (await page.context().cookies()).find(
+        (cookie) => cookie.name === 'school-year'
+      );
+      expect(inheritedScope).toBeUndefined();
+
       await page.getByText('Settings', { exact: true }).click();
       await expect(
         page.getByText('University of Alabama', { exact: true })
