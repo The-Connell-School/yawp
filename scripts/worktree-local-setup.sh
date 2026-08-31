@@ -115,6 +115,24 @@ ensure_postgres() {
 }
 
 write_env_files() {
+  # The Marketing Studio is off unless an operator states that the render
+  # target holds demo data — an assertion, never an inference. A worktree is
+  # the one environment where the statement is trivially true: it films the
+  # dev server on this machine, whose only content is the local-dev seed. So
+  # local dev states it here rather than leaving the admin tab hidden and
+  # every /app/admin/marketing-media route answering 404.
+  #
+  # Disk storage keeps this working without AWS credentials: the app serves
+  # renders out of MARKETING_MEDIA_DIR instead of signing S3 URLs.
+  local marketing_media_dir="$ROOT/.worktree-local/marketing-media"
+  mkdir -p "$marketing_media_dir"
+  local marketing_studio_env
+  marketing_studio_env="MARKETING_STUDIO_ENABLED=on
+MARKETING_RENDER_TARGET_URL=\"http://localhost:${DEV_PORT}\"
+MARKETING_RENDER_TARGET_IS_DEMO=confirmed
+MARKETING_MEDIA_STORAGE=disk
+MARKETING_MEDIA_DIR=\"${marketing_media_dir}\""
+
   cat >"$ROOT/packages/prisma/.env" <<EOF
 DATABASE_URL="${DATABASE_URL}"
 EOF
@@ -133,6 +151,7 @@ CLASS_INSIGHT_MOCK_MODE=fixture
 AI_MODEL="claude-sonnet-4-5"
 ANTHROPIC_API_KEY=""
 BLACKBOARD_LTI_MOCK_URL="http://127.0.0.1:${LTI_MOCK_PORT}"
+${marketing_studio_env}
 EOF
   chmod 600 "$CONFIG_FILE" "$ROOT/packages/prisma/.env" "$ROOT/services/web-app/.env"
 
@@ -241,8 +260,19 @@ Blackboard Learn mock:
 Class insights mock mode (services/web-app/.env):
   CLASS_INSIGHT_MOCK_MODE=fixture   # fake summaries, no Anthropic calls
   CLASS_INSIGHT_MOCK_MODE=live      # real Anthropic when API key is set
+
+Marketing Studio (admin > Marketing), enabled against this worktree:
+  http://localhost:${DEV_PORT:-5176}/app/admin/marketing-media
+  Renders land in ${ROOT}/.worktree-local/marketing-media
+  Storyboard generation needs ANTHROPIC_API_KEY in services/web-app/.env
 EOF
 }
+
+# Sourced by scripts/worktree-local-setup.test.ts to exercise the env-file
+# rendering on its own. Nothing below this point runs in that mode.
+if [[ -n "${WORKTREE_SETUP_SOURCE_ONLY:-}" ]]; then
+  return 0
+fi
 
 FRESH=0
 START_DEV=1
