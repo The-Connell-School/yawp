@@ -1,3 +1,18 @@
+import type { ReactNode } from 'react';
+
+export function AuthPageShell({ children }: { children: ReactNode }) {
+  return (
+    <main className="auth-page-shell">
+      <div className="auth-page-frame">
+        <div className="auth-page-logo">
+          <AuthBrandLockup />
+        </div>
+        <div className="auth-page-content">{children}</div>
+      </div>
+    </main>
+  );
+}
+
 export function AuthBrandLockup({ partner }: { partner?: 'ua' | null }) {
   if (partner === 'ua') {
     return (

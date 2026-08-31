@@ -4,7 +4,6 @@ import { ValidatedForm } from '@rvf/react-router';
 import { FormInput } from '~/components/forms/form-input-2';
 import { Button, button } from '~/components/ui/button';
 import { EmailSchema } from '~/utils/schemas/user';
-import { UaPartnerCodeStatus } from '~/components/ua-partner-code-status';
 
 export const GenericStudentSignupSchema = z.object({
   email: EmailSchema,
@@ -18,7 +17,7 @@ export const UaStudentSignupSchema = z.object({
 
 export const RequiredUaStudentSignupSchema = z.object({
   email: EmailSchema,
-  code: z.string().min(1, 'Code is required'),
+  code: z.string().min(1, 'Access code is required'),
 });
 
 export function StudentSignupForm({
@@ -26,13 +25,11 @@ export function StudentSignupForm({
   codeAccepted = false,
   codeError = null,
   loginHref,
-  clearCodeAction,
 }: {
   partner: 'ua' | null;
   codeAccepted?: boolean;
   codeError?: string | null;
   loginHref?: string;
-  clearCodeAction?: string;
 }) {
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
@@ -44,7 +41,7 @@ export function StudentSignupForm({
     : GenericStudentSignupSchema;
 
   return (
-    <div className="mx-auto mt-8 w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
+    <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
       <div className="flex flex-col items-start gap-2 text-left">
         <h1 className="text-lg font-semibold">Let's get started!</h1>
         <p className="text-base text-pretty text-muted-foreground sm:text-sm">
@@ -54,11 +51,6 @@ export function StudentSignupForm({
         </p>
       </div>
       <div className="mt-6 w-full">
-        {isUa && codeAccepted ? (
-          <div className="mb-4">
-            <UaPartnerCodeStatus clearAction={clearCodeAction} />
-          </div>
-        ) : null}
         {codeError ? (
           <p role="alert" className="mb-4 text-sm text-destructive">
             {codeError}
@@ -90,7 +82,7 @@ export function StudentSignupForm({
             <FormInput
               scope="code"
               type="text"
-              label="Code"
+              label="Access code"
               name="code"
               className="w-full"
             />

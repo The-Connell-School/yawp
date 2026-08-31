@@ -5,7 +5,7 @@ import {
   type LoaderFunctionArgs,
   type MetaFunction,
 } from 'react-router';
-import { AuthBrandLockup } from '~/components/auth-brand-lockup';
+import { AuthPageShell } from '~/components/auth-brand-lockup';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { StudentSignupForm } from '~/components/student-signup-form';
 import { studentSignupAction } from '~/routes/auth.inv.signup/signup.server';
@@ -56,15 +56,14 @@ export async function action(args: ActionFunctionArgs) {
 export default function UaSignUpRoute() {
   const { codeAccepted, codeError } = useLoaderData<typeof loader>();
   return (
-    <div className="min-h-screen py-8">
-      <AuthBrandLockup />
+    <AuthPageShell>
       <StudentSignupForm
         partner="ua"
         codeAccepted={codeAccepted}
         codeError={codeError}
         loginHref="/ua/sign-in"
       />
-    </div>
+    </AuthPageShell>
   );
 }
 

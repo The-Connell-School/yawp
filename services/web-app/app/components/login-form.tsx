@@ -31,7 +31,7 @@ export function LoginForm({
   });
 
   return (
-    <div className="mx-auto mt-8 w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
+    <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
       <div className="flex flex-col items-start gap-2 text-left">
         <h1 className="text-lg font-semibold">Welcome back!</h1>
         <p className="text-base text-pretty text-muted-foreground sm:text-sm">

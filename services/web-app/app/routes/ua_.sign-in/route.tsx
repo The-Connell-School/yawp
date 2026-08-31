@@ -4,7 +4,7 @@ import {
   type LoaderFunctionArgs,
   type MetaFunction,
 } from 'react-router';
-import { AuthBrandLockup } from '~/components/auth-brand-lockup';
+import { AuthPageShell } from '~/components/auth-brand-lockup';
 import { LoginForm } from '~/components/login-form';
 import { loginAction } from '~/routes/auth.login/login.server';
 import { requireAnonymous } from '~/utils/auth.server';
@@ -38,10 +38,9 @@ export async function action(args: ActionFunctionArgs) {
 
 export default function UaSignInRoute() {
   return (
-    <div className="min-h-screen py-8">
-      <AuthBrandLockup />
+    <AuthPageShell>
       <LoginForm redirectTo="/ua" signupHref="/ua/sign-up" />
-    </div>
+    </AuthPageShell>
   );
 }
 
