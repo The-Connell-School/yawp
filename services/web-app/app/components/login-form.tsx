@@ -31,13 +31,15 @@ export function LoginForm({
   });
 
   return (
-    <div className="mx-auto mt-10 w-full max-w-md rounded-xl border bg-white p-8 shadow-sm">
+    <div className="mx-auto mt-8 w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
       <div className="flex flex-col items-start gap-2 text-left">
         <h1 className="text-lg font-semibold">Welcome back!</h1>
-        <p className="text-muted-foreground">Please enter your details.</p>
+        <p className="text-base text-pretty text-muted-foreground sm:text-sm">
+          Please enter your details.
+        </p>
       </div>
-      <div className="mt-8 w-full">
-        <Form {...form.getFormProps()} className="flex flex-col gap-3">
+      <div className="mt-6 w-full">
+        <Form {...form.getFormProps()} className="flex flex-col gap-4">
           <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />
           <FormInput
             scope={form.scope('email')}
@@ -59,24 +61,28 @@ export function LoginForm({
               Forgot password?
             </Link>
           </div>
-          <Button className="w-full" type="submit">
+          <Button
+            className="h-11 w-full text-base sm:h-10 sm:text-sm"
+            type="submit"
+          >
             Log in
           </Button>
         </Form>
-        <div className="my-8 rounded-xl border bg-muted p-6">
-          <p className="text-xl font-bold">New here?</p>
-          <p className="text-muted-foreground">
-            Create an account to get started.
-          </p>
+        <div className="mt-6 flex flex-col gap-4 border-t border-black/10 pt-6">
+          <div className="flex flex-col gap-1 text-left">
+            <p className="font-medium">New here?</p>
+            <p className="text-base text-pretty text-muted-foreground sm:text-sm">
+              Create an account to get started.
+            </p>
+          </div>
           <Link
             className={button({
               variant: 'outline',
-              size: 'lg',
-              className: 'mt-4 w-full shadow',
+              className: 'h-11 w-full gap-2 text-base sm:h-10 sm:text-sm',
             })}
             to={signupHref ?? '/auth/inv/signup'}
           >
-            Create an account <ArrowRightIcon className="ml-2 h-4 w-4" />
+            Create an account <ArrowRightIcon className="size-4" />
           </Link>
         </div>
       </div>

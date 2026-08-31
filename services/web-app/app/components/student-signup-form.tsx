@@ -44,16 +44,16 @@ export function StudentSignupForm({
     : GenericStudentSignupSchema;
 
   return (
-    <div className="mx-auto mt-10 w-full max-w-md rounded-xl border bg-white p-8 shadow-sm">
+    <div className="mx-auto mt-8 w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
       <div className="flex flex-col items-start gap-2 text-left">
         <h1 className="text-lg font-semibold">Let's get started!</h1>
-        <p className="text-muted-foreground">
+        <p className="text-base text-pretty text-muted-foreground sm:text-sm">
           {isUa
             ? 'Please enter your email.'
             : 'Please enter your email & passcode.'}
         </p>
       </div>
-      <div className="mt-8 w-full">
+      <div className="mt-6 w-full">
         {isUa && codeAccepted ? (
           <div className="mb-4">
             <UaPartnerCodeStatus clearAction={clearCodeAction} />
@@ -66,7 +66,7 @@ export function StudentSignupForm({
         ) : null}
         <ValidatedForm
           method="POST"
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-5"
           schema={schema}
           defaultValues={{ email: '', code: '' }}
           validationBehaviorConfig={
@@ -95,19 +95,25 @@ export function StudentSignupForm({
               className="w-full"
             />
           ) : null}
-          <Button className="w-full" type="submit" disabled={isLoading}>
+          <Button
+            className="h-11 w-full text-base sm:h-10 sm:text-sm"
+            type="submit"
+            disabled={isLoading}
+          >
             Submit
           </Button>
         </ValidatedForm>
-        <a
-          className={button({
-            variant: 'link',
-            className: 'mx-auto mt-2 w-full',
-          })}
-          href={loginHref ?? (isUa ? '/ua/sign-in' : '/auth/login')}
-        >
-          Already have an account?
-        </a>
+        <div className="mt-6 border-t border-black/10 pt-4 text-center">
+          <a
+            className={button({
+              variant: 'link',
+              className: 'w-full text-base sm:text-sm',
+            })}
+            href={loginHref ?? (isUa ? '/ua/sign-in' : '/auth/login')}
+          >
+            Already have an account?
+          </a>
+        </div>
       </div>
     </div>
   );
