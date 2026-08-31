@@ -106,9 +106,10 @@ Runner update fails before deployment if credentials or billing are enabled
 with an incomplete configuration.
 
 Terraform also adds `ua.yawp.school` to the CloudFront aliases and ACM
-certificate and creates Route 53 A/AAAA aliases. The production Stripe webhook
-continues to use `https://yawp.school/api/stripe/webhook`; no second endpoint is
-required for the UA browser hostname.
+certificate, associates that forwarded host with App Runner, and creates the
+required Route 53 validation and A/AAAA aliases. The production Stripe webhook
+continues to use `https://yawp.school/api/stripe/webhook`; no second endpoint
+is required for the UA browser hostname.
 
 Never combine the initial credential staging and billing enablement into one
 unreviewed apply. The two-stage switch prevents existing UA students from being

@@ -356,6 +356,12 @@ describe('worktree local setup contract', () => {
     expect(infra).toContain('domain_name = local.apprunner_origin_domain');
     expect(infra).toContain('origin_protocol_policy = "https-only"');
     expect(infra).toContain('"Managed-AllViewer"');
+    expect(infra).toContain(
+      'resource "aws_apprunner_custom_domain_association" "ua_partner"'
+    );
+    expect(infra).toContain(
+      'resource "aws_route53_record" "ua_apprunner_cert_validation"'
+    );
     expect(infra).not.toContain(
       'resource "aws_cloudfront_function" "forward_viewer_host"'
     );
