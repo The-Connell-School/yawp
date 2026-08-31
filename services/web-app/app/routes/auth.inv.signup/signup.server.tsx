@@ -107,10 +107,32 @@ export async function studentSignupAction(
   });
 
   if (existingInvitation) {
-    await prisma.invitation.delete({ where: { id: existingInvitation.id } });
+    let existingPartner: string | null = null;
+    try {
+      const metadata = JSON.parse(existingInvitation.metadata ?? '{}');
+      existingPartner = metadata?.partner === 'ua' ? 'ua' : null;
+    } catch {
+      existingPartner = null;
+    }
+    if ((existingPartner === 'ua') !== isUa) {
+      return validationError(
+        {
+          fieldErrors: {
+            email:
+              'A different pending invitation already exists for this email. Use that invitation before starting another signup.',
+          },
+        },
+        data
+      );
+    }
   }
 
-  await prisma.invitation.create({ data: verificationData });
+  await prisma.$transaction([
+    ...(existingInvitation
+      ? [prisma.invitation.delete({ where: { id: existingInvitation.id } })]
+      : []),
+    prisma.invitation.create({ data: verificationData }),
+  ]);
 
   const response = await sendEmail({
     to: normalizedEmail,

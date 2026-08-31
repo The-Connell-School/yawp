@@ -277,6 +277,17 @@ test.describe.serial('University of Alabama student onboarding', () => {
     await expect(page.getByAltText('The University of Alabama')).toHaveCount(0);
   });
 
+  test('redirects the legacy yawp.school UA entry to the canonical UA host before authentication', async ({
+    page,
+  }) => {
+    await page.goto(
+      `${APP_ORIGIN}/ua?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
+    );
+    await expect(page).toHaveURL(`${UA_APP_ORIGIN}/`);
+    await expect(page.getByAltText('The University of Alabama')).toBeVisible();
+    await expect(page.getByLabel('Code')).toHaveCount(0);
+  });
+
   test('keeps UA and regular Yawp login sessions separate by hostname', async ({
     page,
     e2eContext,
@@ -309,6 +320,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
     page,
     e2eContext,
   }) => {
+    test.setTimeout(45_000);
     const prisma = createE2EPrismaClient();
     try {
       await prisma.orgMembership.deleteMany({
@@ -319,10 +331,21 @@ test.describe.serial('University of Alabama student onboarding', () => {
       });
 
       await page.goto(
-        `/?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
+        `/auth/inv/signup?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
       );
-      await expect(page).toHaveURL(`${UA_APP_ORIGIN}/`);
-      await page.getByRole('link', { name: 'Log in' }).click();
+      await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/inv/signup`);
+      const existingAccountLink = page.getByRole('link', {
+        name: 'Already have an account?',
+      });
+      await expect(existingAccountLink).toHaveAttribute(
+        'href',
+        '/auth/login?redirectTo=%2F'
+      );
+      await existingAccountLink.click();
+      await expect(page).toHaveURL(
+        `${UA_APP_ORIGIN}/auth/login?redirectTo=%2F`
+      );
+      await page.waitForLoadState('networkidle');
       await expect(
         page.getByAltText('The University of Alabama')
       ).toBeVisible();
@@ -524,8 +547,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
         'payment_intent_data[metadata][organizationId]':
           e2eContext.ua.organizationId,
         'payment_intent_data[metadata][cohort]': LICENSE_COHORT,
-        success_url:
-          `${UA_APP_ORIGIN}/billing/ua/success?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${UA_APP_ORIGIN}/billing/ua/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${UA_APP_ORIGIN}/billing/ua?canceled=1`,
       };
       const extraLineItem = await page.request.post(
@@ -619,8 +641,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
           organizationId: e2eContext.ua.organizationId,
           cohort: LICENSE_COHORT,
         },
-        success_url:
-          `${UA_APP_ORIGIN}/billing/ua/success?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${UA_APP_ORIGIN}/billing/ua/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${UA_APP_ORIGIN}/billing/ua?canceled=1`,
       });
       expect(created.data[0]!.line_items.data).toEqual([

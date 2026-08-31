@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { Link, useNavigation } from 'react-router';
+import { useNavigation } from 'react-router';
 import { ValidatedForm } from '@rvf/react-router';
 import { FormInput } from '~/components/forms/form-input-2';
-import { Button } from '~/components/ui/button';
+import { Button, button } from '~/components/ui/button';
 import { EmailSchema } from '~/utils/schemas/user';
 import { UaPartnerCodeStatus } from '~/components/ua-partner-code-status';
 
@@ -69,6 +69,15 @@ export function StudentSignupForm({
           className="flex flex-col gap-4"
           schema={schema}
           defaultValues={{ email: '', code: '' }}
+          validationBehaviorConfig={
+            isUa
+              ? {
+                  initial: 'onSubmit',
+                  whenTouched: 'onSubmit',
+                  whenSubmitted: 'onSubmit',
+                }
+              : undefined
+          }
         >
           <FormInput
             scope="email"
@@ -91,12 +100,16 @@ export function StudentSignupForm({
           <Button className="w-full" type="submit" disabled={isLoading}>
             Submit
           </Button>
-          <Button variant="link" asChild className="mx-auto mt-2 w-full">
-            <Link to={loginHref ?? (isUa ? '/ua/sign-in' : '/auth/login')}>
-              Already have an account?
-            </Link>
-          </Button>
         </ValidatedForm>
+        <a
+          className={button({
+            variant: 'link',
+            className: 'mx-auto mt-2 w-full',
+          })}
+          href={loginHref ?? (isUa ? '/ua/sign-in' : '/auth/login')}
+        >
+          Already have an account?
+        </a>
       </div>
     </div>
   );

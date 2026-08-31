@@ -357,6 +357,43 @@ describe('Checkout return verification', () => {
 });
 
 describe('Checkout creation', () => {
+  test('rejects a misconfigured Stripe price before opening Checkout', async () => {
+    const createCheckoutSession = mock();
+    await expect(
+      createOrReuseCheckoutSession({
+        membershipId: 'membership-1',
+        successUrl: 'https://ua.yawp.school/billing/ua/success',
+        cancelUrl: 'https://ua.yawp.school/billing/ua?canceled=1',
+        config: getUaStudentLicenseConfig(enabledEnv),
+        dependencies: {
+          findMembership: mock().mockResolvedValue({
+            id: 'membership-1',
+            role: 'STUDENT',
+            organizationId: 'org-ua',
+            user: { email: 'student@example.com' },
+          }),
+          findOrCreateLicense: mock().mockResolvedValue({
+            id: 'license-1',
+            status: 'PENDING',
+            validUntil: UA_STUDENT_LICENSE_VALID_UNTIL,
+            checkoutAttempt: 0,
+            stripeCheckoutSessionId: null,
+          }),
+          validateConfiguredPrice: mock().mockRejectedValue(
+            new Error(
+              'Configured Stripe price must be active, one-time, USD 50'
+            )
+          ),
+          retrieveCheckoutSession: mock(),
+          prepareAttempt: mock(),
+          createCheckoutSession,
+          attachCheckoutSession: mock(),
+        },
+      })
+    ).rejects.toThrow('Configured Stripe price');
+    expect(createCheckoutSession).not.toHaveBeenCalled();
+  });
+
   test('reuses the existing open Checkout Session without creating a second payable Session', async () => {
     const createCheckoutSession = mock();
     const prepareAttempt = mock();

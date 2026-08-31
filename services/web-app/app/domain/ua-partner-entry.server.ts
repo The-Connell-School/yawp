@@ -4,6 +4,7 @@ import { getUserId, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
   commitUaPartnerContext,
+  getCanonicalUaUrl,
   getUaPartnerCodeCapture,
   getUaPartnerContext,
   isUaStudentBillingEnabled,
@@ -20,6 +21,9 @@ async function findUaMembership(userId: string, organizationId: string) {
 }
 
 export async function loadUaPartnerEntry(request: Request) {
+  const canonicalUrl = getCanonicalUaUrl(request, '/');
+  if (canonicalUrl) return redirect(canonicalUrl);
+
   if (!isUaStudentBillingEnabled()) {
     throw new Response('Not found', { status: 404 });
   }

@@ -19,7 +19,8 @@ export type UaPartnerContext = { partner: 'ua' };
 
 function configuredUaPartnerHostname() {
   const hostname = process.env.UA_PARTNER_HOSTNAME?.trim().toLowerCase();
-  if (!hostname || hostname.includes('/') || hostname.includes(':')) return null;
+  if (!hostname || hostname.includes('/') || hostname.includes(':'))
+    return null;
   return hostname;
 }
 
@@ -27,6 +28,18 @@ export function isUaPartnerHost(request: Request) {
   const configured = configuredUaPartnerHostname();
   if (!configured) return false;
   return new URL(request.url).hostname.toLowerCase() === configured;
+}
+
+export function getCanonicalUaUrl(request: Request, pathname: string) {
+  if (isUaPartnerHost(request)) return null;
+  const hostname = configuredUaPartnerHostname();
+  if (!hostname || !pathname.startsWith('/')) return null;
+
+  const target = new URL(request.url);
+  target.hostname = hostname;
+  if (target.protocol === 'https:') target.port = '';
+  target.pathname = pathname;
+  return target.toString();
 }
 
 export function createUaPartnerMiddleware(): MiddlewareFunction<Response> {

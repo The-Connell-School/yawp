@@ -2,6 +2,7 @@ data "aws_availability_zones" "available" {}
 
 locals {
   production_edge_enabled = var.env == "production" && var.production_domain_name != ""
+  ua_billing_runtime_enabled = var.ua_student_billing_enabled && var.ua_stripe_credentials_configured
   production_domain_zone  = "${trim(var.production_domain_name, ".")}."
   production_edge_aliases = distinct([var.production_domain_name, var.ua_partner_hostname])
   apprunner_origin_domain = trimsuffix(replace(replace(aws_apprunner_service.web.service_url, "https://", ""), "http://", ""), "/")
@@ -313,7 +314,7 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
             aws_secretsmanager_secret.sentry_dsn.arn,
             aws_secretsmanager_secret.resend_api_key.arn
           ],
-          var.ua_student_billing_enabled ? [
+          local.ua_billing_runtime_enabled ? [
             aws_secretsmanager_secret.stripe_secret_key[0].arn,
             aws_secretsmanager_secret.stripe_webhook_secret[0].arn
           ] : []
@@ -432,23 +433,23 @@ resource "aws_secretsmanager_secret_version" "sentry_dsn" {
 }
 
 resource "aws_secretsmanager_secret" "stripe_secret_key" {
-  count = var.ua_student_billing_enabled ? 1 : 0
+  count = var.ua_stripe_credentials_configured ? 1 : 0
   name  = "${var.app_name}-${var.env}-stripe-secret-key"
 }
 
 resource "aws_secretsmanager_secret_version" "stripe_secret_key" {
-  count         = var.ua_student_billing_enabled ? 1 : 0
+  count         = var.ua_stripe_credentials_configured ? 1 : 0
   secret_id     = aws_secretsmanager_secret.stripe_secret_key[0].id
   secret_string = var.stripe_secret_key
 }
 
 resource "aws_secretsmanager_secret" "stripe_webhook_secret" {
-  count = var.ua_student_billing_enabled ? 1 : 0
+  count = var.ua_stripe_credentials_configured ? 1 : 0
   name  = "${var.app_name}-${var.env}-stripe-webhook-secret"
 }
 
 resource "aws_secretsmanager_secret_version" "stripe_webhook_secret" {
-  count         = var.ua_student_billing_enabled ? 1 : 0
+  count         = var.ua_stripe_credentials_configured ? 1 : 0
   secret_id     = aws_secretsmanager_secret.stripe_webhook_secret[0].id
   secret_string = var.stripe_webhook_secret
 }
@@ -480,7 +481,7 @@ resource "aws_apprunner_service" "web" {
           POSTHOG_HOST = var.posthog_host
           AWS_S3_BUCKET_FOR_VIDEOS = aws_s3_bucket.videos.bucket
           AWS_S3_REGION_FOR_VIDEOS = "us-east-1"
-          UA_STUDENT_BILLING_ENABLED                = tostring(var.ua_student_billing_enabled)
+          UA_STUDENT_BILLING_ENABLED                = tostring(local.ua_billing_runtime_enabled)
           UA_ORGANIZATION_ID                        = var.ua_organization_id
           UA_PARTNER_CODE                           = var.ua_partner_code
           UA_PARTNER_HOSTNAME                       = var.ua_partner_hostname
@@ -499,7 +500,7 @@ resource "aws_apprunner_service" "web" {
           DATABASE_URL = aws_secretsmanager_secret.db_url.arn
           RESEND_API_KEY = aws_secretsmanager_secret.resend_api_key.arn
           SENTRY_DSN = aws_secretsmanager_secret.sentry_dsn.arn
-        }, var.ua_student_billing_enabled ? {
+        }, local.ua_billing_runtime_enabled ? {
           STRIPE_SECRET_KEY     = aws_secretsmanager_secret.stripe_secret_key[0].arn
           STRIPE_WEBHOOK_SECRET = aws_secretsmanager_secret.stripe_webhook_secret[0].arn
         } : {})
@@ -538,16 +539,21 @@ resource "aws_apprunner_service" "web" {
 
   lifecycle {
     precondition {
-      condition = !var.ua_student_billing_enabled || (
-        trimspace(var.ua_organization_id) != "" &&
-        trimspace(var.ua_partner_code) != "" &&
-        trimspace(var.ua_partner_hostname) != "" &&
-        trimspace(var.stripe_secret_key) != "" &&
-        trimspace(var.stripe_webhook_secret) != "" &&
-        trimspace(var.stripe_ua_2026_price_id) != "" &&
-        var.yawp_app_origin == "https://${var.ua_partner_hostname}"
+      condition = (
+        (!var.ua_stripe_credentials_configured || (
+          trimspace(var.stripe_secret_key) != "" &&
+          trimspace(var.stripe_webhook_secret) != "" &&
+          trimspace(var.stripe_ua_2026_price_id) != ""
+        )) &&
+        (var.ua_student_billing_enabled ? var.ua_stripe_credentials_configured : true) &&
+        (!var.ua_student_billing_enabled || (
+          trimspace(var.ua_organization_id) != "" &&
+          trimspace(var.ua_partner_code) != "" &&
+          trimspace(var.ua_partner_hostname) != "" &&
+          var.yawp_app_origin == "https://${var.ua_partner_hostname}"
+        ))
       )
-      error_message = "UA billing requires the organization ID, partner code, partner hostname, Stripe key, webhook secret, price ID, and a matching HTTPS UA app origin."
+      error_message = "UA Stripe credential staging requires the Stripe key, webhook secret, and price ID; enabling billing also requires the organization ID, partner code, partner hostname, and a matching HTTPS UA app origin."
     }
   }
 }
@@ -607,6 +613,7 @@ resource "aws_cloudfront_distribution" "web_edge" {
       https_port             = 443
       origin_protocol_policy = "https-only"
       origin_ssl_protocols   = ["TLSv1.2"]
+      origin_read_timeout    = 120
     }
   }
 

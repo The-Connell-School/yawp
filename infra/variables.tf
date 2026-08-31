@@ -115,6 +115,12 @@ variable "ua_student_billing_enabled" {
   default     = false
 }
 
+variable "ua_stripe_credentials_configured" {
+  type        = bool
+  description = "Provision the production Stripe secrets before enabling the UA student billing gate."
+  default     = false
+}
+
 variable "ua_organization_id" {
   type        = string
   description = "Production Organization.id for the University of Alabama."

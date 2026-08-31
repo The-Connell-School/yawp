@@ -51,7 +51,9 @@ export default function SignupRoute() {
       partner={data.partner}
       codeAccepted={'codeAccepted' in data ? data.codeAccepted : false}
       codeError={'codeError' in data ? data.codeError : null}
-      loginHref="/auth/login"
+      loginHref={
+        data.partner === 'ua' ? '/auth/login?redirectTo=%2F' : '/auth/login'
+      }
       clearCodeAction="/auth/inv/signup"
     />
   );

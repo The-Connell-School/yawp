@@ -13,11 +13,14 @@ import { requireAnonymous } from '~/utils/auth.server';
 import {
   commitUaPartnerContext,
   destroyUaPartnerContext,
+  getCanonicalUaUrl,
   getUaPartnerCodeCapture,
   getUaPartnerContext,
 } from '~/utils/ua-partner.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  const canonicalUrl = getCanonicalUaUrl(request, '/auth/inv/signup');
+  if (canonicalUrl) return redirect(canonicalUrl);
   await requireAnonymous(request);
   const capture = getUaPartnerCodeCapture(request);
   if (capture?.accepted) {

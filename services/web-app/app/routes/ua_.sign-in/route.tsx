@@ -10,10 +10,17 @@ import { loginAction } from '~/routes/auth.login/login.server';
 import { requireAnonymous } from '~/utils/auth.server';
 import {
   commitUaPartnerContext,
+  getCanonicalUaUrl,
   getUaPartnerCodeCapture,
 } from '~/utils/ua-partner.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  const canonicalUrl = getCanonicalUaUrl(request, '/auth/login');
+  if (canonicalUrl) {
+    const target = new URL(canonicalUrl);
+    target.searchParams.set('redirectTo', '/');
+    return redirect(target.toString());
+  }
   await requireAnonymous(request);
   const capture = getUaPartnerCodeCapture(request);
   if (!capture) return null;

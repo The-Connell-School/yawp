@@ -379,65 +379,95 @@ export function createPrismaReconciliationDependencies(
       });
     },
     async applyExistingSubscriptionLicenses(plans) {
-      await prisma.$transaction(async (tx) => {
-        for (const plan of plans) {
-          const membership = await tx.orgMembership.findFirst({
-            where: {
-              id: plan.membershipId,
+      await prisma.$transaction(
+        async (tx) => {
+          for (const plan of plans) {
+            const membership = await tx.orgMembership.findFirst({
+              where: {
+                id: plan.membershipId,
+                organizationId: plan.organizationId,
+                role: 'STUDENT',
+                isActive: true,
+                user: { email: { equals: plan.email, mode: 'insensitive' } },
+              },
+              select: { id: true },
+            });
+            if (!membership) {
+              throw new Error(
+                `Membership changed during apply for ${plan.email}`
+              );
+            }
+
+            const currentLicense = await tx.studentLicense.findUnique({
+              where: {
+                membershipId_cohort: {
+                  membershipId: plan.membershipId,
+                  cohort: plan.cohort,
+                },
+              },
+              select: {
+                source: true,
+                status: true,
+                stripeSubscriptionId: true,
+              },
+            });
+            if (
+              currentLicense &&
+              (currentLicense.source !== EXISTING_SUBSCRIPTION_SOURCE ||
+                currentLicense.status !== ACTIVE_LICENSE_STATUS ||
+                (currentLicense.stripeSubscriptionId !== null &&
+                  currentLicense.stripeSubscriptionId !== plan.subscriptionId))
+            ) {
+              throw new Error(
+                `Existing ${plan.cohort} license changed during apply for ${plan.email}`
+              );
+            }
+
+            const subscriptionOwner = await tx.studentLicense.findUnique({
+              where: { stripeSubscriptionId: plan.subscriptionId },
+              select: { membershipId: true, cohort: true },
+            });
+            if (
+              subscriptionOwner &&
+              (subscriptionOwner.membershipId !== plan.membershipId ||
+                subscriptionOwner.cohort !== plan.cohort)
+            ) {
+              throw new Error(
+                `Subscription ${plan.subscriptionId} changed ownership during apply`
+              );
+            }
+
+            const data = {
               organizationId: plan.organizationId,
-              role: 'STUDENT',
-              isActive: true,
-              user: { email: { equals: plan.email, mode: 'insensitive' } },
-            },
-            select: { id: true },
-          });
-          if (!membership) {
-            throw new Error(
-              `Membership changed during apply for ${plan.email}`
-            );
-          }
-
-          const subscriptionOwner = await tx.studentLicense.findUnique({
-            where: { stripeSubscriptionId: plan.subscriptionId },
-            select: { membershipId: true, cohort: true },
-          });
-          if (
-            subscriptionOwner &&
-            (subscriptionOwner.membershipId !== plan.membershipId ||
-              subscriptionOwner.cohort !== plan.cohort)
-          ) {
-            throw new Error(
-              `Subscription ${plan.subscriptionId} changed ownership during apply`
-            );
-          }
-
-          const data = {
-            organizationId: plan.organizationId,
-            status: ACTIVE_LICENSE_STATUS,
-            source: EXISTING_SUBSCRIPTION_SOURCE,
-            validUntil: plan.validUntil,
-            stripePriceId: plan.stripePriceId,
-            stripeCustomerId: plan.stripeCustomerId,
-            stripeSubscriptionId: plan.subscriptionId,
-            currency: plan.currency,
-            revokedAt: null,
-          } as const;
-          await tx.studentLicense.upsert({
-            where: {
-              membershipId_cohort: {
+              status: ACTIVE_LICENSE_STATUS,
+              source: EXISTING_SUBSCRIPTION_SOURCE,
+              validUntil: plan.validUntil,
+              stripePriceId: plan.stripePriceId,
+              stripeCustomerId: plan.stripeCustomerId,
+              stripeSubscriptionId: plan.subscriptionId,
+              currency: plan.currency,
+              revokedAt: null,
+            } as const;
+            await tx.studentLicense.upsert({
+              where: {
+                membershipId_cohort: {
+                  membershipId: plan.membershipId,
+                  cohort: plan.cohort,
+                },
+              },
+              create: {
                 membershipId: plan.membershipId,
                 cohort: plan.cohort,
+                ...data,
               },
-            },
-            create: {
-              membershipId: plan.membershipId,
-              cohort: plan.cohort,
-              ...data,
-            },
-            update: data,
-          });
+              update: data,
+            });
+          }
+        },
+        {
+          isolationLevel: 'Serializable',
         }
-      });
+      );
     },
   };
 }

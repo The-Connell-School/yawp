@@ -5,6 +5,7 @@ const prisma = {
   orgMembership: { update: mock(), create: mock() },
   invitation: { findFirst: mock(), delete: mock(), create: mock() },
   organization: { findUnique: mock() },
+  $transaction: mock(),
 };
 
 const generateTOTP = mock();
@@ -396,6 +397,7 @@ describe('sendStudentClassInvite', () => {
     prisma.invitation.delete.mockReset();
     prisma.invitation.create.mockReset();
     prisma.organization.findUnique.mockReset();
+    prisma.$transaction.mockReset();
     generateTOTP.mockReset();
     sendEmail.mockReset();
 
@@ -410,6 +412,9 @@ describe('sendStudentClassInvite', () => {
     prisma.user.findFirst.mockResolvedValue(null);
     prisma.invitation.findFirst.mockResolvedValue(null);
     prisma.invitation.create.mockResolvedValue({ id: 'inv-1' });
+    prisma.$transaction.mockImplementation(async (operations: unknown[]) =>
+      Promise.all(operations)
+    );
     prisma.organization.findUnique.mockResolvedValue({ name: 'E2E High' });
     sendEmail.mockResolvedValue({ status: 'success' });
   });
@@ -478,6 +483,24 @@ describe('sendStudentClassInvite', () => {
         },
       })
     );
+    expect(prisma.invitation.create).not.toHaveBeenCalled();
+  });
+
+  test('refuses to overwrite a pending UA onboarding invitation', async () => {
+    prisma.invitation.findFirst.mockResolvedValue({
+      id: 'ua-invite',
+      metadata: JSON.stringify({ partner: 'ua', organizationId: 'org-ua' }),
+    });
+
+    const result = await sendStudentClassInvite({
+      email: 'new@example.com',
+      classId: 'class-1',
+      organizationId: 'org-1',
+      request: new Request('https://example.test/app/my-classes/class-1'),
+    });
+
+    expect(result.status).toBe('error');
+    expect(prisma.invitation.delete).not.toHaveBeenCalled();
     expect(prisma.invitation.create).not.toHaveBeenCalled();
   });
 });

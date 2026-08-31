@@ -5,6 +5,7 @@ import {
   destroyUaPartnerContext,
   getUaPartnerContext,
   getUaPartnerCodeCapture,
+  getCanonicalUaUrl,
   isUaStudentBillingEnabled,
   isUaPartnerHost,
   isValidUaPartnerCode,
@@ -84,15 +85,38 @@ describe('UA partner context', () => {
   test('recognizes only the configured UA hostname', () => {
     process.env.UA_PARTNER_HOSTNAME = 'ua.yawp.school';
 
-    expect(isUaPartnerHost(new Request('https://ua.yawp.school/auth/login'))).toBe(
-      true
-    );
+    expect(
+      isUaPartnerHost(new Request('https://ua.yawp.school/auth/login'))
+    ).toBe(true);
     expect(isUaPartnerHost(new Request('https://yawp.school/auth/login'))).toBe(
       false
     );
     expect(
-      isUaPartnerHost(new Request('https://ua.yawp.school.attacker.test/auth/login'))
+      isUaPartnerHost(
+        new Request('https://ua.yawp.school.attacker.test/auth/login')
+      )
     ).toBe(false);
+  });
+
+  test('builds an allowlisted canonical UA URL for legacy routes', () => {
+    process.env.UA_PARTNER_HOSTNAME = 'ua.yawp.school';
+
+    expect(
+      getCanonicalUaUrl(
+        new Request(
+          'https://yawp.school/ua/sign-up?organizationCode=Roll-Tide-2026'
+        ),
+        '/auth/inv/signup'
+      )
+    ).toBe(
+      'https://ua.yawp.school/auth/inv/signup?organizationCode=Roll-Tide-2026'
+    );
+    expect(
+      getCanonicalUaUrl(
+        new Request('https://ua.yawp.school/auth/login'),
+        '/auth/login'
+      )
+    ).toBeNull();
   });
 
   test('captures a valid organizationCode on any UA-host route and leaves the regular host untouched', async () => {

@@ -4,6 +4,7 @@ const prisma = {
   class: { findMany: mock() },
   user: { findFirst: mock() },
   invitation: { findFirst: mock(), delete: mock(), create: mock() },
+  $transaction: mock(),
 };
 const getUaPartnerContext = mock();
 const commitUaPartnerContext = mock();
@@ -48,6 +49,9 @@ describe('UA student signup', () => {
     prisma.user.findFirst.mockResolvedValue(null);
     prisma.invitation.findFirst.mockResolvedValue(null);
     prisma.invitation.create.mockResolvedValue({ id: 'invite-1' });
+    prisma.$transaction.mockImplementation(async (operations: unknown[]) =>
+      Promise.all(operations)
+    );
     requireUaOrganizationId.mockReturnValue('org-ua');
     commitUaPartnerContext.mockResolvedValue('yawp_partner=ua');
     isValidUaPartnerCode.mockReturnValue(false);
@@ -114,6 +118,23 @@ describe('UA student signup', () => {
     } as any);
 
     expect(response).not.toBeInstanceOf(Response);
+    expect(prisma.invitation.create).not.toHaveBeenCalled();
+  });
+
+  test('UA signup refuses to overwrite a pending ordinary class invitation', async () => {
+    getUaPartnerContext.mockResolvedValue({ partner: 'ua' });
+    prisma.invitation.findFirst.mockResolvedValue({
+      id: 'ordinary-invite',
+      metadata: JSON.stringify({ klassId: 'class-1' }),
+    });
+
+    const response = await studentSignupAction(
+      { request: signup({ email: 'student@ua.edu' }) } as any,
+      { partner: 'ua' }
+    );
+
+    expect(response).not.toBeInstanceOf(Response);
+    expect(prisma.invitation.delete).not.toHaveBeenCalled();
     expect(prisma.invitation.create).not.toHaveBeenCalled();
   });
 });

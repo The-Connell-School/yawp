@@ -438,6 +438,20 @@ async function handler(request: Request) {
     return json(sessionResponse(session));
   }
 
+  if (
+    request.method === 'GET' &&
+    url.pathname === '/v1/prices/price_ua_e2e_2026'
+  ) {
+    return json({
+      id: 'price_ua_e2e_2026',
+      object: 'price',
+      active: true,
+      currency: 'usd',
+      type: 'one_time',
+      unit_amount: 5000,
+    });
+  }
+
   const retrieveSession = url.pathname.match(
     /^\/v1\/checkout\/sessions\/(cs_e2e_\d+)$/
   );

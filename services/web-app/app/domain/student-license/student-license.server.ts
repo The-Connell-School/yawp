@@ -368,6 +368,7 @@ export async function verifyCheckoutSessionForReturn(
 }
 
 type CheckoutCreationDependencies = {
+  validateConfiguredPrice?: () => Promise<void>;
   findMembership: (membershipId: string) => Promise<
     | (MembershipForLicense & {
         user: { email: string };
@@ -410,6 +411,19 @@ function defaultCheckoutCreationDependencies(
 ): CheckoutCreationDependencies {
   const stripe = getStripe(config);
   return {
+    async validateConfiguredPrice() {
+      const price = await stripe.prices.retrieve(config.priceId);
+      if (
+        !price.active ||
+        price.type !== 'one_time' ||
+        price.currency.toLowerCase() !== 'usd' ||
+        price.unit_amount !== 5000
+      ) {
+        throw new Error(
+          'Configured Stripe price must be active, one-time, USD 50'
+        );
+      }
+    },
     findMembership(membershipId) {
       return prisma.orgMembership.findFirst({
         where: {
@@ -582,6 +596,7 @@ export async function createOrReuseCheckoutSession({
       license.stripeCheckoutSessionId
     );
     if (existing.status === 'open' && existing.url) {
+      await deps.validateConfiguredPrice?.();
       return { kind: 'CHECKOUT', url: existing.url };
     }
     if (existing.status === 'complete' && existing.payment_status === 'paid') {
@@ -592,6 +607,7 @@ export async function createOrReuseCheckoutSession({
     }
   }
 
+  await deps.validateConfiguredPrice?.();
   const attempt = await deps.prepareAttempt(license);
   const session = await deps.createCheckoutSession({
     membership,
