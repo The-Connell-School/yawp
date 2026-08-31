@@ -9,7 +9,7 @@ import {
 import { AuthBrandLockup } from '~/components/auth-brand-lockup';
 import { Button, button } from '~/components/ui/button';
 import { setMembershipId } from '~/cookies/membership-id.server';
-import { getUserId } from '~/utils/auth.server';
+import { getUserId, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
   commitUaPartnerContext,
@@ -59,8 +59,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const organizationId = requireUaOrganizationId();
-  const userId = await getUserId(request);
-  if (!userId) throw redirect('/auth/login?redirectTo=%2Fua');
+  const userId = await requireUserId(request);
 
   const existing = await findUaMembership(userId, organizationId);
   if (existing) {
