@@ -39,7 +39,11 @@ function membership(
   organizationId = 'org-1',
   { revisionFlowEnabled = false } = {}
 ) {
-  return { id, role, organization: { id: organizationId, revisionFlowEnabled } };
+  return {
+    id,
+    role,
+    organization: { id: organizationId, revisionFlowEnabled },
+  };
 }
 
 function buildSubmission(
@@ -168,6 +172,33 @@ describe('submission loader — unsubmitted redirect', () => {
     expect((result as { isOwner: boolean }).isOwner).toBe(true);
   });
 
+  test('loads active submission versions newest-first for student navigation', async () => {
+    requireMembership.mockResolvedValue(
+      membership(STUDENT_MEMBERSHIP_ID, 'STUDENT')
+    );
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission());
+
+    await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    });
+
+    const documentSelect =
+      prisma.submission.findFirst.mock.calls[0][0].select.document.select;
+    expect(documentSelect.submissions).toMatchObject({
+      where: { archivedAt: null, unsubmittedAt: null },
+      orderBy: { submittedAt: 'desc' },
+      select: {
+        id: true,
+        submittedAt: true,
+        releasedAt: true,
+        numericPercentage: true,
+        letterGrade: true,
+        score: true,
+      },
+    });
+  });
+
   test('reports the revision flow gate so the Revise button can route on it', async () => {
     requireMembership.mockResolvedValue(
       membership(STUDENT_MEMBERSHIP_ID, 'STUDENT', 'org-1', {
@@ -181,9 +212,9 @@ describe('submission loader — unsubmitted redirect', () => {
       params: { submissionId: 'sub-1' },
     });
 
-    expect((result as { revisionFlowEnabled: boolean }).revisionFlowEnabled).toBe(
-      true
-    );
+    expect(
+      (result as { revisionFlowEnabled: boolean }).revisionFlowEnabled
+    ).toBe(true);
   });
 
   test('reports the revision flow gate as off for an organization without it', async () => {
@@ -197,9 +228,9 @@ describe('submission loader — unsubmitted redirect', () => {
       params: { submissionId: 'sub-1' },
     });
 
-    expect((result as { revisionFlowEnabled: boolean }).revisionFlowEnabled).toBe(
-      false
-    );
+    expect(
+      (result as { revisionFlowEnabled: boolean }).revisionFlowEnabled
+    ).toBe(false);
   });
 
   test('does not redirect a teacher viewing an unsubmitted submission', async () => {

@@ -63,7 +63,7 @@ describe('resolveDocumentLinkTarget', () => {
     ).toBe('/app/submissions/sub-new?exitTo=%2Fapp');
   });
 
-  test('student links to released submission even when a newer submission is pending', () => {
+  test('student links to the newest pending revision instead of an older released grade', () => {
     expect(
       resolveDocumentLinkTarget({
         documentId: 'doc-1',
@@ -82,10 +82,10 @@ describe('resolveDocumentLinkTarget', () => {
           },
         ],
       })
-    ).toBe('/app/submissions/sub-released?exitTo=%2Fapp');
+    ).toBe('/app/submissions/sub-pending?exitTo=%2Fapp');
   });
 
-  test('student with only unreleased submission links to document editor', () => {
+  test('student with only an unreleased submission links to that submission', () => {
     expect(
       resolveDocumentLinkTarget({
         documentId: 'doc-1',
@@ -99,7 +99,7 @@ describe('resolveDocumentLinkTarget', () => {
           },
         ],
       })
-    ).toBe('/app/documents/doc-1?ssv=1&exitTo=%2Fapp');
+    ).toBe('/app/submissions/sub-1?exitTo=%2Fapp');
   });
 
   test('teacher view always links to document editor', () => {

@@ -22,6 +22,12 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
 import { Input } from '~/components/ui/input';
 import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -170,6 +176,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   teachers: { select: { id: true } },
                 },
               },
+            },
+          },
+          submissions: {
+            where: { archivedAt: null, unsubmittedAt: null },
+            orderBy: { submittedAt: 'desc' },
+            select: {
+              id: true,
+              title: true,
+              submittedAt: true,
+              releasedAt: true,
+              numericPercentage: true,
+              letterGrade: true,
+              score: true,
             },
           },
         },
@@ -437,12 +456,19 @@ export default function SubmissionRoute() {
   const canEditTitle = isOwner || isTeacher;
   const submissionTitleDisplay =
     submission.title.trim() || submission.document.title || '';
+  const submissionVersions = submission.document.submissions ?? [];
 
   // Exit target — same pattern as documents route
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const [exitTarget] = useState<string>(
     () => explicitExitTarget ?? readLastNonDocumentRoute() ?? '/app'
   );
+  const versionHref = (submissionId: string) => {
+    const params = new URLSearchParams();
+    if (explicitExitTarget) params.set('exitTo', explicitExitTarget);
+    const query = params.toString();
+    return `/app/submissions/${submissionId}${query ? `?${query}` : ''}`;
+  };
   const essayRef = useRef<HTMLDivElement>(null);
   const [essayElement, setEssayElement] = useState<HTMLDivElement | null>(null);
   const setEssayRef = useCallback((el: HTMLDivElement | null) => {
@@ -487,19 +513,19 @@ export default function SubmissionRoute() {
     ? isWithdrawn
       ? ('secondary' as const)
       : effectiveReleasedAt
-      ? ('success' as const)
-      : submission.submittedAt
-        ? ('info-outlined' as const)
-        : ('secondary' as const)
-    : isWithdrawn
-      ? ('secondary' as const)
-      : effectiveReleasedAt
-      ? ('success' as const)
-      : lifecycleState === 'graded'
         ? ('success' as const)
         : submission.submittedAt
           ? ('info-outlined' as const)
-          : ('secondary' as const);
+          : ('secondary' as const)
+    : isWithdrawn
+      ? ('secondary' as const)
+      : effectiveReleasedAt
+        ? ('success' as const)
+        : lifecycleState === 'graded'
+          ? ('success' as const)
+          : submission.submittedAt
+            ? ('info-outlined' as const)
+            : ('secondary' as const);
 
   // ── Local comments state (optimistic, no revalidation) ─────────────
   const [comments, setComments] = useState(submission.comments);
@@ -916,6 +942,7 @@ export default function SubmissionRoute() {
     isReleased: isReleased,
     isWithdrawn,
   });
+  const opensRevisionFlow = revisePath.startsWith('/app/revise/');
   const viewDocumentHref = useMemo(() => {
     const returnUrl = `${location.pathname}${location.search}${location.hash}`;
     return `/app/documents/${submission.documentId}?exitTo=${encodeURIComponent(returnUrl)}`;
@@ -987,6 +1014,61 @@ export default function SubmissionRoute() {
           </Badge>
         ) : null}
 
+        {isOwner && submissionVersions.length > 1 ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                data-testid="submission-version-menu"
+              >
+                Versions ({submissionVersions.length})
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-64">
+              {submissionVersions.map((version, index) => {
+                const versionNumber = submissionVersions.length - index;
+                const isCurrent = version.id === submission.id;
+                const gradeLabel =
+                  version.numericPercentage != null
+                    ? `${version.numericPercentage}%${
+                        version.letterGrade ? ` (${version.letterGrade})` : ''
+                      }`
+                    : version.score?.trim() || null;
+                const lifecycleLabel = version.releasedAt
+                  ? gradeLabel
+                    ? `Graded · ${gradeLabel}`
+                    : 'Graded'
+                  : 'Submitted';
+
+                return (
+                  <DropdownMenuItem
+                    key={version.id}
+                    asChild
+                    className={isCurrent ? 'bg-muted' : undefined}
+                  >
+                    <Link
+                      to={versionHref(version.id)}
+                      aria-current={isCurrent ? 'page' : undefined}
+                      data-testid={`submission-version-${version.id}`}
+                      className="flex w-full items-center justify-between gap-4"
+                    >
+                      <span className="font-medium">
+                        Version {versionNumber}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {lifecycleLabel}
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {isGradingOther ? (
             <SubmissionActivitySheet
@@ -1020,11 +1102,13 @@ export default function SubmissionRoute() {
                 : 'Show grammar highlights'}
             </Button>
           ) : null}
-          {/* Student: Revise Essay link */}
+          {/* Student revision entry point */}
           {isOwner ? (
             <Button size="sm" variant="outline" asChild>
               <Link to={revisePath} data-testid="submission-revise-essay">
-                Revise Essay
+                {opensRevisionFlow
+                  ? 'Revise with feedback'
+                  : 'Open document editor'}
               </Link>
             </Button>
           ) : null}

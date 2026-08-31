@@ -78,13 +78,21 @@ describe('getStudentDocumentStatus', () => {
     ).toBe('submitted');
   });
 
-  test('released wins over a newer unreleased submission', () => {
+  test('a newer revision awaiting grading takes priority over an older released grade', () => {
     expect(
       getStudentDocumentStatus([
-        { id: 's2', submittedAt: new Date(), releasedAt: null },
-        { id: 's1', submittedAt: new Date(), releasedAt: new Date() },
+        {
+          id: 's2',
+          submittedAt: '2024-03-01T00:00:00.000Z',
+          releasedAt: null,
+        },
+        {
+          id: 's1',
+          submittedAt: '2024-02-01T00:00:00.000Z',
+          releasedAt: '2024-02-02T00:00:00.000Z',
+        },
       ])
-    ).toBe('graded');
+    ).toBe('submitted');
   });
 });
 

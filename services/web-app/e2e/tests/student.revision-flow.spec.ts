@@ -18,7 +18,9 @@ test.describe.serial('Student revises a released essay', () => {
     await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto(`/app/submissions/${e2eContext.gradeId}`);
 
-    await page.getByTestId('submission-revise-essay').click();
+    const revisionEntry = page.getByTestId('submission-revise-essay');
+    await expect(revisionEntry).toHaveText('Revise with feedback');
+    await revisionEntry.click();
 
     await expect(page).toHaveURL(
       new RegExp(`/app/revise/${e2eContext.gradeId}`),
@@ -60,6 +62,12 @@ test.describe.serial('Student revises a released essay', () => {
     // because the pane header also carries the grade, so a student who has
     // collapsed the panel can still see what the essay scored.
     const feedbackPanel = page.getByTestId('revision-feedback-panel');
+    await expect(page.getByTestId('revision-feedback-tab-grade')).toHaveClass(
+      /shadow-sm/
+    );
+    await expect(page.getByTestId('revision-feedback-tab-grade')).toHaveClass(
+      /ring-black\/10/
+    );
     await expect(feedbackPanel.getByText('77% (C+)')).toBeVisible();
     await expect(
       feedbackPanel.getByText('Good effort with room for improvement.')
@@ -72,13 +80,17 @@ test.describe.serial('Student revises a released essay', () => {
     expect(commentCount).toBeGreaterThan(0);
     await expect(commentCountBadge).toHaveClass(/rounded-full/);
     await commentsTab.click();
+    await expect(commentsTab).toHaveClass(/shadow-sm/);
+    await expect(
+      page.getByTestId('revision-feedback-tab-grade')
+    ).not.toHaveClass(/shadow-sm/);
     await expect(
       gradedPane.getByText('Strong thesis statement in the opening sentence.')
     ).toBeVisible();
     await expect(gradedPane.getByText('Teacher comments')).toBeVisible();
-    expect(
-      await gradedPane.locator('[data-grade-comment-card]').count()
-    ).toBe(commentCount);
+    expect(await gradedPane.locator('[data-grade-comment-card]').count()).toBe(
+      commentCount
+    );
 
     await page.getByTestId('revision-feedback-tab-grammar').click();
     await expect(
@@ -99,7 +111,21 @@ test.describe.serial('Student revises a released essay', () => {
 
     await expect(page.getByTestId('revision-feedback-panel')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Hide feedback' }).click();
+    const hideFeedback = page.getByRole('button', { name: 'Hide feedback' });
+    await expect(hideFeedback.locator('svg')).toHaveAttribute(
+      'stroke-width',
+      '1.5'
+    );
+    const backgroundColor = () =>
+      hideFeedback.evaluate(
+        (button) => getComputedStyle(button).backgroundColor
+      );
+
+    await expect.poll(backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    await hideFeedback.hover();
+    await expect.poll(backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+
+    await hideFeedback.click();
     await expect(page.getByTestId('revision-feedback-panel')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Show feedback' }).click();
@@ -240,9 +266,9 @@ test.describe.serial('Student revises a released essay', () => {
     await helpers.waitForSaved();
 
     // The released snapshot is frozen: the revision never rewrites it.
-    await expect(
-      page.getByTestId('revision-graded-pane')
-    ).not.toContainText('Revised in the split screen.');
+    await expect(page.getByTestId('revision-graded-pane')).not.toContainText(
+      'Revised in the split screen.'
+    );
   });
 
   test('the revision title defaults to the current document title', async ({
@@ -336,6 +362,9 @@ test.describe.serial('Student revises a released essay', () => {
       await expect(page).toHaveURL(/\/app\/submissions\/[^/]+$/, {
         timeout: 15000,
       });
+      await expect(page.getByTestId('submission-revise-essay')).toHaveText(
+        'Open document editor'
+      );
 
       await expect
         .poll(
@@ -370,6 +399,36 @@ test.describe.serial('Student revises a released essay', () => {
         text: expect.stringContaining(marker),
         html: expect.stringContaining(marker),
       });
+
+      // The document's current status follows the newest submission, while
+      // the released original remains reachable through version history.
+      await page.goto('/app/my-documents');
+      const revisedDocumentCard = page.locator(
+        `a[href^="/app/submissions/${newSubmissions[0].id}?"]`
+      );
+      await expect(revisedDocumentCard).toBeVisible({ timeout: 15000 });
+      await expect(revisedDocumentCard).toContainText('Revision submitted');
+      await expect(revisedDocumentCard).toContainText('1 previous grade');
+      await expect(revisedDocumentCard).toHaveAttribute(
+        'href',
+        new RegExp(`/app/submissions/${newSubmissions[0].id}`)
+      );
+      await revisedDocumentCard.click();
+      await expect(page).toHaveURL(
+        new RegExp(`/app/submissions/${newSubmissions[0].id}`)
+      );
+
+      const versionMenu = page.getByTestId('submission-version-menu');
+      await expect(versionMenu).toContainText(
+        `Versions (${submissionsBefore.length + 1})`
+      );
+      await versionMenu.click();
+      await expect(
+        page.getByRole('menuitem', { name: /Version 2 Submitted/ })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('menuitem', { name: /Version 1 Graded/ })
+      ).toBeVisible();
     } finally {
       await prisma.$disconnect();
     }
@@ -401,6 +460,34 @@ test.describe.serial('Student revises a released essay', () => {
     expect(textTop - headerBottom).toBeLessThanOrEqual(32);
   });
 
+  test('feedback, graded version, and revision headers have exactly matching heights', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-feedback-panel')).toBeVisible({
+      timeout: 15000,
+    });
+
+    const heights = await Promise.all(
+      [
+        'revision-feedback-header',
+        'revision-graded-header',
+        'revision-draft-header',
+      ].map((testId) =>
+        page
+          .getByTestId(testId)
+          .evaluate((element) => element.getBoundingClientRect().height)
+      )
+    );
+
+    expect(new Set(heights).size, `header heights: ${heights.join(', ')}`).toBe(
+      1
+    );
+  });
+
   // The prompt describes the assignment both drafts answer, so it spans the
   // screen once rather than sitting inside the editor above one of them.
   test('the assignment prompt spans both panes', async ({
@@ -422,7 +509,9 @@ test.describe.serial('Student revises a released essay', () => {
 
     expect(promptWidth).toBeGreaterThan(draftWidth * 1.5);
     await expect(
-      page.getByTestId('revision-draft-pane').getByTestId('assignment-prompt-panel')
+      page
+        .getByTestId('revision-draft-pane')
+        .getByTestId('assignment-prompt-panel')
     ).toHaveCount(0);
   });
 
@@ -521,14 +610,10 @@ test.describe.serial('Student revises a released essay', () => {
     e2eContext,
   }) => {
     await signIn(e2eContext.userEmail, 'johndoe');
-    await page.goto(
-      `/app/revise/${e2eContext.unreleasedGradedSubmissionId}`
-    );
+    await page.goto(`/app/revise/${e2eContext.unreleasedGradedSubmissionId}`);
 
     await expect(page).toHaveURL(
-      new RegExp(
-        `/app/submissions/${e2eContext.unreleasedGradedSubmissionId}`
-      ),
+      new RegExp(`/app/submissions/${e2eContext.unreleasedGradedSubmissionId}`),
       { timeout: 15000 }
     );
     await expect(page.getByTestId('revision-draft-pane')).toHaveCount(0);

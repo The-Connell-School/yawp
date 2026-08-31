@@ -14,6 +14,7 @@ import {
   resolveDocumentLinkTarget,
   type DocumentLinkSubmission,
 } from '../utils/document-link-target';
+import { latestVisibleStudentSubmission } from '../utils/student-document-status';
 
 type Props = {
   exitTo: string;
@@ -36,11 +37,17 @@ export const DocumentLink = ({
   const visibleSubmissions = submissions.filter(
     (s) => !s.archivedAt && !s.unsubmittedAt
   );
+  const latestSubmission = latestVisibleStudentSubmission(visibleSubmissions);
   const isSubmitted = visibleSubmissions.length > 0;
   const gradedSubmissions = visibleSubmissions.filter(
     (s) => s.releasedAt !== null && s.releasedAt !== undefined
   );
-  const showGradedBadge = isStudentView && gradedSubmissions.length > 0;
+  const showGradedBadge = isStudentView && latestSubmission?.releasedAt != null;
+  const showRevisionSubmittedBadge =
+    isStudentView &&
+    latestSubmission != null &&
+    latestSubmission.releasedAt == null &&
+    gradedSubmissions.length > 0;
   const showSubmittedBadge = isStudentView && isSubmitted && !showGradedBadge;
   const targetPath = resolveDocumentLinkTarget({
     documentId: doc.id,
@@ -55,19 +62,31 @@ export const DocumentLink = ({
       to={targetPath}
       className="relative flex h-48 flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all hover:border-primary/50"
     >
-      {showGradedBadge ? (
-        <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-green-600 bg-green-50 px-2 py-0.5 text-xs text-green-900 dark:bg-green-950/80 dark:text-green-100">
-          {gradedSubmissions.length} graded
-        </span>
-      ) : showSubmittedBadge ? (
-        <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-muted-foreground/30 bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-          Submitted
-        </span>
-      ) : (
-        <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-primary px-2 py-0.5 text-xs text-primary">
-          {doc.assignmentModuleSessions[0]?.assignmentModule.title}
-        </span>
-      )}
+      <div className="absolute right-0 top-0 z-20 flex flex-col items-end gap-1">
+        {showGradedBadge ? (
+          <span className="rounded-bl-lg rounded-tr-lg border border-green-600 bg-green-50 px-2 py-0.5 text-xs text-green-900 dark:bg-green-950/80 dark:text-green-100">
+            {gradedSubmissions.length} graded
+          </span>
+        ) : showSubmittedBadge ? (
+          <>
+            <span className="rounded-bl-lg rounded-tr-lg border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-950">
+              {showRevisionSubmittedBadge ? 'Revision submitted' : 'Submitted'}
+            </span>
+            {showRevisionSubmittedBadge ? (
+              <span className="mr-1 rounded-full border border-green-600/40 bg-white/95 px-2 py-0.5 text-[10px] font-medium text-green-900 shadow-xs">
+                {gradedSubmissions.length}{' '}
+                {gradedSubmissions.length === 1
+                  ? 'previous grade'
+                  : 'previous grades'}
+              </span>
+            ) : null}
+          </>
+        ) : (
+          <span className="rounded-bl-lg rounded-tr-lg border border-primary px-2 py-0.5 text-xs text-primary">
+            {doc.assignmentModuleSessions[0]?.assignmentModule.title}
+          </span>
+        )}
+      </div>
       {doc.html ? (
         <div
           dangerouslySetInnerHTML={{ __html: doc.html }}
