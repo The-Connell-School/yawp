@@ -6,6 +6,7 @@ import { Client } from 'pg';
 import {
   E2E_STRIPE_BASE_URL,
   E2E_STRIPE_WEBHOOK_SECRET,
+  E2E_UA_APP_ORIGIN,
   E2E_UA_ORGANIZATION_ID,
   E2E_UA_PARTNER_CODE,
 } from './constants';
@@ -199,7 +200,8 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
     STRIPE_WEBHOOK_SECRET: E2E_STRIPE_WEBHOOK_SECRET,
     STRIPE_UA_2026_PRICE_ID: 'price_ua_e2e_2026',
     STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: 'price_ua_e2e_legacy',
-    YAWP_APP_ORIGIN: 'http://ua.localhost:5173',
+    YAWP_APP_ORIGIN: E2E_UA_APP_ORIGIN,
+    STRIPE_UA_PRODUCTION_TEST_PROMOTION_CODE_ID: 'promo_ua_e2e_production_test',
     E2E_STRIPE_API_BASE: E2E_STRIPE_BASE_URL,
     E2E_UA_NOW: '2026-08-30T12:00:00.000Z',
     ANTHROPIC_API_KEY: '',

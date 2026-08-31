@@ -18,6 +18,7 @@ export type UaStudentLicenseConfig =
       secretKey: string;
       webhookSecret: string;
       applicationOrigin: string;
+      productionTestPromotionCodeId?: string;
     };
 
 const EnabledConfigSchema = z.object({
@@ -26,6 +27,10 @@ const EnabledConfigSchema = z.object({
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
   STRIPE_UA_2026_PRICE_ID: z.string().min(1),
+  STRIPE_UA_PRODUCTION_TEST_PROMOTION_CODE_ID: z
+    .string()
+    .regex(/^promo_[A-Za-z0-9_]+$/)
+    .optional(),
   YAWP_APP_ORIGIN: z.string().url(),
 });
 
@@ -61,6 +66,12 @@ export function getUaStudentLicenseConfig(
     secretKey: parsed.data.STRIPE_SECRET_KEY,
     webhookSecret: parsed.data.STRIPE_WEBHOOK_SECRET,
     applicationOrigin: applicationUrl.origin,
+    ...(parsed.data.STRIPE_UA_PRODUCTION_TEST_PROMOTION_CODE_ID
+      ? {
+          productionTestPromotionCodeId:
+            parsed.data.STRIPE_UA_PRODUCTION_TEST_PROMOTION_CODE_ID,
+        }
+      : {}),
   };
 }
 
@@ -200,12 +211,16 @@ type StripeId = string | { id: string } | null;
 
 type CheckoutSessionLike = {
   id: string;
+  status?: string | null;
   mode: string | null;
   payment_status: string;
+  amount_subtotal?: number | null;
   amount_total: number | null;
   currency: string | null;
   customer: StripeId;
   payment_intent: StripeId;
+  discounts?: Array<{ promotion_code: StripeId }> | null;
+  total_details?: { amount_discount: number | null } | null;
   metadata: Record<string, string> | null;
   line_items?: {
     data: Array<{
@@ -224,11 +239,11 @@ type VerifiedCheckout = {
   membershipId: string;
   organizationId: string;
   stripeCheckoutSessionId: string;
-  stripePaymentIntentId: string;
+  stripePaymentIntentId: string | null;
   stripeCustomerId: string | null;
   stripePriceId: string;
   cohort: typeof UA_STUDENT_LICENSE_COHORT;
-  amountPaid: typeof UA_STUDENT_LICENSE_AMOUNT;
+  amountPaid: number;
   currency: typeof UA_STUDENT_LICENSE_CURRENCY;
   validUntil: Date;
 };
@@ -237,25 +252,44 @@ function verifyPaidCheckoutSession(
   session: CheckoutSessionLike,
   config: Extract<UaStudentLicenseConfig, { enabled: true }>
 ): VerifiedCheckout {
-  if (session.payment_status !== 'paid') {
+  const isPaymentBacked = session.payment_status === 'paid';
+  const isNoCost = session.payment_status === 'no_payment_required';
+  if (!isPaymentBacked && !isNoCost) {
     throw new Error('Checkout Session is not paid');
   }
 
   const metadata = session.metadata ?? {};
   const paymentIntentId = stripeId(session.payment_intent);
+  const promotionCodeIds = (session.discounts ?? [])
+    .map((discount) => stripeId(discount.promotion_code))
+    .filter((id): id is string => Boolean(id));
   const lineItems = session.line_items?.data ?? [];
   const expectedLineItems = lineItems.filter(
     (item) => item.price?.id === config.priceId && (item.quantity ?? 1) === 1
   );
+  const paidShape =
+    isPaymentBacked &&
+    session.amount_total === UA_STUDENT_LICENSE_AMOUNT &&
+    Boolean(paymentIntentId) &&
+    (session.total_details?.amount_discount ?? 0) === 0;
+  const noCostShape =
+    isNoCost &&
+    session.status === 'complete' &&
+    session.amount_subtotal === UA_STUDENT_LICENSE_AMOUNT &&
+    session.amount_total === 0 &&
+    session.total_details?.amount_discount === UA_STUDENT_LICENSE_AMOUNT &&
+    !paymentIntentId &&
+    Boolean(config.productionTestPromotionCodeId) &&
+    promotionCodeIds.length === 1 &&
+    promotionCodeIds[0] === config.productionTestPromotionCodeId;
 
   if (
     session.mode !== 'payment' ||
-    session.amount_total !== UA_STUDENT_LICENSE_AMOUNT ||
+    (!paidShape && !noCostShape) ||
     session.currency?.toLowerCase() !== UA_STUDENT_LICENSE_CURRENCY ||
     metadata.organizationId !== config.organizationId ||
     metadata.cohort !== UA_STUDENT_LICENSE_COHORT ||
     !metadata.membershipId ||
-    !paymentIntentId ||
     lineItems.length !== 1 ||
     expectedLineItems.length !== 1
   ) {
@@ -270,7 +304,7 @@ function verifyPaidCheckoutSession(
     stripeCustomerId: stripeId(session.customer),
     stripePriceId: config.priceId,
     cohort: UA_STUDENT_LICENSE_COHORT,
-    amountPaid: UA_STUDENT_LICENSE_AMOUNT,
+    amountPaid: session.amount_total!,
     currency: UA_STUDENT_LICENSE_CURRENCY,
     validUntil: UA_STUDENT_LICENSE_VALID_UNTIL,
   };
@@ -330,7 +364,7 @@ function defaultCheckoutVerificationDependencies(
   return {
     async retrieveCheckoutSession(id) {
       return (await stripe.checkout.sessions.retrieve(id, {
-        expand: ['line_items.data.price'],
+        expand: ['line_items.data.price', 'discounts.promotion_code'],
       })) as CheckoutSessionLike;
     },
     findMembership(membershipId, organizationId) {
@@ -543,6 +577,9 @@ function defaultCheckoutCreationDependencies(
       const session = await stripe.checkout.sessions.create(
         {
           mode: 'payment',
+          ...(config.productionTestPromotionCodeId
+            ? { allow_promotion_codes: true }
+            : {}),
           line_items: [{ price: config.priceId, quantity: 1 }],
           customer_email: membership.user.email,
           client_reference_id: membership.id,
@@ -613,7 +650,10 @@ export async function createOrReuseCheckoutSession({
       await deps.validateConfiguredPrice?.();
       return { kind: 'CHECKOUT', url: existing.url };
     }
-    if (existing.status === 'complete' && existing.payment_status === 'paid') {
+    if (
+      existing.status === 'complete' &&
+      ['paid', 'no_payment_required'].includes(existing.payment_status)
+    ) {
       // The signed webhook is the only activation authority. A completed
       // browser Session waits for that durable transition instead of granting
       // access or opening a second charge.
@@ -643,6 +683,10 @@ type StripeWebhookTransition =
       kind: 'RECONCILE';
       paymentIntentId: string;
       checkout: VerifiedCheckout | null;
+    }
+  | {
+      kind: 'ACTIVATE_FREE_CHECKOUT';
+      checkout: VerifiedCheckout;
     };
 
 type WebhookTransaction = {
@@ -650,7 +694,7 @@ type WebhookTransaction = {
   lockPaymentIntent: (paymentIntentId: string) => Promise<unknown>;
   reconcile: (
     checkout: VerifiedCheckout | null,
-    paymentIntentId: string,
+    paymentIntentId: string | null,
     status: StripeLicenseStatus
   ) => Promise<unknown>;
 };
@@ -721,6 +765,11 @@ function defaultWebhookTransitionDependencies(
                   data: reconciliationData(checkout, status),
                 });
               }
+              if (!paymentIntentId) {
+                throw new Error(
+                  'Payment reconciliation requires a PaymentIntent'
+                );
+              }
               return tx.studentLicense.updateMany({
                 where: { stripePaymentIntentId: paymentIntentId },
                 data: {
@@ -787,6 +836,12 @@ export async function applyStripeWebhookTransition(
           transition.paymentIntentId,
           status
         );
+      } else if (transition.kind === 'ACTIVATE_FREE_CHECKOUT') {
+        // A fully discounted Checkout has no PaymentIntent. The signed Session
+        // completion is the durable authority, and the Session id supplies the
+        // same transaction-scoped serialization guarantee for replayed events.
+        await tx.lockPaymentIntent(transition.checkout.stripeCheckoutSessionId);
+        await tx.reconcile(transition.checkout, null, 'ACTIVE');
       }
     });
   } catch (error) {
@@ -931,9 +986,12 @@ export async function processStripeWebhook(
   ) {
     const session = await stripe.checkout.sessions.retrieve(
       (event.data.object as Stripe.Checkout.Session).id,
-      { expand: ['line_items.data.price'] }
+      { expand: ['line_items.data.price', 'discounts.promotion_code'] }
     );
-    if (session.payment_status === 'paid') {
+    if (
+      session.payment_status === 'paid' ||
+      session.payment_status === 'no_payment_required'
+    ) {
       checkout = verifyPaidCheckoutSession(
         session as CheckoutSessionLike,
         config
@@ -952,19 +1010,27 @@ export async function processStripeWebhook(
     }
   }
 
-  const paymentIntentId =
-    checkout?.stripePaymentIntentId ??
+  const reconciliationPaymentIntentId =
     paymentIntentIdFromReconciliationEvent(event);
-  const isReconciliationEvent =
-    Boolean(checkout) || isStripePaymentReconciliationEvent(event.type);
-  const transition: StripeWebhookTransition =
-    isReconciliationEvent && paymentIntentId
-      ? {
-          kind: 'RECONCILE',
-          paymentIntentId,
-          checkout,
-        }
-      : { kind: 'IGNORE' };
+  let transition: StripeWebhookTransition = { kind: 'IGNORE' };
+  if (checkout?.stripePaymentIntentId) {
+    transition = {
+      kind: 'RECONCILE',
+      paymentIntentId: checkout.stripePaymentIntentId,
+      checkout,
+    };
+  } else if (checkout && checkout.amountPaid === 0) {
+    transition = { kind: 'ACTIVATE_FREE_CHECKOUT', checkout };
+  } else if (
+    reconciliationPaymentIntentId &&
+    isStripePaymentReconciliationEvent(event.type)
+  ) {
+    transition = {
+      kind: 'RECONCILE',
+      paymentIntentId: reconciliationPaymentIntentId,
+      checkout: null,
+    };
+  }
 
   return applyStripeWebhookTransition(
     {

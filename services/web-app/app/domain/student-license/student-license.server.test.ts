@@ -23,6 +23,7 @@ const enabledEnv = {
   STRIPE_SECRET_KEY: 'sk_test_example',
   STRIPE_WEBHOOK_SECRET: 'whsec_example',
   STRIPE_UA_2026_PRICE_ID: 'price_ua_2026',
+  STRIPE_UA_PRODUCTION_TEST_PROMOTION_CODE_ID: 'promo_ua_production_test',
   UA_PARTNER_HOSTNAME: 'ua.yawp.school',
   YAWP_APP_ORIGIN: 'https://ua.yawp.school',
 };
@@ -59,10 +60,26 @@ describe('UA student license configuration', () => {
     ).toThrow('Invalid UA student billing configuration');
   });
 
+  test('accepts only Stripe Promotion Code object IDs for the production test code', () => {
+    expect(
+      getUaStudentLicenseConfig({
+        ...enabledEnv,
+        STRIPE_UA_PRODUCTION_TEST_PROMOTION_CODE_ID: undefined,
+      })
+    ).not.toHaveProperty('productionTestPromotionCodeId');
+    expect(() =>
+      getUaStudentLicenseConfig({
+        ...enabledEnv,
+        STRIPE_UA_PRODUCTION_TEST_PROMOTION_CODE_ID: 'the-customer-facing-code',
+      })
+    ).toThrow('Invalid UA student billing configuration');
+  });
+
   test('requires a canonical application origin without a path', () => {
     expect(getUaStudentLicenseConfig(enabledEnv)).toMatchObject({
       enabled: true,
       applicationOrigin: 'https://ua.yawp.school',
+      productionTestPromotionCodeId: 'promo_ua_production_test',
     });
     expect(() =>
       getUaStudentLicenseConfig({
@@ -287,6 +304,113 @@ describe('Checkout return verification', () => {
 
     expect(first).toMatchObject({ membershipId: 'membership-1' });
     expect(retrieve).toHaveBeenCalledTimes(1);
+  });
+
+  test('accepts a fully discounted Stripe Checkout without a PaymentIntent', async () => {
+    const retrieve = mock().mockResolvedValue({
+      id: 'cs_free',
+      status: 'complete',
+      mode: 'payment',
+      payment_status: 'no_payment_required',
+      amount_subtotal: 5000,
+      amount_total: 0,
+      currency: 'usd',
+      customer: 'cus_free',
+      payment_intent: null,
+      total_details: { amount_discount: 5000 },
+      discounts: [{ promotion_code: 'promo_ua_production_test' }],
+      metadata: {
+        membershipId: 'membership-free',
+        organizationId: 'org-ua',
+        cohort: UA_STUDENT_LICENSE_COHORT,
+      },
+      line_items: {
+        data: [{ price: { id: 'price_ua_2026' }, quantity: 1 }],
+      },
+    });
+    const findMembership = mock().mockResolvedValue({
+      id: 'membership-free',
+      organizationId: 'org-ua',
+      role: 'STUDENT',
+    });
+
+    await expect(
+      verifyCheckoutSessionForReturn('cs_free', {
+        config: getUaStudentLicenseConfig(enabledEnv),
+        dependencies: {
+          retrieveCheckoutSession: retrieve,
+          findMembership,
+        },
+      })
+    ).resolves.toEqual({ membershipId: 'membership-free' });
+  });
+
+  test('rejects zero-total Checkout sessions without the full configured discount', async () => {
+    const invalidFreeSession = {
+      id: 'cs_invalid_free',
+      status: 'complete',
+      mode: 'payment',
+      payment_status: 'no_payment_required',
+      amount_subtotal: 5000,
+      amount_total: 0,
+      currency: 'usd',
+      customer: 'cus_free',
+      payment_intent: null,
+      total_details: { amount_discount: 4900 },
+      discounts: [{ promotion_code: 'promo_ua_production_test' }],
+      metadata: {
+        membershipId: 'membership-free',
+        organizationId: 'org-ua',
+        cohort: UA_STUDENT_LICENSE_COHORT,
+      },
+      line_items: {
+        data: [{ price: { id: 'price_ua_2026' }, quantity: 1 }],
+      },
+    };
+
+    await expect(
+      verifyCheckoutSessionForReturn('cs_invalid_free', {
+        config: getUaStudentLicenseConfig(enabledEnv),
+        dependencies: {
+          retrieveCheckoutSession: mock().mockResolvedValue(invalidFreeSession),
+          findMembership: mock(),
+        },
+      })
+    ).rejects.toThrow('Checkout Session does not match the UA license');
+  });
+
+  test('rejects a fully discounted Session from a different promotion code', async () => {
+    const wrongPromotion = {
+      id: 'cs_wrong_promotion',
+      status: 'complete',
+      mode: 'payment',
+      payment_status: 'no_payment_required',
+      amount_subtotal: 5000,
+      amount_total: 0,
+      currency: 'usd',
+      customer: 'cus_free',
+      payment_intent: null,
+      total_details: { amount_discount: 5000 },
+      discounts: [{ promotion_code: 'promo_someone_else' }],
+      metadata: {
+        membershipId: 'membership-free',
+        organizationId: 'org-ua',
+        cohort: UA_STUDENT_LICENSE_COHORT,
+      },
+      line_items: {
+        data: [{ price: { id: 'price_ua_2026' }, quantity: 1 }],
+      },
+    };
+
+    await expect(
+      verifyCheckoutSessionForReturn(wrongPromotion.id, {
+        config: getUaStudentLicenseConfig(enabledEnv),
+        dependencies: {
+          retrieveCheckoutSession: mock().mockResolvedValue(wrongPromotion),
+          findMembership: mock(),
+        },
+      })
+    ).rejects.toThrow('Checkout Session does not match the UA license');
   });
 
   test('does not grant access from an unpaid or mismatched Checkout Session', async () => {
@@ -656,6 +780,43 @@ describe('Checkout creation', () => {
     expect(createCheckoutSession).not.toHaveBeenCalled();
   });
 
+  test('waits for the signed webhook after a completed zero-cost Session', async () => {
+    const createCheckoutSession = mock();
+    const result = await createOrReuseCheckoutSession({
+      membershipId: 'membership-1',
+      successUrl: 'https://yawp.school/billing/ua/success',
+      cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
+      config: getUaStudentLicenseConfig(enabledEnv),
+      dependencies: {
+        findMembership: mock().mockResolvedValue({
+          id: 'membership-1',
+          role: 'STUDENT',
+          organizationId: 'org-ua',
+          user: { email: 'student@example.com' },
+        }),
+        findOrCreateLicense: mock().mockResolvedValue({
+          id: 'license-1',
+          status: 'PENDING',
+          validUntil: UA_STUDENT_LICENSE_VALID_UNTIL,
+          checkoutAttempt: 0,
+          stripeCheckoutSessionId: 'cs_free',
+        }),
+        retrieveCheckoutSession: mock().mockResolvedValue({
+          id: 'cs_free',
+          status: 'complete',
+          payment_status: 'no_payment_required',
+          url: null,
+        }),
+        prepareAttempt: mock(),
+        createCheckoutSession,
+        attachCheckoutSession: mock(),
+      },
+    });
+
+    expect(result).toEqual({ kind: 'PROCESSING' });
+    expect(createCheckoutSession).not.toHaveBeenCalled();
+  });
+
   test('closes sales at the exclusive license cutoff', async () => {
     const findOrCreateLicense = mock();
     expect(
@@ -783,6 +944,50 @@ describe('durable Stripe webhook transitions', () => {
       'pi_paid',
       'ACTIVE'
     );
+  });
+
+  test('activates a signed zero-cost Checkout without querying a PaymentIntent', async () => {
+    const recordEvent = mock();
+    const lockPaymentIntent = mock();
+    const reconcile = mock();
+    const retrievePaymentSnapshot = mock();
+    const transaction = mock(async (work: (tx: any) => Promise<void>) =>
+      work({ recordEvent, lockPaymentIntent, reconcile })
+    );
+    const checkout = {
+      membershipId: 'membership-free',
+      organizationId: 'org-ua',
+      stripeCheckoutSessionId: 'cs_free',
+      stripePaymentIntentId: null,
+      stripeCustomerId: 'cus_free',
+      stripePriceId: 'price_ua_2026',
+      cohort: UA_STUDENT_LICENSE_COHORT,
+      amountPaid: 0,
+      currency: 'usd' as const,
+      validUntil: UA_STUDENT_LICENSE_VALID_UNTIL,
+    };
+
+    const result = await applyStripeWebhookTransition(
+      {
+        eventId: 'evt_free_checkout',
+        eventType: 'checkout.session.completed',
+        transition: { kind: 'ACTIVATE_FREE_CHECKOUT', checkout },
+      } as any,
+      {
+        transaction,
+        eventExists: mock().mockResolvedValue(false),
+        retrievePaymentSnapshot,
+      }
+    );
+
+    expect(result).toEqual({ duplicate: false, handled: true });
+    expect(recordEvent).toHaveBeenCalledWith(
+      'evt_free_checkout',
+      'checkout.session.completed'
+    );
+    expect(lockPaymentIntent).toHaveBeenCalledWith('cs_free');
+    expect(retrievePaymentSnapshot).not.toHaveBeenCalled();
+    expect(reconcile).toHaveBeenCalledWith(checkout, null, 'ACTIVE');
   });
 
   test('treats a duplicate event id as success without repeating the transition', async () => {

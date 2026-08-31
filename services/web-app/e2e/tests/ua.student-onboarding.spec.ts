@@ -2,7 +2,14 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { generateTOTP } from '../../app/utils/totp.server';
-import { E2E_STRIPE_BASE_URL, E2E_UA_PARTNER_CODE } from '../constants';
+import {
+  E2E_APP_ORIGIN,
+  E2E_STRIPE_BASE_URL,
+  E2E_UA_APP_ORIGIN,
+  E2E_UA_PARTNER_CODE,
+} from '../constants';
+
+const E2E_UA_PRODUCTION_TEST_CODE = 'YAWP-E2E-100-OFF';
 import {
   createPrismaReconciliationDependencies,
   reconcileUaExistingSubscriptions,
@@ -10,8 +17,8 @@ import {
 
 const LICENSE_COHORT = 'ua-2026';
 const LICENSE_CUTOFF = new Date('2027-01-01T06:00:00.000Z');
-const APP_ORIGIN = 'http://127.0.0.1:5173';
-const UA_APP_ORIGIN = 'http://ua.localhost:5173';
+const APP_ORIGIN = E2E_APP_ORIGIN;
+const UA_APP_ORIGIN = E2E_UA_APP_ORIGIN;
 
 async function signIn(
   page: Page,
@@ -114,7 +121,10 @@ async function getFakeStripeSessions(page: Page) {
       mode: string;
       status: string;
       payment_status: string;
+      amount_subtotal: number;
       amount_total: number;
+      total_details: { amount_discount: number };
+      discounts: Array<{ promotion_code: string }>;
       currency: string;
       metadata: Record<string, string>;
       success_url: string;
@@ -125,6 +135,7 @@ async function getFakeStripeSessions(page: Page) {
         client_reference_id: string;
         payment_intent_metadata: Record<string, string>;
         idempotency_key: string;
+        allow_promotion_codes: boolean;
       };
     }>;
   };
@@ -546,6 +557,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       const created = await getFakeStripeSessions(page);
       expect(created.data).toHaveLength(1);
       expect(created.data[0]!.test_request).toMatchObject({
+        allow_promotion_codes: true,
         customer_email: unpaid.email,
         client_reference_id: unpaid.membershipId,
         payment_intent_metadata: {
@@ -560,6 +572,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
 
       const stripeRequest = {
         mode: 'payment',
+        allow_promotion_codes: 'true',
         'line_items[0][price]': 'price_ua_e2e_2026',
         'line_items[0][quantity]': '1',
         customer_email: unpaid.email,
@@ -619,6 +632,79 @@ test.describe.serial('University of Alabama student onboarding', () => {
     }
   });
 
+  test('completes a signed zero-cost Checkout with the private production-test promotion code', async ({
+    page,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const { unpaid } = e2eContext.ua;
+    try {
+      await resetFakeStripe(page);
+      await clearStudentClasses(unpaid.membershipId);
+      await replaceLicense(unpaid.membershipId, e2eContext.ua.organizationId, {
+        status: 'NONE',
+      });
+
+      await signIn(page, unpaid.email, unpaid.password, /\/billing\/ua/);
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
+
+      await expect(page.getByLabel('Promotion code')).toBeVisible();
+      await page.getByLabel('Promotion code').fill('NOT-THE-TEST-CODE');
+      await page.getByRole('button', { name: 'Complete test payment' }).click();
+      await expect(page.getByText('Invalid promotion code')).toBeVisible();
+      await expect(page).toHaveURL(
+        new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`)
+      );
+
+      await page.getByLabel('Promotion code').fill(E2E_UA_PRODUCTION_TEST_CODE);
+      await page.getByRole('button', { name: 'Complete test payment' }).click();
+      await page.waitForURL(/\/app\/?$/);
+      await expect(page.getByRole('dialog')).toBeVisible();
+
+      const completed = await getFakeStripeSessions(page);
+      expect(completed.data).toHaveLength(1);
+      expect(completed.data[0]).toMatchObject({
+        status: 'complete',
+        payment_status: 'no_payment_required',
+        amount_subtotal: 5_000,
+        amount_total: 0,
+        total_details: { amount_discount: 5_000 },
+        discounts: [{ promotion_code: 'promo_ua_e2e_production_test' }],
+      });
+
+      const activeLicense = await prisma.studentLicense.findUniqueOrThrow({
+        where: {
+          membershipId_cohort: {
+            membershipId: unpaid.membershipId,
+            cohort: LICENSE_COHORT,
+          },
+        },
+      });
+      expect(activeLicense).toMatchObject({
+        status: 'ACTIVE',
+        source: 'STRIPE_CHECKOUT',
+        amountPaid: 0,
+        currency: 'usd',
+        stripePriceId: 'price_ua_e2e_2026',
+        stripePaymentIntentId: null,
+      });
+      expect(activeLicense.stripeCheckoutSessionId).toBe(completed.data[0]!.id);
+
+      const duplicate = await page.request.post(
+        `${E2E_STRIPE_BASE_URL}/test/sessions/${completed.data[0]!.id}/webhook?eventId=evt_duplicate_free_checkout&repeat=2`
+      );
+      expect(duplicate.ok()).toBe(true);
+      expect(
+        await prisma.stripeWebhookEvent.count({
+          where: { id: 'evt_duplicate_free_checkout' },
+        })
+      ).toBe(1);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
   test('completes signed-webhook Checkout and reconciles partial refund and dispute states end to end', async ({
     page,
     e2eContext,
@@ -633,7 +719,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       });
 
       const invalidWebhook = await page.request.post(
-        'http://127.0.0.1:5173/api/stripe/webhook',
+        `${APP_ORIGIN}/api/stripe/webhook`,
         {
           headers: {
             'content-type': 'application/json',

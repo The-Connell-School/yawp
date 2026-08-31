@@ -3,20 +3,23 @@ import {
   E2E_STRIPE_BASE_URL,
   E2E_STRIPE_PORT,
   E2E_STRIPE_WEBHOOK_SECRET,
+  E2E_APP_ORIGIN,
+  E2E_UA_APP_ORIGIN,
   E2E_UA_ORGANIZATION_ID,
 } from './constants';
-
-const E2E_UA_APP_ORIGIN = 'http://ua.localhost:5173';
 
 type FakeSession = {
   id: string;
   mode: 'payment';
   status: 'open' | 'complete';
-  paymentStatus: 'unpaid' | 'paid';
+  paymentStatus: 'unpaid' | 'paid' | 'no_payment_required';
+  amountSubtotal: number;
   amountTotal: number;
+  amountDiscount: number;
   currency: string;
   customer: string;
   paymentIntent: string | null;
+  promotionCodeId: string | null;
   metadata: Record<string, string>;
   priceId: string;
   quantity: number;
@@ -24,6 +27,7 @@ type FakeSession = {
   clientReferenceId: string;
   paymentIntentMetadata: Record<string, string>;
   idempotencyKey: string;
+  allowPromotionCodes: boolean;
   requestFingerprint: string;
   successUrl: string;
   cancelUrl: string;
@@ -52,10 +56,19 @@ function sessionResponse(session: FakeSession) {
     mode: session.mode,
     status: session.status,
     payment_status: session.paymentStatus,
+    amount_subtotal: session.amountSubtotal,
     amount_total: session.amountTotal,
+    total_details: {
+      amount_discount: session.amountDiscount,
+      amount_shipping: 0,
+      amount_tax: 0,
+    },
     currency: session.currency,
     customer: session.customer,
     payment_intent: session.paymentIntent,
+    discounts: session.promotionCodeId
+      ? [{ coupon: null, promotion_code: session.promotionCodeId }]
+      : [],
     metadata: session.metadata,
     url: session.url,
     success_url: session.successUrl,
@@ -70,7 +83,7 @@ function sessionResponse(session: FakeSession) {
             id: session.priceId,
             object: 'price',
             currency: session.currency,
-            unit_amount: session.amountTotal / session.quantity,
+            unit_amount: session.amountSubtotal / session.quantity,
           },
         },
       ],
@@ -143,7 +156,7 @@ async function deliverWebhook(args: {
 
   const responses = await Promise.all(
     Array.from({ length: args.repeat ?? 1 }, async () => {
-      const response = await fetch('http://127.0.0.1:5173/api/stripe/webhook', {
+      const response = await fetch(`${E2E_APP_ORIGIN}/api/stripe/webhook`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -161,7 +174,7 @@ async function deliverWebhook(args: {
   return { eventId, responses };
 }
 
-function checkoutHtml(session: FakeSession) {
+function checkoutHtml(session: FakeSession, error?: string) {
   return new Response(
     `<!doctype html>
 <html lang="en">
@@ -171,6 +184,9 @@ function checkoutHtml(session: FakeSession) {
       <h1>Test Stripe Checkout</h1>
       <p>One-time $50.00 payment</p>
       <form method="post" action="/checkout/${session.id}/pay">
+        <label for="promotion-code">Promotion code</label>
+        <input id="promotion-code" name="promotionCode" autocomplete="off">
+        ${error ? `<p role="alert">${error}</p>` : ''}
         <button name="delivery" value="webhook" type="submit">Complete test payment</button>
         <button name="delivery" value="delayed" type="submit">Complete payment without webhook</button>
       </form>
@@ -224,6 +240,7 @@ async function handler(request: Request) {
           client_reference_id: session.clientReferenceId,
           payment_intent_metadata: session.paymentIntentMetadata,
           idempotency_key: session.idempotencyKey,
+          allow_promotion_codes: session.allowPromotionCodes,
         },
       })),
     });
@@ -239,9 +256,17 @@ async function handler(request: Request) {
     const session = requiredSession(checkoutPay[1]!);
     const form = await request.formData();
     const delivery = form.get('delivery');
+    const promotionCode = String(form.get('promotionCode') ?? '').trim();
+    if (promotionCode && promotionCode !== 'YAWP-E2E-100-OFF') {
+      return checkoutHtml(session, 'Invalid promotion code');
+    }
+    const isNoCost = promotionCode === 'YAWP-E2E-100-OFF';
     session.status = 'complete';
-    session.paymentStatus = 'paid';
-    session.paymentIntent = `pi_${session.id}`;
+    session.paymentStatus = isNoCost ? 'no_payment_required' : 'paid';
+    session.amountTotal = isNoCost ? 0 : session.amountSubtotal;
+    session.amountDiscount = isNoCost ? session.amountSubtotal : 0;
+    session.paymentIntent = isNoCost ? null : `pi_${session.id}`;
+    session.promotionCodeId = isNoCost ? 'promo_ua_e2e_production_test' : null;
     session.url = null;
 
     if (delivery !== 'delayed') {
@@ -346,6 +371,7 @@ async function handler(request: Request) {
     const clientReferenceId = body.get('client_reference_id') ?? '';
     const successUrl = body.get('success_url') ?? '';
     const cancelUrl = body.get('cancel_url') ?? '';
+    const allowPromotionCodes = body.get('allow_promotion_codes') === 'true';
     const requestFingerprint = JSON.stringify(
       [...body.entries()].sort(([leftKey, leftValue], [rightKey, rightValue]) =>
         `${leftKey}\0${leftValue}`.localeCompare(`${rightKey}\0${rightValue}`)
@@ -380,6 +406,7 @@ async function handler(request: Request) {
         ? null
         : 'unexpected cancel URL',
       idempotencyKey ? null : 'Idempotency-Key is required',
+      allowPromotionCodes ? null : 'promotion codes must be enabled',
     ].filter((error): error is string => Boolean(error));
     if (errors.length > 0) {
       return json(
@@ -413,10 +440,13 @@ async function handler(request: Request) {
       mode: 'payment',
       status: 'open',
       paymentStatus: 'unpaid',
+      amountSubtotal: 5_000 * quantity,
       amountTotal: 5_000 * quantity,
+      amountDiscount: 0,
       currency: 'usd',
       customer: `cus_${id}`,
       paymentIntent: null,
+      promotionCodeId: null,
       metadata,
       priceId,
       quantity,
@@ -424,6 +454,7 @@ async function handler(request: Request) {
       clientReferenceId,
       paymentIntentMetadata,
       idempotencyKey,
+      allowPromotionCodes,
       requestFingerprint,
       successUrl,
       cancelUrl,
