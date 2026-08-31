@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
+import Stripe from 'stripe';
 import {
   UA_STUDENT_LICENSE_COHORT,
   UA_STUDENT_LICENSE_VALID_UNTIL,
@@ -27,6 +28,27 @@ const enabledEnv = {
 };
 
 describe('UA student license configuration', () => {
+  test('verifies Stripe webhook signatures with Bun-compatible async crypto', async () => {
+    const stripe = new Stripe('sk_test_example');
+    const payload = JSON.stringify({
+      id: 'evt_async_crypto',
+      object: 'event',
+      type: 'checkout.session.completed',
+    });
+    const signature = await stripe.webhooks.generateTestHeaderStringAsync({
+      payload,
+      secret: enabledEnv.STRIPE_WEBHOOK_SECRET,
+    });
+
+    const event = await stripe.webhooks.constructEventAsync(
+      payload,
+      signature,
+      enabledEnv.STRIPE_WEBHOOK_SECRET
+    );
+
+    expect(event.id).toBe('evt_async_crypto');
+  });
+
   test('defaults the feature off without requiring Stripe credentials', () => {
     expect(getUaStudentLicenseConfig({})).toEqual({ enabled: false });
   });
