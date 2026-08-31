@@ -87,36 +87,13 @@ export function StudentSignupForm({
             autoFocus
           />
           {!isUa || !codeAccepted ? (
-            <div data-uidotsh-pick="Code input treatment" className="contents">
-              <div
-                data-uidotsh-option="Bordered Wrap (current)"
-                className="contents"
-              />
-              <div
-                data-uidotsh-option="Bare Field"
-                className="contents"
-                hidden
-              />
-              <div
-                data-uidotsh-option="Soft Well"
-                className="contents"
-                hidden
-              />
-              <div
-                data-uidotsh-option="Top Divider"
-                className="contents"
-                hidden
-              />
-              <div className="ua-code-field flex w-full items-center rounded-lg border bg-white p-3">
-                <FormInput
-                  scope="code"
-                  type="text"
-                  label="Code"
-                  name="code"
-                  className="w-full"
-                />
-              </div>
-            </div>
+            <FormInput
+              scope="code"
+              type="text"
+              label="Code"
+              name="code"
+              className="w-full"
+            />
           ) : null}
           <Button className="w-full" type="submit" disabled={isLoading}>
             Submit

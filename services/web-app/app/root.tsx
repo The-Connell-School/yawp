@@ -288,24 +288,9 @@ function Document({
         />
         <ScrollRestoration nonce={nonce} />
         <Scripts nonce={nonce} />
-        <UiPickerScript nonce={nonce} />
       </body>
     </html>
   );
-}
-
-function UiPickerScript({ nonce }: { nonce: string }) {
-  useEffect(() => {
-    if (document.querySelector('script[data-uidotsh-picker]')) return;
-
-    const script = document.createElement('script');
-    script.src = 'https://ui.sh/ui-picker.js';
-    script.dataset.uidotshPicker = 'true';
-    script.nonce = nonce;
-    document.body.appendChild(script);
-  }, [nonce]);
-
-  return null;
 }
 
 export default function App({ loaderData: data }: Route.ComponentProps) {

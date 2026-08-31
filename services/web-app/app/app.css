@@ -1368,32 +1368,3 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
     padding-top: 24px;
   }
 }
-/* Temporary ui.sh comparison styles for the signup code-field treatment. */
-[data-uidotsh-pick='Code input treatment']:has(
-    [data-uidotsh-option='Bare Field']:not([hidden])
-  )
-  .ua-code-field {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 0;
-}
-
-[data-uidotsh-pick='Code input treatment']:has(
-    [data-uidotsh-option='Soft Well']:not([hidden])
-  )
-  .ua-code-field {
-  border: 0;
-  background: hsl(var(--muted) / 0.45);
-}
-
-[data-uidotsh-pick='Code input treatment']:has(
-    [data-uidotsh-option='Top Divider']:not([hidden])
-  )
-  .ua-code-field {
-  border: 0;
-  border-top: 1px solid color-mix(in oklab, currentcolor 10%, transparent);
-  border-radius: 0;
-  background: transparent;
-  padding: 1rem 0 0;
-}
