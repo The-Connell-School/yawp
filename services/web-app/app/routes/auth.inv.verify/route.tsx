@@ -336,7 +336,7 @@ export default function Route() {
           </div>
           <div className="px-8 text-center">
             <Button asChild variant="link">
-              <Link to={isUa ? '/auth/login?redirectTo=%2Fua' : '/auth/login'}>
+              <Link to={isUa ? '/auth/login?redirectTo=%2F' : '/auth/login'}>
                 Back to login
               </Link>
             </Button>

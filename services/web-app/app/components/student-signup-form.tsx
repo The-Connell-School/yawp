@@ -26,11 +26,13 @@ export function StudentSignupForm({
   codeAccepted = false,
   codeError = null,
   loginHref,
+  clearCodeAction,
 }: {
   partner: 'ua' | null;
   codeAccepted?: boolean;
   codeError?: string | null;
   loginHref?: string;
+  clearCodeAction?: string;
 }) {
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
@@ -54,7 +56,7 @@ export function StudentSignupForm({
       <div className="mx-auto mt-10 w-full max-w-md px-8">
         {isUa && codeAccepted ? (
           <div className="mb-4">
-            <UaPartnerCodeStatus />
+            <UaPartnerCodeStatus clearAction={clearCodeAction} />
           </div>
         ) : null}
         {codeError ? (

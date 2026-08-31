@@ -1,6 +1,7 @@
 import { Outlet, data, type LoaderFunctionArgs } from 'react-router';
 import { AuthBrandLockup } from '~/components/auth-brand-lockup';
 import { invitationCookieStorage } from '~/cookie-session-storages/invitation.server';
+import { isUaPartnerHost } from '~/utils/ua-partner.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const invitation = await invitationCookieStorage.getSession(
@@ -10,7 +11,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const queryPartner = new URL(request.url).searchParams.get('partner');
   return data({
     partner:
-      invitationPartner === 'ua' || queryPartner === 'ua'
+      isUaPartnerHost(request) ||
+      invitationPartner === 'ua' ||
+      queryPartner === 'ua'
         ? ('ua' as const)
         : null,
   });

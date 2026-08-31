@@ -6,6 +6,8 @@ import {
   E2E_UA_ORGANIZATION_ID,
 } from './constants';
 
+const E2E_UA_APP_ORIGIN = 'http://ua.localhost:5173';
+
 type FakeSession = {
   id: string;
   mode: 'payment';
@@ -371,10 +373,10 @@ async function handler(request: Request) {
         ? null
         : 'PaymentIntent metadata must match Session metadata',
       successUrl ===
-      'http://127.0.0.1:5173/billing/ua/success?session_id={CHECKOUT_SESSION_ID}'
+      `${E2E_UA_APP_ORIGIN}/billing/ua/success?session_id={CHECKOUT_SESSION_ID}`
         ? null
         : 'unexpected success URL',
-      cancelUrl === 'http://127.0.0.1:5173/billing/ua?canceled=1'
+      cancelUrl === `${E2E_UA_APP_ORIGIN}/billing/ua?canceled=1`
         ? null
         : 'unexpected cancel URL',
       idempotencyKey ? null : 'Idempotency-Key is required',

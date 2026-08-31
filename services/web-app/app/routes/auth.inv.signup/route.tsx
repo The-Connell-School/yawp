@@ -1,4 +1,5 @@
 import {
+  redirect,
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
   type MetaFunction,
@@ -7,18 +8,53 @@ import {
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { StudentSignupForm } from '~/components/student-signup-form';
 import { studentSignupAction } from './signup.server';
+import { requireAnonymous } from '~/utils/auth.server';
+import {
+  destroyUaPartnerContext,
+  getUaPartnerContext,
+  isUaPartnerHost,
+} from '~/utils/ua-partner.server';
 
-export async function loader(_args: LoaderFunctionArgs) {
-  return { partner: null };
+export async function loader({ request }: LoaderFunctionArgs) {
+  await requireAnonymous(request);
+  if (!isUaPartnerHost(request)) return { partner: null as null };
+
+  const partnerContext = await getUaPartnerContext(request);
+  return {
+    partner: 'ua' as const,
+    codeAccepted: partnerContext?.partner === 'ua',
+    codeError: new URL(request.url).searchParams.has('codeError')
+      ? 'Enter a valid organization code.'
+      : null,
+  };
 }
 
 export async function action(args: ActionFunctionArgs) {
-  return studentSignupAction(args);
+  const isUa = isUaPartnerHost(args.request);
+  if (isUa) {
+    const formData = await args.request.clone().formData();
+    if (formData.get('intent') === 'clear-partner-code') {
+      return redirect('/auth/inv/signup', {
+        headers: {
+          'set-cookie': await destroyUaPartnerContext(args.request),
+        },
+      });
+    }
+  }
+  return studentSignupAction(args, { partner: isUa ? 'ua' : null });
 }
 
 export default function SignupRoute() {
-  const { partner } = useLoaderData<typeof loader>();
-  return <StudentSignupForm partner={partner} />;
+  const data = useLoaderData<typeof loader>();
+  return (
+    <StudentSignupForm
+      partner={data.partner}
+      codeAccepted={'codeAccepted' in data ? data.codeAccepted : false}
+      codeError={'codeError' in data ? data.codeError : null}
+      loginHref="/auth/login"
+      clearCodeAction="/auth/inv/signup"
+    />
+  );
 }
 
 export const meta: MetaFunction = () => [{ title: 'Sign Up | Yawp!' }];

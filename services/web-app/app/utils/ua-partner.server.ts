@@ -17,13 +17,46 @@ const uaPartnerCookie = createCookie('yawp_partner', {
 
 export type UaPartnerContext = { partner: 'ua' };
 
-export function isUaPartnerHost(_request: Request) {
-  return false;
+function configuredUaPartnerHostname() {
+  const hostname = process.env.UA_PARTNER_HOSTNAME?.trim().toLowerCase();
+  if (!hostname || hostname.includes('/') || hostname.includes(':')) return null;
+  return hostname;
+}
+
+export function isUaPartnerHost(request: Request) {
+  const configured = configuredUaPartnerHostname();
+  if (!configured) return false;
+  return new URL(request.url).hostname.toLowerCase() === configured;
 }
 
 export function createUaPartnerMiddleware(): MiddlewareFunction<Response> {
-  return async (_args, next) => next();
+  return async ({ request }, next) => {
+    if (request.method !== 'GET' || !isUaPartnerHost(request)) return next();
+
+    const capture = getUaPartnerCodeCapture(request);
+    if (!capture) return next();
+
+    let location = capture.redirectTo;
+    if (!capture.accepted) {
+      const cleaned = new URL(capture.redirectTo, request.url);
+      cleaned.searchParams.set('codeError', '1');
+      location = `${cleaned.pathname}${cleaned.search}`;
+    }
+
+    return new Response(null, {
+      status: 303,
+      headers: {
+        'Cache-Control': 'no-store',
+        Location: location,
+        ...(capture.accepted
+          ? { 'set-cookie': await commitUaPartnerContext() }
+          : {}),
+      },
+    });
+  };
 }
+
+export const uaPartnerMiddleware = createUaPartnerMiddleware();
 
 export function isUaStudentBillingEnabled() {
   return (

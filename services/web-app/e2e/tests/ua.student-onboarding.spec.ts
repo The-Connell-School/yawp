@@ -302,7 +302,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await page.getByLabel('Password').fill('johndoe');
       await page.getByRole('button', { name: 'Log in' }).click();
 
-      await page.waitForURL(/\/ua$/);
+      await page.waitForURL(`${UA_APP_ORIGIN}/`);
       await expect(
         page.getByRole('button', { name: 'Continue as a student' })
       ).toBeVisible();
@@ -1070,7 +1070,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
     await page.getByRole('button', { name: 'Log in' }).click();
     await page.waitForURL(new RegExp(`${APP_ORIGIN}/app`));
     await expect(page).toHaveURL(/\/app\/?$/);
-    await page.goto('/billing/ua');
+    await page.goto(`${APP_ORIGIN}/billing/ua`);
     await expect(page).toHaveURL(/\/app\/?$/);
 
     await page.context().clearCookies();
