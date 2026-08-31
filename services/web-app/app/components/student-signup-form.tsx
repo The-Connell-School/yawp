@@ -44,8 +44,8 @@ export function StudentSignupForm({
     : GenericStudentSignupSchema;
 
   return (
-    <div className="mx-auto w-full max-w-md">
-      <div className="mt-8 flex flex-col gap-3 text-center">
+    <div className="mx-auto mt-10 w-full max-w-md rounded-xl border bg-white p-8 shadow-sm">
+      <div className="flex flex-col gap-3 text-center">
         <h1>Let's get started!</h1>
         <p>
           {isUa
@@ -53,7 +53,7 @@ export function StudentSignupForm({
             : 'Please enter your email & passcode.'}
         </p>
       </div>
-      <div className="mx-auto mt-10 w-full max-w-md px-8">
+      <div className="mt-8 w-full">
         {isUa && codeAccepted ? (
           <div className="mb-4">
             <UaPartnerCodeStatus clearAction={clearCodeAction} />

@@ -1,63 +1,17 @@
 export function AuthBrandLockup({ partner }: { partner?: 'ua' | null }) {
   if (partner === 'ua') {
     return (
-      <div data-uidotsh-pick="UA authentication header" className="contents">
-        <div
-          data-uidotsh-option="Vertical Stack (current)"
-          className="contents"
-        >
-          <div
-            className="mx-auto flex w-full max-w-lg flex-col items-center justify-center gap-10 px-4"
-            aria-label="The University of Alabama and Yawp"
-          >
-            <UaNameplate />
-            <span className="text-3xl font-light text-muted-foreground" aria-hidden="true">
-              +
-            </span>
-            <YawpMark />
-          </div>
+      <div
+        className="mx-auto flex w-full max-w-md flex-col items-center gap-5 px-6"
+        aria-label="The University of Alabama and Yawp"
+      >
+        <UaNameplate className="max-w-sm" />
+        <div className="flex w-full max-w-sm items-center gap-3" aria-hidden="true">
+          <span className="h-px flex-1 bg-black/10" />
+          <span className="text-xl font-light text-muted-foreground">+</span>
+          <span className="h-px flex-1 bg-black/10" />
         </div>
-
-        <div data-uidotsh-option="Balanced Inline" className="contents" hidden>
-          <div
-            className="mx-auto flex w-full max-w-2xl items-center justify-center gap-6 px-4 sm:gap-9"
-            aria-label="The University of Alabama and Yawp"
-          >
-            <UaNameplate className="min-w-0 flex-1" />
-            <span className="shrink-0 text-2xl font-light text-muted-foreground" aria-hidden="true">
-              +
-            </span>
-            <YawpMark className="w-36 sm:w-44" />
-          </div>
-        </div>
-
-        <div data-uidotsh-option="Quiet Divider" className="contents" hidden>
-          <div
-            className="mx-auto flex w-full max-w-lg flex-col items-center gap-7 px-4"
-            aria-label="The University of Alabama and Yawp"
-          >
-            <UaNameplate />
-            <div className="flex w-full items-center gap-4" aria-hidden="true">
-              <span className="h-px flex-1 bg-black/10" />
-              <span className="text-2xl font-light text-muted-foreground">+</span>
-              <span className="h-px flex-1 bg-black/10" />
-            </div>
-            <YawpMark className="w-48 sm:w-56" />
-          </div>
-        </div>
-
-        <div data-uidotsh-option="Soft Frame" className="contents" hidden>
-          <div
-            className="mx-auto flex w-full max-w-xl items-center justify-center gap-5 rounded-[min(3vw,1.25rem)] p-6 ring-1 ring-black/10 sm:gap-7 sm:p-8"
-            aria-label="The University of Alabama and Yawp"
-          >
-            <UaNameplate className="min-w-0 flex-1" />
-            <span className="shrink-0 text-2xl font-light text-muted-foreground" aria-hidden="true">
-              +
-            </span>
-            <YawpMark className="w-32 sm:w-40" />
-          </div>
-        </div>
+        <YawpMark className="w-40 sm:w-48" />
       </div>
     );
   }

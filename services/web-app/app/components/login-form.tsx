@@ -31,12 +31,12 @@ export function LoginForm({
   });
 
   return (
-    <div className="mx-auto w-full max-w-md">
-      <div className="mt-8 flex flex-col gap-3 text-center">
+    <div className="mx-auto mt-10 w-full max-w-md rounded-xl border bg-white p-8 shadow-sm">
+      <div className="flex flex-col gap-3 text-center">
         <h1>Welcome back!</h1>
         <p>Please enter your details.</p>
       </div>
-      <div className="mx-auto mt-10 w-full max-w-md px-8">
+      <div className="mt-8 w-full">
         <Form {...form.getFormProps()} className="flex flex-col gap-3">
           <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />
           <FormInput
