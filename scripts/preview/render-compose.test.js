@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { renderPreviewCompose } from './render-compose.mjs';
+
+const requireFromWebApp = createRequire(
+  new URL('../../services/web-app/package.json', import.meta.url)
+);
 
 const deprecatedPreviewSlug = [
   'preview',
@@ -382,7 +387,7 @@ describe('renderPreviewCompose', () => {
     // The renderer image and the installed playwright library resolve browsers
     // by revision paths baked into the image, so they must move together.
     test('renderer image ships browsers for the installed playwright version', () => {
-      const { version } = require('playwright-core/package.json');
+      const { version } = requireFromWebApp('@playwright/test/package.json');
       expect(renderCompose({ sourceDir: sourceWithStudio })).toContain(
         `image: mcr.microsoft.com/playwright:v${version}-jammy`
       );
