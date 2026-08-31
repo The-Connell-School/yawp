@@ -277,6 +277,34 @@ test.describe.serial('University of Alabama student onboarding', () => {
     await expect(page.getByAltText('The University of Alabama')).toHaveCount(0);
   });
 
+  test('keeps UA and regular Yawp login sessions separate by hostname', async ({
+    page,
+    e2eContext,
+  }) => {
+    await signIn(
+      page,
+      e2eContext.ua.paidClassless.email,
+      e2eContext.ua.paidClassless.password,
+      /\/app/
+    );
+
+    await page.goto(`${APP_ORIGIN}/auth/login`);
+    await expect(page.getByAltText('The University of Alabama')).toHaveCount(0);
+    await page.getByLabel('Email').fill(e2eContext.userEmail);
+    await page.getByLabel('Password').fill('johndoe');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.waitForURL(new RegExp(`${APP_ORIGIN}/app`));
+
+    const authCookieDomains = (await page.context().cookies())
+      .filter((cookie) => cookie.name === 'en_session')
+      .map((cookie) => cookie.domain)
+      .sort();
+    expect(authCookieDomains).toEqual(['127.0.0.1', 'ua.localhost']);
+
+    await page.goto(`${UA_APP_ORIGIN}/app`);
+    await expect(page).toHaveURL(/\/app\/?$/);
+  });
+
   test('lets an existing account explicitly add only a UA student membership', async ({
     page,
     e2eContext,
