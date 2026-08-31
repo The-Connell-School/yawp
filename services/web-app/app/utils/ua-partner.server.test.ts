@@ -55,6 +55,17 @@ describe('UA partner context', () => {
     ).toEqual({ accepted: true, redirectTo: '/ua' });
   });
 
+  test('does not mistake an email verification OTP for a partner code', () => {
+    process.env.UA_PARTNER_CODE = 'Roll-Tide-2026';
+    expect(
+      getUaPartnerCodeCapture(
+        new Request(
+          'https://ua.yawp.school/auth/inv/verify?type=onboard-student&target=student%40ua.edu&code=ABC123&partner=ua'
+        )
+      )
+    ).toBeNull();
+  });
+
   test('round-trips a signed, http-only UA context cookie', async () => {
     const setCookie = await commitUaPartnerContext();
     const context = await getUaPartnerContext(

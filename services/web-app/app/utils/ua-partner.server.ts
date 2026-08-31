@@ -83,7 +83,8 @@ export function getUaPartnerCodeCapture(request: Request) {
   const url = new URL(request.url);
   const parameterName = url.searchParams.has('organizationCode')
     ? 'organizationCode'
-    : url.searchParams.has('code')
+    : url.searchParams.has('code') &&
+        ['/', '/ua', '/ua/sign-in', '/ua/sign-up'].includes(url.pathname)
       ? 'code'
       : null;
   if (!parameterName) return null;
