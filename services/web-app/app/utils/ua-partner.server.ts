@@ -1,4 +1,4 @@
-import { createCookie } from 'react-router';
+import { createCookie, type MiddlewareFunction } from 'react-router';
 import { shouldUseSecureCookies } from './cookie-security.server';
 
 // Chromium caps persistent cookies at 400 days. Refreshing this cookie whenever
@@ -16,6 +16,14 @@ const uaPartnerCookie = createCookie('yawp_partner', {
 });
 
 export type UaPartnerContext = { partner: 'ua' };
+
+export function isUaPartnerHost(_request: Request) {
+  return false;
+}
+
+export function createUaPartnerMiddleware(): MiddlewareFunction<Response> {
+  return async (_args, next) => next();
+}
 
 export function isUaStudentBillingEnabled() {
   return (

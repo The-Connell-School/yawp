@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import {
   commitUaPartnerContext,
+  createUaPartnerMiddleware,
   destroyUaPartnerContext,
   getUaPartnerContext,
   getUaPartnerCodeCapture,
   isUaStudentBillingEnabled,
+  isUaPartnerHost,
   isValidUaPartnerCode,
 } from './ua-partner.server';
 
@@ -14,6 +16,7 @@ describe('UA partner context', () => {
     delete process.env.UA_STUDENT_BILLING_ENABLED;
     delete process.env.UA_ORGANIZATION_ID;
     delete process.env.UA_PARTNER_CODE;
+    delete process.env.UA_PARTNER_HOSTNAME;
   });
 
   test('is disabled unless both the flag and organization are configured', () => {
@@ -64,6 +67,50 @@ describe('UA partner context', () => {
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('SameSite=Lax');
     expect(setCookie).toContain('Max-Age=34560000');
+    expect(setCookie).not.toContain('Domain=');
+  });
+
+  test('recognizes only the configured UA hostname', () => {
+    process.env.UA_PARTNER_HOSTNAME = 'ua.yawp.school';
+
+    expect(isUaPartnerHost(new Request('https://ua.yawp.school/auth/login'))).toBe(
+      true
+    );
+    expect(isUaPartnerHost(new Request('https://yawp.school/auth/login'))).toBe(
+      false
+    );
+    expect(
+      isUaPartnerHost(new Request('https://ua.yawp.school.attacker.test/auth/login'))
+    ).toBe(false);
+  });
+
+  test('captures a valid organizationCode on any UA-host route and leaves the regular host untouched', async () => {
+    process.env.UA_PARTNER_HOSTNAME = 'ua.yawp.school';
+    process.env.UA_PARTNER_CODE = 'Roll-Tide-2026';
+    const middleware = createUaPartnerMiddleware();
+    const next = async () => new Response('next');
+
+    const captured = await middleware(
+      {
+        request: new Request(
+          'https://ua.yawp.school/auth/login?organizationCode=roll-tide-2026&from=email'
+        ),
+      } as any,
+      next
+    );
+    expect(captured?.status).toBe(303);
+    expect(captured?.headers.get('location')).toBe('/auth/login?from=email');
+    expect(captured?.headers.get('set-cookie')).toContain('yawp_partner');
+
+    const regular = await middleware(
+      {
+        request: new Request(
+          'https://yawp.school/auth/login?organizationCode=roll-tide-2026'
+        ),
+      } as any,
+      next
+    );
+    expect(await regular?.text()).toBe('next');
   });
 
   test('rejects an unsigned browser-supplied partner value', async () => {

@@ -10,6 +10,8 @@ import {
 
 const LICENSE_COHORT = 'ua-2026';
 const LICENSE_CUTOFF = new Date('2027-01-01T06:00:00.000Z');
+const APP_ORIGIN = 'http://127.0.0.1:5173';
+const UA_APP_ORIGIN = 'http://ua.localhost:5173';
 
 async function signIn(
   page: Page,
@@ -103,6 +105,8 @@ async function getFakeStripeSessions(page: Page) {
 }
 
 test.describe.serial('University of Alabama student onboarding', () => {
+  test.use({ baseURL: UA_APP_ORIGIN });
+
   test('carries partner context through every student auth screen and creates a classless student', async ({
     page,
     e2eContext,
@@ -117,9 +121,9 @@ test.describe.serial('University of Alabama student onboarding', () => {
       });
 
       await page.goto(
-        `/ua?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
+        `/?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
       );
-      await expect(page).toHaveURL(/\/ua$/);
+      await expect(page).toHaveURL(`${UA_APP_ORIGIN}/`);
       await expect(
         page.getByRole('heading', { name: 'Welcome to Yawp' })
       ).toBeVisible();
@@ -129,7 +133,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByAltText('Yawp')).toBeVisible();
 
       await page.getByRole('link', { name: 'Create an account' }).click();
-      await expect(page).toHaveURL(/\/ua\/sign-up$/);
+      await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/inv/signup`);
       await expect(page.getByLabel('Email')).toBeVisible();
       await expect(page.getByLabel('Code')).toHaveCount(0);
       await expect(
@@ -228,9 +232,9 @@ test.describe.serial('University of Alabama student onboarding', () => {
 
       await page.getByRole('button', { name: 'Sign out' }).click();
       await page.waitForURL(/\/auth\/login/);
-      await expect(page.getByAltText('The University of Alabama')).toHaveCount(
-        0
-      );
+      await expect(
+        page.getByAltText('The University of Alabama')
+      ).toBeVisible();
     } finally {
       await prisma.$disconnect();
     }
@@ -240,9 +244,9 @@ test.describe.serial('University of Alabama student onboarding', () => {
     page,
   }) => {
     await page.goto(
-      `/ua/sign-up?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
+      `/auth/inv/signup?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
     );
-    await expect(page).toHaveURL(/\/ua\/sign-up$/);
+    await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/inv/signup`);
     await expect(
       page.getByText('University of Alabama code accepted')
     ).toBeVisible();
@@ -254,21 +258,21 @@ test.describe.serial('University of Alabama student onboarding', () => {
     ).toBeVisible();
 
     await page.getByRole('button', { name: 'Use a different code' }).click();
-    await expect(page).toHaveURL(/\/ua\/sign-up$/);
+    await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/inv/signup`);
     await expect(page.getByLabel('Code')).toBeVisible();
 
     await page.getByLabel('Email').fill('ua.invalid.code@yawp.test');
     await page.getByRole('button', { name: 'Submit' }).click();
     await expect(page.getByText('Code is required')).toBeVisible();
-    await expect(page).toHaveURL(/\/ua\/sign-up$/);
+    await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/inv/signup`);
     await page.getByLabel('Code').fill('wrong-code');
     await page.getByRole('button', { name: 'Submit' }).click();
     await expect(
       page.getByText('Enter a valid organization code.')
     ).toBeVisible();
-    await expect(page).toHaveURL(/\/ua\/sign-up$/);
+    await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/inv/signup`);
 
-    await page.goto('/auth/inv/signup');
+    await page.goto(`${APP_ORIGIN}/auth/inv/signup`);
     await expect(page.getByLabel('Code')).toBeVisible();
     await expect(page.getByAltText('The University of Alabama')).toHaveCount(0);
   });
@@ -287,9 +291,9 @@ test.describe.serial('University of Alabama student onboarding', () => {
       });
 
       await page.goto(
-        `/ua?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
+        `/?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
       );
-      await expect(page).toHaveURL(/\/ua$/);
+      await expect(page).toHaveURL(`${UA_APP_ORIGIN}/`);
       await page.getByRole('link', { name: 'Log in' }).click();
       await expect(
         page.getByAltText('The University of Alabama')
@@ -451,7 +455,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
 
       const responses = await Promise.all(
         Array.from({ length: 6 }, () =>
-          page.request.post('http://127.0.0.1:5173/billing/ua', {
+          page.request.post(`${UA_APP_ORIGIN}/billing/ua`, {
             maxRedirects: 0,
           })
         )
@@ -493,8 +497,8 @@ test.describe.serial('University of Alabama student onboarding', () => {
           e2eContext.ua.organizationId,
         'payment_intent_data[metadata][cohort]': LICENSE_COHORT,
         success_url:
-          'http://127.0.0.1:5173/billing/ua/success?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: 'http://127.0.0.1:5173/billing/ua?canceled=1',
+          `${UA_APP_ORIGIN}/billing/ua/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${UA_APP_ORIGIN}/billing/ua?canceled=1`,
       };
       const extraLineItem = await page.request.post(
         `${E2E_STRIPE_BASE_URL}/v1/checkout/sessions`,
@@ -588,8 +592,8 @@ test.describe.serial('University of Alabama student onboarding', () => {
           cohort: LICENSE_COHORT,
         },
         success_url:
-          'http://127.0.0.1:5173/billing/ua/success?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: 'http://127.0.0.1:5173/billing/ua?canceled=1',
+          `${UA_APP_ORIGIN}/billing/ua/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${UA_APP_ORIGIN}/billing/ua?canceled=1`,
       });
       expect(created.data[0]!.line_items.data).toEqual([
         expect.objectContaining({
@@ -1060,13 +1064,17 @@ test.describe.serial('University of Alabama student onboarding', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
     await page.context().clearCookies();
-    await signIn(page, e2eContext.userEmail, 'johndoe', /\/app/);
+    await page.goto(`${APP_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(e2eContext.userEmail);
+    await page.getByLabel('Password').fill('johndoe');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.waitForURL(new RegExp(`${APP_ORIGIN}/app`));
     await expect(page).toHaveURL(/\/app\/?$/);
     await page.goto('/billing/ua');
     await expect(page).toHaveURL(/\/app\/?$/);
 
     await page.context().clearCookies();
-    await page.goto('/auth/inv/signup');
+    await page.goto(`${APP_ORIGIN}/auth/inv/signup`);
     await expect(page.getByLabel('Code')).toBeVisible();
     await expect(page.getByAltText('The University of Alabama')).toHaveCount(0);
   });
