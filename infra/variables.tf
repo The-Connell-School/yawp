@@ -1,7 +1,7 @@
 variable "aws_region" {
   type        = string
   description = "AWS region to deploy into"
-  default     = "us-east-1"   # adjust as needed
+  default     = "us-east-1" # adjust as needed
 }
 
 variable "aws_tf_state_s3_key" {
@@ -107,4 +107,48 @@ variable "production_domain_name" {
   type        = string
   description = "Public production domain served through the TLS 1.3 CloudFront edge."
   default     = "yawp.school"
+}
+
+variable "ua_student_billing_enabled" {
+  type        = bool
+  description = "Enable the University of Alabama student checkout and license gate."
+  default     = false
+}
+
+variable "ua_organization_id" {
+  type        = string
+  description = "Production Organization.id for the University of Alabama."
+  default     = ""
+}
+
+variable "yawp_app_origin" {
+  type        = string
+  description = "Public origin Stripe uses for checkout success and cancellation redirects."
+  default     = "https://yawp.school"
+}
+
+variable "stripe_secret_key" {
+  type        = string
+  description = "Stripe API secret key for the target environment."
+  sensitive   = true
+  default     = ""
+}
+
+variable "stripe_webhook_secret" {
+  type        = string
+  description = "Signing secret for the target environment's Stripe webhook endpoint."
+  sensitive   = true
+  default     = ""
+}
+
+variable "stripe_ua_2026_price_id" {
+  type        = string
+  description = "Stripe one-time Price ID for the 2026 University of Alabama student license."
+  default     = ""
+}
+
+variable "stripe_ua_existing_subscription_price_ids" {
+  type        = list(string)
+  description = "Legacy recurring Stripe Price IDs whose subscribers should receive the UA license without paying again."
+  default     = []
 }

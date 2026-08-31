@@ -300,17 +300,23 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = [
-          aws_secretsmanager_secret.db_url.arn,
-          aws_secretsmanager_secret.honeypot.arn,
-          aws_secretsmanager_secret.openai_org.arn,
-          aws_secretsmanager_secret.openai_key.arn,
-          aws_secretsmanager_secret.anthropic_key.arn,
-          aws_secretsmanager_secret.session.arn,
-          aws_secretsmanager_secret.internal_token.arn,
-          aws_secretsmanager_secret.sentry_dsn.arn,
-          aws_secretsmanager_secret.resend_api_key.arn
-        ]
+        Resource = concat(
+          [
+            aws_secretsmanager_secret.db_url.arn,
+            aws_secretsmanager_secret.honeypot.arn,
+            aws_secretsmanager_secret.openai_org.arn,
+            aws_secretsmanager_secret.openai_key.arn,
+            aws_secretsmanager_secret.anthropic_key.arn,
+            aws_secretsmanager_secret.session.arn,
+            aws_secretsmanager_secret.internal_token.arn,
+            aws_secretsmanager_secret.sentry_dsn.arn,
+            aws_secretsmanager_secret.resend_api_key.arn
+          ],
+          var.ua_student_billing_enabled ? [
+            aws_secretsmanager_secret.stripe_secret_key[0].arn,
+            aws_secretsmanager_secret.stripe_webhook_secret[0].arn
+          ] : []
+        )
       },
       {
         Effect = "Allow"
@@ -424,6 +430,28 @@ resource "aws_secretsmanager_secret_version" "sentry_dsn" {
   secret_string = var.sentry_dsn
 }
 
+resource "aws_secretsmanager_secret" "stripe_secret_key" {
+  count = var.ua_student_billing_enabled ? 1 : 0
+  name  = "${var.app_name}-${var.env}-stripe-secret-key"
+}
+
+resource "aws_secretsmanager_secret_version" "stripe_secret_key" {
+  count         = var.ua_student_billing_enabled ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.stripe_secret_key[0].id
+  secret_string = var.stripe_secret_key
+}
+
+resource "aws_secretsmanager_secret" "stripe_webhook_secret" {
+  count = var.ua_student_billing_enabled ? 1 : 0
+  name  = "${var.app_name}-${var.env}-stripe-webhook-secret"
+}
+
+resource "aws_secretsmanager_secret_version" "stripe_webhook_secret" {
+  count         = var.ua_student_billing_enabled ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.stripe_webhook_secret[0].id
+  secret_string = var.stripe_webhook_secret
+}
+
 resource "aws_apprunner_service" "web" {
   service_name = "${var.app_name}-${var.env}"
 
@@ -451,9 +479,14 @@ resource "aws_apprunner_service" "web" {
           POSTHOG_HOST = var.posthog_host
           AWS_S3_BUCKET_FOR_VIDEOS = aws_s3_bucket.videos.bucket
           AWS_S3_REGION_FOR_VIDEOS = "us-east-1"
+          UA_STUDENT_BILLING_ENABLED                = tostring(var.ua_student_billing_enabled)
+          UA_ORGANIZATION_ID                        = var.ua_organization_id
+          STRIPE_UA_2026_PRICE_ID                   = var.stripe_ua_2026_price_id
+          STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS = join(",", var.stripe_ua_existing_subscription_price_ids)
+          YAWP_APP_ORIGIN                           = var.yawp_app_origin
         }
 
-        runtime_environment_secrets = {
+        runtime_environment_secrets = merge({
           HONEYPOT_SECRET = aws_secretsmanager_secret.honeypot.arn
           OPENAI_ORG_ID = aws_secretsmanager_secret.openai_org.arn
           OPENAI_API_KEY = aws_secretsmanager_secret.openai_key.arn
@@ -463,7 +496,10 @@ resource "aws_apprunner_service" "web" {
           DATABASE_URL = aws_secretsmanager_secret.db_url.arn
           RESEND_API_KEY = aws_secretsmanager_secret.resend_api_key.arn
           SENTRY_DSN = aws_secretsmanager_secret.sentry_dsn.arn
-        }
+        }, var.ua_student_billing_enabled ? {
+          STRIPE_SECRET_KEY     = aws_secretsmanager_secret.stripe_secret_key[0].arn
+          STRIPE_WEBHOOK_SECRET = aws_secretsmanager_secret.stripe_webhook_secret[0].arn
+        } : {})
       }
     }
 
@@ -495,6 +531,19 @@ resource "aws_apprunner_service" "web" {
   tags = {
     Environment = var.env
     Project     = var.app_name
+  }
+
+  lifecycle {
+    precondition {
+      condition = !var.ua_student_billing_enabled || (
+        trimspace(var.ua_organization_id) != "" &&
+        trimspace(var.stripe_secret_key) != "" &&
+        trimspace(var.stripe_webhook_secret) != "" &&
+        trimspace(var.stripe_ua_2026_price_id) != "" &&
+        can(regex("^https://", var.yawp_app_origin))
+      )
+      error_message = "UA billing requires the organization ID, Stripe key, webhook secret, price ID, and an HTTPS app origin."
+    }
   }
 }
 

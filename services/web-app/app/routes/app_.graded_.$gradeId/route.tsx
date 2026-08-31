@@ -1,6 +1,6 @@
 import { invariant } from '@epic-web/invariant';
 import { type LoaderFunctionArgs, redirect } from 'react-router';
-import { requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
@@ -23,7 +23,8 @@ import { redirectWithToast } from '~/utils/toast.server';
  */
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.gradeId, 'No grade id found');
-  await requireUserId(request);
+  const userId = await requireUserId(request);
+  await requireMembership(request, userId);
 
   const mapping = await prisma.legacyGradeRedirect.findUnique({
     where: { gradeId: params.gradeId },

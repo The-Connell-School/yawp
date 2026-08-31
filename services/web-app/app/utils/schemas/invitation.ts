@@ -4,7 +4,7 @@ export const OwnerOnboardingMetadataSchema = z.object({
   organizationId: z.string(),
 });
 
-export const StudentOnboardingMetadataSchema = z
+const ClassStudentOnboardingMetadataSchema = z
   .object({
     schoolId: z.string(),
     klassId: z.string(),
@@ -20,6 +20,16 @@ export const StudentOnboardingMetadataSchema = z
       message: 'At least one of klassId, klassIds, or schoolId is required',
     }
   );
+
+const UaStudentOnboardingMetadataSchema = z.object({
+  partner: z.literal('ua'),
+  organizationId: z.string().min(1),
+});
+
+export const StudentOnboardingMetadataSchema = z.union([
+  ClassStudentOnboardingMetadataSchema,
+  UaStudentOnboardingMetadataSchema,
+]);
 
 export const TeacherOnboardingMetadataSchema = z.object({
   organizationId: z.string(),

@@ -46,6 +46,15 @@ function classCodeWhere(organizationId: string, code: string) {
   };
 }
 
+function requireStudentMembership(membership: { role: string }) {
+  if (membership.role !== 'STUDENT') {
+    throw Response.json(
+      { error: 'Forbidden', message: 'A student membership is required.' },
+      { status: 403 }
+    );
+  }
+}
+
 async function connectMembershipToClass(membershipId: string, classId: string) {
   await prisma.orgMembership.update({
     where: { id: membershipId },
@@ -56,6 +65,7 @@ async function connectMembershipToClass(membershipId: string, classId: string) {
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
+  requireStudentMembership(membership);
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
 
@@ -82,11 +92,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
     },
-    orderBy: [
-      { schoolYear: 'desc' },
-      { grade: 'asc' },
-      { period: 'asc' },
-    ],
+    orderBy: [{ schoolYear: 'desc' }, { grade: 'asc' }, { period: 'asc' }],
   });
 
   return data({
@@ -99,8 +105,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
+  requireStudentMembership(membership);
   const formData = await request.formData();
   const intent = formData.get('intent');
+  const isModal = new URL(request.url).searchParams.get('modal') === '1';
 
   if (intent === 'validate-code') {
     const { error, data: codeData } = await parseFormData(formData, CodeSchema);
@@ -108,8 +116,15 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const classes = await prisma.class.findMany({
       where: classCodeWhere(membership.organization.id, codeData.code),
-      select: { id: true },
-      take: 20,
+      select: {
+        id: true,
+        schoolYear: true,
+        period: true,
+        grade: true,
+        school: { select: { name: true } },
+        teachers: { select: { user: { select: { name: true } } } },
+      },
+      orderBy: [{ schoolYear: 'desc' }, { grade: 'asc' }, { period: 'asc' }],
     });
 
     if (classes.length === 0) {
@@ -119,9 +134,31 @@ export async function action({ request }: ActionFunctionArgs) {
     if (classes.length === 1) {
       await connectMembershipToClass(membership.id, classes[0]!.id);
 
+      if (isModal) return data({ status: 'enrolled' as const });
+
       return redirectWithToast('/app', {
         title: 'Success',
         description: 'You have been added to the class!',
+      });
+    }
+
+    if (isModal) {
+      return data({
+        status: 'select' as const,
+        code: codeData.code.trim(),
+        classes: classes.map((klass) => ({
+          id: klass.id,
+          label: `${klass.school.name} • ${klass.schoolYear}${
+            formatClassGradePeriod(klass)
+              ? ` • ${formatClassGradePeriod(klass)}`
+              : ''
+          } • ${
+            klass.teachers
+              .map((teacher) => teacher.user.name)
+              .filter(Boolean)
+              .join(', ') || 'Teacher'
+          }`,
+        })),
       });
     }
 
@@ -150,6 +187,8 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     await connectMembershipToClass(membership.id, klass.id);
+
+    if (isModal) return data({ status: 'enrolled' as const });
 
     return redirectWithToast('/app', {
       title: 'Success',

@@ -4,6 +4,8 @@ import {
   type MetaFunction,
   type ActionFunctionArgs,
   useNavigation,
+  type LoaderFunctionArgs,
+  useLoaderData,
 } from 'react-router';
 import { Link } from 'react-router';
 import {
@@ -22,25 +24,49 @@ import { generateTOTP } from '~/utils/totp.server';
 import { Prisma } from '@app/prisma';
 import { getDomainUrl } from '~/utils/misc';
 import { normalizeEmail } from '~/utils/normalize-email';
+import {
+  getUaPartnerContext,
+  requireUaOrganizationId,
+} from '~/utils/ua-partner.server';
 
-const Schema = z.object({
+const GenericSchema = z.object({
   email: EmailSchema,
   code: z.string().min(1, 'Code is required'),
 });
 
+const UaSchema = z.object({
+  email: EmailSchema,
+  code: z.string().optional(),
+});
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const partnerContext = await getUaPartnerContext(request);
+  return { partner: partnerContext?.partner ?? null };
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
-  const { error, data } = await parseFormData(formData, Schema);
+  const partnerContext = await getUaPartnerContext(request);
+  const isUa = partnerContext?.partner === 'ua';
+  const { error, data } = await parseFormData(
+    formData,
+    isUa ? UaSchema : GenericSchema
+  );
   if (error) return validationError(error);
   const normalizedEmail = normalizeEmail(data.email);
 
-  const classes = await prisma.class.findMany({
-    where: { code: { equals: data.code, mode: 'insensitive' }, isArchived: false },
-    select: { id: true },
-    take: 20,
-  });
+  const classes = isUa
+    ? []
+    : await prisma.class.findMany({
+        where: {
+          code: { equals: data.code!, mode: 'insensitive' },
+          isArchived: false,
+        },
+        select: { id: true },
+        take: 20,
+      });
 
-  if (classes.length === 0) {
+  if (!isUa && classes.length === 0) {
     return validationError({ fieldErrors: { code: 'Invalid code.' } }, data);
   }
 
@@ -73,6 +99,7 @@ export async function action({ request }: ActionFunctionArgs) {
   verifyUrl.searchParams.set('type', type);
   verifyUrl.searchParams.set('target', target);
   verifyUrl.searchParams.set('code', otp);
+  if (isUa) verifyUrl.searchParams.set('partner', 'ua');
 
   const verificationData: Prisma.InvitationCreateInput = {
     type,
@@ -80,9 +107,11 @@ export async function action({ request }: ActionFunctionArgs) {
     ...verificationConfig,
     expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
     metadata: JSON.stringify(
-      classes.length === 1
-        ? { klassId: classes[0]!.id }
-        : { klassIds: classes.map((c) => c.id) }
+      isUa
+        ? { partner: 'ua', organizationId: requireUaOrganizationId() }
+        : classes.length === 1
+          ? { klassId: classes[0]!.id }
+          : { klassIds: classes.map((c) => c.id) }
     ),
   };
 
@@ -137,25 +166,27 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function SignupRoute() {
+  const { partner } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
+  const isUa = partner === 'ua';
+  const schema = isUa ? UaSchema : GenericSchema;
 
   return (
     <div className="mx-auto w-full max-w-md">
       <div className="mt-8 flex flex-col gap-3 text-center">
-        <img
-          src="/img/logo_for_light_mode.png"
-          alt="Logo"
-          className="mx-auto mb-8 h-auto w-48 rounded object-cover sm:w-52"
-        />
         <h1>Let's get started!</h1>
-        <p>Please enter your email & passcode.</p>
+        <p>
+          {isUa
+            ? 'Please enter your email.'
+            : 'Please enter your email & passcode.'}
+        </p>
       </div>
       <div className="mx-auto mt-10 w-full max-w-md px-8">
         <ValidatedForm
           method="POST"
           className="flex flex-col gap-4"
-          schema={Schema}
+          schema={schema}
           defaultValues={{
             email: '',
             code: '',
@@ -168,20 +199,26 @@ export default function SignupRoute() {
             label="Email"
             autoFocus
           />
-          <div className="flex w-full items-center rounded-lg border p-3 bg-white">
-            <FormInput
-              scope="code"
-              type="text"
-              label="Code"
-              name="code"
-              className="w-full"
-            />
-          </div>
+          {!isUa ? (
+            <div className="flex w-full items-center rounded-lg border p-3 bg-white">
+              <FormInput
+                scope="code"
+                type="text"
+                label="Code"
+                name="code"
+                className="w-full"
+              />
+            </div>
+          ) : null}
           <Button className="w-full" type="submit" disabled={isLoading}>
             Submit
           </Button>
           <Button variant="link" asChild className="mx-auto mt-2 w-full">
-            <Link to="/auth/login">Already have an account?</Link>
+            <Link
+              to={isUa ? '/auth/login?redirectTo=%2Fua' : '/auth/login'}
+            >
+              Already have an account?
+            </Link>
           </Button>
         </ValidatedForm>
       </div>
