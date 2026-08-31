@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { generateTOTP } from '../../app/utils/totp.server';
-import { E2E_STRIPE_BASE_URL } from '../constants';
+import { E2E_STRIPE_BASE_URL, E2E_UA_PARTNER_CODE } from '../constants';
 import {
   createPrismaReconciliationDependencies,
   reconcileUaExistingSubscriptions,
@@ -116,7 +116,8 @@ test.describe.serial('University of Alabama student onboarding', () => {
         where: { target: studentEmail, type: 'onboard-student' },
       });
 
-      await page.goto('/ua');
+      await page.goto(`/ua?code=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`);
+      await expect(page).toHaveURL(/\/ua$/);
       await expect(
         page.getByRole('heading', { name: 'Welcome to Yawp' })
       ).toBeVisible();
@@ -126,9 +127,12 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByAltText('Yawp')).toBeVisible();
 
       await page.getByRole('link', { name: 'Create an account' }).click();
-      await expect(page).toHaveURL(/\/auth\/inv\/signup/);
+      await expect(page).toHaveURL(/\/ua\/sign-up$/);
       await expect(page.getByLabel('Email')).toBeVisible();
       await expect(page.getByLabel('Code')).toHaveCount(0);
+      await expect(
+        page.getByText('University of Alabama code accepted')
+      ).toBeVisible();
       await expect(
         page.getByAltText('The University of Alabama')
       ).toBeVisible();
@@ -230,6 +234,43 @@ test.describe.serial('University of Alabama student onboarding', () => {
     }
   });
 
+  test('remembers the accepted code until the student explicitly clears it', async ({
+    page,
+  }) => {
+    await page.goto(
+      `/ua/sign-up?code=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
+    );
+    await expect(page).toHaveURL(/\/ua\/sign-up$/);
+    await expect(
+      page.getByText('University of Alabama code accepted')
+    ).toBeVisible();
+    await expect(page.getByLabel('Code')).toHaveCount(0);
+
+    await page.reload();
+    await expect(
+      page.getByText('University of Alabama code accepted')
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: 'Use a different code' }).click();
+    await expect(page).toHaveURL(/\/ua\/sign-up$/);
+    await expect(page.getByLabel('Code')).toBeVisible();
+
+    await page.getByLabel('Email').fill('ua.invalid.code@yawp.test');
+    await page.getByRole('button', { name: 'Submit' }).click();
+    await expect(page.getByText('Code is required')).toBeVisible();
+    await expect(page).toHaveURL(/\/ua\/sign-up$/);
+    await page.getByLabel('Code').fill('wrong-code');
+    await page.getByRole('button', { name: 'Submit' }).click();
+    await expect(
+      page.getByText('Enter a valid organization code.')
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/ua\/sign-up$/);
+
+    await page.goto('/auth/inv/signup');
+    await expect(page.getByLabel('Code')).toBeVisible();
+    await expect(page.getByAltText('The University of Alabama')).toHaveCount(0);
+  });
+
   test('lets an existing account explicitly add only a UA student membership', async ({
     page,
     e2eContext,
@@ -243,7 +284,8 @@ test.describe.serial('University of Alabama student onboarding', () => {
         },
       });
 
-      await page.goto('/ua');
+      await page.goto(`/ua?code=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`);
+      await expect(page).toHaveURL(/\/ua$/);
       await page.getByRole('link', { name: 'Log in' }).click();
       await expect(
         page.getByAltText('The University of Alabama')

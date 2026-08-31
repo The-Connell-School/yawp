@@ -966,6 +966,7 @@ describe('PR preview deployment contract', () => {
     for (const name of [
       'PREVIEW_UA_STUDENT_BILLING_ENABLED',
       'PREVIEW_UA_ORGANIZATION_ID',
+      'PREVIEW_UA_PARTNER_CODE',
       'PREVIEW_STRIPE_SECRET_KEY',
       'PREVIEW_STRIPE_WEBHOOK_SECRET',
       'PREVIEW_STRIPE_UA_2026_PRICE_ID',
@@ -976,6 +977,7 @@ describe('PR preview deployment contract', () => {
     for (const name of [
       'ua_student_billing_enabled',
       'ua_organization_id',
+      'ua_partner_code',
       'stripe_secret_key',
       'stripe_webhook_secret',
       'stripe_ua_2026_price_id',
@@ -986,6 +988,7 @@ describe('PR preview deployment contract', () => {
     expect(infra).toContain('STRIPE_SECRET_KEY');
     expect(infra).toContain('STRIPE_WEBHOOK_SECRET');
     expect(infra).toContain('UA_STUDENT_BILLING_ENABLED');
+    expect(infra).toContain('UA_PARTNER_CODE');
     expect(infra).toContain('YAWP_APP_ORIGIN');
   });
 

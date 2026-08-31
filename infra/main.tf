@@ -481,6 +481,7 @@ resource "aws_apprunner_service" "web" {
           AWS_S3_REGION_FOR_VIDEOS = "us-east-1"
           UA_STUDENT_BILLING_ENABLED                = tostring(var.ua_student_billing_enabled)
           UA_ORGANIZATION_ID                        = var.ua_organization_id
+          UA_PARTNER_CODE                           = var.ua_partner_code
           STRIPE_UA_2026_PRICE_ID                   = var.stripe_ua_2026_price_id
           STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS = join(",", var.stripe_ua_existing_subscription_price_ids)
           YAWP_APP_ORIGIN                           = var.yawp_app_origin
@@ -537,12 +538,13 @@ resource "aws_apprunner_service" "web" {
     precondition {
       condition = !var.ua_student_billing_enabled || (
         trimspace(var.ua_organization_id) != "" &&
+        trimspace(var.ua_partner_code) != "" &&
         trimspace(var.stripe_secret_key) != "" &&
         trimspace(var.stripe_webhook_secret) != "" &&
         trimspace(var.stripe_ua_2026_price_id) != "" &&
         can(regex("^https://", var.yawp_app_origin))
       )
-      error_message = "UA billing requires the organization ID, Stripe key, webhook secret, price ID, and an HTTPS app origin."
+      error_message = "UA billing requires the organization ID, partner code, Stripe key, webhook secret, price ID, and an HTTPS app origin."
     }
   }
 }

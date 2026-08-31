@@ -7,6 +7,7 @@ import {
   E2E_STRIPE_BASE_URL,
   E2E_STRIPE_WEBHOOK_SECRET,
   E2E_UA_ORGANIZATION_ID,
+  E2E_UA_PARTNER_CODE,
 } from './constants';
 
 const CONTAINER_NAME = 'yawp-e2e-postgres';
@@ -192,6 +193,7 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
     E2E_ASSIGNMENT_INSIGHTS_FIXTURE: 'true',
     UA_STUDENT_BILLING_ENABLED: 'true',
     UA_ORGANIZATION_ID: E2E_UA_ORGANIZATION_ID,
+    UA_PARTNER_CODE: E2E_UA_PARTNER_CODE,
     STRIPE_SECRET_KEY: 'sk_test_e2e_not_a_real_secret',
     STRIPE_WEBHOOK_SECRET: E2E_STRIPE_WEBHOOK_SECRET,
     STRIPE_UA_2026_PRICE_ID: 'price_ua_e2e_2026',

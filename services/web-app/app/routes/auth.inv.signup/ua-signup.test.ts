@@ -6,6 +6,8 @@ const prisma = {
   invitation: { findFirst: mock(), delete: mock(), create: mock() },
 };
 const getUaPartnerContext = mock();
+const commitUaPartnerContext = mock();
+const isValidUaPartnerCode = mock();
 const requireUaOrganizationId = mock();
 const sendEmail = mock();
 const generateTOTP = mock();
@@ -13,12 +15,14 @@ const generateTOTP = mock();
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/ua-partner.server', () => ({
   getUaPartnerContext,
+  commitUaPartnerContext,
+  isValidUaPartnerCode,
   requireUaOrganizationId,
 }));
 mock.module('~/utils/email.server', () => ({ sendEmail }));
 mock.module('~/utils/totp.server', () => ({ generateTOTP }));
 
-const { action } = await import('./route');
+const { studentSignupAction } = await import('./signup.server');
 
 function signup(fields: Record<string, string>) {
   const form = new FormData();
@@ -35,6 +39,8 @@ describe('UA student signup', () => {
       for (const fn of Object.values(model)) fn.mockReset();
     }
     getUaPartnerContext.mockReset();
+    commitUaPartnerContext.mockReset();
+    isValidUaPartnerCode.mockReset();
     requireUaOrganizationId.mockReset();
     sendEmail.mockReset();
     generateTOTP.mockReset();
@@ -43,6 +49,8 @@ describe('UA student signup', () => {
     prisma.invitation.findFirst.mockResolvedValue(null);
     prisma.invitation.create.mockResolvedValue({ id: 'invite-1' });
     requireUaOrganizationId.mockReturnValue('org-ua');
+    commitUaPartnerContext.mockResolvedValue('yawp_partner=ua');
+    isValidUaPartnerCode.mockReturnValue(false);
     generateTOTP.mockResolvedValue({
       otp: 'ABC123',
       algorithm: 'SHA-256',
@@ -56,9 +64,10 @@ describe('UA student signup', () => {
   test('trusted UA context creates a student invitation without a class code', async () => {
     getUaPartnerContext.mockResolvedValue({ partner: 'ua' });
 
-    const response = (await action({
-      request: signup({ email: 'student@ua.edu' }),
-    } as any)) as Response;
+    const response = (await studentSignupAction(
+      { request: signup({ email: 'student@ua.edu' }) } as any,
+      { partner: 'ua' }
+    )) as Response;
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toContain('partner=ua');
@@ -72,10 +81,35 @@ describe('UA student signup', () => {
     });
   });
 
+  test('UA signup rejects a missing or invalid organization code', async () => {
+    getUaPartnerContext.mockResolvedValue(null);
+
+    const response = await studentSignupAction(
+      { request: signup({ email: 'student@ua.edu', code: 'wrong' }) } as any,
+      { partner: 'ua' }
+    );
+
+    expect(response).not.toBeInstanceOf(Response);
+    expect(prisma.invitation.create).not.toHaveBeenCalled();
+  });
+
+  test('UA signup accepts a valid typed code and remembers it', async () => {
+    getUaPartnerContext.mockResolvedValue(null);
+    isValidUaPartnerCode.mockReturnValue(true);
+
+    const response = (await studentSignupAction(
+      { request: signup({ email: 'student@ua.edu', code: 'ROLLTIDE' }) } as any,
+      { partner: 'ua' }
+    )) as Response;
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('set-cookie')).toContain('yawp_partner');
+  });
+
   test('generic signup still requires and validates a class code', async () => {
     getUaPartnerContext.mockResolvedValue(null);
 
-    const response = await action({
+    const response = await studentSignupAction({
       request: signup({ email: 'student@example.com' }),
     } as any);
 

@@ -55,6 +55,7 @@ jobs:
       PREVIEW_AI_MODE: live
       PREVIEW_UA_STUDENT_BILLING_ENABLED: ${{ vars.PREVIEW_UA_STUDENT_BILLING_ENABLED || 'false' }}
       PREVIEW_UA_ORGANIZATION_ID: ${{ vars.PREVIEW_UA_ORGANIZATION_ID || 'university-of-alabama-preview' }}
+      PREVIEW_UA_PARTNER_CODE: ${{ vars.PREVIEW_UA_PARTNER_CODE || 'UA-PREVIEW-2026' }}
       PREVIEW_STRIPE_SECRET_KEY: ${{ secrets.PREVIEW_STRIPE_SECRET_KEY }}
       PREVIEW_STRIPE_WEBHOOK_SECRET: ${{ secrets.PREVIEW_STRIPE_WEBHOOK_SECRET }}
       PREVIEW_STRIPE_UA_2026_PRICE_ID: ${{ vars.PREVIEW_STRIPE_UA_2026_PRICE_ID }}
@@ -81,6 +82,7 @@ jobs:
           test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing preview-host secret PREVIEW_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY"; exit 1; }
           if [[ "$PREVIEW_UA_STUDENT_BILLING_ENABLED" == "true" ]]; then
             test -n "$PREVIEW_UA_ORGANIZATION_ID" || { echo "Missing preview-host variable PREVIEW_UA_ORGANIZATION_ID"; exit 1; }
+            test -n "$PREVIEW_UA_PARTNER_CODE" || { echo "Missing preview-host variable PREVIEW_UA_PARTNER_CODE"; exit 1; }
             test -n "$PREVIEW_STRIPE_SECRET_KEY" || { echo "Missing preview-host secret PREVIEW_STRIPE_SECRET_KEY"; exit 1; }
             test -n "$PREVIEW_STRIPE_WEBHOOK_SECRET" || { echo "Missing preview-host secret PREVIEW_STRIPE_WEBHOOK_SECRET"; exit 1; }
             test -n "$PREVIEW_STRIPE_UA_2026_PRICE_ID" || { echo "Missing preview-host variable PREVIEW_STRIPE_UA_2026_PRICE_ID"; exit 1; }
@@ -220,6 +222,7 @@ jobs:
             "PREVIEW_AI_MODE=$(shell_quote "$PREVIEW_AI_MODE")"
             "PREVIEW_UA_STUDENT_BILLING_ENABLED=$(shell_quote "$PREVIEW_UA_STUDENT_BILLING_ENABLED")"
             "PREVIEW_UA_ORGANIZATION_ID=$(shell_quote "$PREVIEW_UA_ORGANIZATION_ID")"
+            "PREVIEW_UA_PARTNER_CODE=$(shell_quote "$PREVIEW_UA_PARTNER_CODE")"
             "PREVIEW_STRIPE_SECRET_KEY=$(shell_quote "$PREVIEW_STRIPE_SECRET_KEY")"
             "PREVIEW_STRIPE_WEBHOOK_SECRET=$(shell_quote "$PREVIEW_STRIPE_WEBHOOK_SECRET")"
             "PREVIEW_STRIPE_UA_2026_PRICE_ID=$(shell_quote "$PREVIEW_STRIPE_UA_2026_PRICE_ID")"

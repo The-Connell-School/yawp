@@ -1,7 +1,10 @@
 import { createCookie } from 'react-router';
 import { shouldUseSecureCookies } from './cookie-security.server';
 
-const UA_PARTNER_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 2;
+// Chromium caps persistent cookies at 400 days. Refreshing this cookie whenever
+// a partner code is accepted gives the UA entry context the closest practical
+// equivalent to "remember this indefinitely" without making it an auth token.
+const UA_PARTNER_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 400;
 
 const uaPartnerCookie = createCookie('yawp_partner', {
   httpOnly: true,
@@ -17,8 +20,35 @@ export type UaPartnerContext = { partner: 'ua' };
 export function isUaStudentBillingEnabled() {
   return (
     process.env.UA_STUDENT_BILLING_ENABLED === 'true' &&
-    Boolean(process.env.UA_ORGANIZATION_ID)
+    Boolean(process.env.UA_ORGANIZATION_ID) &&
+    Boolean(process.env.UA_PARTNER_CODE?.trim())
   );
+}
+
+function normalizePartnerCode(value: string) {
+  return value.trim().toLocaleLowerCase('en-US');
+}
+
+export function isValidUaPartnerCode(value: string | null | undefined) {
+  const configured = process.env.UA_PARTNER_CODE?.trim();
+  return Boolean(
+    configured &&
+    value &&
+    normalizePartnerCode(value) === normalizePartnerCode(configured)
+  );
+}
+
+export function getUaPartnerCodeCapture(request: Request) {
+  const url = new URL(request.url);
+  if (!url.searchParams.has('code')) return null;
+
+  const accepted = isValidUaPartnerCode(url.searchParams.get('code'));
+  url.searchParams.delete('code');
+
+  return {
+    accepted,
+    redirectTo: `${url.pathname}${url.search}`,
+  };
 }
 
 export function requireUaOrganizationId() {

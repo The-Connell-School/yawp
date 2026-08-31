@@ -121,6 +121,12 @@ variable "ua_organization_id" {
   default     = ""
 }
 
+variable "ua_partner_code" {
+  type        = string
+  description = "Student-facing organization code accepted by the University of Alabama signup routes."
+  default     = ""
+}
+
 variable "yawp_app_origin" {
   type        = string
   description = "Public origin Stripe uses for checkout success and cancellation redirects."

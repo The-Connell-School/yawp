@@ -14,7 +14,6 @@ const requireAnonymous = mock();
 const getPasswordHash = mock();
 const redirectWithToast = mock();
 const setMembershipId = mock();
-const destroyUaPartnerContext = mock();
 
 mock.module('~/utils/db.server.ts', () => ({ prisma }));
 mock.module('~/utils/auth.server.ts', () => ({
@@ -39,10 +38,10 @@ mock.module('~/utils/toast.server.ts', () => ({ redirectWithToast }));
 mock.module('~/cookies/membership-id.server.ts', () => ({ setMembershipId }));
 mock.module('~/utils/ua-partner.server', () => ({
   requireUaOrganizationId: () => 'org-ua',
-  destroyUaPartnerContext,
 }));
 process.env.UA_STUDENT_BILLING_ENABLED = 'true';
 process.env.UA_ORGANIZATION_ID = 'org-ua';
+process.env.UA_PARTNER_CODE = 'ROLLTIDE';
 
 const { action, loader } = await import('./route');
 
@@ -59,7 +58,6 @@ describe('UA student onboarding', () => {
     getPasswordHash.mockReset();
     redirectWithToast.mockReset();
     setMembershipId.mockReset();
-    destroyUaPartnerContext.mockReset();
     authSession.set.mockReset();
 
     getPasswordHash.mockResolvedValue('hash');
@@ -72,7 +70,6 @@ describe('UA student onboarding', () => {
       expirationDate: new Date('2027-01-01T00:00:00Z'),
     });
     setMembershipId.mockResolvedValue('membership-id=member-ua');
-    destroyUaPartnerContext.mockResolvedValue('yawp_partner=; Max-Age=0');
     redirectWithToast.mockImplementation(
       async (to: string, _toast: unknown, init?: ResponseInit) =>
         new Response(null, { ...init, status: 302, headers: { location: to } })
@@ -120,11 +117,10 @@ describe('UA student onboarding', () => {
 
     const responseInit = redirectWithToast.mock.calls[0]?.[2] as ResponseInit;
     const setCookies = (responseInit.headers as Headers).getSetCookie();
-    expect(setCookies).toHaveLength(4);
+    expect(setCookies).toHaveLength(3);
     expect(setCookies).toEqual([
       'auth=session',
       'invitation=; Max-Age=0',
-      'yawp_partner=; Max-Age=0',
       'membership-id=member-ua',
     ]);
   });

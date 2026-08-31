@@ -25,7 +25,11 @@ active-license cases remain deterministic after the real cohort expires.
 
 | Area | Edge case | Proof |
 | --- | --- | --- |
-| Partner entry | Anonymous `/ua` establishes trusted UA context | Browser E2E + route contract |
+| Partner entry | A valid code on `/ua`, `/ua/sign-in`, or `/ua/sign-up` is remembered and removed from the URL | Browser E2E + route contract |
+| Partner entry | A bare `/ua` URL does not silently accept an organization code | Route contract |
+| Partner entry | The accepted code survives refresh until the student explicitly clears it | Browser E2E + cookie contract |
+| Partner entry | Clearing the accepted code makes UA signup require the code again | Browser E2E + route contract |
+| Auth isolation | Normal sign-in and signup stay generic even after visiting UA routes | Browser E2E + route contract |
 | Partner entry | Feature disabled or missing organization is unavailable | Configuration/route contract |
 | Branding | UA auth pages show only official UA logo + neutral plus + YAWP logo | Browser E2E + component contract |
 | Branding | Generic auth remains YAWP-only; no application colors change | Browser E2E + component contract |

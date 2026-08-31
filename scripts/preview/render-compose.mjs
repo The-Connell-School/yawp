@@ -123,6 +123,7 @@ ${tlsLabels}
   const uaStudentBillingEnvironment = uaStudentBillingEnabled
     ? `      UA_STUDENT_BILLING_ENABLED: "true"
       UA_ORGANIZATION_ID: ${q(optionalEnv('PREVIEW_UA_ORGANIZATION_ID'))}
+      UA_PARTNER_CODE: ${q(optionalEnv('PREVIEW_UA_PARTNER_CODE'))}
       STRIPE_SECRET_KEY: ${q(optionalEnv('PREVIEW_STRIPE_SECRET_KEY'))}
       STRIPE_WEBHOOK_SECRET: ${q(optionalEnv('PREVIEW_STRIPE_WEBHOOK_SECRET'))}
       STRIPE_UA_2026_PRICE_ID: ${q(optionalEnv('PREVIEW_STRIPE_UA_2026_PRICE_ID'))}
@@ -134,6 +135,7 @@ ${tlsLabels}
   if (uaStudentBillingEnabled) {
     for (const name of [
       'PREVIEW_UA_ORGANIZATION_ID',
+      'PREVIEW_UA_PARTNER_CODE',
       'PREVIEW_STRIPE_SECRET_KEY',
       'PREVIEW_STRIPE_WEBHOOK_SECRET',
       'PREVIEW_STRIPE_UA_2026_PRICE_ID',

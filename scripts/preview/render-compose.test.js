@@ -242,6 +242,7 @@ describe('renderPreviewCompose', () => {
     const names = [
       'PREVIEW_UA_STUDENT_BILLING_ENABLED',
       'PREVIEW_UA_ORGANIZATION_ID',
+      'PREVIEW_UA_PARTNER_CODE',
       'PREVIEW_STRIPE_SECRET_KEY',
       'PREVIEW_STRIPE_WEBHOOK_SECRET',
       'PREVIEW_STRIPE_UA_2026_PRICE_ID',
@@ -253,6 +254,7 @@ describe('renderPreviewCompose', () => {
     Object.assign(process.env, {
       PREVIEW_UA_STUDENT_BILLING_ENABLED: 'true',
       PREVIEW_UA_ORGANIZATION_ID: 'university-of-alabama-preview',
+      PREVIEW_UA_PARTNER_CODE: 'UA-PREVIEW-2026',
       PREVIEW_STRIPE_SECRET_KEY: 'rk_test_preview',
       PREVIEW_STRIPE_WEBHOOK_SECRET: 'whsec_preview',
       PREVIEW_STRIPE_UA_2026_PRICE_ID: 'price_ua_2026',
@@ -266,6 +268,7 @@ describe('renderPreviewCompose', () => {
       expect(compose).toContain(
         'UA_ORGANIZATION_ID: "university-of-alabama-preview"'
       );
+      expect(compose).toContain('UA_PARTNER_CODE: "UA-PREVIEW-2026"');
       expect(compose).toContain('STRIPE_SECRET_KEY: "rk_test_preview"');
       expect(compose).toContain('STRIPE_WEBHOOK_SECRET: "whsec_preview"');
       expect(compose).toContain(
