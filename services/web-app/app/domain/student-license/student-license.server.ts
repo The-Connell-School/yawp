@@ -81,7 +81,11 @@ export function assertStripeModeAllowed(
   livemode: boolean,
   env: Record<string, string | undefined> = process.env
 ) {
-  if (env.NODE_ENV === 'production' && !livemode) {
+  if (
+    env.NODE_ENV === 'production' &&
+    env.YAWP_ENVIRONMENT !== 'preview' &&
+    !livemode
+  ) {
     throw new Error('Stripe test-mode data is not allowed in production');
   }
 }

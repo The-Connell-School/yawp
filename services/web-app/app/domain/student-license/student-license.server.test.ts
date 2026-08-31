@@ -105,6 +105,18 @@ describe('UA student license configuration', () => {
     expect(() =>
       assertStripeModeAllowed(false, { NODE_ENV: 'development' })
     ).not.toThrow();
+    expect(() =>
+      assertStripeModeAllowed(false, {
+        NODE_ENV: 'production',
+        YAWP_ENVIRONMENT: 'preview',
+      })
+    ).not.toThrow();
+    expect(() =>
+      assertStripeModeAllowed(false, {
+        NODE_ENV: 'production',
+        YAWP_ENVIRONMENT: 'production',
+      })
+    ).toThrow('Stripe test-mode data is not allowed in production');
   });
 });
 
