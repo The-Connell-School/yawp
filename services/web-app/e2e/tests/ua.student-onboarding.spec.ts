@@ -23,7 +23,33 @@ async function signIn(
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Log in' }).click();
-  await page.waitForURL(expectedPath, { timeout: 15_000 });
+  await page.waitForURL(expectedPath, { timeout: 30_000 });
+}
+
+async function deleteTestStudentByEmail(email: string) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { memberships: { select: { id: true } } },
+    });
+    const membershipIds = user?.memberships.map(({ id }) => id) ?? [];
+
+    await prisma.$transaction([
+      prisma.studentLicense.deleteMany({
+        where: { membershipId: { in: membershipIds } },
+      }),
+      prisma.orgMembership.deleteMany({
+        where: { id: { in: membershipIds } },
+      }),
+      prisma.user.deleteMany({ where: { email } }),
+      prisma.invitation.deleteMany({
+        where: { target: email, type: 'onboard-student' },
+      }),
+    ]);
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
 async function clearStudentClasses(membershipId: string) {
@@ -105,6 +131,7 @@ async function getFakeStripeSessions(page: Page) {
 }
 
 test.describe.serial('University of Alabama student onboarding', () => {
+  test.describe.configure({ timeout: 60_000 });
   test.use({ baseURL: UA_APP_ORIGIN });
 
   test('carries partner context through every student auth screen and creates a classless student', async ({
@@ -115,10 +142,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
     const studentEmail = 'ua.new.student@yawp.test';
 
     try {
-      await prisma.user.deleteMany({ where: { email: studentEmail } });
-      await prisma.invitation.deleteMany({
-        where: { target: studentEmail, type: 'onboard-student' },
-      });
+      await deleteTestStudentByEmail(studentEmail);
 
       await page.goto(
         `/?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`

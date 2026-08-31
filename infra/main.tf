@@ -469,7 +469,7 @@ resource "aws_apprunner_service" "web" {
       image_configuration {
         port = "8080"
 
-        runtime_environment_variables = {
+        runtime_environment_variables = merge({
           NODE_ENV = var.env
           PORT = "8080"
           AI_MODEL = "claude-sonnet-4-6"
@@ -486,9 +486,10 @@ resource "aws_apprunner_service" "web" {
           UA_PARTNER_CODE                           = var.ua_partner_code
           UA_PARTNER_HOSTNAME                       = var.ua_partner_hostname
           STRIPE_UA_2026_PRICE_ID                   = var.stripe_ua_2026_price_id
-          STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS = join(",", var.stripe_ua_existing_subscription_price_ids)
           YAWP_APP_ORIGIN                           = var.yawp_app_origin
-        }
+        }, length(var.stripe_ua_existing_subscription_price_ids) > 0 ? {
+          STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS = join(",", var.stripe_ua_existing_subscription_price_ids)
+        } : {})
 
         runtime_environment_secrets = merge({
           HONEYPOT_SECRET = aws_secretsmanager_secret.honeypot.arn
@@ -556,6 +557,30 @@ resource "aws_apprunner_service" "web" {
       error_message = "UA Stripe credential staging requires the Stripe key, webhook secret, and price ID; enabling billing also requires the organization ID, partner code, partner hostname, and a matching HTTPS UA app origin."
     }
   }
+}
+
+# CloudFront forwards the viewer Host header so the application can select the
+# UA partner experience. App Runner rejects unassociated Host values at its
+# Envoy edge, so the partner hostname must also be registered here even though
+# public A/AAAA traffic terminates at CloudFront.
+resource "aws_apprunner_custom_domain_association" "ua_partner" {
+  count                = local.production_edge_enabled && var.ua_partner_hostname != var.production_domain_name ? 1 : 0
+  domain_name          = var.ua_partner_hostname
+  enable_www_subdomain = false
+  service_arn          = aws_apprunner_service.web.arn
+}
+
+resource "aws_route53_record" "ua_apprunner_cert_validation" {
+  # App Runner returns two computed validation records. Fixed keys keep the
+  # graph plannable on the first apply, before their names are known.
+  for_each = local.production_edge_enabled && var.ua_partner_hostname != var.production_domain_name ? toset(["0", "1"]) : toset([])
+
+  allow_overwrite = true
+  name            = tolist(aws_apprunner_custom_domain_association.ua_partner[0].certificate_validation_records)[tonumber(each.key)].name
+  records         = [tolist(aws_apprunner_custom_domain_association.ua_partner[0].certificate_validation_records)[tonumber(each.key)].value]
+  ttl             = 60
+  type            = tolist(aws_apprunner_custom_domain_association.ua_partner[0].certificate_validation_records)[tonumber(each.key)].type
+  zone_id         = data.aws_route53_zone.production_domain[0].zone_id
 }
 
 resource "aws_acm_certificate" "web_edge" {
