@@ -51,8 +51,9 @@ import {
   isPreviewAccessGateEnabled,
   previewAccessMiddleware,
 } from './utils/preview-access.server.ts';
+import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
 
-export const middleware = [previewAccessMiddleware];
+export const middleware = [previewAccessMiddleware, uaPartnerMiddleware];
 
 export const links: LinksFunction = () => {
   return [

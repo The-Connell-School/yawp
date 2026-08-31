@@ -55,10 +55,11 @@ describe('preview wake server', () => {
     expect(parsePreviewPr('pr-241.evil.test', 'preview.yawp.school')).toBeNull();
     expect(parsePreviewPr('pr-241.preview.yawp.school:443', 'preview.yawp.school')).toBe(241);
     expect(parsePreviewPr('blackboard-pr-241.preview.yawp.school', 'preview.yawp.school')).toBe(241);
+    expect(parsePreviewPr('ua-pr-241.preview.yawp.school', 'preview.yawp.school')).toBe(241);
     expect(parsePreviewPr('blackboard.pr-241.preview.yawp.school', 'preview.yawp.school')).toBeNull();
   });
 
-  test('distinguishes the Blackboard Learn host from the YAWP preview host', () => {
+  test('distinguishes the UA and Blackboard hosts from the default YAWP preview host', () => {
     expect(parsePreviewHost('pr-241.preview.yawp.school', 'preview.yawp.school')).toEqual({
       pr: 241,
       service: 'web',
@@ -67,8 +68,15 @@ describe('preview wake server', () => {
       pr: 291,
       service: 'blackboard',
     });
+    expect(parsePreviewHost('ua-pr-291.preview.yawp.school', 'preview.yawp.school')).toEqual({
+      pr: 291,
+      service: 'ua',
+    });
     expect(previewServiceHostname(291, 'preview.yawp.school', 'blackboard')).toBe(
       'blackboard-pr-291.preview.yawp.school'
+    );
+    expect(previewServiceHostname(291, 'preview.yawp.school', 'ua')).toBe(
+      'ua-pr-291.preview.yawp.school'
     );
   });
 

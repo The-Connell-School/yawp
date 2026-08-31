@@ -65,6 +65,34 @@ afterEach(async () => {
 });
 
 describe('preview ingress', () => {
+  test('routes the UA preview hostname to the same web container with its host preserved', async () => {
+    let receivedHost;
+    let resolvedService;
+    const upstreamPort = await listen(createServer((incoming, response) => {
+      receivedHost = incoming.headers.host;
+      response.end('ua');
+    }));
+    const ingress = createPreviewIngress({
+      domain: 'preview.yawp.school',
+      resolveTarget: async (_pr, { service }) => {
+        resolvedService = service;
+        return { host: '127.0.0.1', port: upstreamPort };
+      },
+      authorizeWake: async () => false,
+      ensureRunning: async () => {},
+      recordAccess: async () => {},
+    });
+    const ingressPort = await listen(createServer(ingress));
+
+    const response = await request(ingressPort, {
+      headers: { host: 'ua-pr-241.preview.yawp.school' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(resolvedService).toBe('ua');
+    expect(receivedHost).toBe('ua-pr-241.preview.yawp.school');
+  });
+
   test('starts when systemd invokes the release through the current symlink', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'preview-ingress-entrypoint-'));
     roots.push(root);
