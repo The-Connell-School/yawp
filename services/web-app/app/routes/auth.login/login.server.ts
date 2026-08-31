@@ -21,36 +21,30 @@ import {
   getUaPartnerContext,
   isUaPartnerHost,
 } from '~/utils/ua-partner.server';
-
-type LoginSiteMismatch = 'main' | 'ua';
+import { classifyLoginSiteMismatch } from './login-site-mismatch.server';
 
 async function getLoginSiteMismatch(
   request: Request,
   userId: string
-): Promise<LoginSiteMismatch | null> {
-  const uaOrganizationId = process.env.UA_ORGANIZATION_ID?.trim();
+): Promise<'main' | 'ua' | null> {
+  const uaOrganizationId = process.env.UA_ORGANIZATION_ID?.trim() || null;
   if (!uaOrganizationId) return null;
 
   const memberships = await prisma.orgMembership.findMany({
     where: { userId, isActive: true },
     select: { organizationId: true },
   });
-  const hasUaMembership = memberships.some(
-    ({ organizationId }) => organizationId === uaOrganizationId
-  );
-  const hasNonUaMembership = memberships.some(
-    ({ organizationId }) => organizationId !== uaOrganizationId
-  );
+  const isUaHost = isUaPartnerHost(request);
+  const partnerContext = isUaHost ? await getUaPartnerContext(request) : null;
 
-  if (isUaPartnerHost(request)) {
-    if (!hasUaMembership && hasNonUaMembership) {
-      const partnerContext = await getUaPartnerContext(request);
-      return partnerContext ? null : 'main';
-    }
-    return null;
-  }
-
-  return hasUaMembership && !hasNonUaMembership ? 'ua' : null;
+  return classifyLoginSiteMismatch({
+    isUaHost,
+    hasUaPartnerContext: Boolean(partnerContext),
+    uaOrganizationId,
+    membershipOrganizationIds: memberships.map(
+      ({ organizationId }) => organizationId
+    ),
+  });
 }
 
 export async function loginAction({ request }: ActionFunctionArgs) {

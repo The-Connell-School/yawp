@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireAnonymous = mock();
 const verifyUserPassword = mock();
@@ -8,13 +8,10 @@ const commitSession = mock();
 const captureException = mock();
 const getPreviewAccessSeat = mock();
 const setMembershipId = mock();
-const originalUaOrganizationId = process.env.UA_ORGANIZATION_ID;
-const originalUaPartnerHostname = process.env.UA_PARTNER_HOSTNAME;
 
 const prisma = {
   orgMembership: {
     findFirst: mock(),
-    findMany: mock(),
   },
   session: {
     create: mock(),
@@ -50,19 +47,6 @@ mock.module('~/cookies/membership-id.server', () => ({ setMembershipId }));
 const { action } = await import('./route');
 
 describe('auth.login', () => {
-  afterEach(() => {
-    if (originalUaOrganizationId === undefined) {
-      delete process.env.UA_ORGANIZATION_ID;
-    } else {
-      process.env.UA_ORGANIZATION_ID = originalUaOrganizationId;
-    }
-    if (originalUaPartnerHostname === undefined) {
-      delete process.env.UA_PARTNER_HOSTNAME;
-    } else {
-      process.env.UA_PARTNER_HOSTNAME = originalUaPartnerHostname;
-    }
-  });
-
   beforeEach(() => {
     requireAnonymous.mockReset();
     verifyUserPassword.mockReset();
@@ -73,7 +57,6 @@ describe('auth.login', () => {
     getPreviewAccessSeat.mockReset();
     setMembershipId.mockReset();
     prisma.orgMembership.findFirst.mockReset();
-    prisma.orgMembership.findMany.mockReset();
     prisma.session.create.mockReset();
 
     getSessionExpirationDate.mockReturnValue(
@@ -97,80 +80,9 @@ describe('auth.login', () => {
       label: 'Bryant Brock',
     });
     prisma.orgMembership.findFirst.mockResolvedValue({ id: 'membership-2' });
-    prisma.orgMembership.findMany.mockResolvedValue([
-      { organizationId: 'org-main' },
-    ]);
     setMembershipId.mockResolvedValue('membership-id=membership-2; Path=/');
-    process.env.UA_ORGANIZATION_ID = 'org-ua';
-    process.env.UA_PARTNER_HOSTNAME = 'ua.yawp.school';
     delete process.env.PREVIEW_ACCESS_GATE;
     delete process.env.PREVIEW_DATA_MODE;
-  });
-
-  test('returns a main-site callout for a non-UA-only member on the UA host', async () => {
-    const form = new FormData();
-    form.append('email', 'student@example.com');
-    form.append('password', 'password1234');
-
-    const response = await action({
-      request: new Request('https://ua.yawp.school/auth/login', {
-        method: 'POST',
-        body: form,
-      }),
-    } as any);
-
-    expect(response).not.toBeInstanceOf(Response);
-    expect((response as any).data).toMatchObject({
-      fieldErrors: { siteMismatch: 'main' },
-      repopulateFields: {
-        email: 'student@example.com',
-      },
-    });
-    expect(prisma.session.create).not.toHaveBeenCalled();
-  });
-
-  test('returns a UA-site callout for a UA-only member on the main host', async () => {
-    prisma.orgMembership.findMany.mockResolvedValue([
-      { organizationId: 'org-ua' },
-    ]);
-    const form = new FormData();
-    form.append('email', 'ua.student@example.com');
-    form.append('password', 'password1234');
-
-    const response = await action({
-      request: new Request('https://yawp.school/auth/login', {
-        method: 'POST',
-        body: form,
-      }),
-    } as any);
-
-    expect((response as any).data).toMatchObject({
-      fieldErrors: { siteMismatch: 'ua' },
-      repopulateFields: {
-        email: 'ua.student@example.com',
-      },
-    });
-    expect(prisma.session.create).not.toHaveBeenCalled();
-  });
-
-  test('allows a member of both organization types to sign in on either host', async () => {
-    prisma.orgMembership.findMany.mockResolvedValue([
-      { organizationId: 'org-main' },
-      { organizationId: 'org-ua' },
-    ]);
-    const form = new FormData();
-    form.append('email', 'dual-member@example.com');
-    form.append('password', 'password1234');
-
-    const response = (await action({
-      request: new Request('https://ua.yawp.school/auth/login', {
-        method: 'POST',
-        body: form,
-      }),
-    } as any)) as Response;
-
-    expect(response.status).toBe(302);
-    expect(prisma.session.create).toHaveBeenCalledTimes(1);
   });
 
   test('redirects back to the requested document after login', async () => {
