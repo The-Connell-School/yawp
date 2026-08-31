@@ -8,7 +8,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG_FILE = path.join(ROOT, ".worktree-local", "config.env");
 const DEV_PID_FILE = path.join(ROOT, ".worktree-local", "dev.pid");
 const DEV_LOG_FILE = path.join(ROOT, ".worktree-local", "dev.log");
-const MIN_NODE_MAJOR = 20;
+const MIN_NODE_MAJOR = 22;
+const MIN_BUN_VERSION = [1, 3, 1];
 const MAX_CAPTURE_BYTES = 64 * 1024;
 
 function cleanVersion(value) {
@@ -20,6 +21,25 @@ export function selectCompatibleNode(candidates, versionReader = readNodeVersion
   for (const executable of candidates) {
     const version = cleanVersion(versionReader(executable));
     if (version && Number(version.split(".")[0]) >= MIN_NODE_MAJOR) return { executable, version };
+  }
+  return null;
+}
+
+function versionAtLeast(value, minimum) {
+  const cleaned = cleanVersion(value);
+  if (!cleaned) return false;
+  const parts = cleaned.split('.').map(Number);
+  for (let index = 0; index < minimum.length; index += 1) {
+    if (parts[index] > minimum[index]) return true;
+    if (parts[index] < minimum[index]) return false;
+  }
+  return true;
+}
+
+export function selectCompatibleBun(candidates, versionReader = readNodeVersion) {
+  for (const executable of candidates) {
+    const version = cleanVersion(versionReader(executable));
+    if (version && versionAtLeast(version, MIN_BUN_VERSION)) return { executable, version };
   }
   return null;
 }
@@ -55,17 +75,15 @@ function nodeCandidates() {
 }
 
 function bunExecutable() {
-  if (path.basename(process.execPath).startsWith("bun")) return process.execPath;
   const candidates = [
     process.env.BUN_INSTALL && path.join(process.env.BUN_INSTALL, "bin", "bun"),
     process.env.HOME && path.join(process.env.HOME, ".bun", "bin", "bun"),
+    process.env.VOLTA_HOME && path.join(process.env.VOLTA_HOME, "bin", "bun"),
+    process.env.HOME && path.join(process.env.HOME, ".volta", "bin", "bun"),
     "bun",
   ];
-  for (const candidate of unique(candidates)) {
-    const result = spawnSync(candidate, ["--version"], { encoding: "utf8", timeout: 5000 });
-    if (result.status === 0) return candidate;
-  }
-  return null;
+  const selected = selectCompatibleBun(unique(candidates));
+  return selected ? selected.executable : null;
 }
 
 function runtime() {
@@ -107,7 +125,7 @@ function config() {
 function bounded(value) {
   const text = String(value || "")
     .replace(/\b([a-z][a-z0-9+.-]*:\/\/[^\s:@/]+):[^\s@/]+@/gi, "$1:[REDACTED]@")
-    .replace(/\b(password|secret|token|api[_-]?key)\s*[=:]\s*[^\s]+/gi, "$1=[REDACTED]");
+    .replace(/["']?(password|secret|token|api[_-]?key)["']?\s*[=:]\s*["']?[^\s,"'}]+/gi, "$1=[REDACTED]");
   return text.length <= MAX_CAPTURE_BYTES ? text : text.slice(-MAX_CAPTURE_BYTES);
 }
 
@@ -131,7 +149,7 @@ function execute(command, args, { json = false, env = runtime().env, timeout = 1
 }
 
 function commandExists(command, args = ["--version"]) {
-  const result = spawnSync(command, args, { encoding: "utf8", timeout: 5000 });
+  const result = spawnSync(command, args, { cwd: ROOT, encoding: "utf8", timeout: 5000 });
   return { pass: !result.error && result.status === 0, detail: bounded(result.stdout || result.stderr).trim().split("\n")[0] || null };
 }
 
@@ -235,6 +253,23 @@ function pidLive(pid) {
   try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
+function readDevPid() {
+  if (!fs.existsSync(DEV_PID_FILE)) return null;
+  const text = fs.readFileSync(DEV_PID_FILE, "utf8").trim();
+  try {
+    const value = JSON.parse(text);
+    return value && Number.isInteger(value.pid) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function ownedDevProcess(metadata) {
+  if (!metadata || metadata.root !== ROOT || metadata.command !== "bun run web-app:dev" || !pidLive(metadata.pid)) return false;
+  const result = spawnSync("ps", ["-p", String(metadata.pid), "-o", "command="], { encoding: "utf8", timeout: 5000 });
+  return result.status === 0 && /bun(?:\s+run)?\s+web-app:dev/.test(result.stdout);
+}
+
 function httpReady(url) {
   return new Promise((resolve) => {
     const request = http.get(url, { timeout: 2000 }, (response) => {
@@ -260,8 +295,11 @@ async function devStart({ json }) {
   const local = requireConfig();
   const url = `http://localhost:${local.DEV_PORT}/`;
   if (fs.existsSync(DEV_PID_FILE)) {
-    const pid = Number(fs.readFileSync(DEV_PID_FILE, "utf8").trim());
-    if (pidLive(pid) && await httpReady(url)) return { schemaVersion: "project.dev/v1", status: "ready", reused: true, pid, url, log: DEV_LOG_FILE };
+    const metadata = readDevPid();
+    if (ownedDevProcess(metadata) && await httpReady(url)) return { schemaVersion: "project.dev/v1", status: "ready", reused: true, pid: metadata.pid, url, log: DEV_LOG_FILE };
+    if (ownedDevProcess(metadata)) {
+      try { process.kill(-metadata.pid, "SIGTERM"); } catch { /* stale process group already gone */ }
+    }
     fs.rmSync(DEV_PID_FILE, { force: true });
   }
   const selected = runtime();
@@ -274,31 +312,45 @@ async function devStart({ json }) {
   });
   child.unref();
   fs.closeSync(logFd);
-  fs.writeFileSync(DEV_PID_FILE, `${child.pid}\n`, { mode: 0o600 });
+  fs.writeFileSync(DEV_PID_FILE, `${JSON.stringify({ pid: child.pid, root: ROOT, command: "bun run web-app:dev" })}\n`, { mode: 0o600 });
   if (!await waitForUrl(url)) {
     const tail = fs.existsSync(DEV_LOG_FILE) ? bounded(fs.readFileSync(DEV_LOG_FILE, "utf8")).slice(-4096) : "";
-    throw Object.assign(new Error(`dev server did not become ready at ${url}; inspect ${DEV_LOG_FILE}\n${tail}`), { code: "dev_start_failed" });
+    try { process.kill(-child.pid, "SIGTERM"); } catch { /* child already stopped */ }
+    fs.rmSync(DEV_PID_FILE, { force: true });
+    const error = Object.assign(new Error(`dev server did not become ready at ${url}; inspect ${DEV_LOG_FILE}`), { code: "dev_start_failed" });
+    error.stderr = tail;
+    throw error;
   }
   return { schemaVersion: "project.dev/v1", status: "ready", reused: false, pid: child.pid, url, log: DEV_LOG_FILE };
 }
 
 function devStatus() {
   const local = requireConfig();
-  const pid = fs.existsSync(DEV_PID_FILE) ? Number(fs.readFileSync(DEV_PID_FILE, "utf8").trim()) : null;
-  return { schemaVersion: "project.dev/v1", status: pidLive(pid) ? "running" : "stopped", pid, url: `http://localhost:${local.DEV_PORT}/`, log: DEV_LOG_FILE };
+  const metadata = readDevPid();
+  return { schemaVersion: "project.dev/v1", status: ownedDevProcess(metadata) ? "running" : "stopped", pid: metadata?.pid || null, url: `http://localhost:${local.DEV_PORT}/`, log: DEV_LOG_FILE };
 }
 
 function devStop() {
   const status = devStatus();
-  if (status.pid && pidLive(status.pid)) process.kill(-status.pid, "SIGTERM");
+  if (status.pid && pidLive(status.pid) && status.status === "running") process.kill(-status.pid, "SIGTERM");
   fs.rmSync(DEV_PID_FILE, { force: true });
   return { ...status, status: "stopped" };
 }
 
 function changedPaths() {
   const base = process.env.RECORD_PROOF_BASE_SHA || process.env.RECORD_BASE_SHA || "origin/main";
-  const result = spawnSync("git", ["diff", "--name-only", `${base}..HEAD`], { cwd: ROOT, encoding: "utf8", timeout: 10000 });
-  return result.status === 0 ? result.stdout.trim().split("\n").filter(Boolean) : [];
+  const commands = [
+    ["diff", "--name-only", `${base}..HEAD`],
+    ["diff", "--name-only"],
+    ["diff", "--name-only", "--cached"],
+    ["ls-files", "--others", "--exclude-standard"]
+  ];
+  const paths = [];
+  for (const args of commands) {
+    const result = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", timeout: 10000 });
+    if (result.status === 0) paths.push(...result.stdout.trim().split("\n").filter(Boolean));
+  }
+  return unique(paths).sort();
 }
 
 function runTestProfile(profile, { json }) {
@@ -338,7 +390,7 @@ function runTestProfile(profile, { json }) {
 }
 
 async function qaPrepare({ json, routes }) {
-  if (!config()) bootstrap({ fresh: false, json });
+  bootstrap({ fresh: false, json });
   const fixture = verifyFixture();
   if (fixture.status !== "pass") throw Object.assign(new Error("local-dev fixture verification failed; run ./bin/project fixture reset local-dev --json"), { code: "fixture_invalid" });
   const dev = await devStart({ json });
@@ -346,6 +398,8 @@ async function qaPrepare({ json, routes }) {
     schemaVersion: "project.qa-plan/v1",
     status: "ready",
     baseUrl: dev.url,
+    loginUrl: new URL('/auth/dev-login', dev.url).toString(),
+    loginEmail: 'dev.admin@yawp.local',
     routes: routes || "/",
     fixture: "local-dev",
     proofProfile: "qa",
@@ -371,12 +425,33 @@ function parseArgs(argv) {
   const options = {};
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
+    if (value === '-h') { options.help = true; continue; }
     if (!value.startsWith("--")) { positional.push(value); continue; }
     const key = value.slice(2);
     if (index + 1 < argv.length && !argv[index + 1].startsWith("--")) options[key] = argv[++index];
     else options[key] = true;
   }
   return { positional, options };
+}
+
+function validateOptions(options, allowed) {
+  Object.keys(options).forEach((key) => {
+    if (!allowed.includes(key)) throw Object.assign(new Error(`unknown option: --${key}`), { code: 'unknown_option' });
+  });
+}
+
+function validatePositionals(command, operation, positional) {
+  const exact = { capabilities: 1, doctor: 1, bootstrap: 1, test: 1 };
+  if (exact[command] && positional.length !== exact[command]) throw Object.assign(new Error(`unexpected arguments for ${command}`), { code: 'unexpected_argument' });
+  if (command === 'fixture' && (!['apply', 'reset', 'verify', 'list'].includes(operation) || positional.length > 3)) {
+    throw Object.assign(new Error(`invalid fixture command: ${positional.join(' ')}`), { code: 'unknown_command' });
+  }
+  if (command === 'dev' && (!['start', 'status', 'stop'].includes(operation) || positional.length !== 2)) {
+    throw Object.assign(new Error(`invalid dev command: ${positional.join(' ')}`), { code: 'unknown_command' });
+  }
+  if (command === 'qa' && (operation !== 'prepare' || positional.length !== 2)) {
+    throw Object.assign(new Error(`invalid QA command: ${positional.join(' ')}`), { code: 'unknown_command' });
+  }
 }
 
 function output(value, json) {
@@ -390,7 +465,13 @@ export async function main(argv = process.argv.slice(2)) {
   const command = parsed.positional[0] || "help";
   const operation = parsed.positional[1];
   const json = parsed.options.json === true;
-  if (command === "help" || argv.includes("--help") || argv.includes("-h")) return output(help(command === "help" ? operation || "root" : command), false);
+  if (command === "help" || parsed.options.help === true) return output(help(command === "help" ? operation || "root" : command), false);
+  const allowedByCommand = {
+    capabilities: ['json'], doctor: ['json'], bootstrap: ['json', 'fresh'], fixture: ['json'],
+    dev: ['json'], test: ['json', 'profile'], qa: ['json', 'routes']
+  };
+  validateOptions(parsed.options, allowedByCommand[command] || ['json']);
+  validatePositionals(command, operation, parsed.positional);
   if (command === "capabilities") return output(capabilities(), json);
   if (command === "doctor") {
     const result = doctor();
@@ -405,9 +486,17 @@ export async function main(argv = process.argv.slice(2)) {
     if (name !== "local-dev") throw Object.assign(new Error(`unknown fixture: ${name}`), { code: "unknown_fixture" });
     if (operation === "apply" || operation === "reset") {
       bootstrap({ fresh: true, json });
-      return output(verifyFixture(), json);
+      const result = verifyFixture();
+      output(result, json);
+      if (result.status !== 'pass') process.exitCode = 1;
+      return;
     }
-    if (operation === "verify") return output(verifyFixture(), json);
+    if (operation === "verify") {
+      const result = verifyFixture();
+      output(result, json);
+      if (result.status !== 'pass') process.exitCode = 1;
+      return;
+    }
   }
   if (command === "dev") {
     if (operation === "start") return output(await devStart({ json }), json);
@@ -417,4 +506,21 @@ export async function main(argv = process.argv.slice(2)) {
   if (command === "test") return output(runTestProfile(parsed.options.profile || "changed", { json }), json);
   if (command === "qa" && operation === "prepare") return output(await qaPrepare({ json, routes: parsed.options.routes }), json);
   throw Object.assign(new Error(`unknown command: ${parsed.positional.join(" ")}`), { code: "unknown_command" });
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    const wantsJson = process.argv.includes('--json');
+    const topic = process.argv.slice(2).find((value) => !value.startsWith('-')) || 'root';
+    const result = {
+      status: 'error',
+      code: error.code || 'project_command_failed',
+      error: bounded(error.message),
+      diagnostic: bounded([error.stderr, error.stdout].filter(Boolean).join('\n')).slice(-4096) || undefined,
+      suggestedCommands: [`./bin/project ${topic} --help`, './bin/project doctor --json']
+    };
+    if (wantsJson) process.stderr.write(`${JSON.stringify(result, null, 2)}\n`);
+    else process.stderr.write(`project: ${result.error}\nTry: ${result.suggestedCommands.join(' | ')}\n`);
+    process.exitCode = 1;
+  });
 }

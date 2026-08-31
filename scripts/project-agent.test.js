@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import {
   capabilities,
   parseEnvFile,
+  selectCompatibleBun,
   selectCompatibleNode,
 } from "./project-agent.mjs";
 
@@ -19,7 +20,15 @@ describe("Yawp project agent CLI", () => {
       current: "v20.19.1",
       new: "v22.22.0",
     })[candidate]);
-    expect(selected).toEqual({ executable: "current", version: "20.19.1" });
+    expect(selected).toEqual({ executable: "new", version: "22.22.0" });
+  });
+
+  test("rejects Bun older than the package-manager contract", () => {
+    const selected = selectCompatibleBun(["old", "pinned"], (candidate) => ({
+      old: "1.2.2",
+      pinned: "1.3.1",
+    })[candidate]);
+    expect(selected).toEqual({ executable: "pinned", version: "1.3.1" });
   });
 
   test("parses the generated worktree configuration without evaluating shell", () => {
@@ -58,9 +67,17 @@ describe("Yawp project agent CLI", () => {
     expect(error.suggestedCommands).toContain("./bin/project doctor --json");
   });
 
+  test("rejects unknown flags instead of silently choosing a default action", () => {
+    const result = spawnSync(path.join(root, "bin", "project"), ["bootstrap", "--frseh", "--json"], { cwd: root, encoding: "utf8" });
+    expect(result.status).not.toBe(0);
+    expect(JSON.parse(result.stderr).code).toBe("unknown_option");
+  });
+
   test("bootstrap uses an immutable lockfile install", () => {
     const setup = fs.readFileSync(path.join(root, "scripts", "worktree-local-setup.sh"), "utf8");
     expect(setup).toContain("bun install --frozen-lockfile");
     expect(setup).not.toMatch(/^\s*bun install\s*$/m);
+    expect(setup).toContain("CLASS_INSIGHT_MOCK_MODE=fixture");
+    expect(setup).not.toContain("copy_optional_env_value ANTHROPIC_API_KEY");
   });
 });
