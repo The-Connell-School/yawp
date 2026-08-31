@@ -1003,6 +1003,7 @@ describe('PR preview deployment contract', () => {
       'stripe_secret_key',
       'stripe_webhook_secret',
       'stripe_ua_2026_price_id',
+      'stripe_ua_production_test_promotion_code_id',
     ]) {
       expect(variables).toContain(`variable "${name}"`);
     }
@@ -1013,6 +1014,7 @@ describe('PR preview deployment contract', () => {
     expect(infra).toContain('UA_PARTNER_CODE');
     expect(infra).toContain('UA_PARTNER_HOSTNAME');
     expect(infra).toContain('YAWP_APP_ORIGIN');
+    expect(infra).toContain('STRIPE_UA_PRODUCTION_TEST_PROMOTION_CODE_ID');
     expect(infra).toContain('subject_alternative_names');
     expect(infra).toContain(
       'count = var.ua_stripe_credentials_configured ? 1 : 0'
@@ -1024,6 +1026,11 @@ describe('PR preview deployment contract', () => {
     expect(runbook).toContain('ua_partner_code=<student-facing-code>');
     expect(runbook).toContain('ua_student_billing_enabled=false');
     expect(runbook).toContain('ua_student_billing_enabled=true');
+    expect(runbook).toContain(
+      'stripe_ua_production_test_promotion_code_id=<live promo_ object ID>'
+    );
+    expect(runbook).toContain('max_redemptions=1');
+    expect(runbook).toContain('Deactivate the Promotion Code immediately');
   });
 
   test('preview workflow does not require runner AWS credentials for dump restores', () => {

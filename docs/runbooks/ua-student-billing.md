@@ -115,6 +115,34 @@ Never combine the initial credential staging and billing enablement into one
 unreviewed apply. The two-stage switch prevents existing UA students from being
 gated before migration and reconciliation are complete.
 
+## Private production test promotion code
+
+For a production student-flow smoke test, create a live Stripe Coupon with
+`percent_off=100` and `duration=once`. Restrict the Coupon to the live UA
+Product. Create a customer-facing Promotion Code on that Coupon with a
+high-entropy value, a short expiry, and `max_redemptions=1`. Keep the typed code
+only in Stripe; do not commit it or put it in Record, Terraform, logs, or the
+runbook.
+
+Configure only its non-secret Stripe object ID and apply Terraform:
+
+```text
+stripe_ua_production_test_promotion_code_id=<live promo_ object ID>
+```
+
+That setting enables Stripe's hosted promotion-code field. Yawp accepts a
+zero-cost completion only when the signed Session uses that exact Promotion
+Code, retains the configured $50 UA Price and quantity, reports a $50 subtotal
+and discount with a $0 total, and has no PaymentIntent. Normal and invalid-code
+checkouts remain $50.
+
+Complete the smoke with a disposable new UA student, verify the license is
+active with `amountPaid=0` and no PaymentIntent, and confirm no Charge exists.
+Deactivate the Promotion Code immediately after the smoke, then clear
+`stripe_ua_production_test_promotion_code_id` in the next routine Terraform
+apply. Deactivation is the immediate kill switch; clearing runtime configuration
+removes the hosted code field on the subsequent App Runner revision.
+
 ## Cancellation, refunds, and disputes
 
 There is no subscription to cancel because this is a one-time fee. A student

@@ -165,6 +165,20 @@ variable "stripe_ua_2026_price_id" {
   default     = ""
 }
 
+variable "stripe_ua_production_test_promotion_code_id" {
+  type        = string
+  description = "Optional live Stripe Promotion Code object ID allowed to fully discount the UA checkout for a production smoke test."
+  default     = ""
+
+  validation {
+    condition = (
+      trimspace(var.stripe_ua_production_test_promotion_code_id) == "" ||
+      startswith(var.stripe_ua_production_test_promotion_code_id, "promo_")
+    )
+    error_message = "The UA production test promotion code must be empty or a Stripe promo_ object ID."
+  }
+}
+
 variable "stripe_ua_existing_subscription_price_ids" {
   type        = list(string)
   description = "Legacy recurring Stripe Price IDs whose subscribers should receive the UA license without paying again."
