@@ -990,8 +990,6 @@ describe('PR preview deployment contract', () => {
       'PREVIEW_STRIPE_SECRET_KEY',
       'PREVIEW_STRIPE_WEBHOOK_SECRET',
       'PREVIEW_STRIPE_UA_2026_PRICE_ID',
-      'PREVIEW_RESEND_FROM_EMAIL',
-      'PREVIEW_RESEND_API_KEY',
     ]) {
       expect(previewWorkflow).toContain(name);
     }
@@ -1387,6 +1385,8 @@ describe('demo environment deployment contract', () => {
       'PREVIEW_STRIPE_SECRET_KEY',
       'PREVIEW_STRIPE_WEBHOOK_SECRET',
       'PREVIEW_STRIPE_UA_2026_PRICE_ID',
+      'PREVIEW_RESEND_FROM_EMAIL',
+      'PREVIEW_RESEND_API_KEY',
     ]) {
       expect(workflow).toContain(name);
     }
