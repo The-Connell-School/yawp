@@ -239,68 +239,70 @@ export default function Route() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-md">
-      <div className="mt-8 flex flex-col gap-3 text-center">
-        <h1>Let's get started!</h1>
-        <p className="text-sm text-muted-foreground">
+    <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
+      <div className="flex flex-col items-start gap-2 text-left">
+        <h1 className="text-lg font-semibold">Let’s get started!</h1>
+        <p className="text-pretty text-base text-muted-foreground sm:text-sm">
           {isUa
             ? 'Create your account.'
             : 'Create your account and join your class.'}
         </p>
       </div>
 
-      <div className="mx-auto mt-10 w-full max-w-md px-8">
-        <Form
-          method="POST"
-          className="flex flex-col gap-4"
-          {...form.getFormProps()}
-        >
-          <FormInput
-            scope={form.scope('name')}
-            type="text"
-            label="Name"
-            autoFocus
+      <Form
+        method="POST"
+        className="mt-6 flex flex-col gap-5"
+        {...form.getFormProps()}
+      >
+        <FormInput
+          scope={form.scope('name')}
+          type="text"
+          label="Name"
+          autoFocus
+        />
+        {showClassSelect ? (
+          <FormSelect
+            scope={form.scope('classId')}
+            label="Class"
+            options={[
+              { value: '', label: 'Select a class' },
+              ...data.classes.map((klass) => ({
+                value: klass.id,
+                label: `${klass.school.name} • ${klass.schoolYear}${
+                  formatClassGradePeriod(klass)
+                    ? ` • ${formatClassGradePeriod(klass)}`
+                    : ''
+                } • ${
+                  klass.teachers
+                    .map((t) => t.user.name)
+                    .filter(Boolean)
+                    .join(', ') || 'Teacher'
+                }`,
+              })),
+            ]}
           />
-          {showClassSelect ? (
-            <FormSelect
-              scope={form.scope('classId')}
-              label="Class"
-              options={[
-                { value: '', label: 'Select a class' },
-                ...data.classes.map((klass) => ({
-                  value: klass.id,
-                  label: `${klass.school.name} • ${klass.schoolYear}${
-                    formatClassGradePeriod(klass)
-                      ? ` • ${formatClassGradePeriod(klass)}`
-                      : ''
-                  } • ${
-                    klass.teachers
-                      .map((t) => t.user.name)
-                      .filter(Boolean)
-                      .join(', ') || 'Teacher'
-                  }`,
-                })),
-              ]}
-            />
-          ) : !isUa ? (
-            <input type="hidden" name="classId" value={data.classes[0]!.id} />
-          ) : null}
+        ) : !isUa ? (
+          <input type="hidden" name="classId" value={data.classes[0]!.id} />
+        ) : null}
 
-          <FormInput
-            scope={form.scope('password')}
-            type="password"
-            label="Password"
-          />
-          <FormInput
-            scope={form.scope('confirmPassword')}
-            type="password"
-            label="Confirm Password"
-          />
-          <Button className="w-full" type="submit" disabled={isLoading}>
-            {isLoading ? 'Creating...' : 'Create account'}
-          </Button>
-        </Form>
-      </div>
+        <FormInput
+          scope={form.scope('password')}
+          type="password"
+          label="Password"
+        />
+        <FormInput
+          scope={form.scope('confirmPassword')}
+          type="password"
+          label="Confirm Password"
+        />
+        <Button
+          className="h-11 w-full text-base sm:h-10 sm:text-sm"
+          type="submit"
+          disabled={isLoading}
+        >
+          {isLoading ? 'Creating...' : 'Create account'}
+        </Button>
+      </Form>
     </div>
   );
 }

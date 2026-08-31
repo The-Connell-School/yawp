@@ -54,7 +54,6 @@ export default function SignupRoute() {
       loginHref={
         data.partner === 'ua' ? '/auth/login?redirectTo=%2F' : '/auth/login'
       }
-      clearCodeAction="/auth/inv/signup"
     />
   );
 }

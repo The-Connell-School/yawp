@@ -4,7 +4,6 @@ import { ValidatedForm } from '@rvf/react-router';
 import { FormInput } from '~/components/forms/form-input-2';
 import { Button, button } from '~/components/ui/button';
 import { EmailSchema } from '~/utils/schemas/user';
-import { UaPartnerCodeStatus } from '~/components/ua-partner-code-status';
 
 export const GenericStudentSignupSchema = z.object({
   email: EmailSchema,
@@ -18,7 +17,7 @@ export const UaStudentSignupSchema = z.object({
 
 export const RequiredUaStudentSignupSchema = z.object({
   email: EmailSchema,
-  code: z.string().min(1, 'Code is required'),
+  code: z.string().min(1, 'Access code is required'),
 });
 
 export function StudentSignupForm({
@@ -26,13 +25,11 @@ export function StudentSignupForm({
   codeAccepted = false,
   codeError = null,
   loginHref,
-  clearCodeAction,
 }: {
   partner: 'ua' | null;
   codeAccepted?: boolean;
   codeError?: string | null;
   loginHref?: string;
-  clearCodeAction?: string;
 }) {
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
@@ -44,21 +41,16 @@ export function StudentSignupForm({
     : GenericStudentSignupSchema;
 
   return (
-    <div className="mx-auto w-full max-w-md">
-      <div className="mt-8 flex flex-col gap-3 text-center">
-        <h1>Let's get started!</h1>
-        <p>
+    <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
+      <div className="flex flex-col items-start gap-2 text-left">
+        <h1 className="text-lg font-semibold">Let's get started!</h1>
+        <p className="text-base text-pretty text-muted-foreground sm:text-sm">
           {isUa
             ? 'Please enter your email.'
             : 'Please enter your email & passcode.'}
         </p>
       </div>
-      <div className="mx-auto mt-10 w-full max-w-md px-8">
-        {isUa && codeAccepted ? (
-          <div className="mb-4">
-            <UaPartnerCodeStatus clearAction={clearCodeAction} />
-          </div>
-        ) : null}
+      <div className="mt-6 w-full">
         {codeError ? (
           <p role="alert" className="mb-4 text-sm text-destructive">
             {codeError}
@@ -66,7 +58,7 @@ export function StudentSignupForm({
         ) : null}
         <ValidatedForm
           method="POST"
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-5"
           schema={schema}
           defaultValues={{ email: '', code: '' }}
           validationBehaviorConfig={
@@ -87,29 +79,33 @@ export function StudentSignupForm({
             autoFocus
           />
           {!isUa || !codeAccepted ? (
-            <div className="flex w-full items-center rounded-lg border bg-white p-3">
-              <FormInput
-                scope="code"
-                type="text"
-                label="Code"
-                name="code"
-                className="w-full"
-              />
-            </div>
+            <FormInput
+              scope="code"
+              type="text"
+              label="Access code"
+              name="code"
+              className="w-full"
+            />
           ) : null}
-          <Button className="w-full" type="submit" disabled={isLoading}>
+          <Button
+            className="h-11 w-full text-base sm:h-10 sm:text-sm"
+            type="submit"
+            disabled={isLoading}
+          >
             Submit
           </Button>
         </ValidatedForm>
-        <a
-          className={button({
-            variant: 'link',
-            className: 'mx-auto mt-2 w-full',
-          })}
-          href={loginHref ?? (isUa ? '/ua/sign-in' : '/auth/login')}
-        >
-          Already have an account?
-        </a>
+        <div className="mt-6 border-t border-black/10 pt-4 text-center">
+          <a
+            className={button({
+              variant: 'link',
+              className: 'w-full text-base sm:text-sm',
+            })}
+            href={loginHref ?? (isUa ? '/ua/sign-in' : '/auth/login')}
+          >
+            Already have an account?
+          </a>
+        </div>
       </div>
     </div>
   );

@@ -311,37 +311,31 @@ export default function Route() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-[400px] pt-20">
-      <div className="flex flex-col gap-3">
-        <div>
-          <h1 className="text-h1">Check your email</h1>
-          <p className="text-body-md mt-3 text-muted-foreground">
-            We've sent you a code to verify your email address.
-          </p>
-        </div>
-        <div className="mt-6 flex flex-col justify-center gap-1">
-          <div className="flex w-full gap-2">
-            <Form {...form.getFormProps()} className="flex-1">
-              <FormInput scope={form.scope('code')} type="text" label="Code" />
-              <input type="hidden" name="type" value={type} />
-              <input type="hidden" name="target" value={target} />
-              <Button
-                className="mt-2 w-full"
-                type="submit"
-                disabled={navigation.state !== 'idle'}
-              >
-                Submit
-              </Button>
-            </Form>
-          </div>
-          <div className="px-8 text-center">
-            <Button asChild variant="link">
-              <Link to={isUa ? '/auth/login?redirectTo=%2F' : '/auth/login'}>
-                Back to login
-              </Link>
-            </Button>
-          </div>
-        </div>
+    <main className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
+      <div className="flex flex-col items-start gap-2 text-left">
+        <h1 className="text-lg font-semibold">Check your email</h1>
+        <p className="text-pretty text-base text-muted-foreground sm:text-sm">
+          We’ve sent you a code to verify your email address.
+        </p>
+      </div>
+      <Form {...form.getFormProps()} className="mt-6 flex flex-col gap-5">
+        <FormInput scope={form.scope('code')} type="text" label="Code" />
+        <input type="hidden" name="type" value={type} />
+        <input type="hidden" name="target" value={target} />
+        <Button
+          className="h-11 w-full text-base sm:h-10 sm:text-sm"
+          type="submit"
+          disabled={navigation.state !== 'idle'}
+        >
+          Submit
+        </Button>
+      </Form>
+      <div className="mt-6 border-t border-black/10 pt-4 text-center">
+        <Button asChild variant="link" className="w-full text-base sm:text-sm">
+          <Link to={isUa ? '/auth/login?redirectTo=%2F' : '/auth/login'}>
+            Back to login
+          </Link>
+        </Button>
       </div>
     </main>
   );

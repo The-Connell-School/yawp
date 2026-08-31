@@ -150,22 +150,41 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page).toHaveURL(`${UA_APP_ORIGIN}/`);
       await expect(
         page.getByRole('heading', { name: 'Welcome to Yawp' })
-      ).toBeVisible();
-      await expect(
-        page.getByAltText('The University of Alabama')
-      ).toBeVisible();
-      await expect(page.getByAltText('Yawp')).toBeVisible();
+      ).toHaveCount(0);
 
-      await page.getByRole('link', { name: 'Create an account' }).click();
+      const uaLogo = page.getByAltText('The University of Alabama');
+      const yawpLogo = page.getByAltText('Yawp');
+      const createAccount = page.getByRole('link', {
+        name: 'Create an Account',
+      });
+
+      await expect(uaLogo).toBeVisible();
+      await expect(yawpLogo).toBeVisible();
+      await expect(createAccount).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Log In' })).toBeVisible();
+
+      const [uaBox, yawpBox, createAccountBox] = await Promise.all([
+        uaLogo.boundingBox(),
+        yawpLogo.boundingBox(),
+        createAccount.boundingBox(),
+      ]);
+      expect(uaBox).not.toBeNull();
+      expect(yawpBox).not.toBeNull();
+      expect(createAccountBox).not.toBeNull();
+      expect(uaBox!.width).toBeGreaterThan(240);
+      expect(yawpBox!.width).toBeGreaterThan(160);
+      expect(uaBox!.y).toBeLessThan(yawpBox!.y);
+      expect(yawpBox!.y).toBeLessThan(createAccountBox!.y);
+
+      await createAccount.click();
       await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/inv/signup`);
       await expect(page.getByLabel('Email')).toBeVisible();
-      await expect(page.getByLabel('Code')).toHaveCount(0);
-      await expect(
-        page.getByText('University of Alabama code accepted')
-      ).toBeVisible();
-      await expect(
-        page.getByAltText('The University of Alabama')
-      ).toBeVisible();
+      await expect(page.getByLabel('Access code')).toHaveCount(0);
+      await expect(page.getByText('University of Alabama')).toHaveCount(0);
+      await expect(page.getByAltText('The University of Alabama')).toHaveCount(
+        0
+      );
+      await expect(page.getByAltText('Yawp')).toBeVisible();
 
       await page.getByLabel('Email').fill(studentEmail);
       await page.getByRole('button', { name: 'Submit' }).click();
@@ -200,9 +219,10 @@ test.describe.serial('University of Alabama student onboarding', () => {
         partner: 'ua',
         organizationId: e2eContext.ua.organizationId,
       });
-      await expect(
-        page.getByAltText('The University of Alabama')
-      ).toBeVisible();
+      await expect(page.getByAltText('The University of Alabama')).toHaveCount(
+        0
+      );
+      await expect(page.getByAltText('Yawp')).toBeVisible();
 
       const { otp } = await generateTOTP({
         secret: invitation.secret,
@@ -215,9 +235,10 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await page.getByRole('button', { name: 'Submit' }).click();
       await page.waitForURL(/\/auth\/inv\/onboard-student/);
 
-      await expect(
-        page.getByAltText('The University of Alabama')
-      ).toBeVisible();
+      await expect(page.getByAltText('The University of Alabama')).toHaveCount(
+        0
+      );
+      await expect(page.getByAltText('Yawp')).toBeVisible();
       await expect(page.getByLabel('Class')).toHaveCount(0);
       await page.getByLabel('Name').fill('UA New Student');
       await page
@@ -256,40 +277,38 @@ test.describe.serial('University of Alabama student onboarding', () => {
 
       await page.getByRole('button', { name: 'Sign out' }).click();
       await page.waitForURL(/\/auth\/login/);
-      await expect(
-        page.getByAltText('The University of Alabama')
-      ).toBeVisible();
+      await expect(page.getByAltText('The University of Alabama')).toHaveCount(
+        0
+      );
+      await expect(page.getByAltText('Yawp')).toBeVisible();
     } finally {
       await prisma.$disconnect();
     }
   });
 
-  test('remembers the accepted code until the student explicitly clears it', async ({
+  test('remembers the accepted code and requests it only when absent', async ({
     page,
   }) => {
     await page.goto(
       `/auth/inv/signup?organizationCode=${encodeURIComponent(E2E_UA_PARTNER_CODE)}`
     );
     await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/inv/signup`);
-    await expect(
-      page.getByText('University of Alabama code accepted')
-    ).toBeVisible();
-    await expect(page.getByLabel('Code')).toHaveCount(0);
+    await expect(page.getByText('University of Alabama')).toHaveCount(0);
+    await expect(page.getByLabel('Access code')).toHaveCount(0);
 
     await page.reload();
-    await expect(
-      page.getByText('University of Alabama code accepted')
-    ).toBeVisible();
+    await expect(page.getByLabel('Access code')).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Use a different code' }).click();
+    await page.context().clearCookies();
+    await page.goto(`${UA_APP_ORIGIN}/auth/inv/signup`);
     await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/inv/signup`);
-    await expect(page.getByLabel('Code')).toBeVisible();
+    await expect(page.getByLabel('Access code')).toBeVisible();
 
     await page.getByLabel('Email').fill('ua.invalid.code@yawp.test');
     await page.getByRole('button', { name: 'Submit' }).click();
-    await expect(page.getByText('Code is required')).toBeVisible();
+    await expect(page.getByText('Access code is required')).toBeVisible();
     await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/inv/signup`);
-    await page.getByLabel('Code').fill('wrong-code');
+    await page.getByLabel('Access code').fill('wrong-code');
     await page.getByRole('button', { name: 'Submit' }).click();
     await expect(
       page.getByText('Enter a valid organization code.')
@@ -297,7 +316,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
     await expect(page).toHaveURL(`${UA_APP_ORIGIN}/auth/inv/signup`);
 
     await page.goto(`${APP_ORIGIN}/auth/inv/signup`);
-    await expect(page.getByLabel('Code')).toBeVisible();
+    await expect(page.getByLabel('Access code')).toBeVisible();
     await expect(page.getByAltText('The University of Alabama')).toHaveCount(0);
   });
 
@@ -370,9 +389,10 @@ test.describe.serial('University of Alabama student onboarding', () => {
         `${UA_APP_ORIGIN}/auth/login?redirectTo=%2F`
       );
       await page.waitForLoadState('networkidle');
-      await expect(
-        page.getByAltText('The University of Alabama')
-      ).toBeVisible();
+      await expect(page.getByAltText('The University of Alabama')).toHaveCount(
+        0
+      );
+      await expect(page.getByAltText('Yawp')).toBeVisible();
       await page.getByLabel('Email').fill(e2eContext.userEmail);
       await page.getByLabel('Password').fill('johndoe');
       await page.getByRole('button', { name: 'Log in' }).click();
@@ -1148,7 +1168,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
 
     await page.context().clearCookies();
     await page.goto(`${APP_ORIGIN}/auth/inv/signup`);
-    await expect(page.getByLabel('Code')).toBeVisible();
+    await expect(page.getByLabel('Access code')).toBeVisible();
     await expect(page.getByAltText('The University of Alabama')).toHaveCount(0);
   });
 });

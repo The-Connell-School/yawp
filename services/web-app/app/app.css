@@ -63,6 +63,28 @@
   --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
 }
 
+.auth-page-shell {
+  min-height: 100dvh;
+  padding: 2rem 1rem;
+}
+
+.auth-page-frame {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+}
+
+.auth-page-content {
+  width: 100%;
+  min-width: 0;
+}
+
+.auth-page-logo img {
+  width: 13rem;
+}
+
 :root[data-contrast='high'] {
   --primary: 14.8837 58.9041% 40%;
   --muted-foreground: 50 2.4% 36%;
