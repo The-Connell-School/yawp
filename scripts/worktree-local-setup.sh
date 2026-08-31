@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SLUG="$(basename "$ROOT")"
@@ -79,6 +80,14 @@ ensure_postgres() {
   fi
 
   if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+    local mapped_port
+    mapped_port="$(docker port "$CONTAINER_NAME" 5432/tcp 2>/dev/null | head -1 | sed 's/.*://' || true)"
+    if [[ -n "$mapped_port" && "$mapped_port" != "$PG_PORT" ]]; then
+      docker rm -f "$CONTAINER_NAME" >/dev/null
+    fi
+  fi
+
+  if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
     if [[ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME")" != "true" ]]; then
       docker start "$CONTAINER_NAME" >/dev/null
     fi
@@ -105,34 +114,10 @@ ensure_postgres() {
   exit 1
 }
 
-copy_optional_env_value() {
-  local key="$1"
-  local file="$2"
-  if [[ -f "$file" ]]; then
-    rg "^${key}=" "$file" --no-line-number 2>/dev/null | head -1 || true
-  fi
-}
-
 write_env_files() {
-  local anthropic_line=""
-  local ai_model_line=""
-  local main_env=""
-
-  if git_common="$(git -C "$ROOT" rev-parse --git-common-dir 2>/dev/null)"; then
-    main_env="$(cd "$(dirname "$git_common")" && pwd)/services/web-app/.env"
-  fi
-
-  anthropic_line="$(copy_optional_env_value ANTHROPIC_API_KEY "${main_env:-}")"
-  ai_model_line="$(copy_optional_env_value AI_MODEL "${main_env:-}")"
-
   cat >"$ROOT/packages/prisma/.env" <<EOF
 DATABASE_URL="${DATABASE_URL}"
 EOF
-
-  local mock_mode_line="CLASS_INSIGHT_MOCK_MODE=fixture"
-  if [[ -n "${anthropic_line}" ]]; then
-    mock_mode_line="CLASS_INSIGHT_MOCK_MODE=live"
-  fi
 
   cat >"$ROOT/services/web-app/.env" <<EOF
 NODE_ENV=development
@@ -144,16 +129,18 @@ HONEYPOT_SECRET="${SLUG}-worktree-honeypot"
 INTERNAL_COMMAND_TOKEN="${SLUG}-worktree-internal-token"
 AWS_S3_BUCKET_FOR_VIDEOS="${SLUG}-local-dev-bucket"
 AWS_S3_REGION_FOR_VIDEOS="us-east-1"
-${mock_mode_line}
-${ai_model_line:-AI_MODEL="claude-sonnet-4-5"}
-${anthropic_line:-ANTHROPIC_API_KEY=""}
+CLASS_INSIGHT_MOCK_MODE=fixture
+AI_MODEL="claude-sonnet-4-5"
+ANTHROPIC_API_KEY=""
 BLACKBOARD_LTI_MOCK_URL="http://127.0.0.1:${LTI_MOCK_PORT}"
 EOF
+  chmod 600 "$CONFIG_FILE" "$ROOT/packages/prisma/.env" "$ROOT/services/web-app/.env"
 
   if [[ ! -f "$ROOT/.env" ]]; then
     cat >"$ROOT/.env" <<EOF
 AWS_PROFILE=default
 EOF
+    chmod 600 "$ROOT/.env"
   fi
 }
 
