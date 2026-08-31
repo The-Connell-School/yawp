@@ -167,6 +167,24 @@ describe('arrangeGroups', () => {
     ).toHaveLength(3);
   });
 
+  test('aborts if an unlocked student joins between roster reads', async () => {
+    prisma.classAssignment.findUnique
+      .mockResolvedValueOnce({
+        id: 'ca-1',
+        class: { students: [{ id: 'm1' }] },
+      })
+      .mockResolvedValueOnce({
+        id: 'ca-1',
+        class: { students: [{ id: 'm1' }, { id: 'm2' }] },
+        documentGroups: [],
+      });
+
+    await expect(
+      arrangeGroups({ classAssignmentId: 'ca-1', groupSize: 2 })
+    ).rejects.toThrow(/roster changed/i);
+    expect(prisma.documentGroup.create).not.toHaveBeenCalled();
+  });
+
   test('throws when the class assignment does not exist', async () => {
     prisma.classAssignment.findUnique.mockResolvedValue(null);
     await expect(

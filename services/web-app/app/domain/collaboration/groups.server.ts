@@ -41,10 +41,8 @@ export async function arrangeGroups({
     if (!roster) {
       throw new GroupProvisioningError('Class assignment not found.');
     }
-    await lockStudentRosters(
-      tx,
-      roster.class.students.map(({ id }) => id)
-    );
+    const lockedRosterIds = roster.class.students.map(({ id }) => id);
+    await lockStudentRosters(tx, lockedRosterIds);
     if (!(await lockClassAssignmentCollaboration(tx, classAssignmentId))) {
       throw new GroupProvisioningError('Class assignment not found.');
     }
@@ -63,6 +61,16 @@ export async function arrangeGroups({
 
     if (!classAssignment) {
       throw new GroupProvisioningError('Class assignment not found.');
+    }
+    const lockedRoster = new Set(lockedRosterIds);
+    if (
+      classAssignment.class.students.some(
+        (student) => !lockedRoster.has(student.id)
+      )
+    ) {
+      throw new GroupProvisioningError(
+        'The class roster changed while groups were being arranged. Try again.'
+      );
     }
     if (
       classAssignment.documentGroups.some((group) => group.openedAt !== null)

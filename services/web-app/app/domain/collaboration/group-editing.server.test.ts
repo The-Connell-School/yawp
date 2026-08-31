@@ -104,6 +104,13 @@ describe('moveStudentToGroup', () => {
     expect(call.data.removedAt).toBeInstanceOf(Date);
   });
 
+  test('locks the student roster before the class assignment', async () => {
+    await move();
+
+    expect(String(tx.$queryRaw.mock.calls[0][0])).toContain('OrgMembership');
+    expect(String(tx.$queryRaw.mock.calls[1][0])).toContain('ClassAssignment');
+  });
+
   test('adds the student to the target group', async () => {
     await move();
 

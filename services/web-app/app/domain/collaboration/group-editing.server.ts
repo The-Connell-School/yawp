@@ -80,6 +80,7 @@ export async function moveStudentToGroup({
   targetGroupId: string | null;
 }) {
   return prisma.$transaction(async (tx) => {
+    await lockStudentRosters(tx, [membershipId]);
     await lockClassAssignmentCollaboration(tx, classAssignmentId);
     const classAssignment = await loadEditableArrangement(
       tx,
