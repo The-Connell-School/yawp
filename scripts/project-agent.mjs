@@ -383,6 +383,7 @@ function runTestProfile(profile, { json }) {
       "app/domain/collaboration/presence.test.ts",
       "app/domain/collaboration/presence.server.test.ts",
       "app/domain/collaboration/http-provider.test.ts",
+      "app/domain/collaboration/submission-activity-tenant.server.test.ts",
       "app/routes/api.collab.$id.presence/route.test.ts",
       "app/routes/api.collab.$id.updates/route.test.ts",
     ], 120000);
