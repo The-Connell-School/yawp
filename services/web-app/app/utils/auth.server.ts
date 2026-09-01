@@ -30,6 +30,7 @@ const membershipSelect = {
       writingPracticeEnabled: true,
       submissionActivityEnabled: true,
       revisionFlowEnabled: true,
+      gradingQueueNavEnabled: true,
     },
   },
 } as const;

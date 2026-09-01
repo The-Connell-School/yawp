@@ -873,6 +873,10 @@ model Organization {
   /// (/app/revise/:submissionId). Off keeps the legacy
   /// "Revise Essay" -> document editor path.
   revisionFlowEnabled           Boolean                      @default(false)
+  /// Rollout gate for grading-queue navigation: the prev/next student arrows
+  /// beside the name in the grading header. Off keeps the header exactly as it
+  /// is, with Back to the work list as the only way between papers.
+  gradingQueueNavEnabled        Boolean                      @default(false)
   /// Rollout gate for collaborative drafts: may this organization use the
   /// feature at all. Distinct from Assignment.collaborationEnabled, which is
   /// the teacher's per-assignment toggle.

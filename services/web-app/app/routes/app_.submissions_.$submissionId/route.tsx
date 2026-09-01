@@ -49,6 +49,15 @@ import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
 } from '~/utils/document-exit';
+import {
+  GRADING_QUEUE_SORT_PARAM,
+  buildGradingQueueHref,
+  parseGradingQueueScope,
+  parseGradingQueueSort,
+  type GradingQueueNeighbors,
+} from '~/domain/grading/grading-queue';
+import { loadGradingQueueNeighbors } from '~/domain/grading/grading-queue.server';
+import { GradingQueueNav } from './teacher-grading/grading-queue-nav';
 import { EssayPanel } from './essay-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
 import { SelectionToolbar } from './teacher-grading/selection-toolbar';
@@ -381,8 +390,31 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 
+  // Prev/next student arrows in the grading header. The queue is rebuilt from
+  // the work list the teacher came from (carried in `exitTo`) plus that list's
+  // column sort (`queueSort`), so the arrows always walk the same stack in the
+  // same order. Anything that does not resolve to a work list — a bookmark, a
+  // shared link, the student's own view — leaves the header untouched.
+  const gradingQueueScope =
+    (isTeacher || isAdmin) && !isOwner
+      ? parseGradingQueueScope(sanitizeExitTarget(url.searchParams.get('exitTo')))
+      : null;
+  const gradingQueue =
+    gradingQueueScope && profile.organization.gradingQueueNavEnabled === true
+      ? await loadGradingQueueNeighbors({
+          request,
+          membershipId: profile.id,
+          submissionId: submission.id,
+          scope: gradingQueueScope,
+          sort: parseGradingQueueSort(
+            url.searchParams.get(GRADING_QUEUE_SORT_PARAM)
+          ),
+        }).catch(() => null)
+      : null;
+
   return {
     revisionFlowEnabled: profile.organization.revisionFlowEnabled === true,
+    gradingQueue,
     submission: {
       ...submission,
       comments: sortedComments,
@@ -412,6 +444,8 @@ export default function SubmissionRoute() {
     submissionActivityEnabled,
     revisionFlowEnabled,
   } = loaderData;
+  const gradingQueue: GradingQueueNeighbors | null =
+    'gradingQueue' in loaderData ? (loaderData.gradingQueue ?? null) : null;
   const activities = 'activities' in loaderData ? loaderData.activities : [];
   const activityHasMore =
     'activityHasMore' in loaderData ? loaderData.activityHasMore : false;
@@ -514,6 +548,16 @@ export default function SubmissionRoute() {
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const [exitTarget] = useState<string>(
     () => explicitExitTarget ?? readLastNonDocumentRoute() ?? '/app'
+  );
+  const queueSortParam = searchParams.get(GRADING_QUEUE_SORT_PARAM);
+  const gradingQueueHref = useCallback(
+    (nextSubmissionId: string) =>
+      buildGradingQueueHref({
+        submissionId: nextSubmissionId,
+        exitTo: explicitExitTarget,
+        sort: parseGradingQueueSort(queueSortParam),
+      }),
+    [explicitExitTarget, queueSortParam]
   );
   const versionHref = (submissionId: string) => {
     const params = new URLSearchParams();
@@ -1028,10 +1072,22 @@ export default function SubmissionRoute() {
         <div className="h-4 w-px bg-border shrink-0" />
 
         <div className="flex min-w-0 items-center gap-2">
+          {isGradingOther && gradingQueue ? (
+            <GradingQueueNav
+              previous={gradingQueue.previous}
+              next={gradingQueue.next}
+              position={gradingQueue.position}
+              total={gradingQueue.total}
+              hrefFor={gradingQueueHref}
+            />
+          ) : null}
           {isGradingOther &&
           (submission.document.group?.label ||
             submission.document.membership?.user.name) ? (
-            <span className="shrink-0 text-sm text-muted-foreground">
+            <span
+              className="shrink-0 text-sm text-muted-foreground"
+              data-testid="grading-student-name"
+            >
               {submission.document.group?.label ??
                 submission.document.membership?.user.name}
             </span>
