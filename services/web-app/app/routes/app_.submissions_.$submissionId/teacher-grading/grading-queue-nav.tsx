@@ -102,7 +102,7 @@ export function GradingQueueNav({
           data-testid={testId}
           aria-label={label}
           title={label}
-          className="h-7 w-7 shrink-0 p-0 text-muted-foreground"
+          className="h-7 w-7 shrink-0 p-0 text-muted-foreground/40"
         >
           <Icon className="h-4 w-4" />
         </Button>
@@ -114,7 +114,7 @@ export function GradingQueueNav({
         asChild
         variant="ghost"
         size="sm"
-        className="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+        className="h-7 w-7 shrink-0 p-0 text-foreground/70 hover:bg-muted hover:text-foreground"
       >
         <Link
           to={hrefFor(entry.submissionId)}
