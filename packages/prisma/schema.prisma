@@ -173,11 +173,49 @@ model ClassAssignment {
   documents      Document[]
   insight        ClassAssignmentInsight?
   documentGroups DocumentGroup[]
+  shareLink      ClassAssignmentShareLink?
 
   @@unique([assignmentId, classId])
   @@index([classId, createdAt(sort: Desc)])
   @@index([postAt])
   @@index([dueAt])
+}
+
+/// A stable, revocable deep link to one ClassAssignment, made to be handed to an
+/// external LMS that will host it as the assignment's material.
+///
+/// Google Classroom is the first consumer, but nothing here is Classroom-shaped:
+/// the same row is what a Canvas or Schoology paste would use, and `provider`
+/// only records where the link was first minted so adoption can be measured
+/// without splitting the model per LMS.
+///
+/// One row per ClassAssignment. `token` is rotatable in place and `revokedAt`
+/// closes the link, which keeps a rotated or revoked URL from being resurrected
+/// by a second row pointing at the same assignment.
+model ClassAssignmentShareLink {
+  id                    String          @id @default(cuid())
+  createdAt             DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime        @default(now()) @updatedAt @db.Timestamptz(6)
+  classAssignmentId     String          @unique
+  classAssignment       ClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  /// URL-safe random token, not a cuid. This value is guessed against from the
+  /// open internet, so it carries its own entropy budget rather than inheriting
+  /// the id generator's.
+  token                 String          @unique
+  /// Where this link was first minted: `google-classroom` today.
+  provider              String          @default("google-classroom")
+  /// The teacher who minted it. Nullable so removing a teacher does not take
+  /// the class's live Classroom links down with them.
+  createdByMembershipId String?
+  createdByMembership   OrgMembership?  @relation("ClassAssignmentShareLinkCreator", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  /// Set to close the link. A revoked link 404s at launch even while the
+  /// organization's Google Classroom flag is on.
+  revokedAt             DateTime?       @db.Timestamptz(6)
+  lastLaunchedAt        DateTime?       @db.Timestamptz(6)
+  launchCount           Int             @default(0)
+
+  @@index([createdByMembershipId])
+  @@index([revokedAt])
 }
 
 /// One collaboration group within one ClassAssignment.
@@ -882,6 +920,12 @@ model Organization {
   /// on purpose -- a school may want teacher-assigned group work without
   /// students forming their own groups.
   studentDocumentSharingEnabled Boolean                      @default(false)
+  /// Rollout gate for the Google Classroom integration. Off hides the
+  /// "Share to Google Classroom" control and refuses to mint new share links.
+  /// Links already minted keep working, so flipping this off mid-unit does not
+  /// strand students who reached the assignment through Classroom; revoking the
+  /// individual link is the switch that closes an existing door.
+  googleClassroomEnabled        Boolean                      @default(false)
   previewSeatCode               String?                      @unique
   memberships                   OrgMembership[]
   invitations                   Invitation[]
@@ -953,6 +997,7 @@ model OrgMembership {
   documentGroupMemberGrades        DocumentGroupMemberGrade[]
   assignmentModuleSessions         AssignmentModuleSession[]
   documentGroupMemberGradesGiven   DocumentGroupMemberGrade[] @relation("DocumentGroupMemberGradedBy")
+  classAssignmentShareLinks        ClassAssignmentShareLink[] @relation("ClassAssignmentShareLinkCreator")
 
   @@unique([userId, organizationId])
   @@unique([id, organizationId])
