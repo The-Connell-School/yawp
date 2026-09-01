@@ -123,4 +123,44 @@ describe('assignment submissions loader', () => {
     expect(data.insight).toBeNull();
     expect(prisma.classAssignmentInsight.findUnique).not.toHaveBeenCalled();
   });
+
+  test('exposes the Google Classroom gate so the share control can render', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        classInsightsEnabled: true,
+        googleClassroomEnabled: true,
+      },
+    });
+
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/my-classes/class-1/assignments/assignment-1'
+      ),
+      params: { classId: 'class-1', assignmentId: 'assignment-1' },
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(data.googleClassroomEnabled).toBe(true);
+  });
+
+  test('keeps the Google Classroom gate closed for an organization without it', async () => {
+    // The default membership in beforeEach has no googleClassroomEnabled at
+    // all, which is what an organization predating this migration looks like
+    // in practice. It must read as off, not as undefined leaking into JSX.
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/my-classes/class-1/assignments/assignment-1'
+      ),
+      params: { classId: 'class-1', assignmentId: 'assignment-1' },
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(data.googleClassroomEnabled).toBeFalsy();
+  });
 });

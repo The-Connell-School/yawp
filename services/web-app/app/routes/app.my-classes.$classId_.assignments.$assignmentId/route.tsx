@@ -30,6 +30,7 @@ import {
   type ClassInsight,
   type ClassInsightSummary,
 } from './class-insights-panel';
+import { ShareToGoogleClassroomButton } from '~/components/assignments/share-to-google-classroom';
 
 type StatusFilter = 'submitted' | 'graded' | 'released' | 'in-progress';
 
@@ -92,6 +93,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignment = classAssignment.assignment;
 
   const classInsightsEnabled = profile.organization.classInsightsEnabled;
+  const googleClassroomEnabled = profile.organization.googleClassroomEnabled;
   const insightRow = classInsightsEnabled
     ? await prisma.classAssignmentInsight.findUnique({
         where: { classAssignmentId: classAssignment.id },
@@ -205,6 +207,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classAssignmentId: classAssignment.id,
     insight,
     classInsightsEnabled,
+    googleClassroomEnabled,
     gradedCount,
     status,
     isDocumentSubmissionEnabled,
@@ -226,6 +229,7 @@ export default function AssignmentSubmissionsRoute() {
     classAssignmentId,
     insight,
     classInsightsEnabled,
+    googleClassroomEnabled,
     gradedCount,
     status,
     isDocumentSubmissionEnabled,
@@ -390,13 +394,20 @@ export default function AssignmentSubmissionsRoute() {
         </div>
 
         {/* Assignment info */}
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold">
-            {assignment.title || 'Untitled Assignment'}
-          </h3>
-          <div className="mt-1 flex gap-4 text-sm text-muted-foreground">
-            <span>{assignment.assignmentType.title}</span>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold">
+              {assignment.title || 'Untitled Assignment'}
+            </h3>
+            <div className="mt-1 flex gap-4 text-sm text-muted-foreground">
+              <span>{assignment.assignmentType.title}</span>
+            </div>
           </div>
+          {googleClassroomEnabled ? (
+            <ShareToGoogleClassroomButton
+              classAssignmentId={classAssignmentId}
+            />
+          ) : null}
         </div>
 
         {/* Class-wide, assignment-level feedback for the teacher */}
