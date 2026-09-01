@@ -73,6 +73,7 @@ describe('GradingQueueNav', () => {
   test('links both arrows to the neighbouring papers', () => {
     const view = render(
       <GradingQueueNav
+        currentName="Ben Cole"
         previous={ANA}
         next={CARA}
         position={2}
@@ -93,6 +94,7 @@ describe('GradingQueueNav', () => {
   test('names the neighbour and its status so the teacher knows what is next', () => {
     const view = render(
       <GradingQueueNav
+        currentName="Ben Cole"
         previous={ANA}
         next={CARA}
         position={2}
@@ -113,9 +115,37 @@ describe('GradingQueueNav', () => {
     ).toBe('Previous paper: Ana Reyes — Needs Grading');
   });
 
+  test('renders the open student between the arrows', () => {
+    const view = render(
+      <GradingQueueNav
+        currentName="Ben Cole"
+        previous={ANA}
+        next={CARA}
+        position={2}
+        total={3}
+        hrefFor={hrefFor}
+      />
+    );
+
+    const children = Array.from(
+      view.querySelector('[data-testid="grading-queue-nav"]')!.children
+    ).map((child) => child.getAttribute('data-testid'));
+
+    expect(children).toEqual([
+      'grading-queue-previous',
+      'grading-student-name',
+      'grading-queue-next',
+      'grading-queue-position',
+    ]);
+    expect(
+      view.querySelector('[data-testid="grading-student-name"]')?.textContent
+    ).toBe('Ben Cole');
+  });
+
   test('shows the teacher where they are in the stack', () => {
     const view = render(
       <GradingQueueNav
+        currentName="Ben Cole"
         previous={ANA}
         next={CARA}
         position={2}
@@ -132,6 +162,7 @@ describe('GradingQueueNav', () => {
   test('disables an arrow at each end of the queue instead of linking nowhere', () => {
     const view = render(
       <GradingQueueNav
+        currentName="Ben Cole"
         previous={null}
         next={CARA}
         position={1}
@@ -152,6 +183,7 @@ describe('GradingQueueNav', () => {
   test('Alt+Arrow flips papers without leaving the keyboard', () => {
     render(
       <GradingQueueNav
+        currentName="Ben Cole"
         previous={ANA}
         next={CARA}
         position={2}
@@ -178,6 +210,7 @@ describe('GradingQueueNav', () => {
   test('leaves plain arrow keys to the caret and the browser', () => {
     render(
       <GradingQueueNav
+        currentName="Ben Cole"
         previous={ANA}
         next={CARA}
         position={2}
@@ -203,6 +236,7 @@ describe('GradingQueueNav', () => {
   test('does not navigate past the end of the queue', () => {
     render(
       <GradingQueueNav
+        currentName="Ben Cole"
         previous={ANA}
         next={null}
         position={3}

@@ -16,6 +16,8 @@ export type GradingQueueNavEntry = {
 };
 
 export type GradingQueueNavProps = {
+  /** Whose paper is open — rendered between the arrows. */
+  currentName: string;
   previous: GradingQueueNavEntry | null;
   next: GradingQueueNavEntry | null;
   position: number;
@@ -48,6 +50,7 @@ function neighborLabel(
  * put once a grade is released so the release does not strand them.
  */
 export function GradingQueueNav({
+  currentName,
   previous,
   next,
   position,
@@ -136,15 +139,21 @@ export function GradingQueueNav({
     >
       {renderArrow('Previous', previous)}
       <span
+        data-testid="grading-student-name"
+        className="max-w-[14rem] truncate px-1 text-sm text-muted-foreground"
+      >
+        {currentName}
+      </span>
+      {renderArrow('Next', next)}
+      <span
         data-testid="grading-queue-position"
         className={cn(
-          'shrink-0 whitespace-nowrap px-1 text-xs tabular-nums text-muted-foreground'
+          'shrink-0 whitespace-nowrap pl-1 text-xs tabular-nums text-muted-foreground/70'
         )}
         aria-label={`Paper ${position} of ${total} in this list`}
       >
         {position} of {total}
       </span>
-      {renderArrow('Next', next)}
     </div>
   );
 }

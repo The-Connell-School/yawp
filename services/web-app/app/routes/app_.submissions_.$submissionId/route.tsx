@@ -549,6 +549,10 @@ export default function SubmissionRoute() {
   const [exitTarget] = useState<string>(
     () => explicitExitTarget ?? readLastNonDocumentRoute() ?? '/app'
   );
+  const gradingStudentName =
+    submission.document.group?.label ??
+    submission.document.membership?.user.name ??
+    null;
   const queueSortParam = searchParams.get(GRADING_QUEUE_SORT_PARAM);
   const gradingQueueHref = useCallback(
     (nextSubmissionId: string) =>
@@ -1072,29 +1076,26 @@ export default function SubmissionRoute() {
         <div className="h-4 w-px bg-border shrink-0" />
 
         <div className="flex min-w-0 items-center gap-2">
-          {isGradingOther && gradingQueue ? (
+          {isGradingOther && gradingQueue && gradingStudentName ? (
+            // The name sits between the arrows: this is a stack of papers, and
+            // the control that moves through it belongs on the name it names.
             <GradingQueueNav
+              currentName={gradingStudentName}
               previous={gradingQueue.previous}
               next={gradingQueue.next}
               position={gradingQueue.position}
               total={gradingQueue.total}
               hrefFor={gradingQueueHref}
             />
-          ) : null}
-          {isGradingOther &&
-          (submission.document.group?.label ||
-            submission.document.membership?.user.name) ? (
+          ) : isGradingOther && gradingStudentName ? (
             <span
               className="shrink-0 text-sm text-muted-foreground"
               data-testid="grading-student-name"
             >
-              {submission.document.group?.label ??
-                submission.document.membership?.user.name}
+              {gradingStudentName}
             </span>
           ) : null}
-          {isGradingOther &&
-          (submission.document.group?.label ||
-            submission.document.membership?.user.name) ? (
+          {isGradingOther && gradingStudentName ? (
             <span className="text-muted-foreground/40 shrink-0">·</span>
           ) : null}
           {canEditTitle ? (
