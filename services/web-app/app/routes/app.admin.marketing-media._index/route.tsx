@@ -142,12 +142,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
   ]);
 
-  const mappedJobs = jobs.map((job) => ({
-    ...job,
-    createdAt: job.createdAt.toISOString(),
-    title: (job.storyboard as { title?: string } | null)?.title ?? null,
-    outputCount: Array.isArray(job.outputs) ? job.outputs.length : 0,
-  }));
+  // Disk media goes through the admin-gated file route; S3 media is signed on
+  // the job page, not here — a list of 25 signed URLs per poll is wasteful and
+  // the thumbnail is a nicety.
+  const mediaDir = getMarketingMediaDir();
+  const mappedJobs = jobs.map((job) => {
+    const outputs = (
+      Array.isArray(job.outputs) ? job.outputs : []
+    ) as MarketingOutput[];
+    const poster = outputs.find((output) => output.kind === 'IMAGE');
+    return {
+      ...job,
+      createdAt: job.createdAt.toISOString(),
+      title: (job.storyboard as { title?: string } | null)?.title ?? null,
+      outputCount: outputs.length,
+      thumbnailUrl:
+        poster && mediaDir
+          ? `/app/admin/marketing-media/${job.id}/file/${encodeURIComponent(
+              poster.key.split('/').at(-1) ?? ''
+            )}`
+          : null,
+    };
+  });
 
   return dataResponse({
     renderTarget: getMarketingRenderTarget(),
@@ -214,6 +230,32 @@ export async function action({ request }: ActionFunctionArgs) {
     // Revisions written from this job survive: the relation is onDelete
     // SetNull, so deleting a take never takes its follow-ups with it.
     await prisma.marketingMediaJob.delete({ where: { id: job.id } });
+    return redirect('/app/admin/marketing-media');
+  }
+
+  // The whole library at once. Same path as a single library render, eight
+  // times over: no model in the loop, so every job is queued before this
+  // returns and the gallery fills itself as the renderer works through them.
+  if (formData.get('intent') === 'render-showcase') {
+    const renderTarget = getMarketingRenderTarget();
+    for (const entry of MARKETING_LIBRARY) {
+      await prisma.marketingMediaJob.create({
+        data: {
+          createdById: admin.id,
+          kind: entry.kind,
+          status: 'QUEUED',
+          brief: entry.description,
+          audience: null,
+          subjectType: 'FEATURE',
+          subjectId: null,
+          subjectLabel: entry.title,
+          storyboard: entry.storyboard as object,
+          model: null,
+          targetUrl: renderTarget,
+        },
+        select: { id: true },
+      });
+    }
     return redirect('/app/admin/marketing-media');
   }
 
@@ -539,6 +581,38 @@ export default function Route() {
               data only, never real student work.
             </p>
           </div>
+          <div className="flex flex-col items-end gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="bg-white/10 text-slate-50 hover:bg-white/20"
+              asChild
+            >
+              <Link to="/app/admin/marketing-media/gallery">
+                <Images className="mr-1.5 h-4 w-4" aria-hidden />
+                Gallery
+                {stats.files > 0 ? (
+                  <span className="ml-1.5 rounded-full bg-white/15 px-1.5 text-xs tabular-nums">
+                    {stats.files}
+                  </span>
+                ) : null}
+              </Link>
+            </Button>
+            <Form method="post">
+              <input type="hidden" name="intent" value="render-showcase" />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={busy}
+                className="bg-indigo-500 text-white hover:bg-indigo-400"
+                title="Queue every library storyboard"
+              >
+                <Sparkles className="mr-1.5 h-4 w-4" aria-hidden />
+                Render the showcase
+              </Button>
+            </Form>
+          </div>
           <dl className="flex gap-6 text-right">
             <div>
               <dt className="text-xs uppercase tracking-wide text-slate-400">
@@ -565,6 +639,7 @@ export default function Route() {
               </dd>
             </div>
           </dl>
+          </div>
         </div>
       </header>
 
@@ -866,6 +941,7 @@ export default function Route() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40">
+                  <TableHead className="w-[132px]">Take</TableHead>
                   <TableHead>Render</TableHead>
                   <TableHead>Kind</TableHead>
                   <TableHead>Status</TableHead>
@@ -877,10 +953,38 @@ export default function Route() {
               <TableBody>
                 {jobs.map((job) => (
                   <TableRow key={job.id}>
+                    <TableCell className="py-2">
+                      <Link
+                        to={`/app/admin/marketing-media/${job.id}`}
+                        className="block h-[66px] w-[112px] overflow-hidden rounded-md border bg-slate-950"
+                        aria-label={`Open ${job.title ?? 'Untitled'}`}
+                      >
+                        {job.thumbnailUrl ? (
+                          <img
+                            src={job.thumbnailUrl}
+                            alt=""
+                            loading="lazy"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center text-slate-500">
+                            <KindGlyph
+                              kind={job.kind}
+                              className={`h-5 w-5 ${
+                                ACTIVE_STATUSES.includes(job.status) ? 'animate-pulse' : ''
+                              }`}
+                            />
+                          </span>
+                        )}
+                      </Link>
+                    </TableCell>
                     <TableCell className="max-w-md">
-                      <div className="font-medium">
+                      <Link
+                        to={`/app/admin/marketing-media/${job.id}`}
+                        className="font-medium hover:underline"
+                      >
                         {job.title ?? 'Untitled'}
-                      </div>
+                      </Link>
                       <div className="truncate text-xs text-muted-foreground">
                         {job.brief}
                       </div>

@@ -352,3 +352,43 @@ describe('deleting a render', () => {
     expect(prisma.marketingMediaJob.delete).not.toHaveBeenCalled();
   });
 });
+
+describe('render the showcase', () => {
+  beforeEach(() => {
+    requireAdmin.mockReset();
+    requireAdmin.mockResolvedValue({ id: 'admin-1' });
+    requireMutableRequest.mockReset();
+    requireMarketingStudioEnabled.mockReset();
+    getMarketingRenderTarget.mockReset();
+    getMarketingRenderTarget.mockReturnValue('http://localhost:5176');
+    prisma.marketingMediaJob.create.mockReset();
+    prisma.marketingMediaJob.create.mockImplementation(async ({ data }: any) => ({
+      id: `job-${data.subjectLabel}`,
+    }));
+  });
+
+  // One click, the whole library: the gallery fills itself with every
+  // hand-verified storyboard rather than asking for eight separate clicks.
+  test('queues every library storyboard and returns to the studio', async () => {
+    const { MARKETING_LIBRARY } = await import(
+      '../../../../../packages/marketing-media'
+    );
+
+    const response: any = await runAction({ intent: 'render-showcase' });
+
+    expect(prisma.marketingMediaJob.create).toHaveBeenCalledTimes(
+      MARKETING_LIBRARY.length
+    );
+    const queued = prisma.marketingMediaJob.create.mock.calls.map(
+      ([args]: any) => args.data
+    );
+    expect(queued.map((job: any) => job.subjectLabel)).toEqual(
+      MARKETING_LIBRARY.map((entry) => entry.title)
+    );
+    expect(queued.every((job: any) => job.status === 'QUEUED')).toBe(true);
+    expect(queued.every((job: any) => job.model === null)).toBe(true);
+    expect(queued.every((job: any) => job.targetUrl === 'http://localhost:5176')).toBe(true);
+    expect(responseStatus(response)).toBe(302);
+    expect(response.headers.get('location')).toBe('/app/admin/marketing-media');
+  });
+});
