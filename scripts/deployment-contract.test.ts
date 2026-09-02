@@ -1263,6 +1263,36 @@ describe('PR preview deployment contract', () => {
     }
   });
 
+  // The compose render on main defines a renderer service but the deploy
+  // script there never starts it, and a PR cannot change either: the preview
+  // control plane always comes from the default branch. What a PR does control
+  // is its own dev script, which the fast-mode web container runs from source.
+  // So the dev script starts the renderer beside the server, filming
+  // localhost, and the studio works in previews built from this source with no
+  // change to main.
+  test('fast preview web container runs a dev script that starts the embedded renderer', () => {
+    const compose = readRepoFile('scripts/preview/render-compose.mjs');
+    const webAppPackage = JSON.parse(
+      readRepoFile('services/web-app/package.json')
+    ) as { scripts: Record<string, string> };
+    const devWrapper = readRepoFile('services/web-app/scripts/dev.ts');
+    const rendererPackage = JSON.parse(
+      readRepoFile('services/marketing-renderer/package.json')
+    ) as { scripts: Record<string, string> };
+
+    // The container command is main's and runs the PR's `dev` script as-is.
+    expect(compose).toContain(
+      'cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080'
+    );
+    expect(webAppPackage.scripts.dev).toBe('bun run scripts/dev.ts');
+    // The wrapper still runs the real dev server with the arguments it was
+    // given, and starts the embedded renderer with the same arguments so it
+    // learns the port the same way.
+    expect(devWrapper).toContain("spawn('react-router', ['dev', ...args]");
+    expect(devWrapper).toContain("'embedded.ts'");
+    expect(rendererPackage.scripts.embedded).toBe('bun run src/embedded.ts');
+  });
+
   test('preview compose starts the Blackboard LTI mock as a sibling service', () => {
     const compose = readRepoFile('scripts/preview/render-compose.mjs');
     const deploy = readRepoFile('scripts/preview/deploy.sh');
