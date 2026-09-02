@@ -109,6 +109,15 @@ describe('collectGalleryItems', () => {
     expect(items[1]).toMatchObject({ kind: 'VIDEO', durationMs: 9_400 });
   });
 
+  // A clip's first frame is often a blank page mid-navigation; the still from
+  // the same take is the picture that says what the clip is about.
+  test('gives a clip the take’s first still as its poster', () => {
+    const items = collectGalleryItems(JOBS as never, (jobId, key) => `/f/${jobId}/${key.split('/').at(-1)}`);
+    const clip = items.find((item) => item.kind === 'VIDEO');
+    expect(clip?.posterUrl).toBe('/f/job-old/01-graded.png');
+    expect(items[0].posterUrl).toBeUndefined();
+  });
+
   test('keeps a raw capture that has no framed counterpart', () => {
     const items = collectGalleryItems(
       [

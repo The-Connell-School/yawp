@@ -52,6 +52,8 @@ export type GalleryItem = {
   height?: number;
   durationMs?: number;
   finishedAt: string | null;
+  /** For clips: the take's first still, shown before playback. */
+  posterUrl?: string;
 };
 
 type GalleryJob = {
@@ -87,6 +89,7 @@ export function collectGalleryItems(
       Array.isArray(job.outputs) ? job.outputs : []
     ) as MarketingOutput[];
     const names = new Set(outputs.map((output) => basename(output.key)));
+    const poster = outputs.find((output) => output.kind === 'IMAGE');
     const title =
       (job.storyboard as { title?: string } | null)?.title ??
       job.subjectLabel ??
@@ -113,6 +116,9 @@ export function collectGalleryItems(
         height: output.height,
         durationMs: output.durationMs,
         finishedAt: job.finishedAt?.toISOString() ?? null,
+        ...(output.kind === 'VIDEO' && poster
+          ? { posterUrl: urlFor(job.id, poster.key) }
+          : {}),
       });
     }
   }
@@ -153,6 +159,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         collected.map(async (item) => ({
           ...item,
           url: await getSignedGetUrl(item.key, 60 * 60),
+          ...(item.posterUrl
+            ? { posterUrl: await getSignedGetUrl(item.posterUrl, 60 * 60) }
+            : {}),
         }))
       );
 
@@ -193,6 +202,7 @@ function Thumb({ item, large = false }: { item: GalleryItem; large?: boolean }) 
       <video
         className={large ? 'max-h-[70vh] w-full rounded-md' : 'h-full w-full object-cover'}
         src={item.url}
+        poster={item.posterUrl}
         controls={large}
         muted
         playsInline
