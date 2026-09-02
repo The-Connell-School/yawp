@@ -1,6 +1,8 @@
 import {
+  EXIT_TICKETS_ENABLED,
   type ExitTicketConfig,
   composeExitTicketPrompt,
+  isExitTicketAssignmentType,
   parseExitTicketConfigInput,
 } from '~/domain/assignment-types/exit-ticket';
 
@@ -37,5 +39,57 @@ export function parseAssignmentExitTicket(
       prompt: composeExitTicketPrompt(parsed.config),
       exitTicketConfigJson: parsed.config,
     },
+  };
+}
+
+export type ResolveAssignmentPromptResult =
+  | {
+      success: true;
+      prompt: string;
+      /**
+       * Null for everything that is not an exit ticket. Update paths write the
+       * null so a type changed away from Exit Ticket does not keep a config
+       * describing a prompt it no longer has; create paths skip it.
+       */
+      exitTicketConfigJson: ExitTicketConfig | null;
+    }
+  | { success: false; message: string };
+
+/**
+ * The prompt to store for an assignment, and the exit ticket config to store
+ * beside it.
+ *
+ * Every create and edit path runs through this so an exit ticket cannot be
+ * saved with a hand-written prompt on one route and a composed one on
+ * another. For every other assignment type it hands back the posted prompt
+ * unchanged.
+ */
+export function resolveAssignmentPrompt({
+  assignmentTypeKind,
+  postedPrompt,
+  formData,
+}: {
+  assignmentTypeKind: string | null | undefined;
+  postedPrompt: string;
+  formData: FormData;
+}): ResolveAssignmentPromptResult {
+  if (
+    !EXIT_TICKETS_ENABLED ||
+    !isExitTicketAssignmentType({ kind: assignmentTypeKind })
+  ) {
+    return {
+      success: true,
+      prompt: postedPrompt,
+      exitTicketConfigJson: null,
+    };
+  }
+
+  const exitTicket = parseAssignmentExitTicket(formData);
+  if (!exitTicket.success) return exitTicket;
+
+  return {
+    success: true,
+    prompt: exitTicket.value.prompt,
+    exitTicketConfigJson: exitTicket.value.exitTicketConfigJson,
   };
 }

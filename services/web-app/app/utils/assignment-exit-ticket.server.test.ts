@@ -4,7 +4,10 @@ import {
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_TOPIC_MAX_LENGTH,
 } from '~/domain/assignment-types/exit-ticket';
-import { parseAssignmentExitTicket } from './assignment-exit-ticket.server';
+import {
+  parseAssignmentExitTicket,
+  resolveAssignmentPrompt,
+} from './assignment-exit-ticket.server';
 
 function formDataFor(fields: Record<string, string>) {
   const form = new FormData();
@@ -96,5 +99,57 @@ describe('parseAssignmentExitTicket', () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.value.exitTicketConfigJson.mode).toBe('basic');
+  });
+});
+
+describe('resolveAssignmentPrompt', () => {
+  test('hands back the posted prompt for every other assignment type', () => {
+    for (const kind of [null, undefined, 'daily_pages', 'ap_history_essay']) {
+      const result = resolveAssignmentPrompt({
+        assignmentTypeKind: kind,
+        postedPrompt: 'Write the essay.',
+        formData: formDataFor({
+          // Present and ignored: a stray field cannot rewrite the prompt of a
+          // type that is not an exit ticket.
+          exitTicketMode: 'specific',
+          exitTicketFocus: 'explain-concept',
+          exitTicketTopic: 'mitosis',
+        }),
+      });
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.prompt).toBe('Write the essay.');
+      expect(result.exitTicketConfigJson).toBeNull();
+    }
+  });
+
+  test('composes the prompt for an exit ticket', () => {
+    const result = resolveAssignmentPrompt({
+      assignmentTypeKind: 'exit_ticket',
+      postedPrompt: 'Whatever the browser sent.',
+      formData: formDataFor({ exitTicketMode: 'basic' }),
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.prompt).toInclude(BASIC_EXIT_TICKET_PROMPT);
+    expect(result.exitTicketConfigJson).toEqual({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'basic',
+    });
+  });
+
+  test('refuses an exit ticket the teacher has not finished answering', () => {
+    const result = resolveAssignmentPrompt({
+      assignmentTypeKind: 'exit_ticket',
+      postedPrompt: '',
+      formData: formDataFor({
+        exitTicketMode: 'specific',
+        exitTicketFocus: 'explain-concept',
+      }),
+    });
+
+    expect(result.success).toBe(false);
   });
 });

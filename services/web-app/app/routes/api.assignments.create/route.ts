@@ -34,11 +34,7 @@ import {
   parseAssignmentCollaboration,
 } from '~/utils/assignment-collaboration.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
-import { parseAssignmentExitTicket } from '~/utils/assignment-exit-ticket.server';
-import {
-  EXIT_TICKETS_ENABLED,
-  isExitTicketAssignmentType,
-} from '~/domain/assignment-types/exit-ticket';
+import { resolveAssignmentPrompt } from '~/utils/assignment-exit-ticket.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -295,22 +291,21 @@ export async function action({ request }: ActionFunctionArgs) {
   // Exit tickets do not carry a teacher-written prompt. The teacher answered
   // the form instead, and the prompt is composed from those answers here —
   // not taken from the request — so what a student reads is the product's
-  // wording. With the feature off, an exit ticket type behaves like any other
-  // prompt-driven type and nothing already created changes.
-  let exitTicketConfigJson: Prisma.InputJsonValue | undefined;
-  let assignmentPrompt = prompt;
-
-  if (EXIT_TICKETS_ENABLED && isExitTicketAssignmentType(assignmentType)) {
-    const exitTicket = parseAssignmentExitTicket(formData);
-    if (!exitTicket.success) {
-      return dataResponse(
-        { success: false, message: exitTicket.message },
-        { status: 400 }
-      );
-    }
-    assignmentPrompt = exitTicket.value.prompt;
-    exitTicketConfigJson = exitTicket.value.exitTicketConfigJson;
+  // wording. Every other assignment type keeps the prompt it posted.
+  const resolvedPrompt = resolveAssignmentPrompt({
+    assignmentTypeKind: assignmentType.kind,
+    postedPrompt: prompt,
+    formData,
+  });
+  if (!resolvedPrompt.success) {
+    return dataResponse(
+      { success: false, message: resolvedPrompt.message },
+      { status: 400 }
+    );
   }
+  const assignmentPrompt = resolvedPrompt.prompt;
+  const exitTicketConfigJson =
+    resolvedPrompt.exitTicketConfigJson as Prisma.InputJsonValue | null;
 
   if (!assignmentPrompt) {
     return dataResponse(
@@ -321,7 +316,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const promptAttachment = formData.get('promptAttachment');
   let promptAttachmentData:
-    Awaited<ReturnType<typeof uploadAssignmentPromptAttachment>> | undefined;
+    | Awaited<ReturnType<typeof uploadAssignmentPromptAttachment>>
+    | undefined;
   if (promptAttachment instanceof File && promptAttachment.size > 0) {
     try {
       promptAttachmentData =
