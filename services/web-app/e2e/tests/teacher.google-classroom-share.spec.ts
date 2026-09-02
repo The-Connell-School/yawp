@@ -160,8 +160,9 @@ test.describe('teacher shares an assignment to Google Classroom', () => {
     await signIn(e2eContext.userEmail, STUDENT_PASSWORD);
     await page.goto(`/classroom/launch/${link!.token}`);
 
-    await expect(page).toHaveURL(/\/app/);
-    await expect(page).not.toHaveURL(/classroom\/launch/);
+    await expect(page).toHaveURL(
+      new RegExp(`/app/my-classes/${e2eContext.classId}\\?tab=assignments`)
+    );
   });
 
   test('an unknown launch token 404s instead of leaking that it is wrong', async ({

@@ -84,17 +84,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     );
   }
 
+  // The class page with its assignments tab, not the dashboard: a student
+  // arriving from Classroom is looking for one specific assignment, and
+  // `tab=assignments` only means anything on this route. Landing them on /app
+  // leaves them to find the class themselves.
+  const studentDestination = `/app/my-classes/${klass.id}?tab=assignments`;
+
   // Scheduled but not yet posted. The student followed a real link to a real
   // assignment, so say so rather than dropping them somewhere silently.
   const postAt = classAssignment.postAt;
   if (postAt && new Date(postAt).getTime() > Date.now()) {
-    return redirectWithToast('/app?tab=assignments', {
+    return redirectWithToast(studentDestination, {
       type: 'message',
       description: 'That assignment is not open yet. Check back soon.',
     });
   }
 
-  return redirectWithToast('/app?tab=assignments', {
+  return redirectWithToast(studentDestination, {
     type: 'success',
     description: 'Here is your assignment from Google Classroom.',
   });

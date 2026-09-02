@@ -113,7 +113,11 @@ describe('classroom launch', () => {
     const response = (await call()) as Response;
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toContain('tab=assignments');
+    // The class page, not the generic dashboard: `tab=assignments` only means
+    // something on this route.
+    expect(response.headers.get('location')).toBe(
+      '/app/my-classes/class-1?tab=assignments'
+    );
   });
 
   test('takes the class teacher to that assignment, not the student view', async () => {
