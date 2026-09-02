@@ -169,6 +169,9 @@ migrate_and_seed() {
     bun run --cwd packages/prisma prisma migrate deploy
     bun run --cwd packages/prisma backfill-class-art-key
     bun db:seed-local-dev
+    # Created by a script rather than a migration: the admin assignment-type
+    # creator cannot set `kind`, and `kind` is what makes it an exit ticket.
+    bun run --cwd packages/prisma seed-exit-ticket-assignment-type --all-orgs
     bun run --cwd packages/prisma ensure-class-insights-local
   )
 }

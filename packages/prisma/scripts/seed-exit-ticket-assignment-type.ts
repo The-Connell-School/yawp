@@ -5,9 +5,16 @@
  *
  *   cd packages/prisma && DATABASE_URL=... bun run scripts/seed-exit-ticket-assignment-type.ts
  *   ... scripts/seed-exit-ticket-assignment-type.ts --org=<id> --org=<id>
+ *   ... scripts/seed-exit-ticket-assignment-type.ts --all-orgs
  *
- * With no --org flags it targets the oldest organization only, so a new
- * assignment type is never switched on for every customer at once.
+ * With no flags it targets the oldest organization only, so a new assignment
+ * type is never switched on for every customer at once. Previews pass
+ * --all-orgs, where a throwaway per-PR database has nothing to roll out to.
+ *
+ * Granting at the organization is not sufficient on its own: visibility is an
+ * override chain, so a school or teacher that picked its own list ignores the
+ * organization defaults entirely. Those scopes are granted too, so a run that
+ * reports success means the teacher can actually see the type.
  *
  * The admin assignment-type creator cannot set `kind`, and `kind` is what the
  * web app reads to show the exit ticket form instead of a prompt box. So this
@@ -21,8 +28,10 @@ import {
   EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
   EXIT_TICKET_INSTRUCTION_DATA,
   EXIT_TICKET_MODULE_DATA,
+  parseExitTicketAllOrgsArg,
   parseExitTicketOrganizationArgs,
   resolveExitTicketOrganizationIds,
+  resolveExitTicketScopeGrants,
 } from './exit-ticket-assignment-type-data';
 
 const connectionString = process.env.DATABASE_URL;
@@ -64,12 +73,12 @@ async function seedExitTicketAssignmentType() {
     select: { id: true, name: true },
   });
 
+  const argv = process.argv.slice(2);
   const { organizationIds, unknownOrganizationIds } =
     resolveExitTicketOrganizationIds({
-      requestedOrganizationIds: parseExitTicketOrganizationArgs(
-        process.argv.slice(2)
-      ),
+      requestedOrganizationIds: parseExitTicketOrganizationArgs(argv),
       existingOrganizationIds: organizations.map((org) => org.id),
+      allOrganizations: parseExitTicketAllOrgsArg(argv),
     });
 
   if (unknownOrganizationIds.length > 0) {
@@ -120,12 +129,77 @@ async function seedExitTicketAssignmentType() {
     });
   }
 
+  // Organization grants are invisible to a school or teacher that picked its
+  // own list, so those scopes are granted directly. Without this the script
+  // reports success while the type never appears in the assignment dropdown.
+  const [schools, teachers] = await Promise.all([
+    prisma.school.findMany({
+      where: { organizationId: { in: organizationIds } },
+      select: {
+        id: true,
+        organizationId: true,
+        assignmentTypesCustomized: true,
+      },
+    }),
+    prisma.orgMembership.findMany({
+      where: { organizationId: { in: organizationIds }, role: 'TEACHER' },
+      select: {
+        id: true,
+        organizationId: true,
+        assignmentTypesCustomized: true,
+      },
+    }),
+  ]);
+
+  const { schoolIds, membershipIds } = resolveExitTicketScopeGrants({
+    organizationIds,
+    schools: schools.map((school) => ({
+      id: school.id,
+      organizationId: school.organizationId,
+      customized: school.assignmentTypesCustomized,
+    })),
+    teachers: teachers.map((teacher) => ({
+      id: teacher.id,
+      organizationId: teacher.organizationId,
+      customized: teacher.assignmentTypesCustomized,
+    })),
+  });
+
+  for (const schoolId of schoolIds) {
+    await prisma.schoolAssignmentType.upsert({
+      where: {
+        schoolId_assignmentTypeId: {
+          schoolId,
+          assignmentTypeId: assignmentType.id,
+        },
+      },
+      create: { schoolId, assignmentTypeId: assignmentType.id },
+      update: {},
+    });
+  }
+
+  for (const membershipId of membershipIds) {
+    await prisma.teacherAssignmentType.upsert({
+      where: {
+        membershipId_assignmentTypeId: {
+          membershipId,
+          assignmentTypeId: assignmentType.id,
+        },
+      },
+      create: { membershipId, assignmentTypeId: assignmentType.id },
+      update: {},
+    });
+  }
+
   const named = organizations
     .filter((org) => organizationIds.includes(org.id))
     .map((org) => `${org.name} (${org.id})`);
 
   console.log(
     `Exit Ticket assignment type ${assignmentType.id} available to: ${named.join(', ')}`
+  );
+  console.log(
+    `Also granted directly to ${schoolIds.length} customized school(s) and ${membershipIds.length} customized teacher(s).`
   );
 }
 
