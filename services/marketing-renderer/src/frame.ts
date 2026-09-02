@@ -233,6 +233,102 @@ export function buildFramingPage(options: {
 }
 
 /**
+ * The still counterpart of the clip framing page: one capture placed inside
+ * the same window chrome on the same gradient, with the scene's overlay copy
+ * shown as a caption. A still has no timeline, so the copy is simply on.
+ *
+ * Loaded from disk beside the capture rather than inlined: a page carrying a
+ * megabyte of base64 is exactly the kind of setContent payload that hangs
+ * under Bun, while goto + screenshot are the calls the worker already relies
+ * on.
+ */
+export function buildStillFramingPage(options: {
+  width: number;
+  height: number;
+  addressText: string;
+  /** Relative or file URL to the raw capture, resolved against the page. */
+  imageSrc: string;
+  caption?: string;
+}): string {
+  const { canvasWidth, canvasHeight, windowWidth, barHeight } = frameGeometry(
+    options.width,
+    options.height
+  );
+  const caption = options.caption?.trim();
+
+  return `<!doctype html>
+<html>
+<head>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: ${canvasWidth}px; height: ${canvasHeight}px; overflow: hidden; }
+  body {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(125deg,
+      #ff9ecd 0%, #f95f9b 22%, #a855f7 48%, #38bdf8 74%, #fde047 100%);
+  }
+  .window {
+    width: ${windowWidth}px;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 34px 70px rgba(20, 10, 40, 0.45);
+    background: #fff;
+  }
+  .bar {
+    height: ${barHeight}px;
+    background: #f5f1ec;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 8px;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .address {
+    flex: 1;
+    margin: 0 60px;
+    height: 26px;
+    border-radius: 13px;
+    background: #ffffff;
+    color: #6b6560;
+    font: 500 13px/26px -apple-system, 'Segoe UI', sans-serif;
+    text-align: center;
+    overflow: hidden;
+  }
+  img { display: block; width: 100%; height: auto; }
+  .overlay {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: ${Math.round(canvasHeight * 0.045)}px;
+    max-width: ${Math.round(canvasWidth * 0.8)}px;
+    padding: 14px 26px;
+    border-radius: 999px;
+    background: rgba(17, 12, 28, 0.82);
+    color: #fff;
+    font: 600 ${Math.round(canvasWidth * 0.022)}px/1.3 -apple-system, 'Segoe UI', sans-serif;
+    text-align: center;
+    letter-spacing: -0.01em;
+  }
+</style>
+</head>
+<body>
+  <div class="window">
+    <div class="bar">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+      <div class="address">${escapeHtml(options.addressText)}</div>
+    </div>
+    <img id="still" src="${escapeHtml(options.imageSrc)}" alt="">
+  </div>
+${caption ? `  <div class="overlay on">${escapeHtml(caption)}</div>\n` : ''}</body>
+</html>`;
+}
+
+/**
  * Re-shoot the raw capture inside the framing page. Returns the framed WebM
  * and how much lead-in (page setup before playback began) the transcode
  * should cut.

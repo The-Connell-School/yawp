@@ -10,8 +10,12 @@ import {
   type StoryboardStep,
 } from '@app/marketing-media';
 import { CURSOR_INIT_SCRIPT, setCursorVisibilityScript } from './cursor';
-import { frameClip, frameGeometry } from './frame';
-import { buildTranscodeArgs, shotFileName } from './jobs';
+import {
+  buildStillFramingPage,
+  frameClip,
+  frameGeometry,
+} from './frame';
+import { buildTranscodeArgs, rawStillFileName, shotFileName } from './jobs';
 import {
   fetchPreviewAccessCookies,
   parseSessionCookies,
@@ -38,8 +42,10 @@ export type RenderParams = {
   ffmpegPath?: string;
   /** Seat code for a target behind the preview access gate. */
   accessCode?: string;
-  /** Clip presentation. 'window' (default) re-shoots the capture inside a gradient + browser-chrome scene. */
+  /** Presentation. 'window' (default) re-shoots captures inside a gradient + browser-chrome scene; stills and clips alike. */
   frameStyle?: 'window' | 'none';
+  /** Text in the framed window's address pill. */
+  addressText?: string;
   /** Scenes whose optional steps failed, reported back for the job record. */
   onWarning?: (message: string) => void;
   /**
@@ -484,6 +490,125 @@ async function transcode(
   }
 }
 
+const STILL_FRAME_TIMEOUT_MS = 30_000;
+/** Framed stills render at 2x so they stay crisp when scaled into a deck. */
+const STILL_FRAME_SCALE = 2;
+
+/**
+ * Re-shoot each raw still inside the framing page. The framed image takes the
+ * still's place in the output list under its existing name; the raw capture is
+ * kept beside it as "<name>-raw.png" for surfaces that want the bare UI.
+ *
+ * Runs in the same browser as the capture, in its own context sized to the
+ * framing canvas. Full-page captures are skipped — their height is unbounded
+ * and a browser-window frame around a 6000px scroll reads as a mistake.
+ *
+ * Only goto, evaluate, and screenshot are used here: waitForFunction and large
+ * setContent payloads hang under Bun (see frame-runner.mjs).
+ */
+async function frameStills(params: {
+  browser: Awaited<ReturnType<typeof chromium.launch>>;
+  files: RenderedFile[];
+  captions: Map<string, string | undefined>;
+  viewport: { width: number; height: number };
+  addressText: string;
+  onWarning: (message: string) => void;
+}): Promise<void> {
+  const geometry = frameGeometry(params.viewport.width, params.viewport.height);
+  const stills = params.files.filter(
+    (file) => file.kind === 'IMAGE' && file.height !== undefined
+  );
+  if (stills.length === 0) return;
+
+  let context: BrowserContext | null = null;
+  try {
+    context = await bounded(
+      'Still framing context',
+      STILL_FRAME_TIMEOUT_MS,
+      params.browser.newContext({
+        viewport: {
+          width: geometry.canvasWidth,
+          height: geometry.canvasHeight,
+        },
+        deviceScaleFactor: STILL_FRAME_SCALE,
+      })
+    );
+    const page = await context.newPage();
+
+    for (const still of stills) {
+      const rawPath = rawStillFileName(still.path);
+      const pageHtmlPath = still.path.replace(/\.png$/, '.frame.html');
+      try {
+        // The raw capture moves aside first so the framed image can take the
+        // plain name the job page, downloads, and tests already use.
+        fs.renameSync(still.path, rawPath);
+        fs.writeFileSync(
+          pageHtmlPath,
+          buildStillFramingPage({
+            width: params.viewport.width,
+            height: params.viewport.height,
+            addressText: params.addressText,
+            imageSrc: path.basename(rawPath),
+            caption: params.captions.get(still.path),
+          })
+        );
+        await bounded(
+          'Still framing load',
+          STILL_FRAME_TIMEOUT_MS,
+          page.goto(`file://${pageHtmlPath}`, { waitUntil: 'load' })
+        );
+        // `load` covers the image on a static page; confirm it decoded before
+        // shooting, polling with evaluate rather than waitForFunction.
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          const decoded = await page.evaluate(() => {
+            const img = document.getElementById(
+              'still'
+            ) as HTMLImageElement | null;
+            return Boolean(img && img.complete && img.naturalWidth > 0);
+          });
+          if (decoded) break;
+          await page.waitForTimeout(250);
+        }
+        await bounded(
+          'Still framing shot',
+          STILL_FRAME_TIMEOUT_MS,
+          page.screenshot({ path: still.path, fullPage: false })
+        );
+        still.width = geometry.canvasWidth * STILL_FRAME_SCALE;
+        still.height = geometry.canvasHeight * STILL_FRAME_SCALE;
+        params.files.push({
+          path: rawPath,
+          kind: 'IMAGE',
+          label: `${still.label} (raw)`,
+          contentType: 'image/png',
+          width: params.viewport.width,
+          height: params.viewport.height,
+        });
+      } catch (err) {
+        // Put the raw capture back under its own name and move on.
+        if (!fs.existsSync(still.path) && fs.existsSync(rawPath)) {
+          fs.renameSync(rawPath, still.path);
+        }
+        params.onWarning(
+          `Framing "${still.label}" failed, delivering the raw capture: ${
+            err instanceof Error ? err.message.split('\n')[0] : String(err)
+          }`
+        );
+      } finally {
+        fs.rmSync(pageHtmlPath, { force: true });
+      }
+    }
+  } catch (err) {
+    params.onWarning(
+      `Still framing unavailable, delivering raw captures: ${
+        err instanceof Error ? err.message.split('\n')[0] : String(err)
+      }`
+    );
+  } finally {
+    await context?.close().catch(() => {});
+  }
+}
+
 /**
  * Film a validated storyboard against a demo environment.
  *
@@ -578,9 +703,14 @@ export async function renderStoryboard(
   };
   const persona = { current: storyboard.persona };
 
-  const shoot = async (name: string, fullPage: boolean) => {
+  // Captions for the framed stills, by raw file path: the scene's overlay copy
+  // when it has some, so a still says the same line the clip would.
+  const stillCaptions = new Map<string, string | undefined>();
+
+  const shoot = async (name: string, fullPage: boolean, caption?: string) => {
     shotIndex += 1;
     const filePath = path.join(screenshotDir, shotFileName(shotIndex, name));
+    stillCaptions.set(filePath, caption);
     if (wantsVideo)
       await page.evaluate(setCursorVisibilityScript(false)).catch(() => {});
     await page.screenshot({ path: filePath, fullPage });
@@ -695,7 +825,12 @@ export async function renderStoryboard(
 
       if (scene.hold > 0)
         await page.waitForTimeout(Math.round(scene.hold * 1000));
-      if (scene.screenshot) await shoot(scene.id, scene.fullPage);
+      if (scene.screenshot)
+        await shoot(
+          scene.id,
+          scene.fullPage,
+          (scene as { overlay?: string }).overlay
+        );
 
       const pendingZoom = zoomMarks.at(-1);
       if (pendingZoom && pendingZoom.endMs === 0) {
@@ -713,6 +848,24 @@ export async function renderStoryboard(
     }
 
     capturedUntil = Date.now();
+
+    // Framed stills. Presentation, not content: a capture that succeeded is
+    // never lost to a framing problem — the raw still stays in the output
+    // list and a warning says why it stands alone.
+    if ((params.frameStyle ?? 'window') === 'window') {
+      params.onStage?.('framing the stills');
+      await frameStills({
+        browser,
+        files,
+        captions: stillCaptions,
+        viewport: storyboard.viewport,
+        addressText: params.addressText ?? 'app.yawp.school',
+        onWarning: (message) => {
+          warnings.push(message);
+          params.onWarning?.(message);
+        },
+      });
+    }
   } finally {
     // Closing the context is what finalizes the recording, and it can wedge on
     // a browser that is already unhealthy. Bound it, and close the browser

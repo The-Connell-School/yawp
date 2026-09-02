@@ -6,6 +6,7 @@ import {
   markFailed,
   markSucceeded,
   shotFileName,
+  rawStillFileName,
 } from './jobs';
 
 const prisma = {
@@ -216,5 +217,13 @@ describe('buildTranscodeArgs', () => {
     expect(
       buildTranscodeArgs('/tmp/in.webm', '/tmp/out.mp4').join(' ')
     ).toContain('trunc(iw/2)*2');
+  });
+});
+
+describe('framedStillFileName', () => {
+  // The framed still is the deliverable and keeps the plain name the job page
+  // and downloads already use; the raw capture sits beside it, marked.
+  test('marks the raw capture beside the framed one', () => {
+    expect(rawStillFileName('01-grading-hub.png')).toBe('01-grading-hub-raw.png');
   });
 });

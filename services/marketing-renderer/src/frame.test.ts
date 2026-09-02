@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildFramingPage, frameGeometry } from './frame';
+import { buildFramingPage, buildStillFramingPage, frameGeometry } from './frame';
 
 const base = {
   width: 1280,
@@ -84,5 +84,59 @@ describe('buildFramingPage overlays', () => {
     });
 
     expect(html).toContain(`${Math.round(geometry.canvasWidth * 0.022)}px`);
+  });
+});
+
+describe('buildStillFramingPage', () => {
+  const still = {
+    width: 1280,
+    height: 800,
+    addressText: 'app.yawp.school',
+    imageSrc: '01-grading-hub.png',
+  };
+
+  // A raw viewport capture is a screenshot; a framed one is marketing. Same
+  // scene language as the clip framing — gradient, window chrome, shadow — so
+  // stills and clips from one storyboard sit together in a deck.
+  test('places the capture inside the window chrome on the gradient', () => {
+    const html = buildStillFramingPage(still);
+
+    expect(html).toContain('<img id="still" src="01-grading-hub.png"');
+    expect(html).toContain('class="window"');
+    expect(html).toContain('linear-gradient(');
+    expect(html).toContain('class="address">app.yawp.school<');
+  });
+
+  test('sizes the canvas with the shared geometry', () => {
+    const geometry = frameGeometry(1280, 800);
+    const html = buildStillFramingPage(still);
+
+    expect(html).toContain(`width: ${geometry.canvasWidth}px`);
+    expect(html).toContain(`height: ${geometry.canvasHeight}px`);
+    expect(html).toContain(`width: ${geometry.windowWidth}px`);
+  });
+
+  // A still has no timeline, so the scene's overlay copy is simply on.
+  test('shows the caption when the scene has one', () => {
+    const html = buildStillFramingPage({
+      ...still,
+      caption: 'Every writer, one pipeline',
+    });
+    expect(html).toContain('class="overlay on"');
+    expect(html).toContain('Every writer, one pipeline');
+  });
+
+  test('omits the caption element when there is no copy', () => {
+    const html = buildStillFramingPage(still);
+    expect(html).not.toContain('class="overlay');
+  });
+
+  test('escapes caption copy', () => {
+    const html = buildStillFramingPage({
+      ...still,
+      caption: '</div><script>alert(1)</script>',
+    });
+    expect(html).not.toContain('<script>alert(1)');
+    expect(html).toContain('&lt;script&gt;');
   });
 });

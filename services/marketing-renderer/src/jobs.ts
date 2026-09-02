@@ -167,6 +167,11 @@ export function shotFileName(index: number, name: string): string {
   return `${String(index).padStart(2, '0')}-${safeName || 'shot'}.png`;
 }
 
+/** The raw viewport capture kept beside its framed counterpart. */
+export function rawStillFileName(framedFileName: string): string {
+  return framedFileName.replace(/\.png$/, '-raw.png');
+}
+
 /**
  * Playwright records WebM. Marketing surfaces and phones want H.264 in MP4, and
  * phase two clips carry no audio, so the stream is dropped rather than encoded
