@@ -173,6 +173,17 @@ export function rawStillFileName(framedFileName: string): string {
 }
 
 /**
+ * The recording is written when the browser context closes. When that close
+ * wedges and is abandoned, there is no file, and the transcode's own error —
+ * an ffmpeg exit code under a page of build flags — hides the cause.
+ */
+export function missingRecordingError(recordedPath: string): Error {
+  return new Error(
+    `The recording was not written (${recordedPath.split('/').at(-1)}): the browser did not shut down cleanly, so the take will be filmed again.`
+  );
+}
+
+/**
  * Playwright records WebM. Marketing surfaces and phones want H.264 in MP4, and
  * phase two clips carry no audio, so the stream is dropped rather than encoded
  * silent.

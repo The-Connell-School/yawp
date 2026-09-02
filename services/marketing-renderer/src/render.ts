@@ -15,7 +15,12 @@ import {
   frameClip,
   frameGeometry,
 } from './frame';
-import { buildTranscodeArgs, rawStillFileName, shotFileName } from './jobs';
+import {
+  buildTranscodeArgs,
+  missingRecordingError,
+  rawStillFileName,
+  shotFileName,
+} from './jobs';
 import {
   fetchPreviewAccessCookies,
   parseSessionCookies,
@@ -883,6 +888,7 @@ export async function renderStoryboard(
   if (wantsVideo && video) {
     params.onStage?.('saving the recording');
     const recorded = await video.path();
+    if (!fs.existsSync(recorded)) throw missingRecordingError(recorded);
     const mp4Path = path.join(videoDir, `${storyboard.slug}.mp4`);
     // A scene that declared itself the opening shot wins over the default of
     // "first scene ready"; no margin there, because the point is to land on

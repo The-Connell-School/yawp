@@ -6,6 +6,7 @@ import {
   markFailed,
   markSucceeded,
   shotFileName,
+  missingRecordingError,
   rawStillFileName,
 } from './jobs';
 
@@ -225,5 +226,17 @@ describe('framedStillFileName', () => {
   // and downloads already use; the raw capture sits beside it, marked.
   test('marks the raw capture beside the framed one', () => {
     expect(rawStillFileName('01-grading-hub.png')).toBe('01-grading-hub-raw.png');
+  });
+});
+
+describe('missingRecordingError', () => {
+  // A wedged teardown leaves no recording behind. Handing ffmpeg a path that
+  // does not exist reported a 254 and a wall of build flags; the attempt
+  // should say what actually happened so the retry reads as deliberate.
+  test('names the cause rather than the symptom', () => {
+    const error = missingRecordingError('/tmp/marketing-x/video/page@1.webm');
+    expect(error.message).toMatch(/recording was not written/i);
+    expect(error.message).toMatch(/shut down cleanly/i);
+    expect(error.message).toContain('page@1.webm');
   });
 });
