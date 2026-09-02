@@ -35,7 +35,10 @@ before a browser is pointed at it.
 | Job row | `MarketingMediaJob` in `packages/prisma/schema.prisma` |
 | Flag and demo-target gate | `services/web-app/app/utils/marketing-studio.server.ts` |
 | Brief → storyboard | `services/web-app/app/services/marketing-storyboard.server.ts` |
-| Admin surface | `app/routes/app.admin.marketing-media.*` |
+| Admin surface | `app/routes/app.admin.marketing-media.*` — studio, job page, and the Gallery (`…/gallery`): every finished still and clip, filtered by kind, with a lightbox and downloads |
+| One-click showcase | `render-showcase` intent on the studio index: queues every library storyboard |
+| Still and clip framing | `services/marketing-renderer/src/frame.ts` — gradient + window chrome, captions from scene overlays; stills at 2× with the raw capture kept beside them |
+| Embedded renderer | `services/marketing-renderer/src/embedded.ts`, started by `services/web-app/scripts/dev.ts` |
 | Renderer worker | `services/marketing-renderer` |
 | Infrastructure | `infra/marketing-renderer.tf` |
 
