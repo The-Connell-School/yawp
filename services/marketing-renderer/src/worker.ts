@@ -184,10 +184,18 @@ async function main() {
 }
 
 if (import.meta.main) {
-  main().catch((err) => {
-    log('renderer crashed', {
-      error: err instanceof Error ? err.message : String(err),
+  main()
+    .then(() => {
+      // Explicit: a browser that was orphaned mid-attempt leaves handles open,
+      // and the process would otherwise sit here after the loop had already
+      // ended — alive, holding no lock, filming nothing.
+      log('renderer stopped');
+      process.exit(0);
+    })
+    .catch((err) => {
+      log('renderer crashed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      process.exit(1);
     });
-    process.exit(1);
-  });
 }

@@ -37,6 +37,12 @@ const SHORT_RUN_MS = 10_000;
 const RESTART_DELAY_MS = 5_000;
 const SHORT_RUN_RESTART_DELAY_MS = 15_000;
 const MAX_RESTART_DELAY_MS = 5 * 60 * 1000;
+/**
+ * After asking the worker to stop, how long to let it finish what it is
+ * filming before it is killed outright. A take is abandoned at that point;
+ * its lock expires and another worker refilms it.
+ */
+const DEFAULT_STOP_GRACE_MS = 60_000;
 
 function log(message: string, extra: Record<string, unknown> = {}) {
   // eslint-disable-next-line no-console
@@ -176,6 +182,12 @@ export function buildEmbeddedRendererEnv(
   }
 
   return next;
+}
+
+/** Grace between SIGTERM and SIGKILL on stop; MARKETING_EMBEDDED_STOP_GRACE_MS overrides. */
+export function stopGraceMs(env: NodeJS.ProcessEnv): number {
+  const raw = Number(env.MARKETING_EMBEDDED_STOP_GRACE_MS);
+  return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_STOP_GRACE_MS;
 }
 
 /**
@@ -342,7 +354,19 @@ async function superviseWorker(
     if (stopping) return;
     stopping = true;
     log('stopping');
-    child?.kill('SIGTERM');
+    const worker = child;
+    if (!worker) return;
+    worker.kill('SIGTERM');
+    // The worker finishes its current take, then exits. A worker that is
+    // still here after the grace is wedged, not working.
+    const grace = stopGraceMs(env);
+    const killer = setTimeout(() => {
+      if (worker.exitCode === null) {
+        log('worker did not stop in time; killing it', { graceMs: grace });
+        worker.kill('SIGKILL');
+      }
+    }, grace);
+    killer.unref();
   };
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);

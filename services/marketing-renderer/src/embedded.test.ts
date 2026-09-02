@@ -8,6 +8,7 @@ import {
   parseDevServerPort,
   resolvePlaywrightCli,
   selectPreviewSeatCode,
+  stopGraceMs,
 } from './embedded';
 
 // What a seed-mode fast preview's web container actually receives from the
@@ -280,5 +281,13 @@ describe('resolvePlaywrightCli', () => {
     const cli = resolvePlaywrightCli();
     expect(cli.endsWith('/playwright/cli.js')).toBe(true);
     expect(fs.existsSync(cli)).toBe(true);
+  });
+});
+
+describe('stopGraceMs', () => {
+  test('defaults to a minute and honours an override', () => {
+    expect(stopGraceMs({})).toBe(60_000);
+    expect(stopGraceMs({ MARKETING_EMBEDDED_STOP_GRACE_MS: '5000' })).toBe(5_000);
+    expect(stopGraceMs({ MARKETING_EMBEDDED_STOP_GRACE_MS: 'soon' })).toBe(60_000);
   });
 });
