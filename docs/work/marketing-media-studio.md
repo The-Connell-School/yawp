@@ -39,6 +39,19 @@ before a browser is pointed at it.
 | Renderer worker | `services/marketing-renderer` |
 | Infrastructure | `infra/marketing-renderer.tf` |
 
+## Where the renderer runs
+
+| Environment | Renderer | Storage |
+|---|---|---|
+| Production / demo box | ECS service from `infra/marketing-renderer.tf`, scaled to zero by default | S3 |
+| Fast-mode PR preview | Embedded: the web container's `dev` script runs the worker beside the server, filming `localhost` | `/media` volume, served by the app |
+| Local worktree | Embedded, the same way, when `scripts/worktree-local-setup.sh` has turned the studio on | `.worktree-local/marketing-media` |
+
+The preview control plane (`scripts/preview/*`) always comes from the default
+branch, so a PR cannot start a renderer container of its own. The embedded
+renderer exists so the studio still works in a preview built from a branch
+that carries it. See `services/marketing-renderer/README.md`, "Embedded mode".
+
 ## Never film production
 
 Two independent gates, both fail closed, both requiring an explicit statement

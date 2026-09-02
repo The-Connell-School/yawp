@@ -55,6 +55,40 @@ bun run --cwd services/marketing-renderer render-once  # drain one job and exit
 | `MARKETING_RENDERER_ACCESS_CODE` | Seat code for a target behind the preview access gate. Traded for the access cookie before filming; unset for ungated targets. |
 | `MARKETING_MEDIA_STORAGE` | `s3` (default) or `disk`. Disk mode copies outputs to `MARKETING_MEDIA_DIR`, a volume the web app serves itself — used by preview environments, which have no AWS credentials. |
 | `MARKETING_MEDIA_DIR` | Output directory for disk mode; the web app must mount the same path. |
+| `MARKETING_EMBEDDED_RENDERER` | `off` stops the dev script from running the worker beside the dev server. See Embedded mode. |
+
+## Embedded mode (previews and worktrees)
+
+Fast-mode preview environments and local worktrees have no renderer container.
+There, the web app's `dev` script (`services/web-app/scripts/dev.ts`) starts
+`src/embedded.ts` beside the dev server. It runs this same worker, pointed at
+`http://localhost:<port>` — the server in the same container — and stores
+outputs on `MARKETING_MEDIA_DIR`, which the web app serves itself.
+
+It decides for itself whether it belongs in an environment, and logs the reason
+when it stays off. It runs only when all of these hold:
+
+- `NODE_ENV=development` — never beside a production server
+- `MARKETING_STUDIO_ENABLED=on` and `MARKETING_RENDER_TARGET_IS_DEMO=confirmed`
+  — the studio's own explicit gates, which it never overrides
+- `MARKETING_MEDIA_DIR` is set — renders are stored on disk here; an S3
+  environment has the dedicated ECS renderer instead
+- not an e2e or CI run (`E2E=true` or `CI`)
+- `MARKETING_EMBEDDED_RENDERER` is not `off`
+
+Behind a preview access gate it presents the seat for `local-dev-org` (or
+`PREVIEW_ACCESS_MASTER_ORGANIZATION_ID`) from `PREVIEW_ACCESS_SEATS` — the
+organization the dev-login personas belong to, which the seat-session guard
+requires.
+
+On first run it installs Chromium under `node_modules/.cache/ms-playwright`,
+a named volume in fast previews, so it survives redeploys. When running as root
+on a Debian image it also installs `node` and `ffmpeg`, which clip renders need;
+stills need neither. Set `MARKETING_RENDERER_CHROMIUM_PATH` to skip the browser
+install entirely.
+
+The first render after a fresh container is slow while this happens. Watch the
+web container's log for lines prefixed `embedded renderer:`.
 
 ## Tests
 

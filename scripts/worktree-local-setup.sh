@@ -263,7 +263,8 @@ Class insights mock mode (services/web-app/.env):
 
 Marketing Studio (admin > Marketing), enabled against this worktree:
   http://localhost:${DEV_PORT:-5176}/app/admin/marketing-media
-  Renders land in ${ROOT}/.worktree-local/marketing-media
+  bun dev runs the renderer beside the server; renders land in
+  ${ROOT}/.worktree-local/marketing-media (first run downloads Chromium)
   Storyboard generation needs ANTHROPIC_API_KEY in services/web-app/.env
 EOF
 }
