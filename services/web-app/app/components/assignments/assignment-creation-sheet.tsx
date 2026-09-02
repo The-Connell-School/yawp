@@ -14,6 +14,7 @@ import {
   collaborationModeNeedsGroupSize,
   type CollaborationGroupMode,
 } from '~/domain/assignments/collaboration';
+import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group';
 import {
   Select,
   SelectContent,
@@ -21,6 +22,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
+import {
+  DEFAULT_EXIT_TICKET_MODE,
+  EXIT_TICKETS_ENABLED,
+  EXIT_TICKET_FOCUS_OPTIONS,
+  EXIT_TICKET_TOPIC_MAX_LENGTH,
+  composeExitTicketPrompt,
+  exitTicketFocusOption,
+  isExitTicketAssignmentType,
+  parseExitTicketConfigInput,
+  type ExitTicketFocus,
+  type ExitTicketMode,
+} from '~/domain/assignment-types/exit-ticket';
 import {
   Sheet,
   SheetContent,
@@ -41,7 +54,9 @@ import {
 import { toDateInputValue } from '~/utils/date-only';
 
 export type AssignmentCreationEntryPoint =
-  'dashboard' | 'assignment-type' | 'class';
+  | 'dashboard'
+  | 'assignment-type'
+  | 'class';
 
 export type AssignmentCreationAssignmentType = {
   id: string;
@@ -52,6 +67,12 @@ export type AssignmentCreationAssignmentType = {
    * absent flag would look exactly like an unsupported type.
    */
   collaborationSupported: boolean;
+  /**
+   * `AssignmentType.kind`, which decides whether this type gets a prompt box or
+   * a form. Required for the same reason as the flag above: a call site that
+   * forgot to load it would render an exit ticket as a blank prompt.
+   */
+  kind: string | null;
 };
 
 export type AssignmentCreationEditingAssignment = {
@@ -128,6 +149,14 @@ export type AssignmentCreationSheetProps = {
   initialCollaborationGroupMode?: CollaborationGroupMode;
   initialCollaborationGroupSize?: number | null;
   initialGradingAssistantStrictnessLevel?: GradingAssistantStrictnessLevel;
+  /**
+   * Exit ticket answers to start from. Only meaningful when the selected type
+   * is an exit ticket; editing one reopens the form on what was chosen rather
+   * than resetting it to the default.
+   */
+  initialExitTicketMode?: ExitTicketMode;
+  initialExitTicketFocus?: ExitTicketFocus;
+  initialExitTicketTopic?: string;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -215,6 +244,9 @@ export function AssignmentCreationSheetContent({
   initialCollaborationGroupMode = DEFAULT_COLLABORATION_GROUP_MODE,
   initialCollaborationGroupSize = null,
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  initialExitTicketMode = DEFAULT_EXIT_TICKET_MODE,
+  initialExitTicketFocus = EXIT_TICKET_FOCUS_OPTIONS[0].value,
+  initialExitTicketTopic = '',
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -257,6 +289,15 @@ export function AssignmentCreationSheetContent({
     useState<GradingAssistantStrictnessLevel>(
       initialGradingAssistantStrictnessLevel
     );
+  const [exitTicketMode, setExitTicketMode] = useState<ExitTicketMode>(
+    initialExitTicketMode
+  );
+  const [exitTicketFocus, setExitTicketFocus] = useState<ExitTicketFocus>(
+    initialExitTicketFocus
+  );
+  const [exitTicketTopic, setExitTicketTopic] = useState(
+    initialExitTicketTopic
+  );
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [extractionTruncated, setExtractionTruncated] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -273,10 +314,29 @@ export function AssignmentCreationSheetContent({
     fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
   // Collaboration is offered per kind of writing, not per organization: only the
   // assignment types that opt in show the toggle at all.
-  const selectedTypeSupportsCollaboration = Boolean(
-    assignmentTypes.find((type) => type.id === assignmentTypeId)
-      ?.collaborationSupported
+  const selectedType = assignmentTypes.find(
+    (type) => type.id === assignmentTypeId
   );
+  const selectedTypeSupportsCollaboration = Boolean(
+    selectedType?.collaborationSupported
+  );
+  // An exit ticket has no prompt box: the teacher answers the form and the
+  // prompt is composed from the answers. With the feature off it falls back to
+  // the ordinary prompt box, so an exit ticket type can exist before this does.
+  const isExitTicket =
+    EXIT_TICKETS_ENABLED && isExitTicketAssignmentType(selectedType);
+  const selectedExitTicketFocus = exitTicketFocusOption(exitTicketFocus);
+  // Composed through the same parser the server uses, so the preview a teacher
+  // approves and the prompt their students get cannot drift apart. Empty means
+  // the form is not answered yet, which is also what blocks submission.
+  const exitTicketConfig = parseExitTicketConfigInput({
+    mode: exitTicketMode,
+    focus: exitTicketFocus,
+    topic: exitTicketTopic,
+  });
+  const exitTicketPrompt = exitTicketConfig.success
+    ? composeExitTicketPrompt(exitTicketConfig.config)
+    : '';
   const hasFixedClass = Boolean(fixedClassId);
   // Every creation entry point uses the same server workflow. In particular,
   // the class page must not silently drop collaboration fields by posting to
@@ -339,6 +399,9 @@ export function AssignmentCreationSheetContent({
     );
     setSaveForReuse(false);
     setGradingAssistantStrictnessLevel(initialGradingAssistantStrictnessLevel);
+    setExitTicketMode(initialExitTicketMode);
+    setExitTicketFocus(initialExitTicketFocus);
+    setExitTicketTopic(initialExitTicketTopic);
     setAttachmentFile(null);
     setRemoveAttachment(false);
     setExtractionTruncated(false);
@@ -358,6 +421,9 @@ export function AssignmentCreationSheetContent({
     initialCollaborationGroupMode,
     initialCollaborationGroupSize,
     initialGradingAssistantStrictnessLevel,
+    initialExitTicketMode,
+    initialExitTicketFocus,
+    initialExitTicketTopic,
     initialPostAt,
     initialDueAt,
     open,
@@ -413,7 +479,7 @@ export function AssignmentCreationSheetContent({
     isExtracting ||
     !assignmentTypeId ||
     (!isEditing && selectedClassCount === 0) ||
-    !prompt.trim() ||
+    (isExitTicket ? !exitTicketPrompt : !prompt.trim()) ||
     (titleRequired && !title.trim()) ||
     (submitForGrade && !pointValue.trim());
 
@@ -638,66 +704,212 @@ export function AssignmentCreationSheetContent({
           ) : null}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="assignment-create-prompt">Prompt</Label>
-          <div className="relative">
-            <Textarea
-              id="assignment-create-prompt"
-              name="prompt"
-              value={prompt}
-              onChange={(event) => {
-                setPrompt(event.target.value);
-                setExtractionTruncated(false);
-              }}
-              rows={10}
-              className="pb-12"
-              placeholder="Type the full assignment prompt for students, or extract it from a PDF..."
-              disabled={isSaving}
-              required
-            />
-            <input
-              ref={extractFileInputRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0] ?? null;
-                event.target.value = '';
-                if (file) handleExtractPdf(file);
-              }}
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              aria-label="Extract assignment text from PDF"
-              className="absolute bottom-2 right-2 shadow-sm"
-              onClick={() => extractFileInputRef.current?.click()}
-              disabled={!pdfExtractionClassId || isExtracting || isSaving}
-            >
-              {isExtracting ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Extracting...
-                </span>
+        {isExitTicket ? (
+          <div className="space-y-4 rounded-md border p-3">
+            <div className="space-y-2">
+              <Label>Exit ticket</Label>
+              <p className="text-sm text-muted-foreground">
+                Students write their answer — there is nothing to pick from.
+                Choose the standard end-of-lesson check, or name exactly what
+                you want evidence of.
+              </p>
+              <RadioGroup
+                value={exitTicketMode}
+                onValueChange={(value) =>
+                  setExitTicketMode(value as ExitTicketMode)
+                }
+                disabled={isSaving}
+                className="gap-3 pt-1"
+              >
+                <div className="flex items-start gap-2.5">
+                  <RadioGroupItem
+                    id="assignment-create-exit-ticket-basic"
+                    value="basic"
+                    className="mt-1"
+                  />
+                  <Label
+                    htmlFor="assignment-create-exit-ticket-basic"
+                    className="cursor-pointer font-normal"
+                  >
+                    <span className="font-medium">Basic exit ticket</span>
+                    <span className="mt-0.5 block text-sm text-muted-foreground">
+                      The same prompt every time: what did you learn today, in
+                      your own words.
+                    </span>
+                  </Label>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <RadioGroupItem
+                    id="assignment-create-exit-ticket-specific"
+                    value="specific"
+                    className="mt-1"
+                  />
+                  <Label
+                    htmlFor="assignment-create-exit-ticket-specific"
+                    className="cursor-pointer font-normal"
+                  >
+                    <span className="font-medium">Specific exit ticket</span>
+                    <span className="mt-0.5 block text-sm text-muted-foreground">
+                      Check one thing from today&apos;s lesson.
+                    </span>
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {exitTicketMode === 'specific' ? (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="assignment-create-exit-ticket-focus">
+                    What are you checking for?
+                  </Label>
+                  <Select
+                    value={exitTicketFocus}
+                    onValueChange={(value) =>
+                      setExitTicketFocus(value as ExitTicketFocus)
+                    }
+                    disabled={isSaving}
+                  >
+                    <SelectTrigger id="assignment-create-exit-ticket-focus">
+                      <SelectValue placeholder="Choose what to check for" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EXIT_TICKET_FOCUS_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedExitTicketFocus ? (
+                    <p className="text-sm text-muted-foreground">
+                      {selectedExitTicketFocus.helperText}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="assignment-create-exit-ticket-topic">
+                    What specifically?
+                  </Label>
+                  <Input
+                    id="assignment-create-exit-ticket-topic"
+                    value={exitTicketTopic}
+                    onChange={(event) => setExitTicketTopic(event.target.value)}
+                    maxLength={EXIT_TICKET_TOPIC_MAX_LENGTH}
+                    placeholder={selectedExitTicketFocus?.topicPlaceholder}
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <Label htmlFor="assignment-create-exit-ticket-preview">
+                What students will see
+              </Label>
+              {exitTicketPrompt ? (
+                <p
+                  id="assignment-create-exit-ticket-preview"
+                  className="whitespace-pre-line rounded-md bg-muted p-3 text-sm"
+                >
+                  {exitTicketPrompt}
+                </p>
               ) : (
-                <span className="flex items-center gap-2">
-                  <FileUp className="h-3.5 w-3.5" />
-                  Extract from PDF
-                </span>
+                <p
+                  id="assignment-create-exit-ticket-preview"
+                  className="rounded-md border border-dashed p-3 text-sm text-muted-foreground"
+                >
+                  Fill in what this exit ticket is about to see the prompt your
+                  students will get.
+                </p>
               )}
-            </Button>
+            </div>
+
+            <input type="hidden" name="exitTicketMode" value={exitTicketMode} />
+            {exitTicketMode === 'specific' ? (
+              <>
+                <input
+                  type="hidden"
+                  name="exitTicketFocus"
+                  value={exitTicketFocus}
+                />
+                <input
+                  type="hidden"
+                  name="exitTicketTopic"
+                  value={exitTicketTopic}
+                />
+              </>
+            ) : null}
+            {/*
+              The composed prompt goes along so any handler that still expects
+              a prompt field keeps working. The server recomposes it from the
+              answers above rather than trusting this value.
+            */}
+            <input type="hidden" name="prompt" value={exitTicketPrompt} />
           </div>
-          {extractError ? (
-            <p className="text-sm text-destructive">{extractError}</p>
-          ) : null}
-          {extractionTruncated ? (
-            <p className="text-sm text-destructive">
-              This PDF was too big — the extracted prompt got cut off. Please
-              review it and fill in the rest manually.
-            </p>
-          ) : null}
-        </div>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="assignment-create-prompt">Prompt</Label>
+            <div className="relative">
+              <Textarea
+                id="assignment-create-prompt"
+                name="prompt"
+                value={prompt}
+                onChange={(event) => {
+                  setPrompt(event.target.value);
+                  setExtractionTruncated(false);
+                }}
+                rows={10}
+                className="pb-12"
+                placeholder="Type the full assignment prompt for students, or extract it from a PDF..."
+                disabled={isSaving}
+                required
+              />
+              <input
+                ref={extractFileInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  event.target.value = '';
+                  if (file) handleExtractPdf(file);
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                aria-label="Extract assignment text from PDF"
+                className="absolute bottom-2 right-2 shadow-sm"
+                onClick={() => extractFileInputRef.current?.click()}
+                disabled={!pdfExtractionClassId || isExtracting || isSaving}
+              >
+                {isExtracting ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Extracting...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <FileUp className="h-3.5 w-3.5" />
+                    Extract from PDF
+                  </span>
+                )}
+              </Button>
+            </div>
+            {extractError ? (
+              <p className="text-sm text-destructive">{extractError}</p>
+            ) : null}
+            {extractionTruncated ? (
+              <p className="text-sm text-destructive">
+                This PDF was too big — the extracted prompt got cut off. Please
+                review it and fill in the rest manually.
+              </p>
+            ) : null}
+          </div>
+        )}
 
         <div className="pt-6">
           <input type="hidden" name="submitForGrade" value="false" />

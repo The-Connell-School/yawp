@@ -175,6 +175,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: string;
       title: string;
       systemKey: string | null;
+      kind: string | null;
       collaborationSupported: boolean;
     }>({
       scopes: [
@@ -188,6 +189,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         id: true,
         title: true,
         systemKey: true,
+        kind: true,
         collaborationSupported: true,
       },
       orderBy: { position: 'asc' },

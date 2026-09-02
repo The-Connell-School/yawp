@@ -66,7 +66,10 @@ describe('parseAssignmentExitTicket', () => {
 
   test('reports what the teacher still has to answer', () => {
     const missingTopic = parseAssignmentExitTicket(
-      formDataFor({ exitTicketMode: 'specific', exitTicketFocus: 'apply-skill' })
+      formDataFor({
+        exitTicketMode: 'specific',
+        exitTicketFocus: 'apply-skill',
+      })
     );
     expect(missingTopic.success).toBe(false);
     if (missingTopic.success) return;

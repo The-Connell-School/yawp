@@ -1,3 +1,4 @@
+import type { Prisma } from '@app/prisma';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import {
   buildAssignmentCreateInputFromApHistoryEntry,
@@ -296,7 +297,7 @@ export async function action({ request }: ActionFunctionArgs) {
   // not taken from the request — so what a student reads is the product's
   // wording. With the feature off, an exit ticket type behaves like any other
   // prompt-driven type and nothing already created changes.
-  let exitTicketConfigJson: Record<string, unknown> | undefined;
+  let exitTicketConfigJson: Prisma.InputJsonValue | undefined;
   let assignmentPrompt = prompt;
 
   if (EXIT_TICKETS_ENABLED && isExitTicketAssignmentType(assignmentType)) {

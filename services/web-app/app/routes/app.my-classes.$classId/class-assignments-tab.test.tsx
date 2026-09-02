@@ -97,7 +97,7 @@ function renderTab(overrides: Record<string, unknown> = {}) {
       classOption={{ id: 'class-1', name: 'History · Grade 9 • Period 2' }}
       assignments={ASSIGNMENTS}
       assignmentTypes={[
-        { id: 'type-1', title: 'DBQ', collaborationSupported: false },
+        { id: 'type-1', title: 'DBQ', collaborationSupported: false, kind: null },
       ]}
       classInsightsEnabled
       onViewDocuments={() => {}}

@@ -95,6 +95,7 @@ type AssignmentTypeDetailRow = {
   title: string;
   description: string | null;
   systemKey: string | null;
+  kind: string | null;
   collaborationSupported: boolean;
   image: { id: string } | null;
   assignmentModules: Array<{
@@ -377,6 +378,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title: true,
         description: true,
         systemKey: true,
+        kind: true,
         collaborationSupported: true,
         image: { select: { id: true } },
         assignmentModules: {
@@ -655,6 +657,7 @@ export default function AppAssignmentTypesIdRoute() {
                 assignmentTypeCollaborationSupported={
                   data.assignmentType.collaborationSupported
                 }
+                assignmentTypeKind={data.assignmentType.kind}
                 teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}

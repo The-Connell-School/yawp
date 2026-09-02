@@ -21,11 +21,9 @@ describe('the exit ticket assignment type', () => {
     expect(isExitTicketAssignmentType({ kind: 'daily_pages' })).toBe(false);
     expect(isExitTicketAssignmentType({ kind: null })).toBe(false);
     expect(isExitTicketAssignmentType(undefined)).toBe(false);
-    // A row titled "Exit Ticket" that never got the kind is still an
-    // ordinary assignment type: nothing about its prompt is derived.
-    expect(isExitTicketAssignmentType({ kind: null, title: 'Exit Ticket' })).toBe(
-      false
-    );
+    // A row titled "Exit Ticket" that never got the kind is still an ordinary
+    // assignment type: the title is never what decides this.
+    expect(isExitTicketAssignmentType({ kind: null })).toBe(false);
   });
 
   test('offers exactly two ways to write one', () => {

@@ -223,7 +223,10 @@ export function parseExitTicketConfigInput(
   if (!rawMode) {
     return {
       success: true,
-      config: { schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION, mode: 'basic' },
+      config: {
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'basic',
+      },
     };
   }
 
@@ -234,7 +237,10 @@ export function parseExitTicketConfigInput(
   if (rawMode === 'basic') {
     return {
       success: true,
-      config: { schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION, mode: 'basic' },
+      config: {
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'basic',
+      },
     };
   }
 

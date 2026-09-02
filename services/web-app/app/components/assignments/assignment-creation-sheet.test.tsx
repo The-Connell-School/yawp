@@ -32,6 +32,12 @@ const { AssignmentCreationSheetContent, assignmentCreationClassLabel } =
   await import('./assignment-creation-sheet');
 const { SAVED_ASSIGNMENTS_ENABLED } =
   await import('~/domain/assignments/saved-assignments');
+const {
+  BASIC_EXIT_TICKET_PROMPT,
+  EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+  EXIT_TICKET_ELABORATION_NOTE,
+  EXIT_TICKET_FOCUS_OPTIONS,
+} = await import('~/domain/assignment-types/exit-ticket');
 
 describe('assignmentCreationClassLabel', () => {
   it('shows grade and period when both are present', () => {
@@ -86,8 +92,27 @@ function idleFetcher(data: Record<string, unknown> | null = null) {
 
 const assignmentTypes = [
   // type-1 is in the collaborative-drafts pilot; type-2 is not.
-  { id: 'type-1', title: 'Literary Analysis', collaborationSupported: true },
-  { id: 'type-2', title: 'Daily Pages', collaborationSupported: false },
+  {
+    id: 'type-1',
+    title: 'Literary Analysis',
+    collaborationSupported: true,
+    kind: null,
+  },
+  {
+    id: 'type-2',
+    title: 'Daily Pages',
+    collaborationSupported: false,
+    kind: 'daily_pages',
+  },
+];
+
+const exitTicketAssignmentTypes = [
+  {
+    id: 'exit-1',
+    title: 'Exit Ticket',
+    collaborationSupported: false,
+    kind: EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+  },
 ];
 
 const teacherClasses = [
@@ -695,6 +720,131 @@ describe('AssignmentCreationSheetContent', () => {
       expect(
         isChecked(controlById('assignment-create-collaboration-enabled'))
       ).toBe(false);
+    });
+  });
+
+  describe('exit tickets', () => {
+    function renderExitTicketSheet(
+      props: Partial<Parameters<typeof AssignmentCreationSheetContent>[0]> = {}
+    ) {
+      return renderSheet({
+        assignmentTypes: exitTicketAssignmentTypes,
+        fixedAssignmentTypeId: 'exit-1',
+        ...props,
+      });
+    }
+
+    it('replaces the prompt box with the exit ticket form', () => {
+      root = renderExitTicketSheet().root;
+
+      expectText('Basic exit ticket');
+      expectText('Specific exit ticket');
+      // There is nothing for a teacher to write. The prompt is composed.
+      expect(document.querySelector('textarea[name="prompt"]')).toBeNull();
+    });
+
+    it('leaves every other assignment type on the prompt box', () => {
+      root = renderSheet().root;
+
+      expectNoText('Basic exit ticket');
+      expect(textareaByName('prompt')).not.toBeNull();
+    });
+
+    it('opens on the basic exit ticket and submits the standard prompt', () => {
+      root = renderExitTicketSheet().root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-basic'))
+      ).toBe(true);
+      // A basic exit ticket is answerable with one click: nothing else to fill.
+      expectText(BASIC_EXIT_TICKET_PROMPT);
+      expect(inputByName('exitTicketMode').value).toBe('basic');
+      expect(inputByName('prompt').value).toInclude(BASIC_EXIT_TICKET_PROMPT);
+      expect(inputByName('prompt').value).toInclude(
+        EXIT_TICKET_ELABORATION_NOTE
+      );
+    });
+
+    it('asks what to check for once the teacher goes specific', () => {
+      root = renderExitTicketSheet().root;
+
+      expectNoText('What are you checking for?');
+
+      act(() => {
+        controlById('assignment-create-exit-ticket-specific').click();
+      });
+
+      expectText('What are you checking for?');
+      expectText('What specifically?');
+      expect(inputByName('exitTicketMode').value).toBe('specific');
+    });
+
+    it('will not submit a specific exit ticket with no topic', () => {
+      root = renderExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      act(() => {
+        controlById('assignment-create-exit-ticket-specific').click();
+      });
+
+      const submit = document.querySelector<HTMLButtonElement>(
+        'button[type="submit"]'
+      );
+      expect(submit).not.toBeNull();
+      expect(submit!.disabled).toBe(true);
+      // Nothing to preview until the teacher says what it is about.
+      expectNoText(BASIC_EXIT_TICKET_PROMPT);
+    });
+
+    it('previews and submits exactly what students will read', () => {
+      root = renderExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'explain-concept',
+        initialExitTicketTopic: 'the causes of World War I',
+      }).root;
+
+      // The preview is the whole point of the form: the teacher approves the
+      // exact wording before a class ever sees it, and the value that gets
+      // posted is the one they read.
+      expectText('the causes of World War I');
+      expect(inputByName('exitTicketMode').value).toBe('specific');
+      expect(inputByName('exitTicketFocus').value).toBe('explain-concept');
+      expect(inputByName('exitTicketTopic').value).toBe(
+        'the causes of World War I'
+      );
+      expect(inputByName('prompt').value).toInclude(
+        'the causes of World War I'
+      );
+      expect(inputByName('prompt').value).not.toInclude(
+        BASIC_EXIT_TICKET_PROMPT
+      );
+
+      const submit = document.querySelector<HTMLButtonElement>(
+        'button[type="submit"]'
+      );
+      expect(submit!.disabled).toBe(false);
+    });
+
+    it('reopens an exit ticket on the answers it was created with', () => {
+      root = renderExitTicketSheet({
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'apply-skill',
+        initialExitTicketTopic: 'long division',
+      }).root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-specific'))
+      ).toBe(true);
+      expect(
+        (controlById('assignment-create-exit-ticket-topic') as HTMLInputElement)
+          .value
+      ).toBe('long division');
+      expect(inputByName('exitTicketFocus').value).toBe('apply-skill');
+      expect(
+        EXIT_TICKET_FOCUS_OPTIONS.some(
+          (option) => option.value === 'apply-skill'
+        )
+      ).toBe(true);
     });
   });
 });

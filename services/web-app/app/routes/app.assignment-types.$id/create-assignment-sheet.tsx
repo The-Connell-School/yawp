@@ -32,6 +32,9 @@ type Props = {
   assignmentTypeTitle: string;
   /** Whether this kind of writing is in the collaborative-drafts pilot. */
   assignmentTypeCollaborationSupported?: boolean;
+  /** `AssignmentType.kind`, which decides whether the sheet shows a prompt
+   * box or the exit ticket form. */
+  assignmentTypeKind?: string | null;
   teacherClasses: TeacherClass[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -53,6 +56,7 @@ export function CreateAssignmentSheet({
   assignmentTypeId,
   assignmentTypeTitle,
   assignmentTypeCollaborationSupported = false,
+  assignmentTypeKind = null,
   teacherClasses,
   open,
   onOpenChange,
@@ -92,6 +96,7 @@ export function CreateAssignmentSheet({
             id: assignmentTypeId,
             title: assignmentTypeTitle,
             collaborationSupported: assignmentTypeCollaborationSupported,
+            kind: assignmentTypeKind,
           },
         ]}
         teacherClasses={teacherClasses}
