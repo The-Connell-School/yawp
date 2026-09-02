@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { HIDE_CAPTURE_CHROME_SCRIPT } from './render';
+import { HIDE_CAPTURE_CHROME_SCRIPT } from './capture-chrome';
 
 describe('HIDE_CAPTURE_CHROME_SCRIPT', () => {
   // The badge must stay hidden across a React re-render of the document. A
