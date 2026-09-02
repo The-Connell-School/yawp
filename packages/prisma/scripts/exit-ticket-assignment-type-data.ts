@@ -11,6 +11,13 @@
 /** Must match EXIT_TICKET_ASSIGNMENT_TYPE_KIND in the web app. */
 export const EXIT_TICKET_ASSIGNMENT_TYPE_KIND = 'exit_ticket';
 
+/**
+ * The row id the fixtures use. The seed script creates the type with the same
+ * id, so a database seeded either way converges on one row — and the course
+ * image, which the fixtures carry keyed by this id, attaches on both paths.
+ */
+export const EXIT_TICKET_ASSIGNMENT_TYPE_ID = 'cexitticket000000000000000';
+
 export const EXIT_TICKET_ASSIGNMENT_TYPE_DATA = {
   title: 'Exit Ticket',
   description:

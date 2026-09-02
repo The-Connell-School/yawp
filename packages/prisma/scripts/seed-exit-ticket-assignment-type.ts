@@ -23,8 +23,13 @@
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
+// The course image lives in the fixture bundle rather than as a second copy on
+// disk, so the artwork has exactly one source and the two seeding paths cannot
+// drift apart.
+import assignmentTypeImages from '../fixtures/prod-fidelity/assignment-type-images.json';
 import {
   EXIT_TICKET_ASSIGNMENT_TYPE_DATA,
+  EXIT_TICKET_ASSIGNMENT_TYPE_ID,
   EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
   EXIT_TICKET_INSTRUCTION_DATA,
   EXIT_TICKET_MODULE_DATA,
@@ -104,6 +109,7 @@ async function seedExitTicketAssignmentType() {
     },
     create: {
       ...EXIT_TICKET_ASSIGNMENT_TYPE_DATA,
+      id: EXIT_TICKET_ASSIGNMENT_TYPE_ID,
       kind: EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
       ownerOrgId,
       assignmentModules: {
@@ -126,6 +132,29 @@ async function seedExitTicketAssignmentType() {
       },
       create: { organizationId, assignmentTypeId: assignmentType.id },
       update: {},
+    });
+  }
+
+  const imageFixture = assignmentTypeImages.find(
+    (row) => row.assignmentTypeId === EXIT_TICKET_ASSIGNMENT_TYPE_ID
+  );
+  if (imageFixture) {
+    const blob = Buffer.from(imageFixture.blob.base64, 'base64');
+    await prisma.assignmentTypeImage.upsert({
+      where: { assignmentTypeId: assignmentType.id },
+      create: {
+        assignmentTypeId: assignmentType.id,
+        contentType: imageFixture.contentType,
+        altText: imageFixture.altText,
+        blob,
+      },
+      // Replace the artwork but never the row, so an image an admin swapped in
+      // is refreshed rather than duplicated.
+      update: {
+        contentType: imageFixture.contentType,
+        altText: imageFixture.altText,
+        blob,
+      },
     });
   }
 
