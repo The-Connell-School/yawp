@@ -229,6 +229,10 @@ export async function seedSyntheticLocalDevData(
     assignmentTypes,
     (row) => row.title === 'ACT Writing Section'
   );
+  const exitTicketAssignmentTypeId = pickAssignmentTypeId(
+    assignmentTypes,
+    (row) => row.kind === 'exit_ticket'
+  );
 
   const thesisModules = await prisma.assignmentModule.findMany({
     where: { assignmentTypeId: thesisAssignmentTypeId, deletedAt: null },
@@ -299,6 +303,33 @@ export async function seedSyntheticLocalDevData(
     await prisma.classAssignment.create({
       data: {
         assignmentId: dailyAssignment.id,
+        classId: primaryClass.id,
+      },
+    });
+  }
+
+  if (exitTicketAssignmentTypeId) {
+    // An exit ticket stores both: the composed prompt students read, and the
+    // form answers it was composed from. The wording is the one produced by
+    // domain/assignment-types/exit-ticket.ts, copied because this script runs
+    // outside the web app's `~/` alias resolution and cannot import it.
+    const exitTicketAssignment = await prisma.assignment.create({
+      data: {
+        assignmentTypeId: exitTicketAssignmentTypeId,
+        title: 'Exit ticket: the water cycle',
+        prompt:
+          'In your own words, explain how energy moves through the water cycle. Write it the way you would explain it to someone who missed class today — not the definition you were given, but what you actually understand it to mean.\n\nWrite as much as you can, and go further than your first sentence — the more you explain your thinking, the more this is worth. Don’t worry about polish. This is about what you understand, not how neatly you say it.',
+        exitTicketConfigJson: {
+          schemaVersion: 1,
+          mode: 'specific',
+          focus: 'explain-concept',
+          topic: 'how energy moves through the water cycle',
+        },
+      },
+    });
+    await prisma.classAssignment.create({
+      data: {
+        assignmentId: exitTicketAssignment.id,
         classId: primaryClass.id,
       },
     });

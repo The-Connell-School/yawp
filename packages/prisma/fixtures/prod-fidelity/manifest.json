@@ -4,10 +4,10 @@
   "sourceDatabaseUrl": "production-config-export",
   "counts": {
     "rubrics": 2,
-    "assignmentTypes": 12,
+    "assignmentTypes": 13,
     "assignmentTypeImages": 7,
-    "assignmentModules": 40,
-    "assignmentModuleInstructions": 51,
+    "assignmentModules": 41,
+    "assignmentModuleInstructions": 52,
     "assignmentModuleInstructionButtons": 50,
     "teacherTrainings": 2,
     "teacherTrainingImages": 2,
