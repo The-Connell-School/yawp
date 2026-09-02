@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test';
+import fs from 'node:fs';
 import {
   buildEmbeddedRendererEnv,
+  configuredChromiumPath,
   decideEmbeddedRenderer,
   nextRestartDelayMs,
   parseDevServerPort,
+  resolvePlaywrightCli,
   selectPreviewSeatCode,
 } from './embedded';
 
@@ -227,18 +230,55 @@ describe('nextRestartDelayMs', () => {
     expect(nextRestartDelayMs([120_000])).toBe(5_000);
   });
 
-  test('backs off after a quick exit', () => {
-    expect(nextRestartDelayMs([120_000, 2_000])).toBe(15_000);
+  // A worker that dies at once is usually waiting on something outside it —
+  // a database still coming up, a browser not yet installed. Backing off keeps
+  // the log readable without ever abandoning a preview that will recover.
+  test('backs off exponentially after consecutive quick exits, capped', () => {
+    expect(nextRestartDelayMs([2_000])).toBe(15_000);
+    expect(nextRestartDelayMs([2_000, 2_000])).toBe(30_000);
+    expect(nextRestartDelayMs([2_000, 2_000, 2_000])).toBe(60_000);
+    expect(nextRestartDelayMs([2_000, 2_000, 2_000, 2_000])).toBe(120_000);
+    expect(nextRestartDelayMs([2_000, 2_000, 2_000, 2_000, 2_000])).toBe(240_000);
+    expect(nextRestartDelayMs(new Array(6).fill(2_000))).toBe(300_000);
+    expect(nextRestartDelayMs(new Array(12).fill(1_000))).toBe(300_000);
   });
 
-  // Three exits in a row inside ten seconds is a configuration problem, not a
-  // crash to ride out. Looping forever would only bury the reason in logs.
-  test('gives up after three consecutive immediate exits', () => {
-    expect(nextRestartDelayMs([1_000, 2_000, 3_000])).toBeNull();
-    expect(nextRestartDelayMs([60_000, 1_000, 2_000, 3_000])).toBeNull();
-  });
-
-  test('a long run resets the strike count', () => {
+  test('a long run resets the backoff', () => {
     expect(nextRestartDelayMs([1_000, 2_000, 60_000, 1_000])).toBe(15_000);
+  });
+});
+
+describe('configuredChromiumPath', () => {
+  // The compose renderer service and a local worktree with Playwright's
+  // browsers elsewhere both hand the worker a binary directly. Installing a
+  // second browser beside it would be waste, and in a sandbox that cannot
+  // reach the download CDN it would be a failure for no reason.
+  test('returns an explicitly configured binary that exists', () => {
+    expect(
+      configuredChromiumPath(
+        { MARKETING_RENDERER_CHROMIUM_PATH: '/usr/bin/true' },
+        (candidate) => candidate === '/usr/bin/true'
+      )
+    ).toBe('/usr/bin/true');
+  });
+
+  test('ignores a configured path that is missing', () => {
+    expect(
+      configuredChromiumPath(
+        { MARKETING_RENDERER_CHROMIUM_PATH: '/nowhere/chrome' },
+        () => false
+      )
+    ).toBeNull();
+    expect(configuredChromiumPath({}, () => true)).toBeNull();
+  });
+});
+
+describe('resolvePlaywrightCli', () => {
+  // `playwright/cli.js` is not in the package's exports map, so a subpath
+  // require fails under Bun. The CLI has to be found beside the entry point.
+  test('locates the installed CLI', () => {
+    const cli = resolvePlaywrightCli();
+    expect(cli.endsWith('/playwright/cli.js')).toBe(true);
+    expect(fs.existsSync(cli)).toBe(true);
   });
 });

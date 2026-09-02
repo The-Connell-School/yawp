@@ -36,7 +36,7 @@ const DEFAULT_MASTER_ORGANIZATION_ID = 'local-dev-org';
 const SHORT_RUN_MS = 10_000;
 const RESTART_DELAY_MS = 5_000;
 const SHORT_RUN_RESTART_DELAY_MS = 15_000;
-const MAX_CONSECUTIVE_SHORT_RUNS = 3;
+const MAX_RESTART_DELAY_MS = 5 * 60 * 1000;
 
 function log(message: string, extra: Record<string, unknown> = {}) {
   // eslint-disable-next-line no-console
@@ -179,17 +179,48 @@ export function buildEmbeddedRendererEnv(
 }
 
 /**
- * How long to wait before restarting an exited worker, or null to stop.
- * `runDurationsMs` lists how long each run lasted, oldest first.
+ * How long to wait before restarting an exited worker. `runDurationsMs` lists
+ * how long each run lasted, oldest first. A quick exit usually means the
+ * worker is waiting on something outside itself — a database still coming
+ * up, a browser not yet installed — so consecutive quick exits back off
+ * exponentially, to a cap, and never give up: a preview that recovers should
+ * find its renderer waiting.
  */
-export function nextRestartDelayMs(runDurationsMs: number[]): number | null {
+export function nextRestartDelayMs(runDurationsMs: number[]): number {
   let consecutiveShort = 0;
   for (let i = runDurationsMs.length - 1; i >= 0; i--) {
     if (runDurationsMs[i] >= SHORT_RUN_MS) break;
     consecutiveShort++;
   }
-  if (consecutiveShort >= MAX_CONSECUTIVE_SHORT_RUNS) return null;
-  return consecutiveShort > 0 ? SHORT_RUN_RESTART_DELAY_MS : RESTART_DELAY_MS;
+  if (consecutiveShort === 0) return RESTART_DELAY_MS;
+  return Math.min(
+    SHORT_RUN_RESTART_DELAY_MS * 2 ** (consecutiveShort - 1),
+    MAX_RESTART_DELAY_MS
+  );
+}
+
+/**
+ * A Chromium binary handed to the worker directly, when it exists. The compose
+ * renderer service does this from Playwright's image; a worktree may point at
+ * browsers installed elsewhere. Either way nothing needs downloading.
+ */
+export function configuredChromiumPath(
+  env: NodeJS.ProcessEnv,
+  exists: (candidate: string) => boolean = (candidate) =>
+    fs.existsSync(candidate)
+): string | null {
+  const candidate = env.MARKETING_RENDERER_CHROMIUM_PATH?.trim();
+  return candidate && exists(candidate) ? candidate : null;
+}
+
+/**
+ * Path to Playwright's `cli.js`. The package's exports map does not expose it
+ * as a subpath, so it is located beside the package's resolved entry point.
+ */
+export function resolvePlaywrightCli(): string {
+  const requireCjs = createRequire(import.meta.url);
+  const entry = requireCjs.resolve('playwright');
+  return path.join(path.dirname(entry), 'cli.js');
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +285,11 @@ async function ensureSystemTools(env: NodeJS.ProcessEnv): Promise<void> {
 }
 
 async function ensureChromium(env: NodeJS.ProcessEnv): Promise<boolean> {
+  const configured = configuredChromiumPath(env);
+  if (configured) {
+    log('using configured Chromium', { path: configured });
+    return true;
+  }
   process.env.PLAYWRIGHT_BROWSERS_PATH = env.PLAYWRIGHT_BROWSERS_PATH;
   const { chromium } = await import('playwright');
   const executable = () => {
@@ -266,8 +302,7 @@ async function ensureChromium(env: NodeJS.ProcessEnv): Promise<boolean> {
   };
   if (executable()) return true;
 
-  const requireCjs = createRequire(import.meta.url);
-  const cli = requireCjs.resolve('playwright/cli.js');
+  const cli = resolvePlaywrightCli();
   // Playwright's CLI is written for Node; use it when the image has one.
   const runner = commandExists('node') ? 'node' : process.execPath;
   const withDeps = isRoot() && commandExists('apt-get') ? ['--with-deps'] : [];
@@ -337,13 +372,6 @@ async function superviseWorker(
 
     runDurations.push(Date.now() - startedAt);
     const delay = nextRestartDelayMs(runDurations);
-    if (delay === null) {
-      log('worker keeps exiting immediately; giving up. Check the log lines above.', {
-        exitCode: code,
-      });
-      process.exitCode = 1;
-      break;
-    }
     log('worker exited; restarting', { exitCode: code, inMs: delay });
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
