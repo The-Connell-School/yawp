@@ -6,6 +6,7 @@
   "scripts": {
     "start": "bun run src/worker.ts",
     "render-once": "bun run src/worker.ts --once",
+    "embedded": "bun run src/embedded.ts",
     "test": "bun test src/",
     "typecheck": "tsc --noEmit"
   },
