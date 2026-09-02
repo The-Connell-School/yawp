@@ -33,6 +33,11 @@ import {
   parseAssignmentCollaboration,
 } from '~/utils/assignment-collaboration.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
+import { parseAssignmentExitTicket } from '~/utils/assignment-exit-ticket.server';
+import {
+  EXIT_TICKETS_ENABLED,
+  isExitTicketAssignmentType,
+} from '~/domain/assignment-types/exit-ticket';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -190,7 +195,12 @@ export async function action({ request }: ActionFunctionArgs) {
       id: assignmentTypeId,
       archivedAt: null,
     },
-    select: { id: true, systemKey: true, collaborationSupported: true },
+    select: {
+      id: true,
+      systemKey: true,
+      kind: true,
+      collaborationSupported: true,
+    },
   });
 
   if (!assignmentTypeAvailable || !assignmentType) {
@@ -281,7 +291,27 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
-  if (!prompt) {
+  // Exit tickets do not carry a teacher-written prompt. The teacher answered
+  // the form instead, and the prompt is composed from those answers here —
+  // not taken from the request — so what a student reads is the product's
+  // wording. With the feature off, an exit ticket type behaves like any other
+  // prompt-driven type and nothing already created changes.
+  let exitTicketConfigJson: Record<string, unknown> | undefined;
+  let assignmentPrompt = prompt;
+
+  if (EXIT_TICKETS_ENABLED && isExitTicketAssignmentType(assignmentType)) {
+    const exitTicket = parseAssignmentExitTicket(formData);
+    if (!exitTicket.success) {
+      return dataResponse(
+        { success: false, message: exitTicket.message },
+        { status: 400 }
+      );
+    }
+    assignmentPrompt = exitTicket.value.prompt;
+    exitTicketConfigJson = exitTicket.value.exitTicketConfigJson;
+  }
+
+  if (!assignmentPrompt) {
     return dataResponse(
       { success: false, message: 'Prompt is required.' },
       { status: 400 }
@@ -313,11 +343,12 @@ export async function action({ request }: ActionFunctionArgs) {
       data: {
         assignmentTypeId: assignmentType.id,
         title,
-        prompt,
+        prompt: assignmentPrompt,
         gradingAssistantStrictnessLevel,
         tutorEnabled,
         ...collaboration,
         ...promptAttachmentData,
+        ...(exitTicketConfigJson ? { exitTicketConfigJson } : {}),
         ...(gradingIntent?.success
           ? {
               submitForGrade: gradingIntent.data.submitForGrade,
@@ -379,7 +410,7 @@ export async function action({ request }: ActionFunctionArgs) {
         membershipId: profile.id,
         assignmentTypeId: assignmentType.id,
         title: title ?? '',
-        prompt,
+        prompt: assignmentPrompt,
         submitForGrade: gradingIntent?.success
           ? gradingIntent.data.submitForGrade
           : true,
