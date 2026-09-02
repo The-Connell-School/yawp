@@ -103,14 +103,20 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
       viewport: { width: 1280, height: 800 },
       scenes: [
         {
-          id: 'student-dashboard',
-          overlay: 'Students see exactly what is due',
-          goto: '/app',
+          id: 'my-documents',
+          overlay: 'Every piece of writing, one place',
+          // The student dashboard lists classes; a student's own writing is
+          // on My Documents. Clicking a document card on the dashboard used
+          // to time out on every render once the dashboard changed.
+          goto: '/app/my-documents',
           waitFor: 'main',
           settle: 1,
-          hold: 0.5,
+          hold: 0.8,
           screenshot: false,
-          steps: [{ action: 'click', text: 'Graded civic essay' }],
+          steps: [
+            { action: 'waitFor', text: 'Graded civic essay' },
+            { action: 'click', text: 'Graded civic essay' },
+          ],
         },
         {
           id: 'graded-submission',
@@ -145,13 +151,18 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
       viewport: { width: 1280, height: 800 },
       scenes: [
         {
-          id: 'student-dashboard',
-          goto: '/app',
+          id: 'my-documents',
+          overlay: 'Pick up where you left off',
+          // See the feedback clip: student writing lives on My Documents.
+          goto: '/app/my-documents',
           waitFor: 'main',
           settle: 1,
-          hold: 0.5,
+          hold: 0.8,
           screenshot: false,
-          steps: [{ action: 'click', text: 'Practice essay draft' }],
+          steps: [
+            { action: 'waitFor', text: 'Practice essay draft' },
+            { action: 'click', text: 'Practice essay draft' },
+          ],
         },
         {
           id: 'drafting',

@@ -29,6 +29,8 @@ describe('ROUTE_GUIDE', () => {
     expect(text).toContain('Daily Pages - week 2');
     expect(text).toContain('English 10 - Period 3');
     expect(text).toContain('.ProseMirror');
+    expect(text).toContain('/app/my-documents');
+    expect(text).toContain('Graded civic essay');
   });
 
   // The generator reached for {"text": "Assignment"} to pick a dropdown entry
