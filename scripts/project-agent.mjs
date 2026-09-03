@@ -444,7 +444,7 @@ function help(topic = "root") {
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
     test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|mind-report> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
-    site: "Usage: ./bin/project site <setup|dev|build|test|package> [--json]\nIsolated investor pricing site with project-selected runtimes.\n",
+    site: "Usage: ./bin/project site <setup|dev|build|test|package|standalone> [--json]\nIsolated investor pricing site with project-selected runtimes.\n",
     report: "Usage: ./bin/project report mind (--production | --snapshot FILE) --out-dir DIR [--months 1-24] [--include-aws-costs] [--estimate-cost-gaps] [--json]\nRuns aggregate-only reporting in a read-only database transaction.\n",
   };
   return pages[topic] || pages.root;
@@ -471,7 +471,7 @@ function validateOptions(options, allowed) {
 }
 
 function validatePositionals(command, operation, positional) {
-  if (command === 'site' && (!['setup', 'dev', 'build', 'test', 'package'].includes(operation) || positional.length !== 2)) throw Object.assign(new Error('Invalid pricing site operation'), { code: 'unknown_command' });
+  if (command === 'site' && (!['setup', 'dev', 'build', 'test', 'package', 'standalone'].includes(operation) || positional.length !== 2)) throw Object.assign(new Error('Invalid pricing site operation'), { code: 'unknown_command' });
   const exact = { capabilities: 1, doctor: 1, bootstrap: 1, test: 1 };
   if (exact[command] && positional.length !== exact[command]) throw Object.assign(new Error(`unexpected arguments for ${command}`), { code: 'unexpected_argument' });
   if (command === 'fixture' && (!['apply', 'reset', 'verify', 'list'].includes(operation) || positional.length > 3)) {
@@ -502,6 +502,7 @@ export function pricingSitePlan(operation) {
     dev: ['run', 'dev', '--', '--host', '127.0.0.1'],
     build: ['run', 'build'],
     test: ['test'],
+    standalone: ['run', 'build:standalone'],
   };
   if (!commands[operation]) throw new Error('Unknown pricing site operation');
   return { command: 'npm', args: commands[operation], cwd };

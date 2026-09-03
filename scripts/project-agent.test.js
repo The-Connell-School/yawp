@@ -21,6 +21,7 @@ describe("Yawp project agent CLI", () => {
     expect(plan.args).toContain('@openai/sites@0.3.0');
     expect(plan.args).toContain('shadcn');
     expect(pricingSitePlan('build').args).toEqual(['run', 'build']);
+    expect(pricingSitePlan('standalone').args).toEqual(['run', 'build:standalone']);
     expect(pricingSitePlan('package').command).toBe('bash');
     expect(pricingSitePlan('package').args.at(-1)).toBe('../yawp-pricing-site-deploy.tgz');
     expect(() => pricingSitePlan('deploy')).toThrow();
