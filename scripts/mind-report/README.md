@@ -6,6 +6,8 @@ production. No application deployment, migration, or production write is needed.
 ```sh
 ./bin/project report mind --production --include-aws-costs \
   --out-dir reports/mind/YYYY-MM-DD --json
+./bin/project report mind --production --months 24 --include-aws-costs \
+  --out-dir reports/mind/YYYY-MM-DD-two-years --json
 ./bin/project test --profile mind-report --json
 ```
 
@@ -39,8 +41,10 @@ fails that requested report run rather than inventing a cost.
 ## Definitions and limitations
 
 - Time: UTC, Monday-start weeks and calendar months; the current period is partial.
-  The query returns 13 months and 13 weeks, including the current periods. The
-  school year follows the app's July 1 boundary.
+  `--months 24` returns 24 complete months plus the current month to date, and
+  every intersecting week. Default is 12 complete months plus current. The first
+  week is clipped at the requested month boundary and marked partial when needed.
+  The school year follows the app's July 1 boundary.
 - School attribution: ClassAssignment → Class first; otherwise preserved
   DocumentClassForensic → Class; otherwise a unique current membership-school
   mapping. Ambiguous/unlinked records remain in an organization-specific unassigned
@@ -68,6 +72,17 @@ fails that requested report run rather than inventing a cost.
   creation does not store an actor. Admin-supported schools can have student
   usage with zero eligible teacher usage. Assignment deployment volume itself
   includes admin-created assignments in included schools.
+- History definition v2 adds retained teacher DocumentComment feedback. This can
+  reveal activation/activity absent from the prior submission-only feedback
+  sources. Old feedback may predate membership creation after migrations: show
+  that anomaly and omit those intervals from speed rather than reporting a
+  negative activation duration.
+- Older student engagement counts human (`agent=user`) tutor messages, student
+  comment replies, accepted saves and submissions, deduplicated by membership.
+  Do not count assistant tutor replies as student activity. Documents created are
+  a separate start/setup proxy; some may be empty. The model's session creation
+  timestamps can reflect migration history, so tutor activity uses the preserved
+  message timestamps. Only aggregate counts leave the database.
 - Submission, grade, and release counts use their own timestamps. A grade may
   concern a prior-period submission. Mutable grade timestamps reflect current
   retained state, not every grading event. Archived/deleted-marked documents and
@@ -79,9 +94,16 @@ fails that requested report run rather than inventing a cost.
 - UA license statuses are reported before the user-email filter, including manual,
   pending and refunded rows. Manual entitlements are not payments, and a refunded
   row's historical `amountPaid` is not net retained revenue.
-- Optional AWS costs are account-wide unblended service costs for the last three
-  complete months, with the AWS estimated flag. They are not production-only
-  student cost of revenue. No gross margin, renewal, or NRR is invented.
+- Optional AWS costs are account-wide unblended service costs for the requested
+  complete months, with the AWS estimated flag. If AWS specifically rejects a
+  request because history beyond 14 months is disabled, retry the 13 available
+  prior complete months and mark older requested months unavailable/null. Other
+  AWS failures still fail closed. No billing preferences are changed. These are
+  not production-only student cost of revenue. No margin, renewal, or NRR is invented.
+- The full report renders the entire requested calendar, including unavailable
+  pre-submission months as N/A rather than zero. Zero after a source begins means
+  no retained matching events, not a guarantee that all history survived. Monthly,
+  weekly, school and whole-window event counts reconcile independently in the renderer.
 
 ## Verification
 

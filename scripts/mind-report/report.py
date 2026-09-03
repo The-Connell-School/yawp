@@ -1,7 +1,23 @@
 """Render an aggregate MIND snapshot. Standard library only; no network on import."""
 import argparse
+import datetime as dt
 import json
 import pathlib
+
+
+def month_start_before(as_of, months):
+    date = dt.date.fromisoformat(as_of[:10])
+    index = date.year*12 + date.month-1-months
+    return dt.date(index//12,index%12+1,1)
+
+
+def observed_count(value, period, earliest, grain='month'):
+    """No source history before the first retained observation is not a measured zero."""
+    if not earliest:
+        return 'N/A'
+    start=dt.date.fromisoformat(period)
+    end = (start+dt.timedelta(days=7)) if grain=='week' else month_start_before((start.replace(day=28)+dt.timedelta(days=4)).isoformat(),0)
+    return 'N/A' if end<=dt.date.fromisoformat(earliest[:10]) else value
 
 
 def cell(value):
@@ -43,11 +59,21 @@ def validate(data):
         seen.add(key)
         if row['student_submitters'] > row['submissions'] or row['resubmissions'] > row['submissions']:
             raise ValueError('Impossible submission counts')
+        if row.get('student_tutor_users',0)>row.get('student_tutor_messages',0):
+            raise ValueError('Impossible tutor counts')
     for row in data['portfolio_usage']:
         school_total = sum(r['submissions'] for r in data['usage'] if
                            (r['grain'], r['period']) == (row['grain'], row['period']))
         if row['submissions'] != school_total:
             raise ValueError('School and portfolio submissions do not reconcile')
+    if data.get('window_totals'):
+        for metric in ('documents_created','student_tutor_messages','submissions'):
+            expected=data['window_totals'][metric]
+            for grain in ('month','week'):
+                if sum(r[metric] for r in data['usage'] if r['grain']==grain)!=expected:
+                    raise ValueError(f'{metric}: {grain} and window totals do not reconcile')
+            if sum(r[metric] for r in data['school_window_totals'])!=expected:
+                raise ValueError(f'{metric}: school and window totals do not reconcile')
 
 
 def render(data):
@@ -67,6 +93,7 @@ def render(data):
     activated = quality['unique_activated_teacher_memberships']
     first_retained = next(r['earliest'] for r in quality['coverage'] if r['source']=='retained_submissions')
     first_month = first_retained[:7]+'-01' if first_retained else meta['start_at'][:10]
+    coverage={r['source']:r['earliest'] for r in quality['coverage']}
     leading = sorted((r for r in data['usage'] if r['grain']=='month' and r['period']==last_month),
                      key=lambda r:r['submissions'], reverse=True)[0]
     parts = [f'# Yawp investor-coaching MIND report\n\nProduction snapshot: **{meta["as_of"]}**. '
@@ -100,17 +127,51 @@ def render(data):
              'they can refer to different cohorts. Grade timestamps are the currently retained values and can move after regrading. '
              'Repeat submissions count the second and later submission for a document, not confirmed text revisions. '
              'Student counts are distinct membership IDs per period, deduplicated across schools in this summary.']
-    headers = ['Period','Complete?','Schools submitting','Student submitters','Submissions','Graded','Released','Repeat submissions','Teacher feedback actors']
+    if data.get('window_totals'):
+        total=data['window_totals']
+        parts.insert(1, f'## Full requested history: {meta["start_at"][:10]} through {meta["as_of"][:10]}\n\n'
+                     f'{meta["lookback_months"]} complete calendar months plus the current month to date. '
+                     f'**{total["documents_created"]:,} retained student documents created; '
+                     f'{total["student_tutor_messages"]:,} student-authored tutor messages from {total["unique_student_tutor_users"]:,} student memberships; '
+                     f'{total["unique_students_with_observed_activity"]:,} student memberships with an observed tutor/reply/save/submission event; '
+                     f'{total["submissions"]:,} retained submissions.**\n\n'
+                     'Older tutor messages and document comments extend visibility beyond the newer submission tables. '
+                     'Document creation is a setup/start proxy and can include empty drafts; it is kept separate from observed student interactions. '
+                     'These are retained-event totals, not a claim that all historical activity survived. '
+                     'Counts are unique organization memberships, not necessarily unique people. '
+                     'Definition v2 adds legacy document feedback to teacher activity/activation; results may differ from the earlier narrower report.')
+    headers = ['Period','Calendar complete?','Schools submitting','Student submitters','Submissions','Graded','Released','Repeat submissions','Teacher feedback actors']
     for grain, title in [('month','Monthly'),('week','Weekly')]:
         rows=[]
         for (g, period), p in sorted(portfolio.items()):
-            if g!=grain or (grain=='month' and period < first_month): continue
+            if g!=grain: continue
             sr=[r for r in data['usage'] if r['grain']==grain and r['period']==period]
-            rows.append([period,'Yes' if p['complete'] else 'PARTIAL',p['schools_with_submissions'],p['student_submitters'],p['submissions'],
-                         sum(r['graded_submissions'] for r in sr),sum(r['released_submissions'] for r in sr),sum(r['resubmissions'] for r in sr),p['direct_feedback_teachers']])
+            vals=[p['schools_with_submissions'],p['student_submitters'],p['submissions'],sum(r['graded_submissions'] for r in sr),sum(r['released_submissions'] for r in sr),sum(r['resubmissions'] for r in sr)]
+            rows.append([period,'Yes' if p['complete'] else 'PARTIAL']+[observed_count(v,period,first_retained,grain) for v in vals]+
+                        [observed_count(p['direct_feedback_teachers'],period,coverage.get('teacher_feedback',first_retained),grain)])
         parts.append(f'### {title}\n\n'+table(headers,rows))
     parts.append(f'The first retained submission is {first_retained}. Earlier periods have **no retained submission history**, '
-                 'not proven zero use. The first historical month may be truncated. School holidays and term starts affect comparisons; a summer-to-term rebound is not a retention conclusion.')
+                 'not proven zero use. N/A means the source has no retained history for that period; 0 means no retained matching events after the source starts, not a guarantee of complete historical logging. '
+                 'Calendar complete only describes date boundaries, not data completeness. The first historical source month may be truncated. School holidays and term starts affect comparisons; a summer-to-term rebound is not a retention conclusion.')
+    if data.get('window_totals'):
+        history_rows=[]
+        for (grain,period),p in sorted(portfolio.items()):
+            if grain!='month': continue
+            rs=[r for r in data['usage'] if r['grain']=='month' and r['period']==period]
+            history_rows.append([period,observed_count(sum(r['documents_created'] for r in rs),period,coverage.get('document_creation')),
+                observed_count(sum(r['student_tutor_messages'] for r in rs),period,coverage.get('student_tutor_messages')),
+                observed_count(p['student_tutor_users'],period,coverage.get('student_tutor_messages')),
+                p['students_with_observed_activity'],observed_count(p['submissions'],period,first_retained)])
+        parts.append('## Older student activity — month by month\n\n'
+                     'Tutor messages count only agent=user rows, never assistant replies. Student activity counts tutor messages, comment replies, accepted saves or submissions; '
+                     'the mix of available event sources changes over time. Document creation is shown separately. No content is exported.\n\n'+
+                     table(['Month','Documents created','Student tutor messages','Tutor users','Students with observed activity','Submissions'],history_rows))
+        parts.append('## School totals across the requested window\n\n'
+                     'Same exclusions as the earlier packet. School attribution uses retained class links before current membership fallback. '
+                     'Unassigned school rows retain older activity that cannot be reliably attributed to one institution.\n\n'+
+                     table(['Organization / school','Documents created','Tutor messages','Students with observed activity','Submissions','Teacher feedback actors'],[
+                         [f'{schools[r["school_id"]]["organization"]} / {schools[r["school_id"]]["school"]}',r['documents_created'],r['student_tutor_messages'],r['students_with_observed_activity'],r['submissions'],r['teacher_feedback_actors']]
+                         for r in data['school_window_totals'] if schools[r['school_id']]['real_school'] or any(r[k] for k in ('documents_created','student_tutor_messages','submissions'))]))
     parts.append('## School account and activation snapshot\n\n'
                  '“Registered” means surviving non-admin, non-test organization memberships associated with this school. '
                  'Unlinked members fall back to the organization’s sole school only when that mapping is unambiguous; otherwise they remain unassigned. '
@@ -137,9 +198,20 @@ def render(data):
                       rate(usage['week',last_week,s['school_id']]['student_submitters'],s['registered_students']),
                       usage['week',last_week,s['school_id']]['submissions'],usage['week',prev_week,s['school_id']]['submissions']] for s in visible]))
     parts.append('## Monthly school submission trends\n\nSeparate rows preserve organization context; no speculative merging of duplicate school names.')
-    trend_months=sorted({r['period'] for r in data['usage'] if r['grain']=='month' and r['period']>=first_month})
-    parts.append(table(['Organization / school']+[m[:7]+(' *' if m==current_month else '') for m in trend_months],[
-        [f'{s["organization"]} / {s["school"]}']+[usage['month',m,s['school_id']]['submissions'] for m in trend_months] for s in visible]))
+    trend_months=sorted({r['period'] for r in data['usage'] if r['grain']=='month'})
+    for offset in range(0,len(trend_months),6):
+        block=trend_months[offset:offset+6]
+        parts.append(table(['Organization / school']+[m[:7]+(' *' if m==current_month else '') for m in block],[
+            [f'{s["organization"]} / {s["school"]}']+[observed_count(usage['month',m,s['school_id']]['submissions'],m,first_retained) for m in block] for s in visible]))
+    if data.get('window_totals'):
+        parts.append('## Monthly school student engagement across all available sources\n\n'
+                     'Distinct student memberships with tutor messages, comment replies, accepted saves or submissions. '
+                     'This includes meaningful historical activity before the submission table begins. It is not login-based MAU, '
+                     'and the available source mix changes over time. Do not sum monthly values to get unique students across years.')
+        for offset in range(0,len(trend_months),6):
+            block=trend_months[offset:offset+6]
+            parts.append(table(['Organization / school']+[m[:7]+(' *' if m==current_month else '') for m in block],[
+                [f'{s["organization"]} / {s["school"]}']+[usage['month',m,s['school_id']]['students_with_observed_activity'] for m in block] for s in visible]))
     parts.append('* Current month is partial. School-period assignment, student, grading and activation-cohort detail is in the aggregate snapshot accompanying this report.')
     recent_weeks = sorted({r['period'] for r in data['usage'] if r['grain']=='week'})[-6:]
     parts.append('## Weekly school teacher and student trends\n\n'
@@ -173,7 +245,10 @@ def render(data):
                      'Read from AWS Cost Explorer using the Yawp account profile. Unblended cost includes all returned account services/environments, '
                      'not only production student licensing. This is a cost input, not gross margin. External AI providers, support labor and payment fees are not established here.\n\n'+table(
                      ['Month','AWS unblended cost','Currency','AWS estimated?'],[
-                         [r['month'],f'{r["amount"]:.2f}',r['unit'],r['estimated']] for r in data['aws_costs']]))
+                         [r['month'],f'{r["amount"]:.2f}' if r['amount'] is not None else 'UNAVAILABLE',r['unit'],r['estimated']] for r in data['aws_costs']]))
+        if any(r.get('available') is False for r in data['aws_costs']):
+            parts.append('AWS rejected the full history request because historical data beyond 14 months is not enabled. '
+                         'The report includes all returned complete months; earlier unavailable costs are not zeros. Older invoices/billing exports could fill this gap, but they were not supplied.')
     parts.append('## Data quality and verification\n\n'+table(['Check','Result'],[
         ['Read-only consistent snapshot',meta['read_only']],
         ['Retained production submissions',quality['all_submissions']],
@@ -183,6 +258,7 @@ def render(data):
         ['Additional internal/unverified school labels excluded',quality['excluded_or_unverified_school_labels']],
         ['Eligible memberships / all retained memberships',f'{quality["eligible_memberships"]} / {quality["all_memberships"]}'],
         ['Memberships linked to multiple schools',quality['multi_school_memberships']],
+        ['Teacher/school activation observations predating membership creation',sum(s['activation_predates_membership'] for s in data['schools'])],
         ['Retained unsubmitted attempts included',quality['unsubmitted_retained']],
     ])+'\n\n'+table(['Source','First retained timestamp','Latest retained timestamp'],[
         [r['source'],r['earliest'],r['latest']] for r in quality['coverage']]))
@@ -227,11 +303,17 @@ def brief(data):
     rows=[r for r in data['usage'] if r['grain']=='month' and r['period']==last_month and r['submissions']]
     rows.sort(key=lambda r:r['submissions'],reverse=True)
     aws = data.get('aws_costs', [])
-    cost_text = '; '.join(f'{r["month"]}: {r["unit"]} {r["amount"]:.2f}' for r in aws) or 'Not included in this run'
+    available=[r for r in aws if r['amount'] is not None]
+    cost_text = (f'{available[0]["month"]} to {available[-1]["month"]}: {available[0]["unit"]} {sum(r["amount"] for r in available):,.2f} across {len(available)} available months; earlier missing months are not zero' if available else 'Not included in this run')
     return '\n\n'.join([
         '# Yawp — investor-coaching call brief',
+        (f'**Requested history: {data["meta"]["start_at"][:10]} through {data["meta"]["as_of"][:10]}** '
+         f'({data["meta"].get("lookback_months",12)} complete calendar months plus current month to date). '
+         f'{data["window_totals"]["documents_created"]:,} student documents created; '
+         f'{data["window_totals"]["student_tutor_messages"]:,} student tutor messages from {data["window_totals"]["unique_student_tutor_users"]:,} student memberships; '
+         f'{data["window_totals"]["submissions"]:,} retained submissions. Document starts, messages and submissions are separate measures.' if data.get('window_totals') else ''),
         f'Production read: {data["meta"]["as_of"]}. Full school tables and definitions: MIND-report.md.',
-        f'**The useful headline:** {last_month[:7]} had **{month["submissions"]} retained submissions from '
+        f'**Latest complete-month context:** {last_month[:7]} had **{month["submissions"]} retained submissions from '
         f'{month["student_submitters"]} student account memberships across {month["schools_with_submissions"]} school records**. '
         'Usage is measurable now; paid retention and margins require Brian’s external business records.',
         table(['School','Student submitters','Submissions','Graded','Repeat submissions'],[
@@ -243,7 +325,7 @@ def brief(data):
             ['School renewal rate','Pending external contract/renewal ledger. App access expiry cannot answer this.'],
             ['NRR by school','Pending school recurring-revenue ledger with beginning revenue, expansion, contraction and churn.'],
             ['Licensed teachers/students',f'{teachers} non-admin teacher memberships and {students:,} student memberships in the included organizations; these are registered accounts, not purchased licenses. School breakdown and configured organization seat limits are attached. UA has a separate entitlement ledger.'],
-            ['Teacher activation',f'{activated}/{teachers} ({rate(activated,teachers)}) have an observed feedback or classroom-submission signal. This is a registered-teacher proxy, not conversion of selected teachers. Per-school speed is attached; invitation/selection dates are missing.'],
+            ['Teacher activation',f'{activated}/{teachers} ({rate(activated,teachers)}) have an observed feedback or classroom-submission signal, including older document comments in this expanded pull. This is a registered-teacher proxy, not conversion of selected teachers. Per-school speed is attached; invitation/selection dates are missing.'],
             ['Weekly teacher usage',f'{week["direct_feedback_teachers"]} non-admin teacher membership with attributable feedback in the last complete week. Class-linked activity and school rates are attached; admin-supported schools are excluded from this teacher count.'],
             ['Student usage',f'{month["student_submitters"]} submitters in {last_month[:7]}; {month["students_with_save_or_submit"]} memberships with a submission or accepted save. Save history starts partway through August, so the latter is a recent-coverage metric.'],
             ['Student licensing gross margin',f'Not yet calculable. AWS account cost input: {cost_text}. This includes multiple environments; add allocated AI, payment and other direct costs and matching licensing revenue.'],

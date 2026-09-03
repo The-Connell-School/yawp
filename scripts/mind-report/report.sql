@@ -1,11 +1,15 @@
 -- Aggregate-only MIND snapshot. psql -X -qAt -v ON_ERROR_STOP=1 -f report.sql
 -- Run with PGOPTIONS='-c default_transaction_read_only=on'. No customer text exported.
+\if :{?lookback_months}
+\else
+\set lookback_months 12
+\endif
 BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 SET LOCAL statement_timeout = '60s';
 SET LOCAL lock_timeout = '3s';
 SET LOCAL TIME ZONE 'UTC';
 WITH
-params AS (SELECT now() AS as_of, date_trunc('month', now()) - interval '12 months' AS start_at,
+params AS (SELECT now() AS as_of, date_trunc('month', now()) - make_interval(months => :lookback_months::int) AS start_at,
   extract(year FROM now()-interval '6 months')::int::text||'-'||(extract(year FROM now()-interval '6 months')::int+1)::text AS school_year),
 excluded_orgs(id) AS (VALUES ('prod-qa-org'), ('prod-qa-v3-org'),
   ('cmlydo5te000u0qjzv0hmjscc'), ('cmgtqun5v03apl309iozfnorc')),
@@ -68,6 +72,10 @@ teacher_events AS MATERIALIZED (
   SELECT s.school_id,s."gradedAt" at,s."gradedByMembershipId" membership_id,'direct_feedback' kind
   FROM submissions s JOIN eligible_members m ON m.id=s."gradedByMembershipId" AND m.role='TEACHER'
   JOIN schools sc ON sc.id=s.school_id AND sc."organizationId"=m."organizationId" WHERE s."gradedAt" IS NOT NULL
+  UNION ALL SELECT d.school_id,c."createdAt",m.id,'direct_feedback'
+  FROM "DocumentComment" c JOIN docs d ON d.id=c."documentId"
+  JOIN eligible_members m ON m.id=c."membershipId" AND m.role='TEACHER'
+  JOIN schools sc ON sc.id=d.school_id AND sc."organizationId"=m."organizationId"
   UNION ALL SELECT s.school_id,c."createdAt",c."membershipId",'direct_feedback'
   FROM "SubmissionComment" c JOIN submissions s ON s.id=c."submissionId"
   JOIN eligible_members m ON m.id=c."membershipId" AND m.role='TEACHER'
@@ -99,12 +107,23 @@ events AS MATERIALIZED (
     FROM "DocumentWriteJournal" j JOIN docs d ON d.id=j."documentId" JOIN eligible_members m ON m.id=j."membershipId" AND m.role='STUDENT'
     JOIN schools sc ON sc.id=d.school_id AND sc."organizationId"=m."organizationId"
     WHERE j.status='accepted' AND j."eventType"='document.save'
+  UNION ALL SELECT d.school_id,d."createdAt",'document_created',d.id,d.id,d."membershipId",NULL,d.attribution,NULL
+    FROM docs d WHERE d."membershipId" IS NOT NULL
+  UNION ALL SELECT d.school_id,msg."createdAt",'student_tutor_message',msg.id,d.id,m.id,NULL,d.attribution,NULL
+    FROM "AssignmentModuleSessionMessage" msg JOIN "AssignmentModuleSession" sess ON sess.id=msg."assignmentModuleSessionId"
+    JOIN docs d ON d.id=sess."documentId" JOIN eligible_members m ON m.id=coalesce(sess."membershipId",d."membershipId") AND m.role='STUDENT'
+    JOIN schools sc ON sc.id=d.school_id AND sc."organizationId"=m."organizationId"
+    WHERE msg.agent='user'
+  UNION ALL SELECT d.school_id,cr."createdAt",'student_comment_reply',cr.id,d.id,m.id,NULL,d.attribution,NULL
+    FROM "DocumentCommentResponse" cr JOIN "DocumentComment" c ON c.id=cr."commentId" JOIN docs d ON d.id=c."documentId"
+    JOIN eligible_members m ON m.id=cr."membershipId" AND m.role='STUDENT'
+    JOIN schools sc ON sc.id=d.school_id AND sc."organizationId"=m."organizationId"
 ),
 periods AS (
   SELECT 'month' grain,t period,t+interval '1 month' period_end FROM params p,
     generate_series(p.start_at,date_trunc('month',p.as_of),interval '1 month') t
   UNION ALL SELECT 'week',t,t+interval '1 week' FROM params p,
-    generate_series(date_trunc('week',p.as_of)-interval '12 weeks',date_trunc('week',p.as_of),interval '1 week') t
+    generate_series(date_trunc('week',p.start_at),date_trunc('week',p.as_of),interval '1 week') t
 ),
 school_counts AS (
   SELECT s.id school_id,
@@ -122,7 +141,7 @@ school_counts AS (
   LEFT JOIN first_activation fa ON fa.school_id=s.id AND fa.membership_id=m.id GROUP BY s.id
 ),
 usage AS (
-  SELECT pe.grain,pe.period,pe.period_end<=p.as_of complete,s.id school_id,
+  SELECT pe.grain,pe.period,pe.period>=p.start_at AND pe.period_end<=p.as_of complete,s.id school_id,
     count(DISTINCT e.event_id) FILTER(WHERE e.kind='assignment') assignment_deployments,
     count(DISTINCT e.assignment_id) FILTER(WHERE e.kind='assignment') distinct_assignments,
     count(*) FILTER(WHERE e.kind='submission') submissions,
@@ -133,10 +152,16 @@ usage AS (
     count(*) FILTER(WHERE e.kind='released') released_submissions,
     count(*) FILTER(WHERE e.kind='submission' AND e.submission_number>1) resubmissions,
     count(DISTINCT e.membership_id) FILTER(WHERE e.kind IN ('submission','student_save')) students_with_save_or_submit,
-    count(DISTINCT e.document_id) FILTER(WHERE e.kind='student_save') saved_documents
+    count(DISTINCT e.document_id) FILTER(WHERE e.kind='student_save') saved_documents,
+    count(*) FILTER(WHERE e.kind='document_created') documents_created,
+    count(DISTINCT e.membership_id) FILTER(WHERE e.kind='document_created') document_creators,
+    count(*) FILTER(WHERE e.kind='student_tutor_message') student_tutor_messages,
+    count(DISTINCT e.membership_id) FILTER(WHERE e.kind='student_tutor_message') student_tutor_users,
+    count(*) FILTER(WHERE e.kind='student_comment_reply') student_comment_replies,
+    count(DISTINCT e.membership_id) FILTER(WHERE e.kind IN ('student_tutor_message','student_comment_reply','student_save','submission')) students_with_observed_activity
   FROM periods pe CROSS JOIN params p CROSS JOIN schools s
-  LEFT JOIN events e ON e.school_id=s.id AND e.at>=pe.period AND e.at<least(pe.period_end,p.as_of)
-  GROUP BY pe.grain,pe.period,pe.period_end,p.as_of,s.id
+  LEFT JOIN events e ON e.school_id=s.id AND e.at>=greatest(pe.period,p.start_at) AND e.at<least(pe.period_end,p.as_of)
+  GROUP BY pe.grain,pe.period,pe.period_end,p.as_of,p.start_at,s.id
 ),
 teacher_usage AS (
   SELECT pe.grain,pe.period,s.id school_id,
@@ -145,12 +170,12 @@ teacher_usage AS (
     count(DISTINCT t.membership_id) FILTER(WHERE t.kind='classroom_assignment') teachers_with_class_assignments,
     count(DISTINCT t.membership_id) teachers_with_any_signal
   FROM periods pe CROSS JOIN params p CROSS JOIN schools s
-  LEFT JOIN teacher_events t ON t.school_id=s.id AND t.at>=pe.period AND t.at<least(pe.period_end,p.as_of)
+  LEFT JOIN teacher_events t ON t.school_id=s.id AND t.at>=greatest(pe.period,p.start_at) AND t.at<least(pe.period_end,p.as_of)
   GROUP BY pe.grain,pe.period,s.id
 )
 SELECT json_build_object(
   'meta',json_build_object('as_of',(SELECT as_of FROM params),'timezone','UTC','read_only',current_setting('transaction_read_only'),
-    'start_at',(SELECT start_at FROM params),'school_year',(SELECT school_year FROM params),'definition_version','mind-v1'),
+    'start_at',(SELECT start_at FROM params),'lookback_months',:lookback_months::int,'school_year',(SELECT school_year FROM params),'definition_version','mind-v2-history'),
   'organizations',(SELECT json_agg(x ORDER BY x.organization) FROM (
     SELECT o.id organization_id,o.name organization,o."numOfTeacherSeats" configured_teacher_seats,o."numOfStudentSeats" configured_student_seats,
       o."accessExpiresAt" access_expires_at,(SELECT count(*) FROM real_schools s WHERE s."organizationId"=o.id) school_records,
@@ -171,6 +196,7 @@ SELECT json_build_object(
     SELECT u.grain,to_char(u.period,'YYYY-MM-DD') period,u.complete,u.school_id,u.assignment_deployments,u.distinct_assignments,
       u.submissions,u.submitted_documents,u.student_submitters,u.inferred_school_submissions,u.graded_submissions,u.released_submissions,u.resubmissions,
       u.students_with_save_or_submit,u.saved_documents,t.direct_feedback_teachers,t.teachers_with_class_submissions,t.teachers_with_class_assignments,t.teachers_with_any_signal
+      ,u.documents_created,u.document_creators,u.student_tutor_messages,u.student_tutor_users,u.student_comment_replies,u.students_with_observed_activity
     FROM usage u JOIN teacher_usage t USING(grain,period,school_id)
   )x),
   'activation_cohorts',(SELECT json_agg(x ORDER BY x.cohort,x.school_id) FROM (
@@ -182,13 +208,15 @@ SELECT json_build_object(
     LEFT JOIN first_activation fa ON fa.school_id=ms.school_id AND fa.membership_id=m.id CROSS JOIN params p GROUP BY 1,2
   )x),
   'portfolio_usage',(SELECT json_agg(x ORDER BY x.grain,x.period) FROM (
-    SELECT pe.grain,to_char(pe.period,'YYYY-MM-DD') period,pe.period_end<=p.as_of complete,
-      (SELECT count(*) FROM events e WHERE e.kind='submission' AND e.at>=pe.period AND e.at<least(pe.period_end,p.as_of)) submissions,
-      (SELECT count(DISTINCT e.membership_id) FROM events e WHERE e.kind='submission' AND e.at>=pe.period AND e.at<least(pe.period_end,p.as_of)) student_submitters,
-      (SELECT count(DISTINCT e.membership_id) FROM events e WHERE e.kind IN ('submission','student_save') AND e.at>=pe.period AND e.at<least(pe.period_end,p.as_of)) students_with_save_or_submit,
-      (SELECT count(DISTINCT t.membership_id) FROM teacher_events t WHERE t.kind='direct_feedback' AND t.at>=pe.period AND t.at<least(pe.period_end,p.as_of)) direct_feedback_teachers,
-      (SELECT count(DISTINCT t.membership_id) FROM teacher_events t WHERE t.at>=pe.period AND t.at<least(pe.period_end,p.as_of)) teachers_with_any_signal,
-      (SELECT count(DISTINCT e.school_id) FROM events e JOIN schools s ON s.id=e.school_id AND s.real_school WHERE e.kind='submission' AND e.at>=pe.period AND e.at<least(pe.period_end,p.as_of)) schools_with_submissions
+    SELECT pe.grain,to_char(pe.period,'YYYY-MM-DD') period,pe.period>=p.start_at AND pe.period_end<=p.as_of complete,
+      (SELECT count(*) FROM events e WHERE e.kind='submission' AND e.at>=greatest(pe.period,p.start_at) AND e.at<least(pe.period_end,p.as_of)) submissions,
+      (SELECT count(DISTINCT e.membership_id) FROM events e WHERE e.kind='submission' AND e.at>=greatest(pe.period,p.start_at) AND e.at<least(pe.period_end,p.as_of)) student_submitters,
+      (SELECT count(DISTINCT e.membership_id) FROM events e WHERE e.kind IN ('submission','student_save') AND e.at>=greatest(pe.period,p.start_at) AND e.at<least(pe.period_end,p.as_of)) students_with_save_or_submit,
+      (SELECT count(DISTINCT t.membership_id) FROM teacher_events t WHERE t.kind='direct_feedback' AND t.at>=greatest(pe.period,p.start_at) AND t.at<least(pe.period_end,p.as_of)) direct_feedback_teachers,
+      (SELECT count(DISTINCT t.membership_id) FROM teacher_events t WHERE t.at>=greatest(pe.period,p.start_at) AND t.at<least(pe.period_end,p.as_of)) teachers_with_any_signal,
+      (SELECT count(DISTINCT e.school_id) FROM events e JOIN schools s ON s.id=e.school_id AND s.real_school WHERE e.kind='submission' AND e.at>=greatest(pe.period,p.start_at) AND e.at<least(pe.period_end,p.as_of)) schools_with_submissions
+      ,(SELECT count(DISTINCT e.membership_id) FROM events e WHERE e.kind='student_tutor_message' AND e.at>=greatest(pe.period,p.start_at) AND e.at<least(pe.period_end,p.as_of)) student_tutor_users
+      ,(SELECT count(DISTINCT e.membership_id) FROM events e WHERE e.kind IN ('student_tutor_message','student_comment_reply','student_save','submission') AND e.at>=greatest(pe.period,p.start_at) AND e.at<least(pe.period_end,p.as_of)) students_with_observed_activity
     FROM periods pe CROSS JOIN params p
   )x),
   'registration_cohorts',(SELECT json_agg(x ORDER BY x.cohort,x.school_id) FROM (
@@ -202,6 +230,23 @@ SELECT json_build_object(
       count(*) FILTER(WHERE l.status='ACTIVE' AND l."validUntil">p.as_of AND l."revokedAt" IS NULL) valid_active_license_rows,
       sum(l."amountPaid") amount_paid_minor_units,l.currency,min(l."validUntil") earliest_valid_until
     FROM "StudentLicense" l JOIN orgs o ON o.id=l."organizationId" CROSS JOIN params p GROUP BY 1,2,3,4,l.currency
+  )x),
+  'window_totals',json_build_object(
+    'documents_created',(SELECT count(*) FROM events e CROSS JOIN params p WHERE kind='document_created' AND at>=p.start_at AND at<p.as_of),
+    'student_tutor_messages',(SELECT count(*) FROM events e CROSS JOIN params p WHERE kind='student_tutor_message' AND at>=p.start_at AND at<p.as_of),
+    'unique_student_tutor_users',(SELECT count(DISTINCT membership_id) FROM events e CROSS JOIN params p WHERE kind='student_tutor_message' AND at>=p.start_at AND at<p.as_of),
+    'unique_students_with_observed_activity',(SELECT count(DISTINCT membership_id) FROM events e CROSS JOIN params p WHERE kind IN ('student_tutor_message','student_comment_reply','student_save','submission') AND at>=p.start_at AND at<p.as_of),
+    'submissions',(SELECT count(*) FROM events e CROSS JOIN params p WHERE kind='submission' AND at>=p.start_at AND at<p.as_of),
+    'unique_teacher_feedback_actors',(SELECT count(DISTINCT membership_id) FROM teacher_events e CROSS JOIN params p WHERE kind='direct_feedback' AND at>=p.start_at AND at<p.as_of)
+  ),
+  'school_window_totals',(SELECT json_agg(x ORDER BY x.school_id) FROM (
+    SELECT s.id school_id,
+      count(*) FILTER(WHERE e.kind='document_created') documents_created,
+      count(*) FILTER(WHERE e.kind='student_tutor_message') student_tutor_messages,
+      count(DISTINCT e.membership_id) FILTER(WHERE e.kind IN ('student_tutor_message','student_comment_reply','student_save','submission')) students_with_observed_activity,
+      count(*) FILTER(WHERE e.kind='submission') submissions,
+      (SELECT count(DISTINCT t.membership_id) FROM teacher_events t CROSS JOIN params tp WHERE t.school_id=s.id AND t.kind='direct_feedback' AND t.at>=tp.start_at AND t.at<tp.as_of) teacher_feedback_actors
+    FROM schools s CROSS JOIN params p LEFT JOIN events e ON e.school_id=s.id AND e.at>=p.start_at AND e.at<p.as_of GROUP BY s.id
   )x),
   'quality',json_build_object(
     'all_submissions',(SELECT count(*) FROM "Submission" CROSS JOIN params p WHERE "submittedAt"<p.as_of),
@@ -221,6 +266,10 @@ SELECT json_build_object(
       UNION ALL SELECT 'retained_class_assignments',min(at),max(at) FROM events WHERE kind='assignment'
       UNION ALL SELECT 'student_save_journal',min(at),max(at) FROM events WHERE kind='student_save'
       UNION ALL SELECT 'submission_audit',min("createdAt"),max("createdAt") FROM "SubmissionActivity"
+      UNION ALL SELECT 'document_creation',min(at),max(at) FROM events WHERE kind='document_created'
+      UNION ALL SELECT 'student_tutor_messages',min(at),max(at) FROM events WHERE kind='student_tutor_message'
+      UNION ALL SELECT 'student_comment_replies',min(at),max(at) FROM events WHERE kind='student_comment_reply'
+      UNION ALL SELECT 'teacher_feedback',min(at),max(at) FROM teacher_events WHERE kind='direct_feedback'
     )x)
   )
 );

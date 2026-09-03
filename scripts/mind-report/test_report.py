@@ -33,6 +33,40 @@ class ReportTests(unittest.TestCase):
     def test_markdown_escapes_school_labels(self):
         self.assertEqual(self.report.cell('A|B\nC'), 'A\\|B C')
 
+    def test_missing_history_is_not_rendered_as_zero(self):
+        self.assertEqual(self.report.observed_count(0, '2024-10-01', '2026-02-22T00:00:00+00:00'), 'N/A')
+        self.assertEqual(self.report.observed_count(0, '2026-03-01', '2026-02-22T00:00:00+00:00'), 0)
+        self.assertEqual(self.report.observed_count(4, '2026-02-01', '2026-02-22T00:00:00+00:00'), 4)
+
+    def test_month_window_covers_two_complete_years(self):
+        import datetime
+        self.assertEqual(self.report.month_start_before('2026-09-03T13:30:00+00:00', 24), datetime.date(2024,9,1))
+
+    def test_historical_sql_keeps_human_tutor_messages_separate_from_assistant(self):
+        sql = MODULE.with_name('report.sql').read_text()
+        self.assertIn("msg.agent='user'", sql)
+        self.assertIn('student_tutor_message', sql)
+        self.assertIn('documents_created', sql)
+
+    def test_cost_history_fallback_keeps_unavailable_months_null(self):
+        sys.path.insert(0,str(MODULE.parent))
+        try:
+            import run
+        finally:
+            sys.path.pop(0)
+        response={'ResultsByTime':[{'TimePeriod':{'Start':self.report.month_start_before('2026-09-03',n).isoformat()},
+                   'Estimated':False,'Groups':[{'Keys':['Fixture service'],'Metrics':{'UnblendedCost':{'Unit':'USD','Amount':'1'}}}]} for n in range(13,0,-1)]}
+        with mock.patch.object(run,'aws',side_effect=[run.HistoryUnavailable('history disabled'),response]) as call:
+            rows=run.costs('fixture','2026-09-03',24)
+            self.assertEqual(len(rows),24)
+            self.assertEqual(sum(r['amount'] is None for r in rows),11)
+            self.assertEqual(sum(r['amount'] or 0 for r in rows),13)
+            self.assertIn('Start=2025-08-01,End=2026-09-01',call.call_args.args)
+
+    def test_week_before_source_history_is_unknown(self):
+        self.assertEqual(self.report.observed_count(0,'2026-02-09','2026-02-22T00:00:00+00:00','week'),'N/A')
+        self.assertEqual(self.report.observed_count(3,'2026-02-16','2026-02-22T00:00:00+00:00','week'),3)
+
     def test_reconciliation_rejects_missing_submissions(self):
         data = {'quality': {'all_submissions': 10, 'included_submissions': 7,
                             'excluded_submissions': 2}}
