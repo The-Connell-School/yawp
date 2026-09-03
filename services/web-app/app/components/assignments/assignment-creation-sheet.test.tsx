@@ -884,6 +884,47 @@ describe('AssignmentCreationSheetContent', () => {
       expect(inputByName('prompt').value).not.toInclude('Main points');
     });
 
+    it('offers feedback-only versus points, and starts on feedback only', () => {
+      root = renderExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      expectText('How this is graded');
+      expectText('Feedback and understanding only');
+      expectText('For points');
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-feedback-only'))
+      ).toBe(true);
+      // Feedback-only posts submitForGrade=false, which is what keeps the
+      // score out of the gradebook while the response is still read.
+      expect(
+        allInputsByName('submitForGrade').map((input) => input.value)
+      ).toEqual(['false']);
+      // No point value to fill in, so the ticket is submittable as it stands.
+      // Boolean, not the node: a failing DOM matcher tries to serialize the
+      // whole happy-dom tree, which takes the test runner down with it.
+      expect(
+        Boolean(document.getElementById('assignment-create-point-value'))
+      ).toBe(false);
+
+      act(() => {
+        controlById('assignment-create-exit-ticket-for-points').click();
+      });
+
+      expect(
+        allInputsByName('submitForGrade').map((input) => input.value)
+      ).toContain('true');
+      // Small by default: one lesson check should not outweigh real work.
+      expect(
+        (controlById('assignment-create-point-value') as HTMLInputElement).value
+      ).toBe('10');
+    });
+
+    it('keeps the ordinary grade checkbox for every other type', () => {
+      root = renderSheet().root;
+
+      expectNoText('How this is graded');
+      expectText('Submit for grade');
+    });
+
     it('tells the teacher that more notes mean a more targeted ticket', () => {
       root = renderExitTicketSheet({ initialExitTicketMode: 'specific' }).root;
 

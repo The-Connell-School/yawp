@@ -9,6 +9,8 @@ import {
   EXIT_TICKET_LESSON_NOTE_MAX_LENGTH,
   EXIT_TICKET_MODES,
   EXIT_TICKET_TOPIC_MAX_LENGTH,
+  EXIT_TICKET_DEFAULT_POINT_VALUE,
+  EXIT_TICKET_SUBMIT_FOR_GRADE_DEFAULT,
   EXIT_TICKET_TUTOR_ENABLED_DEFAULT,
   composeExitTicketPrompt,
   defaultExitTicketLessonNotesEnabled,
@@ -18,6 +20,7 @@ import {
   parseExitTicketConfigInput,
   parseStoredExitTicketConfig,
 } from './exit-ticket';
+import { DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE } from '~/domain/assignments/saved-assignments';
 
 describe('the exit ticket assignment type', () => {
   test('is recognized by kind, not by title', () => {
@@ -236,6 +239,16 @@ describe('exit ticket defaults', () => {
     // An exit ticket checks what the student understands on their own. A
     // tutor in the document would be answering the question for them.
     expect(EXIT_TICKET_TUTOR_ENABLED_DEFAULT).toBe(false);
+  });
+
+  test('grading starts as feedback only, and points are worth a few', () => {
+    // The assistant still reads and scores every response either way. This
+    // decides only whether that score reaches the gradebook.
+    expect(EXIT_TICKET_SUBMIT_FOR_GRADE_DEFAULT).toBe(false);
+    // Five minutes of writing is not a hundred-point assignment.
+    expect(EXIT_TICKET_DEFAULT_POINT_VALUE).toBeLessThan(
+      DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE
+    );
   });
 
   test('lesson notes start open only when the ticket is specific', () => {

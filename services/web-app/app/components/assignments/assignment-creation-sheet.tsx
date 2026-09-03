@@ -26,8 +26,10 @@ import {
   DEFAULT_EXIT_TICKET_MODE,
   EXIT_TICKETS_ENABLED,
   EXIT_TICKET_FOCUS_OPTIONS,
+  EXIT_TICKET_DEFAULT_POINT_VALUE,
   EXIT_TICKET_LESSON_NOTE_FIELDS,
   EXIT_TICKET_LESSON_NOTE_MAX_LENGTH,
+  EXIT_TICKET_SUBMIT_FOR_GRADE_DEFAULT,
   EXIT_TICKET_TOPIC_MAX_LENGTH,
   EXIT_TICKET_TUTOR_ENABLED_DEFAULT,
   composeExitTicketPrompt,
@@ -251,6 +253,34 @@ export function initialTutorEnabledFor({
   return isExitTicket ? EXIT_TICKET_TUTOR_ENABLED_DEFAULT : initialTutorEnabled;
 }
 
+/**
+ * How an exit ticket starts out in the gradebook. Editing keeps what the
+ * assignment already has; otherwise an exit ticket opens as a feedback-only
+ * check worth a few points if the teacher switches it to points.
+ */
+export function initialGradingFor({
+  isEditing,
+  isExitTicket,
+  initialSubmitForGrade,
+  initialPointValue,
+}: {
+  isEditing: boolean;
+  isExitTicket: boolean;
+  initialSubmitForGrade: boolean;
+  initialPointValue: number | null | undefined;
+}) {
+  if (isEditing || !isExitTicket) {
+    return {
+      submitForGrade: initialSubmitForGrade,
+      pointValue: initialPointValue,
+    };
+  }
+  return {
+    submitForGrade: EXIT_TICKET_SUBMIT_FOR_GRADE_DEFAULT,
+    pointValue: EXIT_TICKET_DEFAULT_POINT_VALUE,
+  };
+}
+
 export function AssignmentCreationSheet({
   ...props
 }: AssignmentCreationSheetProps) {
@@ -315,9 +345,24 @@ export function AssignmentCreationSheetContent({
   );
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [submitForGrade, setSubmitForGrade] = useState(initialSubmitForGrade);
+  const initialGrading = initialGradingFor({
+    isEditing: Boolean(editingAssignment),
+    isExitTicket: isExitTicketTypeId(
+      assignmentTypes,
+      initialAssignmentTypeSelection(
+        assignmentTypes,
+        fixedAssignmentTypeId,
+        initialAssignmentTypeId
+      )
+    ),
+    initialSubmitForGrade,
+    initialPointValue,
+  });
+  const [submitForGrade, setSubmitForGrade] = useState(
+    initialGrading.submitForGrade
+  );
   const [pointValue, setPointValue] = useState(
-    pointValueFieldValue(initialPointValue)
+    pointValueFieldValue(initialGrading.pointValue)
   );
   const [postAt, setPostAt] = useState<string>('');
   const [dueAt, setDueAt] = useState<string>('');
@@ -454,8 +499,21 @@ export function AssignmentCreationSheetContent({
     setSelectedClassIds(initialClassIds(fixedClassId));
     setTitle(initialTitle);
     setPrompt(initialPrompt);
-    setSubmitForGrade(initialSubmitForGrade);
-    setPointValue(pointValueFieldValue(initialPointValue));
+    const grading = initialGradingFor({
+      isEditing: Boolean(editingAssignment),
+      isExitTicket: isExitTicketTypeId(
+        assignmentTypes,
+        initialAssignmentTypeSelection(
+          assignmentTypes,
+          fixedAssignmentTypeId,
+          initialAssignmentTypeId
+        )
+      ),
+      initialSubmitForGrade,
+      initialPointValue,
+    });
+    setSubmitForGrade(grading.submitForGrade);
+    setPointValue(pointValueFieldValue(grading.pointValue));
     setPostAt(toDateInputValue(initialPostAt));
     setDueAt(toDateInputValue(initialDueAt));
     setTutorEnabled(
@@ -631,13 +689,25 @@ export function AssignmentCreationSheetContent({
               setSelectedAssignmentTypeId(nextTypeId);
               // Type-dependent defaults follow the type. Editing never reaches
               // here for the tutor: the toggle is frozen after creation.
+              const nextIsExitTicket = isExitTicketTypeId(
+                assignmentTypes,
+                nextTypeId
+              );
               setTutorEnabled(
                 initialTutorEnabledFor({
                   isEditing,
-                  isExitTicket: isExitTicketTypeId(assignmentTypes, nextTypeId),
+                  isExitTicket: nextIsExitTicket,
                   initialTutorEnabled,
                 })
               );
+              const grading = initialGradingFor({
+                isEditing,
+                isExitTicket: nextIsExitTicket,
+                initialSubmitForGrade,
+                initialPointValue,
+              });
+              setSubmitForGrade(grading.submitForGrade);
+              setPointValue(pointValueFieldValue(grading.pointValue));
             }}
             disabled={
               isSaving ||
@@ -1090,26 +1160,89 @@ export function AssignmentCreationSheetContent({
 
         <div className="pt-6">
           <input type="hidden" name="submitForGrade" value="false" />
-          <div className="flex items-center gap-2.5">
-            <Checkbox
-              id="assignment-create-submit-for-grade"
-              name="submitForGrade"
-              value="true"
-              checked={submitForGrade}
-              onCheckedChange={(checked) => setSubmitForGrade(checked === true)}
-              disabled={isSaving}
-              className="size-4 shrink-0"
-            />
-            <Label
-              htmlFor="assignment-create-submit-for-grade"
-              className="cursor-pointer font-normal leading-none"
-            >
-              Submit for grade
-            </Label>
-          </div>
-          <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-            Students can submit this assignment for a recorded grade.
-          </p>
+          {isExitTicket ? (
+            /* Same field, same values — this only reframes the choice in the
+               terms an exit ticket is actually about. Feedback only still
+               reads and scores every response; it just keeps the score out of
+               the gradebook. */
+            <div className="space-y-2">
+              <Label>How this is graded</Label>
+              <RadioGroup
+                value={submitForGrade ? 'points' : 'feedback'}
+                onValueChange={(value) => setSubmitForGrade(value === 'points')}
+                disabled={isSaving}
+                className="gap-3 pt-1"
+              >
+                <div className="flex items-start gap-2.5">
+                  <RadioGroupItem
+                    id="assignment-create-exit-ticket-feedback-only"
+                    value="feedback"
+                    className="mt-1"
+                  />
+                  <Label
+                    htmlFor="assignment-create-exit-ticket-feedback-only"
+                    className="cursor-pointer font-normal"
+                  >
+                    <span className="font-medium">
+                      Feedback and understanding only
+                    </span>
+                    <span className="mt-0.5 block text-sm text-muted-foreground">
+                      Every response is still read and given feedback, and you
+                      still see who understood it. Nothing goes in the
+                      gradebook. Students answer honestly because there is
+                      nothing to lose by admitting what they missed.
+                    </span>
+                  </Label>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <RadioGroupItem
+                    id="assignment-create-exit-ticket-for-points"
+                    value="points"
+                    className="mt-1"
+                  />
+                  <Label
+                    htmlFor="assignment-create-exit-ticket-for-points"
+                    className="cursor-pointer font-normal"
+                  >
+                    <span className="font-medium">For points</span>
+                    <span className="mt-0.5 block text-sm text-muted-foreground">
+                      A recorded grade. Worth doing when you want the ticket to
+                      count toward completion — keep it small so one lesson
+                      check never outweighs real work.
+                    </span>
+                  </Label>
+                </div>
+              </RadioGroup>
+              {submitForGrade ? (
+                <input type="hidden" name="submitForGrade" value="true" />
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2.5">
+                <Checkbox
+                  id="assignment-create-submit-for-grade"
+                  name="submitForGrade"
+                  value="true"
+                  checked={submitForGrade}
+                  onCheckedChange={(checked) =>
+                    setSubmitForGrade(checked === true)
+                  }
+                  disabled={isSaving}
+                  className="size-4 shrink-0"
+                />
+                <Label
+                  htmlFor="assignment-create-submit-for-grade"
+                  className="cursor-pointer font-normal leading-none"
+                >
+                  Submit for grade
+                </Label>
+              </div>
+              <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+                Students can submit this assignment for a recorded grade.
+              </p>
+            </>
+          )}
 
           {submitForGrade ? (
             <div className="mt-3 flex gap-2.5">

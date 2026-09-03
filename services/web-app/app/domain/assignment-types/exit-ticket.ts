@@ -52,6 +52,21 @@ export const EXIT_TICKET_TOPIC_MAX_LENGTH = 200;
  */
 export const EXIT_TICKET_TUTOR_ENABLED_DEFAULT = false;
 
+/**
+ * An exit ticket is read to find out whether the lesson landed, so it starts
+ * as a feedback-only check: the assistant still reads every response and
+ * scores understanding, but nothing lands in the gradebook. A teacher who
+ * wants points chooses them deliberately.
+ */
+export const EXIT_TICKET_SUBMIT_FOR_GRADE_DEFAULT = false;
+
+/**
+ * What an exit ticket is worth when a teacher does grade it. Five minutes of
+ * writing is not a hundred-point assignment, and the product default of 100
+ * would quietly make one lesson check outweigh an essay.
+ */
+export const EXIT_TICKET_DEFAULT_POINT_VALUE = 10;
+
 /** Notes, not lesson plans: long enough for a paragraph each. */
 export const EXIT_TICKET_LESSON_NOTE_MAX_LENGTH = 1000;
 
