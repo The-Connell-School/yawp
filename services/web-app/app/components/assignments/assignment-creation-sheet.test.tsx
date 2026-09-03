@@ -142,7 +142,9 @@ function cleanup(root: Root | null) {
 }
 
 function expectText(text: string) {
-  expect(document.body.textContent).toContain(text);
+  expect(document.body.textContent?.toLowerCase()).toContain(
+    text.toLowerCase()
+  );
 }
 
 function expectNoText(text: string) {
@@ -880,6 +882,25 @@ describe('AssignmentCreationSheetContent', () => {
       expect(textareaByName('exitTicketLessonWatchFor')).not.toBeNull();
       // Students never see any of it: none of it is in the composed prompt.
       expect(inputByName('prompt').value).not.toInclude('Main points');
+    });
+
+    it('tells the teacher that more notes mean a more targeted ticket', () => {
+      root = renderExitTicketSheet({ initialExitTicketMode: 'specific' }).root;
+
+      expectText('the more you tell us here, the more targeted');
+      // The empty state is a trade-off, not an error.
+      expectText('on their own terms');
+      cleanup(root);
+
+      root = renderExitTicketSheet({
+        initialExitTicketMode: 'specific',
+        initialExitTicketLessonNotes: {
+          mainPoints: 'a',
+          mustMention: 'b',
+          watchFor: 'c',
+        },
+      }).root;
+      expectText('as targeted as an exit ticket gets');
     });
 
     it('reopens an exit ticket with the notes it was created with', () => {

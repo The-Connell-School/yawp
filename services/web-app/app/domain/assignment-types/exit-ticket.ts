@@ -98,6 +98,31 @@ export const EXIT_TICKET_LESSON_NOTE_FIELDS: ExitTicketLessonNoteField[] = [
 ];
 
 /**
+ * How pointed the reading of this ticket can be, given what the teacher has
+ * told us. A vague exit ticket is a real choice and often a good one — it
+ * catches what you did not think to ask about. But nothing can be judged
+ * against a target that was never named, so this is stated plainly in the form
+ * rather than left for a teacher to discover from disappointing results.
+ */
+export function exitTicketTargetingHint(
+  lessonNotes: ExitTicketLessonNotes | null | undefined
+): string {
+  const filled = lessonNotes
+    ? EXIT_TICKET_LESSON_NOTE_FIELDS.filter(
+        (field) => lessonNotes[field.key].trim().length > 0
+      ).length
+    : 0;
+
+  if (filled === 0) {
+    return 'Nothing here yet. Responses will be read on their own terms — open-ended, and good for catching what you did not think to ask about.';
+  }
+  if (filled < EXIT_TICKET_LESSON_NOTE_FIELDS.length) {
+    return 'Good. Every box you fill in gives the reading of these responses something more specific to look for.';
+  }
+  return 'All three filled in. This is as targeted as an exit ticket gets: responses can be read against what you actually taught.';
+}
+
+/**
  * Whether the lesson notes start open. A specific ticket already has the
  * teacher naming what they are checking, so asking what the lesson covered is
  * the natural next question. A basic ticket is meant to be one click.

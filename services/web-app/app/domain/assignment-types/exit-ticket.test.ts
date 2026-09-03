@@ -12,6 +12,7 @@ import {
   EXIT_TICKET_TUTOR_ENABLED_DEFAULT,
   composeExitTicketPrompt,
   defaultExitTicketLessonNotesEnabled,
+  exitTicketTargetingHint,
   exitTicketFocusOption,
   isExitTicketAssignmentType,
   parseExitTicketConfigInput,
@@ -362,5 +363,38 @@ describe('lesson notes', () => {
       schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
       mode: 'basic',
     });
+  });
+});
+
+describe('exitTicketTargetingHint', () => {
+  const none = { mainPoints: '', mustMention: '', watchFor: '' };
+
+  test('says a bare ticket is open-ended rather than wrong', () => {
+    // A vague exit ticket is a real choice, so the empty state reads as a
+    // trade-off, never as an error the teacher has to fix.
+    for (const value of [null, undefined, none]) {
+      const hint = exitTicketTargetingHint(value);
+      expect(hint).toInclude('on their own terms');
+      expect(hint.toLowerCase()).not.toInclude('required');
+    }
+  });
+
+  test('gets more definite as the teacher fills boxes in', () => {
+    const partial = exitTicketTargetingHint({ ...none, mainPoints: 'x' });
+    const full = exitTicketTargetingHint({
+      mainPoints: 'x',
+      mustMention: 'y',
+      watchFor: 'z',
+    });
+
+    expect(partial).not.toBe(exitTicketTargetingHint(none));
+    expect(partial).toInclude('more specific');
+    expect(full).toInclude('as targeted as an exit ticket gets');
+  });
+
+  test('counts only boxes with something actually in them', () => {
+    expect(exitTicketTargetingHint({ ...none, mainPoints: '   ' })).toBe(
+      exitTicketTargetingHint(none)
+    );
   });
 });

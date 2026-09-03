@@ -33,6 +33,7 @@ import {
   composeExitTicketPrompt,
   defaultExitTicketLessonNotesEnabled,
   exitTicketFocusOption,
+  exitTicketTargetingHint,
   isExitTicketAssignmentType,
   parseExitTicketConfigInput,
   type ExitTicketFocus,
@@ -931,8 +932,10 @@ export function AssignmentCreationSheetContent({
                     Add notes about the lesson
                   </span>
                   <span className="mt-0.5 block text-sm text-muted-foreground">
-                    Students never see these. They give whoever reads the
-                    responses something to judge them against.
+                    Students never see these. The more you tell us here, the
+                    more targeted this exit ticket becomes — responses can be
+                    read against what you actually taught, instead of just on
+                    their own terms.
                   </span>
                 </Label>
               </div>
@@ -971,6 +974,9 @@ export function AssignmentCreationSheetContent({
                       </div>
                     );
                   })}
+                  <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                    {exitTicketTargetingHint(lessonNotes)}
+                  </p>
                 </div>
               ) : null}
             </div>
