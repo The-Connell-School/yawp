@@ -11,7 +11,7 @@ const E2E_UA_APP_ORIGIN = 'http://ua.localhost:5173';
 type FakeSession = {
   id: string;
   mode: 'payment';
-  status: 'open' | 'complete';
+  status: 'open' | 'complete' | 'expired';
   paymentStatus: 'unpaid' | 'paid';
   amountTotal: number;
   currency: string;
@@ -36,6 +36,7 @@ type FakeSession = {
 
 const sessions = new Map<string, FakeSession>();
 const sessionsByIdempotencyKey = new Map<string, FakeSession>();
+let catalogUnavailable = false;
 let sessionSequence = 0;
 let eventSequence = 0;
 let activePaymentIntentRequests = 0;
@@ -69,6 +70,8 @@ function sessionResponse(session: FakeSession) {
           price: {
             id: session.priceId,
             object: 'price',
+            product: 'prod_ua_e2e',
+            type: 'one_time',
             currency: session.currency,
             unit_amount: session.amountTotal / session.quantity,
           },
@@ -169,7 +172,7 @@ function checkoutHtml(session: FakeSession) {
   <body>
     <main>
       <h1>Test Stripe Checkout</h1>
-      <p>One-time $50.00 payment</p>
+      <p>One-time $${(session.amountTotal / 100).toFixed(2)} payment</p>
       <form method="post" action="/checkout/${session.id}/pay">
         <button name="delivery" value="webhook" type="submit">Complete test payment</button>
         <button name="delivery" value="delayed" type="submit">Complete payment without webhook</button>
@@ -199,6 +202,7 @@ async function handler(request: Request) {
     sessionSequence = 0;
     activePaymentIntentRequests = 0;
     maxConcurrentPaymentIntentRequests = 0;
+    catalogUnavailable = false;
     return json({ reset: true });
   }
 
@@ -237,6 +241,8 @@ async function handler(request: Request) {
   const checkoutPay = url.pathname.match(/^\/checkout\/(cs_e2e_\d+)\/pay$/);
   if (request.method === 'POST' && checkoutPay) {
     const session = requiredSession(checkoutPay[1]!);
+    if (session.status !== 'open')
+      return json({ error: { message: 'Session is not open' } }, 400);
     const form = await request.formData();
     const delivery = form.get('delivery');
     session.status = 'complete';
@@ -357,7 +363,7 @@ async function handler(request: Request) {
     });
     const errors = [
       body.get('mode') === 'payment' ? null : 'mode must be payment',
-      priceId === 'price_ua_e2e_2026' ? null : 'unexpected Price',
+      priceId === 'price_ua_e2e_35' ? null : 'unexpected Price',
       quantity === 1 ? null : 'quantity must be one',
       hasAdditionalLineItems ? 'exactly one line item is required' : null,
       customerEmail ? null : 'customer_email is required',
@@ -413,7 +419,7 @@ async function handler(request: Request) {
       mode: 'payment',
       status: 'open',
       paymentStatus: 'unpaid',
-      amountTotal: 5_000 * quantity,
+      amountTotal: 3_500 * quantity,
       currency: 'usd',
       customer: `cus_${id}`,
       paymentIntent: null,
@@ -438,20 +444,62 @@ async function handler(request: Request) {
     return json(sessionResponse(session));
   }
 
+  if (request.method === 'POST' && url.pathname === '/test/catalog') {
+    catalogUnavailable = url.searchParams.get('unavailable') === '1';
+    return json({ ok: true });
+  }
+  const legacySession = url.pathname.match(
+    /^\/test\/sessions\/(cs_e2e_\d+)\/legacy-price$/
+  );
+  if (request.method === 'POST' && legacySession) {
+    const session = requiredSession(legacySession[1]!);
+    session.amountTotal = 5000;
+    session.priceId = 'price_ua_e2e_2026';
+    return json(sessionResponse(session));
+  }
+  const expireSession = url.pathname.match(
+    /^\/v1\/checkout\/sessions\/(cs_e2e_\d+)\/expire$/
+  );
+  if (request.method === 'POST' && expireSession) {
+    const session = requiredSession(expireSession[1]!);
+    if (session.status !== 'open')
+      return json({ error: { message: 'Session is not open' } }, 400);
+    session.status = 'expired';
+    session.url = null;
+    return json(sessionResponse(session));
+  }
+  const currentPrice = {
+    id: 'price_ua_e2e_35',
+    object: 'price',
+    product: 'prod_ua_e2e',
+    active: true,
+    currency: 'usd',
+    livemode: false,
+    type: 'one_time',
+    unit_amount: 3500,
+  };
   if (
     request.method === 'GET' &&
     url.pathname === '/v1/prices/price_ua_e2e_2026'
   ) {
     return json({
+      ...currentPrice,
       id: 'price_ua_e2e_2026',
-      object: 'price',
-      active: true,
-      currency: 'usd',
-      livemode: false,
-      type: 'one_time',
+      active: false,
       unit_amount: 5000,
     });
   }
+  if (request.method === 'GET' && url.pathname === '/v1/products/prod_ua_e2e') {
+    return json({
+      id: 'prod_ua_e2e',
+      object: 'product',
+      active: !catalogUnavailable,
+      livemode: false,
+      default_price: currentPrice,
+    });
+  }
+  if (request.method === 'GET' && url.pathname === '/v1/prices/price_ua_e2e_35')
+    return json(currentPrice);
 
   const retrieveSession = url.pathname.match(
     /^\/v1\/checkout\/sessions\/(cs_e2e_\d+)$/

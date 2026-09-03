@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 
 export const UA_STUDENT_LICENSE_COHORT = 'ua-2026';
-export const UA_STUDENT_LICENSE_AMOUNT = 5_000;
+export const UA_STUDENT_LICENSE_AMOUNT = 3_500;
 export const UA_STUDENT_LICENSE_CURRENCY = 'usd';
 export const UA_STUDENT_LICENSE_VALID_UNTIL = new Date(
   '2027-01-01T06:00:00.000Z'
@@ -209,7 +209,13 @@ type CheckoutSessionLike = {
   metadata: Record<string, string> | null;
   line_items?: {
     data: Array<{
-      price?: { id: string } | null;
+      price?: {
+        id: string;
+        product?: StripeId;
+        unit_amount?: number | null;
+        currency?: string;
+        type?: string;
+      } | null;
       quantity?: number | null;
     }>;
   } | null;
@@ -228,14 +234,15 @@ type VerifiedCheckout = {
   stripeCustomerId: string | null;
   stripePriceId: string;
   cohort: typeof UA_STUDENT_LICENSE_COHORT;
-  amountPaid: typeof UA_STUDENT_LICENSE_AMOUNT;
+  amountPaid: number;
   currency: typeof UA_STUDENT_LICENSE_CURRENCY;
   validUntil: Date;
 };
 
 function verifyPaidCheckoutSession(
   session: CheckoutSessionLike,
-  config: Extract<UaStudentLicenseConfig, { enabled: true }>
+  config: Extract<UaStudentLicenseConfig, { enabled: true }>,
+  productId?: string | null
 ): VerifiedCheckout {
   if (session.payment_status !== 'paid') {
     throw new Error('Checkout Session is not paid');
@@ -245,12 +252,19 @@ function verifyPaidCheckoutSession(
   const paymentIntentId = stripeId(session.payment_intent);
   const lineItems = session.line_items?.data ?? [];
   const expectedLineItems = lineItems.filter(
-    (item) => item.price?.id === config.priceId && (item.quantity ?? 1) === 1
+    (item) =>
+      (item.quantity ?? 1) === 1 &&
+      (item.price?.id === config.priceId ||
+        (Boolean(productId) &&
+          stripeId(item.price?.product ?? null) === productId &&
+          item.price?.type === 'one_time' &&
+          item.price.currency?.toLowerCase() === UA_STUDENT_LICENSE_CURRENCY &&
+          item.price.unit_amount === session.amount_total))
   );
 
   if (
     session.mode !== 'payment' ||
-    session.amount_total !== UA_STUDENT_LICENSE_AMOUNT ||
+    !isSupportedUaPaymentAmount(session.amount_total) ||
     session.currency?.toLowerCase() !== UA_STUDENT_LICENSE_CURRENCY ||
     metadata.organizationId !== config.organizationId ||
     metadata.cohort !== UA_STUDENT_LICENSE_COHORT ||
@@ -268,15 +282,16 @@ function verifyPaidCheckoutSession(
     stripeCheckoutSessionId: session.id,
     stripePaymentIntentId: paymentIntentId,
     stripeCustomerId: stripeId(session.customer),
-    stripePriceId: config.priceId,
+    stripePriceId: expectedLineItems[0]!.price!.id,
     cohort: UA_STUDENT_LICENSE_COHORT,
-    amountPaid: UA_STUDENT_LICENSE_AMOUNT,
+    amountPaid: session.amount_total!,
     currency: UA_STUDENT_LICENSE_CURRENCY,
     validUntil: UA_STUDENT_LICENSE_VALID_UNTIL,
   };
 }
 
 type CheckoutVerificationDependencies = {
+  retrieveConfiguredProductId?: () => Promise<string | null>;
   retrieveCheckoutSession: (id: string) => Promise<CheckoutSessionLike>;
   findMembership: (
     membershipId: string,
@@ -328,6 +343,9 @@ function defaultCheckoutVerificationDependencies(
 ): CheckoutVerificationDependencies {
   const stripe = getStripe(config);
   return {
+    async retrieveConfiguredProductId() {
+      return stripeId((await stripe.prices.retrieve(config.priceId)).product);
+    },
     async retrieveCheckoutSession(id) {
       return (await stripe.checkout.sessions.retrieve(id, {
         expand: ['line_items.data.price'],
@@ -363,7 +381,11 @@ export async function verifyCheckoutSessionForReturn(
   const dependencies =
     options.dependencies ?? defaultCheckoutVerificationDependencies(config);
   const session = await dependencies.retrieveCheckoutSession(checkoutSessionId);
-  const checkout = verifyPaidCheckoutSession(session, config);
+  const checkout = verifyPaidCheckoutSession(
+    session,
+    config,
+    await dependencies.retrieveConfiguredProductId?.()
+  );
   const membership = await dependencies.findMembership(
     checkout.membershipId,
     checkout.organizationId
@@ -380,8 +402,46 @@ export async function verifyCheckoutSessionForReturn(
   return { membershipId: membership.id };
 }
 
+function isSupportedUaPaymentAmount(amount: number | null | undefined) {
+  // Previously completed USD 50 purchases remain valid during the price rollover.
+  return amount === UA_STUDENT_LICENSE_AMOUNT || amount === 5_000;
+}
+
+export async function resolveUaCheckoutPrice(
+  config: Extract<UaStudentLicenseConfig, { enabled: true }>,
+  stripe: Pick<Stripe, 'prices' | 'products'> = getStripe(config)
+): Promise<string> {
+  const anchor = await stripe.prices.retrieve(config.priceId);
+  assertStripeModeAllowed(anchor.livemode);
+  const productId = stripeId(anchor.product);
+  if (!productId) throw new Error('Configured Stripe price has no product');
+  const product = await stripe.products.retrieve(productId, {
+    expand: ['default_price'],
+  });
+  if ('deleted' in product || !product.active)
+    throw new Error('UA Stripe product is unavailable');
+  assertStripeModeAllowed(product.livemode);
+  const price =
+    typeof product.default_price === 'string'
+      ? await stripe.prices.retrieve(product.default_price)
+      : product.default_price;
+  if (
+    !price ||
+    !price.active ||
+    price.type !== 'one_time' ||
+    price.currency.toLowerCase() !== UA_STUDENT_LICENSE_CURRENCY ||
+    price.unit_amount !== UA_STUDENT_LICENSE_AMOUNT ||
+    stripeId(price.product) !== productId
+  ) {
+    throw new Error('UA Stripe default price must be active, one-time, USD 35');
+  }
+  assertStripeModeAllowed(price.livemode);
+  return price.id;
+}
+
 type CheckoutCreationDependencies = {
-  validateConfiguredPrice?: () => Promise<void>;
+  resolveCheckoutPrice: () => Promise<string>;
+  expireCheckoutSession: (id: string) => Promise<void>;
   findMembership: (membershipId: string) => Promise<
     | (MembershipForLicense & {
         user: { email: string };
@@ -400,6 +460,9 @@ type CheckoutCreationDependencies = {
     status: string | null;
     payment_status: string;
     url: string | null;
+    amount_total?: number | null;
+    currency?: string | null;
+    line_items?: CheckoutSessionLike['line_items'];
   }>;
   prepareAttempt: (license: {
     id: string;
@@ -407,6 +470,7 @@ type CheckoutCreationDependencies = {
     stripeCheckoutSessionId: string | null;
   }) => Promise<number>;
   createCheckoutSession: (args: {
+    priceId: string;
     membership: MembershipForLicense & { user: { email: string } };
     attempt: number;
     successUrl: string;
@@ -424,19 +488,9 @@ function defaultCheckoutCreationDependencies(
 ): CheckoutCreationDependencies {
   const stripe = getStripe(config);
   return {
-    async validateConfiguredPrice() {
-      const price = await stripe.prices.retrieve(config.priceId);
-      assertStripeModeAllowed(price.livemode);
-      if (
-        !price.active ||
-        price.type !== 'one_time' ||
-        price.currency.toLowerCase() !== 'usd' ||
-        price.unit_amount !== 5000
-      ) {
-        throw new Error(
-          'Configured Stripe price must be active, one-time, USD 50'
-        );
-      }
+    resolveCheckoutPrice: () => resolveUaCheckoutPrice(config, stripe),
+    async expireCheckoutSession(id) {
+      await stripe.checkout.sessions.expire(id);
     },
     findMembership(membershipId) {
       return prisma.orgMembership.findFirst({
@@ -495,12 +549,17 @@ function defaultCheckoutCreationDependencies(
       }
     },
     async retrieveCheckoutSession(id) {
-      const session = await stripe.checkout.sessions.retrieve(id);
+      const session = await stripe.checkout.sessions.retrieve(id, {
+        expand: ['line_items.data.price'],
+      });
       return {
         id: session.id,
         status: session.status,
         payment_status: session.payment_status,
         url: session.url,
+        amount_total: session.amount_total,
+        currency: session.currency,
+        line_items: session.line_items,
       };
     },
     async prepareAttempt(license) {
@@ -529,6 +588,7 @@ function defaultCheckoutCreationDependencies(
       return prepared.checkoutAttempt;
     },
     async createCheckoutSession({
+      priceId,
       membership,
       attempt,
       successUrl,
@@ -543,7 +603,7 @@ function defaultCheckoutCreationDependencies(
       const session = await stripe.checkout.sessions.create(
         {
           mode: 'payment',
-          line_items: [{ price: config.priceId, quantity: 1 }],
+          line_items: [{ price: priceId, quantity: 1 }],
           customer_email: membership.user.email,
           client_reference_id: membership.id,
           metadata,
@@ -551,7 +611,7 @@ function defaultCheckoutCreationDependencies(
           success_url: successUrl,
           cancel_url: cancelUrl,
         },
-        { idempotencyKey: `${idempotencyKey}:${attempt}` }
+        { idempotencyKey: `${idempotencyKey}:${priceId}:${attempt}` }
       );
       return { id: session.id, url: session.url };
     },
@@ -604,26 +664,44 @@ export async function createOrReuseCheckoutSession({
   // could charge the student twice if Stripe later reinstates the first funds.
   if (license.status === 'DISPUTED') return { kind: 'SUSPENDED' };
 
+  let priceId: string | undefined;
   const isTerminal = ['REFUNDED', 'REVOKED'].includes(license.status);
   if (license.stripeCheckoutSessionId && !isTerminal) {
     const existing = await deps.retrieveCheckoutSession(
       license.stripeCheckoutSessionId
     );
-    if (existing.status === 'open' && existing.url) {
-      await deps.validateConfiguredPrice?.();
-      return { kind: 'CHECKOUT', url: existing.url };
-    }
-    if (existing.status === 'complete' && existing.payment_status === 'paid') {
-      // The signed webhook is the only activation authority. A completed
-      // browser Session waits for that durable transition instead of granting
-      // access or opening a second charge.
-      return { kind: 'PROCESSING' };
+    // A completed Session, including a delayed payment, must never open a second charge.
+    if (existing.status === 'complete') return { kind: 'PROCESSING' };
+    if (existing.status === 'open') {
+      priceId = await deps.resolveCheckoutPrice();
+      const items = existing.line_items?.data ?? [];
+      if (
+        existing.url &&
+        existing.amount_total === UA_STUDENT_LICENSE_AMOUNT &&
+        existing.currency === UA_STUDENT_LICENSE_CURRENCY &&
+        items.length === 1 &&
+        items[0]?.price?.id === priceId &&
+        items[0]?.quantity === 1
+      ) {
+        return { kind: 'CHECKOUT', url: existing.url };
+      }
+      // Stripe Sessions retain their original line items after a catalog change.
+      // Close the stale payable Session before advancing the idempotent attempt.
+      try {
+        await deps.expireCheckoutSession(existing.id);
+      } catch (error) {
+        const latest = await deps.retrieveCheckoutSession(existing.id);
+        if (latest.status === 'complete') return { kind: 'PROCESSING' };
+        // Another concurrent retry may have expired it first.
+        if (latest.status !== 'expired') throw error;
+      }
     }
   }
 
-  await deps.validateConfiguredPrice?.();
+  priceId ??= await deps.resolveCheckoutPrice();
   const attempt = await deps.prepareAttempt(license);
   const session = await deps.createCheckoutSession({
+    priceId,
     membership,
     attempt,
     successUrl,
@@ -854,7 +932,7 @@ export function resolveStripeLicenseStatus(
   if (
     snapshot.paymentIntentStatus !== 'succeeded' ||
     !charge?.paid ||
-    charge.amount !== UA_STUDENT_LICENSE_AMOUNT ||
+    !isSupportedUaPaymentAmount(charge.amount) ||
     charge.currency.toLowerCase() !== UA_STUDENT_LICENSE_CURRENCY
   ) {
     return 'REVOKED';
@@ -936,7 +1014,8 @@ export async function processStripeWebhook(
     if (session.payment_status === 'paid') {
       checkout = verifyPaidCheckoutSession(
         session as CheckoutSessionLike,
-        config
+        config,
+        stripeId((await stripe.prices.retrieve(config.priceId)).product)
       );
       const membership = await prisma.orgMembership.findFirst({
         where: {
