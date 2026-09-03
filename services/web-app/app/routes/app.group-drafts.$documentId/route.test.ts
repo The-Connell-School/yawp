@@ -136,9 +136,7 @@ describe('app.group-drafts.$documentId loader', () => {
 
     const where = prisma.document.findFirst.mock.calls[0][0].where;
     expect(where.group).toEqual({ is: { openedAt: { not: null } } });
-    expect(where.assignmentType).toEqual({
-      is: { collaborationSupported: true },
-    });
+    expect(where.assignment).toEqual({ is: { collaborationEnabled: true } });
   });
 
   test('applies the read scope alongside the room predicate', async () => {

@@ -592,9 +592,7 @@ describe('AssignmentCreationSheetContent', () => {
       ).not.toBeNull();
     });
 
-    it('hides the toggle for a kind of writing outside the pilot', () => {
-      // Not merely disabled: offering it where nothing downstream would serve a
-      // room is worse than not offering it at all.
+    it('offers the toggle for a kind of writing outside the former pilot', () => {
       root = renderSheet({
         entryPoint: 'assignment-type',
         fixedAssignmentTypeId: 'type-2',
@@ -602,7 +600,7 @@ describe('AssignmentCreationSheetContent', () => {
 
       expect(
         document.getElementById('assignment-create-collaboration-enabled')
-      ).toBeNull();
+      ).not.toBeNull();
     });
 
     it('offers every group mode, not just a size', () => {

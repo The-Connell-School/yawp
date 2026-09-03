@@ -271,12 +271,7 @@ export function AssignmentCreationSheetContent({
   const isExtracting = extractFetcher.state !== 'idle';
   const assignmentTypeId =
     fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
-  // Collaboration is offered per kind of writing, not per organization: only the
-  // assignment types that opt in show the toggle at all.
-  const selectedTypeSupportsCollaboration = Boolean(
-    assignmentTypes.find((type) => type.id === assignmentTypeId)
-      ?.collaborationSupported
-  );
+  const selectedTypeSupportsCollaboration = Boolean(assignmentTypeId);
   const hasFixedClass = Boolean(fixedClassId);
   // Every creation entry point uses the same server workflow. In particular,
   // the class page must not silently drop collaboration fields by posting to
@@ -834,9 +829,9 @@ export function AssignmentCreationSheetContent({
           </p>
         </div>
 
-        {/* Collaborative drafts. Hidden entirely unless this kind of writing
-            supports them, and frozen after creation for the same reason the tutor
-            toggle is: students may already have group drafts built around it.
+        {/* Collaborative drafts. Available for every assignment type, and frozen
+            after creation for the same reason the tutor toggle is: students may
+            already have group drafts built around it.
             Group membership itself is arranged per class afterwards, because an
             assignment fans out to one ClassAssignment per class. */}
         {selectedTypeSupportsCollaboration ? (
