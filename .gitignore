@@ -215,3 +215,7 @@ scripts/production-sync.env
 !.cursor/environment.json
 !.cursor/install.sh
 !.cursor/start.sh
+
+# Private aggregate reporting outputs and Python cache
+/reports/mind/
+__pycache__/

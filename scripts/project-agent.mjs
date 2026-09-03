@@ -166,7 +166,7 @@ export function capabilities() {
       qa: "./bin/project qa prepare --json",
     },
     fixtures: ["local-dev"],
-    proofProfiles: ["project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "collaboration-presence", "changed"],
+    proofProfiles: ["project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "collaboration-presence", "mind-report", "changed"],
     nextCommands: [
       "./bin/project doctor --json",
       "./bin/project fixture verify local-dev --json",
@@ -373,6 +373,10 @@ function runTestProfile(profile, { json }) {
     const result = execute("git", ["diff", "--check", process.env.RECORD_PROOF_BASE_SHA ? `${process.env.RECORD_PROOF_BASE_SHA}..HEAD` : "HEAD"], { json, env: selected.env, timeout: 30000 });
     results.push({ id: "diff-check", ...result });
   } else if (chosen === "project-cli") run("project-cli", ["test", "./scripts/project-agent.test.js"], 120000);
+  else if (chosen === "mind-report") {
+    run("project-cli", ["test", "./scripts/project-agent.test.js"], 120000);
+    results.push({ id: "mind-report", ...execute("python3", ["-m", "unittest", "discover", "-s", "scripts/mind-report", "-p", "test_*.py"], { json, env: selected.env, timeout: 120000 }) });
+  }
   else if (chosen === "unit") run("unit", ["run", "--cwd", "services/web-app", "test"]);
   else if (chosen === "typecheck") run("typecheck", ["run", "web-app:typecheck"]);
   else if (chosen === "build") run("build", ["run", "web-app:build"]);
@@ -435,11 +439,12 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|mind-report> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nReport: ./bin/project report mind (--production | --snapshot FILE) --out-dir DIR [--include-aws-costs] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
-    test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence> [--json]\n",
+    test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|mind-report> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
+    report: "Usage: ./bin/project report mind (--production | --snapshot FILE) --out-dir DIR [--include-aws-costs] [--json]\nRuns aggregate-only reporting in a read-only database transaction.\n",
   };
   return pages[topic] || pages.root;
 }
@@ -476,6 +481,9 @@ function validatePositionals(command, operation, positional) {
   if (command === 'qa' && (operation !== 'prepare' || positional.length !== 2)) {
     throw Object.assign(new Error(`invalid QA command: ${positional.join(' ')}`), { code: 'unknown_command' });
   }
+  if (command === 'report' && (operation !== 'mind' || positional.length !== 2)) {
+    throw Object.assign(new Error('Expected report mind'), { code: 'unknown_command' });
+  }
 }
 
 function output(value, json) {
@@ -492,7 +500,8 @@ export async function main(argv = process.argv.slice(2)) {
   if (command === "help" || parsed.options.help === true) return output(help(command === "help" ? operation || "root" : command), false);
   const allowedByCommand = {
     capabilities: ['json'], doctor: ['json'], bootstrap: ['json', 'fresh'], fixture: ['json'],
-    dev: ['json'], test: ['json', 'profile'], qa: ['json', 'routes']
+    dev: ['json'], test: ['json', 'profile'], qa: ['json', 'routes'],
+    report: ['json', 'production', 'snapshot', 'out-dir', 'include-aws-costs', 'aws-profile', 'ssh-key', 'psql']
   };
   validateOptions(parsed.options, allowedByCommand[command] || ['json']);
   validatePositionals(command, operation, parsed.positional);
@@ -528,6 +537,20 @@ export async function main(argv = process.argv.slice(2)) {
     if (operation === "stop") return output(devStop(), json);
   }
   if (command === "test") return output(runTestProfile(parsed.options.profile || "changed", { json }), json);
+  if (command === "report") {
+    if (Number(parsed.options.production === true) + Number(typeof parsed.options.snapshot === 'string') !== 1) {
+      throw Object.assign(new Error('Choose exactly one source: --production or --snapshot FILE'), { code: 'report_source_required' });
+    }
+    if (typeof parsed.options['out-dir'] !== 'string') throw Object.assign(new Error('--out-dir DIR is required'), { code: 'report_output_required' });
+    const args = ['scripts/mind-report/run.py'];
+    for (const [key, value] of Object.entries(parsed.options)) {
+      if (key === 'json') continue;
+      args.push(`--${key}`);
+      if (value !== true) args.push(value);
+    }
+    const result = execute('python3', args, { json: true, timeout: 180000 });
+    return output(JSON.parse(result.stdout), json);
+  }
   if (command === "qa" && operation === "prepare") return output(await qaPrepare({ json, routes: parsed.options.routes }), json);
   throw Object.assign(new Error(`unknown command: ${parsed.positional.join(" ")}`), { code: "unknown_command" });
 }

@@ -45,7 +45,17 @@ describe("Yawp project agent CLI", () => {
     expect(contract.fixtures).toContain("local-dev");
     expect(contract.proofProfiles).toContain("qa-smoke");
     expect(contract.proofProfiles).toContain("collaboration-presence");
+    expect(contract.proofProfiles).toContain("mind-report");
     expect(contract.nextCommands.length).toBeGreaterThan(2);
+  });
+
+  test("MIND reporting requires an explicit production or snapshot source", () => {
+    const result = spawnSync(path.join(root, "bin", "project"), ["report", "mind", "--out-dir", "/tmp/unused-mind-report", "--json"], { cwd: root, encoding: "utf8" });
+    expect(result.status).not.toBe(0);
+    expect(JSON.parse(result.stderr).code).toBe("report_source_required");
+    const help = spawnSync(path.join(root, "bin", "project"), ["report", "--help"], { cwd: root, encoding: "utf8" });
+    expect(help.status).toBe(0);
+    expect(help.stdout).toContain("--production");
   });
 
   test("extensionless bin entrypoint returns machine-readable capabilities", () => {
