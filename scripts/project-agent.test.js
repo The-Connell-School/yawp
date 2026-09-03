@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   capabilities,
+  pricingSitePlan,
   parseEnvFile,
   selectCompatibleBun,
   selectCompatibleNode,
@@ -14,6 +15,17 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
+  test("pricing site uses the pinned scaffold and isolated output directory", () => {
+    const plan = pricingSitePlan('setup');
+    expect(plan.cwd).toBe(path.join(root, 'reports/mind/yawp-pricing-site'));
+    expect(plan.args).toContain('@openai/sites@0.3.0');
+    expect(plan.args).toContain('shadcn');
+    expect(pricingSitePlan('build').args).toEqual(['run', 'build']);
+    expect(pricingSitePlan('package').command).toBe('bash');
+    expect(pricingSitePlan('package').args.at(-1)).toBe('../yawp-pricing-site-deploy.tgz');
+    expect(() => pricingSitePlan('deploy')).toThrow();
+  });
+
   test("selects the first Node runtime meeting the declared minimum", () => {
     const selected = selectCompatibleNode(["old", "current", "new"], (candidate) => ({
       old: "v16.2.0",

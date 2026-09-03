@@ -444,6 +444,7 @@ function help(topic = "root") {
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
     test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|mind-report> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
+    site: "Usage: ./bin/project site <setup|dev|build|test|package> [--json]\nIsolated investor pricing site with project-selected runtimes.\n",
     report: "Usage: ./bin/project report mind (--production | --snapshot FILE) --out-dir DIR [--months 1-24] [--include-aws-costs] [--estimate-cost-gaps] [--json]\nRuns aggregate-only reporting in a read-only database transaction.\n",
   };
   return pages[topic] || pages.root;
@@ -470,6 +471,7 @@ function validateOptions(options, allowed) {
 }
 
 function validatePositionals(command, operation, positional) {
+  if (command === 'site' && (!['setup', 'dev', 'build', 'test', 'package'].includes(operation) || positional.length !== 2)) throw Object.assign(new Error('Invalid pricing site operation'), { code: 'unknown_command' });
   const exact = { capabilities: 1, doctor: 1, bootstrap: 1, test: 1 };
   if (exact[command] && positional.length !== exact[command]) throw Object.assign(new Error(`unexpected arguments for ${command}`), { code: 'unexpected_argument' });
   if (command === 'fixture' && (!['apply', 'reset', 'verify', 'list'].includes(operation) || positional.length > 3)) {
@@ -492,6 +494,19 @@ function output(value, json) {
   else process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+export function pricingSitePlan(operation) {
+  const cwd = path.join(ROOT, 'reports/mind/yawp-pricing-site');
+  if (operation === 'package') return { command: 'bash', args: [path.join(process.env.HOME, '.codex/plugins/cache/openai-bundled/sites/0.1.57/scripts/package-site.sh'), '.', '../yawp-pricing-site-deploy.tgz'], cwd };
+  const commands = {
+    setup: ['create', '--yes', '@openai/sites@0.3.0', '.', '--', '--yes', '--add-ons', 'shadcn', '--install'],
+    dev: ['run', 'dev', '--', '--host', '127.0.0.1'],
+    build: ['run', 'build'],
+    test: ['test'],
+  };
+  if (!commands[operation]) throw new Error('Unknown pricing site operation');
+  return { command: 'npm', args: commands[operation], cwd };
+}
+
 export async function main(argv = process.argv.slice(2)) {
   const parsed = parseArgs(argv);
   const command = parsed.positional[0] || "help";
@@ -499,12 +514,19 @@ export async function main(argv = process.argv.slice(2)) {
   const json = parsed.options.json === true;
   if (command === "help" || parsed.options.help === true) return output(help(command === "help" ? operation || "root" : command), false);
   const allowedByCommand = {
+    site: ['json'],
     capabilities: ['json'], doctor: ['json'], bootstrap: ['json', 'fresh'], fixture: ['json'],
     dev: ['json'], test: ['json', 'profile'], qa: ['json', 'routes'],
     report: ['json', 'production', 'snapshot', 'out-dir', 'include-aws-costs', 'aws-profile', 'ssh-key', 'psql', 'months', 'estimate-cost-gaps']
   };
   validateOptions(parsed.options, allowedByCommand[command] || ['json']);
   validatePositionals(command, operation, parsed.positional);
+  if (command === 'site') {
+    const plan = pricingSitePlan(operation);
+    fs.mkdirSync(plan.cwd, { recursive: true });
+    if (operation === 'setup' && fs.existsSync(path.join(plan.cwd, 'package.json'))) throw new Error('Pricing site already initialized');
+    return output(execute(plan.command, plan.args, { cwd: plan.cwd, json, env: runtime().env, timeout: operation === 'dev' ? 4*60*60*1000 : 15*60*1000 }), json);
+  }
   if (command === "capabilities") return output(capabilities(), json);
   if (command === "doctor") {
     const result = doctor();
