@@ -199,6 +199,7 @@ usage AS (
     count(*) FILTER(WHERE e.kind='document_created') documents_created,
     count(DISTINCT e.membership_id) FILTER(WHERE e.kind='document_created') document_creators,
     count(*) FILTER(WHERE e.kind='student_tutor_message') student_tutor_messages,
+    count(*) FILTER(WHERE e.kind='student_tutor_message' AND e.at<(SELECT min("createdAt") FROM "LlmLog" WHERE provider='anthropic')) pre_llm_student_tutor_messages,
     count(DISTINCT e.membership_id) FILTER(WHERE e.kind='student_tutor_message') student_tutor_users,
     count(*) FILTER(WHERE e.kind='student_comment_reply') student_comment_replies,
     count(DISTINCT e.membership_id) FILTER(WHERE e.kind IN ('student_tutor_message','student_comment_reply','student_save','submission')) students_with_observed_activity
@@ -218,7 +219,7 @@ teacher_usage AS (
 )
 SELECT json_build_object(
   'meta',json_build_object('as_of',(SELECT as_of FROM params),'timezone','UTC','read_only',current_setting('transaction_read_only'),
-    'start_at',(SELECT start_at FROM params),'lookback_months',:lookback_months::int,'school_year',(SELECT school_year FROM params),'definition_version','mind-v3-costs'),
+    'start_at',(SELECT start_at FROM params),'lookback_months',:lookback_months::int,'school_year',(SELECT school_year FROM params),'definition_version','mind-v4-historical-costs'),
   'organizations',(SELECT json_agg(x ORDER BY x.organization) FROM (
     SELECT o.id organization_id,o.name organization,o."numOfTeacherSeats" configured_teacher_seats,o."numOfStudentSeats" configured_student_seats,
       o."accessExpiresAt" access_expires_at,(SELECT count(*) FROM real_schools s WHERE s."organizationId"=o.id) school_records,
@@ -239,7 +240,7 @@ SELECT json_build_object(
     SELECT u.grain,to_char(u.period,'YYYY-MM-DD') period,u.complete,u.school_id,u.assignment_deployments,u.distinct_assignments,
       u.submissions,u.submitted_documents,u.student_submitters,u.inferred_school_submissions,u.graded_submissions,u.released_submissions,u.resubmissions,
       u.students_with_save_or_submit,u.saved_documents,t.direct_feedback_teachers,t.teachers_with_class_submissions,t.teachers_with_class_assignments,t.teachers_with_any_signal
-      ,u.documents_created,u.document_creators,u.student_tutor_messages,u.student_tutor_users,u.student_comment_replies,u.students_with_observed_activity
+      ,u.documents_created,u.document_creators,u.student_tutor_messages,u.pre_llm_student_tutor_messages,u.student_tutor_users,u.student_comment_replies,u.students_with_observed_activity
     FROM usage u JOIN teacher_usage t USING(grain,period,school_id)
   )x),
   'activation_cohorts',(SELECT json_agg(x ORDER BY x.cohort,x.school_id) FROM (
@@ -299,6 +300,7 @@ SELECT json_build_object(
     SELECT s.id school_id,
       count(*) FILTER(WHERE e.kind='document_created') documents_created,
       count(*) FILTER(WHERE e.kind='student_tutor_message') student_tutor_messages,
+    count(*) FILTER(WHERE e.kind='student_tutor_message' AND e.at<(SELECT min("createdAt") FROM "LlmLog" WHERE provider='anthropic')) pre_llm_student_tutor_messages,
       count(DISTINCT e.membership_id) FILTER(WHERE e.kind IN ('student_tutor_message','student_comment_reply','student_save','submission')) students_with_observed_activity,
       count(*) FILTER(WHERE e.kind='submission') submissions,
       (SELECT count(DISTINCT t.membership_id) FROM teacher_events t CROSS JOIN params tp WHERE t.school_id=s.id AND t.kind='direct_feedback' AND t.at>=tp.start_at AND t.at<tp.as_of) teacher_feedback_actors

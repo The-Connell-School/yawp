@@ -56,6 +56,9 @@ describe("Yawp project agent CLI", () => {
     const help = spawnSync(path.join(root, "bin", "project"), ["report", "--help"], { cwd: root, encoding: "utf8" });
     expect(help.status).toBe(0);
     expect(help.stdout).toContain("--production");
+    expect(help.stdout).toContain("--estimate-cost-gaps");
+    const gaps = spawnSync(path.join(root, "bin", "project"), ["report", "mind", "--estimate-cost-gaps", "--json"], { cwd: root, encoding: "utf8" });
+    expect(JSON.parse(gaps.stderr).code).toBe("report_source_required");
   });
 
   test("extensionless bin entrypoint returns machine-readable capabilities", () => {

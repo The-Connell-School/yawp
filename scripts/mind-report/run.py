@@ -12,6 +12,7 @@ import time
 from urllib.parse import unquote, urlparse
 from report import brief, render, validate, month_start_before
 from costs import estimate_costs, render_costs
+from history_costs import estimate_history, render_history
 
 HERE = pathlib.Path(__file__).resolve().parent
 
@@ -116,6 +117,7 @@ def main():
     parser.add_argument('--ssh-key', type=pathlib.Path, default=pathlib.Path.home()/'.ssh/yawp-production-bastion')
     parser.add_argument('--psql', default=shutil.which('psql') or '/opt/homebrew/opt/libpq/bin/psql')
     parser.add_argument('--include-aws-costs', action='store_true')
+    parser.add_argument('--estimate-cost-gaps', action='store_true', help='Explicit historical AI/AWS cost scenario using retained activity')
     parser.add_argument('--months',type=int,choices=range(1,25),default=12)
     args = parser.parse_args()
     os.umask(0o077)
@@ -132,6 +134,10 @@ def main():
         data['aws_costs_extracted_at'] = dt.datetime.now(dt.timezone.utc).isoformat()
     if data.get("llm"):
         data["cost_estimates"] = estimate_costs(data)
+    if args.estimate_cost_gaps:
+        if not data.get('llm'):
+            raise ValueError('Historical cost scenario requires an LLM-enabled snapshot')
+        data['historical_cost_scenario'] = estimate_history(data)
     validate(data)
     text = render(data)
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -144,6 +150,9 @@ def main():
     if data.get('cost_estimates'):
         (args.out_dir/'COST-ESTIMATES.md').write_text(render_costs(data['cost_estimates']))
         (args.out_dir/'cost-estimates.json').write_text(json.dumps(data['cost_estimates'],indent=2)+'\n')
+    if args.estimate_cost_gaps:
+        (args.out_dir/'SCHOOL-COSTS-TWO-YEARS.md').write_text(render_history(data['historical_cost_scenario']))
+        (args.out_dir/'school-costs-two-years.json').write_text(json.dumps(data['historical_cost_scenario'],indent=2)+'\n')
     print(json.dumps({'status': 'passed', 'as_of': data['meta']['as_of'], 'report': str(report_file.resolve()),
                       'snapshot': str(snapshot_file.resolve()), 'brief': str(brief_file.resolve()), 'read_only': data['meta']['read_only'],
                       'included_submissions': data['quality']['included_submissions']}))

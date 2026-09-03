@@ -163,3 +163,47 @@ unavailable, February is partial, and the current month is incomplete. Comparabl
 unit costs require both a complete retained-log calendar month and AWS costs.
 Use month-specific costs; avoid dividing six months of AI or thirteen months of
 AWS by two years of distinct students. No two-year all-in total is claimed.
+
+## Full two-year school cost scenario
+
+When the request needs a full-period school estimate despite missing invoices/logs,
+run the explicit opt-in scenario:
+
+```sh
+./bin/project report mind --production --months 24 --include-aws-costs \
+  --estimate-cost-gaps --out-dir reports/mind/YYYY-MM-DD-school-history --json
+```
+
+This adds `SCHOOL-COSTS-TWO-YEARS.md` and `school-costs-two-years.json`. It covers
+only the requested complete calendar months (September 2024–August 2026 for the
+September 2026 pull), excluding the current partial month. The ordinary cost
+report still preserves unavailable source values; the separate historical
+scenario shows known AI/AWS components and modeled gaps in distinct columns.
+
+- AI gaps use actual retained tutor-message timestamps before the earliest LLM
+  log, multiplied by pooled included AI cost per tutor message in the earliest
+  three complete log months with messages (March–May 2026 initially). This avoids
+  applying the newer summer cache rate to older interactions. It is an activity
+  proxy for total AI, including grading, not proof of historical model choice,
+  token volumes or spend. Pre-log AI without tutor activity is not reconstructed.
+- The partial first log month keeps logged costs and estimates only pre-log
+  messages, avoiding double counting. Missing tokens inside the logged period
+  remain an uncertainty rather than another imputed layer.
+- AWS gaps use the median of the earliest three recorded monthly account costs
+  (August–October 2025 initially). This flat earlier-hosting assumption is not a
+  recovered bill. Monthly active-student shares allocate both known and modeled
+  hosting. No-activity overhead remains unallocated.
+- Every school has every complete month in the JSON. The summary includes schools
+  with retained activity or any allocated cost. Zero allocations are not proof
+  that historical cost was zero. Known subtotals span incomplete coverage and must
+  not be described as complete historical bills.
+- Student-months sum school-level monthly active memberships. The rate is monthly
+  operational cost per active membership, not a two-year cost per distinct human,
+  a paid-seat rate or a proposed selling price. Legacy school records remain
+  separate by organization.
+
+The scenario requires the new `pre_llm_student_tutor_messages` SQL aggregate;
+older snapshots without it fail clearly rather than guessing the partial-month
+split. Tests cover observed/model separation, source immutability, the partial
+month, zero denominators/overhead, complete school-month grids, no calibration,
+no AWS baseline, and exclusion of the current partial month.

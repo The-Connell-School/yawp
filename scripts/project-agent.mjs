@@ -439,12 +439,12 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|mind-report> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nReport: ./bin/project report mind (--production | --snapshot FILE) --out-dir DIR [--months 1-24] [--include-aws-costs] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|mind-report> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nReport: ./bin/project report mind (--production | --snapshot FILE) --out-dir DIR [--months 1-24] [--include-aws-costs] [--estimate-cost-gaps] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
     test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|mind-report> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
-    report: "Usage: ./bin/project report mind (--production | --snapshot FILE) --out-dir DIR [--months 1-24] [--include-aws-costs] [--json]\nRuns aggregate-only reporting in a read-only database transaction.\n",
+    report: "Usage: ./bin/project report mind (--production | --snapshot FILE) --out-dir DIR [--months 1-24] [--include-aws-costs] [--estimate-cost-gaps] [--json]\nRuns aggregate-only reporting in a read-only database transaction.\n",
   };
   return pages[topic] || pages.root;
 }
@@ -501,7 +501,7 @@ export async function main(argv = process.argv.slice(2)) {
   const allowedByCommand = {
     capabilities: ['json'], doctor: ['json'], bootstrap: ['json', 'fresh'], fixture: ['json'],
     dev: ['json'], test: ['json', 'profile'], qa: ['json', 'routes'],
-    report: ['json', 'production', 'snapshot', 'out-dir', 'include-aws-costs', 'aws-profile', 'ssh-key', 'psql', 'months']
+    report: ['json', 'production', 'snapshot', 'out-dir', 'include-aws-costs', 'aws-profile', 'ssh-key', 'psql', 'months', 'estimate-cost-gaps']
   };
   validateOptions(parsed.options, allowedByCommand[command] || ['json']);
   validatePositionals(command, operation, parsed.positional);

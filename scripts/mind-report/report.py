@@ -316,6 +316,7 @@ def brief(data):
          f'{data["window_totals"]["student_tutor_messages"]:,} student tutor messages from {data["window_totals"]["unique_student_tutor_users"]:,} student memberships; '
          f'{data["window_totals"]["submissions"]:,} retained submissions. Document starts, messages and submissions are separate measures.' if data.get('window_totals') else ''),
         f'Production read: {data["meta"]["as_of"]}. Full school tables and definitions: MIND-report.md.',
+        ('**Two-year school estimate:** see SCHOOL-COSTS-TWO-YEARS.md for the full-period table. Missing historical AI/AWS components are modeled separately from the known-cost subtotal; this is a planning scenario, not a two-year billing total.' if data.get('historical_cost_scenario') else ''),
         render_costs(data['cost_estimates'],short=True) if data.get('cost_estimates') else '',
         f'**Latest complete-month context:** {last_month[:7]} had **{month["submissions"]} retained submissions from '
         f'{month["student_submitters"]} student account memberships across {month["schools_with_submissions"]} school records**. '
