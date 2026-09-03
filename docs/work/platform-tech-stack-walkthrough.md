@@ -1,7 +1,9 @@
 # Yawp platform: a step-by-step tech stack walkthrough
 
-Research ticket: `yawp-tech-stack-walkthrough`  
-Inspected: September 3, 2026  
+Research ticket: `yawp-tech-stack-walkthrough`
+
+Inspected: September 3, 2026
+
 Source baseline: `0466e5981d86ce534ca36370002f08d5a1e86767`
 
 This describes the implementation and configuration in the checked-out repository. It is a research deliverable, not a live production audit. Package versions below are manifest declarations; deployed versions and enabled features can differ. Application behavior was not changed.
