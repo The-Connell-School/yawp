@@ -60,6 +60,9 @@ describe('the Exit Ticket rubric shape', () => {
 
     expect(score(95)).toBe(95);
     expect(score(80)).toBeGreaterThanOrEqual(75);
+    // "Partly there" tops out below the band that means they can explain it,
+    // so a strong-but-incomplete answer cannot read as a full one.
+    expect(score(85)).toBeLessThan(86);
   });
 
   test('reads for understanding, not for polish', () => {

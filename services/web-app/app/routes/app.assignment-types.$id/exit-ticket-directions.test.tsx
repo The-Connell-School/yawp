@@ -76,4 +76,15 @@ describe('ExitTicketDirections', () => {
     render();
     expect(text()).toContain('tutor is switched off by default');
   });
+
+  it('names the basic-with-no-notes case as deliberate, not a default', () => {
+    render();
+    // The weakest configuration for reading responses, and the one a teacher
+    // lands in by doing nothing. It has a real use, so it is framed as a
+    // choice to make on purpose rather than as a mistake.
+    expect(text()).toContain(
+      'a basic ticket with no notes is the hardest one to read well'
+    );
+    expect(text()).toContain('deliberately');
+  });
 });

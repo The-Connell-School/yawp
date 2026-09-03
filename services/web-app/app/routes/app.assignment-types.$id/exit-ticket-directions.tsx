@@ -96,6 +96,18 @@ export function ExitTicketDirections() {
           what mattered and you will get back a much sharper read on who has it
           and who does not.
         </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground/80">
+            A basic ticket with no notes is the hardest one to read well.
+          </span>{' '}
+          Nothing names the lesson, so responses can only be judged on whether
+          the student explained something with substance — not on whether they
+          got the thing you were actually teaching. That is a genuine tool: it
+          is the most honest way to find out what students think the lesson was
+          about, and it is worth using deliberately for exactly that. Just reach
+          for it on purpose rather than by default. If you want to know whether
+          a particular idea landed, add the notes or make the ticket specific.
+        </p>
       </div>
 
       <div>

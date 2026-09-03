@@ -37,13 +37,13 @@ export const EXIT_TICKET_SCORE_BANDS: RubricScoreBand[] = [
   },
   {
     min: 75,
-    max: 89,
+    max: 85,
     label: 'Partly there',
     description:
       'The right idea in their own words, but thin, partly muddled, or missing a piece. A student who explains what they do understand and then names precisely where they get stuck belongs here: locating the edge of your own knowledge is real understanding, not the absence of it.',
   },
   {
-    min: 90,
+    min: 86,
     max: 100,
     label: 'Explains it',
     description:
