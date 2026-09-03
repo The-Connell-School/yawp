@@ -739,7 +739,7 @@ describe('api.assignments.create', () => {
         { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
       ]);
     };
-    // The pilot gate lives on the assignment type, not the organization.
+    // Legacy flag values prove creation no longer depends on assignment type.
     const enablePilot = () => {
       singleClass();
       mockAssignmentTypeAvailable({ collaborationSupported: true });
@@ -796,9 +796,7 @@ describe('api.assignments.create', () => {
       expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
     });
 
-    test('forces collaboration off for an assignment type outside the pilot', async () => {
-      // The assignment is still created: a teacher who picks another type gets
-      // ordinary solo work rather than an error.
+    test('stores collaboration for an assignment type outside the former pilot', async () => {
       disablePilot();
 
       const body = await readBody(await createWithCollaboration());
@@ -807,8 +805,9 @@ describe('api.assignments.create', () => {
       expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            collaborationEnabled: false,
-            collaborationGroupSize: null,
+            collaborationEnabled: true,
+            collaborationGroupMode: 'teacher',
+            collaborationGroupSize: 3,
           }),
         })
       );
@@ -898,14 +897,19 @@ describe('api.assignments.create', () => {
       expect(autoArrangeNewAssignment).not.toHaveBeenCalled();
     });
 
-    test('does not arrange when the pilot gate forces collaboration off', async () => {
-      // Otherwise a type outside the pilot would still get groups built for an
-      // assignment whose collaboration was just switched off.
+    test('arranges groups for an assignment type outside the former pilot', async () => {
       disablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
 
       await createWithCollaboration({ collaborationGroupMode: 'random' });
 
-      expect(autoArrangeNewAssignment).not.toHaveBeenCalled();
+      expect(autoArrangeNewAssignment).toHaveBeenCalledWith({
+        assignmentId: 'assignment-1',
+        mode: 'random',
+        groupSize: 3,
+      });
     });
 
     test('sends the teacher on to group setup, because creating is not the end', async () => {
