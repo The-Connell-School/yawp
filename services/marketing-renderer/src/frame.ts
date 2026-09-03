@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import type { MarketingBackdrop } from '@app/marketing-media';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +35,8 @@ export type FrameOptions = {
   overlays?: OverlayMark[];
   /** Timed push-ins, positioned in normalised capture coordinates. */
   zooms?: ZoomMark[];
+  /** The ground the capture is re-shot on. Defaults to the gradient. */
+  backdrop?: MarketingBackdrop;
 };
 
 export type OverlayMark = {
@@ -63,8 +66,25 @@ export type FramedResult = {
   leadInSeconds: number;
 };
 
-/** Canvas leaves margin for the backdrop; the window fills ~82% of the width. */
-export function frameGeometry(width: number, height: number) {
+/**
+ * Canvas leaves margin for the backdrop; the window fills ~82% of the width.
+ * The 'none' backdrop has neither: it delivers the capture at its own size,
+ * with no chrome, for embedding somewhere that supplies its own frame.
+ */
+export function frameGeometry(
+  width: number,
+  height: number,
+  backdrop: MarketingBackdrop = 'gradient'
+) {
+  if (backdrop === 'none') {
+    return {
+      canvasWidth: width,
+      canvasHeight: height,
+      windowWidth: width,
+      videoHeight: height,
+      barHeight: 0,
+    };
+  }
   const windowWidth = Math.round(width * 0.82);
   const videoHeight = Math.round((windowWidth / width) * height);
   const barHeight = 44;
@@ -73,50 +93,54 @@ export function frameGeometry(width: number, height: number) {
   return { canvasWidth, canvasHeight, windowWidth, videoHeight, barHeight };
 }
 
-/** Keeps storyboard copy from closing the framing page's own markup. */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+/**
+ * The ground a framed capture sits on. Shared by stills and clips so the two
+ * come out of one storyboard looking like one set.
+ */
+const BACKDROP_GROUNDS: Record<MarketingBackdrop, string> = {
+  gradient:
+    'linear-gradient(125deg, #ff9ecd 0%, #f95f9b 22%, #a855f7 48%, #38bdf8 74%, #fde047 100%)',
+  slate: '#0f172a',
+  // The app's own warm off-white, so a still sits on the brand ground.
+  paper: '#f5f1ec',
+  none: 'transparent',
+};
 
-export function buildFramingPage(options: {
-  width: number;
-  height: number;
-  addressText: string;
-  videoSrc: string;
-  overlays?: OverlayMark[];
-  zooms?: ZoomMark[];
+/** A lighter ground needs a lighter shadow, or the window looks pasted on. */
+const BACKDROP_SHADOWS: Record<MarketingBackdrop, string> = {
+  gradient: '0 34px 70px rgba(20, 10, 40, 0.45)',
+  slate: '0 34px 70px rgba(0, 0, 0, 0.55)',
+  paper: '0 24px 50px rgba(60, 50, 40, 0.18)',
+  none: 'none',
+};
+
+/** Shared CSS for the window chrome, so stills and clips frame identically. */
+function framingStyles(options: {
+  backdrop: MarketingBackdrop;
+  canvasWidth: number;
+  canvasHeight: number;
+  windowWidth: number;
+  barHeight: number;
 }): string {
-  const { canvasWidth, canvasHeight, windowWidth, barHeight } = frameGeometry(
-    options.width,
-    options.height
-  );
-
-  return `<!doctype html>
-<html>
-<head>
-<style>
+  const bare = options.backdrop === 'none';
+  return `
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: ${canvasWidth}px; height: ${canvasHeight}px; overflow: hidden; }
+  html, body { width: ${options.canvasWidth}px; height: ${options.canvasHeight}px; overflow: hidden; }
   body {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(125deg,
-      #ff9ecd 0%, #f95f9b 22%, #a855f7 48%, #38bdf8 74%, #fde047 100%);
+    background: ${BACKDROP_GROUNDS[options.backdrop]};
   }
   .window {
-    width: ${windowWidth}px;
-    border-radius: 14px;
+    width: ${options.windowWidth}px;
+    ${bare ? '' : 'border-radius: 14px;'}
     overflow: hidden;
-    box-shadow: 0 34px 70px rgba(20, 10, 40, 0.45);
+    box-shadow: ${BACKDROP_SHADOWS[options.backdrop]};
   }
   .bar {
-    height: ${barHeight}px;
+    height: ${options.barHeight}px;
     background: #f5f1ec;
     display: flex;
     align-items: center;
@@ -135,6 +159,60 @@ export function buildFramingPage(options: {
     text-align: center;
     overflow: hidden;
   }
+  .overlay {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: ${Math.round(options.canvasHeight * 0.045)}px;
+    max-width: ${Math.round(options.canvasWidth * 0.8)}px;
+    padding: 14px 26px;
+    border-radius: 999px;
+    background: rgba(17, 12, 28, 0.82);
+    color: #fff;
+    font: 600 ${Math.round(options.canvasWidth * 0.022)}px/1.3 -apple-system, 'Segoe UI', sans-serif;
+    text-align: center;
+    letter-spacing: -0.01em;
+  }`;
+}
+
+/** The window chrome bar, omitted entirely for the bare backdrop. */
+function windowBar(backdrop: MarketingBackdrop, addressText: string): string {
+  if (backdrop === 'none') return '';
+  return `    <div class="bar">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+      <div class="address">${escapeHtml(addressText)}</div>
+    </div>
+`;
+}
+
+/** Keeps storyboard copy from closing the framing page's own markup. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export function buildFramingPage(options: {
+  width: number;
+  height: number;
+  addressText: string;
+  videoSrc: string;
+  overlays?: OverlayMark[];
+  zooms?: ZoomMark[];
+  backdrop?: MarketingBackdrop;
+}): string {
+  const backdrop = options.backdrop ?? 'gradient';
+  const geometry = frameGeometry(options.width, options.height, backdrop);
+  const { canvasWidth, canvasHeight, windowWidth, barHeight } = geometry;
+
+  return `<!doctype html>
+<html>
+<head>
+<style>${framingStyles({ backdrop, canvasWidth, canvasHeight, windowWidth, barHeight })}
   video {
     display: block;
     width: 100%;
@@ -143,34 +221,13 @@ export function buildFramingPage(options: {
     transform-origin: 50% 50%;
     will-change: transform;
   }
-  .overlay {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: ${Math.round(canvasHeight * 0.045)}px;
-    max-width: ${Math.round(canvasWidth * 0.8)}px;
-    padding: 14px 26px;
-    border-radius: 999px;
-    background: rgba(17, 12, 28, 0.82);
-    color: #fff;
-    font: 600 ${Math.round(canvasWidth * 0.022)}px/1.3 -apple-system, 'Segoe UI', sans-serif;
-    text-align: center;
-    letter-spacing: -0.01em;
-    opacity: 0;
-    transition: opacity 220ms ease;
-  }
+  .overlay { opacity: 0; transition: opacity 220ms ease; }
   .overlay.on { opacity: 1; }
 </style>
 </head>
 <body>
   <div class="window">
-    <div class="bar">
-      <div class="dot" style="background:#ff5f57"></div>
-      <div class="dot" style="background:#febc2e"></div>
-      <div class="dot" style="background:#28c840"></div>
-      <div class="address">${options.addressText}</div>
-    </div>
-    <video id="clip" src="${options.videoSrc}" muted playsinline preload="auto"></video>
+${windowBar(backdrop, options.addressText)}    <video id="clip" src="${options.videoSrc}" muted playsinline preload="auto"></video>
   </div>
   <div class="overlay" id="overlay"></div>
   <script>
@@ -249,80 +306,22 @@ export function buildStillFramingPage(options: {
   /** Relative or file URL to the raw capture, resolved against the page. */
   imageSrc: string;
   caption?: string;
+  backdrop?: MarketingBackdrop;
 }): string {
-  const { canvasWidth, canvasHeight, windowWidth, barHeight } = frameGeometry(
-    options.width,
-    options.height
-  );
+  const backdrop = options.backdrop ?? 'gradient';
+  const geometry = frameGeometry(options.width, options.height, backdrop);
   const caption = options.caption?.trim();
 
   return `<!doctype html>
 <html>
 <head>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: ${canvasWidth}px; height: ${canvasHeight}px; overflow: hidden; }
-  body {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(125deg,
-      #ff9ecd 0%, #f95f9b 22%, #a855f7 48%, #38bdf8 74%, #fde047 100%);
-  }
-  .window {
-    width: ${windowWidth}px;
-    border-radius: 14px;
-    overflow: hidden;
-    box-shadow: 0 34px 70px rgba(20, 10, 40, 0.45);
-    background: #fff;
-  }
-  .bar {
-    height: ${barHeight}px;
-    background: #f5f1ec;
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    gap: 8px;
-  }
-  .dot { width: 12px; height: 12px; border-radius: 50%; }
-  .address {
-    flex: 1;
-    margin: 0 60px;
-    height: 26px;
-    border-radius: 13px;
-    background: #ffffff;
-    color: #6b6560;
-    font: 500 13px/26px -apple-system, 'Segoe UI', sans-serif;
-    text-align: center;
-    overflow: hidden;
-  }
+<style>${framingStyles({ backdrop, ...geometry })}
   img { display: block; width: 100%; height: auto; }
-  .overlay {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: ${Math.round(canvasHeight * 0.045)}px;
-    max-width: ${Math.round(canvasWidth * 0.8)}px;
-    padding: 14px 26px;
-    border-radius: 999px;
-    background: rgba(17, 12, 28, 0.82);
-    color: #fff;
-    font: 600 ${Math.round(canvasWidth * 0.022)}px/1.3 -apple-system, 'Segoe UI', sans-serif;
-    text-align: center;
-    letter-spacing: -0.01em;
-  }
 </style>
 </head>
 <body>
   <div class="window">
-    <div class="bar">
-      <div class="dot" style="background:#ff5f57"></div>
-      <div class="dot" style="background:#febc2e"></div>
-      <div class="dot" style="background:#28c840"></div>
-      <div class="address">${escapeHtml(options.addressText)}</div>
-    </div>
-    <img id="still" src="${escapeHtml(options.imageSrc)}" alt="">
+${windowBar(backdrop, options.addressText)}    <img id="still" src="${escapeHtml(options.imageSrc)}" alt="">
   </div>
 ${caption ? `  <div class="overlay on">${escapeHtml(caption)}</div>\n` : ''}</body>
 </html>`;
@@ -334,7 +333,8 @@ ${caption ? `  <div class="overlay on">${escapeHtml(caption)}</div>\n` : ''}</bo
  * should cut.
  */
 export async function frameClip(options: FrameOptions): Promise<FramedResult> {
-  const geometry = frameGeometry(options.width, options.height);
+  const backdrop = options.backdrop ?? 'gradient';
+  const geometry = frameGeometry(options.width, options.height, backdrop);
 
   const framedDir = path.join(options.outDir, 'framed');
   fs.mkdirSync(framedDir, { recursive: true });
@@ -346,6 +346,7 @@ export async function frameClip(options: FrameOptions): Promise<FramedResult> {
     videoSrc: 'clip.webm',
     overlays: options.overlays,
     zooms: options.zooms,
+    backdrop,
   });
 
   // The framing stage runs under Node rather than the worker's own runtime:

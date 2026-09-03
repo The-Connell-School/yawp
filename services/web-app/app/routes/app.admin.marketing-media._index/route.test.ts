@@ -392,3 +392,78 @@ describe('render the showcase', () => {
     expect(response.headers.get('location')).toBe('/app/admin/marketing-media');
   });
 });
+
+describe('backdrop choice', () => {
+  beforeEach(() => {
+    requireAdmin.mockReset();
+    requireAdmin.mockResolvedValue({ id: 'admin-1' });
+    requireMutableRequest.mockReset();
+    requireMarketingStudioEnabled.mockReset();
+    getMarketingRenderTarget.mockReset();
+    getMarketingRenderTarget.mockReturnValue('http://localhost:5176');
+    prisma.marketingMediaJob.create.mockReset();
+    prisma.marketingMediaJob.create.mockResolvedValue({ id: 'job-1' });
+    generateStoryboard.mockReset();
+    prisma.marketingMediaJob.update.mockReset();
+  });
+
+  // The brief says what to show; the backdrop says what it sits on. The model
+  // never picks it — it is stamped onto whatever storyboard comes back.
+  test('stamps the chosen backdrop onto a generated storyboard', async () => {
+    generateStoryboard.mockResolvedValue({
+      storyboard: { ...STORYBOARD, backdrop: 'gradient' },
+      model: 'claude',
+    });
+
+    await runAction({
+      brief: 'A teacher reviewing submitted work.',
+      kind: 'STILLS',
+      backdrop: 'paper',
+    });
+
+    const [[update]] = prisma.marketingMediaJob.update.mock.calls;
+    expect(update.data.storyboard.backdrop).toBe('paper');
+  });
+
+  test('stamps it onto a pasted storyboard too', async () => {
+    await runAction({
+      brief: 'A teacher reviewing submitted work.',
+      kind: 'STILLS',
+      backdrop: 'slate',
+      storyboardJson: JSON.stringify(STORYBOARD),
+    });
+
+    const [[created]] = prisma.marketingMediaJob.create.mock.calls;
+    expect(created.data.storyboard.backdrop).toBe('slate');
+  });
+
+  test('a library render takes the backdrop without editing the library', async () => {
+    await runAction({
+      intent: 'render-library',
+      librarySlug: 'library-teacher-grading-hub',
+      backdrop: 'none',
+    });
+
+    const [[created]] = prisma.marketingMediaJob.create.mock.calls;
+    expect(created.data.storyboard.backdrop).toBe('none');
+  });
+
+  test('defaults to the gradient when nothing is chosen', async () => {
+    await runAction({
+      intent: 'render-library',
+      librarySlug: 'library-teacher-grading-hub',
+    });
+
+    const [[created]] = prisma.marketingMediaJob.create.mock.calls;
+    expect(created.data.storyboard.backdrop).toBe('gradient');
+  });
+
+  test('rejects a backdrop that is not offered', async () => {
+    const response: any = await runAction({
+      brief: 'A teacher reviewing submitted work.',
+      kind: 'STILLS',
+      backdrop: 'chartreuse',
+    });
+    expect(responseStatus(response)).toBe(400);
+  });
+});

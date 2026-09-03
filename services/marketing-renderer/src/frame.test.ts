@@ -140,3 +140,74 @@ describe('buildStillFramingPage', () => {
     expect(html).toContain('&lt;script&gt;');
   });
 });
+
+describe('backdrops', () => {
+  const still = {
+    width: 1280,
+    height: 800,
+    addressText: 'app.yawp.school',
+    imageSrc: 'shot.png',
+  };
+
+  // Same scene, different ground. The window chrome and geometry are shared,
+  // so a deck can mix backdrops without the frames looking unrelated.
+  test('gradient is what a storyboard gets by default', () => {
+    expect(buildStillFramingPage(still)).toContain('linear-gradient(');
+    expect(buildFramingPage({ ...base })).toContain('linear-gradient(');
+  });
+
+  test('slate and paper are flat grounds, not gradients', () => {
+    const slate = buildStillFramingPage({ ...still, backdrop: 'slate' });
+    expect(slate).not.toContain('linear-gradient(');
+    expect(slate).toContain('#0f172a');
+
+    const paper = buildStillFramingPage({ ...still, backdrop: 'paper' });
+    expect(paper).not.toContain('linear-gradient(');
+    // The app's own warm off-white, so a still sits on the brand ground.
+    expect(paper).toContain('#f5f1ec');
+  });
+
+  test('paper keeps the caption readable on a light ground', () => {
+    const paper = buildStillFramingPage({
+      ...still,
+      backdrop: 'paper',
+      caption: 'Feedback students actually read',
+    });
+    expect(paper).toContain('Feedback students actually read');
+    expect(paper).toContain('color: #fff');
+  });
+
+  test('none drops the chrome and the margin entirely', () => {
+    const bare = buildStillFramingPage({ ...still, backdrop: 'none' });
+    expect(bare).not.toContain('class="bar"');
+    expect(bare).not.toContain('linear-gradient(');
+    // Canvas is the capture itself; nothing is added around it.
+    expect(bare).toContain(`width: ${still.width}px`);
+  });
+
+  test('clips take the same backdrops', () => {
+    const slate = buildFramingPage({ ...base, backdrop: 'slate' });
+    expect(slate).toContain('#0f172a');
+    expect(slate).not.toContain('linear-gradient(');
+  });
+});
+
+describe('frameGeometry', () => {
+  // 'none' delivers the capture at its own size; every other backdrop leaves
+  // room for the ground around the window.
+  test('unframed captures keep the capture’s exact size', () => {
+    expect(frameGeometry(1280, 800, 'none')).toMatchObject({
+      canvasWidth: 1280,
+      canvasHeight: 800,
+      windowWidth: 1280,
+      barHeight: 0,
+    });
+  });
+
+  test('framed captures leave room for the backdrop', () => {
+    const framed = frameGeometry(1280, 800, 'gradient');
+    expect(framed.canvasWidth).toBe(1280);
+    expect(framed.canvasHeight).toBeGreaterThan(800);
+    expect(framed.windowWidth).toBeLessThan(1280);
+  });
+});

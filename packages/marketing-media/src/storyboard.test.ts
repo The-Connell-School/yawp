@@ -5,6 +5,7 @@ import {
   estimateRenderSeconds,
   parseStoryboard,
   safeParseStoryboard,
+  MARKETING_BACKDROPS,
 } from './storyboard';
 
 function scene(overrides: Record<string, unknown> = {}) {
@@ -420,5 +421,31 @@ describe('viewport', () => {
 
     expect(parsed.viewport.width).toBeLessThan(500);
     expect(parsed.viewport.height).toBeGreaterThan(500);
+  });
+});
+
+describe('backdrop', () => {
+  const base = {
+    slug: 'backdrop-check',
+    title: 'Backdrop check',
+    scenes: [{ id: 'one', goto: '/app', waitFor: 'main' }],
+  };
+
+  // The backdrop travels with the storyboard rather than the job row, so a
+  // revision or a re-render films the same look without being told again.
+  test('defaults to the gradient', () => {
+    expect(parseStoryboard(base).backdrop).toBe('gradient');
+  });
+
+  test('accepts every offered backdrop', () => {
+    for (const backdrop of MARKETING_BACKDROPS) {
+      expect(parseStoryboard({ ...base, backdrop }).backdrop).toBe(backdrop);
+    }
+  });
+
+  test('rejects anything else', () => {
+    expect(safeParseStoryboard({ ...base, backdrop: 'chartreuse' }).success).toBe(
+      false
+    );
   });
 });

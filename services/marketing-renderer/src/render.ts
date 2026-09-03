@@ -16,6 +16,7 @@ import {
   frameClip,
   frameGeometry,
 } from './frame';
+import type { MarketingBackdrop } from '@app/marketing-media';
 import {
   buildTranscodeArgs,
   missingRecordingError,
@@ -494,10 +495,15 @@ async function frameStills(params: {
   files: RenderedFile[];
   captions: Map<string, string | undefined>;
   viewport: { width: number; height: number };
+  backdrop: MarketingBackdrop;
   addressText: string;
   onWarning: (message: string) => void;
 }): Promise<void> {
-  const geometry = frameGeometry(params.viewport.width, params.viewport.height);
+  const geometry = frameGeometry(
+    params.viewport.width,
+    params.viewport.height,
+    params.backdrop
+  );
   const stills = params.files.filter(
     (file) => file.kind === 'IMAGE' && file.height !== undefined
   );
@@ -533,6 +539,7 @@ async function frameStills(params: {
             addressText: params.addressText,
             imageSrc: path.basename(rawPath),
             caption: params.captions.get(still.path),
+            backdrop: params.backdrop,
           })
         );
         await bounded(
@@ -835,13 +842,19 @@ export async function renderStoryboard(
     // Framed stills. Presentation, not content: a capture that succeeded is
     // never lost to a framing problem — the raw still stays in the output
     // list and a warning says why it stands alone.
-    if ((params.frameStyle ?? 'window') === 'window') {
+    // 'none' is the storyboard asking for the bare capture, which is what the
+    // shoot already produced; there is nothing to re-shoot.
+    if (
+      (params.frameStyle ?? 'window') === 'window' &&
+      storyboard.backdrop !== 'none'
+    ) {
       params.onStage?.('framing the stills');
       await frameStills({
         browser,
         files,
         captions: stillCaptions,
         viewport: storyboard.viewport,
+        backdrop: storyboard.backdrop,
         addressText: params.addressText ?? 'app.yawp.school',
         onWarning: (message) => {
           warnings.push(message);
@@ -877,7 +890,8 @@ export async function renderStoryboard(
         ? Math.max(0, (firstSceneReadyAt - startedAt) / 1000 - 0.4)
         : 0;
 
-    const frameStyle = params.frameStyle ?? 'window';
+    const frameStyle =
+      storyboard.backdrop === 'none' ? 'none' : (params.frameStyle ?? 'window');
     let outputWidth = storyboard.viewport.width;
     let outputHeight = storyboard.viewport.height;
 
@@ -897,6 +911,8 @@ export async function renderStoryboard(
           chromiumPath: params.chromiumPath,
           overlays: overlayMarks,
           zooms: zoomMarks.filter((mark) => mark.endMs > mark.startMs),
+          backdrop: storyboard.backdrop,
+          addressText: params.addressText,
         });
       } catch (err) {
         const warning = `Framing failed, delivering the unframed capture: ${
@@ -922,7 +938,8 @@ export async function renderStoryboard(
       fs.rmSync(framed.videoPath, { force: true });
       const geometry = frameGeometry(
         storyboard.viewport.width,
-        storyboard.viewport.height
+        storyboard.viewport.height,
+        storyboard.backdrop
       );
       outputWidth = geometry.canvasWidth;
       outputHeight = geometry.canvasHeight;

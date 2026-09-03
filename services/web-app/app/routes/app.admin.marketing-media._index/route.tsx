@@ -22,9 +22,9 @@ import {
   FileJson,
   Images,
   Layers,
+  Palette,
   PenLine,
   ShieldCheck,
-  Sparkles,
   Timer,
 } from 'lucide-react';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
@@ -56,6 +56,8 @@ import {
   generateStoryboard,
 } from '~/services/marketing-storyboard.server';
 import {
+  MARKETING_BACKDROPS,
+  MARKETING_BACKDROP_LABELS,
   MARKETING_JOB_KINDS,
   MARKETING_LIBRARY,
   describeStoryboardError,
@@ -63,6 +65,7 @@ import {
   parseStoryboard,
   plannedShotCount,
   safeParseStoryboard,
+  type MarketingBackdrop,
   type MarketingJobKind,
   type MarketingOutput,
 } from '../../../../../packages/marketing-media';
@@ -111,6 +114,7 @@ const CreateJobSchema = z.object({
   kind: z.enum(MARKETING_JOB_KINDS),
   assignmentTypeId: z.string().trim().optional(),
   storyboardJson: z.string().trim().optional(),
+  backdrop: z.enum(MARKETING_BACKDROPS).optional(),
 });
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -192,6 +196,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 }
 
+/**
+ * The backdrop chosen on the form, applied to whatever storyboard is about to
+ * be filmed. It is set here rather than asked of the model or written into the
+ * library, so one library entry renders on any ground.
+ */
+function withBackdrop<T extends object>(
+  storyboard: T,
+  backdrop: MarketingBackdrop
+): T & { backdrop: MarketingBackdrop } {
+  return { ...storyboard, backdrop };
+}
+
+function readBackdrop(formData: FormData): MarketingBackdrop | null {
+  const raw = String(formData.get('backdrop') ?? '').trim();
+  if (!raw) return 'gradient';
+  return (MARKETING_BACKDROPS as readonly string[]).includes(raw)
+    ? (raw as MarketingBackdrop)
+    : null;
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   requireMarketingStudioEnabled();
   const admin = await requireAdmin(request);
@@ -236,6 +260,11 @@ export async function action({ request }: ActionFunctionArgs) {
   // The whole library at once. Same path as a single library render, eight
   // times over: no model in the loop, so every job is queued before this
   // returns and the gallery fills itself as the renderer works through them.
+  const chosenBackdrop = readBackdrop(formData);
+  if (chosenBackdrop === null) {
+    return dataResponse({ error: 'That backdrop is not offered.' }, { status: 400 });
+  }
+
   if (formData.get('intent') === 'render-showcase') {
     const renderTarget = getMarketingRenderTarget();
     for (const entry of MARKETING_LIBRARY) {
@@ -249,7 +278,7 @@ export async function action({ request }: ActionFunctionArgs) {
           subjectType: 'FEATURE',
           subjectId: null,
           subjectLabel: entry.title,
-          storyboard: entry.storyboard as object,
+          storyboard: withBackdrop(entry.storyboard as object, chosenBackdrop),
           model: null,
           targetUrl: renderTarget,
         },
@@ -280,7 +309,7 @@ export async function action({ request }: ActionFunctionArgs) {
         subjectType: 'FEATURE',
         subjectId: null,
         subjectLabel: entry.title,
-        storyboard: entry.storyboard as object,
+        storyboard: withBackdrop(entry.storyboard as object, chosenBackdrop),
         model: null,
         targetUrl: getMarketingRenderTarget(),
       },
@@ -342,7 +371,7 @@ export async function action({ request }: ActionFunctionArgs) {
         subjectType: subject ? 'ASSIGNMENT_TYPE' : 'FEATURE',
         subjectId: subject?.id ?? null,
         subjectLabel: subject?.title ?? null,
-        storyboard: result.data,
+        storyboard: withBackdrop(result.data, chosenBackdrop),
         model: null,
         targetUrl: renderTarget,
       },
@@ -381,7 +410,7 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { id: job.id },
       data: {
         status: 'QUEUED',
-        storyboard: generated.storyboard,
+        storyboard: withBackdrop(generated.storyboard, chosenBackdrop),
         model: generated.model,
       },
     });
@@ -483,6 +512,38 @@ function JobRowActions({ jobId, title }: { jobId: string; title: string }) {
   );
 }
 
+/**
+ * The ground itself, at thumbnail size — the only honest way to show what a
+ * backdrop is. Mirrors the renderer's grounds in frame.ts.
+ */
+const BACKDROP_SWATCHES: Record<MarketingBackdrop, string> = {
+  gradient:
+    'linear-gradient(125deg, #ff9ecd 0%, #f95f9b 22%, #a855f7 48%, #38bdf8 74%, #fde047 100%)',
+  slate: '#0f172a',
+  paper: '#f5f1ec',
+  none: 'transparent',
+};
+
+function BackdropSwatch({ backdrop }: { backdrop: MarketingBackdrop }) {
+  if (backdrop === 'none') {
+    return (
+      <span
+        aria-hidden
+        className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-dashed text-muted-foreground"
+      >
+        <Palette className="h-3 w-3" />
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      className="mt-0.5 h-5 w-5 shrink-0 rounded border"
+      style={{ background: BACKDROP_SWATCHES[backdrop] }}
+    />
+  );
+}
+
 /** One stage of the brief-to-media pipeline, drawn under the composer. */
 function PipelineStep({
   icon,
@@ -521,6 +582,9 @@ export default function Route() {
   const revalidator = useRevalidator();
   const [showStoryboard, setShowStoryboard] = useState(false);
   const [kind, setKind] = useState<'STILLS' | 'CLIP'>('STILLS');
+  // Shared by the brief form and the one-click renders below, so a library
+  // entry or the whole showcase films on whatever ground is selected here.
+  const [backdrop, setBackdrop] = useState<MarketingBackdrop>('gradient');
   const busy = navigation.state === 'submitting';
 
   // Renders finish in a worker, not in this tab. While anything is generating,
@@ -601,6 +665,7 @@ export default function Route() {
             </Button>
             <Form method="post">
               <input type="hidden" name="intent" value="render-showcase" />
+              <input type="hidden" name="backdrop" value={backdrop} />
               <Button
                 type="submit"
                 size="sm"
@@ -608,7 +673,7 @@ export default function Route() {
                 className="bg-indigo-500 text-white hover:bg-indigo-400"
                 title="Queue every library storyboard"
               >
-                <Sparkles className="mr-1.5 h-4 w-4" aria-hidden />
+                <Clapperboard className="mr-1.5 h-4 w-4" aria-hidden />
                 Render the showcase
               </Button>
             </Form>
@@ -648,7 +713,7 @@ export default function Route() {
         <Card className="lg:col-span-3">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-indigo-500" aria-hidden />
+              <Clapperboard className="h-4 w-4 text-indigo-500" aria-hidden />
               New render
             </CardTitle>
           </CardHeader>
@@ -732,6 +797,51 @@ export default function Route() {
                       </span>
                     </span>
                   </button>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend className="mb-1.5 text-sm font-medium">Backdrop</legend>
+                <select
+                  id="backdrop"
+                  name="backdrop"
+                  value={backdrop}
+                  onChange={(event) =>
+                    setBackdrop(event.target.value as MarketingBackdrop)
+                  }
+                  className="sr-only"
+                  aria-label="Backdrop"
+                >
+                  {MARKETING_BACKDROPS.map((option) => (
+                    <option key={option} value={option}>
+                      {MARKETING_BACKDROP_LABELS[option].label}
+                    </option>
+                  ))}
+                </select>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {MARKETING_BACKDROPS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      aria-pressed={backdrop === option}
+                      onClick={() => setBackdrop(option)}
+                      className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
+                        backdrop === option
+                          ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/40'
+                          : 'hover:bg-muted/60'
+                      }`}
+                    >
+                      <BackdropSwatch backdrop={option} />
+                      <span>
+                        <span className="block text-sm font-medium">
+                          {MARKETING_BACKDROP_LABELS[option].label}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {MARKETING_BACKDROP_LABELS[option].detail}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </fieldset>
 
@@ -855,7 +965,8 @@ export default function Route() {
           Hand-verified storyboards of the moments schools ask about — frequent
           low-stakes writing, criterion-referenced feedback, the grading
           pipeline, built-in teacher development. One click renders fresh media;
-          no AI writing step, so these come out right every time.
+          no AI writing step, so these come out right every time. They film on
+          the backdrop selected above.
         </p>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {library.map((entry) => (
@@ -903,6 +1014,7 @@ export default function Route() {
                 <Form method="post">
                   <input type="hidden" name="intent" value="render-library" />
                   <input type="hidden" name="librarySlug" value={entry.slug} />
+                  <input type="hidden" name="backdrop" value={backdrop} />
                   <Button
                     type="submit"
                     size="sm"

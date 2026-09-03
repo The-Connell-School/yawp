@@ -48,6 +48,45 @@ export const MARKETING_PERSONAS = [
 
 export type MarketingPersona = (typeof MARKETING_PERSONAS)[number];
 
+/**
+ * What a framed still or clip is presented on. The gradient is the default
+ * because it is what a product clip in a feed looks like; the quieter ones
+ * exist because a slide deck, a doc, or a page with its own art does not want
+ * a second loud thing on it, and 'none' hands back the bare capture.
+ *
+ * It lives on the storyboard rather than the job row so a revision or a
+ * re-render films the same look without being told again.
+ */
+export const MARKETING_BACKDROPS = [
+  'gradient',
+  'slate',
+  'paper',
+  'none',
+] as const;
+export type MarketingBackdrop = (typeof MARKETING_BACKDROPS)[number];
+
+export const MARKETING_BACKDROP_LABELS: Record<
+  MarketingBackdrop,
+  { label: string; detail: string }
+> = {
+  gradient: {
+    label: 'Gradient',
+    detail: 'Vivid colour wash. Made for a feed or a landing page.',
+  },
+  slate: {
+    label: 'Slate',
+    detail: 'Deep neutral. Sits quietly on a dark slide.',
+  },
+  paper: {
+    label: 'Paper',
+    detail: 'Warm off-white, the app\'s own. For docs and light decks.',
+  },
+  none: {
+    label: 'None',
+    detail: 'The bare capture, no window chrome. For embedding.',
+  },
+};
+
 export const VIEWPORT_PRESETS = {
   desktop: { width: 1440, height: 900 },
   laptop: { width: 1280, height: 800 },
@@ -343,6 +382,7 @@ export const StoryboardSchema = z
     audience: z.string().max(200).optional(),
     goal: z.string().max(400).optional(),
     persona: z.enum(MARKETING_PERSONAS).default('teacher'),
+    backdrop: z.enum(MARKETING_BACKDROPS).default('gradient'),
     viewport,
     scenes: z.array(StoryboardSceneSchema).min(1).max(MAX_SCENES),
   })
