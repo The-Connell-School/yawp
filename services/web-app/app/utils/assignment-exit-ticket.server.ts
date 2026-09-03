@@ -29,6 +29,12 @@ export function parseAssignmentExitTicket(
     mode: formData.get('exitTicketMode')?.toString(),
     focus: formData.get('exitTicketFocus')?.toString(),
     topic: formData.get('exitTicketTopic')?.toString(),
+    // Teacher-only context. Stored beside the ticket, never composed into the
+    // prompt: the sheet renders these fields only while notes are switched on,
+    // so a ticket without notes posts nothing here and stores nothing.
+    lessonMainPoints: formData.get('exitTicketLessonMainPoints')?.toString(),
+    lessonMustMention: formData.get('exitTicketLessonMustMention')?.toString(),
+    lessonWatchFor: formData.get('exitTicketLessonWatchFor')?.toString(),
   });
 
   if (!parsed.success) return parsed;

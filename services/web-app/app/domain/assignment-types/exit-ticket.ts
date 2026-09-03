@@ -45,6 +45,69 @@ export const DEFAULT_EXIT_TICKET_MODE: ExitTicketMode = 'basic';
  */
 export const EXIT_TICKET_TOPIC_MAX_LENGTH = 200;
 
+/**
+ * An exit ticket checks what the student understands on their own. A tutor in
+ * the document would be answering the question for them, so the per-assignment
+ * tutor toggle starts off for this type where it starts on for every other.
+ */
+export const EXIT_TICKET_TUTOR_ENABLED_DEFAULT = false;
+
+/** Notes, not lesson plans: long enough for a paragraph each. */
+export const EXIT_TICKET_LESSON_NOTE_MAX_LENGTH = 1000;
+
+/**
+ * What the teacher can tell us about the lesson the ticket closes. Students
+ * never see any of it — "what they absolutely should mention" is the answer
+ * key — so none of it is composed into the prompt. It is stored beside the
+ * ticket for whoever reads the responses.
+ */
+export type ExitTicketLessonNotes = {
+  mainPoints: string;
+  mustMention: string;
+  watchFor: string;
+};
+
+export type ExitTicketLessonNoteField = {
+  key: keyof ExitTicketLessonNotes;
+  label: string;
+  helperText: string;
+  placeholder: string;
+};
+
+export const EXIT_TICKET_LESSON_NOTE_FIELDS: ExitTicketLessonNoteField[] = [
+  {
+    key: 'mainPoints',
+    label: 'Main points of the lesson',
+    helperText: 'What today was actually about, in a sentence or two.',
+    placeholder:
+      'e.g., Weathering breaks rock down in place; erosion carries the pieces away. Both are driven by water, wind, and ice.',
+  },
+  {
+    key: 'mustMention',
+    label: 'What they absolutely should mention',
+    helperText:
+      'The one thing a response cannot leave out and still show understanding.',
+    placeholder: 'e.g., The difference is whether the material moves.',
+  },
+  {
+    key: 'watchFor',
+    label: 'Mix-ups to watch for',
+    helperText: 'The wrong turn students usually take with this.',
+    placeholder: 'e.g., Using “weathering” and “erosion” interchangeably.',
+  },
+];
+
+/**
+ * Whether the lesson notes start open. A specific ticket already has the
+ * teacher naming what they are checking, so asking what the lesson covered is
+ * the natural next question. A basic ticket is meant to be one click.
+ */
+export function defaultExitTicketLessonNotesEnabled(
+  mode: ExitTicketMode
+): boolean {
+  return mode === 'specific';
+}
+
 export type ExitTicketFocus =
   | 'explain-concept'
   | 'apply-skill'
@@ -136,14 +199,19 @@ export const BASIC_EXIT_TICKET_PROMPT =
 export const EXIT_TICKET_ELABORATION_NOTE =
   'Write as much as you can, and go further than your first sentence — the more you explain your thinking, the more this is worth. Don’t worry about polish. This is about what you understand, not how neatly you say it.';
 
+type ExitTicketConfigBase = {
+  schemaVersion: typeof EXIT_TICKET_CONFIG_SCHEMA_VERSION;
+  /** Absent, never empty: a ticket without notes stores no key at all. */
+  lessonNotes?: ExitTicketLessonNotes;
+};
+
 export type ExitTicketConfig =
-  | { schemaVersion: typeof EXIT_TICKET_CONFIG_SCHEMA_VERSION; mode: 'basic' }
-  | {
-      schemaVersion: typeof EXIT_TICKET_CONFIG_SCHEMA_VERSION;
+  | (ExitTicketConfigBase & { mode: 'basic' })
+  | (ExitTicketConfigBase & {
       mode: 'specific';
       focus: ExitTicketFocus;
       topic: string;
-    };
+    });
 
 /**
  * Whether an assignment type is an exit ticket. Keyed on `kind` and never on
@@ -205,7 +273,45 @@ export type ExitTicketConfigInput = {
   mode?: string | null;
   focus?: string | null;
   topic?: string | null;
+  lessonMainPoints?: string | null;
+  lessonMustMention?: string | null;
+  lessonWatchFor?: string | null;
 };
+
+type LessonNotesParseResult =
+  | { success: true; lessonNotes?: ExitTicketLessonNotes }
+  | { success: false; message: string };
+
+function parseLessonNotesInput(
+  input: ExitTicketConfigInput
+): LessonNotesParseResult {
+  const notes: ExitTicketLessonNotes = {
+    mainPoints: input.lessonMainPoints?.toString().trim() ?? '',
+    mustMention: input.lessonMustMention?.toString().trim() ?? '',
+    watchFor: input.lessonWatchFor?.toString().trim() ?? '',
+  };
+
+  for (const field of EXIT_TICKET_LESSON_NOTE_FIELDS) {
+    if (notes[field.key].length > EXIT_TICKET_LESSON_NOTE_MAX_LENGTH) {
+      return {
+        success: false,
+        message: `Keep “${field.label}” under ${EXIT_TICKET_LESSON_NOTE_MAX_LENGTH} characters.`,
+      };
+    }
+  }
+
+  const hasAny = Object.values(notes).some((value) => value.length > 0);
+  return hasAny ? { success: true, lessonNotes: notes } : { success: true };
+}
+
+function withLessonNotes<T extends ExitTicketConfig>(
+  config: T,
+  parsed: { lessonNotes?: ExitTicketLessonNotes }
+): T {
+  return parsed.lessonNotes
+    ? { ...config, lessonNotes: parsed.lessonNotes }
+    : config;
+}
 
 /**
  * Writing: strict about the specific path, forgiving about an absent mode.
@@ -220,27 +326,20 @@ export function parseExitTicketConfigInput(
 ): ExitTicketConfigParseResult {
   const rawMode = input.mode?.toString().trim() ?? '';
 
-  if (!rawMode) {
-    return {
-      success: true,
-      config: {
-        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
-        mode: 'basic',
-      },
-    };
-  }
-
-  if (!EXIT_TICKET_MODES.includes(rawMode as ExitTicketMode)) {
+  if (rawMode && !EXIT_TICKET_MODES.includes(rawMode as ExitTicketMode)) {
     return { success: false, message: 'Exit ticket type is invalid.' };
   }
 
-  if (rawMode === 'basic') {
+  const notes = parseLessonNotesInput(input);
+  if (!notes.success) return notes;
+
+  if (!rawMode || rawMode === 'basic') {
     return {
       success: true,
-      config: {
-        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
-        mode: 'basic',
-      },
+      config: withLessonNotes(
+        { schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION, mode: 'basic' },
+        notes
+      ),
     };
   }
 
@@ -268,12 +367,15 @@ export function parseExitTicketConfigInput(
 
   return {
     success: true,
-    config: {
-      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
-      mode: 'specific',
-      focus: option.value,
-      topic,
-    },
+    config: withLessonNotes(
+      {
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'specific',
+        focus: option.value,
+        topic,
+      },
+      notes
+    ),
   };
 }
 
@@ -290,8 +392,13 @@ export function parseStoredExitTicketConfig(
   const record = value as Record<string, unknown>;
   if (record.schemaVersion !== EXIT_TICKET_CONFIG_SCHEMA_VERSION) return null;
 
+  const notes = parseStoredLessonNotes(record.lessonNotes);
+
   if (record.mode === 'basic') {
-    return { schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION, mode: 'basic' };
+    return withLessonNotes(
+      { schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION, mode: 'basic' },
+      notes
+    );
   }
 
   if (record.mode !== 'specific') return null;
@@ -304,10 +411,33 @@ export function parseStoredExitTicketConfig(
   const topic = typeof record.topic === 'string' ? record.topic.trim() : '';
   if (!topic) return null;
 
-  return {
-    schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
-    mode: 'specific',
-    focus: option.value,
-    topic,
+  return withLessonNotes(
+    {
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'specific',
+      focus: option.value,
+      topic,
+    },
+    notes
+  );
+}
+
+/**
+ * Notes as stored. A value that is not the shape this version writes reads as
+ * no notes rather than an error, so the ticket itself still opens.
+ */
+function parseStoredLessonNotes(value: unknown): {
+  lessonNotes?: ExitTicketLessonNotes;
+} {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  const read = (key: keyof ExitTicketLessonNotes) =>
+    typeof record[key] === 'string' ? (record[key] as string).trim() : '';
+  const notes: ExitTicketLessonNotes = {
+    mainPoints: read('mainPoints'),
+    mustMention: read('mustMention'),
+    watchFor: read('watchFor'),
   };
+  const hasAny = Object.values(notes).some((entry) => entry.length > 0);
+  return hasAny ? { lessonNotes: notes } : {};
 }

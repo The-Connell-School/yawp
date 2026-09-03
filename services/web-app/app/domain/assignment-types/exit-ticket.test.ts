@@ -5,9 +5,13 @@ import {
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_ELABORATION_NOTE,
   EXIT_TICKET_FOCUS_OPTIONS,
+  EXIT_TICKET_LESSON_NOTE_FIELDS,
+  EXIT_TICKET_LESSON_NOTE_MAX_LENGTH,
   EXIT_TICKET_MODES,
   EXIT_TICKET_TOPIC_MAX_LENGTH,
+  EXIT_TICKET_TUTOR_ENABLED_DEFAULT,
   composeExitTicketPrompt,
+  defaultExitTicketLessonNotesEnabled,
   exitTicketFocusOption,
   isExitTicketAssignmentType,
   parseExitTicketConfigInput,
@@ -223,5 +227,140 @@ describe('parseStoredExitTicketConfig', () => {
     expect(
       parseStoredExitTicketConfig({ schemaVersion: 99, mode: 'basic' })
     ).toBeNull();
+  });
+});
+
+describe('exit ticket defaults', () => {
+  test('the tutor starts off', () => {
+    // An exit ticket checks what the student understands on their own. A
+    // tutor in the document would be answering the question for them.
+    expect(EXIT_TICKET_TUTOR_ENABLED_DEFAULT).toBe(false);
+  });
+
+  test('lesson notes start open only when the ticket is specific', () => {
+    // A specific ticket already has a teacher naming what they are checking,
+    // so asking what the lesson covered is the natural next question. A basic
+    // ticket is meant to be one click.
+    expect(defaultExitTicketLessonNotesEnabled('basic')).toBe(false);
+    expect(defaultExitTicketLessonNotesEnabled('specific')).toBe(true);
+  });
+
+  test('every lesson note field is labelled and scaffolded', () => {
+    expect(EXIT_TICKET_LESSON_NOTE_FIELDS.map((field) => field.key)).toEqual([
+      'mainPoints',
+      'mustMention',
+      'watchFor',
+    ]);
+    for (const field of EXIT_TICKET_LESSON_NOTE_FIELDS) {
+      expect(field.label.trim()).not.toBe('');
+      expect(field.placeholder.trim()).not.toBe('');
+    }
+  });
+});
+
+describe('lesson notes', () => {
+  const notes = {
+    mainPoints: 'Weathering breaks rock down in place; erosion moves it.',
+    mustMention: 'The difference is whether the material moves.',
+    watchFor: 'Using the two words interchangeably.',
+  };
+
+  test('are kept, trimmed, on either shape of ticket', () => {
+    const basic = parseExitTicketConfigInput({
+      mode: 'basic',
+      lessonMainPoints: `  ${notes.mainPoints}  `,
+      lessonMustMention: notes.mustMention,
+      lessonWatchFor: notes.watchFor,
+    });
+    expect(basic.success).toBe(true);
+    if (!basic.success) return;
+    expect(basic.config.lessonNotes).toEqual(notes);
+
+    const specific = parseExitTicketConfigInput({
+      mode: 'specific',
+      focus: 'explain-concept',
+      topic: 'erosion',
+      lessonMainPoints: notes.mainPoints,
+    });
+    expect(specific.success).toBe(true);
+    if (!specific.success) return;
+    expect(specific.config.lessonNotes).toEqual({
+      mainPoints: notes.mainPoints,
+      mustMention: '',
+      watchFor: '',
+    });
+  });
+
+  test('are omitted entirely when the teacher wrote nothing', () => {
+    // Nothing to store means no key, so a ticket without notes is
+    // byte-identical to one created before notes existed.
+    const result = parseExitTicketConfigInput({
+      mode: 'basic',
+      lessonMainPoints: '   ',
+      lessonMustMention: '',
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect('lessonNotes' in result.config).toBe(false);
+  });
+
+  test('are bounded so they stay notes', () => {
+    const result = parseExitTicketConfigInput({
+      mode: 'basic',
+      lessonMainPoints: 'a'.repeat(EXIT_TICKET_LESSON_NOTE_MAX_LENGTH + 1),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test('never reach the prompt students read', () => {
+    // "What they absolutely should mention" is the answer key. Composing it
+    // into the student prompt would hand the answer over.
+    for (const config of [
+      {
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'basic' as const,
+        lessonNotes: notes,
+      },
+      {
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'specific' as const,
+        focus: 'explain-concept' as const,
+        topic: 'erosion',
+        lessonNotes: notes,
+      },
+    ]) {
+      const prompt = composeExitTicketPrompt(config);
+      expect(prompt).not.toInclude(notes.mainPoints);
+      expect(prompt).not.toInclude(notes.mustMention);
+      expect(prompt).not.toInclude(notes.watchFor);
+    }
+  });
+
+  test('read back from storage, and a malformed value reads as none', () => {
+    const stored = parseStoredExitTicketConfig({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'basic',
+      lessonNotes: notes,
+    });
+    expect(stored?.lessonNotes).toEqual(notes);
+
+    const withoutNotes = parseStoredExitTicketConfig({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'basic',
+    });
+    expect(withoutNotes).toEqual({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'basic',
+    });
+
+    const malformed = parseStoredExitTicketConfig({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'basic',
+      lessonNotes: 'just a string',
+    });
+    expect(malformed).toEqual({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'basic',
+    });
   });
 });

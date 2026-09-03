@@ -93,6 +93,30 @@ describe('parseAssignmentExitTicket', () => {
     expect(longTopic.success).toBe(false);
   });
 
+  test('keeps lesson notes beside the ticket and out of the prompt', () => {
+    const result = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketMode: 'specific',
+        exitTicketFocus: 'explain-concept',
+        exitTicketTopic: 'erosion',
+        exitTicketLessonMainPoints:
+          'Erosion moves material; weathering does not.',
+        exitTicketLessonMustMention: 'whether the material moves',
+        exitTicketLessonWatchFor: 'using the two words interchangeably',
+      })
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.value.exitTicketConfigJson.lessonNotes).toEqual({
+      mainPoints: 'Erosion moves material; weathering does not.',
+      mustMention: 'whether the material moves',
+      watchFor: 'using the two words interchangeably',
+    });
+    // The answer key stays with the teacher.
+    expect(result.value.prompt).not.toInclude('whether the material moves');
+  });
+
   test('a form that posts no exit ticket fields still yields a usable ticket', () => {
     const result = parseAssignmentExitTicket(new FormData());
 

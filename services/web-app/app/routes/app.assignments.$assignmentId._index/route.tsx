@@ -867,6 +867,9 @@ export default function AssignmentDetailRoute() {
               ? assignment.exitTicket.topic
               : undefined
           }
+          initialExitTicketLessonNotes={
+            assignment.exitTicket?.lessonNotes ?? null
+          }
         />
 
         {/* Same sheet, same props as the class page's "Add assignment", so
@@ -892,6 +895,9 @@ export default function AssignmentDetailRoute() {
             assignment.exitTicket?.mode === 'specific'
               ? assignment.exitTicket.topic
               : undefined
+          }
+          initialExitTicketLessonNotes={
+            assignment.exitTicket?.lessonNotes ?? null
           }
         />
       </div>

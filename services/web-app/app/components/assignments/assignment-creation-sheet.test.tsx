@@ -825,6 +825,86 @@ describe('AssignmentCreationSheetContent', () => {
       expect(submit!.disabled).toBe(false);
     });
 
+    it('starts the tutor off for an exit ticket, and on for everything else', () => {
+      // An exit ticket checks what students understand on their own; a tutor
+      // in the document would be answering the question for them.
+      root = renderExitTicketSheet().root;
+      expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
+        false
+      );
+      expectText('Off by default for an exit ticket');
+      cleanup(root);
+
+      root = renderSheet().root;
+      expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
+        true
+      );
+    });
+
+    it('keeps the stored tutor setting when editing an exit ticket', () => {
+      // The toggle is frozen after creation, so the default must not
+      // override what the assignment actually has.
+      root = renderExitTicketSheet({
+        editingAssignment: { id: 'a-1' },
+        initialTutorEnabled: true,
+      }).root;
+      expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
+        true
+      );
+    });
+
+    it('closes the lesson notes on a basic ticket and opens them on a specific one', () => {
+      root = renderExitTicketSheet().root;
+
+      expectText('Add notes about the lesson');
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-lesson-notes'))
+      ).toBe(false);
+      // Closed means no note fields at all: nothing is posted, nothing stored.
+      expect(
+        document.querySelector('textarea[name="exitTicketLessonMainPoints"]')
+      ).toBeNull();
+
+      act(() => {
+        controlById('assignment-create-exit-ticket-specific').click();
+      });
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-lesson-notes'))
+      ).toBe(true);
+      expectText('Main points of the lesson');
+      expectText('What they absolutely should mention');
+      expectText('Mix-ups to watch for');
+      expect(textareaByName('exitTicketLessonMainPoints')).not.toBeNull();
+      expect(textareaByName('exitTicketLessonMustMention')).not.toBeNull();
+      expect(textareaByName('exitTicketLessonWatchFor')).not.toBeNull();
+      // Students never see any of it: none of it is in the composed prompt.
+      expect(inputByName('prompt').value).not.toInclude('Main points');
+    });
+
+    it('reopens an exit ticket with the notes it was created with', () => {
+      root = renderExitTicketSheet({
+        initialExitTicketMode: 'basic',
+        initialExitTicketLessonNotes: {
+          mainPoints: 'Erosion moves material.',
+          mustMention: 'whether the material moves',
+          watchFor: '',
+        },
+      }).root;
+
+      // Notes present means the section opens even on a basic ticket, which
+      // would otherwise start closed.
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-lesson-notes'))
+      ).toBe(true);
+      expect(textareaByName('exitTicketLessonMainPoints').value).toBe(
+        'Erosion moves material.'
+      );
+      expect(textareaByName('exitTicketLessonMustMention').value).toBe(
+        'whether the material moves'
+      );
+    });
+
     it('reopens an exit ticket on the answers it was created with', () => {
       root = renderExitTicketSheet({
         initialExitTicketMode: 'specific',

@@ -26,12 +26,17 @@ import {
   DEFAULT_EXIT_TICKET_MODE,
   EXIT_TICKETS_ENABLED,
   EXIT_TICKET_FOCUS_OPTIONS,
+  EXIT_TICKET_LESSON_NOTE_FIELDS,
+  EXIT_TICKET_LESSON_NOTE_MAX_LENGTH,
   EXIT_TICKET_TOPIC_MAX_LENGTH,
+  EXIT_TICKET_TUTOR_ENABLED_DEFAULT,
   composeExitTicketPrompt,
+  defaultExitTicketLessonNotesEnabled,
   exitTicketFocusOption,
   isExitTicketAssignmentType,
   parseExitTicketConfigInput,
   type ExitTicketFocus,
+  type ExitTicketLessonNotes,
   type ExitTicketMode,
 } from '~/domain/assignment-types/exit-ticket';
 import {
@@ -157,6 +162,8 @@ export type AssignmentCreationSheetProps = {
   initialExitTicketMode?: ExitTicketMode;
   initialExitTicketFocus?: ExitTicketFocus;
   initialExitTicketTopic?: string;
+  /** Present reopens the notes section filled in; absent leaves the default. */
+  initialExitTicketLessonNotes?: ExitTicketLessonNotes | null;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -206,6 +213,43 @@ function pointValueFieldValue(pointValue: number | null | undefined) {
     : String(pointValue);
 }
 
+const EMPTY_LESSON_NOTES: ExitTicketLessonNotes = {
+  mainPoints: '',
+  mustMention: '',
+  watchFor: '',
+};
+
+function isExitTicketTypeId(
+  assignmentTypes: AssignmentCreationAssignmentType[],
+  assignmentTypeId: string
+) {
+  return (
+    EXIT_TICKETS_ENABLED &&
+    isExitTicketAssignmentType(
+      assignmentTypes.find((type) => type.id === assignmentTypeId)
+    )
+  );
+}
+
+/**
+ * What the tutor toggle starts at. Editing keeps whatever the assignment has —
+ * the toggle is frozen after creation anyway. Otherwise an exit ticket starts
+ * off, where every other type starts on: a tutor in the document would be
+ * answering the question the ticket is asking.
+ */
+export function initialTutorEnabledFor({
+  isEditing,
+  isExitTicket,
+  initialTutorEnabled,
+}: {
+  isEditing: boolean;
+  isExitTicket: boolean;
+  initialTutorEnabled: boolean;
+}) {
+  if (isEditing) return initialTutorEnabled;
+  return isExitTicket ? EXIT_TICKET_TUTOR_ENABLED_DEFAULT : initialTutorEnabled;
+}
+
 export function AssignmentCreationSheet({
   ...props
 }: AssignmentCreationSheetProps) {
@@ -247,6 +291,7 @@ export function AssignmentCreationSheetContent({
   initialExitTicketMode = DEFAULT_EXIT_TICKET_MODE,
   initialExitTicketFocus = EXIT_TICKET_FOCUS_OPTIONS[0].value,
   initialExitTicketTopic = '',
+  initialExitTicketLessonNotes = null,
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -275,7 +320,20 @@ export function AssignmentCreationSheetContent({
   );
   const [postAt, setPostAt] = useState<string>('');
   const [dueAt, setDueAt] = useState<string>('');
-  const [tutorEnabled, setTutorEnabled] = useState(initialTutorEnabled);
+  const [tutorEnabled, setTutorEnabled] = useState(() =>
+    initialTutorEnabledFor({
+      isEditing: Boolean(editingAssignment),
+      isExitTicket: isExitTicketTypeId(
+        assignmentTypes,
+        initialAssignmentTypeSelection(
+          assignmentTypes,
+          fixedAssignmentTypeId,
+          initialAssignmentTypeId
+        )
+      ),
+      initialTutorEnabled,
+    })
+  );
   const [collaborationEnabled, setCollaborationEnabled] = useState(
     initialCollaborationEnabled
   );
@@ -297,6 +355,14 @@ export function AssignmentCreationSheetContent({
   );
   const [exitTicketTopic, setExitTicketTopic] = useState(
     initialExitTicketTopic
+  );
+  const [lessonNotesEnabled, setLessonNotesEnabled] = useState(
+    initialExitTicketLessonNotes
+      ? true
+      : defaultExitTicketLessonNotesEnabled(initialExitTicketMode)
+  );
+  const [lessonNotes, setLessonNotes] = useState<ExitTicketLessonNotes>(
+    initialExitTicketLessonNotes ?? EMPTY_LESSON_NOTES
   );
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [extractionTruncated, setExtractionTruncated] = useState(false);
@@ -391,7 +457,20 @@ export function AssignmentCreationSheetContent({
     setPointValue(pointValueFieldValue(initialPointValue));
     setPostAt(toDateInputValue(initialPostAt));
     setDueAt(toDateInputValue(initialDueAt));
-    setTutorEnabled(initialTutorEnabled);
+    setTutorEnabled(
+      initialTutorEnabledFor({
+        isEditing: Boolean(editingAssignment),
+        isExitTicket: isExitTicketTypeId(
+          assignmentTypes,
+          initialAssignmentTypeSelection(
+            assignmentTypes,
+            fixedAssignmentTypeId,
+            initialAssignmentTypeId
+          )
+        ),
+        initialTutorEnabled,
+      })
+    );
     setCollaborationEnabled(initialCollaborationEnabled);
     setCollaborationGroupMode(initialCollaborationGroupMode);
     setCollaborationGroupSize(
@@ -402,6 +481,12 @@ export function AssignmentCreationSheetContent({
     setExitTicketMode(initialExitTicketMode);
     setExitTicketFocus(initialExitTicketFocus);
     setExitTicketTopic(initialExitTicketTopic);
+    setLessonNotesEnabled(
+      initialExitTicketLessonNotes
+        ? true
+        : defaultExitTicketLessonNotesEnabled(initialExitTicketMode)
+    );
+    setLessonNotes(initialExitTicketLessonNotes ?? EMPTY_LESSON_NOTES);
     setAttachmentFile(null);
     setRemoveAttachment(false);
     setExtractionTruncated(false);
@@ -424,6 +509,8 @@ export function AssignmentCreationSheetContent({
     initialExitTicketMode,
     initialExitTicketFocus,
     initialExitTicketTopic,
+    initialExitTicketLessonNotes,
+    editingAssignment,
     initialPostAt,
     initialDueAt,
     open,
@@ -539,7 +626,18 @@ export function AssignmentCreationSheetContent({
           <Label>Assignment type</Label>
           <Select
             value={assignmentTypeId}
-            onValueChange={setSelectedAssignmentTypeId}
+            onValueChange={(nextTypeId) => {
+              setSelectedAssignmentTypeId(nextTypeId);
+              // Type-dependent defaults follow the type. Editing never reaches
+              // here for the tutor: the toggle is frozen after creation.
+              setTutorEnabled(
+                initialTutorEnabledFor({
+                  isEditing,
+                  isExitTicket: isExitTicketTypeId(assignmentTypes, nextTypeId),
+                  initialTutorEnabled,
+                })
+              );
+            }}
             disabled={
               isSaving ||
               Boolean(fixedAssignmentTypeId) ||
@@ -715,9 +813,16 @@ export function AssignmentCreationSheetContent({
               </p>
               <RadioGroup
                 value={exitTicketMode}
-                onValueChange={(value) =>
-                  setExitTicketMode(value as ExitTicketMode)
-                }
+                onValueChange={(value) => {
+                  const nextMode = value as ExitTicketMode;
+                  setExitTicketMode(nextMode);
+                  // The notes default follows the shape: open for specific,
+                  // closed for basic. Anything already typed is kept either
+                  // way, so switching back and forth loses nothing.
+                  setLessonNotesEnabled(
+                    defaultExitTicketLessonNotesEnabled(nextMode)
+                  );
+                }}
                 disabled={isSaving}
                 className="gap-3 pt-1"
               >
@@ -803,6 +908,72 @@ export function AssignmentCreationSheetContent({
                 </div>
               </div>
             ) : null}
+
+            {/* Teacher-only context about the lesson. Rendered only while
+                switched on, so a ticket without notes posts no note fields and
+                stores none. Nothing here is ever composed into the prompt. */}
+            <div className="space-y-3 rounded-md border border-dashed p-3">
+              <div className="flex items-start gap-2.5">
+                <Checkbox
+                  id="assignment-create-exit-ticket-lesson-notes"
+                  checked={lessonNotesEnabled}
+                  onCheckedChange={(checked) =>
+                    setLessonNotesEnabled(checked === true)
+                  }
+                  disabled={isSaving}
+                  className="mt-0.5 size-4 shrink-0"
+                />
+                <Label
+                  htmlFor="assignment-create-exit-ticket-lesson-notes"
+                  className="cursor-pointer font-normal"
+                >
+                  <span className="font-medium">
+                    Add notes about the lesson
+                  </span>
+                  <span className="mt-0.5 block text-sm text-muted-foreground">
+                    Students never see these. They give whoever reads the
+                    responses something to judge them against.
+                  </span>
+                </Label>
+              </div>
+
+              {lessonNotesEnabled ? (
+                <div className="space-y-3 pl-[calc(1rem+0.625rem)]">
+                  {EXIT_TICKET_LESSON_NOTE_FIELDS.map((field) => {
+                    const id = `assignment-create-exit-ticket-lesson-${field.key}`;
+                    const name = `exitTicketLesson${field.key[0].toUpperCase()}${field.key.slice(1)}`;
+                    return (
+                      <div key={field.key} className="space-y-1.5">
+                        <Label htmlFor={id}>
+                          {field.label}{' '}
+                          <span className="text-muted-foreground">
+                            (optional)
+                          </span>
+                        </Label>
+                        <Textarea
+                          id={id}
+                          name={name}
+                          value={lessonNotes[field.key]}
+                          onChange={(event) =>
+                            setLessonNotes((current) => ({
+                              ...current,
+                              [field.key]: event.target.value,
+                            }))
+                          }
+                          rows={2}
+                          maxLength={EXIT_TICKET_LESSON_NOTE_MAX_LENGTH}
+                          placeholder={field.placeholder}
+                          disabled={isSaving}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          {field.helperText}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="assignment-create-exit-ticket-preview">
@@ -1042,7 +1213,9 @@ export function AssignmentCreationSheetContent({
           <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
             {isEditing
               ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
-              : "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."}
+              : isExitTicket
+                ? 'Off by default for an exit ticket: it checks what students understand on their own, and a tutor in the document would answer the question for them. Turn it on if you want them to have help.'
+                : "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."}
           </p>
         </div>
 
