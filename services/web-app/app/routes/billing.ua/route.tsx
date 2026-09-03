@@ -1,5 +1,7 @@
 import {
   Form,
+  data,
+  useActionData,
   redirect,
   useLoaderData,
   type ActionFunctionArgs,
@@ -69,12 +71,23 @@ export async function action({ request }: ActionFunctionArgs) {
   const config = getUaStudentLicenseConfig();
   if (!config.enabled) throw new Error('UA student billing is disabled');
   const origin = config.applicationOrigin;
-  const checkout = await createOrReuseCheckoutSession({
-    membershipId: membership.id,
-    successUrl: `${origin}/billing/ua/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: `${origin}/billing/ua?canceled=1`,
-    config,
-  });
+  let checkout;
+  try {
+    checkout = await createOrReuseCheckoutSession({
+      membershipId: membership.id,
+      successUrl: `${origin}/billing/ua/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${origin}/billing/ua?canceled=1`,
+      config,
+    });
+  } catch {
+    return data(
+      {
+        error:
+          'We could not open payment. Please try again in a moment. If you already paid, wait for confirmation before retrying.',
+      },
+      { status: 503 }
+    );
+  }
 
   if (checkout.kind === 'ACTIVE') return redirect('/app');
   if (checkout.kind === 'CLOSED') return redirect('/billing/ua?closed=1');
@@ -88,6 +101,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function UaBillingRoute() {
+  const actionData = useActionData<typeof action>();
   const { canceled, closed, processing, suspended } =
     useLoaderData<typeof loader>();
   return (
@@ -106,8 +120,13 @@ export default function UaBillingRoute() {
               ? 'The 2026 student license ended on December 31, 2026.'
               : suspended
                 ? UA_DISPUTE_SUSPENDED_MESSAGE
-              : 'Pay the one-time $50 semester fee to continue to YAWP. Access runs through December 31, 2026.'}
+                : 'Pay the one-time $35 semester fee to continue to YAWP. Access runs through December 31, 2026.'}
           </p>
+          {actionData?.error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {actionData.error}
+            </p>
+          ) : null}
           {canceled ? (
             <p className="text-sm text-muted-foreground">
               {UA_CHECKOUT_CANCELED_MESSAGE}

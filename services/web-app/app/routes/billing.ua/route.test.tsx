@@ -73,6 +73,7 @@ describe('UA billing route', () => {
         cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
       })
     );
+    if (!(response instanceof Response)) throw new Error('Expected redirect');
     expect(response.headers.get('location')).toBe(
       'https://checkout.stripe.test/cs_1'
     );
@@ -85,6 +86,7 @@ describe('UA billing route', () => {
         method: 'POST',
       }),
     } as any);
+    if (!(response instanceof Response)) throw new Error('Expected redirect');
     expect(response.headers.get('location')).toBe('/billing/ua?closed=1');
   });
 
@@ -101,9 +103,8 @@ describe('UA billing route', () => {
         method: 'POST',
       }),
     } as any);
-    expect(response.headers.get('location')).toBe(
-      '/billing/ua?suspended=1'
-    );
+    if (!(response instanceof Response)) throw new Error('Expected redirect');
+    expect(response.headers.get('location')).toBe('/billing/ua?suspended=1');
     expect(UA_DISPUTE_SUSPENDED_MESSAGE).toContain(
       'cannot start another payment'
     );
@@ -123,5 +124,20 @@ describe('UA billing route', () => {
     expect(UA_CHECKOUT_CANCELED_MESSAGE.toLowerCase()).not.toContain(
       'not been charged'
     );
+  });
+
+  test('keeps Stripe errors on the billing page with a retryable message', async () => {
+    createOrReuseCheckoutSession.mockRejectedValue(
+      new Error('Stripe unavailable')
+    );
+    const response = await action({
+      request: new Request('https://yawp.school/billing/ua', {
+        method: 'POST',
+      }),
+    } as any);
+    expect(response).toMatchObject({
+      data: { error: expect.stringContaining('try again') },
+      init: { status: 503 },
+    });
   });
 });

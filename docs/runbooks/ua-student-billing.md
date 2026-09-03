@@ -1,6 +1,6 @@
 # University of Alabama student billing
 
-The UA student license is a one-time $50 payment. It grants access through
+The UA student license is a one-time $35 payment. It grants access through
 December 31, 2026. Teachers keep their existing invitation-only onboarding and
 never enter this checkout.
 
@@ -19,11 +19,15 @@ remain available during the compatibility window but are not canonical links.
 
 ## Stripe sandbox
 
-The verified sandbox catalog is:
+The original sandbox catalog was:
 
 - Product: `prod_VAgFpOe36KPfnX`
 - Price: `price_1UAKsYHOYKJAxG9PN4RfcXwN`
-- Amount: $50 USD, one time
+- Original amount: $50 USD, one time (historical; do not use for new Checkout)
+
+Before testing, add an active one-time $35 USD price to that same sandbox
+product and set it as the product default. The configured price below remains
+a stable product anchor; it may be archived.
 
 Configure the `preview-host` GitHub environment with:
 
@@ -65,7 +69,7 @@ same application and database.
 
 ## Production cutover
 
-Create a live-mode one-time $50 price and a live webhook endpoint at
+Create a live-mode one-time $35 default price and a live webhook endpoint at
 `https://yawp.school/api/stripe/webhook` with the same event list. Then provide
 the inputs through the existing protected deployment secret path in two
 separate applies. Production rejects test-mode Prices and webhook events even
@@ -82,12 +86,12 @@ ua_partner_hostname=ua.yawp.school
 yawp_app_origin=https://ua.yawp.school
 stripe_secret_key=<live Stripe secret key>
 stripe_webhook_secret=<live endpoint signing secret>
-stripe_ua_2026_price_id=<live one-time Price.id>
+stripe_ua_2026_price_id=<live Price.id identifying the UA product>
 stripe_ua_existing_subscription_price_ids=[<legacy recurring Price.id>, ...]
 ```
 
 Apply and verify that the two Stripe secrets exist in AWS Secrets Manager, that
-the live Price is active and still $50, and that normal `yawp.school` sign-in is
+the product default Price is active, one-time, and $35 USD, and that normal `yawp.school` sign-in is
 unchanged. This stage does not pass the Stripe secrets to App Runner and leaves
 `UA_STUDENT_BILLING_ENABLED=false` at runtime.
 
@@ -121,3 +125,32 @@ There is no subscription to cancel because this is a one-time fee. A student
 can leave Stripe Checkout before paying and return later. A completed payment
 activates the license. A full refund or a lost dispute revokes access; a
 reinstated dispute restores it. Partial refunds remain an operator review case.
+
+
+## Changing the UA price
+
+`STRIPE_UA_2026_PRICE_ID` identifies the UA Stripe product through an existing
+price. Checkout retrieves that product's current default price on every new
+attempt. The anchor may remain the archived $50 price; no environment-variable
+change is required for the $35 rollover. Restricted Stripe keys need read access
+to both Prices and Products, plus the existing Checkout Session permissions
+(including expiration).
+
+New checkout requires an active product with an active, one-time $35 USD default
+price. Other amounts, currencies, recurring prices, or missing defaults fail
+closed with a retry message on `/billing/ua`. The displayed semester fee is $35;
+future amount changes require updating the application amount contract too.
+
+An existing hosted checkout keeps its original amount. Returning to billing and
+clicking Continue to payment expires an unpaid stale session before creating the
+$35 replacement. Refreshing an already-open Stripe page alone does not run the
+application's rollover logic. Completed payments wait for signed webhooks and do
+not open another charge. Already-paid $50 sessions remain valid; new $35 sessions
+are verified against the same product, and refund/dispute handling supports both
+amounts. License dates and grandfathered access remain unchanged.
+
+Run `./bin/project test --profile ua-billing` for focused contracts, or
+`./bin/project test --profile ua-billing-e2e` for those contracts plus the real
+browser and signed local Stripe emulator. The browser profile uses a separate
+test database in this workspace's local Postgres and refuses to reuse running
+servers on its test ports (5173 and 12111).

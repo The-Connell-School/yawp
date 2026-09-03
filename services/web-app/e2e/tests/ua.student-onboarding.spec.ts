@@ -580,7 +580,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
 
       const stripeRequest = {
         mode: 'payment',
-        'line_items[0][price]': 'price_ua_e2e_2026',
+        'line_items[0][price]': 'price_ua_e2e_35',
         'line_items[0][quantity]': '1',
         customer_email: unpaid.email,
         client_reference_id: unpaid.membershipId,
@@ -639,6 +639,83 @@ test.describe.serial('University of Alabama student onboarding', () => {
     }
   });
 
+  test('replaces a stale $50 checkout after Back and retries on the active $35 default', async ({
+    page,
+    e2eContext,
+  }) => {
+    const { unpaid } = e2eContext.ua;
+    await resetFakeStripe(page);
+    await replaceLicense(unpaid.membershipId, e2eContext.ua.organizationId, {
+      status: 'NONE',
+    });
+    await signIn(page, unpaid.email, unpaid.password, /\/billing\/ua/);
+    await expect(
+      page.getByText('Pay the one-time $35 semester fee', { exact: false })
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Continue to payment' }).click();
+    await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
+    const old = (await getFakeStripeSessions(page)).data[0]!;
+    // Represents a still-open Session made by the previous deployment.
+    expect(
+      (
+        await page.request.post(
+          `${E2E_STRIPE_BASE_URL}/test/sessions/${old.id}/legacy-price`
+        )
+      ).ok()
+    ).toBe(true);
+    await page.reload();
+    await expect(page.getByText('One-time $50.00 payment')).toBeVisible();
+    await page.goBack();
+    await page.getByRole('button', { name: 'Continue to payment' }).click();
+    await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
+    await expect(page.getByText('One-time $35.00 payment')).toBeVisible();
+    const sessions = (await getFakeStripeSessions(page)).data;
+    expect(sessions).toHaveLength(2);
+    expect(sessions[0]).toMatchObject({
+      id: old.id,
+      status: 'expired',
+      amount_total: 5000,
+    });
+    expect(sessions[1]).toMatchObject({ status: 'open', amount_total: 3500 });
+    expect(sessions[1]!.test_request.idempotency_key).not.toBe(
+      old.test_request.idempotency_key
+    );
+    await page.getByRole('link', { name: 'Cancel payment' }).click();
+    await page.getByRole('button', { name: 'Retry payment' }).click();
+    await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
+    expect((await getFakeStripeSessions(page)).data).toHaveLength(2);
+  });
+
+  test('shows an inline retry message when the Stripe product is unavailable', async ({
+    page,
+    e2eContext,
+  }) => {
+    const { unpaid } = e2eContext.ua;
+    await resetFakeStripe(page);
+    await replaceLicense(unpaid.membershipId, e2eContext.ua.organizationId, {
+      status: 'NONE',
+    });
+    await signIn(page, unpaid.email, unpaid.password, /\/billing\/ua/);
+    await page.request.post(
+      `${E2E_STRIPE_BASE_URL}/test/catalog?unavailable=1`
+    );
+    try {
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await expect(page.getByRole('alert')).toContainText('Please try again');
+      await expect(
+        page.getByRole('button', { name: 'Continue to payment' })
+      ).toBeVisible();
+      expect((await getFakeStripeSessions(page)).data).toHaveLength(0);
+    } finally {
+      await page.request.post(
+        `${E2E_STRIPE_BASE_URL}/test/catalog?unavailable=0`
+      );
+    }
+    await page.getByRole('button', { name: 'Continue to payment' }).click();
+    await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
+    await expect(page.getByText('One-time $35.00 payment')).toBeVisible();
+  });
+
   test('completes signed-webhook Checkout and reconciles partial refund and dispute states end to end', async ({
     page,
     e2eContext,
@@ -665,12 +742,15 @@ test.describe.serial('University of Alabama student onboarding', () => {
       expect(invalidWebhook.status()).toBe(400);
 
       await signIn(page, unpaid.email, unpaid.password, /\/billing\/ua/);
+      await expect(
+        page.getByText('Pay the one-time $35 semester fee', { exact: false })
+      ).toBeVisible();
       await page.getByRole('button', { name: 'Continue to payment' }).click();
       await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
       await expect(
         page.getByRole('heading', { name: 'Test Stripe Checkout' })
       ).toBeVisible();
-      await expect(page.getByText('One-time $50.00 payment')).toBeVisible();
+      await expect(page.getByText('One-time $35.00 payment')).toBeVisible();
 
       const created = await getFakeStripeSessions(page);
       expect(created.data).toHaveLength(1);
@@ -678,7 +758,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
         mode: 'payment',
         status: 'open',
         payment_status: 'unpaid',
-        amount_total: 5_000,
+        amount_total: 3_500,
         currency: 'usd',
         metadata: {
           membershipId: unpaid.membershipId,
@@ -691,7 +771,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       expect(created.data[0]!.line_items.data).toEqual([
         expect.objectContaining({
           quantity: 1,
-          price: expect.objectContaining({ id: 'price_ua_e2e_2026' }),
+          price: expect.objectContaining({ id: 'price_ua_e2e_35' }),
         }),
       ]);
       expect(created.data[0]!.test_request).toMatchObject({
@@ -719,9 +799,9 @@ test.describe.serial('University of Alabama student onboarding', () => {
       expect(activeLicense).toMatchObject({
         status: 'ACTIVE',
         source: 'STRIPE_CHECKOUT',
-        amountPaid: 5_000,
+        amountPaid: 3_500,
         currency: 'usd',
-        stripePriceId: 'price_ua_e2e_2026',
+        stripePriceId: 'price_ua_e2e_35',
       });
       expect(activeLicense.stripeCheckoutSessionId).toBe(created.data[0]!.id);
       expect(activeLicense.stripePaymentIntentId).toBe(
@@ -792,6 +872,9 @@ test.describe.serial('University of Alabama student onboarding', () => {
         status: 'NONE',
       });
       await signIn(page, unpaid.email, unpaid.password, /\/billing\/ua/);
+      await expect(
+        page.getByText('Pay the one-time $35 semester fee', { exact: false })
+      ).toBeVisible();
       await page.getByRole('button', { name: 'Continue to payment' }).click();
       await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
       const created = await getFakeStripeSessions(page);
@@ -805,7 +888,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       expect(metricsReset.ok()).toBe(true);
       const [refund, dispute] = await Promise.all([
         page.request.post(
-          `${E2E_STRIPE_BASE_URL}/test/sessions/${sessionId}/refund?amount=5000&eventId=evt_concurrent_refund`
+          `${E2E_STRIPE_BASE_URL}/test/sessions/${sessionId}/refund?amount=3500&eventId=evt_concurrent_refund`
         ),
         page.request.post(
           `${E2E_STRIPE_BASE_URL}/test/sessions/${sessionId}/dispute?status=under_review&eventId=evt_concurrent_dispute`
@@ -956,6 +1039,9 @@ test.describe.serial('University of Alabama student onboarding', () => {
       });
 
       await signIn(page, unpaid.email, unpaid.password, /\/billing\/ua/);
+      await expect(
+        page.getByText('Pay the one-time $35 semester fee', { exact: false })
+      ).toBeVisible();
       await page.getByRole('button', { name: 'Continue to payment' }).click();
       await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
       const firstSession = (await getFakeStripeSessions(page)).data[0]!;
@@ -976,6 +1062,9 @@ test.describe.serial('University of Alabama student onboarding', () => {
         .getByRole('button', { name: 'Complete payment without webhook' })
         .click();
       await page.waitForURL(/\/billing\/ua$/);
+      await expect(
+        page.getByText('Pay the one-time $35 semester fee', { exact: false })
+      ).toBeVisible();
       await page.getByRole('button', { name: 'Continue to payment' }).click();
       await page.waitForURL(/\/billing\/ua\?processing=1$/);
       await expect(
@@ -993,7 +1082,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByRole('dialog')).toBeVisible();
 
       const fullRefund = await page.request.post(
-        `${E2E_STRIPE_BASE_URL}/test/sessions/${firstSession.id}/refund?amount=5000&eventId=evt_full_refund&repeat=2`
+        `${E2E_STRIPE_BASE_URL}/test/sessions/${firstSession.id}/refund?amount=3500&eventId=evt_full_refund&repeat=2`
       );
       expect(fullRefund.ok()).toBe(true);
       expect(
@@ -1004,6 +1093,9 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await page.goto('/app');
       await expect(page).toHaveURL(/\/billing\/ua$/);
 
+      await expect(
+        page.getByText('Pay the one-time $35 semester fee', { exact: false })
+      ).toBeVisible();
       await page.getByRole('button', { name: 'Continue to payment' }).click();
       await page.waitForURL(new RegExp(`${E2E_STRIPE_BASE_URL}/checkout/`));
       const sessions = (await getFakeStripeSessions(page)).data;
