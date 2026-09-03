@@ -7,6 +7,10 @@ import {
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './dev-personas';
+import {
+  composeExitTicketPrompt,
+  type ExitTicketConfig,
+} from '../../../../services/web-app/app/domain/assignment-types/exit-ticket.ts';
 
 type PersonaRecord = {
   persona: LocalDevPersona;
@@ -70,7 +74,12 @@ async function upsertPersona(
 }
 
 function pickAssignmentTypeId(
-  rows: Array<{ id: string; title: string; kind: string | null; systemKey: string | null }>,
+  rows: Array<{
+    id: string;
+    title: string;
+    kind: string | null;
+    systemKey: string | null;
+  }>,
   matcher: (row: (typeof rows)[number]) => boolean
 ) {
   return rows.find(matcher)?.id ?? null;
@@ -78,7 +87,7 @@ function pickAssignmentTypeId(
 
 export async function seedSyntheticLocalDevData(
   prisma: SyntheticSeedClient,
-  options: SyntheticSeedOptions = {},
+  options: SyntheticSeedOptions = {}
 ): Promise<LocalDevSeedContext> {
   const organizationId = options.organizationId ?? LOCAL_DEV_ORG_ID;
   const personas = options.personas ?? LOCAL_DEV_PERSONAS;
@@ -110,14 +119,15 @@ export async function seedSyntheticLocalDevData(
   ];
 
   const schools = await Promise.all(
-    ['North Ridge High', 'Riverview Academy', 'Summit Prep'].map(async (name, index) =>
-      prisma.school.create({
-        data: {
-          name,
-          code: schoolCodes[index]!,
-          organizationId,
-        },
-      })
+    ['North Ridge High', 'Riverview Academy', 'Summit Prep'].map(
+      async (name, index) =>
+        prisma.school.create({
+          data: {
+            name,
+            code: schoolCodes[index]!,
+            organizationId,
+          },
+        })
     )
   );
 
@@ -297,7 +307,8 @@ export async function seedSyntheticLocalDevData(
       data: {
         assignmentTypeId: dailyPagesAssignmentTypeId,
         title: 'Daily Pages - week 2',
-        prompt: 'Write freely for ten minutes about something that surprised you this week.',
+        prompt:
+          'Write freely for ten minutes about something that surprised you this week.',
       },
     });
     await prisma.classAssignment.create({
@@ -309,29 +320,230 @@ export async function seedSyntheticLocalDevData(
   }
 
   if (exitTicketAssignmentTypeId) {
-    // An exit ticket stores both: the composed prompt students read, and the
-    // form answers it was composed from. The wording is the one produced by
-    // domain/assignment-types/exit-ticket.ts, copied because this script runs
-    // outside the web app's `~/` alias resolution and cannot import it.
-    const exitTicketAssignment = await prisma.assignment.create({
-      data: {
-        assignmentTypeId: exitTicketAssignmentTypeId,
-        title: 'Exit ticket: the water cycle',
-        prompt:
-          'In your own words, explain how energy moves through the water cycle. Write it the way you would explain it to someone who missed class today — not the definition you were given, but what you actually understand it to mean.\n\nWrite as much as you can, and go further than your first sentence — the more you explain your thinking, the more this is worth. Don’t worry about polish. This is about what you understand, not how neatly you say it.',
-        exitTicketConfigJson: {
-          schemaVersion: 1,
-          mode: 'specific',
-          focus: 'explain-concept',
-          topic: 'how energy moves through the water cycle',
+    // A worked set of exit tickets, graded, so the whole rotation is visible
+    // without waiting on a live grading run: both shapes, several focuses,
+    // graded-for-points beside feedback-only, and a response in each band.
+    //
+    // Prompts are composed by the same function the product uses rather than
+    // pasted, so the demo cannot drift from what a teacher would really get.
+    const exitTicketModules = await prisma.assignmentModule.findMany({
+      where: { assignmentTypeId: exitTicketAssignmentTypeId, deletedAt: null },
+      orderBy: { position: 'asc' },
+      select: {
+        id: true,
+        position: true,
+        instructions: {
+          orderBy: { position: 'asc' },
+          select: { id: true, prompt: true },
         },
       },
     });
-    await prisma.classAssignment.create({
-      data: {
-        assignmentId: exitTicketAssignment.id,
-        classId: primaryClass.id,
+
+    type DemoResponse = {
+      membershipId: string;
+      title: string;
+      text: string;
+      /** The band this response is meant to land in, scored on 0-100. */
+      score: number;
+      letterGrade: string;
+      overallComment: string;
+    };
+
+    async function seedExitTicket({
+      title,
+      config,
+      submitForGrade,
+      pointValue,
+      responses,
+    }: {
+      title: string;
+      config: ExitTicketConfig;
+      submitForGrade: boolean;
+      pointValue: number | null;
+      responses: DemoResponse[];
+    }) {
+      const assignment = await prisma.assignment.create({
+        data: {
+          assignmentTypeId: exitTicketAssignmentTypeId!,
+          title,
+          prompt: composeExitTicketPrompt(config),
+          exitTicketConfigJson: config as unknown as Prisma.InputJsonValue,
+          submitForGrade,
+          pointValue,
+          // An exit ticket checks what a student understands unaided.
+          tutorEnabled: false,
+        },
+      });
+      const classAssignment = await prisma.classAssignment.create({
+        data: { assignmentId: assignment.id, classId: primaryClass.id },
+      });
+
+      for (const response of responses) {
+        const html = `<p>${response.text}</p>`;
+        const document = await prisma.document.create({
+          data: {
+            title: response.title,
+            text: response.text,
+            html,
+            revision: 2,
+            membershipId: response.membershipId,
+            assignmentTypeId: exitTicketAssignmentTypeId!,
+            assignmentId: assignment.id,
+            classAssignmentId: classAssignment.id,
+            assignmentModuleSessions: {
+              create: buildModuleSessionsCreateData(exitTicketModules),
+            },
+          },
+        });
+        await prisma.submission.create({
+          data: {
+            documentId: document.id,
+            html,
+            text: response.text,
+            title: response.title,
+            submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+            gradedByMembershipId: primaryTeacher.membershipId,
+            gradedAt: new Date(),
+            // A band-scored rubric records the percentage it was scored at,
+            // which is what lets a graded ticket show "9 / 10" against the
+            // point value the teacher chose.
+            numericPercentage: response.score,
+            overallScore: response.score,
+            letterGrade: response.letterGrade,
+            score: `${response.score}% (${response.letterGrade})`,
+            overallComment: response.overallComment,
+            rubricScores: {
+              understanding: {
+                score: response.score,
+                comment: '',
+                isAi: true,
+              },
+            },
+            releasedAt: new Date(),
+          },
+        });
+      }
+    }
+
+    // Specific, graded for points, with notes: the fully-specified case.
+    await seedExitTicket({
+      title: 'Exit ticket: the water cycle',
+      config: {
+        schemaVersion: 1,
+        mode: 'specific',
+        focus: 'explain-concept',
+        topic: 'how energy moves through the water cycle',
+        lessonNotes: {
+          mainPoints:
+            'Energy enters as sunlight, is carried as latent heat in water vapour, and is released again when the vapour condenses.',
+          mustMention:
+            'That the energy is released when water vapour condenses, not when it evaporates.',
+          watchFor:
+            'Describing where the water goes without ever mentioning energy.',
+        },
       },
+      submitForGrade: true,
+      pointValue: 10,
+      responses: [
+        {
+          membershipId: personaRecords['student-graded'].membershipId,
+          title: 'Exit ticket: the water cycle',
+          text: 'The sun puts energy into the water when it evaporates, and the water carries that energy with it as vapour. The part I did not get until today is that the energy does not disappear up there. It gets let go again when the vapour cools down and condenses into cloud, which is why storms have so much energy in them. So the water cycle is really moving energy around, not just moving water around.',
+          score: 92,
+          letterGrade: 'A',
+          overallComment:
+            'Rosa, you have got the thing this was checking for: you explained that the energy is released at condensation, not at evaporation, and you did it in your own words. The line about storms shows you following the idea somewhere of your own. Next step is saying where that energy came from in the first place.',
+        },
+        {
+          membershipId: personaRecords['student-submitted'].membershipId,
+          title: 'Exit ticket: the water cycle',
+          text: 'The water cycle is evaporation, condensation, precipitation and collection. The water goes up into the clouds and then comes back down as rain and then it goes into rivers and back to the ocean and starts again.',
+          score: 68,
+          letterGrade: 'D',
+          overallComment:
+            'Marcus, this is an accurate list of the stages, but it is the list you were given rather than an explanation of it. The question was about energy, and energy is not mentioned anywhere here. Have another go at just one step: what happens to the sun energy when the vapour turns back into water?',
+        },
+      ],
+    });
+
+    // Specific, feedback only: the honest-confusion case the rubric protects.
+    await seedExitTicket({
+      title: 'Exit ticket: balancing equations',
+      config: {
+        schemaVersion: 1,
+        mode: 'specific',
+        focus: 'clear-up-confusion',
+        topic: 'how to balance a chemical equation',
+        lessonNotes: {
+          mainPoints:
+            'Atoms are conserved, so coefficients change but subscripts never do.',
+          mustMention: 'That you may only change coefficients, not subscripts.',
+          watchFor:
+            'Changing a subscript to make the counts match, which changes the substance.',
+        },
+      },
+      submitForGrade: false,
+      pointValue: null,
+      responses: [
+        {
+          membershipId: personaRecords.student.membershipId,
+          title: 'Exit ticket: balancing equations',
+          text: 'I understand why we balance them. The number of atoms has to be the same on both sides because atoms do not just appear. What I keep getting stuck on is which number I am allowed to change. I know I am supposed to change the big number in front, but when I am halfway through and the oxygens still do not match, I end up changing the little number instead because it works. I think that is wrong because it makes it a different chemical, but I am not sure why that matters more than getting the counts even.',
+          score: 82,
+          letterGrade: 'B',
+          overallComment:
+            'Ana, this is exactly the kind of answer that helps me teach. You have the principle right, and you have found the precise place you come unstuck rather than saying you do not get it. You are also right about why changing the subscript is a problem: it makes it a different substance. Hold on to that instinct, and tomorrow we will work on what to do when the oxygens will not come out even.',
+        },
+      ],
+    });
+
+    // Specific, self-assessment: the miscalibrated confident answer.
+    await seedExitTicket({
+      title: 'Exit ticket: how well do you have cell division?',
+      config: {
+        schemaVersion: 1,
+        mode: 'specific',
+        focus: 'judge-understanding',
+        topic: 'today’s lesson on mitosis and meiosis',
+        lessonNotes: {
+          mainPoints:
+            'Mitosis makes two identical cells; meiosis makes four cells with half the chromosomes.',
+          mustMention: 'That meiosis halves the chromosome number.',
+          watchFor: 'Saying both processes make identical cells.',
+        },
+      },
+      submitForGrade: false,
+      pointValue: null,
+      responses: [
+        {
+          membershipId: personaRecords['student-unreleased'].membershipId,
+          title: 'Exit ticket: how well do you have cell division?',
+          text: 'I understand this really well. I paid attention the whole lesson and the diagrams made sense to me. I could definitely explain mitosis and meiosis to someone else, they are both ways that cells divide to make new cells. I would say I am at a 9 out of 10 on this one.',
+          score: 65,
+          letterGrade: 'D',
+          overallComment:
+            'Jamal, you sound confident, and that is worth something. But the only thing you actually said about the two processes is that both divide cells, which is the part they share. This ticket was asking you to test yourself: try naming one way meiosis differs from mitosis. If that is harder than it felt in the lesson, that is useful to know now rather than on Friday.',
+        },
+      ],
+    });
+
+    // Basic, no notes: the open-ended case, and the hardest one to read.
+    await seedExitTicket({
+      title: 'Exit ticket: Thursday',
+      config: { schemaVersion: 1, mode: 'basic' },
+      submitForGrade: false,
+      pointValue: null,
+      responses: [
+        {
+          membershipId: personaRecords['student-graded'].membershipId,
+          title: 'Exit ticket: Thursday',
+          text: 'What I actually got today was that the reason we do the reading before the discussion is not to check we did it. It is because the discussion is where you find out what you missed. I always thought the reading was the work and the talking was the easy bit, but I said something today that I only worked out while I was saying it. So maybe the talking is also the work.',
+          score: 78,
+          letterGrade: 'C',
+          overallComment:
+            'Rosa, this is a real observation about how you learn, and it is the kind of thing this ticket is good at catching. You noticed something true about yourself. It sits a little away from the content of the lesson, so I cannot tell from this what you took from the reading itself, but I am glad you wrote it.',
+        },
+      ],
     });
   }
 

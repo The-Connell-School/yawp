@@ -18,7 +18,9 @@ describe('local dev seed fixtures', () => {
     const bundle = await loadProdFidelityBundle();
     expect(bundle.manifest.version).toBe(2);
     expect(bundle.manifest.sourceDatabaseUrl).toBe('production-config-export');
-    expect(bundle.assignmentTypes).toHaveLength(12);
+    // 12 exported from production, plus the Exit Ticket type the product
+    // seeds itself because the admin creator cannot set `kind`.
+    expect(bundle.assignmentTypes).toHaveLength(13);
     expect(bundle.rubrics).toHaveLength(2);
     expect(
       bundle.assignmentTypes.some(
@@ -39,7 +41,9 @@ describe('local dev seed fixtures', () => {
 
     expect(assignmentTypeTitles).toContain("GBA 300: Int'l Expansion Plan");
     expect(assignmentTypeTitles).toContain("GBA 300: Int'l Etiquette");
-    expect(assignmentTypeTitles).toContain('Nonverbal Communication Assignment');
+    expect(assignmentTypeTitles).toContain(
+      'Nonverbal Communication Assignment'
+    );
     expect(rubricNames).toEqual(
       new Set(['daily-pages-engagement', 'thesis-driven-essay'])
     );
@@ -122,17 +126,11 @@ describe('local dev seed fixtures', () => {
 
   test('keeps production export and existing-database sync PII-safe', async () => {
     const exportSource = readFileSync(
-      join(
-        import.meta.dirname,
-        'local-dev/export-prod-fidelity-fixtures.ts'
-      ),
+      join(import.meta.dirname, 'local-dev/export-prod-fidelity-fixtures.ts'),
       'utf8'
     );
     const importSource = readFileSync(
-      join(
-        import.meta.dirname,
-        'local-dev/import-prod-fidelity-fixtures.ts'
-      ),
+      join(import.meta.dirname, 'local-dev/import-prod-fidelity-fixtures.ts'),
       'utf8'
     );
     const syncSource = readFileSync(
@@ -160,9 +158,7 @@ describe('local dev seed fixtures', () => {
       teacherTrainingModuleResources: [],
     });
     expect(fixtureText).not.toMatch(/postgres(?:ql)?:\/\/[^\s"']+@/i);
-    expect(fixtureText).not.toMatch(
-      /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
-    );
+    expect(fixtureText).not.toMatch(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
     expect(fixtureText).not.toMatch(/sk-ant-[A-Za-z0-9_-]+/);
 
     for (const resource of bundle.teacherTrainingModuleResources) {
@@ -170,9 +166,7 @@ describe('local dev seed fixtures', () => {
       const decoded = Buffer.from(resource.blob.base64, 'base64').toString(
         'utf8'
       );
-      expect(decoded).not.toMatch(
-        /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
-      );
+      expect(decoded).not.toMatch(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
       expect(decoded).not.toMatch(
         /(?:\+?1[-. (]*)?\d{3}[-. )]*\d{3}[-. ]*\d{4}/
       );
@@ -183,10 +177,12 @@ describe('local dev seed fixtures', () => {
     const bundle = await loadProdFidelityBundle();
     const buttonDeleteMany = mock(async () => ({ count: 0 }));
     const visibilityDeleteMany = mock(async () => ({ count: 0 }));
-    const assignmentTypeUpsert = mock(async (args: { create: { id: string } }) =>
-      args.create
+    const assignmentTypeUpsert = mock(
+      async (args: { create: { id: string } }) => args.create
     );
-    const upsert = mock(async (args: { create: { id: string } }) => args.create);
+    const upsert = mock(
+      async (args: { create: { id: string } }) => args.create
+    );
     const rubricUpsert = mock(
       async (args: { create: { id: string; name: string } }) => args.create
     );
@@ -260,8 +256,7 @@ describe('local dev seed fixtures', () => {
     );
 
     const teacherMembershipIdsBlock =
-      source.match(/const teacherMembershipIds = \[([\s\S]*?)\];/)?.[1] ??
-      '';
+      source.match(/const teacherMembershipIds = \[([\s\S]*?)\];/)?.[1] ?? '';
     expect(teacherMembershipIdsBlock).toContain('primaryTeacher.membershipId');
     expect(teacherMembershipIdsBlock).toContain('ownerTeacher.membershipId');
     expect(teacherMembershipIdsBlock).toContain('adminTeacher.membershipId');
@@ -275,8 +270,7 @@ describe('local dev seed fixtures', () => {
     expect(adminClassConnects.length).toBeGreaterThanOrEqual(2);
 
     const studentMembershipIdsBlock =
-      source.match(/const studentMembershipIds = \[([\s\S]*?)\];/)?.[1] ??
-      '';
+      source.match(/const studentMembershipIds = \[([\s\S]*?)\];/)?.[1] ?? '';
     expect(studentMembershipIdsBlock).not.toContain('Teacher.membershipId');
   });
 
