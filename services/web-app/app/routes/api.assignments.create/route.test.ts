@@ -193,7 +193,7 @@ describe('api.assignments.create', () => {
         id: 'at-1',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true, collaborationSupported: true },
+      select: { id: true, systemKey: true },
     });
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -476,7 +476,7 @@ describe('api.assignments.create', () => {
         id: 'at-forbidden',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true, collaborationSupported: true },
+      select: { id: true, systemKey: true },
     });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });

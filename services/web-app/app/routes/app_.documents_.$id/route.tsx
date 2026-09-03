@@ -260,16 +260,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       title: true,
       html: true,
       text: true,
-      // `group` and `collaborationSupported` answer one question: may this draft
-      // still be turned into a shared one? A draft that already belongs to a
-      // group is already shared, and a kind of writing outside the pilot has no
-      // collaborative page to become.
       group: { select: { id: true } },
       assignmentType: {
         select: {
           id: true,
           title: true,
-          collaborationSupported: true,
         },
       },
       assignment: {
