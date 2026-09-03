@@ -43,6 +43,10 @@ const MAX_RESTART_DELAY_MS = 5 * 60 * 1000;
  * its lock expires and another worker refilms it.
  */
 const DEFAULT_STOP_GRACE_MS = 60_000;
+/** One trial launch of the browser; the real launches in render.ts allow 60s. */
+const LAUNCH_CHECK_TIMEOUT_MS = 45_000;
+/** Between attempts to get a browser that launches, once the immediate fixes are spent. */
+const LAUNCH_RETRY_DELAY_MS = 5 * 60 * 1000;
 
 function log(message: string, extra: Record<string, unknown> = {}) {
   // eslint-disable-next-line no-console
@@ -188,6 +192,23 @@ export function buildEmbeddedRendererEnv(
 export function stopGraceMs(env: NodeJS.ProcessEnv): number {
   const raw = Number(env.MARKETING_EMBEDDED_STOP_GRACE_MS);
   return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_STOP_GRACE_MS;
+}
+
+/**
+ * The one line of a failed browser launch worth reading. Playwright's message
+ * is the launch command and every flag, then the browser's own stderr; the
+ * missing library, when that is the cause, is named on the last line.
+ */
+export function describeLaunchFailure(message: string): string {
+  const library = message.match(
+    /error while loading shared libraries: ([^:\s]+)/
+  );
+  if (library) {
+    return `missing system library ${library[1]} (Chromium cannot start without it)`;
+  }
+  const stderr = [...message.matchAll(/\[err\] (.+)/g)].map((m) => m[1].trim());
+  if (stderr.length > 0) return stderr[stderr.length - 1];
+  return message.split('\n')[0].trim();
 }
 
 /**
@@ -341,6 +362,100 @@ async function ensureChromium(env: NodeJS.ProcessEnv): Promise<boolean> {
   return ready;
 }
 
+/** Launch the browser once, the way a render would, and close it again. */
+async function verifyChromiumLaunch(
+  env: NodeJS.ProcessEnv
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = env.PLAYWRIGHT_BROWSERS_PATH;
+  const { chromium } = await import('playwright');
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const browser = await Promise.race([
+      chromium.launch({
+        headless: true,
+        executablePath: configuredChromiumPath(env) ?? undefined,
+      }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('Browser launch check exceeded 45s')),
+          LAUNCH_CHECK_TIMEOUT_MS
+        );
+      }),
+    ]);
+    await browser.close().catch(() => {});
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * Chromium's system libraries, installed on their own. `install --with-deps`
+ * does this too, but its failure is easy to miss inside the download's
+ * output; when the browser is present and still will not start, this is the
+ * step that was missing.
+ */
+async function installSystemDeps(env: NodeJS.ProcessEnv): Promise<boolean> {
+  if (!isRoot() || !commandExists('apt-get')) {
+    log('cannot install Chromium system libraries here: not root, or no apt-get');
+    return false;
+  }
+  const runner = commandExists('node') ? 'node' : process.execPath;
+  log('installing Chromium system libraries');
+  try {
+    const code = await runToCompletion(
+      runner,
+      [resolvePlaywrightCli(), 'install-deps', 'chromium'],
+      env
+    );
+    if (code !== 0) log('system library install exited non-zero', { code });
+    return code === 0;
+  } catch (err) {
+    log('system library install failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+}
+
+/**
+ * Do not hand the worker a browser that cannot start. Every job it claimed
+ * would fail three times with a page of flags, when the honest state is
+ * "no renderer attached" — which is what a queued job shows while this waits.
+ * Fixes are tried in order (download, system libraries), then this checks
+ * back every few minutes so a transient apt failure heals on its own.
+ */
+async function ensureBrowserLaunches(env: NodeJS.ProcessEnv): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    await ensureChromium(env);
+    let result = await verifyChromiumLaunch(env);
+    if (!result.ok) {
+      log('Chromium cannot start', {
+        attempt,
+        reason: describeLaunchFailure(result.error),
+      });
+      if (await installSystemDeps(env)) {
+        result = await verifyChromiumLaunch(env);
+        if (!result.ok) {
+          log('Chromium still cannot start after installing libraries', {
+            reason: describeLaunchFailure(result.error),
+          });
+        }
+      }
+    }
+    if (result.ok) {
+      log('Chromium launches; starting the worker');
+      return;
+    }
+    log('no working browser; jobs will wait as "no renderer attached"', {
+      retryInMs: LAUNCH_RETRY_DELAY_MS,
+    });
+    await new Promise((resolve) => setTimeout(resolve, LAUNCH_RETRY_DELAY_MS));
+  }
+}
+
 async function superviseWorker(
   env: NodeJS.ProcessEnv,
   rendererDir: string
@@ -426,7 +541,7 @@ async function main() {
   }
 
   await ensureSystemTools(env);
-  await ensureChromium(env);
+  await ensureBrowserLaunches(env);
   await superviseWorker(env, rendererDir);
 }
 

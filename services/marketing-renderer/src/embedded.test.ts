@@ -4,6 +4,7 @@ import {
   buildEmbeddedRendererEnv,
   configuredChromiumPath,
   decideEmbeddedRenderer,
+  describeLaunchFailure,
   nextRestartDelayMs,
   parseDevServerPort,
   resolvePlaywrightCli,
@@ -289,5 +290,32 @@ describe('stopGraceMs', () => {
     expect(stopGraceMs({})).toBe(60_000);
     expect(stopGraceMs({ MARKETING_EMBEDDED_STOP_GRACE_MS: '5000' })).toBe(5_000);
     expect(stopGraceMs({ MARKETING_EMBEDDED_STOP_GRACE_MS: 'soon' })).toBe(60_000);
+  });
+});
+
+describe('describeLaunchFailure', () => {
+  // The preview's first render failed with a page of Chromium flags and the
+  // one line that mattered cut off. The bootstrap now launches the browser
+  // itself before any job, and this is the line it reports.
+  test('names the missing system library', () => {
+    const message =
+      'launch: Target page, context or browser has been closed\nBrowser logs:\n<launching> /app/node_modules/.cache/ms-playwright/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell --headless\n<launched> pid=6999\n[pid=6999][err] /app/.../chrome-headless-shell: error while loading shared libraries: libnss3.so: cannot open shared object file: No such file or directory';
+    expect(describeLaunchFailure(message)).toBe(
+      'missing system library libnss3.so (Chromium cannot start without it)'
+    );
+  });
+
+  test('falls back to the browser’s own error line', () => {
+    const message =
+      'launch: Target page, context or browser has been closed\nBrowser logs:\n<launching> /x/chrome --headless\n[pid=12][err] /x/chrome: error: something else entirely';
+    expect(describeLaunchFailure(message)).toBe(
+      '/x/chrome: error: something else entirely'
+    );
+  });
+
+  test('otherwise reports the first line', () => {
+    expect(describeLaunchFailure("Executable doesn't exist at /x/chrome\n╔═══╗")).toBe(
+      "Executable doesn't exist at /x/chrome"
+    );
   });
 });

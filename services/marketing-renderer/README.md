@@ -87,8 +87,15 @@ on a Debian image it also installs `node` and `ffmpeg`, which clip renders need;
 stills need neither. Set `MARKETING_RENDERER_CHROMIUM_PATH` to skip the browser
 install entirely.
 
+Before the worker starts, the supervisor launches Chromium once. If the browser
+will not start — typically a missing system library, named in the log — it
+installs Playwright's dependencies explicitly and tries again, and keeps trying
+every few minutes rather than starting a worker that would fail every job.
+Until it succeeds, queued jobs show "no renderer is attached".
+
 The first render after a fresh container is slow while this happens. Watch the
-web container's log for lines prefixed `embedded renderer:`.
+web container's log for lines prefixed `embedded renderer:`; `Chromium launches;
+starting the worker` is the line that means renders will complete.
 
 ## Tests
 
