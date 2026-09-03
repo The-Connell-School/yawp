@@ -18,7 +18,7 @@ export function buildGradingRequest({
   label,
   studentFirstName,
   assignmentPrompt,
-  teacherNotes,
+  gradingContext,
   essayText,
 }: {
   promptShape: GradingPromptShape;
@@ -27,22 +27,23 @@ export function buildGradingRequest({
   studentFirstName: string;
   assignmentPrompt: string | null | undefined;
   /**
-   * Context the teacher gave about the lesson, which the student never saw.
+   * What this particular assignment adds for the grader and the student never
+   * saw: how to read the rubric for it, and any notes the teacher gave.
    * Absent for every assignment that supplies none, which keeps the payload
    * for every existing type byte-identical.
    */
-  teacherNotes?: string | null;
+  gradingContext?: string | null;
   essayText: string;
 }): GradingRequest {
   const assignmentPromptSection = assignmentPrompt?.trim()
     ? `Assignment prompt: ${assignmentPrompt.trim()}`
     : 'Assignment prompt: No assignment prompt was provided.';
-  const teacherNotesSection = teacherNotes?.trim()
-    ? `\n\n${teacherNotes.trim()}`
+  const gradingContextSection = gradingContext?.trim()
+    ? `\n\n${gradingContext.trim()}`
     : '';
 
   const header = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${label}\n\nRubric category keys (use these exact keys in categories[].key):\n${promptShape.rubricText}`;
-  const tail = `${assignmentPromptSection}${teacherNotesSection}\n\nEssay:\n${essayText}`;
+  const tail = `${assignmentPromptSection}${gradingContextSection}\n\nEssay:\n${essayText}`;
 
   if (instructions.mode === 'unified') {
     return {

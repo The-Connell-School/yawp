@@ -166,6 +166,13 @@ export type ExitTicketFocusOption = {
   topicPlaceholder: string;
   /** `{topic}` is replaced with what the teacher typed. */
   template: string;
+  /**
+   * How the grader should read the rubric bands for this focus. The bands are
+   * the shared spine — explains it, partly there, names it only, no evidence —
+   * and this says what each one means when the ticket is checking for this
+   * particular kind of understanding. Never shown to the student.
+   */
+  gradingCriteria: string;
 };
 
 /**
@@ -182,6 +189,8 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
     topicPlaceholder: 'e.g., the causes of World War I',
     template:
       'In your own words, explain {topic}. Write it the way you would explain it to someone who missed class today — not the definition you were given, but what you actually understand it to mean.',
+    gradingCriteria:
+      'Judge whether the student can restate the idea in their own words and whether their explanation would genuinely help someone who missed the lesson. Fluent phrasing borrowed from the teacher or the textbook, with nothing showing the student has made the idea theirs, is names it only however polished it sounds.',
   },
   {
     value: 'apply-skill',
@@ -190,6 +199,8 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
     topicPlaceholder: 'e.g., solving a two-step equation',
     template:
       'Show me how you would go about {topic}. Walk through your thinking one step at a time, and explain why each step comes where it does.',
+    gradingCriteria:
+      'Judge the reasoning rather than the answer. Look for steps that are sound and visible, and for the student being able to say why each step belongs where it does. A correct final answer with no thinking shown is not full understanding; sound reasoning that goes wrong late is much closer to it.',
   },
   {
     value: 'understand-text',
@@ -198,6 +209,8 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
     topicPlaceholder: 'e.g., the second stanza of the poem',
     template:
       'What is {topic} actually saying? Put it in your own words, then point to what in it made you read it that way.',
+    gradingCriteria:
+      'Judge whether the reading is the student’s own and whether it is anchored to the source. Look for both: a restatement in their own words, and them pointing at what in the text produced that reading. A plausible summary with nothing pointed at is partly there.',
   },
   {
     value: 'clear-up-confusion',
@@ -207,6 +220,8 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
     topicPlaceholder: 'e.g., how to balance a chemical equation',
     template:
       'What part of {topic} still doesn’t sit right with you? Name the piece that is fuzzy, then say what you think might be going on and where you get stuck.',
+    gradingCriteria:
+      'The student was asked what still confuses them, so being confused is the task and never a failure. Judge the precision of the self-diagnosis: whether they locate the specific piece that is fuzzy rather than saying they do not get any of it, and whether they can say what they think might be going on. Never score a response down for admitting confusion.',
   },
   {
     value: 'connect-learning',
@@ -215,6 +230,8 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
     topicPlaceholder: 'e.g., the New Deal',
     template:
       'How does {topic} connect to what we have already worked on this unit? Say what lines up with what you already knew, and what does not fit as neatly as you expected.',
+    gradingCriteria:
+      'Judge whether the connection is real and specific rather than merely asserted. Look for the student naming what lines up with earlier work and what does not fit as neatly as they expected. Noticing a genuine mismatch is stronger evidence of understanding than a tidy connection that costs nothing.',
   },
   {
     value: 'judge-understanding',
@@ -223,6 +240,8 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
     topicPlaceholder: 'e.g., today’s lesson on cell division',
     template:
       'How well do you really understand {topic} right now? Be honest — say what you could already teach to someone else, and what you would still get stuck on if I asked you about it tomorrow.',
+    gradingCriteria:
+      'The student was asked to rate their own understanding, so judge calibration rather than confidence. A student who claims to have it and then cannot explain it understands less than one who names exactly what they could teach and what they would still get stuck on. Confident vagueness scores below honest specificity.',
   },
 ];
 

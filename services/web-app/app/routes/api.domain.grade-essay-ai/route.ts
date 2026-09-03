@@ -7,7 +7,7 @@ import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import { parseStoredExitTicketConfig } from '~/domain/assignment-types/exit-ticket';
-import { buildExitTicketTeacherNotes } from '~/domain/assignment-types/exit-ticket-rubric';
+import { buildExitTicketGradingContext } from '~/domain/assignment-types/exit-ticket-rubric';
 import {
   computeWeightedBandPercentage,
   formatGrade,
@@ -797,9 +797,10 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const assignmentPrompt = submission.document.assignment?.prompt?.trim();
-  // What the teacher said the lesson covered, for an exit ticket that carries
-  // it. Null for every other assignment, which leaves the payload unchanged.
-  const teacherNotes = buildExitTicketTeacherNotes(
+  // How to read the rubric for this ticket, plus whatever the teacher said the
+  // lesson covered. Null for every other assignment, leaving the payload
+  // exactly as it was.
+  const gradingContext = buildExitTicketGradingContext(
     parseStoredExitTicketConfig(
       submission.document.assignment?.exitTicketConfigJson
     )
@@ -1042,7 +1043,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     label: resolvedGradingConfig.label,
     studentFirstName,
     assignmentPrompt,
-    teacherNotes,
+    gradingContext,
     essayText: submission.text,
   });
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(

@@ -6,6 +6,7 @@ import type {
 } from './assignment-type-rubric.shared';
 import {
   EXIT_TICKET_LESSON_NOTE_FIELDS,
+  exitTicketFocusOption,
   type ExitTicketConfig,
 } from './exit-ticket';
 
@@ -102,26 +103,51 @@ export const EXIT_TICKET_PROMPT_CONFIG: PromptConfigData = {
 };
 
 /**
- * The teacher's notes about the lesson, rendered for the grading prompt.
+ * Everything about this particular ticket that the grader needs and the
+ * student never saw: what kind of understanding it is checking for, and
+ * whatever the teacher said about the lesson.
  *
- * Null when the teacher wrote none, which is also every ticket created before
- * notes existed: the grader then judges against the prompt alone, exactly as
- * it did before. Students never see any of this.
+ * The rubric stays one category with one set of bands, which is what keeps
+ * every exit ticket in a class aggregating into a single class-level read.
+ * This is the per-assignment half — it tells the grader how to read those
+ * shared bands for this ticket rather than giving the ticket its own rubric.
+ *
+ * Null when there is nothing to add, which is every basic ticket without
+ * notes and every ticket created before any of this existed: the grader then
+ * judges against the prompt alone, exactly as it did before.
  */
-export function buildExitTicketTeacherNotes(
+export function buildExitTicketGradingContext(
   config: ExitTicketConfig | null | undefined
 ): string | null {
+  const sections: string[] = [];
+
+  if (config?.mode === 'specific') {
+    const option = exitTicketFocusOption(config.focus);
+    if (option) {
+      sections.push(
+        [
+          `What this ticket is checking for: ${option.label.toLowerCase()}.`,
+          option.gradingCriteria,
+        ].join('\n')
+      );
+    }
+  }
+
   const notes = config?.lessonNotes;
-  if (!notes) return null;
+  if (notes) {
+    const lines = EXIT_TICKET_LESSON_NOTE_FIELDS.filter((field) =>
+      notes[field.key]?.trim()
+    ).map((field) => `- ${field.label}: ${notes[field.key].trim()}`);
 
-  const lines = EXIT_TICKET_LESSON_NOTE_FIELDS.filter((field) =>
-    notes[field.key]?.trim()
-  ).map((field) => `- ${field.label}: ${notes[field.key].trim()}`);
+    if (lines.length > 0) {
+      sections.push(
+        [
+          "The teacher's notes on the lesson this ticket closes. The student did not see these; judge the response against them.",
+          ...lines,
+        ].join('\n')
+      );
+    }
+  }
 
-  if (lines.length === 0) return null;
-
-  return [
-    "The teacher's notes on the lesson this ticket closes. The student did not see these; judge the response against them.",
-    ...lines,
-  ].join('\n');
+  return sections.length > 0 ? sections.join('\n\n') : null;
 }

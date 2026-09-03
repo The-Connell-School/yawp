@@ -4,8 +4,12 @@ import {
   EXIT_TICKET_RUBRIC,
   EXIT_TICKET_SCORING_SCALE,
   EXIT_TICKET_UNDERSTANDING_CATEGORY_KEY,
-  buildExitTicketTeacherNotes,
+  buildExitTicketGradingContext,
 } from './exit-ticket-rubric';
+import {
+  EXIT_TICKET_FOCUS_OPTIONS as EXIT_TICKET_FOCUS_OPTIONS_FOR_TEST,
+  exitTicketFocusOption,
+} from './exit-ticket';
 import {
   getCategoryScoreBounds,
   isBandScoredRubric,
@@ -82,15 +86,15 @@ describe('the Exit Ticket rubric shape', () => {
   });
 });
 
-describe('buildExitTicketTeacherNotes', () => {
+describe('buildExitTicketGradingContext', () => {
   const notes = {
     mainPoints: 'Weathering breaks rock down; erosion moves it.',
     mustMention: 'The difference is whether the material moves.',
     watchFor: 'Using the two words interchangeably.',
   };
 
-  test('renders what the teacher wrote, labelled for the grader', () => {
-    const text = buildExitTicketTeacherNotes({
+  test('renders the teacher notes, labelled for the grader', () => {
+    const text = buildExitTicketGradingContext({
       schemaVersion: 1,
       mode: 'basic',
       lessonNotes: notes,
@@ -102,7 +106,7 @@ describe('buildExitTicketTeacherNotes', () => {
   });
 
   test('omits a field the teacher left blank', () => {
-    const text = buildExitTicketTeacherNotes({
+    const text = buildExitTicketGradingContext({
       schemaVersion: 1,
       mode: 'basic',
       lessonNotes: { ...notes, watchFor: '' },
@@ -112,12 +116,66 @@ describe('buildExitTicketTeacherNotes', () => {
     expect(text).not.toInclude('Mix-ups to watch for');
   });
 
+  test('tells the grader how to read the bands for this focus', () => {
+    const text = buildExitTicketGradingContext({
+      schemaVersion: 1,
+      mode: 'specific',
+      focus: 'apply-skill',
+      topic: 'long division',
+    });
+
+    expect(text).toInclude(
+      exitTicketFocusOption('apply-skill')!.gradingCriteria
+    );
+    // Named too, so the grader knows which of the six it is reading.
+    expect(text).toInclude('apply a skill');
+  });
+
+  test('gives every focus its own criteria', () => {
+    for (const option of EXIT_TICKET_FOCUS_OPTIONS_FOR_TEST) {
+      const text = buildExitTicketGradingContext({
+        schemaVersion: 1,
+        mode: 'specific',
+        focus: option.value,
+        topic: 'anything',
+      });
+      expect(text).toInclude(option.gradingCriteria);
+    }
+  });
+
+  test('carries the focus criteria and the notes together', () => {
+    const text = buildExitTicketGradingContext({
+      schemaVersion: 1,
+      mode: 'specific',
+      focus: 'explain-concept',
+      topic: 'erosion',
+      lessonNotes: notes,
+    });
+
+    expect(text).toInclude(
+      exitTicketFocusOption('explain-concept')!.gradingCriteria
+    );
+    expect(text).toInclude(notes.mustMention);
+  });
+
+  test('a basic ticket gets no focus criteria, because it has no focus', () => {
+    const text = buildExitTicketGradingContext({
+      schemaVersion: 1,
+      mode: 'basic',
+      lessonNotes: notes,
+    });
+
+    for (const option of EXIT_TICKET_FOCUS_OPTIONS_FOR_TEST) {
+      expect(text).not.toInclude(option.gradingCriteria);
+    }
+  });
+
   test('is null when there is nothing to say', () => {
-    // No notes means the grader judges against the prompt alone, which is
-    // exactly how a ticket created before notes existed is graded.
+    // No focus and no notes means the grader judges against the prompt alone,
+    // exactly how a ticket created before any of this is graded.
     expect(
-      buildExitTicketTeacherNotes({ schemaVersion: 1, mode: 'basic' })
+      buildExitTicketGradingContext({ schemaVersion: 1, mode: 'basic' })
     ).toBeNull();
-    expect(buildExitTicketTeacherNotes(null)).toBeNull();
+    expect(buildExitTicketGradingContext(null)).toBeNull();
   });
 });

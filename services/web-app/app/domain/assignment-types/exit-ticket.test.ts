@@ -49,10 +49,22 @@ describe('the exit ticket assignment type', () => {
       expect(option.label.trim()).not.toBe('');
       expect(option.helperText.trim()).not.toBe('');
       expect(option.topicPlaceholder.trim()).not.toBe('');
+      // What "explains it" means for this focus. The bands stay the shared
+      // spine; this is what the grader reads them through.
+      expect(option.gradingCriteria.trim()).not.toBe('');
       // The whole point of the focus is that the teacher's topic lands
       // inside a real sentence rather than being appended to one.
       expect(option.template).toInclude('{topic}');
     }
+  });
+
+  test('no two focuses are judged the same way', () => {
+    // If two focuses shared criteria, one of them is not pulling its weight
+    // as a distinct thing to check for.
+    const criteria = EXIT_TICKET_FOCUS_OPTIONS.map(
+      (option) => option.gradingCriteria
+    );
+    expect(new Set(criteria).size).toBe(criteria.length);
   });
 
   test('exitTicketFocusOption looks options up and rejects unknown ones', () => {

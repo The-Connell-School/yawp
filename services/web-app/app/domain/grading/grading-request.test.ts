@@ -153,7 +153,7 @@ describe('grading request', () => {
   });
 });
 
-describe('teacher notes in the grading request', () => {
+describe('per-assignment grading context in the request', () => {
   const base = {
     promptShape: {
       categoryFeedbackEnabled: false,
@@ -174,7 +174,7 @@ describe('teacher notes in the grading request', () => {
   test('are placed with the prompt, so the grader judges against them', () => {
     const request = buildGradingRequest({
       ...base,
-      teacherNotes: 'Should mention: the material moves.',
+      gradingContext: 'Should mention: the material moves.',
     });
 
     expect(request.userPrompt).toInclude('Should mention: the material moves.');
@@ -191,8 +191,14 @@ describe('teacher notes in the grading request', () => {
     // Every existing assignment type supplies no notes, so its payload must
     // be exactly what it was before this existed.
     const without = buildGradingRequest(base);
-    const explicitlyEmpty = buildGradingRequest({ ...base, teacherNotes: '' });
-    const explicitlyNull = buildGradingRequest({ ...base, teacherNotes: null });
+    const explicitlyEmpty = buildGradingRequest({
+      ...base,
+      gradingContext: '',
+    });
+    const explicitlyNull = buildGradingRequest({
+      ...base,
+      gradingContext: null,
+    });
 
     expect(explicitlyEmpty).toEqual(without);
     expect(explicitlyNull).toEqual(without);
