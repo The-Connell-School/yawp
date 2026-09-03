@@ -65,6 +65,7 @@ class ReportTests(unittest.TestCase):
         self.assertIn('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;', sql)
         self.assertTrue(sql.rstrip().endswith('ROLLBACK;'))
         self.assertIn('"DocumentClassForensic"', sql)
+        self.assertIn("SELECT id FROM eligible_members WHERE role='STUDENT'", sql)
         self.assertNotIn('u.email,', sql)
         self.assertNotIn('d.text,', sql)
 

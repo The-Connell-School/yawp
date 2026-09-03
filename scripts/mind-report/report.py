@@ -187,7 +187,7 @@ def render(data):
     ])+'\n\n'+table(['Source','First retained timestamp','Latest retained timestamp'],[
         [r['source'],r['earliest'],r['latest']] for r in quality['coverage']]))
     parts.append('Exclusions: four known demo/QA/test organizations, eight internal or unverified person/demo school labels, '
-                 'admin/superadmin users, and obvious test email patterns. The exact rules are in the versioned SQL. '
+                 'admin/superadmin users, obvious test email patterns, and teacher-owned practice documents. The exact rules are in the versioned SQL. '
                  'This is a pragmatic first cut, not Brian’s confirmed customer roster. '
                  'Soft-deleted/archived documents and unsubmitted attempts remain in historical activity counts; permanently deleted rows are unavailable. '
                  'Current memberships and class links can change historical attribution on rerun. '
@@ -249,7 +249,7 @@ def brief(data):
             ['Student licensing gross margin',f'Not yet calculable. AWS account cost input: {cost_text}. This includes multiple environments; add allocated AI, payment and other direct costs and matching licensing revenue.'],
             ['Onboarding/support gross margin','Not yet calculable. Need service revenue (or agreed bundled allocation), delivery/support hours, loaded hourly cost and direct tools/travel.'],
         ]),
-        '**Interpretation limits:** known QA/demo/internal records and admin users are excluded. School records include legacy duplicates and pilots, '
+        '**Interpretation limits:** known QA/demo/internal records, admin users and teacher-owned practice documents are excluded from student activity. School records include legacy duplicates and pilots, '
         f'so they are not a customer count. The first retained submission is {next(r["earliest"] for r in data["quality"]["coverage"] if r["source"]=="retained_submissions")}; missing earlier history is not zero usage. '
         'A repeated submission is a revision proxy, not proof the text changed. Grade counts use grade timestamps and may concern earlier submissions.',
         '**Brian’s next input:** one school contract/revenue ledger, a selected-teacher roster with selection dates, '

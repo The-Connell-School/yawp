@@ -55,7 +55,7 @@ mapped_docs AS MATERIALIZED (
   LEFT JOIN "ClassAssignment" ca ON ca.id=d."classAssignmentId" LEFT JOIN "Class" c ON c.id=ca."classId"
   LEFT JOIN "DocumentClassForensic" f ON f."documentId"=d.id LEFT JOIN "Class" fc ON fc.id=f."oldClassId"
   LEFT JOIN one_member_school ms ON ms.membership_id=d."membershipId"
-  WHERE (d."membershipId" IN (SELECT id FROM eligible_members) OR d."artifactKind"::text='assignment-group')
+  WHERE (d."membershipId" IN (SELECT id FROM eligible_members WHERE role='STUDENT') OR d."artifactKind"::text='assignment-group')
 ),
 docs AS MATERIALIZED (SELECT d.* FROM mapped_docs d JOIN schools s ON s.id=d.school_id),
 submissions AS MATERIALIZED (

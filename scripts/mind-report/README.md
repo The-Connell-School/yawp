@@ -50,6 +50,9 @@ fails that requested report run rather than inventing a cost.
   admin/superadmin users and obvious test-email patterns. These are a practical
   initial reporting cohort, not Brian's verified paid-customer roster. Update
   exclusions deliberately and preserve old snapshots/definition versions.
+- Student activity excludes teacher-owned practice documents even when their
+  artifact kind is `student`. Ownership role, rather than artifact label alone,
+  determines whether a solo artifact represents student use.
 - Accounts are organization memberships, not unique humans, purchased licenses,
   or necessarily currently enrolled students. School links can overlap; portfolio
   active-member counts deduplicate membership IDs. `isActive` is an account flag,
