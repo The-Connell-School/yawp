@@ -6,6 +6,8 @@ import crypto from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
+import { parseStoredExitTicketConfig } from '~/domain/assignment-types/exit-ticket';
+import { buildExitTicketTeacherNotes } from '~/domain/assignment-types/exit-ticket-rubric';
 import {
   computeWeightedBandPercentage,
   formatGrade,
@@ -589,6 +591,7 @@ export async function action({ request }: ActionFunctionArgs) {
             gradingAssistantStrictnessLevel: true,
             apHistorySnapshot: true,
             prompt: true,
+            exitTicketConfigJson: true,
           },
         },
         classAssignment: {
@@ -794,6 +797,13 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const assignmentPrompt = submission.document.assignment?.prompt?.trim();
+  // What the teacher said the lesson covered, for an exit ticket that carries
+  // it. Null for every other assignment, which leaves the payload unchanged.
+  const teacherNotes = buildExitTicketTeacherNotes(
+    parseStoredExitTicketConfig(
+      submission.document.assignment?.exitTicketConfigJson
+    )
+  );
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   const forceFallback = data.llmRetry === 'fallback';
@@ -1032,6 +1042,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     label: resolvedGradingConfig.label,
     studentFirstName,
     assignmentPrompt,
+    teacherNotes,
     essayText: submission.text,
   });
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
