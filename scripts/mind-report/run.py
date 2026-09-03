@@ -11,6 +11,7 @@ import subprocess
 import time
 from urllib.parse import unquote, urlparse
 from report import brief, render, validate, month_start_before
+from costs import estimate_costs, render_costs
 
 HERE = pathlib.Path(__file__).resolve().parent
 
@@ -129,6 +130,8 @@ def main():
     if args.include_aws_costs:
         data['aws_costs'] = costs(args.aws_profile, data['meta']['as_of'],data['meta'].get('lookback_months',3))
         data['aws_costs_extracted_at'] = dt.datetime.now(dt.timezone.utc).isoformat()
+    if data.get("llm"):
+        data["cost_estimates"] = estimate_costs(data)
     validate(data)
     text = render(data)
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -138,6 +141,9 @@ def main():
     snapshot_file.write_text(json.dumps(data, indent=2)+'\n')
     report_file.write_text(text)
     brief_file.write_text(brief(data))
+    if data.get('cost_estimates'):
+        (args.out_dir/'COST-ESTIMATES.md').write_text(render_costs(data['cost_estimates']))
+        (args.out_dir/'cost-estimates.json').write_text(json.dumps(data['cost_estimates'],indent=2)+'\n')
     print(json.dumps({'status': 'passed', 'as_of': data['meta']['as_of'], 'report': str(report_file.resolve()),
                       'snapshot': str(snapshot_file.resolve()), 'brief': str(brief_file.resolve()), 'read_only': data['meta']['read_only'],
                       'included_submissions': data['quality']['included_submissions']}))

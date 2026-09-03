@@ -126,3 +126,40 @@ direct-cost/support-time records. The report contains the field-level join plan
 and separate formulas for renewal, cohort NRR, licensing margin and service margin.
 Start with a manual monthly finance join and the repeatable product-data pull;
 there is no need to build a customer-facing analytics dashboard for this request.
+
+## Anthropic and AWS operating-cost estimate
+
+Definition v3 also writes `COST-ESTIMATES.md` and `cost-estimates.json` and includes
+cost tables in the call brief and full report. The same command above pulls LlmLog
+aggregates in the same read-only transaction. Only aggregate token counts and
+school-level attribution leave PostgreSQL, never log payloads or person IDs.
+
+The observed model is `claude-sonnet-4-6`. Its standard Anthropic API list price,
+verified 2026-09-03 at <https://platform.claude.com/docs/en/about-claude/pricing>, is
+USD 3 input / 15 output / 3.75 five-minute cache write / 0.30 cache read per million
+tokens. `costs.py` pins this rate card. Unknown model/provider rates produce N/A,
+not zero; deliberately extend the rate card after verification if models change.
+The API's input and cache categories are separate and additive. The code uses
+five-minute ephemeral caching; older missing cache fields are assumed zero.
+Missing input/output totals are counted explicitly and can understate spend.
+
+Attribution uses metadata IDs first, then a unique exact assistant-response match
+within 60 seconds following the log timestamp, unique for both the message and
+log. It uses all matching messages before applying cohort exclusions. No text or
+hash is exported. Explicitly identified test/admin/teacher-practice calls are
+excluded; remaining unmatched calls form shared AI overhead. School inference
+uses the same historical/current membership evidence as product metrics.
+
+Shared AI is allocated by monthly tutor-message share, falling back to active
+student share when there are no messages. AWS account-wide cost is allocated by
+monthly active-student share. Zero activity preserves unallocated overhead; no
+zero denominator is reported as zero unit cost. School-month totals reconcile
+with the combined account estimate after explicit AI exclusions. A student at
+multiple schools is an exposure in each school. These are cost per active
+student-school membership, not cost per purchased seat or selling prices.
+
+Logging begins February 21, 2026 in the initial production pull. Earlier AI is
+unavailable, February is partial, and the current month is incomplete. Comparable
+unit costs require both a complete retained-log calendar month and AWS costs.
+Use month-specific costs; avoid dividing six months of AI or thirteen months of
+AWS by two years of distinct students. No two-year all-in total is claimed.

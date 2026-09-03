@@ -119,6 +119,49 @@ events AS MATERIALIZED (
     JOIN eligible_members m ON m.id=cr."membershipId" AND m.role='STUDENT'
     JOIN schools sc ON sc.id=d.school_id AND sc."organizationId"=m."organizationId"
 ),
+llm_base AS MATERIALIZED (
+  SELECT l.id,l."createdAt",l.provider,l.model,l."inputTokens",l."outputTokens",l.metadata,l.response,
+    l.error IS NOT NULL failed
+  FROM "LlmLog" l CROSS JOIN params p WHERE l."createdAt">=p.start_at AND l."createdAt"<p.as_of
+),
+-- Compare retained text inside PostgreSQL only; export no prompts, responses, hashes or people IDs.
+llm_message_candidates AS MATERIALIZED (
+  SELECT l.id log_id,msg.id message_id,sess."documentId",coalesce(sess."membershipId",d."membershipId") membership_id,
+    count(*) OVER(PARTITION BY l.id) log_matches,count(*) OVER(PARTITION BY msg.id) message_matches
+  FROM llm_base l JOIN "AssignmentModuleSessionMessage" msg
+    ON md5(msg.content)=md5(l.response) AND msg.content=l.response
+    AND msg."createdAt">=l."createdAt" AND msg."createdAt"<l."createdAt"+interval '60 seconds'
+  JOIN "AssignmentModuleSession" sess ON sess.id=msg."assignmentModuleSessionId"
+  JOIN "Document" d ON d.id=sess."documentId"
+  WHERE msg.agent='assistant' AND length(l.response)>0
+),
+llm_links AS MATERIALIZED (
+  SELECT l.*,coalesce(l.metadata->>'documentId',sub."documentId",sess."documentId",matched."documentId") document_id,
+    coalesce(l.metadata->>'membershipId',sess."membershipId",matched.membership_id) membership_id,
+    coalesce(ca."classId",l.metadata->>'classId') class_id,
+    CASE WHEN l.metadata->>'documentId' IS NOT NULL OR sub.id IS NOT NULL OR sess.id IS NOT NULL
+      OR ca.id IS NOT NULL OR l.metadata->>'classId' IS NOT NULL OR l.metadata->>'membershipId' IS NOT NULL THEN 'metadata'
+      WHEN matched.log_id IS NOT NULL THEN 'unique_response_match' ELSE 'unattributed' END link_method
+  FROM llm_base l LEFT JOIN "Submission" sub ON sub.id=l.metadata->>'submissionId'
+  LEFT JOIN "AssignmentModuleSession" sess ON sess.id=l.metadata->>'cmsId'
+  LEFT JOIN "ClassAssignment" ca ON ca.id=l.metadata->>'classAssignmentId'
+  LEFT JOIN llm_message_candidates matched ON matched.log_id=l.id AND matched.log_matches=1 AND matched.message_matches=1
+),
+llm_attributed AS MATERIALIZED (
+  SELECT l.id,l."createdAt",l.provider,l.model,l."inputTokens",l."outputTokens",l.metadata,l.failed,
+    CASE WHEN (rawdoc.id IS NOT NULL AND d.id IS NULL) OR (c.id IS NOT NULL AND sc.id IS NULL)
+      OR (rawmember.id IS NOT NULL AND em.id IS NULL) THEN NULL
+      ELSE coalesce(d.school_id,sc.id,ms.id) END school_id,
+    CASE WHEN (rawdoc.id IS NOT NULL AND d.id IS NULL) OR (c.id IS NOT NULL AND sc.id IS NULL)
+      OR (rawmember.id IS NOT NULL AND em.id IS NULL) THEN 'excluded'
+      WHEN coalesce(d.school_id,sc.id,ms.id) IS NULL THEN 'unattributed'
+      ELSE l.link_method END attribution
+  FROM llm_links l LEFT JOIN "Document" rawdoc ON rawdoc.id=l.document_id LEFT JOIN docs d ON d.id=rawdoc.id
+  LEFT JOIN "Class" c ON c.id=l.class_id LEFT JOIN schools sc ON sc.id=c."schoolId"
+  LEFT JOIN "OrgMembership" rawmember ON rawmember.id=l.membership_id
+  LEFT JOIN eligible_members em ON em.id=rawmember.id
+  LEFT JOIN one_member_school oms ON oms.membership_id=em.id LEFT JOIN schools ms ON ms.id=oms.school_id
+),
 periods AS (
   SELECT 'month' grain,t period,t+interval '1 month' period_end FROM params p,
     generate_series(p.start_at,date_trunc('month',p.as_of),interval '1 month') t
@@ -175,7 +218,7 @@ teacher_usage AS (
 )
 SELECT json_build_object(
   'meta',json_build_object('as_of',(SELECT as_of FROM params),'timezone','UTC','read_only',current_setting('transaction_read_only'),
-    'start_at',(SELECT start_at FROM params),'lookback_months',:lookback_months::int,'school_year',(SELECT school_year FROM params),'definition_version','mind-v2-history'),
+    'start_at',(SELECT start_at FROM params),'lookback_months',:lookback_months::int,'school_year',(SELECT school_year FROM params),'definition_version','mind-v3-costs'),
   'organizations',(SELECT json_agg(x ORDER BY x.organization) FROM (
     SELECT o.id organization_id,o.name organization,o."numOfTeacherSeats" configured_teacher_seats,o."numOfStudentSeats" configured_student_seats,
       o."accessExpiresAt" access_expires_at,(SELECT count(*) FROM real_schools s WHERE s."organizationId"=o.id) school_records,
@@ -231,6 +274,19 @@ SELECT json_build_object(
       sum(l."amountPaid") amount_paid_minor_units,l.currency,min(l."validUntil") earliest_valid_until
     FROM "StudentLicense" l JOIN orgs o ON o.id=l."organizationId" CROSS JOIN params p GROUP BY 1,2,3,4,l.currency
   )x),
+  'llm',json_build_object(
+    'earliest',(SELECT min("createdAt") FROM "LlmLog" WHERE provider='anthropic'),
+    'calls',(SELECT count(*) FROM llm_base),
+    'groups',(SELECT json_agg(x ORDER BY x.month,x.provider,x.model,x.school_id,x.attribution) FROM (
+      SELECT to_char("createdAt",'YYYY-MM') AS month,provider,model,school_id,attribution,count(*) calls,
+        count(*) FILTER(WHERE failed) error_calls,
+        count(*) FILTER(WHERE "inputTokens" IS NULL OR "outputTokens" IS NULL) missing_token_calls,
+        count(*) FILTER(WHERE metadata->>'cacheCreationInputTokens' IS NULL OR metadata->>'cacheReadInputTokens' IS NULL) missing_cache_calls,
+        coalesce(sum("inputTokens"),0) input_tokens,coalesce(sum("outputTokens"),0) output_tokens,
+        coalesce(sum((metadata->>'cacheCreationInputTokens')::bigint),0) cache_creation_tokens,
+        coalesce(sum((metadata->>'cacheReadInputTokens')::bigint),0) cache_read_tokens
+      FROM llm_attributed GROUP BY 1,2,3,4,5)x)
+  ),
   'window_totals',json_build_object(
     'documents_created',(SELECT count(*) FROM events e CROSS JOIN params p WHERE kind='document_created' AND at>=p.start_at AND at<p.as_of),
     'student_tutor_messages',(SELECT count(*) FROM events e CROSS JOIN params p WHERE kind='student_tutor_message' AND at>=p.start_at AND at<p.as_of),

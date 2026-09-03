@@ -3,6 +3,7 @@ import argparse
 import datetime as dt
 import json
 import pathlib
+from costs import render_costs
 
 
 def month_start_before(as_of, months):
@@ -240,10 +241,12 @@ def render(data):
                  'A manual active license is an entitlement, not evidence of a payment. Recorded amountPaid on a refunded row is historical gross payment, not retained revenue.\n\n'+table(
                  ['Organization','Cohort','Status','Source','Rows','Currently valid active','Recorded gross minor units','Currency'],[
                      [r['organization'],r['cohort'],r['status'],r['source'],r['license_rows'],r['valid_active_license_rows'],r['amount_paid_minor_units'],r['currency']] for r in (data['licenses'] or [])]))
+    if data.get('cost_estimates'):
+        parts.append(render_costs(data['cost_estimates']))
     if data.get('aws_costs'):
         parts.append('## Partial cost input: AWS account spend\n\n'
                      'Read from AWS Cost Explorer using the Yawp account profile. Unblended cost includes all returned account services/environments, '
-                     'not only production student licensing. This is a cost input, not gross margin. External AI providers, support labor and payment fees are not established here.\n\n'+table(
+                     'not only production student licensing. This is a cost input, not gross margin. Anthropic estimates, when log data is present, are reported separately above; support labor and payment fees remain unavailable.\n\n'+table(
                      ['Month','AWS unblended cost','Currency','AWS estimated?'],[
                          [r['month'],f'{r["amount"]:.2f}' if r['amount'] is not None else 'UNAVAILABLE',r['unit'],r['estimated']] for r in data['aws_costs']]))
         if any(r.get('available') is False for r in data['aws_costs']):
@@ -313,6 +316,7 @@ def brief(data):
          f'{data["window_totals"]["student_tutor_messages"]:,} student tutor messages from {data["window_totals"]["unique_student_tutor_users"]:,} student memberships; '
          f'{data["window_totals"]["submissions"]:,} retained submissions. Document starts, messages and submissions are separate measures.' if data.get('window_totals') else ''),
         f'Production read: {data["meta"]["as_of"]}. Full school tables and definitions: MIND-report.md.',
+        render_costs(data['cost_estimates'],short=True) if data.get('cost_estimates') else '',
         f'**Latest complete-month context:** {last_month[:7]} had **{month["submissions"]} retained submissions from '
         f'{month["student_submitters"]} student account memberships across {month["schools_with_submissions"]} school records**. '
         'Usage is measurable now; paid retention and margins require Brian’s external business records.',
@@ -328,7 +332,7 @@ def brief(data):
             ['Teacher activation',f'{activated}/{teachers} ({rate(activated,teachers)}) have an observed feedback or classroom-submission signal, including older document comments in this expanded pull. This is a registered-teacher proxy, not conversion of selected teachers. Per-school speed is attached; invitation/selection dates are missing.'],
             ['Weekly teacher usage',f'{week["direct_feedback_teachers"]} non-admin teacher membership with attributable feedback in the last complete week. Class-linked activity and school rates are attached; admin-supported schools are excluded from this teacher count.'],
             ['Student usage',f'{month["student_submitters"]} submitters in {last_month[:7]}; {month["students_with_save_or_submit"]} memberships with a submission or accepted save. Save history starts partway through August, so the latter is a recent-coverage metric.'],
-            ['Student licensing gross margin',f'Not yet calculable. AWS account cost input: {cost_text}. This includes multiple environments; add allocated AI, payment and other direct costs and matching licensing revenue.'],
+            ['Student licensing gross margin',f'Not yet calculable. AWS account cost input: {cost_text}. This includes multiple environments. The attached cost estimate adds logged Anthropic usage when available; payment and other direct costs plus matching licensing revenue are still needed.'],
             ['Onboarding/support gross margin','Not yet calculable. Need service revenue (or agreed bundled allocation), delivery/support hours, loaded hourly cost and direct tools/travel.'],
         ]),
         '**Interpretation limits:** known QA/demo/internal records, admin users and teacher-owned practice documents are excluded from student activity. School records include legacy duplicates and pilots, '
