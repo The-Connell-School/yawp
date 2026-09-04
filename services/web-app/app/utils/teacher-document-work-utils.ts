@@ -133,11 +133,19 @@ export function getTeacherDocumentWorkStatusDisplay(
       })
     : null;
 
+  // Work that is not for a grade has no grade to append, and a bare "Released"
+  // reads as though grading silently failed. It was read and given feedback,
+  // so the badge says that instead.
+  const isSubmittedForGrade = document.assignment?.submitForGrade !== false;
+  const label = grade
+    ? `${TEACHER_DOCUMENT_STATUS_LABELS[status]} · ${grade}`
+    : isSubmittedForGrade
+      ? TEACHER_DOCUMENT_STATUS_LABELS[status]
+      : `${TEACHER_DOCUMENT_STATUS_LABELS[status]} · Feedback only`;
+
   return {
     status,
-    label: grade
-      ? `${TEACHER_DOCUMENT_STATUS_LABELS[status]} · ${grade}`
-      : TEACHER_DOCUMENT_STATUS_LABELS[status],
+    label,
     badgeClassName: TEACHER_DOCUMENT_STATUS_BADGE_CLASSES[status],
   };
 }
