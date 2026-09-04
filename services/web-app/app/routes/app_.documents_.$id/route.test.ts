@@ -226,7 +226,9 @@ function makeDocument({
 function documentOnce(doc: unknown) {
   let served = false;
   prisma.document.findFirst.mockImplementation((args: any) => {
-    if (args?.where?.assignmentType) return Promise.resolve(null);
+    if (args?.where?.artifactKind === 'ASSIGNMENT_GROUP') {
+      return Promise.resolve(null);
+    }
     if (!served) {
       served = true;
       return Promise.resolve(doc);
@@ -258,9 +260,9 @@ describe('app_.documents_.$id loader', () => {
     prisma.document.findFirst.mockImplementation((args) =>
       Promise.resolve(
         // The loader asks first whether this document is a collaboration room,
-        // told apart by the assignment-type gate no authorization clause
-        // carries. These fixtures are ordinary documents, so it finds nothing.
-        args?.where?.assignmentType
+        // told apart by its assignment-group artifact predicate. These fixtures
+        // are ordinary documents, so it finds nothing.
+        args?.where?.artifactKind === 'ASSIGNMENT_GROUP'
           ? null
           : makeDocument({
               includeSnapshot:
@@ -276,10 +278,8 @@ describe('app_.documents_.$id loader', () => {
   });
 
   test('offers no road to writing with a classmate while students may not group themselves', async () => {
-    // Everything else about this document qualifies: the student owns it, it is
-    // a kind of writing in the pilot, and it belongs to no group yet. The only
-    // reason the menu item is withheld is the pedagogical gate, and it is
-    // answered server-side so no client can render its own way in.
+    // Students still cannot turn an individual draft into a collaboration room;
+    // collaborative drafts begin from a teacher-created assignment group.
     requireMembership.mockResolvedValue({
       id: 'profile-1',
       role: 'STUDENT',
@@ -287,7 +287,7 @@ describe('app_.documents_.$id loader', () => {
     });
     prisma.document.findFirst.mockImplementation((args: any) =>
       Promise.resolve(
-        args?.where?.assignmentType
+        args?.where?.artifactKind === 'ASSIGNMENT_GROUP'
           ? null
           : {
               ...makeDocument({ includeSnapshot: false }),
@@ -295,7 +295,6 @@ describe('app_.documents_.$id loader', () => {
               assignmentType: {
                 id: 'type-1',
                 title: 'AP History Essay',
-                collaborationSupported: true,
               },
             }
       )
@@ -478,8 +477,9 @@ describe('app_.documents_.$id loader, on a collaboration room', () => {
       .mockResolvedValue(false);
   });
 
-  /** The room probe is the only query that carries the assignment-type gate. */
-  const isRoomProbe = (args: any) => Boolean(args?.where?.assignmentType);
+  /** The room probe is the only query scoped to assignment-group artifacts. */
+  const isRoomProbe = (args: any) =>
+    args?.where?.artifactKind === 'ASSIGNMENT_GROUP';
 
   test('sends a group draft to the collaborative page', async () => {
     prisma.document.findFirst.mockImplementation((args: any) =>

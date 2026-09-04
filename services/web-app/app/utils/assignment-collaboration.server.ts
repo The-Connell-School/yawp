@@ -12,29 +12,6 @@ export type ParseAssignmentCollaborationResult =
   | { success: true; value: AssignmentCollaborationSettings }
   | { success: false; message: string };
 
-/**
- * Applies the `AssignmentType.collaborationSupported` rollout gate to parsed
- * settings, given the flag for the type this assignment is being created from.
- *
- * The gate used to be `Organization.collaborativeDraftsEnabled`, which is the
- * right shape for a real rollout and the wrong shape for a pilot: it defaults to
- * false, so the feature was invisible in every environment including preview.
- * Scoping to one assignment type keeps the pilot narrow while letting it be seen,
- * and it is the same gate the collaborative page and the transport enforce.
- *
- * Fails closed, and forces collaboration off rather than erroring: a teacher who
- * picks a type outside the pilot should get an ordinary solo assignment, not a
- * dead end.
- */
-export function applyCollaborationRolloutGate(
-  settings: AssignmentCollaborationSettings,
-  assignmentTypeSupportsCollaboration: boolean
-): AssignmentCollaborationSettings {
-  if (!settings.collaborationEnabled) return settings;
-  if (!assignmentTypeSupportsCollaboration) return SOLO_COLLABORATION_SETTINGS;
-  return settings;
-}
-
 function lastValue(formData: FormData, field: string): string | undefined {
   return formData
     .getAll(field)

@@ -166,7 +166,7 @@ export function capabilities() {
       qa: "./bin/project qa prepare --json",
     },
     fixtures: ["local-dev"],
-    proofProfiles: ["project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "collaboration-presence", "changed"],
+    proofProfiles: ["project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
     nextCommands: [
       "./bin/project doctor --json",
       "./bin/project fixture verify local-dev --json",
@@ -377,6 +377,17 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "typecheck") run("typecheck", ["run", "web-app:typecheck"]);
   else if (chosen === "build") run("build", ["run", "web-app:build"]);
   else if (chosen === "qa-smoke") run("qa-smoke", ["run", "web-app:test:e2e:smoke"], 30 * 60 * 1000);
+  else if (chosen === "ua-billing") runWebApp("ua-billing", ["run", "test:ua:focused"]);
+  else if (chosen === "ua-billing-e2e") {
+    const local = requireConfig();
+    const database = new URL(local.DATABASE_URL);
+    if (!['localhost', '127.0.0.1'].includes(database.hostname)) throw new Error('UA billing E2E requires the isolated local database');
+    database.pathname = '/yawp_ua_billing_e2e';
+    results.push({ id: 'ua-billing-e2e', ...execute(selected.bun, ['run', 'test:ua:ship'], {
+      json, cwd: webAppRoot, timeout: 30 * 60 * 1000,
+      env: { ...selected.env, E2E_DATABASE_URL: database.toString(), CI: 'true' },
+    }) });
+  }
   else if (chosen === "collaboration-presence") {
     runWebApp("presence-contracts", [
       "test",
@@ -435,10 +446,10 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
-    test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence> [--json]\n",
+    test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
   };
   return pages[topic] || pages.root;

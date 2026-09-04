@@ -424,14 +424,12 @@ export function AssignmentCreationSheetContent({
   const isExtracting = extractFetcher.state !== 'idle';
   const assignmentTypeId =
     fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
-  // Collaboration is offered per kind of writing, not per organization: only the
-  // assignment types that opt in show the toggle at all.
   const selectedType = assignmentTypes.find(
     (type) => type.id === assignmentTypeId
   );
-  const selectedTypeSupportsCollaboration = Boolean(
-    selectedType?.collaborationSupported
-  );
+  // Collaboration is offered for every assignment type now, so this only asks
+  // whether a type has been chosen at all.
+  const selectedTypeSupportsCollaboration = Boolean(assignmentTypeId);
   // An exit ticket has no prompt box: the teacher answers the form and the
   // prompt is composed from the answers. With the feature off it falls back to
   // the ordinary prompt box, so an exit ticket type can exist before this does.
@@ -1358,9 +1356,9 @@ export function AssignmentCreationSheetContent({
           </p>
         </div>
 
-        {/* Collaborative drafts. Hidden entirely unless this kind of writing
-            supports them, and frozen after creation for the same reason the tutor
-            toggle is: students may already have group drafts built around it.
+        {/* Collaborative drafts. Available for every assignment type, and frozen
+            after creation for the same reason the tutor toggle is: students may
+            already have group drafts built around it.
             Group membership itself is arranged per class afterwards, because an
             assignment fans out to one ClassAssignment per class. */}
         {selectedTypeSupportsCollaboration ? (

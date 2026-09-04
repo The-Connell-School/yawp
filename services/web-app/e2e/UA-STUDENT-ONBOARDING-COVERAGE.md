@@ -57,7 +57,7 @@ active-license cases remain deterministic after the real cohort expires.
 | Existing subscribers | Active/trialing allowed-price subscriptions import idempotently and skip Checkout | Import contract + production adapter against PostgreSQL |
 | Import safety | Bad status, wrong price, duplicate email/subscription, ambiguous membership, and conflicts fail closed | Import contract |
 | Import ownership | One Stripe subscription cannot be attached to a second student's license | Production adapter against PostgreSQL |
-| Checkout shape | One payment, one $50 USD line item, correct Price, Session/PaymentIntent metadata, customer/reference, and canonical callbacks | Browser E2E through Stripe SDK; emulator rejects malformed requests |
+| Checkout shape | One payment, one $35 USD line item, correct Price, Session/PaymentIntent metadata, customer/reference, and canonical callbacks | Browser E2E through Stripe SDK; emulator rejects malformed requests |
 | Checkout cancel | Account remains; canceled copy, Retry, and Sign out remain available | Browser E2E |
 | Checkout reuse | Cancel/retry reuses the still-open Session instead of creating another charge | Browser E2E + domain contract |
 | Parallel Checkout | Simultaneous first attempts converge on one license, one Stripe idempotency key, and one hosted Session | Browser E2E through production route + PostgreSQL + Stripe SDK |
@@ -102,3 +102,11 @@ configured:
 
 Those are deployment configuration checks, not untested application branches. Run one
 Stripe test-mode smoke against the deployed URL before enabling live billing.
+
+
+The catalog fixture keeps the configured $50 price archived and sets a different
+$35 price as the same product's default. Browser coverage also restores a legacy
+$50 open Session, returns through Back, and verifies expiration before a $35
+replacement; cancellation/retry reuses that replacement. A catalog outage stays
+on billing with an inline retry message. Unit contracts cover payment-vs-expiry
+races and continued verification/refund handling for historical $50 payments.

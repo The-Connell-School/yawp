@@ -1,10 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { type CollaborationGroupMode } from '~/domain/assignments/collaboration';
-import {
-  applyCollaborationRolloutGate,
-  parseAssignmentCollaboration,
-} from './assignment-collaboration.server';
+import { parseAssignmentCollaboration } from './assignment-collaboration.server';
 
 const form = (entries: Record<string, string | string[]>) => {
   const formData = new FormData();
@@ -171,36 +168,5 @@ describe('parseAssignmentCollaboration', () => {
         collaborationGroupSize: null,
       },
     });
-  });
-});
-
-describe('applyCollaborationRolloutGate', () => {
-  const on = {
-    collaborationEnabled: true,
-    collaborationGroupMode: 'teacher' as const,
-    collaborationGroupSize: 3,
-  };
-
-  test('passes settings through when the assignment type supports collaboration', () => {
-    expect(applyCollaborationRolloutGate(on, true)).toEqual(on);
-  });
-
-  test('forces collaboration off for an assignment type that does not', () => {
-    // Fail closed, and force off rather than erroring: a teacher who picks a
-    // type outside the pilot gets an ordinary solo assignment, not a dead end.
-    expect(applyCollaborationRolloutGate(on, false)).toEqual({
-      collaborationEnabled: false,
-      collaborationGroupMode: 'teacher',
-      collaborationGroupSize: null,
-    });
-  });
-
-  test('leaves an already-disabled assignment untouched', () => {
-    const off = {
-      collaborationEnabled: false,
-      collaborationGroupMode: 'teacher' as const,
-      collaborationGroupSize: null,
-    };
-    expect(applyCollaborationRolloutGate(off, true)).toEqual(off);
   });
 });

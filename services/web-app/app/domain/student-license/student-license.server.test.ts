@@ -13,6 +13,7 @@ import {
   isStripePaymentReconciliationEvent,
   paymentIntentIdFromReconciliationEvent,
   resolveStripeLicenseStatus,
+  resolveUaCheckoutPrice,
   resolveUaStudentLicenseAccess,
   verifyCheckoutSessionForReturn,
 } from './student-license.server';
@@ -413,6 +414,7 @@ describe('Checkout creation', () => {
         cancelUrl: 'https://ua.yawp.school/billing/ua?canceled=1',
         config: getUaStudentLicenseConfig(enabledEnv),
         dependencies: {
+          expireCheckoutSession: mock(),
           findMembership: mock().mockResolvedValue({
             id: 'membership-1',
             role: 'STUDENT',
@@ -426,9 +428,9 @@ describe('Checkout creation', () => {
             checkoutAttempt: 0,
             stripeCheckoutSessionId: null,
           }),
-          validateConfiguredPrice: mock().mockRejectedValue(
+          resolveCheckoutPrice: mock().mockRejectedValue(
             new Error(
-              'Configured Stripe price must be active, one-time, USD 50'
+              'Configured Stripe price must be active, one-time, USD 35'
             )
           ),
           retrieveCheckoutSession: mock(),
@@ -450,6 +452,8 @@ describe('Checkout creation', () => {
       cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
       config: getUaStudentLicenseConfig(enabledEnv),
       dependencies: {
+        expireCheckoutSession: mock(),
+        resolveCheckoutPrice: mock().mockResolvedValue('price_ua_2026'),
         findMembership: mock().mockResolvedValue({
           id: 'membership-1',
           role: 'STUDENT',
@@ -465,6 +469,11 @@ describe('Checkout creation', () => {
         }),
         retrieveCheckoutSession: mock().mockResolvedValue({
           id: 'cs_open',
+          amount_total: 3500,
+          currency: 'usd',
+          line_items: {
+            data: [{ price: { id: 'price_ua_2026' }, quantity: 1 }],
+          },
           status: 'open',
           payment_status: 'unpaid',
           url: 'https://checkout.stripe.test/cs_open',
@@ -502,6 +511,8 @@ describe('Checkout creation', () => {
       url: 'https://checkout.stripe.test/cs_shared',
     });
     const dependencies = {
+      expireCheckoutSession: mock(),
+      resolveCheckoutPrice: mock().mockResolvedValue('price_ua_2026'),
       findMembership: mock().mockResolvedValue(membership),
       findOrCreateLicense: mock().mockResolvedValue(license),
       retrieveCheckoutSession: mock(),
@@ -557,6 +568,8 @@ describe('Checkout creation', () => {
         cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
         config: getUaStudentLicenseConfig(enabledEnv),
         dependencies: {
+          expireCheckoutSession: mock(),
+          resolveCheckoutPrice: mock().mockResolvedValue('price_ua_2026'),
           findMembership: mock().mockResolvedValue(membership),
           findOrCreateLicense: mock().mockResolvedValue({
             id: 'license-1',
@@ -593,6 +606,8 @@ describe('Checkout creation', () => {
       cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
       config: getUaStudentLicenseConfig(enabledEnv),
       dependencies: {
+        expireCheckoutSession: mock(),
+        resolveCheckoutPrice: mock().mockResolvedValue('price_ua_2026'),
         findMembership: mock().mockResolvedValue({
           id: 'membership-1',
           role: 'STUDENT',
@@ -627,6 +642,8 @@ describe('Checkout creation', () => {
       cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
       config: getUaStudentLicenseConfig(enabledEnv),
       dependencies: {
+        expireCheckoutSession: mock(),
+        resolveCheckoutPrice: mock().mockResolvedValue('price_ua_2026'),
         findMembership: mock().mockResolvedValue({
           id: 'membership-1',
           role: 'STUDENT',
@@ -672,6 +689,8 @@ describe('Checkout creation', () => {
       config: getUaStudentLicenseConfig(enabledEnv),
       now: UA_STUDENT_LICENSE_VALID_UNTIL,
       dependencies: {
+        expireCheckoutSession: mock(),
+        resolveCheckoutPrice: mock().mockResolvedValue('price_ua_2026'),
         findMembership: mock().mockResolvedValue({
           id: 'membership-1',
           role: 'STUDENT',
@@ -697,6 +716,8 @@ describe('Checkout creation', () => {
         cancelUrl: 'https://yawp.school/billing/ua?canceled=1',
         config: getUaStudentLicenseConfig(enabledEnv),
         dependencies: {
+          expireCheckoutSession: mock(),
+          resolveCheckoutPrice: mock().mockResolvedValue('price_ua_2026'),
           findMembership: mock().mockResolvedValue({
             id: 'membership-1',
             role: 'STUDENT',
@@ -1048,6 +1069,217 @@ describe('Stripe payment state reconciliation', () => {
 
     for (const snapshot of invalidSnapshots) {
       expect(resolveStripeLicenseStatus(snapshot)).toBe('REVOKED');
+    }
+  });
+});
+
+describe('UA price rollover', () => {
+  const config = getUaStudentLicenseConfig(enabledEnv);
+  const price = {
+    id: 'price_new_35',
+    product: 'prod_ua',
+    active: true,
+    livemode: false,
+    type: 'one_time',
+    currency: 'usd',
+    unit_amount: 3500,
+  };
+  function catalog(defaultPrice: unknown = price) {
+    return {
+      prices: {
+        retrieve: mock().mockResolvedValue({
+          ...price,
+          id: 'price_ua_2026',
+          active: false,
+          unit_amount: 5000,
+        }),
+      },
+      products: {
+        retrieve: mock().mockResolvedValue({
+          id: 'prod_ua',
+          active: true,
+          livemode: false,
+          default_price: defaultPrice,
+        }),
+      },
+    };
+  }
+  test('uses the active $35 product default when the configured $50 price is archived', async () => {
+    const stripe = catalog();
+    expect(await resolveUaCheckoutPrice(config as any, stripe as any)).toBe(
+      'price_new_35'
+    );
+    expect(stripe.products.retrieve).toHaveBeenCalledWith('prod_ua', {
+      expand: ['default_price'],
+    });
+  });
+  test('fails closed for missing, archived, wrong-amount, recurring, foreign-product, or foreign-currency defaults', async () => {
+    for (const bad of [
+      null,
+      { ...price, active: false },
+      { ...price, unit_amount: 5000 },
+      { ...price, type: 'recurring' },
+      { ...price, currency: 'eur' },
+      { ...price, product: 'prod_other' },
+    ]) {
+      await expect(
+        resolveUaCheckoutPrice(config as any, catalog(bad) as any)
+      ).rejects.toThrow();
+    }
+  });
+  function dependencies() {
+    return {
+      findMembership: mock().mockResolvedValue({
+        id: 'membership-1',
+        role: 'STUDENT',
+        organizationId: 'org-ua',
+        user: { email: 'student@example.com' },
+      }),
+      findOrCreateLicense: mock().mockResolvedValue({
+        id: 'license-1',
+        status: 'PENDING',
+        validUntil: UA_STUDENT_LICENSE_VALID_UNTIL,
+        checkoutAttempt: 0,
+        stripeCheckoutSessionId: 'cs_old',
+      }),
+      resolveCheckoutPrice: mock().mockResolvedValue('price_new_35'),
+      retrieveCheckoutSession: mock().mockResolvedValue({
+        id: 'cs_old',
+        status: 'open',
+        payment_status: 'unpaid',
+        url: 'https://checkout.stripe.test/old',
+        amount_total: 5000,
+        currency: 'usd',
+        line_items: { data: [{ price: { id: 'price_ua_2026' }, quantity: 1 }] },
+      }),
+      expireCheckoutSession: mock().mockResolvedValue(undefined),
+      prepareAttempt: mock().mockResolvedValue(1),
+      createCheckoutSession: mock().mockResolvedValue({
+        id: 'cs_new',
+        url: 'https://checkout.stripe.test/new',
+      }),
+      attachCheckoutSession: mock(),
+    };
+  }
+  const request = {
+    membershipId: 'membership-1',
+    config,
+    successUrl: 'https://ua.yawp.school/billing/ua/success',
+    cancelUrl: 'https://ua.yawp.school/billing/ua?canceled=1',
+  };
+  test('expires the old open $50 session before creating a fresh $35 attempt', async () => {
+    const deps = dependencies();
+    deps.createCheckoutSession.mockImplementation(async () => {
+      expect(deps.expireCheckoutSession).toHaveBeenCalledWith('cs_old');
+      return { id: 'cs_new', url: 'https://checkout.stripe.test/new' };
+    });
+    expect(
+      await createOrReuseCheckoutSession({ ...request, dependencies: deps })
+    ).toEqual({ kind: 'CHECKOUT', url: 'https://checkout.stripe.test/new' });
+    expect(deps.createCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({ priceId: 'price_new_35', attempt: 1 })
+    );
+  });
+  test('does not create a second payment when expiration fails or payment wins the race', async () => {
+    for (const paid of [false, true]) {
+      const deps = dependencies();
+      deps.expireCheckoutSession.mockRejectedValue(new Error('cannot expire'));
+      deps.retrieveCheckoutSession.mockResolvedValueOnce(
+        await dependencies().retrieveCheckoutSession()
+      );
+      if (paid)
+        deps.retrieveCheckoutSession.mockResolvedValue({
+          id: 'cs_old',
+          status: 'complete',
+          payment_status: 'paid',
+          url: null,
+        });
+      if (paid)
+        expect(
+          await createOrReuseCheckoutSession({ ...request, dependencies: deps })
+        ).toEqual({ kind: 'PROCESSING' });
+      else
+        await expect(
+          createOrReuseCheckoutSession({ ...request, dependencies: deps })
+        ).rejects.toThrow('cannot expire');
+      expect(deps.createCheckoutSession).not.toHaveBeenCalled();
+      expect(deps.prepareAttempt).not.toHaveBeenCalled();
+    }
+  });
+  test('verifies new-product prices and historical $50 payments without depending on the current default', async () => {
+    for (const [priceId, amount] of [
+      ['price_new_35', 3500],
+      ['price_ua_2026', 5000],
+    ] as const) {
+      const session = {
+        id: 'cs_paid',
+        mode: 'payment',
+        payment_status: 'paid',
+        amount_total: amount,
+        currency: 'usd',
+        payment_intent: 'pi_paid',
+        metadata: {
+          membershipId: 'membership-1',
+          organizationId: 'org-ua',
+          cohort: 'ua-2026',
+        },
+        line_items: {
+          data: [
+            {
+              quantity: 1,
+              price: {
+                id: priceId,
+                product: 'prod_ua',
+                type: 'one_time',
+                currency: 'usd',
+                unit_amount: amount,
+              },
+            },
+          ],
+        },
+      };
+      const deps = {
+        retrieveCheckoutSession: mock().mockResolvedValue(session),
+        retrieveConfiguredProductId: mock().mockResolvedValue('prod_ua'),
+        findMembership: mock().mockResolvedValue({
+          id: 'membership-1',
+          role: 'STUDENT',
+          organizationId: 'org-ua',
+        }),
+      };
+      expect(
+        await verifyCheckoutSessionForReturn('cs_paid', {
+          config,
+          dependencies: deps,
+        })
+      ).toEqual({ membershipId: 'membership-1' });
+      if (amount === 3500) {
+        deps.retrieveConfiguredProductId.mockResolvedValue('prod_other');
+        await expect(
+          verifyCheckoutSessionForReturn('cs_paid', {
+            config,
+            dependencies: deps,
+          })
+        ).rejects.toThrow('does not match');
+      }
+    }
+  });
+  test('reconciles refunds for both current $35 and historical $50 payments', () => {
+    for (const amount of [3500, 5000]) {
+      const snapshot = {
+        paymentIntentStatus: 'succeeded',
+        charge: {
+          paid: true,
+          amount,
+          amountRefunded: 0,
+          currency: 'usd',
+          disputed: false,
+        },
+        disputeStatuses: [],
+      };
+      expect(resolveStripeLicenseStatus(snapshot)).toBe('ACTIVE');
+      snapshot.charge.amountRefunded = amount;
+      expect(resolveStripeLicenseStatus(snapshot)).toBe('REFUNDED');
     }
   });
 });

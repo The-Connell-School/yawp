@@ -138,23 +138,27 @@ describe('class assignment groups', () => {
       await expect(get()).rejects.toBeDefined();
     });
 
-    test('the loader 404s when the assignment type is outside the pilot', async () => {
+    test('the loader allows collaborative assignments with a legacy unsupported type flag', async () => {
       prisma.classAssignment.findFirst.mockResolvedValue(
         scoped({ typeSupported: false })
       );
 
-      await expect(get()).rejects.toBeDefined();
+      const response = await get();
+
+      expect((await readBody(response)).assignmentId).toBe('a-1');
     });
 
-    test('the action refuses when the assignment type is outside the pilot', async () => {
+    test('the action allows collaborative assignments with a legacy unsupported type flag', async () => {
       prisma.classAssignment.findFirst.mockResolvedValue(
         scoped({ typeSupported: false })
       );
 
       const result: any = await post({ intent: 'open' });
 
-      expect(openGroups).not.toHaveBeenCalled();
-      expect(result.options.type).toBe('error');
+      expect(openGroups).toHaveBeenCalledWith({
+        classAssignmentId: 'ca-1',
+      });
+      expect(result.options.type).toBe('success');
     });
   });
 
@@ -517,8 +521,7 @@ describe('class assignment groups', () => {
       expect((await body(result)).message).toMatch(/still has students/);
     });
 
-    test('editing is refused for an assignment type outside the pilot', async () => {
-      // The gate runs before the intent split, so it covers these too.
+    test('editing is allowed for a legacy unsupported assignment type flag', async () => {
       prisma.classAssignment.findFirst.mockResolvedValue(
         scoped({ typeSupported: false })
       );
@@ -529,7 +532,11 @@ describe('class assignment groups', () => {
         targetGroupId: 'group-2',
       });
 
-      expect(moveStudentToGroup).not.toHaveBeenCalled();
+      expect(moveStudentToGroup).toHaveBeenCalledWith({
+        classAssignmentId: 'ca-1',
+        membershipId: 'student-1',
+        targetGroupId: 'group-2',
+      });
     });
   });
 

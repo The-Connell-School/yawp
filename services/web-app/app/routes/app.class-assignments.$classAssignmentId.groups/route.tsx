@@ -65,7 +65,6 @@ async function requireTeacherClassAssignment(
           collaborationEnabled: true,
           collaborationGroupSize: true,
           collaborationGroupMode: true,
-          assignmentType: { select: { collaborationSupported: true } },
         },
       },
       class: {
@@ -93,11 +92,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     params.classAssignmentId
   );
 
-  if (
-    !classAssignment ||
-    !classAssignment.assignment.collaborationEnabled ||
-    !classAssignment.assignment.assignmentType.collaborationSupported
-  ) {
+  if (!classAssignment || !classAssignment.assignment.collaborationEnabled) {
     // Indistinguishable from nonexistent for anyone who is not this class's
     // teacher, and for any assignment that is not a collaborative one.
     throw dataResponse(
@@ -191,11 +186,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const backTo = `/app/class-assignments/${params.classAssignmentId}/groups`;
 
-  if (
-    !classAssignment ||
-    !classAssignment.assignment.collaborationEnabled ||
-    !classAssignment.assignment.assignmentType.collaborationSupported
-  ) {
+  if (!classAssignment || !classAssignment.assignment.collaborationEnabled) {
     return redirectWithToast('/app', {
       type: 'error',
       description: 'That assignment is not set up for collaborative drafts.',

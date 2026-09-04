@@ -29,10 +29,7 @@ import {
   DEFAULT_ASSIGNMENT_POINT_VALUE,
   parseAssignmentGradingIntent,
 } from '~/utils/assignment-grading-intent.server';
-import {
-  applyCollaborationRolloutGate,
-  parseAssignmentCollaboration,
-} from '~/utils/assignment-collaboration.server';
+import { parseAssignmentCollaboration } from '~/utils/assignment-collaboration.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 import { resolveAssignmentPrompt } from '~/utils/assignment-exit-ticket.server';
 
@@ -192,12 +189,7 @@ export async function action({ request }: ActionFunctionArgs) {
       id: assignmentTypeId,
       archivedAt: null,
     },
-    select: {
-      id: true,
-      systemKey: true,
-      kind: true,
-      collaborationSupported: true,
-    },
+    select: { id: true, systemKey: true, kind: true },
   });
 
   if (!assignmentTypeAvailable || !assignmentType) {
@@ -210,13 +202,7 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  // Rollout gate. Applied here rather than at parse time because it needs the
-  // resolved assignment type, and it forces collaboration off rather than
-  // failing: a type outside the pilot yields an ordinary solo assignment.
-  const collaboration = applyCollaborationRolloutGate(
-    collaborationResult.value,
-    assignmentType.collaborationSupported
-  );
+  const collaboration = collaborationResult.value;
 
   if (collaboration.collaborationEnabled) {
     const emptyClass = await prisma.class.findFirst({
@@ -271,20 +257,33 @@ export async function action({ request }: ActionFunctionArgs) {
       deployment: { postAt, dueAt },
     });
 
-    // Unreachable while AP History is outside the pilot, which forces
-    // collaboration off above. Here anyway so flagging that type later cannot
-    // quietly leave this one branch without an arrangement.
+    let nextStep: ReturnType<typeof groupSetupNextStep> = null;
     if (collaboration.collaborationEnabled) {
       await autoArrangeNewAssignment({
         assignmentId: createdApAssignment.id,
         mode: collaboration.collaborationGroupMode,
         groupSize: collaboration.collaborationGroupSize,
       });
+
+      const deployments = await prisma.classAssignment.findMany({
+        where: { assignmentId: createdApAssignment.id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, classId: true },
+      });
+      nextStep = groupSetupNextStep({
+        assignmentId: createdApAssignment.id,
+        collaborationEnabled: true,
+        deployments: deployments.map((deployment) => ({
+          classAssignmentId: deployment.id,
+          classId: deployment.classId,
+        })),
+      });
     }
 
     return dataResponse({
       success: true,
       message: 'Assignment created and applied to classes.',
+      nextStep,
     });
   }
 
