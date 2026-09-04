@@ -527,6 +527,149 @@ export async function seedSyntheticLocalDevData(
       ],
     });
 
+    // Apply a skill, graded, whole class: every band on one ticket, and the
+    // clearest demonstration of what this rubric actually rewards. The student
+    // who gets the wrong answer with sound reasoning outscores the one who
+    // gets it right and shows nothing.
+    await seedExitTicket({
+      title: 'Exit ticket: two-step equations',
+      config: {
+        schemaVersion: 1,
+        mode: 'specific',
+        focus: 'apply-skill',
+        topic: 'solving a two-step equation like 3x + 7 = 22',
+        lessonNotes: {
+          mainPoints:
+            'Undo the addition or subtraction first, then undo the multiplication. Whatever you do to one side you do to the other.',
+          mustMention: 'Why the +7 comes off before the 3 is divided out.',
+          watchFor:
+            'Dividing by 3 first, which leaves a fraction and usually ends in a wrong answer.',
+        },
+      },
+      submitForGrade: true,
+      pointValue: 10,
+      responses: [
+        {
+          membershipId: personaRecords['student-graded'].membershipId,
+          title: 'Exit ticket: two-step equations',
+          text: 'First I take the 7 off both sides, so 3x + 7 = 22 becomes 3x = 15. I do the 7 first because it is the thing furthest from the x, and I am peeling the equation back in the opposite order from how it was built. Then I divide both sides by 3 and get x = 5. I checked it by putting 5 back in: 3 times 5 is 15, plus 7 is 22, so it works.',
+          score: 94,
+          letterGrade: 'A',
+          overallComment:
+            'Rosa, you did not just do the steps, you said why they go in that order — peeling it back in the opposite order from how it was built is exactly it. Checking your answer by substituting back is a habit worth keeping.',
+        },
+        {
+          membershipId: personaRecords.student.membershipId,
+          title: 'Exit ticket: two-step equations',
+          text: 'You have to get rid of the 7 first because it is added on, and you can only undo the multiplying once the adding is gone. So 3x + 7 = 22 turns into 3x = 15. Then I divide by 3. I got x = 4 but I am not sure, I think I divided wrong at the end.',
+          score: 83,
+          letterGrade: 'B',
+          overallComment:
+            'Ana, your final answer is wrong, and your understanding is not. You explained why the +7 comes off first, which is the thing this was checking for, and you caught that the last step was where it went astray. Redo just that division: 15 divided by 3.',
+        },
+        {
+          membershipId: personaRecords['student-submitted'].membershipId,
+          title: 'Exit ticket: two-step equations',
+          text: 'x = 5',
+          score: 70,
+          letterGrade: 'C',
+          overallComment:
+            'Marcus, that is the right answer, so something is working. But this ticket was asking for your thinking, and there is none here to read — I cannot tell whether you know why the 7 comes off before you divide, or whether you remembered the pattern. Show me the order next time and say why.',
+        },
+        {
+          membershipId: personaRecords['student-unreleased'].membershipId,
+          title: 'Exit ticket: two-step equations',
+          text: 'idk',
+          score: 40,
+          letterGrade: 'F',
+          overallComment:
+            'Jamal, there is nothing here for me to work with. If you are stuck, tell me where — even "I do not know which number to move first" gives me something to teach to. Come find me before Friday.',
+        },
+      ],
+    });
+
+    // Understand a text: the same reading, anchored and unanchored.
+    await seedExitTicket({
+      title: 'Exit ticket: the second stanza',
+      config: {
+        schemaVersion: 1,
+        mode: 'specific',
+        focus: 'understand-text',
+        topic: 'the second stanza of “Those Winter Sundays”',
+        lessonNotes: {
+          mainPoints:
+            'The speaker is looking back as an adult and recognising love in his father’s labour that he could not see as a child.',
+          mustMention:
+            'That the recognition is retrospective — the child did not see it at the time.',
+          watchFor:
+            'Reading the cold as only weather rather than as the household’s mood.',
+        },
+      },
+      submitForGrade: false,
+      pointValue: null,
+      responses: [
+        {
+          membershipId: personaRecords['student-graded'].membershipId,
+          title: 'Exit ticket: the second stanza',
+          text: 'I think the stanza is about the speaker realising something late. He says he woke and heard the cold "splintering, breaking" which is not really about the temperature, it is about how the house felt, like something was about to crack. And he says he spoke "indifferently" to his father, which is a strange word to choose about yourself unless you are looking back and wincing at it. That word is what made me think he is telling this from years later, not as it happened.',
+          score: 91,
+          letterGrade: 'A',
+          overallComment:
+            'Rosa, you did the thing this was asking for: you told me what the stanza means and then pointed at the words that got you there. Picking "indifferently" as the tell is a genuinely good catch — that is close reading.',
+        },
+        {
+          membershipId: personaRecords.student.membershipId,
+          title: 'Exit ticket: the second stanza',
+          text: 'The stanza is about the speaker remembering his father and feeling bad about how he treated him. It is sad and it shows that he did not appreciate what his father did for him until later on when he was older.',
+          score: 78,
+          letterGrade: 'C',
+          overallComment:
+            'Ana, your reading is right, and it would be much stronger with the poem in it. Nothing here points at a word or a line, so I cannot tell whether you got this from the text or from our discussion. Go back and find the one word that shows he is looking back.',
+        },
+      ],
+    });
+
+    // Connect to earlier learning: a real mismatch beats a tidy connection.
+    await seedExitTicket({
+      title: 'Exit ticket: the New Deal',
+      config: {
+        schemaVersion: 1,
+        mode: 'specific',
+        focus: 'connect-learning',
+        topic: 'the New Deal',
+        lessonNotes: {
+          mainPoints:
+            'The New Deal expanded federal power in ways the Progressive Era had started, but went much further and faced far less consensus.',
+          mustMention:
+            'A specific link to the Progressive Era reforms we studied.',
+          watchFor:
+            'Saying it is "just like" the Progressive Era without naming what was different.',
+        },
+      },
+      submitForGrade: false,
+      pointValue: null,
+      responses: [
+        {
+          membershipId: personaRecords['student-submitted'].membershipId,
+          title: 'Exit ticket: the New Deal',
+          text: 'It picks up where the Progressives left off, with the government stepping in on things it used to leave alone. But the part that does not fit is how people reacted. The Progressive reforms we read about had a lot of agreement behind them, and the New Deal had the Court striking things down and people calling it socialism. So it is the same direction but a completely different temperature, and I am not totally sure why the reaction was so different when the idea was similar.',
+          score: 90,
+          letterGrade: 'A',
+          overallComment:
+            'Marcus, the connection is good and the mismatch is better. Noticing that the same direction met a completely different reaction is the more interesting observation, and the question you end on is the one historians argue about. Bring it to Monday.',
+        },
+        {
+          membershipId: personaRecords['student-unreleased'].membershipId,
+          title: 'Exit ticket: the New Deal',
+          text: 'The New Deal connects to the Progressive Era because they both wanted to help people and make the country better. They are both examples of the government doing more to fix problems in society.',
+          score: 72,
+          letterGrade: 'C',
+          overallComment:
+            'Jamal, this is true but it would be true of almost any two reforms — nothing here is specific to the New Deal or to what we actually read about the Progressives. Name one Progressive reform from our unit and say what the New Deal did that went further.',
+        },
+      ],
+    });
+
     // Basic, no notes: the open-ended case, and the hardest one to read.
     await seedExitTicket({
       title: 'Exit ticket: Thursday',
