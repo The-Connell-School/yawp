@@ -3,34 +3,30 @@ import {
   type LoaderFunctionArgs,
   useLoaderData,
 } from 'react-router';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
 import { requireAdmin } from '~/utils/auth.server';
 import { cn } from '~/utils/misc';
 import {
-  isBenchmarkCaseApproved,
   type GradingBenchmarkCase,
   type GradingEvaluationDefinition,
+  type GradingBenchmarkResult,
 } from '~/domain/ai-evaluation/grading-benchmark';
 import { gradingAssistantBenchmarkV1 } from '~/domain/ai-evaluation/grading-assistant-benchmark.v1';
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  await requireAdmin(request);
+type CaseRunResult = GradingBenchmarkResult['cases'][number];
 
-  const suite = gradingAssistantBenchmarkV1;
-  const draftCaseCount = suite.cases.filter(
-    (benchmarkCase) => benchmarkCase.approval.status === 'draft'
-  ).length;
-  const approvedCaseCount = suite.cases.filter(isBenchmarkCaseApproved).length;
+type RunSummary = GradingBenchmarkResult['summary'];
 
-  return dataResponse({
-    suite,
-    draftCaseCount,
-    approvedCaseCount,
-    releaseBlocked: approvedCaseCount < suite.cases.length,
-  });
-}
+const STATIC_ASSISTANTS = [
+  {
+    id: gradingAssistantBenchmarkV1.id,
+    label: 'Thesis-Driven Essay (static)',
+    suite: gradingAssistantBenchmarkV1,
+  },
+] as const;
 
 const METHOD_LABELS: Record<GradingEvaluationDefinition['method'], string> = {
   code: 'Deterministic code check',
@@ -38,50 +34,35 @@ const METHOD_LABELS: Record<GradingEvaluationDefinition['method'], string> = {
   cross_case: 'Cross-case comparison',
 };
 
-const PROVENANCE_LABELS: Record<
-  GradingBenchmarkCase['provenance']['kind'],
-  string
-> = {
-  synthetic: 'Synthetic',
-  deidentified_production: 'Deidentified production',
+const STATUS_LABELS: Record<CaseRunResult['status'], string> = {
+  pass: 'Pass',
+  fail: 'Fail',
+  needs_review: 'Review',
+  blocked: 'Blocked',
 };
 
-const APPROVAL_LABELS: Record<
-  GradingBenchmarkCase['approval']['status'],
-  string
+const STATUS_VARIANT: Record<
+  CaseRunResult['status'],
+  'default' | 'secondary' | 'destructive' | 'outline'
 > = {
-  draft: 'Draft',
-  approved: 'Approved',
-  retired: 'Retired',
+  pass: 'default',
+  fail: 'destructive',
+  needs_review: 'secondary',
+  blocked: 'outline',
 };
 
-const FLOW_STEPS = [
-  {
-    title: 'Case input',
-    description:
-      'A synthetic essay, strictness level, and student first name are given to the grading assistant.',
-  },
-  {
-    title: 'Model output',
-    description:
-      'The assistant returns a score and comment for every rubric category plus a personalized overall comment.',
-  },
-  {
-    title: 'Deterministic checks',
-    description:
-      'Code evaluators verify the response contract and confirm every score falls inside its case-defined expected band.',
-  },
-  {
-    title: 'Qualitative review',
-    description:
-      'A human or LLM judge checks feedback grounding, rubric alignment, tone, and safety criteria against each requirement.',
-  },
-  {
-    title: 'Release decision',
-    description:
-      'A case only counts toward a release once product and educator approvals match its current fingerprint.',
-  },
-];
+export async function loader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
+  const suite = gradingAssistantBenchmarkV1;
+
+  return dataResponse({
+    assistant: STATIC_ASSISTANTS[0],
+    suite,
+    totalCases: suite.cases.length,
+    evaluationCount: suite.evaluations.length,
+  });
+}
 
 function matchesSearch(benchmarkCase: GradingBenchmarkCase, search: string) {
   if (!search) return true;
@@ -100,17 +81,21 @@ function ScoreBand({
   categoryKey,
   min,
   max,
+  actual,
   minScore,
   maxScore,
 }: {
   categoryKey: string;
   min: number;
   max: number;
+  actual?: number;
   minScore: number;
   maxScore: number;
 }) {
   const span = maxScore - minScore + 1;
   const segments = Array.from({ length: span }, (_, index) => minScore + index);
+  const inBand =
+    actual !== undefined && actual >= min && actual <= max ? actual : null;
 
   return (
     <div data-testid={`score-band-${categoryKey}`} className="min-w-0">
@@ -119,7 +104,15 @@ function ScoreBand({
           {categoryKey.replaceAll('_', ' ')}
         </dt>
         <dd className="shrink-0 text-sm tabular-nums text-muted-foreground">
-          {min}–{max}
+          {actual !== undefined ? (
+            <span className={cn(!inBand && 'text-destructive font-medium')}>
+              {actual} · expected {min}–{max}
+            </span>
+          ) : (
+            <span>
+              {min}–{max}
+            </span>
+          )}
         </dd>
       </div>
       <div
@@ -132,7 +125,13 @@ function ScoreBand({
             key={segment}
             className={cn(
               'h-2 rounded-full',
-              segment >= min && segment <= max ? 'bg-primary' : 'bg-muted'
+              segment >= min && segment <= max
+                ? actual === segment
+                  ? 'bg-primary ring-2 ring-primary/40'
+                  : 'bg-primary/70'
+                : actual === segment
+                  ? 'bg-destructive'
+                  : 'bg-muted'
             )}
           />
         ))}
@@ -141,8 +140,23 @@ function ScoreBand({
   );
 }
 
+function CaseStatusIcon({
+  status,
+  running,
+}: {
+  status?: CaseRunResult['status'];
+  running?: boolean;
+}) {
+  if (running) return <span aria-hidden>⟳</span>;
+  if (!status) return <span aria-hidden className="text-muted-foreground">·</span>;
+  if (status === 'pass') return <span aria-hidden>✓</span>;
+  if (status === 'fail') return <span aria-hidden>✗</span>;
+  if (status === 'needs_review') return <span aria-hidden>⚠</span>;
+  return <span aria-hidden>⊘</span>;
+}
+
 export default function AdminAiEvaluationsRoute() {
-  const { suite, draftCaseCount, approvedCaseCount, releaseBlocked } =
+  const { assistant, suite, totalCases, evaluationCount } =
     useLoaderData<typeof loader>();
 
   const [search, setSearch] = useState('');
@@ -151,6 +165,14 @@ export default function AdminAiEvaluationsRoute() {
   const [selectedCaseId, setSelectedCaseId] = useState(
     suite.cases[0]?.id ?? null
   );
+  const [caseResults, setCaseResults] = useState<Record<string, CaseRunResult>>(
+    {}
+  );
+  const [runningCaseId, setRunningCaseId] = useState<string | null>(null);
+  const [isRunningAll, setIsRunningAll] = useState(false);
+  const [runProgress, setRunProgress] = useState({ completed: 0, total: 0 });
+  const [lastRunAt, setLastRunAt] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
@@ -182,100 +204,185 @@ export default function AdminAiEvaluationsRoute() {
     filteredCases[0] ??
     null;
 
+  const selectedResult = selectedCase ? caseResults[selectedCase.id] : null;
+
   const evaluationsById = useMemo(() => {
     return new Map(
       suite.evaluations.map((evaluation) => [evaluation.id, evaluation])
     );
   }, [suite.evaluations]);
 
+  const summary = useMemo<RunSummary>(() => {
+    const results = Object.values(caseResults);
+    return {
+      total: results.length,
+      passed: results.filter((item) => item.status === 'pass').length,
+      failed: results.filter((item) => item.status === 'fail').length,
+      needsReview: results.filter((item) => item.status === 'needs_review')
+        .length,
+      blocked: results.filter((item) => item.status === 'blocked').length,
+    };
+  }, [caseResults]);
+
+  const runCase = useCallback(async (caseId: string) => {
+    const formData = new FormData();
+    formData.set('intent', 'runCase');
+    formData.set('caseId', caseId);
+
+    const response = await fetch('/api/domain/grading-assistant-benchmark', {
+      method: 'POST',
+      body: formData,
+    });
+    const payload = (await response.json()) as {
+      success: boolean;
+      message?: string;
+      caseResult?: CaseRunResult;
+    };
+
+    if (!response.ok || !payload.success || !payload.caseResult) {
+      throw new Error(payload.message ?? 'The benchmark case could not run.');
+    }
+
+    return payload.caseResult;
+  }, []);
+
+  const handleRunCase = useCallback(
+    async (caseId: string) => {
+      setRunError(null);
+      setRunningCaseId(caseId);
+      try {
+        const caseResult = await runCase(caseId);
+        setCaseResults((current) => ({ ...current, [caseId]: caseResult }));
+        setLastRunAt(new Date().toISOString());
+      } catch (error) {
+        setRunError(
+          error instanceof Error
+            ? error.message
+            : 'The benchmark case could not run.'
+        );
+      } finally {
+        setRunningCaseId(null);
+      }
+    },
+    [runCase]
+  );
+
+  const handleRunAll = useCallback(async () => {
+    setRunError(null);
+    setIsRunningAll(true);
+    setRunProgress({ completed: 0, total: suite.cases.length });
+
+    try {
+      for (const [index, benchmarkCase] of suite.cases.entries()) {
+        setRunningCaseId(benchmarkCase.id);
+        const caseResult = await runCase(benchmarkCase.id);
+        setCaseResults((current) => ({
+          ...current,
+          [benchmarkCase.id]: caseResult,
+        }));
+        setRunProgress({ completed: index + 1, total: suite.cases.length });
+      }
+      setLastRunAt(new Date().toISOString());
+    } catch (error) {
+      setRunError(
+        error instanceof Error ? error.message : 'The benchmark could not run.'
+      );
+    } finally {
+      setRunningCaseId(null);
+      setIsRunningAll(false);
+    }
+  }, [runCase, suite.cases]);
+
+  const isRunning = isRunningAll || runningCaseId !== null;
+
   return (
     <div className="flex flex-col gap-6 p-3 sm:p-5">
-      <div>
-        <h2 className="text-2xl font-semibold">Benchmark review</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Read-only review of the {suite.title} (v{suite.version}) corpus.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold">Grading Evals</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Run live AI checks against the static {assistant.label} benchmark.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="assistant-select" className="sr-only">
+            Grading assistant
+          </label>
+          <select
+            id="assistant-select"
+            value={assistant.id}
+            disabled
+            className="h-10 rounded-md border border-input bg-input-background px-3 text-sm"
+          >
+            <option value={assistant.id}>{assistant.label}</option>
+          </select>
+          <Button
+            type="button"
+            data-testid="run-all-cases"
+            disabled={isRunning}
+            onClick={() => void handleRunAll()}
+          >
+            {isRunningAll
+              ? `Running ${runProgress.completed}/${runProgress.total}`
+              : 'Run all cases'}
+          </Button>
+        </div>
       </div>
+
+      {runError ? (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+        >
+          {runError}
+        </p>
+      ) : null}
 
       <div>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-gray-950/5 pt-4 sm:grid-cols-4 dark:border-white/10">
           <div className="pr-4 [&:not(:nth-child(2n+1))]:border-l [&:not(:nth-child(2n+1))]:pl-4 sm:[&:not(:nth-child(4n+1))]:border-l sm:[&:not(:nth-child(4n+1))]:pl-4 border-gray-950/5 dark:border-white/10">
-            <dt className="truncate text-sm text-muted-foreground">
-              Draft cases
-            </dt>
+            <dt className="truncate text-sm text-muted-foreground">Cases</dt>
             <dd
-              data-testid="stat-draft-cases"
+              data-testid="stat-total-cases"
               className="mt-1 text-2xl font-semibold tabular-nums"
             >
-              {draftCaseCount}
+              {totalCases}
             </dd>
           </div>
           <div className="border-l border-gray-950/5 pl-4 dark:border-white/10">
-            <dt className="truncate text-sm text-muted-foreground">
-              Evaluation definitions
-            </dt>
+            <dt className="truncate text-sm text-muted-foreground">Checks</dt>
             <dd
               data-testid="stat-evaluation-definitions"
               className="mt-1 text-2xl font-semibold tabular-nums"
             >
-              {suite.evaluations.length}
+              {evaluationCount}
             </dd>
           </div>
           <div className="border-l border-gray-950/5 pl-4 dark:border-white/10">
-            <dt className="truncate text-sm text-muted-foreground">Approved</dt>
+            <dt className="truncate text-sm text-muted-foreground">Pass</dt>
             <dd
-              data-testid="stat-approved-cases"
-              className="mt-1 text-2xl font-semibold tabular-nums"
+              data-testid="stat-pass-count"
+              className="mt-1 text-2xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-400"
             >
-              {approvedCaseCount}
+              {summary.passed}
             </dd>
           </div>
           <div className="border-l border-gray-950/5 pl-4 dark:border-white/10">
-            <dt className="truncate text-sm text-muted-foreground">
-              Release status
-            </dt>
+            <dt className="truncate text-sm text-muted-foreground">Fail</dt>
             <dd
-              data-testid="stat-release-status"
-              className="mt-1 text-2xl font-semibold"
+              data-testid="stat-fail-count"
+              className="mt-1 text-2xl font-semibold tabular-nums text-destructive"
             >
-              {releaseBlocked ? 'Blocked' : 'Ready'}
+              {summary.failed}
             </dd>
           </div>
         </dl>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {lastRunAt
+            ? `Last run ${new Date(lastRunAt).toLocaleString()}.`
+            : 'No runs yet. Hit Run all cases to grade every essay with live AI.'}
+        </p>
       </div>
-
-      <section aria-labelledby="evaluation-flow-heading">
-        <h2 id="evaluation-flow-heading" className="text-base font-semibold">
-          How a case becomes a release
-        </h2>
-        <ol
-          data-testid="evaluation-flow"
-          role="list"
-          className="mt-3 grid gap-4 sm:grid-cols-5"
-        >
-          {FLOW_STEPS.map((step, index) => (
-            <li
-              key={step.title}
-              className={cn(
-                'pt-3 sm:pt-0',
-                index === 0
-                  ? 'border-t-0 sm:border-l-0 sm:pl-0'
-                  : 'border-t border-gray-950/5 sm:border-t-0 sm:border-l sm:pl-4 dark:border-white/10'
-              )}
-            >
-              <span className="text-xs font-medium text-muted-foreground">
-                Step {index + 1}
-              </span>
-              <p className="mt-0.5 text-sm font-semibold text-foreground">
-                {step.title}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {step.description}
-              </p>
-            </li>
-          ))}
-        </ol>
-      </section>
 
       <section
         aria-labelledby="case-explorer-heading"
@@ -320,15 +427,6 @@ export default function AdminAiEvaluationsRoute() {
                   </option>
                 ))}
               </select>
-              <svg
-                viewBox="0 0 8 5"
-                width="8"
-                height="5"
-                fill="none"
-                className="pointer-events-none col-start-2 row-start-1 place-self-center"
-              >
-                <path d="M.5.5 4 4 7.5.5" stroke="currentcolor" />
-              </svg>
             </div>
 
             <div className="inline-grid flex-1 grid-cols-[1fr_2rem]">
@@ -347,15 +445,6 @@ export default function AdminAiEvaluationsRoute() {
                 <option value="intermediate">Intermediate</option>
                 <option value="advanced">Advanced</option>
               </select>
-              <svg
-                viewBox="0 0 8 5"
-                width="8"
-                height="5"
-                fill="none"
-                className="pointer-events-none col-start-2 row-start-1 place-self-center"
-              >
-                <path d="M.5.5 4 4 7.5.5" stroke="currentcolor" />
-              </svg>
             </div>
           </div>
 
@@ -377,6 +466,8 @@ export default function AdminAiEvaluationsRoute() {
             ) : (
               filteredCases.map((benchmarkCase) => {
                 const isSelected = benchmarkCase.id === selectedCase?.id;
+                const result = caseResults[benchmarkCase.id];
+                const caseRunning = runningCaseId === benchmarkCase.id;
                 return (
                   <li key={benchmarkCase.id}>
                     <button
@@ -384,16 +475,24 @@ export default function AdminAiEvaluationsRoute() {
                       onClick={() => setSelectedCaseId(benchmarkCase.id)}
                       aria-pressed={isSelected}
                       className={cn(
-                        'flex w-full min-w-0 flex-col gap-1 px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
+                        'flex w-full min-w-0 items-start gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
                         isSelected && 'bg-muted text-foreground'
                       )}
                     >
-                      <span className="truncate text-sm font-medium">
-                        {benchmarkCase.title}
+                      <span className="mt-0.5 w-4 shrink-0 text-sm">
+                        <CaseStatusIcon
+                          status={result?.status}
+                          running={caseRunning}
+                        />
                       </span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {benchmarkCase.input.strictness} ·{' '}
-                        {APPROVAL_LABELS[benchmarkCase.approval.status]}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                          {benchmarkCase.title}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {benchmarkCase.input.strictness}
+                          {result ? ` · ${STATUS_LABELS[result.status]}` : ''}
+                        </span>
                       </span>
                     </button>
                   </li>
@@ -406,43 +505,78 @@ export default function AdminAiEvaluationsRoute() {
         <div className="min-w-0">
           {selectedCase ? (
             <div data-testid="case-detail" className="flex flex-col gap-5">
-              <div>
-                <h3 className="text-lg font-semibold">{selectedCase.title}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {selectedCase.description}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {selectedCase.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" size="sm">
-                      {tag}
-                    </Badge>
-                  ))}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">{selectedCase.title}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {selectedCase.description}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {selectedCase.tags.map((tag) => (
+                      <Badge key={tag} variant="secondary" size="sm">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="run-selected-case"
+                  disabled={isRunning}
+                  onClick={() => void handleRunCase(selectedCase.id)}
+                >
+                  {runningCaseId === selectedCase.id
+                    ? 'Running…'
+                    : 'Run this case'}
+                </Button>
               </div>
 
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
-                <div>
-                  <dt className="font-medium text-foreground">Strictness</dt>
-                  <dd className="text-muted-foreground">
-                    {selectedCase.input.strictness}
-                  </dd>
+              {selectedResult ? (
+                <div
+                  data-testid="case-run-result"
+                  className="rounded-lg border px-4 py-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={STATUS_VARIANT[selectedResult.status]}>
+                      {STATUS_LABELS[selectedResult.status]}
+                    </Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {selectedResult.evaluations.length} checks evaluated
+                    </span>
+                  </div>
+                  <ul role="list" className="mt-3 flex flex-col gap-2">
+                    {selectedResult.evaluations.map((evaluation) => (
+                      <li
+                        key={`${evaluation.evaluatorId}-${evaluation.criterionId ?? 'core'}`}
+                        className="rounded-md bg-muted/40 px-3 py-2 text-sm"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">
+                            {evaluationsById.get(evaluation.evaluatorId)
+                              ?.title ?? evaluation.evaluatorId}
+                          </span>
+                          <Badge
+                            variant={
+                              evaluation.status === 'pass'
+                                ? 'default'
+                                : evaluation.status === 'fail'
+                                  ? 'destructive'
+                                  : 'secondary'
+                            }
+                            size="sm"
+                          >
+                            {STATUS_LABELS[evaluation.status]}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">
+                          {evaluation.evidence ?? evaluation.message}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <div>
-                  <dt className="font-medium text-foreground">Approval</dt>
-                  <dd
-                    data-testid="case-approval-status"
-                    className="text-muted-foreground"
-                  >
-                    {APPROVAL_LABELS[selectedCase.approval.status]}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-foreground">Provenance</dt>
-                  <dd className="text-muted-foreground">
-                    {PROVENANCE_LABELS[selectedCase.provenance.kind]}
-                  </dd>
-                </div>
-              </dl>
+              ) : null}
 
               <div>
                 <h4 className="text-sm font-semibold">Essay</h4>
@@ -461,12 +595,16 @@ export default function AdminAiEvaluationsRoute() {
                     const band =
                       selectedCase.expectations.scoreBands[categoryKey];
                     if (!band) return null;
+                    const actual = selectedResult?.output?.categories.find(
+                      (category) => category.key === categoryKey
+                    )?.score;
                     return (
                       <ScoreBand
                         key={categoryKey}
                         categoryKey={categoryKey}
                         min={band.min}
                         max={band.max}
+                        actual={actual}
                         minScore={suite.rubric.minScore}
                         maxScore={suite.rubric.maxScore}
                       />

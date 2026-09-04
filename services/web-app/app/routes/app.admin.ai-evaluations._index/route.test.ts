@@ -16,7 +16,7 @@ describe('admin ai-evaluations loader', () => {
     requireAdmin.mockResolvedValue(undefined);
   });
 
-  test('requires admin and returns the benchmark suite with review counts', async () => {
+  test('requires admin and returns the static grading benchmark suite', async () => {
     const response = await loader({
       request: new Request('https://example.test/app/admin/ai-evaluations'),
       params: {},
@@ -27,18 +27,17 @@ describe('admin ai-evaluations loader', () => {
       response as {
         data: {
           suite: typeof gradingAssistantBenchmarkV1;
-          draftCaseCount: number;
-          approvedCaseCount: number;
-          releaseBlocked: boolean;
+          totalCases: number;
+          evaluationCount: number;
+          assistant: { label: string };
         };
       }
     ).data;
 
     expect(data.suite).toEqual(gradingAssistantBenchmarkV1);
     expect(data.suite.cases).toHaveLength(15);
-    expect(data.suite.evaluations).toHaveLength(9);
-    expect(data.draftCaseCount).toBe(15);
-    expect(data.approvedCaseCount).toBe(0);
-    expect(data.releaseBlocked).toBe(true);
+    expect(data.totalCases).toBe(15);
+    expect(data.evaluationCount).toBe(9);
+    expect(data.assistant.label).toContain('Thesis-Driven Essay');
   });
 });
