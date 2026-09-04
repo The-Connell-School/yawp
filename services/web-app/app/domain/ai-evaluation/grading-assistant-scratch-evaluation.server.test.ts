@@ -12,6 +12,8 @@ const gradingConfig: ResolvedAssignmentTypeGradingConfig = {
   scoringType: 'weighted_1_5',
   minScore: 1,
   maxScore: 5,
+  step: 1,
+  rubricIncomplete: false,
   rubricCategories: [
     {
       key: 'claim',

@@ -1030,7 +1030,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     documentText: submission.text,
   });
   const { system, maxTokens } = compiledInvocation;
-
+  const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
+    rubricKeys.length
+  );
 
   let responseText = '';
 
