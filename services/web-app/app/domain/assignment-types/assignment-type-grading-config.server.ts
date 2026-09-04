@@ -15,11 +15,13 @@ import { normalizeScoreStep } from './score-scale-steps';
 export type AssignmentTypeGradingInstructions =
   | {
       mode: 'preset';
+      systemInstructions?: string;
       rubricInstructions: string;
       scoreInstructions: string;
     }
   | {
       mode: 'unified';
+      systemInstructions?: string;
       gradingInstructions: string;
     }
   | {
@@ -55,9 +57,13 @@ export type ResolvedAssignmentTypeGradingConfig = {
   calibrationNotes: string | null;
   sourceTemplateId: string | null;
   sourceTemplateSlug: string | null;
+  promptTemplate?: {
+    systemMessage: string;
+    userMessage: string;
+  } | null;
 };
 
-type AssignmentTypeGradingRow = {
+export type AssignmentTypeGradingRow = {
   id: string;
   title: string;
   kind: string | null;
@@ -98,6 +104,16 @@ function getPromptConfigSnapshot(
   return isRecord(rawPromptConfig) ? rawPromptConfig : fallbackPromptConfig;
 }
 
+function getManagedPromptTemplate(promptConfig: Record<string, unknown>) {
+  const systemMessage = promptConfig.systemMessageTemplate;
+  const userMessage = promptConfig.userMessageTemplate;
+  if (typeof systemMessage !== 'string' || typeof userMessage !== 'string') {
+    return null;
+  }
+  if (!systemMessage.trim() || !userMessage.trim()) return null;
+  return { systemMessage, userMessage };
+}
+
 function applyGradingInstructionsOverride(
   promptConfig: Record<string, unknown>
 ): Record<string, unknown> {
@@ -116,12 +132,21 @@ function applyGradingInstructionsOverride(
 export function getAssignmentTypeGradingInstructions(
   promptConfig: Record<string, unknown>
 ): AssignmentTypeGradingInstructions {
+  const systemInstructions =
+    typeof promptConfig.systemInstructions === 'string' &&
+    promptConfig.systemInstructions.trim()
+      ? promptConfig.systemInstructions.trim()
+      : undefined;
   const gradingInstructionsOverride =
     typeof promptConfig.gradingInstructionsOverride === 'string'
       ? promptConfig.gradingInstructionsOverride.trim()
       : '';
   if (gradingInstructionsOverride) {
-    return { mode: 'unified', gradingInstructions: gradingInstructionsOverride };
+    return {
+      mode: 'unified',
+      systemInstructions,
+      gradingInstructions: gradingInstructionsOverride,
+    };
   }
 
   const gradingInstructions =
@@ -129,12 +154,13 @@ export function getAssignmentTypeGradingInstructions(
       ? promptConfig.gradingInstructions.trim()
       : '';
   if (gradingInstructions) {
-    return { mode: 'unified', gradingInstructions };
+    return { mode: 'unified', systemInstructions, gradingInstructions };
   }
 
   if (promptConfig.instructionsPreset === 'legacy_thesis_driven_essay') {
     return {
       mode: 'preset',
+      systemInstructions,
       rubricInstructions: gradingAssistantRubricInstructions,
       scoreInstructions: gradingAssistantScoreScaleInstructions,
     };
@@ -150,12 +176,6 @@ export function getAssignmentTypeGradingInstructions(
     promptConfig.scoreInstructions.trim()
       ? promptConfig.scoreInstructions.trim()
       : 'Scores must be integers in the configured range.';
-  const systemInstructions =
-    typeof promptConfig.systemInstructions === 'string' &&
-    promptConfig.systemInstructions.trim()
-      ? promptConfig.systemInstructions.trim()
-      : undefined;
-
   return {
     mode: 'legacy-split',
     rubricInstructions,
@@ -196,7 +216,7 @@ function getOwnGradingInstructionsOverride(
     : undefined;
 }
 
-function buildResolvedConfig({
+export function buildResolvedAssignmentTypeGradingConfig({
   assignmentTypeId,
   assignmentTypeKind,
   assignmentTypeTitle,
@@ -288,6 +308,7 @@ function buildResolvedConfig({
       parsedConfig.source === 'assignment-type'
         ? (row?.gradingAssistantSourceTemplateSlug ?? null)
         : null,
+    promptTemplate: getManagedPromptTemplate(promptConfigSnapshot),
   };
 }
 
@@ -318,7 +339,7 @@ export async function resolveAssignmentTypeGradingConfig({
     },
   });
 
-  return buildResolvedConfig({
+  return buildResolvedAssignmentTypeGradingConfig({
     assignmentTypeId,
     assignmentTypeKind,
     assignmentTypeTitle,

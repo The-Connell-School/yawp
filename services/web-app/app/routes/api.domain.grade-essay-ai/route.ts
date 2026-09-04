@@ -29,7 +29,6 @@ import {
   buildGradingPromptShape,
   buildGradingResponseSchemaText,
 } from '~/domain/grading/grading-prompt-shape';
-import { buildGradingRequest } from '~/domain/grading/grading-request';
 import {
   applyGradingAssistantStrictnessToActComposite,
   applyGradingAssistantStrictnessToPercentage,
@@ -37,6 +36,7 @@ import {
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
+import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   extractJsonObjectCandidates,
@@ -763,7 +763,6 @@ export async function action({ request }: ActionFunctionArgs) {
     scoringType,
     source: resolvedGradingConfig.source,
   };
-  const templateInstructions = resolvedGradingConfig.instructions;
   const gradingInstructionsOverride =
     typeof resolvedGradingConfig.promptConfigSnapshot
       .gradingInstructionsOverride === 'string'
@@ -792,8 +791,6 @@ export async function action({ request }: ActionFunctionArgs) {
     maxScore,
     categoryFeedbackEnabled,
   });
-
-  const assignmentPrompt = submission.document.assignment?.prompt?.trim();
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   const forceFallback = data.llmRetry === 'fallback';
@@ -1026,16 +1023,15 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  const { system, userPrompt } = buildGradingRequest({
-    promptShape,
-    instructions: templateInstructions,
-    label: resolvedGradingConfig.label,
+  const compiledInvocation = compileGradingAssistantInvocation({
+    gradingConfig: resolvedGradingConfig,
     studentFirstName,
-    assignmentPrompt,
-    essayText: submission.text,
+    strictnessLevel: gradingAssistantStrictnessLevel,
+    documentText: submission.text,
   });
+  const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
-    rubricCategories.length
+    rubricKeys.length
   );
 
   let responseText = '';
@@ -1053,8 +1049,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       responseText = await getGradingLlmCompletion({
         model,
         system,
-        messages: [{ role: 'user', content: userPrompt }],
-        maxTokens: rubricEvaluationMaxTokens,
+        messages: compiledInvocation.messages,
+        maxTokens,
         metadata: {
           feature: 'grading',
           kind: 'rubric-evaluation',

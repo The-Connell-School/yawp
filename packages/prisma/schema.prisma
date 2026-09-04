@@ -79,24 +79,24 @@ model Rubric {
 }
 
 model AssignmentType {
-  id                                 String                        @id @default(cuid())
-  createdAt                          DateTime                      @default(now()) @db.Timestamptz(6)
-  updatedAt                          DateTime                      @default(now()) @db.Timestamptz(6)
+  id                                 String                                 @id @default(cuid())
+  createdAt                          DateTime                               @default(now()) @db.Timestamptz(6)
+  updatedAt                          DateTime                               @default(now()) @db.Timestamptz(6)
   title                              String
-  kind                               String?                       @unique
+  kind                               String?                                @unique
   description                        String?
   position                           Int
-  systemKey                          String?                       @unique
-  archivedAt                         DateTime?                     @db.Timestamptz(6)
+  systemKey                          String?                                @unique
+  archivedAt                         DateTime?                              @db.Timestamptz(6)
   ownerOrgId                         String?
-  ownerOrg                           Organization?                 @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
+  ownerOrg                           Organization?                          @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
   ownerMembershipId                  String?
-  ownerMembership                    OrgMembership?                @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
+  ownerMembership                    OrgMembership?                         @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
   /// The rubric this assignment type grades with, chosen from the shared
   /// library. Null keeps the older behaviour: its own JSON columns below, or
   /// the built-in default for its kind.
   rubricId                           String?
-  rubric                             Rubric?                       @relation(fields: [rubricId], references: [id])
+  rubric                             Rubric?                                @relation(fields: [rubricId], references: [id])
   scoringScaleJson                   Json?
   rubricJson                         Json?
   gradingPromptConfigJson            Json?
@@ -105,8 +105,8 @@ model AssignmentType {
   /// Prototype gate for collaborative drafts. Collaboration is offered only for
   /// assignment types that opt in, which keeps the pilot to one course rather
   /// than every kind of writing in the product.
-  collaborationSupported             Boolean                       @default(false)
-  gradingAssistantVersion            Int                           @default(1)
+  collaborationSupported             Boolean                                @default(false)
+  gradingAssistantVersion            Int                                    @default(1)
   gradingAssistantSourceTemplateId   String?
   gradingAssistantSourceTemplateSlug String?
   image                              AssignmentTypeImage?
@@ -117,6 +117,11 @@ model AssignmentType {
   assignments                        Assignment[]
   documents                          Document[]
   apHistoryLibraryEntries            ApHistoryPromptLibraryEntry[]
+  evaluations                        AssignmentTypeEvaluation[]
+  evaluationCases                    AssignmentTypeEvaluationCase[]
+  evaluationRuns                     AssignmentTypeEvaluationRun[]
+  promptVersions                     AssignmentTypePromptVersion[]
+  evaluationSuiteVersions            AssignmentTypeEvaluationSuiteVersion[]
   savedThesisPrompts                 SavedThesisPrompt[]
   savedDailyPagesPrompts             SavedDailyPagesPrompt[]
   savedAssignments                   SavedAssignment[]
@@ -126,6 +131,126 @@ model AssignmentType {
   @@index([archivedAt])
   @@index([systemKey])
   @@index([kind])
+}
+
+model AssignmentTypeEvaluation {
+  id               String                         @id @default(cuid())
+  createdAt        DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime                       @default(now()) @updatedAt @db.Timestamptz(6)
+  assignmentTypeId String
+  assignmentType   AssignmentType                 @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  title            String
+  description      String
+  position         Int                            @default(0)
+  archivedAt       DateTime?                      @db.Timestamptz(6)
+  cases            AssignmentTypeEvaluationCase[]
+
+  @@index([assignmentTypeId, archivedAt, position])
+}
+
+model AssignmentTypeEvaluationCase {
+  id                 String                           @id @default(cuid())
+  createdAt          DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime                         @default(now()) @updatedAt @db.Timestamptz(6)
+  assignmentTypeId   String
+  assignmentType     AssignmentType                   @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  evaluationId       String?
+  evaluation         AssignmentTypeEvaluation?        @relation(fields: [evaluationId], references: [id], onDelete: SetNull)
+  rubricCategoryKey  String
+  title              String
+  documentText       String
+  criterion          String
+  expectedOutputJson Json?
+  position           Int                              @default(0)
+  archivedAt         DateTime?                        @db.Timestamptz(6)
+  results            AssignmentTypeEvaluationResult[]
+
+  @@index([assignmentTypeId, archivedAt, rubricCategoryKey, position])
+  @@index([evaluationId, archivedAt, position])
+}
+
+model AssignmentTypePromptVersion {
+  id                    String                        @id @default(cuid())
+  createdAt             DateTime                      @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                      @default(now()) @updatedAt @db.Timestamptz(6)
+  promotedAt            DateTime?                     @db.Timestamptz(6)
+  assignmentTypeId      String
+  assignmentType        AssignmentType                @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  version               Int
+  revision              Int                           @default(1)
+  status                String                        @default("draft")
+  systemMessageTemplate String                        @db.Text
+  userMessageTemplate   String                        @db.Text
+  variableSchemaJson    Json
+  contentHash           String
+  runs                  AssignmentTypeEvaluationRun[]
+
+  @@unique([assignmentTypeId, version])
+  @@index([assignmentTypeId, status, version(sort: Desc)])
+}
+
+model AssignmentTypeEvaluationSuiteVersion {
+  id               String                        @id @default(cuid())
+  createdAt        DateTime                      @default(now()) @db.Timestamptz(6)
+  assignmentTypeId String
+  assignmentType   AssignmentType                @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  version          Int
+  contentHash      String
+  snapshotJson     Json
+  runs             AssignmentTypeEvaluationRun[]
+
+  @@unique([assignmentTypeId, version])
+  @@index([assignmentTypeId, version(sort: Desc)])
+}
+
+model AssignmentTypeEvaluationRun {
+  id                         String                                @id @default(cuid())
+  createdAt                  DateTime                              @default(now()) @db.Timestamptz(6)
+  completedAt                DateTime?                             @db.Timestamptz(6)
+  assignmentTypeId           String
+  assignmentType             AssignmentType                        @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  promptVersion              Int
+  promptVersionId            String?
+  savedPromptVersion         AssignmentTypePromptVersion?          @relation(fields: [promptVersionId], references: [id], onDelete: SetNull)
+  promptRevision             Int?
+  promptSnapshotJson         Json
+  evaluationSuiteVersionId   String?
+  evaluationSuiteVersion     AssignmentTypeEvaluationSuiteVersion? @relation(fields: [evaluationSuiteVersionId], references: [id], onDelete: SetNull)
+  evaluationSuiteContentHash String?
+  evaluationSnapshotJson     Json?
+  status                     String                                @default("running")
+  totalCases                 Int                                   @default(0)
+  passedCases                Int                                   @default(0)
+  failedCases                Int                                   @default(0)
+  needsReviewCases           Int                                   @default(0)
+  results                    AssignmentTypeEvaluationResult[]
+
+  @@index([assignmentTypeId, createdAt(sort: Desc)])
+  @@index([promptVersionId, evaluationSuiteVersionId, createdAt(sort: Desc)])
+  @@index([status])
+}
+
+model AssignmentTypeEvaluationResult {
+  id                   String                        @id @default(cuid())
+  createdAt            DateTime                      @default(now()) @db.Timestamptz(6)
+  runId                String
+  run                  AssignmentTypeEvaluationRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  caseId               String?
+  evaluationCase       AssignmentTypeEvaluationCase? @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  caseTitle            String
+  rubricCategoryKey    String
+  criterion            String
+  status               String
+  evidence             String
+  gradingOutputJson    Json?
+  expectedOutputJson   Json?
+  responseContractJson Json?
+  requestSnapshotJson  Json?
+
+  @@unique([runId, caseId])
+  @@index([runId])
+  @@index([caseId])
+  @@index([status])
 }
 
 model Assignment {

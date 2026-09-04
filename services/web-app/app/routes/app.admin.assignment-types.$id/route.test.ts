@@ -6,6 +6,9 @@ const prisma = {
     findUnique: mock(),
     update: mock(),
   },
+  assignmentTypePromptVersion: {
+    findMany: mock(),
+  },
   orgMembership: {
     findMany: mock(),
     findUnique: mock(),
@@ -45,6 +48,7 @@ describe('admin assignment type detail action', () => {
     prisma.$transaction.mockReset();
     prisma.assignmentType.findUnique.mockReset();
     prisma.assignmentType.update.mockReset();
+    prisma.assignmentTypePromptVersion.findMany.mockReset();
     prisma.rubric.findUnique.mockReset();
     prisma.orgMembership.findMany.mockReset();
     prisma.orgMembership.findUnique.mockReset();
@@ -72,6 +76,7 @@ describe('admin assignment type detail action', () => {
         instructionsPreset: 'legacy_thesis_driven_essay',
       },
     });
+    prisma.assignmentTypePromptVersion.findMany.mockResolvedValue([]);
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
   });
@@ -153,7 +158,10 @@ describe('admin assignment type detail action', () => {
     );
     form.set(
       'promptConfigJson',
-      JSON.stringify({ gradingInstructions: 'Grade this as ACT Writing.' })
+      JSON.stringify({
+        systemInstructions: 'Act as an ACT Writing evaluator.',
+        gradingInstructions: 'Grade this as ACT Writing.',
+      })
     );
 
     await action({
@@ -196,6 +204,7 @@ describe('admin assignment type detail action', () => {
           ],
         },
         gradingPromptConfigJson: {
+          systemInstructions: 'Act as an ACT Writing evaluator.',
           gradingInstructions: 'Grade this as ACT Writing.',
         },
         gradingOutputSchemaJson: {
@@ -452,6 +461,89 @@ describe('admin assignment type detail action', () => {
       createdAt: new Date('2026-06-04T00:00:00.000Z'),
       description: null,
       archivedAt: null,
+      scoringScaleJson: {
+        type: 'act_writing_2_12',
+        minScore: 1,
+        maxScore: 6,
+      },
+      rubricJson: {
+        categories: [
+          {
+            key: 'ideas_and_analysis',
+            label: 'Ideas and Analysis',
+            weight: 1,
+            description: 'Develop a clear perspective.',
+          },
+        ],
+      },
+      gradingPromptConfigJson: {
+        systemInstructions: 'Act as an ACT Writing evaluator.',
+        gradingInstructions: 'Apply the ACT Writing rubric exactly.',
+      },
+      gradingOutputSchemaJson: { schemaVersion: 1 },
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 4,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      evaluations: [
+        {
+          id: 'evaluation-1',
+          title: 'Positive greeting',
+          description: 'Begin with a brief, encouraging acknowledgment.',
+          position: 0,
+          archivedAt: null,
+          createdAt: new Date('2026-07-13T16:00:00.000Z'),
+        },
+      ],
+      evaluationCases: [
+        {
+          id: 'case-1',
+          evaluationId: 'evaluation-1',
+          title: 'Clear claim',
+          rubricCategoryKey: 'ideas_and_analysis',
+          documentText: 'School uniforms should remain optional.',
+          criterion: 'The feedback identifies the claim.',
+          expectedOutputJson: {
+            overallComment: 'Jordan, you have a clear claim. Revise next.',
+          },
+          position: 0,
+          createdAt: new Date('2026-07-13T17:00:00.000Z'),
+        },
+      ],
+      evaluationRuns: [
+        {
+          id: 'run-1',
+          promptVersion: 4,
+          status: 'completed',
+          totalCases: 1,
+          passedCases: 1,
+          failedCases: 0,
+          needsReviewCases: 0,
+          promptSnapshotJson: {
+            compiledPrompt: {
+              system: 'You are a grading assistant. Prompt v4.',
+              userMessage: 'Grade the case document.',
+            },
+          },
+          createdAt: new Date('2026-07-13T18:00:00.000Z'),
+          completedAt: new Date('2026-07-13T18:00:05.000Z'),
+          results: [
+            {
+              id: 'result-1',
+              caseId: 'case-1',
+              caseTitle: 'Clear claim',
+              rubricCategoryKey: 'ideas_and_analysis',
+              criterion: 'The feedback identifies the claim.',
+              status: 'pass',
+              evidence: 'The response identifies the claim.',
+              gradingOutputJson: { overallComment: 'Jordan, revise next.' },
+              expectedOutputJson: {
+                overallComment: 'Jordan, you have a clear claim. Revise next.',
+              },
+            },
+          ],
+        },
+      ],
       assignmentModules: [],
       image: null,
     });
@@ -464,6 +556,117 @@ describe('admin assignment type detail action', () => {
       context: {} as never,
     });
 
-    expect((result as { data: any }).data.course.title).toBe('ACT Writing');
+    const data = (result as { data: any }).data;
+    expect(data.course.title).toBe('ACT Writing');
+    expect(data.gradingAssistantPromptPreview.version).toBe(4);
+    expect(data.gradingAssistantPromptPreview.system).toContain(
+      'You are a grading assistant.'
+    );
+    expect(data.gradingAssistantPromptPreview.system).toContain(
+      'Assignment type system instructions:\nAct as an ACT Writing evaluator.'
+    );
+    expect(data.gradingAssistantPromptPreview.userMessage).toContain(
+      'Assignment type grading config: ACT Writing'
+    );
+    expect(data.gradingAssistantPromptPreview.userMessage).toContain(
+      'Apply the ACT Writing rubric exactly.'
+    );
+    expect(data.gradingAssistantPromptPreview.userMessage).toContain(
+      'Essay:\n[CASE DOCUMENT CONTENT]'
+    );
+    expect(data.gradingAssistantPromptPreview.previewInputs).toEqual({
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: '[CASE DOCUMENT CONTENT]',
+    });
+    expect(data.evaluationHistory).toBeUndefined();
+    const assignmentTypeQuery =
+      prisma.assignmentType.findUnique.mock.calls[0]?.[0];
+    expect(assignmentTypeQuery.include.evaluations).toBeUndefined();
+    expect(assignmentTypeQuery.include.evaluationCases).toBeUndefined();
+    expect(assignmentTypeQuery.include.evaluationRuns).toBeUndefined();
+  });
+
+  test('resolves the production prompt version label for the current prompt', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'ACT Writing',
+      kind: 'act_writing',
+      createdAt: new Date('2026-06-04T00:00:00.000Z'),
+      description: null,
+      archivedAt: null,
+      scoringScaleJson: null,
+      rubricJson: null,
+      gradingPromptConfigJson: null,
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      evaluations: [],
+      evaluationCases: [],
+      assignmentModules: [],
+      image: null,
+    });
+    prisma.assignmentTypePromptVersion.findMany.mockResolvedValue([
+      {
+        id: 'prompt-a',
+        createdAt: new Date('2026-07-14T14:00:00.000Z'),
+        status: 'previous',
+      },
+      {
+        id: 'prompt-b',
+        createdAt: new Date('2026-07-14T16:00:00.000Z'),
+        status: 'production',
+      },
+    ]);
+
+    const result = await loader({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1'
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    const data = (result as { data: any }).data;
+    expect(data.currentPromptLabel).toBe('7.14.2026 B');
+  });
+
+  test('does not present the standard prompt as the exact AP History invocation', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-ap-history',
+      title: 'AP History Essay',
+      kind: 'ap_history',
+      systemKey: 'ap_history_essay',
+      createdAt: new Date('2026-06-04T00:00:00.000Z'),
+      description: null,
+      archivedAt: null,
+      scoringScaleJson: null,
+      rubricJson: null,
+      gradingPromptConfigJson: null,
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      assignmentModules: [],
+      image: null,
+    });
+
+    const result = await loader({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-ap-history'
+      ),
+      params: { id: 'at-ap-history' },
+      context: {} as never,
+    });
+
+    const data = (result as { data: any }).data;
+    expect(data.gradingAssistantPromptPreview).toBeNull();
+    expect(data.gradingAssistantPromptPreviewUnavailableReason).toContain(
+      'assignment snapshot'
+    );
+    expect(prisma.assignmentType.findUnique).toHaveBeenCalledTimes(1);
   });
 });

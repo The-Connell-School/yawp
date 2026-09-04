@@ -42,6 +42,7 @@
     "github:preview-config": "bash scripts/github-preview-config.sh",
     "db:restore-local-from-s3": "bash scripts/restore-local-from-s3.sh",
     "db:seed-local-dev": "bun run --cwd packages/prisma seed-local-dev",
+    "db:seed-grading-evaluations": "bun run --cwd packages/prisma seed-grading-evaluations",
     "worktree:setup": "bash scripts/worktree-local-setup.sh --no-dev",
     "worktree:setup:fresh": "bash scripts/worktree-local-setup.sh --fresh --no-dev",
     "project": "./bin/project",

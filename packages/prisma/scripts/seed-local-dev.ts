@@ -9,6 +9,7 @@ import {
 } from './local-dev/import-prod-fidelity-fixtures';
 import { seedCollaborationDemoData } from './local-dev/seed-collaboration';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
+import { seedStarterGradingEvaluations } from './local-dev/starter-grading-evaluations';
 import { truncateAllPublicTables } from './local-dev/truncate-all';
 import { enableClassInsightsForOrganizations } from './local-dev/class-insights';
 import {
@@ -62,6 +63,12 @@ try {
   const context = await seedSyntheticLocalDevData(prisma);
   console.timeEnd('synthetic');
 
+  console.time('grading-evaluations');
+  const evaluationSummary = await seedStarterGradingEvaluations(prisma, {
+    demo: true,
+  });
+  console.timeEnd('grading-evaluations');
+
   // After the synthetic seed, because it puts the four student personas into
   // groups alongside the cohort it creates.
   console.time('collaboration');
@@ -79,6 +86,7 @@ try {
         organizationId: context.organizationId,
         primaryClassId: context.primaryClassId,
         thesisAssignmentTypeId: context.thesisAssignmentTypeId,
+        evaluationSummary,
         personas: LOCAL_DEV_PERSONAS.map((persona) => ({
           label: persona.label,
           email: persona.email,
