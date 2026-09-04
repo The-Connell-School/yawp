@@ -56,6 +56,7 @@ const FormSelectImpl = forwardRef<HTMLButtonElement, FormSelectProps<string>>(
     const field = useField(scope);
     const fallbackId = useId();
     const id = props.id ?? fallbackId;
+    const labelId = `${id}-label`;
     const error = field.error();
     const errorId = error ? `${id}-error` : undefined;
     const name = field.name();
@@ -63,7 +64,7 @@ const FormSelectImpl = forwardRef<HTMLButtonElement, FormSelectProps<string>>(
     return (
       <div className={cn('flex flex-col gap-1', className)}>
         {labelInfo ? (
-          <label htmlFor={id}>
+          <label id={labelId} htmlFor={id}>
             <span className="flex items-center gap-2">
               {label ?? ''}{' '}
               <Tooltip text={<p className="max-w-[300px]">{labelInfo}</p>}>
@@ -72,7 +73,9 @@ const FormSelectImpl = forwardRef<HTMLButtonElement, FormSelectProps<string>>(
             </span>
           </label>
         ) : hideLabel ? null : (
-          <label htmlFor={id}>{label ?? ''}</label>
+          <label id={labelId} htmlFor={id}>
+            {label ?? ''}
+          </label>
         )}
         <Select
           value={field.value()?.toString()}
@@ -85,6 +88,8 @@ const FormSelectImpl = forwardRef<HTMLButtonElement, FormSelectProps<string>>(
           <SelectTrigger
             className={cn(error && 'border-destructive')}
             type="button"
+            aria-labelledby={label && !hideLabel ? labelId : undefined}
+            aria-label={hideLabel ? label : undefined}
           >
             <div className="flex items-center gap-1">
               {prefix}

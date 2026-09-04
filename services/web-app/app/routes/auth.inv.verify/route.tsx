@@ -150,6 +150,7 @@ export async function action({ request }: ActionFunctionArgs) {
       include: {
         memberships: {
           where: { organizationId: organizationId },
+          include: { schools: { select: { id: true } } },
         },
       },
     });
@@ -157,7 +158,10 @@ export async function action({ request }: ActionFunctionArgs) {
     if (existingUser) {
       let membership: OrgMembership;
       if (existingUser.memberships.length > 0) {
-        if (existingUser.memberships[0].role === 'TEACHER') {
+        if (
+          existingUser.memberships[0].role === 'TEACHER' &&
+          existingUser.memberships[0].schools.length > 0
+        ) {
           return redirectWithToast(
             '/app',
             {
@@ -176,6 +180,16 @@ export async function action({ request }: ActionFunctionArgs) {
             }
           );
         }
+        invitationCookie.set('organizationId', organizationId);
+        invitationCookie.set('email', normalizedTarget);
+        return redirect('/auth/inv/onboard-teacher-school', {
+          headers: {
+            'set-cookie':
+              await invitationCookieStorage.commitSession(invitationCookie),
+          },
+        });
+      }
+      if (existingUser.memberships.length > 0) {
         const membershipToUpdate = existingUser.memberships[0];
         membership = await prisma.orgMembership.update({
           where: { id: membershipToUpdate.id },
