@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   capabilities,
+  capsuleWorktree,
   parseEnvFile,
   selectCompatibleBun,
   selectCompatibleNode,
@@ -72,6 +73,43 @@ describe("Yawp project agent CLI", () => {
     const result = spawnSync(path.join(root, "bin", "project"), ["bootstrap", "--frseh", "--json"], { cwd: root, encoding: "utf8" });
     expect(result.status).not.toBe(0);
     expect(JSON.parse(result.stderr).code).toBe("unknown_option");
+  });
+
+  test("advertises teardown so Record can record a removal path at provision time", () => {
+    const contract = capabilities();
+    expect(contract.commands.teardown).toBe("./bin/project teardown --json");
+  });
+
+  test("only a Record-provisioned capsule worktree is eligible for teardown", () => {
+    const marker = { RECORD_EXECUTION_ID: "work-abc123" };
+    expect(capsuleWorktree("/repo/.git", marker)).toBe(false);
+    expect(capsuleWorktree("/repo/.git/worktrees/capsule", marker)).toBe(true);
+    // Hand-managed worktrees are linked too, so the Record marker is what makes one disposable.
+    expect(capsuleWorktree("/repo/.git/worktrees/my-feature", {})).toBe(false);
+    expect(capsuleWorktree("/repo/.git/worktrees/my-feature", { RECORD_EXECUTION_ID: "  " })).toBe(false);
+  });
+
+  // This suite runs in a hand-managed worktree, so the guard is exercised for real here.
+  test("teardown refuses any workspace Record did not provision", () => {
+    const result = spawnSync(path.join(root, "bin", "project"), ["teardown", "--json"], {
+      cwd: root,
+      encoding: "utf8",
+      env: { ...process.env, RECORD_EXECUTION_ID: "" },
+    });
+    expect(result.status).not.toBe(0);
+    expect(JSON.parse(result.stderr).code).toBe("capsule_required");
+  });
+
+  test("teardown help and option validation stay bounded", () => {
+    const help = spawnSync(path.join(root, "bin", "project"), ["teardown", "--help"], { cwd: root, encoding: "utf8" });
+    expect(help.status).toBe(0);
+    expect(help.stdout).toContain("./bin/project teardown");
+    const unknown = spawnSync(path.join(root, "bin", "project"), ["teardown", "--wipe-everything", "--json"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    expect(unknown.status).not.toBe(0);
+    expect(JSON.parse(unknown.stderr).code).toBe("unknown_option");
   });
 
   test("bootstrap uses an immutable lockfile install", () => {

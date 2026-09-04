@@ -164,6 +164,7 @@ export function capabilities() {
       fixture: "./bin/project fixture apply local-dev --json",
       test: "./bin/project test --profile changed --json",
       qa: "./bin/project qa prepare --json",
+      teardown: "./bin/project teardown --json",
     },
     fixtures: ["local-dev"],
     proofProfiles: ["project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
@@ -213,6 +214,70 @@ function bootstrap({ fresh, json }) {
     ports: local ? { app: Number(local.DEV_PORT), database: Number(local.PG_PORT), e2e: Number(process.env.RECORD_PORT_E2E || process.env.E2E_PORT || 0) || null } : null,
     container: local && local.CONTAINER_NAME,
     nextCommands: ["./bin/project fixture verify local-dev --json", "./bin/project dev start --json"],
+  };
+}
+
+// Only a Record capsule is disposable, and a capsule always carries RECORD_EXECUTION_ID from the
+// provisioning adapter. Hand-managed workspaces are linked worktrees too, so link status alone
+// would let a teardown destroy an environment somebody is actually working in.
+export function capsuleWorktree(gitDir, environment = process.env) {
+  if (!/(^|\/)\.git\/worktrees\//.test(String(gitDir || ""))) return false;
+  return String(environment.RECORD_EXECUTION_ID || "").trim() !== "";
+}
+
+function absoluteGitDir(environment) {
+  const result = spawnSync("git", ["rev-parse", "--absolute-git-dir"], {
+    cwd: ROOT, env: environment, encoding: "utf8", timeout: 10000,
+  });
+  if (result.error || result.status !== 0) {
+    throw Object.assign(new Error("cannot resolve the git directory for this workspace"), { code: "git_unavailable" });
+  }
+  return String(result.stdout || "").trim();
+}
+
+function dockerRemove(args, environment) {
+  const result = spawnSync("docker", args, { cwd: ROOT, env: environment, encoding: "utf8", timeout: 60000 });
+  // Removal is idempotent: an already-absent container or volume is a success, not a failure.
+  if (!result.error && result.status === 0) return "removed";
+  if (/No such container|no such volume|No such object/i.test(String(result.stderr || ""))) return "absent";
+  throw Object.assign(new Error(`docker ${args.join(" ")} failed: ${bounded(result.stderr)}`), { code: "docker_teardown_failed" });
+}
+
+function teardown({ json, keepVolume }) {
+  const selected = runtime();
+  const gitDir = absoluteGitDir(selected.env);
+  if (!capsuleWorktree(gitDir)) {
+    throw Object.assign(
+      new Error("refusing to tear down this workspace; teardown only runs inside a Record capsule, which Record identifies with RECORD_EXECUTION_ID"),
+      { code: "capsule_required" },
+    );
+  }
+  const local = config();
+  if (!local) {
+    return { schemaVersion: "project.teardown/v1", status: "nothing-to-do", reason: "not-bootstrapped", removed: {} };
+  }
+  try { devStop(); } catch { /* a dev server that is already gone does not block teardown */ }
+  const removed = {
+    container: local.CONTAINER_NAME ? dockerRemove(["rm", "--force", "--volumes", local.CONTAINER_NAME], selected.env) : "absent",
+    volume: "kept",
+    config: "absent",
+  };
+  if (!keepVolume && local.VOLUME_NAME) {
+    removed.volume = dockerRemove(["volume", "rm", local.VOLUME_NAME], selected.env);
+  }
+  const configDir = path.dirname(CONFIG_FILE);
+  if (fs.existsSync(configDir)) {
+    fs.rmSync(configDir, { recursive: true, force: true });
+    removed.config = "removed";
+  }
+  return {
+    schemaVersion: "project.teardown/v1",
+    status: "torn-down",
+    worktree: ROOT,
+    container: local.CONTAINER_NAME || null,
+    volume: local.VOLUME_NAME || null,
+    ports: { app: Number(local.DEV_PORT) || null, database: Number(local.PG_PORT) || null },
+    removed,
   };
 }
 
@@ -446,7 +511,8 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n  ./bin/project teardown [--keep-volume] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    teardown: "Usage: ./bin/project teardown [--keep-volume] [--json]\n\nStops the dev server, then removes this capsule's Postgres container, volume, and generated\nconfig. Runs only inside a Record capsule worktree; the primary workspace is always refused.\n",
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
     test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
@@ -476,7 +542,7 @@ function validateOptions(options, allowed) {
 }
 
 function validatePositionals(command, operation, positional) {
-  const exact = { capabilities: 1, doctor: 1, bootstrap: 1, test: 1 };
+  const exact = { capabilities: 1, doctor: 1, bootstrap: 1, test: 1, teardown: 1 };
   if (exact[command] && positional.length !== exact[command]) throw Object.assign(new Error(`unexpected arguments for ${command}`), { code: 'unexpected_argument' });
   if (command === 'fixture' && (!['apply', 'reset', 'verify', 'list'].includes(operation) || positional.length > 3)) {
     throw Object.assign(new Error(`invalid fixture command: ${positional.join(' ')}`), { code: 'unknown_command' });
@@ -503,7 +569,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (command === "help" || parsed.options.help === true) return output(help(command === "help" ? operation || "root" : command), false);
   const allowedByCommand = {
     capabilities: ['json'], doctor: ['json'], bootstrap: ['json', 'fresh'], fixture: ['json'],
-    dev: ['json'], test: ['json', 'profile'], qa: ['json', 'routes']
+    dev: ['json'], test: ['json', 'profile'], qa: ['json', 'routes'], teardown: ['json', 'keep-volume']
   };
   validateOptions(parsed.options, allowedByCommand[command] || ['json']);
   validatePositionals(command, operation, parsed.positional);
@@ -538,6 +604,7 @@ export async function main(argv = process.argv.slice(2)) {
     if (operation === "status") return output(devStatus(), json);
     if (operation === "stop") return output(devStop(), json);
   }
+  if (command === "teardown") return output(teardown({ json, keepVolume: parsed.options['keep-volume'] === true }), json);
   if (command === "test") return output(runTestProfile(parsed.options.profile || "changed", { json }), json);
   if (command === "qa" && operation === "prepare") return output(await qaPrepare({ json, routes: parsed.options.routes }), json);
   throw Object.assign(new Error(`unknown command: ${parsed.positional.join(" ")}`), { code: "unknown_command" });
