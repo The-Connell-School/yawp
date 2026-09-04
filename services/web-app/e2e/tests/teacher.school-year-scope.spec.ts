@@ -69,7 +69,7 @@ test.describe('School year scope', () => {
       await page.waitForURL('**/auth/inv/onboard-teacher**');
 
       await page.locator('input[name="name"]').fill('Invited UA Teacher');
-      await page.locator('button[role="combobox"]').first().click();
+      await page.getByRole('combobox', { name: 'School' }).click();
       await page
         .getByRole('option', { name: 'UA E2E School', exact: true })
         .click();
