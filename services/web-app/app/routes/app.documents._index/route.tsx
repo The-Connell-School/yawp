@@ -42,7 +42,12 @@ import {
   readStudentWorkViewPreferences,
   getStoredCollapsedStudentWorkGroups,
   withStoredCollapsedStudentWorkGroups,
+  clearStoredStudentWorkFilters,
+  stripStudentWorkResetParam,
+  STUDENT_WORK_RESET_PARAM,
 } from './student-work-view-preferences';
+import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
+import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 
 export const handle = { breadcrumb: 'Documents' };
 
@@ -53,7 +58,7 @@ function resolveDocumentClass(
     } | null;
     membership: {
       classesAsStudent: TeacherDocumentWorkClassSummary[];
-    };
+    } | null;
   },
   options: {
     teacherClassIds: Set<string>;
@@ -68,14 +73,14 @@ function resolveDocumentClass(
     return options.fallbackClass;
   }
 
-  const enrolledTeacherClass = document.membership.classesAsStudent.find(
+  const enrolledTeacherClass = document.membership?.classesAsStudent.find(
     (klass) => options.teacherClassIds.has(klass.id)
   );
   if (enrolledTeacherClass) {
     return enrolledTeacherClass;
   }
 
-  return document.membership.classesAsStudent[0] ?? null;
+  return document.membership?.classesAsStudent[0] ?? null;
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -104,10 +109,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const group = parseDocumentGroupMode(url.searchParams.get('group'));
   const query = (url.searchParams.get('q') ?? '').trim();
 
+  // Everything on this page hangs off the teacher's classes, so scoping them
+  // to the school year chosen in the sidebar scopes the whole grading queue —
+  // and keeps it agreeing with what My Classes shows.
+  const schoolYearScope = await resolveTeacherSchoolYearScope(
+    request,
+    profile.id
+  );
+
   const classes = await prisma.class.findMany({
     where: {
       teachers: { some: { id: profile.id } },
       isArchived: false,
+      ...(schoolYearScope === ALL_SCHOOL_YEARS
+        ? {}
+        : { schoolYear: schoolYearScope }),
     },
     select: {
       id: true,
@@ -190,7 +206,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
       },
+      group: {
+        select: {
+          id: true,
+          label: true,
+          members: {
+            where: { removedAt: null },
+            orderBy: { membershipId: 'asc' },
+            select: {
+              membershipId: true,
+              membership: {
+                select: {
+                  id: true,
+                  user: { select: { id: true, name: true, email: true } },
+                },
+              },
+            },
+          },
+        },
+      },
       submissions: {
+        where: { unsubmittedAt: null },
         orderBy: { submittedAt: 'desc' },
         select: {
           id: true,
@@ -220,7 +256,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
       id: document.id,
       title: document.title,
       updatedAt: new Date(document.updatedAt),
-      membership: document.membership,
+      // Teacher worklists render a group as a group. The compatibility-shaped
+      // subject below is a view model only; it is never persisted as ownership.
+      membership:
+        document.membership ??
+        ({
+          id: `group:${document.group?.id ?? document.id}`,
+          user: {
+            id: `group:${document.group?.id ?? document.id}`,
+            name: document.group?.label ?? 'Collaborative group',
+            email: '',
+          },
+          classesAsStudent: [],
+        } as const),
+      group: document.group,
       assignment: document.assignment,
       resolvedClass: resolveDocumentClass(document, {
         teacherClassIds,
@@ -291,6 +340,15 @@ export default function StudentWorkRoute() {
     }
 
     hasHydratedStudentWorkPreferences.current = true;
+
+    if (searchParams.has(STUDENT_WORK_RESET_PARAM)) {
+      clearStoredStudentWorkFilters();
+      setSearchParams(stripStudentWorkResetParam(searchParams), {
+        replace: true,
+      });
+      return;
+    }
+
     const merged = mergeStoredStudentWorkSearchParams({
       searchParams,
       storedPreferences: readStudentWorkViewPreferences(),

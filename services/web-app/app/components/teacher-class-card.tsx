@@ -1,14 +1,18 @@
 import { Link } from 'react-router';
 import { ClassArt } from '~/components/class-art';
+import {
+  getClassCardHeading,
+} from '~/utils/class-display';
 
 export type TeacherClassCardData = {
   id: string;
-  grade: string;
-  period: string;
+  grade: string | null;
+  period: string | null;
   title: string | null;
   classArtKey: string | null;
   legacyClassArtIndex?: number | null;
   school: { id: string; name: string } | null;
+  schoolYear?: string;
   _count: { students: number; assignments: number };
   stats?: {
     ungradedCount: number;
@@ -16,20 +20,17 @@ export type TeacherClassCardData = {
   };
 };
 
-export function formatTeacherClassLabel(klass: {
-  grade: string;
-  period: string;
-  title?: string | null;
-}) {
-  const base = `Grade ${klass.grade} • Period ${klass.period}`;
-  return klass.title ? `${base} — ${klass.title}` : base;
-}
+export { formatClassCardTitle as formatTeacherClassLabel } from '~/utils/class-display';
 
 export function TeacherClassCard({
   klass,
+  showSchoolYear = false,
 }: {
   klass: TeacherClassCardData;
+  showSchoolYear?: boolean;
 }) {
+  const { title, subtitle } = getClassCardHeading(klass);
+
   return (
     <div className="flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md">
       <Link
@@ -46,14 +47,27 @@ export function TeacherClassCard({
 
         <div className="flex flex-1 flex-col gap-3 p-4">
           <div>
-            {klass.school?.name ? (
-              <p className="font-mono text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground">
-                {klass.school.name}
+            {klass.school?.name || showSchoolYear ? (
+              <p className="flex items-center gap-1.5 font-mono text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground">
+                {klass.school?.name ? <span>{klass.school.name}</span> : null}
+                {/*
+                  Only while the list spans years: inside a single year every
+                  card would carry the same label and it would be noise.
+                */}
+                {showSchoolYear && klass.schoolYear ? (
+                  <>
+                    {klass.school?.name ? <span aria-hidden>•</span> : null}
+                    <span>{klass.schoolYear.replace('-', '–')}</span>
+                  </>
+                ) : null}
               </p>
             ) : null}
             <h4 className="mt-1 text-balance text-base font-semibold tracking-tight text-foreground">
-              {formatTeacherClassLabel(klass)}
+              {title}
             </h4>
+            {subtitle ? (
+              <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
+            ) : null}
           </div>
         </div>
 

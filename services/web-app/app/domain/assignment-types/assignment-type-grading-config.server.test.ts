@@ -74,6 +74,8 @@ describe('resolveAssignmentTypeGradingConfig', () => {
       categories: config.rubricCategories,
       minScore: 1,
       maxScore: 6,
+      // Absent from the stored scale, so it falls back to every value.
+      step: 1,
       scoringType: 'act_writing_2_12',
     });
     expect(config.promptConfigSnapshot).toEqual({
@@ -105,6 +107,7 @@ describe('resolveAssignmentTypeGradingConfig', () => {
       gradingAssistantVersion: 1,
       gradingAssistantSourceTemplateId: null,
       gradingAssistantSourceTemplateSlug: null,
+      rubric: null,
     });
 
     const config = await resolveAssignmentTypeGradingConfig({
@@ -158,5 +161,59 @@ describe('resolveAssignmentTypeGradingConfig', () => {
       systemMessage: 'Production system for {{assignment_type}}',
       userMessage: 'Rubric:\n{{rubric}}\nEssay:\n{{document}}',
     });
+  });
+
+  test('selecting the canonical Thesis library entry preserves the exact production config identity', async () => {
+    const { THESIS_DRIVEN_ESSAY } =
+      await import('~/domain/rubrics/thesis-driven-essay');
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'assignment-type-thesis',
+      title: 'Thesis-driven Essay',
+      kind: null,
+      scoringScaleJson: {
+        type: 'weighted_percent',
+        minScore: 0,
+        maxScore: 100,
+      },
+      rubricJson: { categories: [] },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Stale instructions from the retired rubric editor.',
+        gradingInstructionsOverride:
+          'Apply the thesis rubric with extra emphasis on source analysis.',
+      },
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: 'Changed notes.',
+      gradingAssistantVersion: 9,
+      gradingAssistantSourceTemplateId: 'changed-template',
+      gradingAssistantSourceTemplateSlug: 'changed-template',
+      rubric: {
+        name: 'thesis-driven-essay',
+        schemaJson: THESIS_DRIVEN_ESSAY,
+      },
+    });
+
+    const config = await resolveAssignmentTypeGradingConfig({
+      assignmentTypeId: 'assignment-type-thesis',
+    });
+
+    expect(config.source).toBe('thesis-default');
+    expect(config.label).toBe('Thesis-driven essay grading assistant');
+    expect(config.version).toBe(1);
+    expect(config.scoringType).toBe('weighted_1_5');
+    expect(config.minScore).toBe(1);
+    expect(config.maxScore).toBe(5);
+    expect(config.instructions).toEqual({
+      mode: 'unified',
+      gradingInstructions:
+        'Apply the thesis rubric with extra emphasis on source analysis.',
+    });
+    expect(config.promptConfigSnapshot).toEqual(
+      expect.objectContaining({
+        gradingInstructions:
+          'Apply the thesis rubric with extra emphasis on source analysis.',
+      })
+    );
+    expect(config.sourceTemplateId).toBeNull();
+    expect(config.sourceTemplateSlug).toBeNull();
   });
 });

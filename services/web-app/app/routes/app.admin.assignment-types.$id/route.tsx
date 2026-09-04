@@ -1,5 +1,6 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import { data as dataResponse, redirect, useLoaderData } from 'react-router';
+import type { Prisma } from '@app/prisma';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
 import { requireAdmin } from '~/utils/auth.server';
@@ -10,6 +11,7 @@ import {
   parseRubric,
   parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
@@ -30,6 +32,42 @@ function parseJsonFormField(formData: FormData, name: string) {
   } catch {
     throw new Response(`${name} must be valid JSON`, { status: 400 });
   }
+}
+
+function withGradingInstructionsOverride(
+  rawPromptConfig: unknown,
+  rawOverride: FormDataEntryValue | null
+) {
+  const promptConfig =
+    rawPromptConfig &&
+    typeof rawPromptConfig === 'object' &&
+    !Array.isArray(rawPromptConfig)
+      ? { ...(rawPromptConfig as Record<string, unknown>) }
+      : {};
+  const gradingInstructionsOverride =
+    typeof rawOverride === 'string' ? rawOverride.trim() : '';
+
+  if (gradingInstructionsOverride) {
+    promptConfig.gradingInstructionsOverride = gradingInstructionsOverride;
+  } else {
+    delete promptConfig.gradingInstructionsOverride;
+  }
+
+  return promptConfig as Prisma.InputJsonObject;
+}
+
+function readGradingInstructionsOverride(rawPromptConfig: unknown) {
+  if (
+    !rawPromptConfig ||
+    typeof rawPromptConfig !== 'object' ||
+    Array.isArray(rawPromptConfig)
+  ) {
+    return '';
+  }
+
+  const value = (rawPromptConfig as Record<string, unknown>)
+    .gradingInstructionsOverride;
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -146,6 +184,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       formData.has('rubricJson') ||
       formData.has('promptConfigJson') ||
       formData.has('outputSchemaJson');
+    const hasGradingInstructionsOverrideField = formData.has(
+      'gradingInstructionsOverride'
+    );
+    const hasRubricIdField = formData.has('rubricId');
+    const rawRubricId = formData.get('rubricId')?.toString() ?? '';
+    const rubricId =
+      rawRubricId && rawRubricId !== '__none__' ? rawRubricId : null;
 
     if (!assignmentTypeId) {
       throw new Response('Not Found', { status: 404 });
@@ -157,26 +202,71 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const existing = await prisma.assignmentType.findUnique({
       where: { id: assignmentTypeId },
-      select: { id: true },
+      select: { id: true, rubricJson: true, gradingPromptConfigJson: true },
     });
     if (!existing) {
       throw new Response('Not Found', { status: 404 });
     }
 
+    if (hasRubricIdField && rubricId) {
+      const rubric = await prisma.rubric.findUnique({
+        where: { id: rubricId },
+        select: { id: true },
+      });
+      if (!rubric) {
+        throw new Response('That rubric no longer exists.', { status: 404 });
+      }
+    }
+
+    const gradingInstructionsOverrideChanged =
+      hasGradingInstructionsOverrideField &&
+      (formData.get('gradingInstructionsOverride')?.toString().trim() ?? '') !==
+        readGradingInstructionsOverride(existing.gradingPromptConfigJson);
+
     const gradingConfigData = hasGradingConfigFields
       ? {
           scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
           rubricJson: parseJsonFormField(formData, 'rubricJson'),
-          gradingPromptConfigJson: parseJsonFormField(
-            formData,
-            'promptConfigJson'
-          ),
+          gradingPromptConfigJson: hasGradingInstructionsOverrideField
+            ? withGradingInstructionsOverride(
+                parseJsonFormField(formData, 'promptConfigJson'),
+                formData.get('gradingInstructionsOverride')
+              )
+            : parseJsonFormField(formData, 'promptConfigJson'),
           gradingOutputSchemaJson:
             parseJsonFormField(formData, 'outputSchemaJson') ??
             DEFAULT_OUTPUT_SCHEMA_JSON,
           gradingAssistantVersion: { increment: 1 },
         }
-      : {};
+      : gradingInstructionsOverrideChanged
+        ? {
+            gradingPromptConfigJson: withGradingInstructionsOverride(
+              existing.gradingPromptConfigJson,
+              formData.get('gradingInstructionsOverride')
+            ),
+            gradingAssistantVersion: { increment: 1 },
+          }
+        : {};
+
+    if (hasGradingConfigFields) {
+      const nextRubric = parseRubric(gradingConfigData.rubricJson);
+      const nextRubricComplete = isRubricFullyPopulated(nextRubric);
+      if (!nextRubricComplete) {
+        // Grandfather assignment types whose rubric was already incomplete
+        // before this edit — don't force an unrelated save (e.g. a title
+        // change) to be blocked on fixing a pre-existing gap. Only block edits
+        // that would newly break a rubric that was whole.
+        const previouslyComplete = isRubricFullyPopulated(
+          parseRubric((existing as { rubricJson?: unknown }).rubricJson)
+        );
+        if (previouslyComplete) {
+          throw new Response(
+            'Every rubric category needs a key, label, description, and weight before saving. Finish the categories you started, or remove them.',
+            { status: 400 }
+          );
+        }
+      }
+    }
 
     await prisma.$transaction(async (tx) => {
       if (deleteImage) {
@@ -204,6 +294,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           title,
           description: description || null,
+          ...(hasRubricIdField ? { rubricId } : {}),
           ...gradingConfigData,
         },
       });

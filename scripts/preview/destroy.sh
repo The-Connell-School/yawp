@@ -3,6 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
+export PREVIEW_ROOT
+# shellcheck source=remove-preview-path.sh
+source "$SCRIPT_DIR/remove-preview-path.sh"
 
 compose_file="$PREVIEW_DIR/docker-compose.yml"
 if [[ -f "$compose_file" ]]; then
@@ -16,5 +19,8 @@ if docker inspect preview-postgres >/dev/null 2>&1; then
 fi
 
 docker volume rm "${COMPOSE_PROJECT}_${COMPOSE_PROJECT}-postgres-data" >/dev/null 2>&1 || true
-rm -rf "$PREVIEW_DIR"
+preview_remove_path "$PREVIEW_DIR" "$SLUG"
+if [[ -n "${SOURCE_DIR:-}" ]]; then
+  preview_remove_path "$SOURCE_DIR" "$SLUG"
+fi
 echo "Destroyed $SLUG"

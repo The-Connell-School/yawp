@@ -9,8 +9,8 @@ import {
 
 export type TeacherDocumentWorkClassSummary = {
   id: string;
-  grade: string;
-  period: string;
+  grade: string | null;
+  period: string | null;
   title: string | null;
 };
 
@@ -38,6 +38,17 @@ export type TeacherDocumentWorkRow = {
     id: string;
     user: { id?: string; name: string | null; email: string };
   };
+  group?: {
+    id: string;
+    label: string;
+    members: Array<{
+      membershipId: string;
+      membership: {
+        id: string;
+        user: { id?: string; name: string | null; email: string };
+      };
+    }>;
+  } | null;
   assignment: {
     id: string;
     title: string | null;
@@ -67,10 +78,7 @@ export type ReleaseGradeRow = {
   };
 };
 
-export function formatClassLabel(klass: TeacherDocumentWorkClassSummary) {
-  const base = `Grade ${klass.grade} • Period ${klass.period}`;
-  return klass.title ? `${base} — ${klass.title}` : base;
-}
+export { formatClassLabel } from '~/utils/class-display';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -93,6 +101,10 @@ export function getTeacherDocumentWorkDetailLink(params: {
 
   if (params.document.latestSubmission?.id) {
     return `/app/submissions/${params.document.latestSubmission.id}?edit=1&exitTo=${encodedExitTo}`;
+  }
+
+  if (params.document.group) {
+    return `/app/group-drafts/${params.document.id}?exitTo=${encodedExitTo}`;
   }
 
   return `/app/documents/${params.document.id}?left=tutor&exitTo=${encodedExitTo}`;

@@ -1,40 +1,42 @@
+import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
-  type LoaderFunctionArgs,
-  data as dataResponse,
-  redirect,
+  Form,
+  useFetcher,
+  useLoaderData,
+  useRevalidator,
+  useRouteLoaderData,
 } from 'react-router';
-import { Form, Link, useLoaderData, useRouteLoaderData, useSearchParams } from 'react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
-import { DocumentLink } from '~/components/document-link.js';
+import { Button } from '~/components/ui/button';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
-import {
-  getStudentPreviewState,
-  shouldUseStudentExperience,
-} from '~/utils/student-preview.server';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '~/components/ui/accordion';
-import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import type { TeacherClassCardData } from '~/components/teacher-class-card';
+import { StudentClassCard } from '~/components/student-class-card';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { getTeacherRecentActiveClassIds } from '~/utils/teacher-dashboard-recent-classes.server';
+import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
 import {
-  orderAssignmentModuleSessionsForCurrentStep,
-  type AssignmentModuleSessionResumeCandidate,
-} from '~/utils/assignment-module-session-resume';
+  resolveSchoolYearScopeForMembership,
+  schoolYearWhere,
+} from '~/utils/school-year-scope.server';
 import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
+import { formatClassLabel } from '~/utils/class-display';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -42,63 +44,41 @@ export type AssignmentTypeRow = {
   id: string;
   title: string;
   systemKey?: string | null;
+  collaborationSupported?: boolean;
   image?: { id: string } | null;
 };
-
-function formatClassLabel(klass: {
-  grade: string;
-  period: string;
-  title: string | null;
-}) {
-  const base = `Grade ${klass.grade} • Period ${klass.period}`;
-  return klass.title ? `${base} — ${klass.title}` : base;
-}
-
-function orderDocumentTileModuleSessions<
-  T extends { assignmentModuleSessions: AssignmentModuleSessionResumeCandidate[] },
->(documents: T[]) {
-  return documents.map((document) => ({
-    ...document,
-    assignmentModuleSessions: orderAssignmentModuleSessionsForCurrentStep(
-      document.assignmentModuleSessions
-    ),
-  }));
-}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  const preview = await getStudentPreviewState(request);
-  const useStudentExperience = shouldUseStudentExperience({
-    membershipRole: profile.role,
-    previewActive: preview.active,
-  });
+  const useStudentExperience = profile.role === 'STUDENT';
+  // The dashboard is the first thing either role sees, so it has to obey the
+  // same school year everything else does.
+  const schoolYearScope = await resolveSchoolYearScopeForMembership(
+    request,
+    profile
+  );
 
-  const studentClassCount =
-    useStudentExperience
-      ? ((
-          await prisma.orgMembership.findUnique({
-            where: { id: profile.id },
-            select: { _count: { select: { classesAsStudent: true } } },
-          })
-        )?._count.classesAsStudent ?? 0)
-      : 0;
+  const studentClassCount = useStudentExperience
+    ? ((
+        await prisma.orgMembership.findUnique({
+          where: { id: profile.id },
+          select: { _count: { select: { classesAsStudent: true } } },
+        })
+      )?._count.classesAsStudent ?? 0)
+    : 0;
 
   const isStudentOnlyWithNoClasses =
-    useStudentExperience &&
-    !profile.isOrgOwner &&
-    studentClassCount === 0;
+    useStudentExperience && !profile.isOrgOwner && studentClassCount === 0;
 
-  if (isStudentOnlyWithNoClasses) {
-    return redirect('/enter-code');
-  }
-
-  // Determine which class IDs this student belongs to (for assignment fetching).
+  // Student assignment types were only used for the retired "Write something new"
+  // entry point. Students now start writing only from a class assignment.
   let studentAssignmentClassIds: string[] = [];
   if (useStudentExperience) {
     const studentClasses = await prisma.class.findMany({
       where: {
         students: { some: { id: profile.id } },
+        ...schoolYearWhere(schoolYearScope),
       },
       select: { id: true },
     });
@@ -126,140 +106,35 @@ export async function loader({ request }: LoaderFunctionArgs) {
           }))
         )
     : [];
-  const assignmentsEnabled =
-    useStudentExperience
-      ? studentAssignmentClassIds.length > 0
-      : teacherAssignmentClassScopes.length > 0;
+  const assignmentsEnabled = useStudentExperience
+    ? studentAssignmentClassIds.length > 0
+    : teacherAssignmentClassScopes.length > 0;
 
-  const [courses, documents, archivedDocuments, teacherClasses, assignments] =
-    await Promise.all([
-    !useStudentExperience
-      ? ([] as AssignmentTypeRow[])
-      : prisma.assignmentType.findMany({
-          where: {
-            archivedAt: null,
-            organizationAssignments: {
-              some: { organizationId: profile.organization.id },
-            },
-          },
-          select: {
-            image: { select: { id: true } },
-            id: true,
-            title: true,
-            systemKey: true,
-          },
-          orderBy: { position: 'asc' },
-        }),
-    prisma.document.findMany({
-      orderBy: { createdAt: 'desc' },
-      where: { membershipId: profile.id, deletedAt: null, archivedAt: null },
-      include: {
-        assignmentModuleSessions: {
-          include: {
-            assignmentModule: {
-              include: {
-                instructions: { select: { id: true } },
-              },
-            },
-          },
-          orderBy: { assignmentModule: { position: 'desc' } },
+  const enrolledClasses = useStudentExperience
+    ? await getStudentEnrolledClasses(profile.id, schoolYearScope)
+    : [];
+
+  const teacherClasses = !useStudentExperience
+    ? await prisma.class.findMany({
+        where: {
+          teachers: { some: { id: profile.id } },
+          isArchived: false,
+          ...schoolYearWhere(schoolYearScope),
         },
-        submissions: {
-          where: { archivedAt: null },
-          orderBy: { submittedAt: 'desc' },
-          select: {
-            id: true,
-            title: true,
-            releasedAt: true,
-            submittedAt: true,
+        select: {
+          id: true,
+          grade: true,
+          period: true,
+          title: true,
+          classArtIndex: true,
+          classArtKey: true,
+          school: { select: { id: true, name: true, organizationId: true } },
+          _count: {
+            select: { students: true, teachers: true, classAssignments: true },
           },
         },
-      },
-    }),
-    prisma.document.findMany({
-      orderBy: { archivedAt: 'desc' },
-      where: {
-        membershipId: profile.id,
-        deletedAt: null,
-        archivedAt: { not: null },
-      },
-      include: {
-        assignmentModuleSessions: {
-          include: {
-            assignmentModule: {
-              include: {
-                instructions: { select: { id: true } },
-              },
-            },
-          },
-          orderBy: { assignmentModule: { position: 'desc' } },
-        },
-        submissions: {
-          where: { archivedAt: null },
-          orderBy: { submittedAt: 'desc' },
-          select: {
-            id: true,
-            title: true,
-            releasedAt: true,
-            submittedAt: true,
-          },
-        },
-      },
-    }),
-    // Teacher classes and recent ordering
-    !useStudentExperience
-      ? prisma.class.findMany({
-          where: {
-            teachers: { some: { id: profile.id } },
-            isArchived: false,
-          },
-          select: {
-            id: true,
-            grade: true,
-            period: true,
-            title: true,
-            classArtIndex: true,
-            classArtKey: true,
-            school: { select: { id: true, name: true, organizationId: true } },
-            _count: {
-              select: { students: true, teachers: true, classAssignments: true },
-            },
-          },
-        })
-      : [],
-    useStudentExperience && assignmentsEnabled
-      ? prisma.classAssignment.findMany({
-          where: {
-            classId: { in: studentAssignmentClassIds },
-          },
-          select: {
-            id: true,
-            assignment: {
-              select: {
-                id: true,
-                title: true,
-                prompt: true,
-                assignmentType: {
-                  select: {
-                    id: true,
-                    title: true,
-                  },
-                },
-              },
-            },
-            class: {
-              select: {
-                id: true,
-                grade: true,
-                period: true,
-                title: true,
-              },
-            },
-          },
-          orderBy: [{ createdAt: 'desc' }],
-        })
-      : [],
-  ]);
+      })
+    : [];
 
   // Sort teacher classes with recent activity first.
   let teacherClassesOrdered: typeof teacherClasses = teacherClasses;
@@ -287,8 +162,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
       return (
         (a.title ?? '').localeCompare(b.title ?? '') ||
-        a.grade.localeCompare(b.grade) ||
-        a.period.localeCompare(b.period)
+        (a.grade ?? '').localeCompare(b.grade ?? '') ||
+        (a.period ?? '').localeCompare(b.period ?? '')
       );
     });
   }
@@ -296,13 +171,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const teacherClassStatsById = !useStudentExperience
     ? new Map(
         await Promise.all(
-          teacherClasses.map(async (klass) => [
-            klass.id,
-            {
-              stats: await getTeacherClassCardStats(klass.id),
-              assignments: klass._count.classAssignments,
-            },
-          ] as const)
+          teacherClasses.map(
+            async (klass) =>
+              [
+                klass.id,
+                {
+                  stats: await getTeacherClassCardStats(klass.id),
+                  assignments: klass._count.classAssignments,
+                },
+              ] as const
+          )
         )
       )
     : new Map<
@@ -355,6 +233,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             title: true,
+            collaborationSupported: true,
             systemKey: true,
             image: { select: { id: true } },
           },
@@ -370,14 +249,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     .map((type) => ({
       id: type.id,
       title: type.title,
+      // AssignmentTypeRow is shared with student-side selects that do not ask
+      // for this column, so it is optional there and defaulted here.
+      collaborationSupported: type.collaborationSupported ?? false,
     }));
 
   return dataResponse({
-    courses,
-    documents: orderDocumentTileModuleSessions(documents),
-    archivedDocuments: orderDocumentTileModuleSessions(archivedDocuments),
+    requiresClassCode: isStudentOnlyWithNoClasses,
+    enrolledClasses,
     teacherClasses: teacherClassesOrdered,
-    assignments,
     assignmentsEnabled,
     teacherClassCards,
     totalTeacherClassCount: teacherClasses.length,
@@ -396,19 +276,12 @@ export default function AppRoute() {
   const user = useUser();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
-  const [searchParams, setSearchParams] = useSearchParams();
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [createAssignmentTypeId, setCreateAssignmentTypeId] = useState<
     string | undefined
   >();
-  const studentPreviewActive = rootData?.studentPreview?.active ?? false;
-  const isTeacher =
-    user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
+  const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
-  const currentStudentTab =
-    assignmentsEnabled && searchParams.get('tab') === 'assignments'
-      ? 'assignments'
-      : 'courses';
 
   if (isTeacher) {
     const needsGradingCount = data.teacherWorkspaceClassStats.reduce(
@@ -478,168 +351,170 @@ export default function AppRoute() {
   }
 
   return (
-    <section
-      data-testid="app._index"
-      className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
-    >
-      <div className="flex w-full justify-between border-b bg-secondary">
-        <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <div className="flex flex-col">
-            <h2>Welcome, {user.name}!</h2>
-            <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-              Welcome to your dashboard. Here you can view and manage your
-              courses.
-            </p>
+    <>
+      <section
+        data-testid="app._index"
+        className={`no-scrollbar flex h-full w-full flex-col overflow-y-scroll ${
+          data.requiresClassCode ? 'pointer-events-none select-none' : ''
+        }`}
+      >
+        <div className="flex w-full justify-between border-b bg-secondary">
+          <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+            <div className="flex flex-col">
+              <h2>Welcome, {user.name}!</h2>
+              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
+                Welcome to your dashboard. Open a class to see your assignments
+                and continue your writing.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
-        <div className="flex flex-col">
-          {assignmentsEnabled ? (
-            <div className="mb-2">
-              <Tabs
-                value={currentStudentTab}
-                onValueChange={(value) => {
-                  const next = new URLSearchParams(searchParams);
-                  if (value === 'assignments') {
-                    next.set('tab', 'assignments');
-                  } else {
-                    next.delete('tab');
-                  }
-                  setSearchParams(next, { replace: true });
-                }}
-              >
-                <TabsList>
-                  <TabsTrigger value="courses">
-                    Courses ({data.courses.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="assignments">
-                    Assignments ({data.assignments.length})
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-          ) : null}
-          {currentStudentTab === 'courses' ? (
-            <>
-              <p className="my-2 text-foreground/60">Courses</p>
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                {data.courses.map((course) => (
-                  <Link
-                    to={`/app/assignment-types/${course.id}`}
-                    key={course.id}
-                    className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
-                  >
-                    {course.image ? (
-                      <img
-                        src={`/api/image/course/${course.image.id}`}
-                        alt=""
-                        className="h-32 w-auto rounded-t-lg object-cover"
-                      />
-                    ) : (
-                      <div className="h-32 w-auto rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20" />
-                    )}
-                    <div className="max-w-42 flex items-center justify-between p-3">
-                      <h4 className="text-foreground/90">{course.title}</h4>
-                    </div>
-                  </Link>
+        <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
+          <div className="flex flex-col">
+            <p className="my-2 text-foreground/60">Classes</p>
+            {data.enrolledClasses.length > 0 ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {data.enrolledClasses.map((klass) => (
+                  <StudentClassCard key={klass.id} klass={klass} />
                 ))}
               </div>
+            ) : (
+              <NoDataPlaceholder
+                title="No classes yet"
+                subtitle="When your teacher adds you to a class, it will appear here."
+              />
+            )}
+          </div>
+        </div>
+      </section>
+      {data.requiresClassCode ? <ClassCodeGate /> : null}
+    </>
+  );
+}
+
+type ClassCodeFetcherData =
+  | {
+      status: 'select';
+      code: string;
+      classes: Array<{ id: string; label: string }>;
+    }
+  | { status: 'enrolled' }
+  | { fieldErrors?: { code?: string; classId?: string } };
+
+function ClassCodeGate() {
+  const [isMounted, setIsMounted] = useState(false);
+  const fetcher = useFetcher<ClassCodeFetcherData>();
+  const revalidator = useRevalidator();
+  const result = fetcher.data;
+  const needsSelection =
+    result && 'status' in result && result.status === 'select';
+
+  useEffect(() => {
+    if (result && 'status' in result && result.status === 'enrolled') {
+      revalidator.revalidate();
+    }
+  }, [result, revalidator]);
+
+  const fieldErrors =
+    result && 'fieldErrors' in result ? result.fieldErrors : undefined;
+
+  useEffect(() => setIsMounted(true), []);
+
+  // Radix portals render under document.body. Waiting until hydration keeps
+  // the server and first client tree identical; the dashboard itself is
+  // already pointer-inert while this mounts.
+  if (!isMounted) return null;
+
+  return (
+    <Dialog open onOpenChange={() => {}}>
+      <DialogContent
+        hideClose
+        overlayClassName="bg-background/50 backdrop-blur-sm"
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>
+            {needsSelection ? 'Select your class' : 'Enter your class code'}
+          </DialogTitle>
+          <DialogDescription>
+            {needsSelection
+              ? 'Multiple classes use this code. Choose the class you are joining.'
+              : 'Enter the code from your teacher to finish setting up your dashboard.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <fetcher.Form
+          method="post"
+          action="/enter-code?modal=1"
+          className="space-y-4"
+        >
+          {needsSelection ? (
+            <>
+              <input type="hidden" name="intent" value="assign-class" />
+              <input type="hidden" name="code" value={result.code} />
+              <label className="block space-y-2 text-sm font-medium">
+                <span>Class</span>
+                <select
+                  name="classId"
+                  required
+                  autoFocus
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    Select a class
+                  </option>
+                  {result.classes.map((klass) => (
+                    <option key={klass.id} value={klass.id}>
+                      {klass.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </>
           ) : (
             <>
-              <p className="my-2 text-foreground/60">Assignments</p>
-              {data.assignments.length > 0 ? (
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                  {data.assignments.map((classAssignment) => (
-                    <Form
-                      method="post"
-                      action={`/app/class-assignments/${classAssignment.id}/start`}
-                      key={classAssignment.id}
-                    >
-                      <button
-                        type="submit"
-                        className="flex h-full w-full flex-col rounded-lg border bg-muted text-left transition-shadow hover:shadow"
-                      >
-                        <div className="h-24 w-full rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20 px-3 py-2">
-                          <p className="line-clamp-3 text-xs text-muted-foreground">
-                            {classAssignment.assignment.prompt}
-                          </p>
-                        </div>
-                        <div className="flex flex-1 flex-col gap-1 p-3">
-                          <h4 className="text-foreground/90 font-medium">
-                            {classAssignment.assignment.title?.trim() ||
-                              'Untitled Assignment'}
-                          </h4>
-                          <p className="text-xs text-muted-foreground">
-                            {classAssignment.assignment.assignmentType.title}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Grade {classAssignment.class.grade} • Period{' '}
-                            {classAssignment.class.period}
-                            {classAssignment.class.title
-                              ? ` • ${classAssignment.class.title}`
-                              : ''}
-                          </p>
-                        </div>
-                      </button>
-                    </Form>
-                  ))}
-                </div>
-              ) : (
-                <NoDataPlaceholder
-                  title="No assignments"
-                  subtitle="When your teacher posts assignments, they will appear here."
+              <input type="hidden" name="intent" value="validate-code" />
+              <label className="block space-y-2 text-sm font-medium">
+                <span>Class code</span>
+                <input
+                  name="code"
+                  required
+                  autoFocus
+                  autoComplete="off"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 />
-              )}
+              </label>
             </>
           )}
-        </div>
-        <div className="mt-8 flex flex-col">
-          <p className="my-2 text-foreground/60">Documents</p>
-          {data.documents.length ? (
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              {data.documents.map((doc) => (
-                <DocumentLink
-                  key={doc.id}
-                  doc={doc}
-                  exitTo="/app"
-                  isStudentView
-                />
-              ))}
-            </div>
-          ) : (
-            <NoDataPlaceholder
-              title="No documents"
-              subtitle="Select a course above to get started."
-            />
-          )}
-          {data.archivedDocuments.length > 0 && (
-            <div className="mt-6">
-              <Accordion type="single" collapsible>
-                <AccordionItem value="archived" className="border-none">
-                  <AccordionTrigger className="text-sm text-muted-foreground hover:no-underline py-2">
-                    View archived documents ({data.archivedDocuments.length})
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4 pt-2">
-                      {data.archivedDocuments.map((doc) => (
-                        <DocumentLink
-                          key={doc.id}
-                          doc={doc}
-                          exitTo="/app"
-                          isArchived
-                          isStudentView
-                        />
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
+          {fieldErrors?.code || fieldErrors?.classId ? (
+            <p className="text-sm text-destructive" role="alert">
+              {fieldErrors.code ?? fieldErrors.classId}
+            </p>
+          ) : null}
+          <Button
+            className="w-full"
+            type="submit"
+            disabled={fetcher.state !== 'idle'}
+          >
+            {fetcher.state !== 'idle'
+              ? 'Checking…'
+              : needsSelection
+                ? 'Join class'
+                : 'Continue'}
+          </Button>
+        </fetcher.Form>
+
+        <DialogFooter>
+          <Form method="post" action="/auth/logout" className="w-full">
+            <Button variant="outline" className="w-full" type="submit">
+              Sign out
+            </Button>
+          </Form>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

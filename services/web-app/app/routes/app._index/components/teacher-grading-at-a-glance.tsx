@@ -8,13 +8,17 @@ import {
 import { Link } from 'react-router';
 import { cn } from '~/utils/misc';
 
+// `reset=1` tells the documents page to drop the teacher's stored filters
+// instead of restoring them over the top of the link. These cards say what
+// they show — "everything that needs grading" — and a leftover class or
+// assignment filter would quietly make that untrue.
 const GRADING_LINKS = {
-  all: '/app/documents',
-  needsGrading: '/app/documents?status=needs-grading',
-  byStudent: '/app/documents?status=needs-grading&group=student',
-  byClass: '/app/documents?status=needs-grading&group=class',
-  byAssignment: '/app/documents?status=needs-grading&group=assignment',
-  toRelease: '/app/documents?status=graded',
+  all: '/app/documents?reset=1',
+  needsGrading: '/app/documents?status=needs-grading&reset=1',
+  byStudent: '/app/documents?status=needs-grading&group=student&reset=1',
+  byClass: '/app/documents?status=needs-grading&group=class&reset=1',
+  byAssignment: '/app/documents?status=needs-grading&group=assignment&reset=1',
+  toRelease: '/app/documents?status=graded&reset=1',
 } as const;
 
 function GradingModeCard({

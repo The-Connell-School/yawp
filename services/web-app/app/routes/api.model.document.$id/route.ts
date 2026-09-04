@@ -1,10 +1,20 @@
 import { createHash } from 'node:crypto';
+import type { Prisma } from '@app/prisma';
 import { invariant } from '@epic-web/invariant';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { documentReadWhere } from '~/utils/document-access.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
+import {
+  buildSubmissionBodyAuditMetadata,
+  recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 
 const PUT = z.object({
   text: z.string().optional(),
@@ -14,6 +24,8 @@ const PUT = z.object({
   clientSeq: z.coerce.number().int().nonnegative().optional(),
   baseRevision: z.coerce.number().int().nonnegative().optional(),
 });
+
+class SubmissionSnapshotConflictError extends Error {}
 
 function hashString(value: string) {
   return createHash('sha256').update(value).digest('hex');
@@ -41,14 +53,18 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     const actionType = formData.get('action');
 
     if (actionType === 'archive' || actionType === 'unarchive') {
-      const updated = await prisma.document.update({
-        where: { id: params.id, membershipId: profile.id },
+      const updated = await prisma.document.updateMany({
+        where: {
+          id: params.id,
+          artifactKind: 'STUDENT',
+          membershipId: profile.id,
+        },
         data: {
           archivedAt: actionType === 'archive' ? new Date() : null,
         },
       });
 
-      if (!updated) {
+      if (updated.count !== 1) {
         return new Response(null, { status: 404 });
       }
       return new Response(null, { status: 204 });
@@ -56,12 +72,16 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   }
 
   if (request.method === 'DELETE') {
-    const updated = await prisma.document.update({
-      where: { id: params.id, membershipId: profile.id },
+    const updated = await prisma.document.updateMany({
+      where: {
+        id: params.id,
+        artifactKind: 'STUDENT',
+        membershipId: profile.id,
+      },
       data: { deletedAt: new Date() },
     });
 
-    if (!updated) {
+    if (updated.count !== 1) {
       return new Response(null, { status: 404 });
     } else {
       return new Response(null, { status: 204 });
@@ -71,15 +91,40 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   const fd = formData ?? (await request.formData());
   const { error, data } = await parseFormData(fd, PUT);
   if (error) return validationError(error);
-  const [user, document] = await Promise.all([
-    prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { isAdmin: true },
-    }),
-    prisma.document.findUniqueOrThrow({
-      where: { id: params.id },
-    }),
-  ]);
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { isAdmin: true },
+  });
+
+  // Resolve the document through the access predicate BEFORE anything is written.
+  //
+  // This used to be a bare `findUniqueOrThrow({ where: { id: params.id } })`, and
+  // the only scoped query was the `document.update` at the very end. That ordering
+  // refused the write while having already performed two others against a document
+  // the caller has no claim on: a `documentWriteJournal` row stamped with the
+  // caller's userId/membershipId but carrying the victim's current html and text
+  // (`resolvedHtml` falls back to `document.html` when the body sends no content),
+  // and a `documentRevision` appended to the victim's history. The final update
+  // then threw P2025, which the catch below only handles on the stale-baseRevision
+  // path, so the request 500'd and left the journal row `pending` forever.
+  const document = await prisma.document.findFirst({
+    where: {
+      id: params.id,
+      ...(snapshotId
+        ? documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin })
+        : {
+            artifactKind: 'STUDENT',
+            ...documentReadWhere({
+              profileId: profile.id,
+              isAdmin: user.isAdmin,
+            }),
+          }),
+    },
+  });
+
+  if (!document) {
+    return new Response(null, { status: 404 });
+  }
 
   const source = new URL(request.url).searchParams.get('from') ?? 'unknown';
   const hasBodyMutation = data.html !== undefined || data.text !== undefined;
@@ -122,21 +167,14 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     },
   });
 
-  if (
-    data.editorSessionId &&
-    data.clientSeq !== undefined &&
-    hasBodyMutation
-  ) {
+  if (data.editorSessionId && data.clientSeq !== undefined && hasBodyMutation) {
     const lastAccepted = await prisma.documentWriteJournal.findFirst({
       where: {
         documentId: document.id,
         editorSessionId: data.editorSessionId,
         status: 'accepted',
       },
-      orderBy: [
-        { clientSeq: 'desc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy: [{ clientSeq: 'desc' }, { createdAt: 'desc' }],
       select: { clientSeq: true },
     });
 
@@ -191,26 +229,54 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   }
 
   if (snapshotId) {
+    const snapshotDocumentAccessWhere: Prisma.DocumentWhereInput = {
+      deletedAt: null,
+      AND: [
+        {
+          OR: [
+            { artifactKind: 'ASSIGNMENT_GROUP' },
+            { membership: { is: { userId: { not: userId } } } },
+          ],
+        },
+        ...(hasEffectivePlatformAdmin(user.isAdmin)
+          ? []
+          : [
+              buildTeacherDocumentAccessWhere({
+                membershipId: profile.id,
+                organizationId: profile.organization.id,
+              }),
+            ]),
+      ],
+    };
     // snapshotId now refers to a Submission id
     const submission = await prisma.submission.findFirst({
       where: {
         id: snapshotId,
         documentId: document.id,
-        ...(user.isAdmin
-          ? {}
-          : {
-              document: {
-                is: {
-                  classAssignment: {
-                    class: {
-                      teachers: { some: { id: profile.id } },
-                    },
+        document: { is: snapshotDocumentAccessWhere },
+      },
+      select: {
+        id: true,
+        text: true,
+        html: true,
+        updatedAt: true,
+        releasedAt: true,
+        document: {
+          select: {
+            artifactKind: true,
+            membership: { select: { organizationId: true } },
+            classAssignment: {
+              select: {
+                class: {
+                  select: {
+                    school: { select: { organizationId: true } },
                   },
                 },
               },
-            }),
+            },
+          },
+        },
       },
-      select: { id: true },
     });
 
     if (!submission) {
@@ -220,6 +286,29 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     const submissionData: { html?: string; text?: string } = {};
     if (data.html !== undefined) submissionData.html = data.html;
     if (data.text !== undefined) submissionData.text = data.text;
+
+    if (
+      submission.document.artifactKind === 'ASSIGNMENT_GROUP' &&
+      Object.keys(submissionData).length > 0
+    ) {
+      await prisma.documentWriteJournal.update({
+        where: { id: journal.id },
+        data: {
+          status: 'rejected',
+          failureReason: 'teacher_cannot_rewrite_group_submission',
+        },
+      });
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: 'Teachers cannot rewrite a shared group submission.',
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
     if (Object.keys(submissionData).length === 0) {
       await prisma.documentWriteJournal.update({
@@ -238,10 +327,92 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       );
     }
 
-    await prisma.submission.update({
-      where: { id: submission.id },
-      data: submissionData,
+    const previousBody = buildSubmissionBodyAuditMetadata({
+      text: submission.text,
+      html: submission.html,
     });
+    const nextBody = buildSubmissionBodyAuditMetadata({
+      text: submissionData.text ?? submission.text,
+      html: submissionData.html ?? submission.html,
+    });
+
+    if (JSON.stringify(previousBody) !== JSON.stringify(nextBody)) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          const updated = await tx.submission.updateMany({
+            where: {
+              id: submission.id,
+              documentId: document.id,
+              updatedAt: submission.updatedAt,
+              document: { is: snapshotDocumentAccessWhere },
+            },
+            data: { ...submissionData, updatedAt: new Date() },
+          });
+          if (updated.count !== 1) throw new SubmissionSnapshotConflictError();
+          const organizationId =
+            submission.document.classAssignment?.class?.school
+              ?.organizationId ??
+            submission.document.membership?.organizationId ??
+            profile.organization.id;
+          await recordSubmissionActivity(tx, {
+            submissionId: submission.id,
+            organizationId,
+            actorMembershipId: resolveSubmissionActivityActorMembershipId({
+              actorMembershipId: profile.id,
+              actorOrganizationId: profile.organization.id,
+              submissionOrganizationId: organizationId,
+            }),
+            actorUserId: userId,
+            eventType: submissionActivityEventTypes.bodyUpdated,
+            source: 'document-snapshot',
+            occurredAfterRelease: submission.releasedAt != null,
+            changes: {
+              body: { before: previousBody, after: nextBody },
+            },
+          });
+          await tx.documentWriteJournal.update({
+            where: { id: journal.id },
+            data: {
+              status: 'accepted',
+              resultingRevision: document.revision,
+            },
+          });
+        });
+      } catch (error) {
+        if (error instanceof SubmissionSnapshotConflictError) {
+          await prisma.documentWriteJournal.update({
+            where: { id: journal.id },
+            data: {
+              status: 'rejected',
+              failureReason: 'stale_submission_snapshot',
+            },
+          });
+          return new Response(
+            JSON.stringify({ ok: false, error: 'stale_submission_snapshot' }),
+            { status: 409, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        await prisma.documentWriteJournal.update({
+          where: { id: journal.id },
+          data: {
+            status: 'rejected',
+            failureReason:
+              error instanceof Error
+                ? error.message
+                : 'snapshot_transaction_failed',
+          },
+        });
+        throw error;
+      }
+
+      return new Response(
+        JSON.stringify({ ok: true, revision: document.revision }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
     await prisma.documentWriteJournal.update({
       where: { id: journal.id },
@@ -286,20 +457,12 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     update = await prisma.document.update({
       where: {
         id: document.id,
-        ...(user.isAdmin
-          ? {}
-          : {
-              OR: [
-                { membershipId: profile.id },
-                {
-                  membership: {
-                    classesAsStudent: {
-                      some: { teachers: { some: { id: profile.id } } },
-                    },
-                  },
-                },
-              ],
-            }),
+        // Redundant now that the resolve above is scoped, and deliberately kept:
+        // the predicate is what refuses the write, and it should not depend on a
+        // lookup fifty lines earlier staying scoped.
+        AND: [
+          documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin }),
+        ],
         ...(hasBodyMutation && data.baseRevision !== undefined
           ? { revision: data.baseRevision }
           : {}),
@@ -307,7 +470,11 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       data: documentUpdateData,
     });
   } catch (error) {
-    if (hasBodyMutation && data.baseRevision !== undefined && isRecordNotFoundError(error)) {
+    if (
+      hasBodyMutation &&
+      data.baseRevision !== undefined &&
+      isRecordNotFoundError(error)
+    ) {
       await prisma.documentWriteJournal.update({
         where: { id: journal.id },
         data: {

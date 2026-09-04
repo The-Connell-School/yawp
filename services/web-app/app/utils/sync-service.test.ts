@@ -46,11 +46,12 @@ describe('SyncService', () => {
     const statusChanges: SyncStatus[] = [];
     service.onStatusChange((s) => statusChanges.push(s));
     service.start('doc-1');
-    await service.forceSave();
+    const result = await service.forceSave();
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(statusChanges).toContain('saving');
     expect(statusChanges).toContain('synced');
+    expect(result).toBe('synced');
   });
 
   it('skips sync when content hash matches last synced hash', async () => {
@@ -69,9 +70,10 @@ describe('SyncService', () => {
 
     service.start('doc-1');
     service.setLastSyncedHash('abc');
-    await service.forceSave();
+    const result = await service.forceSave();
 
     expect(mockFetch).not.toHaveBeenCalled();
+    expect(result).toBe('synced');
   });
 
   it('transitions to auth-expired on 401 response', async () => {
@@ -95,9 +97,10 @@ describe('SyncService', () => {
     const statusChanges: SyncStatus[] = [];
     service.onStatusChange((s) => statusChanges.push(s));
     service.start('doc-1');
-    await service.forceSave();
+    const result = await service.forceSave();
 
     expect(statusChanges).toContain('auth-expired');
+    expect(result).toBe('auth-expired');
   });
 
   it('transitions to offline on network error', async () => {
@@ -121,9 +124,39 @@ describe('SyncService', () => {
     const statusChanges: SyncStatus[] = [];
     service.onStatusChange((s) => statusChanges.push(s));
     service.start('doc-1');
-    await service.forceSave();
+    const result = await service.forceSave();
 
     expect(statusChanges).toContain('offline');
+    expect(result).toBe('offline');
+  });
+
+  it('reports an error result for a stale revision conflict', async () => {
+    mockFetch.mockImplementation(() =>
+      Promise.resolve(
+        Response.json(
+          { error: 'stale_base_revision', currentRevision: 4 },
+          { status: 409 }
+        )
+      )
+    );
+    await store.put({
+      docId: 'doc-1',
+      html: '<p>latest</p>',
+      text: 'latest',
+      updatedAt: Date.now(),
+      serverRevision: 3,
+      syncStatus: 'pending',
+      lastSyncedAt: null,
+      lastSyncError: null,
+      contentHash: 'latest-hash',
+      localVersion: 2,
+    });
+    service.start('doc-1');
+
+    const result = await service.forceSave();
+
+    expect(result).toBe('error');
+    expect(service.getStatus()).toBe('error');
   });
 
   it('notifies listeners and supports unsubscribe', async () => {

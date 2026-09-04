@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { currentSchoolYear } from '../../app/utils/school-year';
 import { createDeployedAssignment } from '../db-helpers';
 
 test.describe.serial('Teacher class sorting and filtering', () => {
@@ -21,7 +22,7 @@ test.describe.serial('Teacher class sorting and filtering', () => {
       const klass = await prisma.class.create({
         data: {
           code: `SORT-${suffix}`.toUpperCase(),
-          schoolYear: '2024-2025',
+          schoolYear: currentSchoolYear(),
           period: 'Sorting',
           grade: '9th',
           title: 'Sorting Filter QA',
@@ -87,7 +88,8 @@ test.describe.serial('Teacher class sorting and filtering', () => {
 
       const studentsTable = page.getByRole('table', { name: 'Students' });
       const studentHeaders = studentsTable.locator('thead th');
-      await expect(studentHeaders).toHaveCount(4);
+      // Checkbox, Student Name, Email, Pasted text, Documents.
+      await expect(studentHeaders).toHaveCount(5);
       for (const header of await studentHeaders.all()) {
         await expect(header).toHaveCSS('white-space', 'nowrap');
       }

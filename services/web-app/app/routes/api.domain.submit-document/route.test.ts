@@ -6,6 +6,8 @@ const prisma = {
   },
   document: {
     findFirst: mock(),
+    updateMany: mock(),
+    findUniqueOrThrow: mock(),
   },
   submission: {
     create: mock(),
@@ -14,6 +16,7 @@ const prisma = {
     create: mock(),
     update: mock(),
   },
+  submissionActivity: { create: mock() },
   $transaction: mock(),
 };
 
@@ -39,9 +42,12 @@ describe('api.domain.submit-document', () => {
   beforeEach(() => {
     prisma.user.findUnique.mockReset();
     prisma.document.findFirst.mockReset();
+    prisma.document.updateMany.mockReset();
+    prisma.document.findUniqueOrThrow.mockReset();
     prisma.submission.create.mockReset();
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
+    prisma.submissionActivity.create.mockReset();
     prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
@@ -51,7 +57,11 @@ describe('api.domain.submit-document', () => {
       id: 'profile-1',
       role: 'STUDENT',
       isOrgOwner: false,
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        revisionFlowEnabled: false,
+      },
     });
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
     prisma.document.findFirst.mockResolvedValue({
@@ -61,6 +71,7 @@ describe('api.domain.submit-document', () => {
       title: 'Essay',
       submissions: [],
       revision: 4,
+      updatedAt: new Date('2026-08-20T11:59:00.000Z'),
       classAssignment: null,
       membership: {
         classesAsStudent: [
@@ -78,24 +89,30 @@ describe('api.domain.submit-document', () => {
       id: 'journal-1',
       status: 'accepted',
     });
+    prisma.document.updateMany.mockResolvedValue({ count: 1 });
+    prisma.document.findUniqueOrThrow.mockResolvedValue({
+      id: 'doc-1',
+      revision: 4,
+    });
+    prisma.submission.create.mockResolvedValue({
+      id: 'sub-1',
+      title: 'Essay',
+      submittedAt: new Date('2026-08-20T12:00:00.000Z'),
+    });
     prisma.$transaction.mockImplementation(async (callback: any) => {
       const tx = {
-        submission: {
-          create: mock().mockResolvedValue({ id: 'sub-1' }),
-        },
-        document: {
-          update: mock().mockResolvedValue({
-            id: 'doc-1',
-            revision: 4,
-          }),
-        },
+        user: prisma.user,
+        submission: prisma.submission,
+        document: prisma.document,
+        documentWriteJournal: prisma.documentWriteJournal,
+        submissionActivity: prisma.submissionActivity,
       };
 
       return callback(tx);
     });
   });
 
-  test('creates a submission and updates the document', async () => {
+  test('keeps legacy owner submission working while Revision Flow is off', async () => {
     const form = new FormData();
     form.append('documentId', 'doc-1');
 
@@ -111,6 +128,107 @@ describe('api.domain.submit-document', () => {
     };
 
     expect(response.data.success).toBe(true);
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    const activity = prisma.submissionActivity.create.mock.calls[0][0].data;
+    expect(activity).toEqual(
+      expect.objectContaining({
+        submissionId: 'sub-1',
+        organizationId: 'org-1',
+        actorMembershipId: 'profile-1',
+        eventType: 'submission.created',
+        occurredAfterRelease: false,
+      })
+    );
+    expect(JSON.stringify(activity.metadata)).not.toContain('Draft');
+  });
+
+  for (const actor of [
+    {
+      name: 'same-organization non-owner student',
+      membershipId: 'profile-same-org-non-owner',
+      organizationId: 'org-1',
+    },
+    {
+      name: 'cross-organization student',
+      membershipId: 'profile-cross-org',
+      organizationId: 'org-2',
+    },
+  ]) {
+    test(`refuses a ${actor.name} before creating a revision submission`, async () => {
+      requireMembership.mockResolvedValue({
+        id: actor.membershipId,
+        role: 'STUDENT',
+        isOrgOwner: false,
+        organization: {
+          id: actor.organizationId,
+          name: 'Other organization',
+          revisionFlowEnabled: true,
+        },
+      });
+      prisma.document.findFirst.mockResolvedValue(null);
+      const form = new FormData();
+      form.append('documentId', 'doc-1');
+
+      const response = await action({
+        request: new Request('https://example.com/api/domain/submit-document', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      expect(response).toBeInstanceOf(Response);
+      expect((response as Response).status).toBe(302);
+      expect(prisma.document.findFirst).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          id: 'doc-1',
+          deletedAt: null,
+          OR: [
+            { membershipId: actor.membershipId },
+            {
+              membership: {
+                classesAsStudent: {
+                  some: {
+                    teachers: { some: { id: actor.membershipId } },
+                  },
+                },
+              },
+            },
+          ],
+        }),
+        select: expect.any(Object),
+      });
+      expect(prisma.documentWriteJournal.create).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.submission.create).not.toHaveBeenCalled();
+    });
+  }
+
+  test('fails closed when the required submission audit write is unavailable', async () => {
+    const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+    process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = 'false';
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    try {
+      await expect(
+        action({
+          request: new Request(
+            'https://example.com/api/domain/submit-document',
+            { method: 'POST', body: form }
+          ),
+        } as any)
+      ).rejects.toThrow(
+        'Submission activity recording is temporarily unavailable'
+      );
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+      } else {
+        process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = previous;
+      }
+    }
   });
 
   test('records a document submit journal entry with the full document payload', async () => {
@@ -154,5 +272,74 @@ describe('api.domain.submit-document', () => {
         },
       }
     );
+  });
+
+  test('rolls back the protected submit when journal acceptance fails', async () => {
+    prisma.documentWriteJournal.update
+      .mockRejectedValueOnce(new Error('journal acceptance unavailable'))
+      .mockResolvedValueOnce({ id: 'journal-1', status: 'rejected' });
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    await expect(
+      action({
+        request: new Request('https://example.com/api/domain/submit-document', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any)
+    ).rejects.toThrow('journal acceptance unavailable');
+
+    expect(prisma.documentWriteJournal.update).toHaveBeenCalledTimes(2);
+    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject(
+      { data: { status: 'accepted' } }
+    );
+    expect(prisma.documentWriteJournal.update.mock.calls[1]?.[0]).toMatchObject(
+      {
+        data: {
+          status: 'rejected',
+          failureReason: 'journal acceptance unavailable',
+        },
+      }
+    );
+  });
+
+  test('returns 409 with no submission or activity when access changes before commit', async () => {
+    prisma.document.updateMany.mockResolvedValue({ count: 0 });
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    const response = (await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any)) as { data: { success: boolean }; init?: { status?: number } };
+
+    expect(response.init?.status).toBe(409);
+    expect(prisma.submission.create).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    expect(
+      prisma.documentWriteJournal.update.mock.calls.at(-1)?.[0]
+    ).toMatchObject({
+      data: { status: 'rejected' },
+    });
+  });
+
+  test('uses updatedAt as the active-submission concurrency token', async () => {
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(prisma.document.updateMany.mock.calls[0]?.[0].where).toMatchObject({
+      revision: 4,
+      updatedAt: new Date('2026-08-20T11:59:00.000Z'),
+    });
   });
 });

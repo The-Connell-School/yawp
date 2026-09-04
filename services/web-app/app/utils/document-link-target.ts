@@ -1,7 +1,11 @@
+import { latestVisibleStudentSubmission } from './student-document-status';
+
 export type DocumentLinkSubmission = {
   id: string;
   releasedAt: Date | string | null;
   archivedAt?: Date | string | null;
+  /** Teacher-initiated unsubmit. Excluded the same as archivedAt. */
+  unsubmittedAt?: Date | string | null;
   submittedAt?: Date | string | null;
 };
 
@@ -16,7 +20,9 @@ export function pickLatestReleasedSubmission<T extends DocumentLinkSubmission>(
 ): T | null {
   const released = submissions.filter(
     (submission) =>
-      submission.archivedAt == null && submission.releasedAt != null
+      submission.archivedAt == null &&
+      submission.unsubmittedAt == null &&
+      submission.releasedAt != null
   );
 
   if (released.length === 0) {
@@ -44,10 +50,10 @@ export function resolveDocumentLinkTarget({
   const encodedExitTo = encodeURIComponent(exitTo);
 
   if (isStudentView) {
-    const latestReleasedSubmission = pickLatestReleasedSubmission(submissions);
+    const latestSubmission = latestVisibleStudentSubmission(submissions);
 
-    if (latestReleasedSubmission) {
-      return `/app/submissions/${latestReleasedSubmission.id}?exitTo=${encodedExitTo}`;
+    if (latestSubmission) {
+      return `/app/submissions/${latestSubmission.id}?exitTo=${encodedExitTo}`;
     }
   }
 

@@ -1,7 +1,7 @@
 import { type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireUserId } from '~/utils/auth.server.js';
+import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { NameSchema } from '~/utils/schemas/user.js';
 
@@ -15,6 +15,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const userId = await requireUserId(request);
+  await requireMembership(request, userId);
   const { error, data } = await parseFormData(request, Schema);
 
   if (error) return validationError(error);

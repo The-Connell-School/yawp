@@ -21,9 +21,25 @@ export enum AgentType {
 
 export type Message = { role: AgentType; content: string; name?: string };
 
+/**
+ * A system-prompt content block that can carry an Anthropic prompt-caching
+ * breakpoint. Pass an array instead of a plain string to `system` when part
+ * of the prompt is stable across calls (a fixed instruction constant, a
+ * module-level rubric) and part varies per conversation — put
+ * `cache_control` on the last block of the stable prefix and leave the
+ * variable tail unmarked. See `shared/prompt-caching.md` for placement
+ * rules; only the Anthropic path uses this — OpenAI fallback calls flatten
+ * blocks into a plain string.
+ */
+export interface CacheableSystemBlock {
+  type: 'text';
+  text: string;
+  cache_control?: { type: 'ephemeral' };
+}
+
 interface Params {
   messages: { role: 'user' | 'assistant'; content: string; name?: string }[];
-  system?: string;
+  system?: string | CacheableSystemBlock[];
   temperature?: number;
   maxTokens?: number;
   model: string;
@@ -41,7 +57,11 @@ interface Params {
   forceFallback?: boolean;
   signalFallbackRetry?: boolean;
   fallbackModel?: string;
+  /** Disable automatic cross-provider transfer for sensitive workloads. */
+  allowFallbackProvider?: boolean;
   signal?: AbortSignal;
+  /** Store only counts/timing metadata when prompts contain sensitive records. */
+  logPayload?: 'full' | 'metadata-only';
 }
 
 async function logLlmCall(data: {
@@ -56,21 +76,34 @@ async function logLlmCall(data: {
   totalTokens?: number;
   durationMs?: number;
   metadata?: Record<string, unknown>;
+  logPayload?: 'full' | 'metadata-only';
 }) {
+  const metadataOnly = data.logPayload === 'metadata-only';
   try {
     await prisma.llmLog.create({
       data: {
         model: data.model,
         provider: data.provider,
-        systemPrompt: data.systemPrompt,
-        messages: data.messages as object,
-        response: data.response,
-        error: data.error,
+        systemPrompt: metadataOnly ? undefined : data.systemPrompt,
+        messages: metadataOnly
+          ? {
+              redacted: true,
+              messageCount:
+                data.metadata && typeof data.metadata.messageCount === 'number'
+                  ? data.metadata.messageCount
+                  : 0,
+            }
+          : (data.messages as object),
+        response: metadataOnly ? undefined : data.response,
+        error: metadataOnly && data.error ? 'LLM request failed' : data.error,
         inputTokens: data.inputTokens,
         outputTokens: data.outputTokens,
         totalTokens: data.totalTokens,
         durationMs: data.durationMs,
-        metadata: data.metadata as object,
+        metadata: {
+          ...data.metadata,
+          ...(metadataOnly ? { payloadLogging: 'metadata-only' } : {}),
+        } as object,
       },
     });
   } catch (err) {
@@ -96,6 +129,37 @@ function isOpenAiTextModel(model: string) {
 
 function stripTabs(value: string | undefined) {
   return value?.replace(/\t/g, '');
+}
+
+/**
+ * Tab-strips a `system` param while preserving its shape: a plain string
+ * stays a string (existing behavior, byte-for-byte); an array of
+ * `CacheableSystemBlock`s stays an array with `cache_control` untouched, so
+ * the Anthropic request keeps its cache breakpoint.
+ */
+function stripTabsFromSystem(
+  system: string | CacheableSystemBlock[] | undefined
+): string | CacheableSystemBlock[] | undefined {
+  if (system === undefined) return undefined;
+  if (typeof system === 'string') return stripTabs(system);
+  return system.map((block) => ({
+    ...block,
+    text: stripTabs(block.text) ?? block.text,
+  }));
+}
+
+/**
+ * Flattens `system` to a single string for the `LlmLog.systemPrompt` column
+ * and for providers (OpenAI fallback) that only take a plain system string.
+ * Blocks join on a blank line so the logged prompt reads the same as the
+ * pre-caching single-string prompt did.
+ */
+function systemToPlainString(
+  system: string | CacheableSystemBlock[] | undefined
+): string | undefined {
+  if (system === undefined) return undefined;
+  if (typeof system === 'string') return system;
+  return system.map((block) => block.text).join('\n\n');
 }
 
 function fallbackReasonFor(error: unknown) {
@@ -141,7 +205,11 @@ function buildLogMetadata({
 }
 
 async function runAnthropicCompletion(params: Params, startTime: number) {
-  const system = stripTabs(params.system);
+  // Preserve the system param's shape (string vs. cacheable block array) so
+  // any `cache_control` breakpoint the caller set survives tab-stripping.
+  // The flattened string form is only used for the LlmLog audit column.
+  const system = stripTabsFromSystem(params.system);
+  const systemForLog = systemToPlainString(system);
   const messages: Array<{
     role: 'user' | 'assistant';
     content: string | Array<Record<string, unknown>>;
@@ -155,6 +223,11 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let toolRoundCount = 0;
+  // Prompt-caching savings are only verifiable from the API's own usage
+  // report — track both across every round of a tool-use loop so a single
+  // logged call reflects the full turn, not just its final round.
+  let totalCacheCreationInputTokens = 0;
+  let totalCacheReadInputTokens = 0;
 
   try {
     for (let round = 0; round <= maxRounds; round++) {
@@ -172,6 +245,9 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
 
       totalInputTokens += message.usage?.input_tokens ?? 0;
       totalOutputTokens += message.usage?.output_tokens ?? 0;
+      totalCacheCreationInputTokens +=
+        message.usage?.cache_creation_input_tokens ?? 0;
+      totalCacheReadInputTokens += message.usage?.cache_read_input_tokens ?? 0;
 
       if (
         message.stop_reason === 'tool_use' &&
@@ -211,19 +287,27 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
       await logLlmCall({
         model: params.model,
         provider: 'anthropic',
-        systemPrompt: system,
+        systemPrompt: systemForLog,
         messages,
         response: responseText,
         inputTokens: totalInputTokens,
         outputTokens: totalOutputTokens,
         totalTokens: totalInputTokens + totalOutputTokens,
         durationMs,
-        metadata: buildLogMetadata({
-          metadata: params.metadata,
-          messages,
-          hasTools,
-          toolRoundCount,
-        }),
+        metadata: {
+          ...buildLogMetadata({
+            metadata: params.metadata,
+            messages,
+            hasTools,
+            toolRoundCount,
+          }),
+          // Verifies the cache saving actually happened rather than assuming
+          // it did: 0 cache_read + >0 cache_creation means this call wrote
+          // the cache; >0 cache_read means a later call read it back cheap.
+          cacheCreationInputTokens: totalCacheCreationInputTokens,
+          cacheReadInputTokens: totalCacheReadInputTokens,
+        },
+        logPayload: params.logPayload,
       });
 
       return responseText;
@@ -235,16 +319,21 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
     await logLlmCall({
       model: params.model,
       provider: 'anthropic',
-      systemPrompt: system,
+      systemPrompt: systemForLog,
       messages,
       error: err instanceof Error ? err.message : String(err),
       durationMs,
-      metadata: buildLogMetadata({
-        metadata: params.metadata,
-        messages,
-        hasTools,
-        toolRoundCount,
-      }),
+      metadata: {
+        ...buildLogMetadata({
+          metadata: params.metadata,
+          messages,
+          hasTools,
+          toolRoundCount,
+        }),
+        cacheCreationInputTokens: totalCacheCreationInputTokens,
+        cacheReadInputTokens: totalCacheReadInputTokens,
+      },
+      logPayload: params.logPayload,
     });
     throw err;
   }
@@ -282,7 +371,7 @@ async function runOpenAiCompletion({
       ? [
           {
             role: 'system' as const,
-            content: stripTabs(params.system),
+            content: stripTabs(systemToPlainString(params.system)),
           },
         ]
       : []),
@@ -359,7 +448,7 @@ async function runOpenAiCompletion({
       await logLlmCall({
         model,
         provider: 'openai',
-        systemPrompt: stripTabs(params.system),
+        systemPrompt: stripTabs(systemToPlainString(params.system)),
         messages: formattedMessages,
         response: responseText,
         inputTokens: totalInputTokens,
@@ -372,6 +461,7 @@ async function runOpenAiCompletion({
           hasTools,
           toolRoundCount,
         }),
+        logPayload: params.logPayload,
       });
 
       return responseText;
@@ -383,7 +473,7 @@ async function runOpenAiCompletion({
     await logLlmCall({
       model,
       provider: 'openai',
-      systemPrompt: stripTabs(params.system),
+      systemPrompt: stripTabs(systemToPlainString(params.system)),
       messages: formattedMessages,
       error: err instanceof Error ? err.message : String(err),
       durationMs,
@@ -393,6 +483,7 @@ async function runOpenAiCompletion({
         hasTools,
         toolRoundCount,
       }),
+      logPayload: params.logPayload,
     });
     throw err;
   }
@@ -402,7 +493,7 @@ export async function getLLMCompletion(params: Params) {
   const startTime = Date.now();
   const fallbackModel = getOpenAiFallbackModel(params);
 
-  if (params.forceFallback) {
+  if (params.forceFallback && params.allowFallbackProvider !== false) {
     return runOpenAiCompletion({
       params,
       model: fallbackModel,
@@ -417,7 +508,8 @@ export async function getLLMCompletion(params: Params) {
   }
 
   if (params.model.includes('claude')) {
-    const fallbackAvailable = isFallbackEnabled();
+    const fallbackAvailable =
+      params.allowFallbackProvider !== false && isFallbackEnabled();
     const circuitState = getAnthropicOutageState();
 
     if (fallbackAvailable && isAnthropicOutageCircuitOpen()) {

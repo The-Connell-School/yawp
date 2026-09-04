@@ -63,6 +63,10 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import { generateClassCode } from '~/utils/class';
+import {
+  currentSchoolYear,
+  selectableSchoolYears,
+} from '~/utils/school-year';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
 
@@ -112,6 +116,45 @@ type TeacherSchoolConnector = {
     }) => Promise<unknown>;
   };
 };
+
+function prismaUniqueConstraintTargets(error: unknown): string[] | null {
+  if (!error || typeof error !== 'object') return null;
+
+  const prismaError = error as {
+    code?: unknown;
+    meta?: {
+      target?: unknown;
+      driverAdapterError?: {
+        cause?: { constraint?: { fields?: unknown } };
+      };
+    };
+  };
+  if (prismaError.code !== 'P2002') return null;
+
+  const values = [
+    prismaError.meta?.target,
+    prismaError.meta?.driverAdapterError?.cause?.constraint?.fields,
+  ];
+
+  return values.flatMap((value) => {
+    if (Array.isArray(value)) {
+      return value.filter((item): item is string => typeof item === 'string');
+    }
+    return typeof value === 'string' ? [value] : [];
+  });
+}
+
+function uniqueConstraintIncludes(
+  targets: readonly string[],
+  field: string
+): boolean {
+  return targets.some((target) =>
+    target
+      .replace(/[()"']/g, '')
+      .split(',')
+      .some((part) => part.trim() === field)
+  );
+}
 
 async function connectTeachersToSchool(
   tx: TeacherSchoolConnector,
@@ -263,13 +306,15 @@ export async function action({ request }: ActionFunctionArgs) {
   if (intent === 'create-class') {
     const schoolId = formData.get('schoolId') as string;
     const schoolYear = formData.get('schoolYear') as string;
-    const grade = formData.get('grade') as string;
-    const period = formData.get('period') as string;
+    const grade = (formData.get('grade') as string)?.trim() || null;
+    const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
+    const codeWasGenerated =
+      formData.get('codeWasGenerated') === 'true' || !code;
     const teacherIds = formData.getAll('teacherIds') as string[];
 
-    if (!schoolId || !schoolYear || !grade || !period) {
+    if (!schoolId || !schoolYear) {
       return dataResponse(
         { error: 'All fields are required' },
         { status: 400 }
@@ -289,14 +334,6 @@ export async function action({ request }: ActionFunctionArgs) {
       code = generateClassCode();
     }
 
-    // Validate code format (alphanumeric, 3-10 chars)
-    if (!/^[A-Z0-9]{3,10}$/.test(code)) {
-      return dataResponse(
-        { error: 'Code must be 3-10 alphanumeric characters' },
-        { status: 400 }
-      );
-    }
-
     // Verify school belongs to organization
     const school = await prisma.school.findFirst({
       where: { id: schoolId, organizationId: profile.organization.id },
@@ -306,59 +343,74 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ error: 'Invalid school' }, { status: 400 });
     }
 
-    try {
-      const classArtKey = await pickClassArtKeyForOrganization(
-        profile.organization.id
-      );
+    const classArtKey = await pickClassArtKeyForOrganization(
+      profile.organization.id
+    );
+    const maxAttempts = codeWasGenerated ? 4 : 1;
 
-      await prisma.$transaction(async (tx) => {
-        await tx.class.create({
-          data: {
-            schoolId,
-            schoolYear,
-            grade,
-            period,
-            title,
-            code,
-            cardGradientKey: generateClassCardGradientKey(code),
-            classArtKey,
-            teachers: {
-              connect: teacherIds.map((id) => ({ id })),
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.class.create({
+            data: {
+              schoolId,
+              schoolYear,
+              grade,
+              period,
+              title,
+              code,
+              cardGradientKey: generateClassCardGradientKey(code),
+              classArtKey,
+              teachers: {
+                connect: teacherIds.map((id) => ({ id })),
+              },
             },
-          },
+          });
+
+          await connectTeachersToSchool(tx, teacherIds, schoolId);
         });
 
-        await connectTeachersToSchool(tx, teacherIds, schoolId);
-      });
+        return dataResponse({ success: true });
+      } catch (error: unknown) {
+        const uniqueTargets = prismaUniqueConstraintTargets(error);
+        const isCodeCollision =
+          uniqueTargets && uniqueConstraintIncludes(uniqueTargets, 'code');
 
-      return dataResponse({ success: true });
-    } catch (error: any) {
-      if (error.code === 'P2002') {
-        const target = error.meta?.target;
-        const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '');
-        if (targetText.includes('code')) {
+        if (isCodeCollision && attempt + 1 < maxAttempts) {
+          code = generateClassCode();
+          continue;
+        }
+
+        if (isCodeCollision) {
           return dataResponse(
             { error: 'Class code already in use. Choose a different code.' },
             { status: 400 }
           );
         }
-        return dataResponse({ error: 'Class could not be created.' }, { status: 400 });
+        if (uniqueTargets) {
+          return dataResponse(
+            { error: 'Class could not be created.' },
+            { status: 400 }
+          );
+        }
+        throw error;
       }
-      throw error;
     }
+
+    throw new Error('Class code retry loop exhausted unexpectedly');
   }
 
   if (intent === 'edit-class') {
     const classId = formData.get('classId') as string;
     const schoolId = formData.get('schoolId') as string;
     const schoolYear = formData.get('schoolYear') as string;
-    const grade = formData.get('grade') as string;
-    const period = formData.get('period') as string;
+    const grade = (formData.get('grade') as string)?.trim() || null;
+    const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     const code = (formData.get('code') as string)?.trim().toUpperCase() || '';
     const teacherIds = formData.getAll('teacherIds') as string[];
 
-    if (!classId || !schoolId || !schoolYear || !grade || !period || !code) {
+    if (!classId || !schoolId || !schoolYear || !code) {
       return dataResponse(
         { error: 'All fields are required' },
         { status: 400 }
@@ -369,14 +421,6 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!/^\d{4}-\d{4}$/.test(schoolYear)) {
       return dataResponse(
         { error: 'School year must be in format YYYY-YYYY' },
-        { status: 400 }
-      );
-    }
-
-    // Validate code format (alphanumeric, 3-10 chars)
-    if (!/^[A-Z0-9]{3,10}$/.test(code)) {
-      return dataResponse(
-        { error: 'Code must be 3-10 alphanumeric characters' },
         { status: 400 }
       );
     }
@@ -425,11 +469,10 @@ export async function action({ request }: ActionFunctionArgs) {
       });
 
       return dataResponse({ success: true });
-    } catch (error: any) {
-      if (error.code === 'P2002') {
-        const target = error.meta?.target;
-        const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '');
-        if (targetText.includes('code')) {
+    } catch (error: unknown) {
+      const uniqueTargets = prismaUniqueConstraintTargets(error);
+      if (uniqueTargets) {
+        if (uniqueConstraintIncludes(uniqueTargets, 'code')) {
           return dataResponse(
             { error: 'Class code already in use. Choose a different code.' },
             { status: 400 }
@@ -924,8 +967,8 @@ export default function OrganizationClassesRoute() {
                           </div>
                         </TableCell>
                         <TableCell>{cls.schoolYear}</TableCell>
-                        <TableCell>{cls.grade}</TableCell>
-                        <TableCell>{cls.period}</TableCell>
+                        <TableCell>{cls.grade ?? '—'}</TableCell>
+                        <TableCell>{cls.period ?? '—'}</TableCell>
                         <TableCell>
                           <Badge variant="secondary">
                             {cls._count.students}
@@ -1021,26 +1064,26 @@ function ClassSheet({
       : 'create';
   const fetcher = useFetcher({ key: fetcherKey });
   const [schoolId, setSchoolId] = useState('');
-  const [schoolYear, setSchoolYear] = useState('');
+  const [schoolYear, setSchoolYear] = useState(currentSchoolYear());
   const [grade, setGrade] = useState('');
   const [period, setPeriod] = useState('');
   const [title, setTitle] = useState('');
   const [code, setCode] = useState('');
+  const [generatedCode, setGeneratedCode] = useState('');
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
 
   // Reset form when editingClass or duplicatingClass changes or sheet opens/closes
   useEffect(() => {
     const sourceClass = editingClass || duplicatingClass;
     setSchoolId(sourceClass?.schoolId || '');
-    setSchoolYear(sourceClass?.schoolYear || '');
+    setSchoolYear(sourceClass?.schoolYear || currentSchoolYear());
     setGrade(sourceClass?.grade || '');
     setPeriod(sourceClass?.period || '');
     setTitle(sourceClass?.title || '');
     // Generate new code for duplicates, use existing for edits
-    setCode(
-      editingClass?.code ||
-        (duplicatingClass ? generateClassCode() : generateClassCode())
-    );
+    const nextCode = editingClass?.code || generateClassCode();
+    setCode(nextCode);
+    setGeneratedCode(editingClass ? '' : nextCode);
     setSelectedTeachers(sourceClass?.teachers?.map((t: any) => t.id) || []);
   }, [editingClass, duplicatingClass, open]);
 
@@ -1057,6 +1100,9 @@ function ClassSheet({
     formData.append('period', period);
     formData.append('title', title);
     formData.append('code', code);
+    if (!editingClass && code === generatedCode) {
+      formData.append('codeWasGenerated', 'true');
+    }
     selectedTeachers.forEach((teacherId) => {
       formData.append('teacherIds', teacherId);
     });
@@ -1120,36 +1166,46 @@ function ClassSheet({
               placeholder="A3B9X2"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              maxLength={10}
               required
               className="font-mono"
             />
             <p className="text-xs text-muted-foreground">
-              Short code (3-10 characters, letters and numbers)
+              Class code students use to join
             </p>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="schoolYear">School Year</Label>
-            <Input
-              id="schoolYear"
-              placeholder="2024-2025"
-              value={schoolYear}
-              onChange={(e) => setSchoolYear(e.target.value)}
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              Format: YYYY-YYYY (e.g., 2024-2025)
-            </p>
+            {/* Picked, not typed — the year scopes every teacher surface, so a
+                typo here hides the class from the teacher who owns it. */}
+            <Select value={schoolYear} onValueChange={setSchoolYear}>
+              <SelectTrigger id="schoolYear" data-testid="class-school-year">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {selectableSchoolYears({ include: schoolYear }).map((year) => (
+                  <SelectItem key={year} value={year}>
+                    {year.replace('-', '–')}
+                    {year === currentSchoolYear() ? ' (current)' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="grade">Grade</Label>
-            <Select value={grade} onValueChange={setGrade} required>
+            <Label htmlFor="grade">Grade (Optional)</Label>
+            <Select
+              value={grade || NO_GRADE_VALUE}
+              onValueChange={(value) =>
+                setGrade(value === NO_GRADE_VALUE ? '' : value)
+              }
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a grade" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={NO_GRADE_VALUE}>No grade</SelectItem>
                 <SelectItem value="K">K</SelectItem>
                 <SelectItem value="1">1</SelectItem>
                 <SelectItem value="2">2</SelectItem>
@@ -1168,12 +1224,18 @@ function ClassSheet({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="period">Period</Label>
-            <Select value={period} onValueChange={setPeriod} required>
+            <Label htmlFor="period">Period (Optional)</Label>
+            <Select
+              value={period || NO_PERIOD_VALUE}
+              onValueChange={(value) =>
+                setPeriod(value === NO_PERIOD_VALUE ? '' : value)
+              }
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a period" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={NO_PERIOD_VALUE}>No period</SelectItem>
                 <SelectItem value="1">1</SelectItem>
                 <SelectItem value="2">2</SelectItem>
                 <SelectItem value="3">3</SelectItem>
@@ -1270,6 +1332,8 @@ function ClassSheet({
 }
 
 const BULK_SCHOOL_UNCHANGED = '__unchanged__';
+const NO_GRADE_VALUE = '__none__';
+const NO_PERIOD_VALUE = '__none__';
 
 function BulkEditClassSheet({
   open,

@@ -11,6 +11,20 @@ const schema = z.object({
   AWS_S3_BUCKET_FOR_VIDEOS: z.string(),
   AWS_S3_REGION_FOR_VIDEOS: z.string(),
   AI_MODEL: z.string().optional(),
+  /**
+   * Realtime collaboration provider credentials. Optional on purpose: the
+   * feature is gated per organization and unset everywhere today, so requiring
+   * them would stop every existing environment from booting. The token route
+   * returns a 500 rather than a token when they are absent.
+   *
+   * TIPTAP_COLLAB_SECRET signs document-scoped JWTs and must never reach the
+   * client — do not add it to `getEnv()`.
+   */
+  TIPTAP_COLLAB_APP_ID: z.string().optional(),
+  TIPTAP_COLLAB_SECRET: z.string().optional(),
+  PREVIEW_DATA_MODE: z
+    .enum(['seed', 'production-dump', 'sanitized-production'])
+    .optional(),
 });
 
 declare global {

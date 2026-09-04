@@ -63,7 +63,7 @@ describe('resolveDocumentLinkTarget', () => {
     ).toBe('/app/submissions/sub-new?exitTo=%2Fapp');
   });
 
-  test('student links to released submission even when a newer submission is pending', () => {
+  test('student links to the newest pending revision instead of an older released grade', () => {
     expect(
       resolveDocumentLinkTarget({
         documentId: 'doc-1',
@@ -82,10 +82,10 @@ describe('resolveDocumentLinkTarget', () => {
           },
         ],
       })
-    ).toBe('/app/submissions/sub-released?exitTo=%2Fapp');
+    ).toBe('/app/submissions/sub-pending?exitTo=%2Fapp');
   });
 
-  test('student with only unreleased submission links to document editor', () => {
+  test('student with only an unreleased submission links to that submission', () => {
     expect(
       resolveDocumentLinkTarget({
         documentId: 'doc-1',
@@ -99,7 +99,7 @@ describe('resolveDocumentLinkTarget', () => {
           },
         ],
       })
-    ).toBe('/app/documents/doc-1?ssv=1&exitTo=%2Fapp');
+    ).toBe('/app/submissions/sub-1?exitTo=%2Fapp');
   });
 
   test('teacher view always links to document editor', () => {
@@ -112,6 +112,44 @@ describe('resolveDocumentLinkTarget', () => {
           {
             id: 'sub-1',
             releasedAt: '2024-01-01T00:00:00.000Z',
+          },
+        ],
+      })
+    ).toBe('/app/documents/doc-1?ssv=1&exitTo=%2Fapp');
+  });
+
+  test('ignores a teacher-unsubmitted submission when picking released grade', () => {
+    expect(
+      resolveDocumentLinkTarget({
+        documentId: 'doc-1',
+        exitTo: '/app',
+        isStudentView: true,
+        submissions: [
+          {
+            id: 'sub-unsubmitted',
+            releasedAt: '2024-03-01T00:00:00.000Z',
+            unsubmittedAt: '2024-03-02T00:00:00.000Z',
+          },
+          {
+            id: 'sub-active',
+            releasedAt: '2024-02-01T00:00:00.000Z',
+          },
+        ],
+      })
+    ).toBe('/app/submissions/sub-active?exitTo=%2Fapp');
+  });
+
+  test('links to the document editor when the only submission was unsubmitted', () => {
+    expect(
+      resolveDocumentLinkTarget({
+        documentId: 'doc-1',
+        exitTo: '/app',
+        isStudentView: true,
+        submissions: [
+          {
+            id: 'sub-unsubmitted',
+            releasedAt: '2024-03-01T00:00:00.000Z',
+            unsubmittedAt: '2024-03-02T00:00:00.000Z',
           },
         ],
       })

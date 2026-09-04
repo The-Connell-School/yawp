@@ -3,8 +3,12 @@ import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { validationError, parseFormData } from '@rvf/react-router';
 import { z } from 'zod';
 import { zfd } from 'zod-form-data';
-import { requireUserId } from '~/utils/auth.server.js';
+import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import {
+  documentAuthorOwnSessionWhere,
+  getIsPlatformAdmin,
+} from '~/utils/document-access.server';
 import omit from 'lodash/omit';
 
 const validator = z.object({
@@ -38,12 +42,22 @@ function sortInstructionsByPosition<T extends { position?: number | null }>(
 
 export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.id, 'Missing cms id');
-  await requireUserId(request);
+  const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
+  const isAdmin = await getIsPlatformAdmin(userId);
   const { error, data } = await parseFormData(request, validator);
   if (error) return validationError(error);
 
-  const cms = await prisma.assignmentModuleSession.findUnique({
-    where: { id: params.id },
+  // Scoped to the caller's OWN session, which on a solo document is the owner's
+  // and on a shared draft is that one student's. Not owner-scope: a co-author
+  // would 404 on a group draft. Not author-scope either: that would let one
+  // student write into their partner's transcript. Teachers read student work
+  // elsewhere; nobody but the student writes into it here.
+  const cms = await prisma.assignmentModuleSession.findFirst({
+    where: {
+      id: params.id,
+      ...documentAuthorOwnSessionWhere({ profileId: profile.id, isAdmin }),
+    },
     include: {
       assignmentModule: {
         include: {
@@ -115,13 +129,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
       : {}),
   };
 
+  // Write against the id the scoped lookup returned, never the raw param.
   await prisma.assignmentModuleSession.update({
-    where: { id: params.id },
+    where: { id: cms.id },
     data: updateData,
   });
 
   const updatedCms = await prisma.assignmentModuleSession.findUnique({
-    where: { id: params.id },
+    where: { id: cms.id },
     include: {
       messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
       assignmentModule: {

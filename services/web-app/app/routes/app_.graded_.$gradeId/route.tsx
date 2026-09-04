@@ -1,5 +1,6 @@
 import { invariant } from '@epic-web/invariant';
 import { type LoaderFunctionArgs, redirect } from 'react-router';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
@@ -11,9 +12,19 @@ import { redirectWithToast } from '~/utils/toast.server';
  * LegacyGradeRedirect mapping to find the corresponding submissionId and
  * redirects to the document page (Phase 3 will add a dedicated submission view
  * at /app/submissions/:submissionId).
+ *
+ * A session is required before the mapping is read. The route hands back a
+ * document id in the `Location` header, so without a session it is a free
+ * legacy-id -> document-id oracle: exactly the input every document-scoped
+ * endpoint needs before it can be attacked. The destination page
+ * (`app_.documents_.$id`) is properly authorized, so this loader does not need
+ * to authorize the document itself — it only exists so an authenticated user
+ * following an old bookmark lands somewhere sensible.
  */
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.gradeId, 'No grade id found');
+  const userId = await requireUserId(request);
+  await requireMembership(request, userId);
 
   const mapping = await prisma.legacyGradeRedirect.findUnique({
     where: { gradeId: params.gradeId },

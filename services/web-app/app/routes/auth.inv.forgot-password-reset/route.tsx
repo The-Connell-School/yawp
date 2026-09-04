@@ -85,36 +85,38 @@ export default function ResetPasswordPage() {
   });
 
   return (
-    <div className="container flex flex-col justify-center pb-32 pt-20">
-      <div className="text-center">
-        <h1 className="text-h1">Password Reset</h1>
-        <p className="text-body-md mt-3 text-muted-foreground">
-          Hi, {data.email}. No worries. It happens all the time.
+    <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
+      <div className="flex flex-col items-start gap-2 text-left">
+        <h1 className="text-lg font-semibold">Reset your password</h1>
+        <p className="text-pretty text-base text-muted-foreground sm:text-sm">
+          Choose a new password for {data.email}.
         </p>
       </div>
-      <div className="mx-auto mt-16 min-w-full max-w-sm px-8 sm:min-w-[368px]">
-        <Form
-          {...form.getFormProps()}
-          className="flex flex-col gap-4"
-          method="POST"
+      <Form
+        {...form.getFormProps()}
+        className="mt-6 flex flex-col gap-5"
+        method="POST"
+      >
+        <FormInput
+          scope={form.scope('password')}
+          type="password"
+          label="New Password"
+          autoComplete="new-password"
+        />
+        <FormInput
+          scope={form.scope('confirmPassword')}
+          type="password"
+          label="Confirm Password"
+          autoComplete="new-password"
+        />
+        <Button
+          className="h-11 w-full text-base sm:h-10 sm:text-sm"
+          type="submit"
+          disabled={isLoading}
         >
-          <FormInput
-            scope={form.scope('password')}
-            type="password"
-            label="New Password"
-            autoComplete="new-password"
-          />
-          <FormInput
-            scope={form.scope('confirmPassword')}
-            type="password"
-            label="Confirm Password"
-            autoComplete="new-password"
-          />
-          <Button className="w-full" type="submit" disabled={isLoading}>
-            Reset password
-          </Button>
-        </Form>
-      </div>
+          Reset password
+        </Button>
+      </Form>
     </div>
   );
 }

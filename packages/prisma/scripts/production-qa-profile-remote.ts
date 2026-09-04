@@ -8,8 +8,10 @@ import { assertProductionQaPassword } from './production-qa-profile';
 const prismaRoot = join(import.meta.dir, '..');
 const ENV = process.argv[2];
 
-if (ENV !== 'production') {
-  console.error('Usage: bun run production-qa-profile-remote production');
+if (ENV !== 'production' && ENV !== 'production-postcheck') {
+  console.error(
+    'Usage: bun run production-qa-profile-remote production|production-postcheck'
+  );
   process.exit(1);
 }
 
@@ -64,6 +66,10 @@ const sshProcess = spawn('ssh', [
   '-N',
   '-o',
   'ExitOnForwardFailure=yes',
+  '-o',
+  'StrictHostKeyChecking=yes',
+  '-o',
+  `UserKnownHostsFile=${join(process.env.HOME ?? '', '.ssh', 'known_hosts')}`,
   '-L',
   `${LOCAL_PORT}:${DB_HOST}:5432`,
   SSH_HOST,
@@ -109,7 +115,12 @@ setTimeout(async () => {
 
     const exitCode = await runCommand(
       'bun',
-      ['run', 'scripts/production-qa-profile.ts'],
+      [
+        'run',
+        ENV === 'production'
+          ? 'scripts/production-qa-profile.ts'
+          : 'scripts/production-qa-postcheck.ts',
+      ],
       env
     );
     sshProcess.kill();
