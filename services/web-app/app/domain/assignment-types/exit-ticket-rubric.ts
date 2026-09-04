@@ -24,27 +24,27 @@ export const EXIT_TICKET_UNDERSTANDING_CATEGORY_KEY = 'understanding';
 export const EXIT_TICKET_SCORE_BANDS: RubricScoreBand[] = [
   {
     min: 0,
-    max: 59,
+    max: 0,
     label: 'No evidence',
     description:
-      'Blank, off topic, or nothing that responds to what was asked. This band is for an empty answer, never for a short or uncertain one written in good faith.',
+      'Blank, off topic, or nothing that responds to what was asked — "idk" and the like. There is nothing here to read, so it earns nothing. This band is only ever for an absent answer: a short or uncertain one written in good faith belongs higher, and so does any attempt that engages with the question.',
   },
   {
-    min: 60,
-    max: 74,
+    min: 1,
+    max: 44,
     label: 'Names it only',
     description:
-      'Repeats the topic, the term, or the teacher’s phrasing without explaining it. There is no sign yet of the student having made the idea their own.',
+      'Repeats the topic, the term, the teacher’s phrasing, or a bare answer, without the explanation the ticket asked for. The student is on topic and has done something, but not the thing that was requested, so this stays below half credit however correct the fragment is.',
   },
   {
-    min: 75,
-    max: 85,
+    min: 45,
+    max: 80,
     label: 'Partly there',
     description:
       'The right idea in their own words, but thin, partly muddled, or missing a piece. A student who explains what they do understand and then names precisely where they get stuck belongs here: locating the edge of your own knowledge is real understanding, not the absence of it.',
   },
   {
-    min: 86,
+    min: 81,
     max: 100,
     label: 'Explains it',
     description:

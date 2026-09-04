@@ -53,20 +53,44 @@ describe('the Exit Ticket rubric shape', () => {
     }
   });
 
-  test('grades humanely rather than mapping four steps onto a percentage', () => {
-    // A 0-3 scale scaled linearly puts "partly there" at 67%, a D. The bands
-    // are written on the scale the grade is read in, so they do not.
+  test('what the bands are worth once they become points', () => {
+    // The scale is read as a percentage of the teacher's point value, so the
+    // band edges are the real grading policy. These are the claims that
+    // matter, checked as points on a ten-point ticket.
+    const outOfTen = (value: number) => Math.round((value / 100) * 10);
+    const band = (label: string) =>
+      EXIT_TICKET_RUBRIC.categories[0].bands!.find(
+        (entry) => entry.label === label
+      )!;
+
+    // Nothing to read earns nothing. Not "almost nothing" — nothing.
+    expect(band('No evidence').min).toBe(0);
+    expect(band('No evidence').max).toBe(0);
+    expect(outOfTen(band('No evidence').max)).toBe(0);
+
+    // Answering without doing what was asked stays under half credit, however
+    // correct the fragment is. A bare right answer on a ticket that asked for
+    // reasoning is not most of the marks.
+    expect(outOfTen(band('Names it only').max)).toBeLessThan(5);
+
+    // Partial understanding is solid partial credit, not a near-miss on full.
+    expect(outOfTen(band('Partly there').min)).toBeGreaterThanOrEqual(5);
+    expect(outOfTen(band('Partly there').max)).toBeLessThan(9);
+
+    // Explaining it is full-credit territory.
+    expect(outOfTen(band('Explains it').max)).toBe(10);
+  });
+
+  test('scores read back on the scale the bands are written in', () => {
     const score = (value: number) =>
       computeWeightedBandPercentage(
         { [EXIT_TICKET_UNDERSTANDING_CATEGORY_KEY]: { score: value } },
         EXIT_TICKET_RUBRIC.categories
       );
 
+    expect(score(0)).toBe(0);
+    expect(score(40)).toBe(40);
     expect(score(95)).toBe(95);
-    expect(score(80)).toBeGreaterThanOrEqual(75);
-    // "Partly there" tops out below the band that means they can explain it,
-    // so a strong-but-incomplete answer cannot read as a full one.
-    expect(score(85)).toBeLessThan(86);
   });
 
   test('reads for understanding, not for polish', () => {
