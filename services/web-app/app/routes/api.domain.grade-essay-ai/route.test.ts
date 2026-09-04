@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { rubricKeys } from '~/domain/grading/rubric';
+import { GBA300_INTERNATIONAL_ETIQUETTE } from '~/domain/rubrics/gba300-rubrics';
+import {
+  GBA300_ETIQUETTE_EXEMPLARY_SCORES,
+  GBA300_ETIQUETTE_INTRODUCTION_EXEMPLARY,
+} from '~/domain/rubrics/ua-rubric-scoring-fixtures';
 
 const prisma = {
   $transaction: mock(),
@@ -2389,5 +2394,75 @@ describe('api.domain.grade-essay-ai', () => {
         engagement: { score: 0, comment: '', isAi: true },
       });
     });
+  });
+
+  test('stores bundled GBA 300 International Etiquette band scores as raw points', async () => {
+    const rubric = GBA300_INTERNATIONAL_ETIQUETTE;
+
+    prisma.assignmentType.findUnique.mockResolvedValue(
+      mockAssignmentType({
+        id: 'assignment-type-gba300-etiquette',
+        title: rubric.title,
+        scoringScaleJson: rubric.scoringScale,
+        rubricJson: rubric.rubric,
+        gradingPromptConfigJson: rubric.promptConfig,
+        gradingOutputSchemaJson: rubric.outputSchema,
+        gradingCalibrationNotes: rubric.calibrationNotes,
+      })
+    );
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'sub-gba300-etiquette-validation',
+        text: GBA300_ETIQUETTE_INTRODUCTION_EXEMPLARY,
+        document: {
+          ...mockSubmission().document,
+          assignmentTypeId: 'assignment-type-gba300-etiquette',
+          assignmentType: {
+            id: 'assignment-type-gba300-etiquette',
+            kind: null,
+            title: rubric.title,
+          },
+        },
+      })
+    );
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        categories: rubric.rubric.categories.map((category) => ({
+          key: category.key,
+          score:
+            GBA300_ETIQUETTE_EXEMPLARY_SCORES[
+              category.key as keyof typeof GBA300_ETIQUETTE_EXEMPLARY_SCORES
+            ],
+          comment: `Exemplary ${category.label}.`,
+        })),
+        overallComment: 'Jordan, the comparison is clear and specific.',
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-gba300-etiquette-validation');
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const payload = (response as { data: Record<string, unknown> }).data;
+
+    expect(payload.success).toBe(true);
+    const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+    expect(stored.numericPercentage).toBe(100);
+    expect(stored.overallScore).toBe(100);
+    expect(stored.rubricScores.introduction.score).toBe(5);
+    expect(stored.rubricScores.country_1_its_two_topics.score).toBe(20);
+    expect(stored.rubricScores.conclusion.score).toBe(5);
+
+    const gradingCall = getLLMCompletion.mock.calls.find(
+      ([request]) => request.metadata?.kind === 'rubric-evaluation'
+    );
+    expect(gradingCall?.[0].messages.some((message: { content: string }) =>
+      message.content.includes(GBA300_ETIQUETTE_INTRODUCTION_EXEMPLARY)
+    )).toBe(true);
   });
 });
