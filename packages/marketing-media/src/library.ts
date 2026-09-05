@@ -200,7 +200,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
       scenes: [
         {
           id: 'grading-hub',
-          goto: '/app/student-work',
+          goto: '/app/documents',
           waitFor: 'main',
           settle: 1.2,
           hold: 1.5,

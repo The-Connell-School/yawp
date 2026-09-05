@@ -187,6 +187,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       };
     }),
     stats: {
+      // A draft is not in flight — nothing is happening to it until a person
+      // reads the plan — so it gets counted, and shown, on its own.
+      awaitingYou: mappedJobs.filter((job) => job.status === 'DRAFT').length,
       inFlight: mappedJobs.filter((job) => ACTIVE_STATUSES.includes(job.status))
         .length,
       finished: mappedJobs.filter((job) => job.status === 'SUCCEEDED').length,
@@ -409,7 +412,10 @@ export async function action({ request }: ActionFunctionArgs) {
     await prisma.marketingMediaJob.update({
       where: { id: job.id },
       data: {
-        status: 'QUEUED',
+        // Not QUEUED: a generated storyboard is the model's reading of a
+        // brief, and the operator has not seen it yet. It waits as a plan
+        // they approve, so a misread costs a glance instead of a render.
+        status: 'DRAFT',
         storyboard: withBackdrop(generated.storyboard, chosenBackdrop),
         model: generated.model,
       },
@@ -679,6 +685,16 @@ export default function Route() {
             </Form>
           </div>
           <dl className="flex gap-6 text-right">
+            {stats.awaitingYou > 0 ? (
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-indigo-300">
+                  Awaiting you
+                </dt>
+                <dd className="text-2xl font-semibold tabular-nums text-indigo-300">
+                  {stats.awaitingYou}
+                </dd>
+              </div>
+            ) : null}
             <div>
               <dt className="text-xs uppercase tracking-wide text-slate-400">
                 In flight

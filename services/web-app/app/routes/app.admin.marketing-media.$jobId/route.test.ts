@@ -434,7 +434,9 @@ describe('marketing media job page', () => {
     });
     const queued = prisma.marketingMediaJob.update.mock.calls[0][0];
     expect(queued.where).toEqual({ id: 'job-2' });
-    expect(queued.data.status).toBe('QUEUED');
+    // A revision is the model reading words too, so it comes back as a plan
+    // the operator approves — see "approving a plan" below.
+    expect(queued.data.status).toBe('DRAFT');
     expect(response instanceof Response && response.status).toBe(302);
     expect(
       response instanceof Response && response.headers.get('location')
@@ -502,5 +504,60 @@ describe('marketing media job page', () => {
     expect(failed.data.status).toBe('FAILED');
     expect(failed.data.error).toContain('model unavailable');
     expect(response instanceof Response && response.status).toBe(302);
+  });
+});
+
+describe('approving a plan', () => {
+  beforeEach(() => {
+    requireAdmin.mockReset();
+    requireAdmin.mockResolvedValue({ id: 'admin-1' });
+    requireMutableRequest.mockReset();
+    requireMarketingStudioEnabled.mockReset();
+    prisma.marketingMediaJob.findUnique.mockReset();
+    prisma.marketingMediaJob.update.mockReset();
+  });
+
+  function draft(overrides: Record<string, unknown> = {}) {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue({
+      id: 'job-1',
+      status: 'DRAFT',
+      kind: 'CLIP',
+      brief: 'Show the reporter',
+      audience: null,
+      subjectType: 'FEATURE',
+      subjectId: null,
+      subjectLabel: null,
+      targetUrl: 'http://localhost:5176',
+      storyboard: { slug: 'a', title: 'A plan', scenes: [] },
+      ...overrides,
+    });
+  }
+
+  test('films a draft the operator approved', async () => {
+    draft();
+    const response: any = await action(args(request({ intent: 'approve' })));
+
+    const [[update]] = prisma.marketingMediaJob.update.mock.calls;
+    expect(update.data.status).toBe('QUEUED');
+    expect(responseStatus(response)).not.toBe(400);
+  });
+
+  // Approving anything else would re-queue a take that already ran, or jump a
+  // job the model is still writing.
+  test('refuses to approve a job that is not a draft', async () => {
+    draft({ status: 'SUCCEEDED' });
+    const response: any = await action(args(request({ intent: 'approve' })));
+
+    expect(responseStatus(response)).toBe(400);
+    expect(prisma.marketingMediaJob.update).not.toHaveBeenCalled();
+  });
+
+  test('a draft can be discarded without filming it', async () => {
+    draft();
+    const response: any = await action(args(request({ intent: 'cancel' })));
+
+    const [[update]] = prisma.marketingMediaJob.update.mock.calls;
+    expect(update.data.status).toBe('CANCELLED');
+    expect(responseStatus(response)).not.toBe(400);
   });
 });

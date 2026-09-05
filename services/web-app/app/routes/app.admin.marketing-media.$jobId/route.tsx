@@ -45,6 +45,7 @@ import {
   MAX_RENDER_ATTEMPTS,
   RENDER_LOCK_TIMEOUT_MS,
   TERMINAL_JOB_STATUSES,
+  describePlan,
   diffStoryboards,
   estimateRenderSeconds,
   safeParseStoryboard,
@@ -180,6 +181,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ? diffStoryboards(job.parent.storyboard, job.storyboard)
       : null,
     storyboard: parsedStoryboard?.success ? parsedStoryboard.data : null,
+    // The storyboard in the operator's language, read before anything films.
+    plan: parsedStoryboard?.success ? describePlan(parsedStoryboard.data) : null,
     estimatedSeconds: parsedStoryboard?.success
       ? estimateRenderSeconds(parsedStoryboard.data)
       : null,
@@ -214,6 +217,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
     },
   });
   if (!job) throw new Response('Not Found', { status: 404 });
+
+  // The operator read the plan and said film it. This is the only path from a
+  // draft into the queue: nothing else promotes one, so a storyboard nobody
+  // approved is never filmed.
+  if (intent === 'approve') {
+    if (job.status !== 'DRAFT') {
+      return dataResponse(
+        { error: 'That render is not waiting for approval.' },
+        { status: 400 }
+      );
+    }
+    await prisma.marketingMediaJob.update({
+      where: { id: job.id },
+      data: { status: 'QUEUED' },
+    });
+    return dataResponse({ ok: true });
+  }
 
   if (intent === 'cancel') {
     if (TERMINAL_JOB_STATUSES.includes(job.status as MarketingJobStatus)) {
@@ -280,7 +300,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       await prisma.marketingMediaJob.update({
         where: { id: revisionJob.id },
         data: {
-          status: 'QUEUED',
+          // A revision is still the model reading words, so it comes back as
+          // a plan too. The operator sees whether the note landed before a
+          // worker spends another minute on it.
+          status: 'DRAFT',
           storyboard: revised.storyboard,
           model: revised.model,
         },
@@ -357,6 +380,8 @@ function pipelineStages(job: {
   const hasStoryboard = Boolean(job.storyboard);
   const states: Record<string, StageState[]> = {
     GENERATING: ['active', 'pending', 'pending'],
+    // The storyboard exists; the queue is waiting on the operator, not a worker.
+    DRAFT: ['done', 'pending', 'pending'],
     QUEUED: ['done', 'active', 'pending'],
     RENDERING: ['done', 'done', 'active'],
     SUCCEEDED: ['done', 'done', 'done'],
@@ -483,6 +508,7 @@ export default function Route() {
     changes,
     storyboard,
     estimatedSeconds,
+    plan,
     queueStalled,
     waitingForTurn,
     queueAhead,
@@ -722,6 +748,85 @@ export default function Route() {
         </Card>
       ) : null}
 
+      {/* ——— The plan: what the model understood, before anything films ——— */}
+      {job.status === 'DRAFT' && plan ? (
+        <Card className="border-indigo-300">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-indigo-900 dark:text-indigo-200">
+              <PenLine className="h-4 w-4" aria-hidden />
+              Read this before it films
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="rounded-lg border bg-muted/40 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                What it thinks you asked for
+              </p>
+              <p
+                data-testid="marketing-plan-goal"
+                className="mt-1 text-sm font-medium"
+              >
+                {plan.goal ?? plan.title}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Filmed as {plan.persona} · about{' '}
+                {Math.round(plan.estimatedSeconds)}s of screen time
+              </p>
+            </div>
+
+            <ol className="flex flex-col gap-3">
+              {plan.scenes.map((scene, index) => (
+                <li
+                  key={scene.id}
+                  data-testid="marketing-plan-scene"
+                  className="flex gap-3"
+                >
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs tabular-nums text-muted-foreground">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 text-sm">
+                    <div className="font-medium">{scene.where}</div>
+                    {scene.actions.length > 0 ? (
+                      <div className="text-muted-foreground">
+                        {scene.actions.join(', then ')}
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground">
+                        holds on the screen
+                      </div>
+                    )}
+                    {scene.emphasis ? (
+                      <div className="text-xs text-muted-foreground">
+                        {scene.emphasis}
+                      </div>
+                    ) : null}
+                    {scene.overlay ? (
+                      <div className="mt-1 inline-block rounded bg-slate-900 px-2 py-0.5 text-xs text-slate-50">
+                        {scene.overlay}
+                      </div>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+              <Form method="post">
+                <input type="hidden" name="intent" value="approve" />
+                <Button type="submit" data-testid="marketing-plan-approve">
+                  <Clapperboard className="mr-1.5 h-4 w-4" aria-hidden />
+                  Film it
+                </Button>
+              </Form>
+              <p className="text-xs text-muted-foreground">
+                Not what you meant? Say what to change below — it is rewritten
+                and comes back here, still unfilmed.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* ——— The screening room: what this take produced ——— */}
       <Card>
         <CardHeader>
@@ -738,9 +843,11 @@ export default function Route() {
                 aria-hidden
               />
               <p className="text-sm text-muted-foreground">
-                {active
-                  ? 'Nothing yet. This page refreshes while the render runs.'
-                  : 'This job produced no media.'}
+                {job.status === 'DRAFT'
+                  ? 'Nothing filmed yet — approve the plan above first.'
+                  : active
+                    ? 'Nothing yet. This page refreshes while the render runs.'
+                    : 'This job produced no media.'}
               </p>
             </div>
           ) : (

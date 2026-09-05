@@ -1,5 +1,6 @@
 const STATUS_STYLES: Record<string, string> = {
   GENERATING: 'border-amber-200 bg-amber-50 text-amber-900',
+  DRAFT: 'border-indigo-200 bg-indigo-50 text-indigo-900',
   QUEUED: 'border-sky-200 bg-sky-50 text-sky-900',
   RENDERING: 'border-indigo-200 bg-indigo-50 text-indigo-900',
   SUCCEEDED: 'border-emerald-200 bg-emerald-50 text-emerald-900',
@@ -9,6 +10,8 @@ const STATUS_STYLES: Record<string, string> = {
 
 const DOT_STYLES: Record<string, string> = {
   GENERATING: 'bg-amber-500 animate-pulse',
+  // Not pulsing: nothing is happening until a person reads the plan.
+  DRAFT: 'bg-indigo-500',
   QUEUED: 'bg-sky-500 animate-pulse',
   RENDERING: 'bg-indigo-500 animate-pulse',
   SUCCEEDED: 'bg-emerald-500',

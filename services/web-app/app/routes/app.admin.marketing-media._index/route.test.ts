@@ -200,7 +200,7 @@ describe('marketing media job creation', () => {
     expect(prisma.marketingMediaJob.create).not.toHaveBeenCalled();
   });
 
-  test('generates a storyboard from a brief and queues the job', async () => {
+  test('generates a storyboard from a brief and holds it as a plan', async () => {
     generateStoryboard.mockResolvedValue({
       storyboard: STORYBOARD,
       model: 'claude-sonnet-4-6',
@@ -223,7 +223,9 @@ describe('marketing media job creation', () => {
 
     const update = prisma.marketingMediaJob.update.mock.calls[0][0];
     expect(update.where.id).toBe('job-1');
-    expect(update.data.status).toBe('QUEUED');
+    // A generated storyboard waits for the operator to read the plan; see
+    // "a brief becomes a plan, not a render" below.
+    expect(update.data.status).toBe('DRAFT');
     expect(update.data.model).toBe('claude-sonnet-4-6');
   });
 
@@ -465,5 +467,54 @@ describe('backdrop choice', () => {
       backdrop: 'chartreuse',
     });
     expect(responseStatus(response)).toBe(400);
+  });
+});
+
+describe('a brief becomes a plan, not a render', () => {
+  beforeEach(() => {
+    requireAdmin.mockReset();
+    requireAdmin.mockResolvedValue({ id: 'admin-1' });
+    requireMutableRequest.mockReset();
+    requireMarketingStudioEnabled.mockReset();
+    getMarketingRenderTarget.mockReset();
+    getMarketingRenderTarget.mockReturnValue('http://localhost:5176');
+    prisma.marketingMediaJob.create.mockReset();
+    prisma.marketingMediaJob.create.mockResolvedValue({ id: 'job-1' });
+    prisma.marketingMediaJob.update.mockReset();
+    generateStoryboard.mockReset();
+    generateStoryboard.mockResolvedValue({
+      storyboard: STORYBOARD,
+      model: 'claude',
+    });
+  });
+
+  // The whole point: the operator reads what the model understood before a
+  // worker spends a minute filming the wrong thing.
+  test('a generated storyboard waits as a DRAFT', async () => {
+    await runAction({ brief: 'Show the reporter answering a question.', kind: 'CLIP' });
+
+    const [[update]] = prisma.marketingMediaJob.update.mock.calls;
+    expect(update.data.status).toBe('DRAFT');
+  });
+
+  // Hand-verified storyboards and ones the operator pasted need no approval:
+  // nobody is guessing at intent in either case.
+  test('library renders still queue immediately', async () => {
+    await runAction({
+      intent: 'render-library',
+      librarySlug: 'library-teacher-grading-hub',
+    });
+    const [[created]] = prisma.marketingMediaJob.create.mock.calls;
+    expect(created.data.status).toBe('QUEUED');
+  });
+
+  test('a pasted storyboard still queues immediately', async () => {
+    await runAction({
+      brief: 'Pasted by hand.',
+      kind: 'STILLS',
+      storyboardJson: JSON.stringify(STORYBOARD),
+    });
+    const [[created]] = prisma.marketingMediaJob.create.mock.calls;
+    expect(created.data.status).toBe('QUEUED');
   });
 });

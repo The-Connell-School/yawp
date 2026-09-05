@@ -26,6 +26,11 @@ export const ALLOWED_ROUTES = [
   '/app',
   '/app/my-classes',
   '/app/my-documents',
+  '/app/assignments',
+  '/app/documents',
+  '/app/reporter',
+  // Legacy: redirects to /app/documents. Kept so storyboards written against
+  // the old path still validate; the guide sends new ones to the new one.
   '/app/student-work',
   '/app/teacher-trainings',
 ] as const;

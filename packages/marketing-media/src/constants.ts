@@ -10,6 +10,12 @@ export type MarketingJobKind = (typeof MARKETING_JOB_KINDS)[number];
 export const MARKETING_JOB_STATUSES = [
   /** The brief is in, the storyboard is being written. */
   'GENERATING',
+  /**
+   * A storyboard exists and is waiting for the operator to read the plan and
+   * say film it. Nothing claims a DRAFT — the renderer takes QUEUED — so a
+   * brief the model misread costs a glance rather than a render.
+   */
+  'DRAFT',
   /** Storyboard validated, waiting for a renderer. */
   'QUEUED',
   /** A renderer has claimed it. */

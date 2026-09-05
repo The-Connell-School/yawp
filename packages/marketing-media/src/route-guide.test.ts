@@ -42,3 +42,40 @@ describe('ROUTE_GUIDE', () => {
     expect(text).toMatch(/portal/i);
   });
 });
+
+describe('coverage of the real teacher navigation', () => {
+  // The model can only film what the allow-list contains. Every destination in
+  // the signed-in teacher navigation is a feature somebody will ask for a demo
+  // of, so a missing one is not a gap in the guide — it is a brief the studio
+  // silently cannot answer, and it answers with something adjacent instead.
+  test('every teacher nav destination is filmable', () => {
+    for (const route of [
+      '/app',
+      '/app/my-classes',
+      '/app/assignments',
+      '/app/documents',
+      '/app/teacher-trainings',
+      '/app/reporter',
+    ] as const) {
+      expect(ALLOWED_ROUTES).toContain(route);
+    }
+  });
+
+  // /app/student-work now redirects to /app/documents. Existing storyboards
+  // still name it, so it stays allowed, but the guide has to send new ones to
+  // the canonical path — a redirect mid-capture races the scene's waitFor.
+  test('sends new storyboards to the canonical documents route', () => {
+    expect(ALLOWED_ROUTES).toContain('/app/student-work');
+    expect(ROUTE_GUIDE['/app/student-work']).toMatch(/redirect/i);
+    expect(ROUTE_GUIDE['/app/student-work']).toContain('/app/documents');
+  });
+
+  test('names what each new surface actually offers', () => {
+    // Written from the running seeded app, not from the components.
+    expect(ROUTE_GUIDE['/app/reporter']).toContain('Ask Yawp Reporter');
+    expect(ROUTE_GUIDE['/app/reporter']).toContain('Grade report for a class');
+    expect(ROUTE_GUIDE['/app/assignments']).toContain('New Assignment');
+    expect(ROUTE_GUIDE['/app/assignments']).toContain('Daily Pages - week 2');
+    expect(ROUTE_GUIDE['/app/documents']).toContain('Needs Grading');
+  });
+});

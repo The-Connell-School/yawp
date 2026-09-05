@@ -98,3 +98,16 @@ describe('student storyboards follow the current student flow', () => {
     }
   });
 });
+
+describe('library routes stay canonical', () => {
+  // A redirect fires mid-capture and can race the scene's waitFor, so the
+  // hand-verified library must never point at a path that redirects.
+  test('no entry navigates to the legacy student-work path', () => {
+    for (const entry of MARKETING_LIBRARY) {
+      const parsed = parseStoryboard(entry.storyboard);
+      for (const scene of parsed.scenes) {
+        expect(scene.goto).not.toBe('/app/student-work');
+      }
+    }
+  });
+});
