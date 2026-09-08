@@ -40,9 +40,8 @@ const getAvailableAssignmentTypesForScopes = mock();
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
 // before any file could mock.module() this path (see comment there).
-const assignmentTypeAccessActual = globalThis.__realModules[
-  '~/utils/assignment-type-access.server'
-];
+const assignmentTypeAccessActual =
+  globalThis.__realModules['~/utils/assignment-type-access.server'];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -61,7 +60,7 @@ mock.module('~/utils/assignment-type-access.server', () => ({
   getAvailableAssignmentTypesForScopes,
 }));
 
-const { action, loader } = await import('./route');
+const { action, loader, showModulesAccordion } = await import('./route');
 
 function makeAssignmentType(overrides: Record<string, unknown> = {}) {
   return {
@@ -97,9 +96,7 @@ function mockActionAssignmentTypeAvailable({
   systemKey = null as string | null,
 } = {}) {
   prisma.assignmentType.findFirst.mockImplementation(async (args: any) =>
-    args.select?.systemKey !== undefined
-      ? { id, systemKey }
-      : { id }
+    args.select?.systemKey !== undefined ? { id, systemKey } : { id }
   );
 }
 
@@ -284,6 +281,23 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.savedDailyPagesPrompt.findMany.mockResolvedValue([]);
   });
 
+  test('hides the modules list on an exit ticket', () => {
+    // The exit ticket has one module whose whole description is "answer the
+    // exit ticket in your own words". The directions above it already say
+    // that, so the accordion is noise on this page only.
+    expect(showModulesAccordion({ kind: 'exit_ticket' }, 1)).toBe(false);
+    expect(showModulesAccordion({ kind: null }, 1)).toBe(true);
+  });
+
+  test('hides the modules list on an exit ticket for students too', () => {
+    // Not gated on role: the row is equally uninformative either way.
+    expect(showModulesAccordion({ kind: 'exit_ticket' }, 3)).toBe(false);
+  });
+
+  test('still hides the modules list when there are no modules at all', () => {
+    expect(showModulesAccordion({ kind: null }, 0)).toBe(false);
+  });
+
   test('provides prompt library data for teachers viewing Daily Pages', async () => {
     const response = (await loader({
       request: new Request('https://example.test/app/assignment-types/at-1'),
@@ -332,13 +346,13 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
       params: { id: 'at-1' },
     } as never)) as any;
 
-    expect(prisma.savedDailyPagesPrompt.findMany.mock.calls[0][0].where).toEqual(
-      {
-        membershipId: 'teacher-1',
-        assignmentTypeId: 'at-1',
-        archivedAt: null,
-      }
-    );
+    expect(
+      prisma.savedDailyPagesPrompt.findMany.mock.calls[0][0].where
+    ).toEqual({
+      membershipId: 'teacher-1',
+      assignmentTypeId: 'at-1',
+      archivedAt: null,
+    });
     // The saved prompt is the only thing the "My prompts" filter keeps.
     expect(response.data.promptLibrary.prompts).toHaveLength(1);
     expect(response.data.promptLibrary.prompts[0]).toMatchObject({
@@ -446,9 +460,9 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
       'library',
       'mine',
     ]);
-    expect(response.data.thesisPromptLibrary.optionCounts.collections.mine).toBe(
-      1
-    );
+    expect(
+      response.data.thesisPromptLibrary.optionCounts.collections.mine
+    ).toBe(1);
   });
 
   test('omits thesis prompt library for students and other assignment types', async () => {

@@ -1,4 +1,5 @@
 import { EXIT_TICKET_FOCUS_OPTIONS } from '~/domain/assignment-types/exit-ticket';
+import { EXIT_TICKET_SCORE_BANDS } from '~/domain/assignment-types/exit-ticket-rubric';
 
 /**
  * What a teacher reads on the Exit Ticket page before they make one.
@@ -44,8 +45,8 @@ export function ExitTicketDirections() {
           An exit ticket is the last five minutes of a lesson. It is not a quiz
           and not a journal — it is how you find out whether today actually
           landed, while there is still time to do something about it. Students
-          write; nothing is multiple choice, and nothing is auto-scored, because
-          the point is to read what they say in their own words.
+          write: there is nothing to pick from and no answer key, because the
+          point is what they say in their own words.
         </p>
       </div>
 
@@ -107,6 +108,41 @@ export function ExitTicketDirections() {
           about, and it is worth using deliberately for exactly that. Just reach
           for it on purpose rather than by default. If you want to know whether
           a particular idea landed, add the notes or make the ticket specific.
+        </p>
+      </div>
+
+      <div>
+        <h4 className="mb-2 text-sm font-semibold">How they are scored</h4>
+        <p className="text-sm text-muted-foreground">
+          Every response is scored, on the one question of how much of the idea
+          the student can explain. What you choose when you make the ticket is
+          whether that score counts.{' '}
+          <span className="font-medium text-foreground/80">
+            Feedback and understanding only
+          </span>{' '}
+          keeps it out of the gradebook — you still see the score and who
+          understood it, and a student loses nothing by admitting what they
+          missed.{' '}
+          <span className="font-medium text-foreground/80">For points</span>{' '}
+          records the same score as a grade.
+        </p>
+        <ul className="mt-2 space-y-2 text-sm text-foreground/80">
+          {EXIT_TICKET_SCORE_BANDS.map((band) => (
+            <li key={band.label}>
+              <span className="font-medium">{band.label}</span>{' '}
+              <span className="text-muted-foreground">
+                ({band.min === band.max ? band.min : `${band.min}–${band.max}`})
+              </span>{' '}
+              — {band.description}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-sm text-muted-foreground">
+          That is the whole scale, and it is the same text the grader is given.
+          Two lines in it are deliberate rather than accidental: “idk” earns a
+          zero instead of a low score, and a bare correct answer handed in
+          without the reasoning the ticket asked for stays under half credit,
+          because the answer was never the thing being checked.
         </p>
       </div>
 

@@ -587,11 +587,32 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
 }
 
+/**
+ * Whether the modules accordion earns its place on this page.
+ *
+ * Every assignment type carries at least one module — it is what a direct
+ * document is created from — but an exit ticket's is a single row whose
+ * description restates the prompt, sitting directly under directions that
+ * already explain the whole thing. Hidden there rather than deleted, because
+ * the module itself is still what New -> Document builds from.
+ */
+export function showModulesAccordion(
+  assignmentType: { kind?: string | null },
+  moduleCount: number
+): boolean {
+  if (moduleCount === 0) return false;
+  return !isExitTicketAssignmentType(assignmentType);
+}
+
 export default function AppAssignmentTypesIdRoute() {
   const user = useUser();
   const data = useLoaderData<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const hasModules = data.assignmentType.assignmentModules.length > 0;
+  const modulesVisible = showModulesAccordion(
+    data.assignmentType,
+    data.assignmentType.assignmentModules.length
+  );
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
@@ -723,7 +744,7 @@ export default function AppAssignmentTypesIdRoute() {
         {data.showExitTicketDirections ? <ExitTicketDirections /> : null}
         {showPromptsLibrary ? <TeacherDirections /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
-        {hasModules ? (
+        {modulesVisible ? (
           <Accordion type="single" collapsible>
             <AccordionItem value="modules">
               <AccordionTrigger className="py-2 text-base">

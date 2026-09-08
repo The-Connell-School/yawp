@@ -15,6 +15,8 @@ import { createRoot, type Root } from 'react-dom/client';
 const { ExitTicketDirections } = await import('./exit-ticket-directions');
 const { EXIT_TICKET_FOCUS_OPTIONS } =
   await import('~/domain/assignment-types/exit-ticket');
+const { EXIT_TICKET_SCORE_BANDS } =
+  await import('~/domain/assignment-types/exit-ticket-rubric');
 
 function text() {
   return (document.body.textContent ?? '').toLowerCase();
@@ -86,5 +88,34 @@ describe('ExitTicketDirections', () => {
       'a basic ticket with no notes is the hardest one to read well'
     );
     expect(text()).toContain('deliberately');
+  });
+
+  it('does not claim responses are left unscored', () => {
+    // Every response is scored 0-100 against the understanding bands, whether
+    // or not the score is recorded as a grade. The page used to say nothing
+    // was auto-scored, which was simply false.
+    render();
+    expect(text()).not.toContain('nothing is auto-scored');
+  });
+
+  it('says every response is scored and that counting it is the teacher choice', () => {
+    render();
+    expect(text()).toContain('every response is scored');
+    expect(text()).toContain('gradebook');
+  });
+
+  it('shows the whole scale a response is scored against', () => {
+    // Driven off the bands the grader is actually given, so the page cannot
+    // describe a scale the model is not working from.
+    render();
+    for (const band of EXIT_TICKET_SCORE_BANDS) {
+      expect(text()).toContain(band.label.toLowerCase());
+      expect(text()).toContain(band.description.toLowerCase());
+    }
+  });
+
+  it('names the two scoring calls that surprise people', () => {
+    render();
+    expect(text()).toContain('under half credit');
   });
 });
