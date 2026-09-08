@@ -56,8 +56,6 @@ describe('writing lessons index route', () => {
       context: {} as never,
     } as any);
 
-    expect(response.data.lessonCount).toBeGreaterThan(0);
-    expect(response.data.promptCount).toBeGreaterThan(0);
     // Grammar & Mechanics is always present; Composition appears when enabled.
     expect(
       response.data.sections.some(

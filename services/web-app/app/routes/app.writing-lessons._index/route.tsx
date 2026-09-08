@@ -3,7 +3,6 @@ import {
   ChevronDown,
   ChevronRight,
   Plus,
-  Sparkles,
   Zap,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -99,19 +98,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       })),
     }));
 
-  const allLessons = sections
-    .flatMap((section) => section.groups)
-    .flatMap((group) => group.lessons);
-  const lessonCount = allLessons.length;
-  const promptCount = allLessons.reduce(
-    (total, lesson) => total + lesson.promptCount,
-    0
-  );
-  const topicCount = sections.reduce(
-    (total, section) => total + section.groups.length,
-    0
-  );
-
   const isTeacher = membership.role === 'TEACHER';
   const teacherClasses = isTeacher
     ? await prisma.class.findMany({
@@ -140,9 +126,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return dataResponse({
     sections,
-    lessonCount,
-    promptCount,
-    topicCount,
     isTeacher,
     teacherClasses,
     assignments,
@@ -150,15 +133,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function WritingLessonsIndexRoute() {
-  const {
-    sections,
-    lessonCount,
-    promptCount,
-    topicCount,
-    isTeacher,
-    teacherClasses,
-    assignments,
-  } = useLoaderData<typeof loader>();
+  const { sections, isTeacher, teacherClasses, assignments } =
+    useLoaderData<typeof loader>();
   const [lessonToAssign, setLessonToAssign] = useState<{
     slug: string;
     title: string;
@@ -202,7 +178,6 @@ export default function WritingLessonsIndexRoute() {
               className="shrink-0 rounded-full"
               onClick={() => setIsCreateOpen(true)}
             >
-              <Sparkles className="mr-2 size-4 shrink-0" />
               {isTeacher ? 'Create assignment' : 'Create practice'}
             </Button>
           </div>
@@ -227,30 +202,6 @@ export default function WritingLessonsIndexRoute() {
               </p>
             </div>
           )}
-          <div className="mt-6 grid grid-cols-3 gap-px overflow-hidden rounded-xl border bg-border sm:w-fit">
-            <div className="flex flex-col gap-0.5 bg-popover px-4 py-3 sm:px-6">
-              <p className="text-xl font-semibold tabular-nums">
-                {lessonCount}
-              </p>
-              <p className="text-base text-muted-foreground sm:text-sm">
-                Lessons
-              </p>
-            </div>
-            <div className="flex flex-col gap-0.5 bg-popover px-4 py-3 sm:px-6">
-              <p className="text-xl font-semibold tabular-nums">
-                {promptCount}
-              </p>
-              <p className="text-base text-muted-foreground sm:text-sm">
-                Prompts
-              </p>
-            </div>
-            <div className="flex flex-col gap-0.5 bg-popover px-4 py-3 sm:px-6">
-              <p className="text-xl font-semibold tabular-nums">{topicCount}</p>
-              <p className="text-base text-muted-foreground sm:text-sm">
-                Topics
-              </p>
-            </div>
-          </div>
         </div>
       </div>
 
