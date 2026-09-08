@@ -7,10 +7,8 @@ import {
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './dev-personas';
-import {
-  composeExitTicketPrompt,
-  type ExitTicketConfig,
-} from '../../../../services/web-app/app/domain/assignment-types/exit-ticket.ts';
+import { composeExitTicketPrompt } from '../../../../services/web-app/app/domain/assignment-types/exit-ticket.ts';
+import { EXIT_TICKET_DEMO_TICKETS } from './exit-ticket-demo-data.ts';
 
 type PersonaRecord = {
   persona: LocalDevPersona;
@@ -320,9 +318,10 @@ export async function seedSyntheticLocalDevData(
   }
 
   if (exitTicketAssignmentTypeId) {
-    // A worked set of exit tickets, graded, so the whole rotation is visible
-    // without waiting on a live grading run: both shapes, several focuses,
-    // graded-for-points beside feedback-only, and a response in each band.
+    // A worked set of exit tickets, so the whole rotation is visible without
+    // waiting on a live grading run. What each one is there to show — and the
+    // guarantee that between them they cover every configuration — lives in
+    // exit-ticket-demo-data.ts alongside its coverage test.
     //
     // Prompts are composed by the same function the product uses rather than
     // pasted, so the demo cannot drift from what a teacher would really get.
@@ -339,55 +338,33 @@ export async function seedSyntheticLocalDevData(
       },
     });
 
-    type DemoResponse = {
-      membershipId: string;
-      title: string;
-      text: string;
-      /** The band this response is meant to land in, scored on 0-100. */
-      score: number;
-      letterGrade: string;
-      overallComment: string;
-    };
-
-    async function seedExitTicket({
-      title,
-      config,
-      submitForGrade,
-      pointValue,
-      responses,
-    }: {
-      title: string;
-      config: ExitTicketConfig;
-      submitForGrade: boolean;
-      pointValue: number | null;
-      responses: DemoResponse[];
-    }) {
+    for (const ticket of EXIT_TICKET_DEMO_TICKETS) {
       const assignment = await prisma.assignment.create({
         data: {
-          assignmentTypeId: exitTicketAssignmentTypeId!,
-          title,
-          prompt: composeExitTicketPrompt(config),
-          exitTicketConfigJson: config as unknown as Prisma.InputJsonValue,
-          submitForGrade,
-          pointValue,
-          // An exit ticket checks what a student understands unaided.
-          tutorEnabled: false,
+          assignmentTypeId: exitTicketAssignmentTypeId,
+          title: ticket.title,
+          prompt: composeExitTicketPrompt(ticket.config),
+          exitTicketConfigJson:
+            ticket.config as unknown as Prisma.InputJsonValue,
+          submitForGrade: ticket.submitForGrade,
+          pointValue: ticket.pointValue,
+          tutorEnabled: ticket.tutorEnabled,
         },
       });
       const classAssignment = await prisma.classAssignment.create({
         data: { assignmentId: assignment.id, classId: primaryClass.id },
       });
 
-      for (const response of responses) {
+      for (const response of ticket.responses) {
         const html = `<p>${response.text}</p>`;
         const document = await prisma.document.create({
           data: {
-            title: response.title,
+            title: ticket.title,
             text: response.text,
             html,
             revision: 2,
-            membershipId: response.membershipId,
-            assignmentTypeId: exitTicketAssignmentTypeId!,
+            membershipId: personaRecords[response.personaKey].membershipId,
+            assignmentTypeId: exitTicketAssignmentTypeId,
             assignmentId: assignment.id,
             classAssignmentId: classAssignment.id,
             assignmentModuleSessions: {
@@ -395,13 +372,27 @@ export async function seedSyntheticLocalDevData(
             },
           },
         });
+
+        // A draft was started and never handed in, so there is nothing to
+        // grade and no submission row to make.
+        if (response.state === 'draft') continue;
+
+        const submitted = {
+          documentId: document.id,
+          html,
+          text: response.text,
+          title: ticket.title,
+          submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+        };
+
+        if (response.state === 'submitted') {
+          await prisma.submission.create({ data: submitted });
+          continue;
+        }
+
         await prisma.submission.create({
           data: {
-            documentId: document.id,
-            html,
-            text: response.text,
-            title: response.title,
-            submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+            ...submitted,
             gradedByMembershipId: primaryTeacher.membershipId,
             gradedAt: new Date(),
             // A band-scored rubric records the percentage it was scored at,
@@ -424,270 +415,6 @@ export async function seedSyntheticLocalDevData(
         });
       }
     }
-
-    // Specific, graded for points, with notes: the fully-specified case.
-    await seedExitTicket({
-      title: 'Exit ticket: the water cycle',
-      config: {
-        schemaVersion: 1,
-        mode: 'specific',
-        focus: 'explain-concept',
-        topic: 'how energy moves through the water cycle',
-        lessonNotes: {
-          mainPoints:
-            'Energy enters as sunlight, is carried as latent heat in water vapour, and is released again when the vapour condenses.',
-          mustMention:
-            'That the energy is released when water vapour condenses, not when it evaporates.',
-          watchFor:
-            'Describing where the water goes without ever mentioning energy.',
-        },
-      },
-      submitForGrade: true,
-      pointValue: 10,
-      responses: [
-        {
-          membershipId: personaRecords['student-graded'].membershipId,
-          title: 'Exit ticket: the water cycle',
-          text: 'The sun puts energy into the water when it evaporates, and the water carries that energy with it as vapour. The part I did not get until today is that the energy does not disappear up there. It gets let go again when the vapour cools down and condenses into cloud, which is why storms have so much energy in them. So the water cycle is really moving energy around, not just moving water around.',
-          score: 92,
-          letterGrade: 'A',
-          overallComment:
-            'Rosa, you have got the thing this was checking for: you explained that the energy is released at condensation, not at evaporation, and you did it in your own words. The line about storms shows you following the idea somewhere of your own. Next step is saying where that energy came from in the first place.',
-        },
-        {
-          membershipId: personaRecords['student-submitted'].membershipId,
-          title: 'Exit ticket: the water cycle',
-          text: 'The water cycle is evaporation, condensation, precipitation and collection. The water goes up into the clouds and then comes back down as rain and then it goes into rivers and back to the ocean and starts again.',
-          score: 38,
-          letterGrade: 'F',
-          overallComment:
-            'Marcus, this is an accurate list of the stages, but it is the list you were given rather than an explanation of it. The question was about energy, and energy is not mentioned anywhere here. Have another go at just one step: what happens to the sun energy when the vapour turns back into water?',
-        },
-      ],
-    });
-
-    // Specific, feedback only: the honest-confusion case the rubric protects.
-    await seedExitTicket({
-      title: 'Exit ticket: balancing equations',
-      config: {
-        schemaVersion: 1,
-        mode: 'specific',
-        focus: 'clear-up-confusion',
-        topic: 'how to balance a chemical equation',
-        lessonNotes: {
-          mainPoints:
-            'Atoms are conserved, so coefficients change but subscripts never do.',
-          mustMention: 'That you may only change coefficients, not subscripts.',
-          watchFor:
-            'Changing a subscript to make the counts match, which changes the substance.',
-        },
-      },
-      submitForGrade: false,
-      pointValue: null,
-      responses: [
-        {
-          membershipId: personaRecords.student.membershipId,
-          title: 'Exit ticket: balancing equations',
-          text: 'I understand why we balance them. The number of atoms has to be the same on both sides because atoms do not just appear. What I keep getting stuck on is which number I am allowed to change. I know I am supposed to change the big number in front, but when I am halfway through and the oxygens still do not match, I end up changing the little number instead because it works. I think that is wrong because it makes it a different chemical, but I am not sure why that matters more than getting the counts even.',
-          score: 74,
-          letterGrade: 'C',
-          overallComment:
-            'Ana, this is exactly the kind of answer that helps me teach. You have the principle right, and you have found the precise place you come unstuck rather than saying you do not get it. You are also right about why changing the subscript is a problem: it makes it a different substance. Hold on to that instinct, and tomorrow we will work on what to do when the oxygens will not come out even.',
-        },
-      ],
-    });
-
-    // Specific, self-assessment: the miscalibrated confident answer.
-    await seedExitTicket({
-      title: 'Exit ticket: how well do you have cell division?',
-      config: {
-        schemaVersion: 1,
-        mode: 'specific',
-        focus: 'judge-understanding',
-        topic: 'today’s lesson on mitosis and meiosis',
-        lessonNotes: {
-          mainPoints:
-            'Mitosis makes two identical cells; meiosis makes four cells with half the chromosomes.',
-          mustMention: 'That meiosis halves the chromosome number.',
-          watchFor: 'Saying both processes make identical cells.',
-        },
-      },
-      submitForGrade: false,
-      pointValue: null,
-      responses: [
-        {
-          membershipId: personaRecords['student-unreleased'].membershipId,
-          title: 'Exit ticket: how well do you have cell division?',
-          text: 'I understand this really well. I paid attention the whole lesson and the diagrams made sense to me. I could definitely explain mitosis and meiosis to someone else, they are both ways that cells divide to make new cells. I would say I am at a 9 out of 10 on this one.',
-          score: 36,
-          letterGrade: 'F',
-          overallComment:
-            'Jamal, you sound confident, and that is worth something. But the only thing you actually said about the two processes is that both divide cells, which is the part they share. This ticket was asking you to test yourself: try naming one way meiosis differs from mitosis. If that is harder than it felt in the lesson, that is useful to know now rather than on Friday.',
-        },
-      ],
-    });
-
-    // Apply a skill, graded, whole class: every band on one ticket, and the
-    // clearest demonstration of what this rubric actually rewards. The student
-    // who gets the wrong answer with sound reasoning outscores the one who
-    // gets it right and shows nothing.
-    await seedExitTicket({
-      title: 'Exit ticket: two-step equations',
-      config: {
-        schemaVersion: 1,
-        mode: 'specific',
-        focus: 'apply-skill',
-        topic: 'solving a two-step equation like 3x + 7 = 22',
-        lessonNotes: {
-          mainPoints:
-            'Undo the addition or subtraction first, then undo the multiplication. Whatever you do to one side you do to the other.',
-          mustMention: 'Why the +7 comes off before the 3 is divided out.',
-          watchFor:
-            'Dividing by 3 first, which leaves a fraction and usually ends in a wrong answer.',
-        },
-      },
-      submitForGrade: true,
-      pointValue: 10,
-      responses: [
-        {
-          membershipId: personaRecords['student-graded'].membershipId,
-          title: 'Exit ticket: two-step equations',
-          text: 'First I take the 7 off both sides, so 3x + 7 = 22 becomes 3x = 15. I do the 7 first because it is the thing furthest from the x, and I am peeling the equation back in the opposite order from how it was built. Then I divide both sides by 3 and get x = 5. I checked it by putting 5 back in: 3 times 5 is 15, plus 7 is 22, so it works.',
-          score: 94,
-          letterGrade: 'A',
-          overallComment:
-            'Rosa, you did not just do the steps, you said why they go in that order — peeling it back in the opposite order from how it was built is exactly it. Checking your answer by substituting back is a habit worth keeping.',
-        },
-        {
-          membershipId: personaRecords.student.membershipId,
-          title: 'Exit ticket: two-step equations',
-          text: 'You have to get rid of the 7 first because it is added on, and you can only undo the multiplying once the adding is gone. So 3x + 7 = 22 turns into 3x = 15. Then I divide by 3. I got x = 4 but I am not sure, I think I divided wrong at the end.',
-          score: 72,
-          letterGrade: 'C',
-          overallComment:
-            'Ana, your final answer is wrong, and your understanding is not. You explained why the +7 comes off first, which is the thing this was checking for, and you caught that the last step was where it went astray. Redo just that division: 15 divided by 3.',
-        },
-        {
-          membershipId: personaRecords['student-submitted'].membershipId,
-          title: 'Exit ticket: two-step equations',
-          text: 'x = 5',
-          score: 40,
-          letterGrade: 'F',
-          overallComment:
-            'Marcus, that is the right answer, so something is working. But this ticket was asking for your thinking, and there is none here to read — I cannot tell whether you know why the 7 comes off before you divide, or whether you remembered the pattern. Show me the order next time and say why.',
-        },
-        {
-          membershipId: personaRecords['student-unreleased'].membershipId,
-          title: 'Exit ticket: two-step equations',
-          text: 'idk',
-          score: 0,
-          letterGrade: 'F',
-          overallComment:
-            'Jamal, there is nothing here for me to work with. If you are stuck, tell me where — even "I do not know which number to move first" gives me something to teach to. Come find me before Friday.',
-        },
-      ],
-    });
-
-    // Understand a text: the same reading, anchored and unanchored.
-    await seedExitTicket({
-      title: 'Exit ticket: the second stanza',
-      config: {
-        schemaVersion: 1,
-        mode: 'specific',
-        focus: 'understand-text',
-        topic: 'the second stanza of “Those Winter Sundays”',
-        lessonNotes: {
-          mainPoints:
-            'The speaker is looking back as an adult and recognising love in his father’s labour that he could not see as a child.',
-          mustMention:
-            'That the recognition is retrospective — the child did not see it at the time.',
-          watchFor:
-            'Reading the cold as only weather rather than as the household’s mood.',
-        },
-      },
-      submitForGrade: false,
-      pointValue: null,
-      responses: [
-        {
-          membershipId: personaRecords['student-graded'].membershipId,
-          title: 'Exit ticket: the second stanza',
-          text: 'I think the stanza is about the speaker realising something late. He says he woke and heard the cold "splintering, breaking" which is not really about the temperature, it is about how the house felt, like something was about to crack. And he says he spoke "indifferently" to his father, which is a strange word to choose about yourself unless you are looking back and wincing at it. That word is what made me think he is telling this from years later, not as it happened.',
-          score: 91,
-          letterGrade: 'A',
-          overallComment:
-            'Rosa, you did the thing this was asking for: you told me what the stanza means and then pointed at the words that got you there. Picking "indifferently" as the tell is a genuinely good catch — that is close reading.',
-        },
-        {
-          membershipId: personaRecords.student.membershipId,
-          title: 'Exit ticket: the second stanza',
-          text: 'The stanza is about the speaker remembering his father and feeling bad about how he treated him. It is sad and it shows that he did not appreciate what his father did for him until later on when he was older.',
-          score: 66,
-          letterGrade: 'D',
-          overallComment:
-            'Ana, your reading is right, and it would be much stronger with the poem in it. Nothing here points at a word or a line, so I cannot tell whether you got this from the text or from our discussion. Go back and find the one word that shows he is looking back.',
-        },
-      ],
-    });
-
-    // Connect to earlier learning: a real mismatch beats a tidy connection.
-    await seedExitTicket({
-      title: 'Exit ticket: the New Deal',
-      config: {
-        schemaVersion: 1,
-        mode: 'specific',
-        focus: 'connect-learning',
-        topic: 'the New Deal',
-        lessonNotes: {
-          mainPoints:
-            'The New Deal expanded federal power in ways the Progressive Era had started, but went much further and faced far less consensus.',
-          mustMention:
-            'A specific link to the Progressive Era reforms we studied.',
-          watchFor:
-            'Saying it is "just like" the Progressive Era without naming what was different.',
-        },
-      },
-      submitForGrade: false,
-      pointValue: null,
-      responses: [
-        {
-          membershipId: personaRecords['student-submitted'].membershipId,
-          title: 'Exit ticket: the New Deal',
-          text: 'It picks up where the Progressives left off, with the government stepping in on things it used to leave alone. But the part that does not fit is how people reacted. The Progressive reforms we read about had a lot of agreement behind them, and the New Deal had the Court striking things down and people calling it socialism. So it is the same direction but a completely different temperature, and I am not totally sure why the reaction was so different when the idea was similar.',
-          score: 90,
-          letterGrade: 'A',
-          overallComment:
-            'Marcus, the connection is good and the mismatch is better. Noticing that the same direction met a completely different reaction is the more interesting observation, and the question you end on is the one historians argue about. Bring it to Monday.',
-        },
-        {
-          membershipId: personaRecords['student-unreleased'].membershipId,
-          title: 'Exit ticket: the New Deal',
-          text: 'The New Deal connects to the Progressive Era because they both wanted to help people and make the country better. They are both examples of the government doing more to fix problems in society.',
-          score: 42,
-          letterGrade: 'F',
-          overallComment:
-            'Jamal, this is true but it would be true of almost any two reforms — nothing here is specific to the New Deal or to what we actually read about the Progressives. Name one Progressive reform from our unit and say what the New Deal did that went further.',
-        },
-      ],
-    });
-
-    // Basic, no notes: the open-ended case, and the hardest one to read.
-    await seedExitTicket({
-      title: 'Exit ticket: Thursday',
-      config: { schemaVersion: 1, mode: 'basic' },
-      submitForGrade: false,
-      pointValue: null,
-      responses: [
-        {
-          membershipId: personaRecords['student-graded'].membershipId,
-          title: 'Exit ticket: Thursday',
-          text: 'What I actually got today was that the reason we do the reading before the discussion is not to check we did it. It is because the discussion is where you find out what you missed. I always thought the reading was the work and the talking was the easy bit, but I said something today that I only worked out while I was saying it. So maybe the talking is also the work.',
-          score: 68,
-          letterGrade: 'D',
-          overallComment:
-            'Rosa, this is a real observation about how you learn, and it is the kind of thing this ticket is good at catching. You noticed something true about yourself. It sits a little away from the content of the lesson, so I cannot tell from this what you took from the reading itself, but I am glad you wrote it.',
-        },
-      ],
-    });
   }
 
   const teacherTrainings = await prisma.teacherTraining.findMany({
