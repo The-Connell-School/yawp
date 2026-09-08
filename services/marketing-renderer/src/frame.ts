@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { awaitChildExit } from './child';
 import type { MarketingBackdrop } from '@app/marketing-media';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -369,37 +370,25 @@ export async function frameClip(options: FrameOptions): Promise<FramedResult> {
     playbackTimeoutMs: Math.max(30_000, timeoutMs - 30_000),
   });
 
-  const result = await new Promise<{
-    stdout: string;
-    stderr: string;
-    code: number | null;
-  }>((resolve, reject) => {
-    const child = spawn('node', [runnerPath, config], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    // A framing browser that wedges must not hold the worker past its attempt
-    // deadline; kill it and let the caller fall back to the raw capture.
-    const killTimer = setTimeout(() => {
-      stderr += `\nFraming exceeded ${Math.round(timeoutMs / 1000)}s and was killed.`;
-      child.kill('SIGKILL');
-    }, timeoutMs);
-    child.stdout.on('data', (chunk) => {
-      stdout += String(chunk);
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += String(chunk);
-    });
-    child.on('error', (err) => {
-      clearTimeout(killTimer);
-      reject(err);
-    });
-    child.on('close', (code) => {
-      clearTimeout(killTimer);
-      resolve({ stdout, stderr, code });
-    });
+  const child = spawn('node', [runnerPath, config], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    // Its own process group, so the timeout can take Chromium down with it
+    // instead of leaving orphans that hold this render's pipes open.
+    detached: true,
   });
+  let stdout = '';
+  let stderr = '';
+  child.stdout?.on('data', (chunk) => {
+    stdout += String(chunk);
+  });
+  child.stderr?.on('data', (chunk) => {
+    stderr += String(chunk);
+  });
+  const outcome = await awaitChildExit(child, { timeoutMs });
+  if (outcome.timedOut) {
+    stderr += `\nFraming exceeded ${Math.round(timeoutMs / 1000)}s and was killed.`;
+  }
+  const result = { stdout, stderr, code: outcome.code };
 
   if (result.code !== 0) {
     throw new Error(

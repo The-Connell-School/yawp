@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { awaitChildExit } from './child';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium, type BrowserContext, type Page } from 'playwright';
@@ -440,34 +441,31 @@ async function transcode(
   outputPath: string,
   options: { trimStartSeconds?: number } = {}
 ): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(
-      ffmpegPath,
-      buildTranscodeArgs(inputPath, outputPath, options),
-      {
-        stdio: ['ignore', 'ignore', 'pipe'],
-      }
-    );
-    let stderr = '';
-    // ffmpeg on a truncated or malformed recording can sit forever rather than
-    // exiting; kill it instead of letting it consume the attempt.
-    const killTimer = setTimeout(() => {
-      stderr += `\nffmpeg exceeded ${Math.round(TRANSCODE_TIMEOUT_MS / 1000)}s and was killed.`;
-      child.kill('SIGKILL');
-    }, TRANSCODE_TIMEOUT_MS);
-    child.stderr?.on('data', (chunk) => {
-      stderr += String(chunk);
-    });
-    child.on('error', (err) => {
-      clearTimeout(killTimer);
-      reject(err);
-    });
-    child.on('close', (code) => {
-      clearTimeout(killTimer);
-      if (code === 0) return resolve();
-      reject(new Error(`ffmpeg exited ${code}: ${stderr.slice(-2000)}`));
-    });
+  const child = spawn(
+    ffmpegPath,
+    buildTranscodeArgs(inputPath, outputPath, options),
+    {
+      stdio: ['ignore', 'ignore', 'pipe'],
+      // Own process group: ffmpeg spawns helpers, and the timeout must take
+      // them too rather than leave them holding this render's pipes.
+      detached: true,
+    }
+  );
+  let stderr = '';
+  child.stderr?.on('data', (chunk) => {
+    stderr += String(chunk);
   });
+  const outcome = await awaitChildExit(child, {
+    timeoutMs: TRANSCODE_TIMEOUT_MS,
+  });
+  if (outcome.timedOut) {
+    throw new Error(
+      `ffmpeg exceeded ${Math.round(TRANSCODE_TIMEOUT_MS / 1000)}s and was killed: ${stderr.slice(-2000)}`
+    );
+  }
+  if (outcome.code !== 0) {
+    throw new Error(`ffmpeg exited ${outcome.code}: ${stderr.slice(-2000)}`);
+  }
 
   if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
     throw new Error('ffmpeg produced no output file');
