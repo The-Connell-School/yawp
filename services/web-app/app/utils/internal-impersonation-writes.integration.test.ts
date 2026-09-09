@@ -67,11 +67,15 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
     let rechecks = 0;
     let releaseTail!: () => void;
     let tail!: Promise<unknown>;
+    let transactionFromScope!: typeof wrapped.$transaction;
+    let rawFromScope!: typeof wrapped.$executeRaw;
     await runWithImpersonation(context, { requestId: wrappedRequest, action: 'test.proxy' }, async () => {
       rechecks++;
       if (!authorizeTail) throw new Error('tail revoked');
       return context;
     }, async () => {
+      transactionFromScope = wrapped.$transaction;
+      rawFromScope = wrapped.$executeRaw;
       await cachedTransaction([
         cachedSettings.create({ data: { name: `${prefix}-array-a`, value: 'one' } }),
         wrapped.setting.create({ data: { name: `${prefix}-array-b`, value: 'two' } }),
@@ -86,6 +90,9 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
     });
     expect(await prisma.internalImpersonationEvent.count({ where: { sessionId: identity.id, requestId: wrappedRequest } })).toBe(2);
     expect((await prisma.setting.findUniqueOrThrow({ where: { name: `${prefix}-array-a` } })).value).toBe('one');
+    await transactionFromScope([wrapped.setting.create({ data: { name: `${prefix}-outside`, value: 'ordinary' } })]);
+    await rawFromScope`UPDATE "Setting" SET "value" = 'ordinary raw update' WHERE "name" = ${`${prefix}-outside`}`;
+    expect(await prisma.internalImpersonationEvent.count({ where: { requestId: wrappedRequest } })).toBe(2);
     authorizeTail = false;
     releaseTail();
     await expect(tail).rejects.toThrow('tail revoked');
