@@ -49,3 +49,43 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('scenario receipt
     await expect(Promise.resolve(db.$executeRaw`DELETE FROM "InternalScenarioReceipt" WHERE "jobId"=${input.jobId}`)).rejects.toThrow();
   } finally { await db.$disconnect(); }
 }, 60000);
+
+test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('trusted runner uses private target registration and returns only the receipt', async () => {
+  const { mkdtemp, writeFile, rm, chmod } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const connection = process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL!;
+  const url = new URL(connection);
+  if (!['localhost', '127.0.0.1'].includes(url.hostname) || !url.pathname.startsWith('/yawp_')) throw new Error('Owned local DB required');
+  process.env.DATABASE_URL = connection; process.env.E2E_DATABASE_URL = connection;
+  const { basePrisma: db } = await import('./db.server');
+  const org = await db.organization.create({ data: { name: 'Trusted scenario runner test' } });
+  const directory = await mkdtemp(join(tmpdir(), 'yawp-scenario-'));
+  const configPath = join(directory, 'targets.json');
+  const targetId = randomUUID();
+  const config = { targets: [{ targetId, environment: 'demo', organizationId: org.id, databaseUrl: connection }] };
+  const request = { jobId: randomUUID(), actorId: 'test-worker', target: { id: targetId, environment: 'demo', organizationId: org.id },
+    fingerprint: 'b'.repeat(64), mode: 'populate', recipe: { teachers: 1, students: 2, classes: 1, assignmentsPerClass: 1, submissions: 'submitted' } };
+  const execute = async (value: unknown) => {
+    const child = Bun.spawn([process.execPath, new URL('../../../../scripts/internal-scenario-runner.ts', import.meta.url).pathname], {
+      stdin: new Blob([JSON.stringify(value)]), stdout: 'pipe', stderr: 'pipe', env: { PATH: process.env.PATH!, SCENARIO_CONFIG: configPath },
+    });
+    const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+    return { stdout, stderr, code };
+  };
+  try {
+    await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });
+    const result = await execute(request);
+    expect(result.code).toBe(0);
+    const receipt = JSON.parse(result.stdout);
+    expect(receipt).toMatchObject({ jobId: request.jobId, targetId, counts: { users: 3, classes: 1, assignments: 1, submissions: 2 } });
+    expect((await execute(request)).stdout).toBe(result.stdout);
+    expect(await db.orgMembership.count({ where: { organizationId: org.id } })).toBe(3);
+    expect((await execute({ ...request, jobId: randomUUID(), target: { ...request.target, id: 'unknown' } })).code).toBe(1);
+    await chmod(configPath, 0o644);
+    const denied = await execute(request);
+    expect(denied.code).toBe(1);
+    expect(denied.stdout).toBe('');
+    expect(denied.stderr).not.toContain(connection);
+  } finally { await rm(directory, { recursive: true, force: true }); await db.$disconnect(); }
+}, 60000);
