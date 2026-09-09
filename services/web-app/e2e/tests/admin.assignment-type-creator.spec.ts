@@ -40,6 +40,7 @@ test.describe('Admin assignment type creator', () => {
       await page.getByText(`View ${rubric.title}`, { exact: true }).click();
       await expect(page.getByTestId('rubric-library-json')).toContainText('daily-pages-engagement');
       await page.getByRole('link', { name: 'Prompt', exact: true }).click();
+      await page.getByRole('button', { name: /Production/ }).click();
       await expect(page.getByRole('button', { name: 'View compiled prompt', exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Test prompt', exact: true })).toBeVisible();
       await page.goto(`/app/admin/assignment-types/${created.id}`);
