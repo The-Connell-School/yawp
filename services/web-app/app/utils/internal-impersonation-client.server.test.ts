@@ -41,7 +41,7 @@ describe('Internal impersonation service client', () => {
     await expect(denied.context(identity.id)).rejects.toThrow('Impersonation is inactive');
   });
   test('end sends only the authoritative session ID', async () => {
-    const transport = mock(async (_url: string | URL | Request, _init?: RequestInit) => Response.json({ ended: true }));
+    const transport = mock(async (_url: string | URL | Request, _init?: RequestInit) => new Response(null, { status: 204 }));
     const client = new InternalImpersonationClient('https://internal.test', key, transport as typeof fetch);
     await client.end(identity.id);
     expect(transport.mock.calls[0]![1]?.body).toBe(JSON.stringify({ sessionId: identity.id }));
