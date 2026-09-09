@@ -57,3 +57,11 @@ Instruction overrides must preserve unrelated stored prompt fields. Clearing a s
 - CI is a release gate, not a substitute for requirement verification. A completion report must distinguish passing checks, observed deployment state, and verified product behavior, and must leave any missing item open.
 
 Recovery deployment and runtime verification results should be recorded when they exist. This document intentionally makes no recovery-shipped claim.
+
+## Recovery findings and bounded telemetry audit
+
+A read-only audit of September 4, 18:09 UTC through September 9, 19:30 UTC found two production create-page views in PostHog, associated with one distinct identifier. AWS application logs contain the matching two GET 200 requests and two POST 400 requests (September 9 at 19:11:55.757 and 19:12:20.477 UTC). This excludes later recovery QA. Observed visits and failures are not a definitive affected-user count, and they do not establish whether existing assignment configuration or historical grades changed. AWS evidence queries: `b1f43725-d2ad-41cc-959c-5dc0542c4fb0` and `874adc24-1f65-4dac-b45a-6466f7586647` in us-east-1.
+
+Independent recovery review caught additional inconsistencies before release: the prompt workspace and evaluation API read raw inline configuration, while actual grading resolved the selected library rubric. Library-only creation therefore exposed missing prompt tools and incorrect evaluation inputs. The recovery uses the canonical resolver in those paths and preserves promoted assignment-owned prompt templates alongside library rubrics. Promotion continues writing only the assignment's own prompt settings; it does not copy resolved library configuration into legacy columns. AP History assignment snapshot semantics are unchanged.
+
+Regression coverage now includes the compiled production invocation, library-only prompt workspace, evaluation category validation and invocation, promoted prompt templates with Daily Pages and canonical Thesis, and browser access to prompt tools after creation. The Record `assignment-rubric` proof profile runs focused route/resolver tests, prompt/evaluation tests, TypeScript, a production build, and the creator browser suite. Required repository CI remains a separate gate. These checks preserve exact configuration assertions rather than weakening them to match current implementation.
