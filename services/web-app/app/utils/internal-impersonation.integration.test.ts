@@ -24,6 +24,9 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed sessi
   const service = new InternalImpersonationSessions(prisma, remote);
   const linkToken = randomBytes(32).toString('base64url');
   try {
+    await expect(Promise.resolve(prisma.internalImpersonationSession.create({ data: {
+      ...identity, expiresAt: new Date(identity.expiresAt), membershipId: membership.id, cookieTokenHash: 'f'.repeat(64),
+    } }))).rejects.toThrow();
     const created = await service.start(linkToken);
     expect(created.cookieToken).not.toBe(linkToken);
     expect(created.identity).toEqual(identity);
@@ -31,12 +34,20 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed sessi
     expect(stored.actorId).toBe(identity.actorId);
     expect(stored.userId).toBe(teacher.id);
     expect(stored.membershipId).toBe(membership.id);
+    await expect(Promise.resolve(prisma.internalImpersonationSession.update({ where: { id: identity.id }, data: { actorId: 'different-actor' } }))).rejects.toThrow();
+    await expect(Promise.resolve(prisma.internalImpersonationSession.update({ where: { id: identity.id }, data: { endedAt: new Date() } }))).rejects.toThrow();
     expect(JSON.stringify(stored)).not.toContain(linkToken);
     expect(JSON.stringify(stored)).not.toContain(created.cookieToken);
     expect(await prisma.internalImpersonationEvent.count({ where: { sessionId: identity.id, action: 'session.started' } })).toBe(1);
     expect((await service.resolve(created.cookieToken)).actorId).toBe(identity.actorId);
     expect((await service.resolve(created.cookieToken)).userId).toBe(teacher.id);
     expect(reads).toBe(2);
+    await prisma.orgMembership.update({ where: { id: membership.id }, data: { isActive: false } });
+    await expect(service.resolve(created.cookieToken)).rejects.toThrow('Impersonation is inactive');
+    await prisma.orgMembership.update({ where: { id: membership.id }, data: { isActive: true } });
+    await prisma.user.update({ where: { id: teacher.id }, data: { isAdmin: true } });
+    await expect(service.resolve(created.cookieToken)).rejects.toThrow('Impersonation is inactive');
+    await prisma.user.update({ where: { id: teacher.id }, data: { isAdmin: teacher.isAdmin } });
     active = false;
     await expect(service.resolve(created.cookieToken)).rejects.toThrow('Impersonation is inactive');
     active = true;
@@ -52,6 +63,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed sessi
     expect((await prisma.internalImpersonationSession.findUniqueOrThrow({ where: { id: identity.id } })).remoteEndPending).toBe(false);
     expect(active).toBe(false);
   } finally {
+    await prisma.orgMembership.update({ where: { id: membership.id }, data: { isActive: membership.isActive } });
+    await prisma.user.update({ where: { id: teacher.id }, data: { isAdmin: teacher.isAdmin } });
     await prisma.internalImpersonationEvent.deleteMany({ where: { sessionId: identity.id } });
     await prisma.internalImpersonationSession.deleteMany({ where: { id: identity.id } });
     await prisma.$disconnect();
