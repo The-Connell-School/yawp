@@ -375,6 +375,7 @@ function runTestProfile(profile, { json }) {
   } else if (chosen === "project-cli") run("project-cli", ["test", "./scripts/project-agent.test.js"], 120000);
   else if (chosen === "internal-management") runWebApp("internal-management", ["test", "app/utils/internal-management.server.test.ts"]);
   else if (chosen === "internal-impersonation") runWebApp("internal-impersonation", ["test", "app/utils/internal-impersonation-client.server.test.ts"]);
+  else if (chosen === "internal-impersonation-http") runWebApp("internal-impersonation-http", ["test", "app/utils/internal-impersonation-http.server.test.ts"]);
   else if (["internal-directory-integration", "internal-impersonation-integration", "internal-impersonation-writes"].includes(chosen)) {
     const local = requireConfig();
     results.push({ id: chosen, ...execute(selected.bun,
