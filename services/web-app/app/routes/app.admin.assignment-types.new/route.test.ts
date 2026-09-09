@@ -202,16 +202,29 @@ describe('admin assignment type new action', () => {
   });
   test.each([
     ['missing title', { title: '   ' }, 'Title is required'],
-    ['invalid JSON', { title: 'New type', rubricJson: '{invalid' }, 'rubricJson must be valid JSON'],
-  ])('returns recoverable action data for %s', async (_name, fields, message) => {
-    const form = new FormData();
-    for (const [key, value] of Object.entries(fields)) form.set(key, value);
-    const result = await action({
-      request: new Request('https://example.test/app/admin/assignment-types/new', { method: 'POST', body: form }),
-      params: {}, context: {} as never,
-    } as never);
-    expect(result).toMatchObject({ data: { error: message }, init: { status: 400 } });
-    expect(prisma.assignmentType.create).not.toHaveBeenCalled();
-  });
-
+    [
+      'invalid JSON',
+      { title: 'New type', rubricJson: '{invalid' },
+      'rubricJson must be valid JSON',
+    ],
+  ])(
+    'returns recoverable action data for %s',
+    async (_name, fields, message) => {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(fields)) form.set(key, value);
+      const result = await action({
+        request: new Request(
+          'https://example.test/app/admin/assignment-types/new',
+          { method: 'POST', body: form }
+        ),
+        params: {},
+        context: {} as never,
+      } as never);
+      expect(result).toMatchObject({
+        data: { error: message },
+        init: { status: 400 },
+      });
+      expect(prisma.assignmentType.create).not.toHaveBeenCalled();
+    }
+  );
 });
