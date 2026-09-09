@@ -37,7 +37,7 @@ test.skipIf(!process.env.INTERNAL_PAIR_WORKSPACE)('Internal worker publishes thr
       expect(['/api/internal/v1/rubrics', '/api/internal/v1/rubrics/validate']).toContain(requested.pathname);
       // Only this harness maps the registered test origin onto its owned loopback server.
       const response = await fetch(new URL(requested.pathname + requested.search, server.url), init);
-      if (requested.pathname === '/api/internal/v1/rubrics' && init.method === 'POST' && ++responses === 1) { expect(response.status).toBe(200); await response.body?.cancel(); throw new Error('Receipt lost after commit'); }
+      if (requested.pathname === '/api/internal/v1/rubrics' && init.method === 'POST' && ++responses <= 3) { expect(response.status).toBe(200); await response.body?.cancel(); throw new Error('Receipt lost after commit'); }
       return response;
     });
     const destination = { id: target.id, name: target.name, environment: target.environment, origin: target.origin, credentialEnv: target.credentialEnv, archived: target.archived };
@@ -60,14 +60,21 @@ test.skipIf(!process.env.INTERNAL_PAIR_WORKSPACE)('Internal worker publishes thr
     expect(committed.createdBy).toBe(member.id);
     expect(committed.sourceContentId).toBe(revision.contentId);
     expect(committed.sourceFingerprint).toBe(revision.fingerprint);
+    await worker.runOnce(); await worker.runOnce();
+    expect((await store.readContentPromotion(member.id, job.id)).status).toBe('failed');
+    const retry = { requestKey: randomUUID(), expectedAttempts: 3, reason: 'Connection restored; recover original receipt' };
+    const [firstRetry, secondRetry] = await Promise.all([store.reconcileContentPromotion(member.id, job.id, retry), store.reconcileContentPromotion(member.id, job.id, retry)]);
+    expect(firstRetry.id).toBe(job.id); expect(secondRetry.id).toBe(job.id); expect(firstRetry.attempts).toBe(3);
     await worker.runOnce();
     expect((await store.readContentPromotion(member.id, job.id)).status).toBe('succeeded');
+    expect((await store.readContentPromotion(member.id, job.id)).attempts).toBe(4);
+    expect(await db.auditEvent.count({ where: { actorId: member.id, action: 'content.promotion.reconciliation.requested' } })).toBe(1);
     expect(await yawp.rubricRevision.count({ where: { rubricName: name } })).toBe(1);
     const audit = await db.auditEvent.findFirstOrThrow({ where: { actorId: member.id, action: 'content.promotion.completed' } });
     expect(audit.metadata.destinationRevisionId).toBe(committed.id);
     expect(audit.metadata.destinationFingerprint).toBe(committed.fingerprint);
     expect(JSON.stringify(audit)).not.toContain(key);
-    expect(await db.auditEvent.count({ where: { actorId: member.id, action: 'content.promotion.unconfirmed' } })).toBe(1);
+    expect(await db.auditEvent.count({ where: { actorId: member.id, action: 'content.promotion.unconfirmed' } })).toBe(3);
     const afterReview = await adapter.review(destination, schema, new AbortController().signal);
     expect(afterReview.ok).toBe(true); expect(afterReview.current.fingerprint).toBe(committed.fingerprint);
     expect(afterReview.current.version).toBe(committed.version);
