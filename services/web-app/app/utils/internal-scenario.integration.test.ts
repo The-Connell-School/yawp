@@ -67,7 +67,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('trusted runner u
   const request = { jobId: randomUUID(), actorId: 'test-worker', target: { id: targetId, environment: 'demo', organizationId: org.id },
     fingerprint: 'b'.repeat(64), mode: 'populate', recipe: { teachers: 1, students: 2, classes: 1, assignmentsPerClass: 1, submissions: 'submitted' } };
   const execute = async (value: unknown) => {
-    const child = Bun.spawn([process.execPath, new URL('../../../../scripts/internal-scenario-runner.ts', import.meta.url).pathname], {
+    const child = Bun.spawn([process.execPath, new URL('../../scripts/internal-scenario-runner.ts', import.meta.url).pathname], {
       stdin: new Blob([JSON.stringify(value)]), stdout: 'pipe', stderr: 'pipe', env: { PATH: process.env.PATH!, SCENARIO_CONFIG: configPath },
     });
     const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
@@ -76,6 +76,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('trusted runner u
   try {
     await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });
     const result = await execute(request);
+    expect(result.stderr).toBe('');
     expect(result.code).toBe(0);
     const receipt = JSON.parse(result.stdout);
     expect(receipt).toMatchObject({ jobId: request.jobId, targetId, counts: { users: 3, classes: 1, assignments: 1, submissions: 2 } });
@@ -87,5 +88,12 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('trusted runner u
     expect(denied.code).toBe(1);
     expect(denied.stdout).toBe('');
     expect(denied.stderr).not.toContain(connection);
+    await chmod(configPath, 0o600);
+    await writeFile(configPath, JSON.stringify({ targets: [{ ...config.targets[0], databaseUrl: 'postgresql://forbidden:secret@production.example/yawp_prod' }] }));
+    const production = await execute(request);
+    expect(production.code).toBe(1);
+    expect(production.stderr).not.toContain('secret');
+    await writeFile(configPath, JSON.stringify({ targets: [{ ...config.targets[0], environment: 'preview', revision: 'c'.repeat(40) }] }));
+    expect((await execute({ ...request, target: { ...request.target, environment: 'preview', revision: 'd'.repeat(40) } })).code).toBe(1);
   } finally { await rm(directory, { recursive: true, force: true }); await db.$disconnect(); }
 }, 60000);
