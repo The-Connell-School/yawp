@@ -15,6 +15,56 @@ test.describe('Admin assignment type creator', () => {
     await expect(page.getByText(OOPS)).toHaveCount(0);
   });
 
+  test('validation preserves a new assignment type until its rubric is complete', async ({ page, signIn }) => {
+    test.setTimeout(90_000);
+    const prisma = createE2EPrismaClient();
+    const title = `Creator Validation QA ${Date.now()}`;
+    const description = 'Keep this input while correcting the rubric.';
+    try {
+      await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
+      await page.goto('/app/admin/assignment-types/new');
+      await page.locator('input[name="title"]').fill(title);
+      await page.getByLabel('Description', { exact: true }).fill(description);
+      await page.getByRole('button', { name: 'Create', exact: true }).click();
+      await expect(page.getByRole('alert')).toContainText('Every rubric category');
+      await expect(page.getByText(OOPS)).toHaveCount(0);
+      await expect(page.locator('input[name="title"]')).toHaveValue(title);
+      await expect(page.getByLabel('Description', { exact: true })).toHaveValue(description);
+      expect(await prisma.assignmentType.count({ where: { title } })).toBe(0);
+
+      await page.getByTestId('rubric-add-category').click();
+      await page.getByTestId('rubric-category-row-0').click();
+      await page.getByLabel('Label', { exact: true }).fill('Evidence');
+      await page.getByLabel('Weight %').fill('100');
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await page.getByRole('button', { name: 'Create', exact: true }).click();
+      await expect(page.getByRole('alert')).toContainText('Every rubric category');
+      await expect(page.getByText(OOPS)).toHaveCount(0);
+      await expect(page.locator('input[name="title"]')).toHaveValue(title);
+      await expect(page.getByTestId('rubric-category-row-0')).toContainText('Evidence');
+      expect(await prisma.assignmentType.count({ where: { title } })).toBe(0);
+
+      await page.getByTestId('rubric-category-row-0').click();
+      await page.locator('#category-edit-description').fill('Support claims with relevant evidence.');
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await page.getByRole('button', { name: 'Create', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Edit assignment type' })).toBeVisible();
+      await expect(page.getByText(OOPS)).toHaveCount(0);
+      const created = await prisma.assignmentType.findFirstOrThrow({ where: { title } });
+      expect(created.description).toBe(description);
+      expect(created.rubricJson).toMatchObject({ categories: [{ label: 'Evidence', description: 'Support claims with relevant evidence.', weight: 1 }] });
+      await page.reload();
+      await expect(page.locator('input[name="title"]')).toHaveValue(title);
+    } finally {
+      const types = await prisma.assignmentType.findMany({ where: { title }, select: { id: true } });
+      const ids = types.map((row) => row.id);
+      await prisma.assignmentModule.deleteMany({ where: { assignmentTypeId: { in: ids } } });
+      await prisma.organizationAssignmentType.deleteMany({ where: { assignmentTypeId: { in: ids } } });
+      await prisma.assignmentType.deleteMany({ where: { id: { in: ids } } });
+      await prisma.$disconnect();
+    }
+  });
+
   test('saving a new assignment type must not show the oops screen', async ({
     page,
     signIn,
