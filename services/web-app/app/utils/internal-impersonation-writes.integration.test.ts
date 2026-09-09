@@ -10,6 +10,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
   const { prisma } = await import('./db.server');
   const { InternalImpersonationSessions } = await import('./internal-impersonation-sessions.server');
   const { withImpersonationTransaction } = await import('./internal-impersonation-writes.server');
+  const { createAttributedPrisma, runWithImpersonation } = await import('./internal-impersonation-context.server');
   const teacher = await prisma.user.findUniqueOrThrow({ where: { email: 'dev.teacher@yawp.local' }, include: { memberships: true } });
   const membership = teacher.memberships.find(m => m.isActive)!;
   const identity = { id: randomUUID(), actorId: `integration-${randomUUID()}`, userId: teacher.id, organizationId: membership.organizationId, expiresAt: new Date(Date.now() + 60000).toISOString() };
@@ -50,6 +51,34 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
       await tx.setting.deleteMany({ where: { name: { startsWith: prefix } } });
     });
     expect(await prisma.internalImpersonationEvent.count({ where: { sessionId: identity.id, jobId, action: 'row.deleted' } })).toBe(3);
+    const wrapped = createAttributedPrisma(prisma);
+    const wrappedRequest = randomUUID();
+    let authorizeTail = true;
+    let rechecks = 0;
+    let releaseTail!: () => void;
+    let tail!: Promise<unknown>;
+    await runWithImpersonation(context, { requestId: wrappedRequest, action: 'test.proxy' }, async () => {
+      rechecks++;
+      if (!authorizeTail) throw new Error('tail revoked');
+      return context;
+    }, async () => {
+      await wrapped.$transaction([
+        wrapped.setting.create({ data: { name: `${prefix}-array-a`, value: 'one' } }),
+        wrapped.setting.create({ data: { name: `${prefix}-array-b`, value: 'two' } }),
+      ]);
+      await expect(wrapped.$transaction(async tx => {
+        await tx.setting.updateMany({ where: { name: { startsWith: prefix } }, data: { value: 'should roll back' } });
+        throw new Error('transaction rollback');
+      })).rejects.toThrow('transaction rollback');
+      tail = new Promise<void>(resolve => { releaseTail = resolve; }).then(() => wrapped.setting.create({ data: { name: `${prefix}-tail`, value: 'must not run' } }));
+    });
+    expect(await prisma.internalImpersonationEvent.count({ where: { sessionId: identity.id, requestId: wrappedRequest } })).toBe(2);
+    expect((await prisma.setting.findUniqueOrThrow({ where: { name: `${prefix}-array-a` } })).value).toBe('one');
+    authorizeTail = false;
+    releaseTail();
+    await expect(tail).rejects.toThrow('tail revoked');
+    expect(rechecks).toBe(1);
+    expect(await prisma.setting.count({ where: { name: `${prefix}-tail` } })).toBe(0);
     await service.end(created.cookieToken);
     await expect(withImpersonationTransaction(prisma, context, { requestId: randomUUID(), action: 'test.after-exit' }, async tx => {
       await tx.setting.create({ data: { name: `${prefix}-after`, value: 'blocked' } });
