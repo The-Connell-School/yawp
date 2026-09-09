@@ -303,10 +303,12 @@ describe('worktree local setup contract', () => {
     const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
 
     expect(setupScript).toContain(
-      'WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"'
+      'WORKTREE_NAME="$(basename "$ROOT")"'
     );
     expect(setupScript).toContain('SLUG="$WORKTREE_NAME"');
-    expect(setupScript).not.toContain('SLUG="$(basename "$ROOT")"');
+    expect(setupScript).not.toContain('WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"');
+    expect(setupScript).toContain('CONTAINER_NAME="yawp-${SLUG}-postgres"');
+    expect(setupScript).toContain('VOLUME_NAME="yawp-${SLUG}-postgres-data"');
   });
 
   test('worktree setup installs dependencies before any Prisma generation', () => {
