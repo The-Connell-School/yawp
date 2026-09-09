@@ -17,6 +17,10 @@ import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assi
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { computePromptVersionLabels } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 import { isPromptVersionControlEnabled } from '~/domain/ai-evaluation/prompt-version-control.server';
+import {
+  listRubrics,
+  seedStarterRubrics,
+} from '~/domain/rubrics/rubric-library.server';
 
 const PROMPT_PREVIEW_INPUTS = {
   studentFirstName: 'Jordan',
@@ -94,11 +98,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
+  // Keep the static library available in every environment without requiring
+  // an operator to run a separate seed command before opening this form.
+  await seedStarterRubrics();
+  const rubrics = (await listRubrics()).map(({ id, name, title, json }) => ({
+    id,
+    name,
+    title,
+    json,
+  }));
+
   const currentPromptLabel = await resolveCurrentPromptLabel(course.id);
 
   if (course.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
     return dataResponse({
       course,
+      rubrics,
       gradingAssistantPromptPreview: null,
       gradingAssistantPromptPreviewUnavailableReason:
         'The AP History prompt is built from the assignment snapshot. Open a graded submission to inspect the full prompt.',
@@ -118,6 +133,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     course,
+    rubrics,
     gradingAssistantPromptPreview: {
       ...compiledInvocation,
       version: resolvedGradingConfig.version,
@@ -352,6 +368,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export default function AssignmentTypeRoute() {
   const {
     course,
+    rubrics,
     gradingAssistantPromptPreview,
     gradingAssistantPromptPreviewUnavailableReason,
     currentPromptLabel,
@@ -366,6 +383,8 @@ export default function AssignmentTypeRoute() {
       scoringScale={parseScoringScale(course.scoringScaleJson)}
       rubric={parseRubric(course.rubricJson)}
       promptConfig={parsePromptConfig(course.gradingPromptConfigJson)}
+      rubrics={rubrics}
+      selectedRubricId={course.rubricId ?? null}
       gradingAssistantPromptPreview={gradingAssistantPromptPreview ?? undefined}
       gradingAssistantPromptPreviewUnavailableReason={
         gradingAssistantPromptPreviewUnavailableReason ?? undefined
