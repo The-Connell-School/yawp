@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  rubric: { findUnique: mock() },
   assignmentType: {
     count: mock(),
     create: mock(),
@@ -21,8 +20,6 @@ const { action } = await import('./route');
 describe('admin assignment type new action', () => {
   beforeEach(() => {
     requireAdmin.mockReset();
-    prisma.rubric.findUnique.mockReset();
-    prisma.rubric.findUnique.mockResolvedValue({ id: "daily-pages" });
     prisma.assignmentType.count.mockReset();
     prisma.assignmentType.create.mockReset();
     prisma.rubric.findUnique.mockReset();
