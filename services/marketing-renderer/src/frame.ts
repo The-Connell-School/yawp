@@ -72,6 +72,24 @@ export type FramedResult = {
  * The 'none' backdrop has neither: it delivers the capture at its own size,
  * with no chrome, for embedding somewhere that supplies its own frame.
  */
+/** Type size of the burned-in caption, derived from the canvas so it reads at feed size. */
+export function captionFontSize(canvasWidth: number): number {
+  return Math.round(canvasWidth * 0.022);
+}
+
+/**
+ * How tall a one-line caption pill comes out: the line box plus the padding
+ * in `.overlay`. The band under the window is sized against this, so the copy
+ * has somewhere to sit that is not on top of the app.
+ */
+export function captionPillHeight(canvasWidth: number): number {
+  const CAPTION_LINE_HEIGHT = 1.3;
+  const CAPTION_PADDING_Y = 14;
+  return Math.round(
+    captionFontSize(canvasWidth) * CAPTION_LINE_HEIGHT + CAPTION_PADDING_Y * 2
+  );
+}
+
 export function frameGeometry(
   width: number,
   height: number,
@@ -84,14 +102,40 @@ export function frameGeometry(
       windowWidth: width,
       videoHeight: height,
       barHeight: 0,
+      windowTop: 0,
+      captionBand: 0,
+      captionInset: Math.round(height * 0.045),
     };
   }
   const windowWidth = Math.round(width * 0.82);
   const videoHeight = Math.round((windowWidth / width) * height);
   const barHeight = 44;
   const canvasWidth = width;
-  const canvasHeight = Math.round(videoHeight + barHeight + height * 0.16);
-  return { canvasWidth, canvasHeight, windowWidth, videoHeight, barHeight };
+  // Ground around the window. Split rather than centred: the copy is burned
+  // in at the bottom, and a band only half the slack tall is not enough to
+  // hold it, so the pill ends up over the UI it is describing.
+  const slack = Math.round(height * 0.22);
+  const captionBand = Math.max(
+    Math.round(slack * 0.66),
+    captionPillHeight(canvasWidth) + 24
+  );
+  const windowTop = slack - Math.round(slack * 0.66);
+  const canvasHeight = videoHeight + barHeight + windowTop + captionBand;
+  // Centres a one-line pill in the band; a wrapped one grows upward into the
+  // headroom the band was given over the pill height.
+  const captionInset = Math.round(
+    (captionBand - captionPillHeight(canvasWidth)) / 2
+  );
+  return {
+    canvasWidth,
+    canvasHeight,
+    windowWidth,
+    videoHeight,
+    barHeight,
+    windowTop,
+    captionBand,
+    captionInset,
+  };
 }
 
 /**
@@ -122,6 +166,8 @@ function framingStyles(options: {
   canvasHeight: number;
   windowWidth: number;
   barHeight: number;
+  windowTop: number;
+  captionInset: number;
 }): string {
   const bare = options.backdrop === 'none';
   return `
@@ -130,8 +176,9 @@ function framingStyles(options: {
   body {
     position: relative;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
+    padding-top: ${options.windowTop}px;
     background: ${BACKDROP_GROUNDS[options.backdrop]};
   }
   .window {
@@ -164,13 +211,13 @@ function framingStyles(options: {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    bottom: ${Math.round(options.canvasHeight * 0.045)}px;
+    bottom: ${options.captionInset}px;
     max-width: ${Math.round(options.canvasWidth * 0.8)}px;
     padding: 14px 26px;
     border-radius: 999px;
     background: rgba(17, 12, 28, 0.82);
     color: #fff;
-    font: 600 ${Math.round(options.canvasWidth * 0.022)}px/1.3 -apple-system, 'Segoe UI', sans-serif;
+    font: 600 ${captionFontSize(options.canvasWidth)}px/1.3 -apple-system, 'Segoe UI', sans-serif;
     text-align: center;
     letter-spacing: -0.01em;
   }`;
@@ -208,12 +255,12 @@ export function buildFramingPage(options: {
 }): string {
   const backdrop = options.backdrop ?? 'gradient';
   const geometry = frameGeometry(options.width, options.height, backdrop);
-  const { canvasWidth, canvasHeight, windowWidth, barHeight } = geometry;
+  const { canvasWidth, canvasHeight } = geometry;
 
   return `<!doctype html>
 <html>
 <head>
-<style>${framingStyles({ backdrop, canvasWidth, canvasHeight, windowWidth, barHeight })}
+<style>${framingStyles({ backdrop, ...geometry })}
   video {
     display: block;
     width: 100%;

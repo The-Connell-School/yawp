@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { buildFramingPage, buildStillFramingPage, frameGeometry } from './frame';
+import {
+  buildFramingPage,
+  buildStillFramingPage,
+  captionPillHeight,
+  frameGeometry,
+} from './frame';
 
 const base = {
   width: 1280,
@@ -126,6 +131,22 @@ describe('buildStillFramingPage', () => {
     expect(html).toContain('Every writer, one pipeline');
   });
 
+  // The pill is anchored into the reserved band, not floated over the app.
+  test('sits the caption in the band below the window', () => {
+    const geometry = frameGeometry(1280, 800);
+    const html = buildStillFramingPage({
+      ...still,
+      caption: 'Every writer, one pipeline',
+    });
+
+    expect(html).toContain(`padding-top: ${geometry.windowTop}px`);
+    expect(html).toContain(`bottom: ${geometry.captionInset}px`);
+    // Room for the pill between where it starts and where the window ends.
+    expect(geometry.captionInset + captionPillHeight(geometry.canvasWidth)).toBeLessThanOrEqual(
+      geometry.captionBand
+    );
+  });
+
   test('omits the caption element when there is no copy', () => {
     const html = buildStillFramingPage(still);
     expect(html).not.toContain('class="overlay');
@@ -209,5 +230,35 @@ describe('frameGeometry', () => {
     expect(framed.canvasWidth).toBe(1280);
     expect(framed.canvasHeight).toBeGreaterThan(800);
     expect(framed.windowWidth).toBeLessThan(1280);
+  });
+
+  // The caption is the line an audience is meant to read. If it rides up over
+  // the window it covers the very control the scene just demonstrated, which
+  // is worse than having no caption at all. So the ground below the window is
+  // sized to hold a one-line pill on its own.
+  test('reserves a band under the window that a one-line caption fits in', () => {
+    const framed = frameGeometry(1280, 800, 'gradient');
+
+    expect(framed.captionBand).toBeGreaterThanOrEqual(
+      captionPillHeight(framed.canvasWidth)
+    );
+  });
+
+  // Slack is split rather than centred: a taller band below than above is
+  // what leaves the caption somewhere to go.
+  test('gives the caption more room below the window than above it', () => {
+    const framed = frameGeometry(1280, 800, 'gradient');
+
+    expect(framed.captionBand).toBeGreaterThan(framed.windowTop);
+    expect(framed.windowTop).toBeGreaterThan(0);
+  });
+
+  // A bare capture has no ground to caption into, so the copy stays where it
+  // always was: over the picture.
+  test('unframed captures reserve no band', () => {
+    expect(frameGeometry(1280, 800, 'none')).toMatchObject({
+      captionBand: 0,
+      windowTop: 0,
+    });
   });
 });
