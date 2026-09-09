@@ -4,41 +4,16 @@ import { createE2EPrismaClient } from '../prisma-client';
 const OOPS = /Oops! Something didn't work quite right/i;
 
 test.describe('Admin assignment type creator', () => {
-  let createdLibraryFixture = false;
-  test.beforeAll(async () => {
-    const prisma = createE2EPrismaClient();
-    try {
-      // Dedicated database fixture: the application resolves the saved library schema.
-      const schema = {
-        name: 'daily-pages-engagement', title: 'Daily Pages engagement',
-        scoringScale: { type: 'rubric_points', minScore: 0, maxScore: 30, step: 10 },
-        rubric: { categories: [{ key: 'engagement_with_prompt', label: 'Engagement with Prompt', description: 'Engage with the writing prompt.', weight: 1 }] },
-        promptConfig: { gradingInstructions: 'Evaluate engagement with the prompt.' },
-        outputSchema: { schemaVersion: 1, responseShape: 'categories_overall_comment' },
-        calibrationNotes: null,
-      };
-      const existing = await prisma.rubric.findUnique({ where: { name: schema.name } });
-      if (!existing) {
-        await prisma.rubric.create({ data: { name: schema.name, title: schema.title, schemaJson: JSON.parse(JSON.stringify(schema)) } });
-        createdLibraryFixture = true;
-      }
-    } finally { await prisma.$disconnect(); }
-  });
-  test.afterAll(async () => {
-    if (!createdLibraryFixture) return;
-    const prisma = createE2EPrismaClient();
-    try { await prisma.rubric.deleteMany({ where: { name: 'daily-pages-engagement' } }); }
-    finally { await prisma.$disconnect(); }
-  });
   test('creation keeps the library rubric and instructions through title validation and reopening', async ({ page, signIn }) => {
     test.setTimeout(90_000);
     const prisma = createE2EPrismaClient();
     const title = `Creator Selected Rubric QA ${Date.now()}`;
     const instructions = 'Reward concrete supporting details for this assignment.';
     try {
-      const rubric = await prisma.rubric.findUniqueOrThrow({ where: { name: 'daily-pages-engagement' } });
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto('/app/admin/assignment-types/new');
+      // The loader seeds the canonical protected library before we capture it.
+      const rubric = await prisma.rubric.findUniqueOrThrow({ where: { name: 'daily-pages-engagement' } });
       await expect(page.getByTestId('rubric-add-category')).toHaveCount(0);
       await expect(page.getByTestId('rubric-paste-open')).toHaveCount(0);
       await page.getByTestId('rubric-library-select').click();
