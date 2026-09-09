@@ -1,0 +1,17 @@
+**
+!package.json
+!bun.lock
+!packages/
+!packages/prisma/
+!packages/prisma/package.json
+!packages/prisma/schema.prisma
+!packages/prisma/prisma.config.ts
+!packages/prisma/index.ts
+!services/
+!services/web-app/
+!services/web-app/package.json
+!services/web-app/app/
+!services/web-app/app/utils/
+!services/web-app/app/utils/internal-scenario.server.ts
+!services/web-app/scripts/
+!services/web-app/scripts/internal-scenario-runner.ts

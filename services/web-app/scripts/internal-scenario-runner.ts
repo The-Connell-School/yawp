@@ -2,7 +2,7 @@ import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { PrismaClient } from '@app/prisma';
+import { PrismaClient } from '../../../packages/prisma/generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { InternalScenarios } from '../app/utils/internal-scenario.server';
 
