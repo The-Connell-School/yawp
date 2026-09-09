@@ -21,7 +21,7 @@ test.skipIf(!process.env.INTERNAL_PAIR_WORKSPACE)('Internal worker publishes thr
   const store = new PlatformStore(db);
   const key = 'local-pair-only-' + randomUUID().replaceAll('-', '');
   const http = createRubricHttp(new InternalRubrics(yawp), () => key, () => true);
-  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: request => request.method === 'POST' ? http.publish(request) : http.inspect(request) });
+  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: request => new URL(request.url).pathname.endsWith('/validate') ? http.validate(request) : request.method === 'POST' ? http.publish(request) : http.inspect(request) });
   let worker: any, member: any, target: any;
   const name = `paired-${randomUUID()}`;
   try {
@@ -32,12 +32,20 @@ test.skipIf(!process.env.INTERNAL_PAIR_WORKSPACE)('Internal worker publishes thr
     const revision = await store.saveContentDraft(member.id, { contentId: randomUUID(), expectedVersion: 0, kind: 'rubric', name, title: schema.title, document: schema });
     let responses = 0;
     const adapter = new HttpContentAdapter((env: string) => { expect(env).toBe(target.credentialEnv); return key; }, async (destination: string, init: RequestInit) => {
-      expect(destination).toBe(target.origin + '/api/internal/v1/rubrics');
+      const requested = new URL(destination);
+      expect(requested.origin).toBe(target.origin);
+      expect(['/api/internal/v1/rubrics', '/api/internal/v1/rubrics/validate']).toContain(requested.pathname);
       // Only this harness maps the registered test origin onto its owned loopback server.
-      const response = await fetch(new URL('/api/internal/v1/rubrics', server.url), init);
-      if (++responses === 1) { expect(response.status).toBe(200); await response.body?.cancel(); throw new Error('Receipt lost after commit'); }
+      const response = await fetch(new URL(requested.pathname + requested.search, server.url), init);
+      if (requested.pathname === '/api/internal/v1/rubrics' && init.method === 'POST' && ++responses === 1) { expect(response.status).toBe(200); await response.body?.cancel(); throw new Error('Receipt lost after commit'); }
       return response;
     });
+    const destination = { id: target.id, name: target.name, environment: target.environment, origin: target.origin, credentialEnv: target.credentialEnv, archived: target.archived };
+    const beforeReview = await adapter.review(destination, schema, new AbortController().signal);
+    expect(beforeReview.ok).toBe(true); expect(beforeReview.current).toBeNull();
+    expect(await yawp.rubric.count({ where: { name } })).toBe(0);
+    const invalidReview = await adapter.review(destination, { ...schema, rubric: { categories: [] } }, new AbortController().signal);
+    expect(invalidReview.ok).toBe(false); expect(invalidReview.issues.length).toBeGreaterThan(0);
     worker = new ContentWorker(store, internalUrl, adapter);
     const job = await store.promoteContent(member.id, { requestKey: randomUUID(), contentId: revision.contentId, version: 1, targetId: target.id, expectedFingerprint: null, reason: 'Paired QA' });
     await worker.runOnce();
@@ -54,6 +62,9 @@ test.skipIf(!process.env.INTERNAL_PAIR_WORKSPACE)('Internal worker publishes thr
     expect(audit.metadata.destinationFingerprint).toBe(committed.fingerprint);
     expect(JSON.stringify(audit)).not.toContain(key);
     expect(await db.auditEvent.count({ where: { actorId: member.id, action: 'content.promotion.unconfirmed' } })).toBe(1);
+    const afterReview = await adapter.review(destination, schema, new AbortController().signal);
+    expect(afterReview.ok).toBe(true); expect(afterReview.current.fingerprint).toBe(committed.fingerprint);
+    expect(afterReview.current.version).toBe(committed.version);
     // A fresh request with a stale destination fingerprint must not replace published content.
     const stale = await store.promoteContent(member.id, { requestKey: randomUUID(), contentId: revision.contentId, version: 1, targetId: target.id, expectedFingerprint: null, reason: 'Stale review' });
     for (let i = 0; i < 3; i++) await worker.runOnce();
