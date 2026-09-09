@@ -382,7 +382,7 @@ function runTestProfile(profile, { json }) {
     const database = new URL(local.DATABASE_URL);
     if (!['localhost', '127.0.0.1'].includes(database.hostname)) throw new Error('Assignment creation E2E requires the isolated local database');
     database.pathname = '/yawp_assignment_create_e2e';
-    results.push({ id: 'assignment-create', ...execute(selected.bun, ['x', 'playwright', 'test', '--project=chromium', 'e2e/tests/admin.assignment-type-creator.spec.ts', '--grep', 'validation preserves', '--reporter=line', '--retries=0'], {
+    results.push({ id: 'assignment-create', ...execute(selected.bun, ['x', 'playwright', 'test', '--project=chromium', 'e2e/tests/admin.assignment-type-creator.spec.ts', '--reporter=line', '--retries=0'], {
       json, cwd: webAppRoot, timeout: 10 * 60 * 1000,
       env: { ...selected.env, E2E_DATABASE_URL: database.toString(), CI: 'true' },
     }) });
