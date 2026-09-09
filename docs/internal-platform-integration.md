@@ -43,6 +43,22 @@ The integration profile uses only the worktree's local seeded database and makes
 
 ## Bootstrap recovery
 
+## Application mutation auditing
+
+The shared application Prisma client now supports `runWithImpersonation` scopes. Ordinary requests retain normal behavior. In an attributed scope, awaited queries execute in a database transaction carrying a transaction-local session ID and request/job metadata. Database triggers derive operator/user/organization from the persisted session and append one event for each inserted, updated or deleted row, including bulk operations and implicit Prisma join-table rows. Events contain table and primary/composite record keys, never copied row values.
+
+`withImpersonationTransaction` checks session identity, expiry, local membership and privilege eligibility, then verifies that every application table has enabled audit and truncate guards. Future migrations must add those guards to new tables; missing coverage prevents impersonated writes rather than silently omitting audit. Truncation is blocked during impersonation and always blocked for the audit table. Ordinary local seed reset preserves the internal session/audit tables.
+
+The facade supports normal awaited operations, callback transactions and Prisma array transactions. All writes and their audit events commit or roll back together. Transaction settings do not leak into pooled connections. Cached model methods still consult current attribution. Nested calls to the root `$transaction` inside an existing attributed transaction are rejected; helpers should use the transaction client already supplied to them.
+
+Async descendants using the shared application client retain attribution after a response, regain remote authorization, and receive a request-tail job identifier. They start new transactions rather than reusing a completed transaction. This does not yet cover a durable job deserialized by another process or a worker that creates its own Prisma client; those producers/consumers still require explicit attribution propagation.
+
+`./bin/project test --profile internal-impersonation-writes --json` verifies real Postgres row events, no row-value copying, atomic rollback, bulk/array/callback transactions, cached methods, pooled context isolation, revoked async tails, truncate rejection, uncovered-table rejection and seed-reset audit preservation. The seed-reset proof is rolled back to retain the local fixture.
+
+The HTTP handoff, authenticated request middleware and banner remain unwired. No route can activate the new impersonation context yet.
+
+## Bootstrap recovery details
+
 The recovered setup uses Bun 1.3.1's text `bun.lock`, migrated from the existing binary lock without refreshing dependencies. Frozen dependency validation runs once from the worktree root before configuration/database side effects. The application Dockerfile uses the same text lock. Preview fingerprints already support either lock format.
 
 Resource names now use the exact worktree directory and a path hash rather than the shared parent directory. Record port overrides are honored on subsequent runs. A legacy shared-resource configuration receives newly named resources; the script does not remove its old database/volume. Record's initial failed execution receipt remains historical: subsequent project CLI bootstrap and fixture checks are separate repair evidence, not a rewrite of that receipt.

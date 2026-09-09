@@ -7,7 +7,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
   if (!['localhost', '127.0.0.1'].includes(url.hostname) || !url.pathname.startsWith('/yawp_')) throw new Error('Local fixture database required');
   process.env.DATABASE_URL = connection;
   process.env.E2E_DATABASE_URL = connection;
-  const { prisma } = await import('./db.server');
+  const { basePrisma: prisma } = await import('./db.server');
   const { InternalImpersonationSessions } = await import('./internal-impersonation-sessions.server');
   const { withImpersonationTransaction } = await import('./internal-impersonation-writes.server');
   const { createAttributedPrisma, runWithImpersonation } = await import('./internal-impersonation-context.server');
@@ -80,7 +80,9 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
         await tx.setting.updateMany({ where: { name: { startsWith: prefix } }, data: { value: 'should roll back' } });
         throw new Error('transaction rollback');
       })).rejects.toThrow('transaction rollback');
-      tail = new Promise<void>(resolve => { releaseTail = resolve; }).then(() => wrapped.setting.create({ data: { name: `${prefix}-tail`, value: 'must not run' } }));
+      await wrapped.$transaction(async () => {
+        tail = new Promise<void>(resolve => { releaseTail = resolve; }).then(() => wrapped.setting.create({ data: { name: `${prefix}-tail`, value: 'must not run' } }));
+      });
     });
     expect(await prisma.internalImpersonationEvent.count({ where: { sessionId: identity.id, requestId: wrappedRequest } })).toBe(2);
     expect((await prisma.setting.findUniqueOrThrow({ where: { name: `${prefix}-array-a` } })).value).toBe('one');
@@ -89,6 +91,13 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
     await expect(tail).rejects.toThrow('tail revoked');
     expect(rechecks).toBe(1);
     expect(await prisma.setting.count({ where: { name: `${prefix}-tail` } })).toBe(0);
+    const { truncateAllPublicTables } = await import('../../../../packages/prisma/scripts/local-dev/truncate-all');
+    await expect(prisma.$transaction(async tx => {
+      await truncateAllPublicTables(tx);
+      expect(await tx.internalImpersonationEvent.count({ where: { sessionId: identity.id } })).toBeGreaterThan(0);
+      expect(await tx.internalImpersonationSession.count({ where: { id: identity.id } })).toBe(1);
+      throw new Error('restore fixture after seed reset proof');
+    })).rejects.toThrow('restore fixture after seed reset proof');
     await service.end(created.cookieToken);
     await expect(withImpersonationTransaction(prisma, context, { requestId: randomUUID(), action: 'test.after-exit' }, async tx => {
       await tx.setting.create({ data: { name: `${prefix}-after`, value: 'blocked' } });

@@ -1267,10 +1267,15 @@ model InternalImpersonationEvent {
   action         String
   resourceType   String
   resourceId     String
+  requestId      String?
+  requestAction  String?
+  jobId          String?
   createdAt      DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([sessionId, createdAt])
   @@index([organizationId, createdAt])
+  @@index([requestId])
+  @@index([jobId])
 }
 
 model Session {
