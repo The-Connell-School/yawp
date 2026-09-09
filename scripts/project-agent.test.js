@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -14,6 +15,28 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
+  test("failed dependency validation does not start or reset a database", () => {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "yawp-bootstrap-"));
+    try {
+      fs.mkdirSync(path.join(fixture, "scripts"));
+      fs.mkdirSync(path.join(fixture, "bin"));
+      fs.mkdirSync(path.join(fixture, "packages/prisma"), { recursive: true });
+      fs.mkdirSync(path.join(fixture, "services/web-app"), { recursive: true });
+      fs.copyFileSync(path.join(root, "scripts/worktree-local-setup.sh"), path.join(fixture, "scripts/setup.sh"));
+      fs.writeFileSync(path.join(fixture, "bin/bun"), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$BOOTSTRAP_CALLS"\nexit 42\n', { mode: 0o755 });
+      fs.writeFileSync(path.join(fixture, "bin/docker"), '#!/bin/sh\nprintf "docker %s\\n" "$*" >> "$BOOTSTRAP_CALLS"\nexit 0\n', { mode: 0o755 });
+      const calls = path.join(fixture, "calls");
+      const result = spawnSync("bash", [path.join(fixture, "scripts/setup.sh"), "--fresh", "--no-dev"], {
+        cwd: os.tmpdir(), encoding: "utf8", timeout: 5000,
+        env: { ...process.env, PATH: `${fixture}/bin:${process.env.PATH}`, BOOTSTRAP_CALLS: calls },
+      });
+      expect(result.status).toBe(42);
+      expect(fs.readFileSync(calls, "utf8")).toBe("install --frozen-lockfile\n");
+      expect(fs.existsSync(path.join(fixture, ".worktree-local"))).toBe(false);
+    } finally {
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
   test("selects the first Node runtime meeting the declared minimum", () => {
     const selected = selectCompatibleNode(["old", "current", "new"], (candidate) => ({
       old: "v16.2.0",
