@@ -375,10 +375,10 @@ function runTestProfile(profile, { json }) {
   } else if (chosen === "project-cli") run("project-cli", ["test", "./scripts/project-agent.test.js"], 120000);
   else if (chosen === "internal-management") runWebApp("internal-management", ["test", "app/utils/internal-management.server.test.ts"]);
   else if (chosen === "internal-impersonation") runWebApp("internal-impersonation", ["test", "app/utils/internal-impersonation-client.server.test.ts"]);
-  else if (["internal-directory-integration", "internal-impersonation-integration"].includes(chosen)) {
+  else if (["internal-directory-integration", "internal-impersonation-integration", "internal-impersonation-writes"].includes(chosen)) {
     const local = requireConfig();
     results.push({ id: chosen, ...execute(selected.bun,
-      ["test", chosen === "internal-directory-integration" ? "app/utils/internal-directory.integration.test.ts" : "app/utils/internal-impersonation.integration.test.ts"], {
+      ["test", chosen === "internal-directory-integration" ? "app/utils/internal-directory.integration.test.ts" : chosen === "internal-impersonation-writes" ? "app/utils/internal-impersonation-writes.integration.test.ts" : "app/utils/internal-impersonation.integration.test.ts"], {
         json, cwd: webAppRoot, timeout: 60000,
         env: { ...selected.env, INTERNAL_DIRECTORY_TEST_DATABASE_URL: local.DATABASE_URL },
       }) });
