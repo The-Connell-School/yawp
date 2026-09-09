@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  rubric: { findUnique: mock() },
   assignmentType: {
     count: mock(),
     create: mock(),
@@ -17,12 +18,37 @@ const { action } = await import('./route');
 describe('admin assignment type new action', () => {
   beforeEach(() => {
     requireAdmin.mockReset();
+    prisma.rubric.findUnique.mockReset();
+    prisma.rubric.findUnique.mockResolvedValue({ id: "daily-pages" });
     prisma.assignmentType.count.mockReset();
     prisma.assignmentType.create.mockReset();
 
     requireAdmin.mockResolvedValue(undefined);
     prisma.assignmentType.count.mockResolvedValue(4);
     prisma.assignmentType.create.mockResolvedValue({ id: 'at-new' });
+  });
+
+  test('persists a selected library rubric and instructions without copying grading JSON', async () => {
+    const form = new FormData();
+    form.set('title', 'Daily journal');
+    form.set('rubricId', 'daily-pages');
+    form.set('gradingInstructionsOverride', '  Focus on reflection.  ');
+    await action({ request: new Request('https://example.test/new', { method: 'POST', body: form }), params: {}, context: {} } as never);
+    expect(prisma.rubric.findUnique).toHaveBeenCalledWith({ where: { id: 'daily-pages' }, select: { id: true } });
+    expect(prisma.assignmentType.create).toHaveBeenCalledWith({ data: {
+      title: 'Daily journal', kind: null, description: null, position: 4,
+      rubricId: 'daily-pages', gradingPromptConfigJson: { gradingInstructionsOverride: 'Focus on reflection.' },
+    } });
+  });
+
+  test('rejects a deleted library selection inline without creating an assignment type', async () => {
+    prisma.rubric.findUnique.mockResolvedValue(null);
+    const form = new FormData();
+    form.set('title', 'Daily journal');
+    form.set('rubricId', 'deleted-rubric');
+    const result = await action({ request: new Request('https://example.test/new', { method: 'POST', body: form }), params: {}, context: {} } as never);
+    expect(result).toMatchObject({ data: { error: 'That rubric no longer exists. Choose another rubric.' }, init: { status: 400 } });
+    expect(prisma.assignmentType.create).not.toHaveBeenCalled();
   });
 
   test('creates assignment type with rubric and grading config', async () => {
