@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomInt } from 'node:crypto';
 
 test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('scenario receipts survive retries; reset replaces only owned active classroom data', async () => {
   const connection = process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL!;
@@ -97,5 +97,37 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('trusted runner u
     expect(production.stderr).not.toContain('secret');
     await writeFile(configPath, JSON.stringify({ targets: [{ ...config.targets[0], environment: 'preview', revision: 'c'.repeat(40) }] }));
     expect((await execute({ ...request, target: { ...request.target, environment: 'preview', revision: 'd'.repeat(40) } })).code).toBe(1);
+    const seatId = `preview-seat-${randomInt(100000, 99999999)}`;
+    const otherSeatId = `preview-seat-${randomInt(100000000, 999999999)}`;
+    await db.organization.create({ data: { id: seatId, name: 'Selected scenario seat' } });
+    await db.organization.create({ data: { id: otherSeatId, name: 'Unregistered scenario seat' } });
+    const registered = { ...config.targets[0], environment: 'preview', revision: 'c'.repeat(40), seatOrganizationIds: [seatId] };
+    await writeFile(configPath, JSON.stringify({ targets: [registered] }));
+    const selected = { ...request, jobId: randomUUID(), target: { ...request.target, environment: 'preview', revision: registered.revision, organizationId: seatId } };
+    const generated = await execute(selected);
+    expect(generated.code).toBe(0);
+    expect(await db.orgMembership.count({ where: { organizationId: seatId, isActive: true } })).toBe(3);
+    expect(await db.orgMembership.count({ where: { organizationId: org.id, isActive: true } })).toBe(3);
+    expect((await execute(selected)).stdout).toBe(generated.stdout);
+    expect((await execute({ ...selected, target: { ...selected.target, organizationId: org.id } })).code).toBe(1);
+    expect((await execute({ ...selected, jobId: randomUUID(), target: { ...selected.target, organizationId: otherSeatId } })).code).toBe(1);
+    expect(await db.orgMembership.count({ where: { organizationId: otherSeatId } })).toBe(0);
+    expect((await execute({ ...selected, jobId: randomUUID(), mode: 'reset' })).code).toBe(0);
+    expect(await db.orgMembership.count({ where: { organizationId: seatId, isActive: true } })).toBe(3);
+    expect(await db.orgMembership.count({ where: { organizationId: org.id, isActive: true } })).toBe(3);
+    const saved = await db.internalScenarioReceipt.findUniqueOrThrow({ where: { jobId: selected.jobId } });
+    expect(saved.organizationId).toBe(seatId);
+    for (const invalid of [
+      { ...registered, seatOrganizationIds: [seatId, seatId] },
+      { ...registered, seatOrganizationIds: ['arbitrary-org'] },
+      { ...registered, environment: 'demo' },
+    ]) {
+      await writeFile(configPath, JSON.stringify({ targets: [invalid] }));
+      const rejected = await execute({ ...selected, jobId: randomUUID() });
+      expect(rejected.code).toBe(1);
+      expect(rejected.stdout).toBe('');
+      expect(rejected.stderr).not.toContain(connection);
+    }
+
   } finally { await rm(directory, { recursive: true, force: true }); await db.$disconnect(); }
 }, 60000);
