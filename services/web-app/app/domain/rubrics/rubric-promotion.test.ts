@@ -6,7 +6,7 @@ describe('promotion rubric validation', () => {
   test('valid portable rubrics and all current starter definitions retain category content', () => {
     for (const raw of [valid(), ...STARTER_RUBRICS]) {
       const result = validateRubricPromotion(raw);
-      expect(result.ok).toBe(true);
+      expect({ name: raw.name, ...result }).toMatchObject({ ok: true });
       if (result.ok) {
         expect(result.schema.name).toBe(raw.name);
         expect(result.schema.rubric.categories).toEqual(raw.rubric.categories);
