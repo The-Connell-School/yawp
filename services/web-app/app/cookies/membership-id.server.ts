@@ -1,3 +1,4 @@
+import { getImpersonationAttribution } from '~/utils/internal-impersonation-context.server';
 import { createCookie } from 'react-router';
 import { shouldUseSecureCookies } from '~/utils/cookie-security.server';
 
@@ -17,6 +18,8 @@ export function destroyMembershipId() {
 }
 
 export async function getMembershipId(request: Request): Promise<string> {
+  const internal = getImpersonationAttribution();
+  if (internal) return internal.membershipId;
   const rawCookie = request.headers.get('cookie');
   const membershipId = rawCookie
     ? await membershipIdCookie.parse(rawCookie)

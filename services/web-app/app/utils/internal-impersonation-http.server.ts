@@ -46,7 +46,7 @@ export function createImpersonationHttp(options: {
   async function denied(request: Request) {
     // Retain the internal cookie until explicit exit so an invalid session can
     // never silently fall back to another login cookie on the next request.
-    const headers = new Headers({ 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' });
+    const headers = new Headers({ 'cache-control': 'no-store', 'referrer-policy': 'same-origin' });
     if (new URL(request.url).pathname.startsWith('/api/')) return json({ error: 'Impersonation is inactive', valid: false }, 401, headers);
     headers.set('content-type', 'text/html; charset=utf-8');
     headers.set('content-security-policy', "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
@@ -76,7 +76,8 @@ export function createImpersonationHttp(options: {
       headers.delete('set-cookie');
       for (const value of cookies) if (!/^(en_session|membership-id)=/.test(value)) headers.append('set-cookie', value);
       headers.set('cache-control', 'no-store');
-      headers.set('referrer-policy', 'no-referrer');
+      // Preserve same-origin form Origin headers while withholding cross-site referrers.
+      headers.set('referrer-policy', 'same-origin');
       return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
     } catch (error) {
       await options.audit(identity, operation, 'request.failed', path);

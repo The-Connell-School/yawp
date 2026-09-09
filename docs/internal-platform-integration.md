@@ -8,7 +8,7 @@ Search accepts `q`, optional `organizationId`, `limit` (1–50, default 50), and
 
 Lookup returns `{ id, organizationId, privileged }` for an active membership. Either `isAdmin` or `isSuperAdmin` makes a user privileged. Missing users/memberships return 404. When a user has multiple active memberships, callers must pass `organizationId`; an ambiguous lookup returns 409. Internal's impersonation form/adapter must carry the selected organization to this endpoint before enabling multi-organization impersonation.
 
-These endpoints do not establish login sessions. The fragment-token handoff, attributed session, persistent banner/exit, per-request revalidation, mutation audit, and background-job attribution still need implementation. Existing app authentication is unchanged.
+These directory endpoints do not establish login sessions. The separate, opt-in browser integration below establishes attributed sessions. Ordinary app authentication remains available.
 
 ## Attributed session lifecycle
 
@@ -20,7 +20,7 @@ Resolving a session revalidates with Internal on every call, compares the full i
 
 Session start/end and their attribution events use one database transaction. Deferred database guards reject lifecycle changes without matching audit. Attribution and lifetime cannot be changed; ended sessions cannot reopen. Audit rows reject UPDATE/DELETE and retain identity snapshots without cascading user relations. Database owners still control schema/trigger administration; deployment must restrict the application database role accordingly.
 
-Exit first ends local access. If Internal cannot be reached, remote termination remains durably pending. `flushPendingEnds` attempts up to 20 pending terminations; it still needs scheduling when the HTTP integration is wired. A consumed grant that fails local creation is ended upstream on a best-effort basis; it never becomes an ordinary session.
+Exit first ends local access. If Internal cannot be reached, remote termination remains durably pending. `flushPendingEnds` attempts up to 20 pending terminations; it still needs scheduling. A consumed grant that fails local creation is ended upstream on a best-effort basis; it never becomes an ordinary session.
 
 Validation:
 
@@ -29,7 +29,7 @@ Validation:
 ./bin/project test --profile internal-impersonation-integration --json
 ```
 
-The latter uses the isolated worktree database, restores any temporary teacher/membership flags, removes its session records, and retains synthetic append-only audit events. The remote service is a controlled test double. The HTTP handoff, cookie authentication middleware, always-visible banner/exit, application mutation auditing, job propagation and end-retry scheduling remain unfinished. Session-lifecycle audit is not yet application-action audit; do not activate production impersonation until that request boundary is wired and verified.
+The latter uses the isolated worktree database, restores any temporary teacher/membership flags, removes its session records, and retains synthetic append-only audit events. The remote service is a controlled test double. HTTP and application-action audit are implemented as described below. Durable cross-process job propagation and end-retry scheduling remain unfinished. Production activation is not verified.
 
 Validation commands:
 
@@ -53,7 +53,19 @@ Async descendants using the shared application client retain attribution after a
 
 `./bin/project test --profile internal-impersonation-writes --json` verifies real Postgres row events, no row-value copying, atomic rollback, bulk/array/callback transactions, cached methods, pooled context isolation, revoked async tails, truncate rejection, uncovered-table rejection and seed-reset audit preservation. The seed-reset proof is rolled back to retain the local fixture.
 
-The HTTP handoff, authenticated request middleware and banner remain unwired. No route can activate the new impersonation context yet.
+## Browser integration (opt-in)
+
+`INTERNAL_IMPERSONATION_ENABLED=true` enables `/auth/internal-impersonation#token=…`. The resource page strips the fragment before posting it with a signed CSRF challenge, avoiding token-bearing request URLs or app analytics. The handoff expires ordinary login/membership cookies and creates a separate HttpOnly session cookie with the original bounded expiry.
+
+Configure server-only `YAWP_PUBLIC_ORIGIN` (canonical HTTPS application origin), `INTERNAL_PLATFORM_ORIGIN` (plain HTTPS Internal origin), and `YAWP_PRODUCTION_SERVICE_KEY` (outbound redeem/context/end credential). The outbound credential must differ from inbound `YAWP_MANAGEMENT_SERVICE_KEY`. Existing `SESSION_SECRET` signs cookies. Only non-production loopback app origins permit HTTP and non-Secure cookies; production cookies always require Secure. These settings are not exposed through `getEnv()`.
+
+Root middleware validates the session before app loaders/actions, establishes request attribution and records request start/completion. Authentication helpers pin the assumed user and membership; the root membership list is limited to that membership. Alternate login, LTI, legacy impersonation, admin pages and organization switching are denied until exit. Invalid internal cookies never fall back to ordinary authentication. Unsafe methods require the canonical same origin. Authenticated pages use a same-origin referrer policy so native POST forms preserve Origin while cross-site referrers stay hidden; the token handoff retains no-referrer.
+
+A fixed root banner shows the assumed account, operator and organization with an Exit button, including routes outside the normal app layout. Client PostHog initialization/provider are omitted for the impersonation session. Exit clears browser credentials and ends the local session before attempting remote termination. A revoked session receives an unavailable page with an exit form. Missing integration configuration fails closed; it does not silently sign in another user.
+
+`./bin/project test --profile internal-impersonation-browser --json` starts the real app on the owned app port and uses its local fixture database. A temporary HTTPS authority simulates only the Internal protocol. Chromium verifies fragment removal, target identity/banner, authentication heartbeat, organization-switch denial, request/lifecycle audit attribution, exit and remote revocation. The server processes/certificate are removed afterward; synthetic append-only audit records remain. Stop an already-running owned dev server before this test. `internal-impersonation-http` covers CSRF/origin failures, invalid-cookie fallback prevention, unavailable audit and termination services, cookie replacement and response caching.
+
+The full deployed Internal-to-production pairing has not been exercised. Selected-organization forwarding from the Internal UI/adapter, durable cross-process jobs, retry scheduling and deployment configuration remain outstanding.
 
 ## Bootstrap recovery details
 

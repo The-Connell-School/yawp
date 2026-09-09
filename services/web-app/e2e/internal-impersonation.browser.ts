@@ -19,7 +19,7 @@ const origin = `http://localhost:${port}`;
 const dir = mkdtempSync(join(tmpdir(), 'yawp-impersonation-'));
 const db = new Client({ connectionString: database.toString() });
 await db.connect();
-const { rows: [user] } = await db.query(`SELECT u.id, u.email, m."organizationId", m.id AS "membershipId"
+const { rows: [user] } = await db.query<{ id: string; email: string; organizationId: string; membershipId: string }>(`SELECT u.id, u.email, m."organizationId", m.id AS "membershipId"
   FROM "User" u JOIN "OrgMembership" m ON m."userId"=u.id
   WHERE u.email='dev.teacher@yawp.local' AND m."isActive"=true LIMIT 1`);
 assert(user, 'Run the local-dev fixture first');
@@ -71,14 +71,15 @@ try {
   assert((await page.getByRole('region', { name: 'Active impersonation' }).innerText()).includes(user.email));
   assert(!page.url().includes(token));
   assert(!requested.some(url => url.includes(token)), 'Link token must never appear in a request URL');
-  assert((await page.request.get(`${origin}/api/auth/check`)).ok());
+  assert.equal((await (await page.request.get(`${origin}/api/auth/check`)).json()).valid, true);
   assert.equal((await page.request.post(`${origin}/api/membership-id`, { headers: { origin } })).status(), 403);
   const sessionId = identity.id;
   await page.getByRole('button', { name: 'Exit impersonation', exact: true }).click();
   await page.waitForURL(`${origin}/`);
   assert.equal(ends, 1);
+  assert.equal((await (await page.request.get(`${origin}/api/auth/check`)).json()).valid, false);
   assert(!(await page.context().cookies()).some(cookie => cookie.name === 'yawp_internal_impersonation'));
-  const { rows: events } = await db.query('SELECT action, "actorId", "userId" FROM "InternalImpersonationEvent" WHERE "sessionId"=$1', [sessionId]);
+  const { rows: events } = await db.query<{ action: string; actorId: string; userId: string }>('SELECT action, "actorId", "userId" FROM "InternalImpersonationEvent" WHERE "sessionId"=$1', [sessionId]);
   assert(events.some(event => event.action === 'session.started'));
   assert(events.some(event => event.action.startsWith('request.completed.')));
   assert(events.some(event => event.action === 'session.ended'));
@@ -95,6 +96,8 @@ try {
   await page.waitForURL(`${origin}/`);
   console.log('PASS: real browser handoff, banner, membership lock, audit, exit and revocation');
 } catch (error) {
+  const failedPage = browser?.contexts()[0]?.pages()[0];
+  if (failedPage) console.error('Page:', failedPage.url().replaceAll(token, '[redacted]'), (await failedPage.locator('body').innerText()).slice(0, 1200).replaceAll(token, '[redacted]'));
   // App logs stay private; do not echo request bodies or generated credentials.
   console.error('Browser impersonation acceptance failed:', error instanceof Error ? error.message.replaceAll(token, '[redacted]') : 'unknown failure');
   throw error;
