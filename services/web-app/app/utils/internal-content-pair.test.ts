@@ -25,7 +25,7 @@ test.skipIf(!process.env.INTERNAL_PAIR_WORKSPACE)('Internal worker publishes thr
   let worker: any, member: any, target: any;
   const name = `paired-${randomUUID()}`;
   try {
-    expect(await db.job.count({ where: { kind: 'content.promote', status: { in: ['queued', 'running'] } } })).toBe(0);
+    expect(await db.job.count({ where: { kind: { in: ['content.promote', 'content.review'] }, status: { in: ['queued', 'running'] } } })).toBe(0);
     member = await db.member.create({ data: { subject: randomUUID(), email: `pair-${randomUUID()}@example.test`, grants: { create: [{ capability: 'content.manage', environment: 'development' }, { capability: 'content.promote', environment: 'production' }] } } });
     target = await db.contentDestination.create({ data: { id: randomUUID(), name: 'Local paired production authority', environment: 'production', origin: `https://${randomUUID()}.example.test`, credentialEnv: 'YAWP_CONTENT_PAIR_KEY' } });
     const schema = { name, title: 'Paired rubric', scoringScale: { type: 'rubric_points', minScore: 0, maxScore: 4 }, rubric: { categories: [{ key: 'claim', label: 'Claim', description: 'Explain the claim', weight: 1 }] } };
@@ -47,6 +47,12 @@ test.skipIf(!process.env.INTERNAL_PAIR_WORKSPACE)('Internal worker publishes thr
     const invalidReview = await adapter.review(destination, { ...schema, rubric: { categories: [] } }, new AbortController().signal);
     expect(invalidReview.ok).toBe(false); expect(invalidReview.issues.length).toBeGreaterThan(0);
     worker = new ContentWorker(store, internalUrl, adapter);
+    const reviewJob = await store.requestContentReview(member.id, { requestKey: randomUUID(), contentId: revision.contentId, version: 1, targetId: target.id });
+    await worker.runOnce();
+    const reviewed = await store.readContentReview(member.id, reviewJob.id);
+    expect(reviewed.status).toBe('succeeded'); expect(reviewed.result.ok).toBe(true); expect(reviewed.result.current).toBeNull();
+    expect(await yawp.rubric.count({ where: { name } })).toBe(0);
+    expect(await db.auditEvent.count({ where: { actorId: member.id, action: 'content.review.completed' } })).toBe(1);
     const job = await store.promoteContent(member.id, { requestKey: randomUUID(), contentId: revision.contentId, version: 1, targetId: target.id, expectedFingerprint: null, reason: 'Paired QA' });
     await worker.runOnce();
     expect((await store.readContentPromotion(member.id, job.id)).status).toBe('queued');
