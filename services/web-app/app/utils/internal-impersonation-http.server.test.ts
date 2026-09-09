@@ -137,6 +137,7 @@ test('impersonation error reporting excludes cookies, tokens, queries and except
   expect(reportImpersonationError(new Request('https://yawp.test/app?token=secret', { headers: { cookie: 'yawp_internal_impersonation=secret', authorization: 'Bearer secret' } }), report)).toBe(true);
   expect(reportImpersonationError(new Request('https://yawp.test/auth/internal-impersonation?token=secret'), report)).toBe(true);
   expect(reportImpersonationError(new Request('https://yawp.test/app', { headers: { cookie: 'ordinary=session' } }), report)).toBe(false);
-  expect(records).toEqual([{ event: 'internal_impersonation_request_failed' }, { event: 'internal_impersonation_request_failed' }]);
+  expect(reportImpersonationError(new Request('https://yawp.test/api/internal/v1/qa/accounts', { headers: { authorization: 'Bearer secret' } }), report)).toBe(true);
+  expect(records).toEqual([{ event: 'internal_impersonation_request_failed' }, { event: 'internal_impersonation_request_failed' }, { event: 'internal_impersonation_request_failed' }]);
   expect(JSON.stringify(records)).not.toContain('secret');
 });

@@ -1,3 +1,4 @@
+import { reportImpersonationError } from './utils/internal-impersonation-error.server';
 import { PassThrough } from 'node:stream';
 import type { EntryContext, HandleErrorFunction } from 'react-router';
 import { createReadableStreamFromReadable } from '@react-router/node';
@@ -55,7 +56,7 @@ export default function handleRequest(
           // errors encountered during initial shell rendering since they'll
           // reject and get logged in handleDocumentRequest.
           if (shellRendered) {
-            console.error(error);
+            if (!reportImpersonationError(request, entry => console.error(entry))) console.error(error);
           }
         },
       }
@@ -74,6 +75,8 @@ export const handleError: HandleErrorFunction = async (error, args) => {
   if (request.signal.aborted) {
     return;
   }
+
+  if (reportImpersonationError(request, entry => console.error(entry))) return;
 
   console.log('🔥 Error caught by handleError:', error);
 
