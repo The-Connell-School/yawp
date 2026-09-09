@@ -21,9 +21,8 @@ const getStudentEnrolledClasses = mock();
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
 // before any file could mock.module() this path (see comment there).
-const actualAssignmentTypeAccess = globalThis.__realModules[
-  '~/utils/assignment-type-access.server'
-];
+const actualAssignmentTypeAccess =
+  globalThis.__realModules['~/utils/assignment-type-access.server'];
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
@@ -69,7 +68,10 @@ describe('app index loader assignments', () => {
     getTeacherRecentActiveClassIds.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
     getStudentPreviewState.mockReset();
-    getStudentPreviewState.mockResolvedValue({ active: false, organizationId: null });
+    getStudentPreviewState.mockResolvedValue({
+      active: false,
+      organizationId: null,
+    });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
     getStudentEnrolledClasses.mockReset();
     getStudentEnrolledClasses.mockResolvedValue([]);
@@ -117,6 +119,22 @@ describe('app index loader assignments', () => {
     } as any);
 
     expect(getAvailableAssignmentTypesForScopes).not.toHaveBeenCalled();
+  });
+
+  test('keeps a classless student on the dashboard and returns blocking class-code state', async () => {
+    prisma.orgMembership.findUnique.mockResolvedValue({
+      _count: { classesAsStudent: 0 },
+    });
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(response).not.toBeInstanceOf(Response);
+    expect(data.requiresClassCode).toBe(true);
   });
 
   test('does not load documents or assignments for the student dashboard', async () => {
@@ -321,7 +339,10 @@ describe('app index loader assignments', () => {
           id: 'class-active-2',
           school: { id: 'school-1', organizationId: 'org-1' },
         },
-        { id: 'class-quiet', school: { id: 'school-1', organizationId: 'org-1' } },
+        {
+          id: 'class-quiet',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
       ];
     });
 
@@ -333,9 +354,9 @@ describe('app index loader assignments', () => {
     const data = (response as { data: any }).data;
 
     expect(data.totalTeacherClassCount).toBe(3);
-    expect(data.teacherClassCards.map((klass: { id: string }) => klass.id)).toEqual(
-      ['class-active-1', 'class-active-2', 'class-quiet']
-    );
+    expect(
+      data.teacherClassCards.map((klass: { id: string }) => klass.id)
+    ).toEqual(['class-active-1', 'class-active-2', 'class-quiet']);
     expect(data.teacherWorkspaceClassStats).toHaveLength(3);
   });
 
@@ -366,7 +387,10 @@ describe('app index loader assignments', () => {
 
       return classRows.map((klass) => ({
         id: klass.id,
-        school: { id: klass.school.id, organizationId: klass.school.organizationId },
+        school: {
+          id: klass.school.id,
+          organizationId: klass.school.organizationId,
+        },
       }));
     });
 
@@ -409,7 +433,10 @@ describe('app index loader assignments', () => {
       }
 
       return [
-        { id: 'class-quiet', school: { id: 'school-1', organizationId: 'org-1' } },
+        {
+          id: 'class-quiet',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
       ];
     });
 
@@ -552,8 +579,10 @@ describe('app index loader assignments', () => {
       },
     ]);
     expect(data.assignmentCreationTypes).toEqual([
-      { id: 'type-1', title: 'Daily Pages' },
+      // Defaulted rather than omitted: the sheet reads this to decide whether to
+      // offer collaborative drafts, and an absent flag would read as supported
+      // nowhere but be indistinguishable from a select that forgot to ask.
+      { id: 'type-1', title: 'Daily Pages', collaborationSupported: false },
     ]);
   });
-
 });

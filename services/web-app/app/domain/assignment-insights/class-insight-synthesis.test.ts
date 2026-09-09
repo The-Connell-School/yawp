@@ -4,6 +4,21 @@ import {
   buildInsightPrompt,
   parseInsightResponse,
 } from './class-insight-synthesis';
+import { DEFAULT_INSIGHT_RUBRIC, type InsightRubric } from './insight-rubric';
+
+const GBA_RUBRIC: InsightRubric = {
+  categories: [
+    { key: 'budget', label: 'Budget', weight: 0.5, minScore: 0, maxScore: 100 },
+    {
+      key: 'recommendation',
+      label: 'Recommendation',
+      weight: 0.5,
+      minScore: 0,
+      maxScore: 100,
+    },
+  ],
+};
+
 
 const sampleAggregate = aggregateRubricPerformance([
   {
@@ -86,7 +101,7 @@ describe('parseInsightResponse', () => {
   test('parses a well-formed payload', () => {
     const result = parseInsightResponse(
       JSON.stringify(validPayload),
-      sampleAggregate
+      DEFAULT_INSIGHT_RUBRIC
     );
     expect(result).not.toBeNull();
     expect(result!.overview).toContain('strong theses');
@@ -98,7 +113,7 @@ describe('parseInsightResponse', () => {
     const wrapped = `Here is the summary:\n\n${JSON.stringify(
       validPayload
     )}\n\nHope that helps!`;
-    const result = parseInsightResponse(wrapped, sampleAggregate);
+    const result = parseInsightResponse(wrapped, DEFAULT_INSIGHT_RUBRIC);
     expect(result).not.toBeNull();
     expect(result!.categories).toHaveLength(2);
   });
@@ -116,7 +131,7 @@ describe('parseInsightResponse', () => {
           { title: 'c', detail: 'd', rubricCategory: 'thesis_and_content' },
         ],
       }),
-      sampleAggregate
+      DEFAULT_INSIGHT_RUBRIC
     );
     expect(result!.categories.map((c) => c.key)).toEqual([
       'thesis_and_content',
@@ -134,18 +149,86 @@ describe('parseInsightResponse', () => {
         ],
         nextSteps: [],
       }),
-      sampleAggregate
+      DEFAULT_INSIGHT_RUBRIC
     );
     expect(result!.categories[0].status).toBe('mixed');
   });
 
   test('returns null when there is no parseable object', () => {
-    expect(parseInsightResponse('the model refused', sampleAggregate)).toBeNull();
+    expect(parseInsightResponse('the model refused', DEFAULT_INSIGHT_RUBRIC)).toBeNull();
   });
 
   test('returns null when required fields are missing', () => {
     expect(
-      parseInsightResponse(JSON.stringify({ foo: 'bar' }), sampleAggregate)
+      parseInsightResponse(JSON.stringify({ foo: 'bar' }), DEFAULT_INSIGHT_RUBRIC)
     ).toBeNull();
+  });
+});
+
+describe('synthesis against an assignment type’s own rubric', () => {
+  const aggregate = {
+    submissionCount: 3,
+    categories: [
+      {
+        key: 'budget',
+        label: 'Budget',
+        weight: 0.5,
+        averageScore: 88,
+        scoredCount: 3,
+        distribution: { 1: 0, 2: 0, 3: 0, 4: 1, 5: 2 } as Record<1 | 2 | 3 | 4 | 5, number>,
+        lowCount: 0,
+        highCount: 3,
+        sampleComments: [],
+      },
+    ],
+    strongest: 'budget',
+    weakest: 'budget',
+  };
+
+  test('offers the model this rubric’s keys, not the default five', () => {
+    const { system } = buildInsightPrompt(aggregate, {}, GBA_RUBRIC);
+
+    expect(system).toContain('budget, recommendation');
+    expect(system).not.toContain('thesis_and_content');
+  });
+
+  test('states the range and thresholds the category is actually marked in', () => {
+    // Told "strong (>=4)" about scores out of 100, the model reads the class
+    // backwards.
+    const { user } = buildInsightPrompt(aggregate, {}, GBA_RUBRIC);
+
+    expect(user).toContain('avg 88.00 / 100');
+    expect(user).toContain('strong (>=75)');
+    expect(user).toContain('struggling (<=25)');
+  });
+
+  test('names the strongest category from this rubric', () => {
+    const { user } = buildInsightPrompt(aggregate, {}, GBA_RUBRIC);
+
+    expect(user).toContain('strongest category: Budget');
+  });
+
+  test('keeps a reply about this rubric’s categories and drops the rest', () => {
+    const summary = parseInsightResponse(
+      JSON.stringify({
+        overview: 'Strong on costing.',
+        categories: [
+          { key: 'budget', status: 'strength', summary: 'Costed honestly.' },
+          { key: 'thesis_and_content', status: 'gap', summary: 'Not on this rubric.' },
+        ],
+        nextSteps: [
+          { title: 'Push the call', detail: 'Ask for a decision.', rubricCategory: 'recommendation' },
+          { title: 'Off-rubric', detail: 'Nope.', rubricCategory: 'voice_and_style' },
+        ],
+      }),
+      GBA_RUBRIC
+    );
+
+    expect(summary?.categories).toEqual([
+      { key: 'budget', label: 'Budget', status: 'strength', summary: 'Costed honestly.' },
+    ]);
+    expect(summary?.nextSteps).toEqual([
+      { title: 'Push the call', detail: 'Ask for a decision.', rubricCategory: 'recommendation' },
+    ]);
   });
 });

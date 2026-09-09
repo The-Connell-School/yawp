@@ -5,6 +5,10 @@ import { sendEmail } from '~/utils/email.server';
 import { getDomainUrl } from '~/utils/misc';
 import { normalizeEmail } from '~/utils/normalize-email';
 import { generateTOTP } from '~/utils/totp.server';
+import {
+  lockClassCollaborationDeployments,
+  lockStudentRosters,
+} from '~/domain/collaboration/class-assignment-lock.server';
 
 export type StudentEmailLookupResult =
   | { status: 'existing'; email: string }
@@ -13,12 +17,10 @@ export type StudentEmailLookupResult =
   | { status: 'error'; error: string };
 
 export type StudentEnrollResult =
-  | { status: 'enrolled'; message?: string }
-  | { status: 'error'; error: string };
+  { status: 'enrolled'; message?: string } | { status: 'error'; error: string };
 
 export type StudentInviteResult =
-  | { status: 'invited'; email: string }
-  | { status: 'error'; error: string };
+  { status: 'invited'; email: string } | { status: 'error'; error: string };
 
 const STAFF_ACCOUNT_ERROR =
   'This email belongs to a staff account, not a student account.';
@@ -48,7 +50,10 @@ async function findUserByEmail(email: string) {
 }
 
 type StudentMembershipLookup =
-  | { status: 'ok'; membership: { id: string; classesAsStudent: { id: string }[] } }
+  | {
+      status: 'ok';
+      membership: { id: string; classesAsStudent: { id: string }[] };
+    }
   | { status: 'error'; error: string };
 
 function resolveStudentMembership(
@@ -168,9 +173,13 @@ export async function enrollExistingStudentInClass({
     };
   }
 
-  await prisma.orgMembership.update({
-    where: { id: orgMembership.id },
-    data: { classesAsStudent: { connect: { id: classId } } },
+  await prisma.$transaction(async (tx) => {
+    await lockStudentRosters(tx, [orgMembership.id]);
+    await lockClassCollaborationDeployments(tx, classId);
+    await tx.orgMembership.update({
+      where: { id: orgMembership.id },
+      data: { classesAsStudent: { connect: { id: classId } } },
+    });
   });
 
   return { status: 'enrolled' };
@@ -234,7 +243,8 @@ export async function sendStudentClassInvite({
   if (existingUser) {
     return {
       status: 'error',
-      error: 'This student already has an account. Add them to the class instead.',
+      error:
+        'This student already has an account. Add them to the class instead.',
     };
   }
 
@@ -251,9 +261,19 @@ export async function sendStudentClassInvite({
   });
 
   if (existingInvitation) {
-    await prisma.invitation.delete({
-      where: { id: existingInvitation.id },
-    });
+    try {
+      const metadata = JSON.parse(existingInvitation.metadata ?? '{}');
+      if (metadata?.partner === 'ua') {
+        return {
+          status: 'error',
+          error:
+            'This student has a pending University of Alabama signup. They must finish or clear that signup before receiving a class invitation.',
+        };
+      }
+    } catch {
+      // Legacy invitations without parseable metadata remain replaceable by
+      // the ordinary class-invitation flow.
+    }
   }
 
   const { otp, ...verificationConfig } = await generateTOTP({
@@ -276,7 +296,12 @@ export async function sendStudentClassInvite({
     metadata: JSON.stringify({ klassId: classId }),
   };
 
-  await prisma.invitation.create({ data: verificationData });
+  await prisma.$transaction([
+    ...(existingInvitation
+      ? [prisma.invitation.delete({ where: { id: existingInvitation.id } })]
+      : []),
+    prisma.invitation.create({ data: verificationData }),
+  ]);
 
   const response = await sendEmail({
     to: email,

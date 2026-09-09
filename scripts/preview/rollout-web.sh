@@ -14,6 +14,7 @@ PREVIEW_ROLLOUT_POLL_SECONDS="${PREVIEW_ROLLOUT_POLL_SECONDS:-1}"
 PREVIEW_CANDIDATE_COMPOSE_FILE="${PREVIEW_CANDIDATE_COMPOSE_FILE:-${PREVIEW_COMPOSE_FILE}.candidate}"
 PREVIEW_ACTIVE_WEB_FILE="${PREVIEW_ACTIVE_WEB_FILE:-${PREVIEW_COMPOSE_FILE}.active-web}"
 PREVIEW_TLS="${PREVIEW_TLS:-true}"
+PREVIEW_ADDITIONAL_HOSTNAMES="${PREVIEW_ADDITIONAL_HOSTNAMES:-}"
 
 [[ "$PREVIEW_COMPOSE_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || {
   echo "Invalid PREVIEW_COMPOSE_PROJECT" >&2
@@ -23,6 +24,17 @@ PREVIEW_TLS="${PREVIEW_TLS:-true}"
   echo "Invalid PREVIEW_HOSTNAME" >&2
   exit 1
 }
+PREVIEW_HOST_RULE="Host(\`${PREVIEW_HOSTNAME}\`)"
+IFS=',' read -r -a additional_hostnames <<<"$PREVIEW_ADDITIONAL_HOSTNAMES"
+for additional_hostname in "${additional_hostnames[@]}"; do
+  additional_hostname="${additional_hostname//[[:space:]]/}"
+  [[ -n "$additional_hostname" ]] || continue
+  [[ "$additional_hostname" =~ ^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$ ]] || {
+    echo "Invalid PREVIEW_ADDITIONAL_HOSTNAMES entry" >&2
+    exit 1
+  }
+  PREVIEW_HOST_RULE+=" || Host(\`${additional_hostname}\`)"
+done
 [[ "$PREVIEW_ROLLOUT_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || {
   echo "PREVIEW_ROLLOUT_ATTEMPTS must be a positive integer" >&2
   exit 1
@@ -170,12 +182,12 @@ write_candidate_route() {
 http:
   routers:
     ${router_base}-http:
-      rule: 'Host(\`${PREVIEW_HOSTNAME}\`)'
+      rule: '${PREVIEW_HOST_RULE}'
       entryPoints: [web]
       service: ${router_base}
       priority: 10000
     ${router_base}-https:
-      rule: 'Host(\`${PREVIEW_HOSTNAME}\`)'
+      rule: '${PREVIEW_HOST_RULE}'
       entryPoints: [websecure]
       service: ${router_base}
       priority: 10000
@@ -192,7 +204,7 @@ YAML
 http:
   routers:
     ${router_base}-http:
-      rule: 'Host(\`${PREVIEW_HOSTNAME}\`)'
+      rule: '${PREVIEW_HOST_RULE}'
       entryPoints: [web]
       service: ${router_base}
       priority: 10000

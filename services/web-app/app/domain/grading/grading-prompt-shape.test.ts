@@ -6,6 +6,7 @@ import {
   resolveCategoryFeedbackEnabled,
 } from './grading-prompt-shape';
 import { DAILY_PAGES_RUBRIC } from '~/domain/assignment-types/daily-pages-rubric';
+import { CRISTO_REY_HORNBUCKLE_FIVE_PARAGRAPH_ESSAY } from '~/domain/rubrics/cristo-rey-rubrics';
 
 const thesisCategories = [
   {
@@ -143,7 +144,28 @@ describe('buildGradingPromptShape for a rubric that customizes nothing', () => {
   test('still asks for a per-category comment', () => {
     expect(shape.categoryFeedbackEnabled).toBe(true);
     expect(shape.systemPrompt).toContain('"comment": string');
-    expect(shape.systemPrompt).toContain('Provide concise, actionable comments.');
+    expect(shape.systemPrompt).toContain(
+      'Provide concise, actionable comments.'
+    );
     expect(shape.systemPrompt).not.toContain('Do not write per-category');
+  });
+});
+
+describe('buildGradingPromptShape for the Cristo Rey rubric', () => {
+  const rubric = CRISTO_REY_HORNBUCKLE_FIVE_PARAGRAPH_ESSAY;
+  const shape = buildGradingPromptShape({
+    categories: rubric.rubric.categories,
+    minScore: rubric.scoringScale.minScore,
+    maxScore: rubric.scoringScale.maxScore,
+    studentFirstName: 'Jordan',
+  });
+
+  test('asks for 1-4 category scores and renders the four source levels', () => {
+    expect(shape.systemPrompt).toContain('"score": 1-4');
+    expect(shape.rubricText).toContain('4-4 Advanced');
+    expect(shape.rubricText).toContain('3-3 Proficient');
+    expect(shape.rubricText).toContain('2-2 Developing');
+    expect(shape.rubricText).toContain('1-1 Beginning');
+    expect(shape.rubricText).not.toMatch(/90-100|80-89|70-79|1-69/);
   });
 });

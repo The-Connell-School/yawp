@@ -39,7 +39,10 @@ import {
   listSavedAssignments,
 } from '~/domain/assignments/saved-assignments.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { deleteClassAssignmentDeployment } from '~/utils/assignment-deployment.server';
+import {
+  AssignmentHasCollaborativeWorkError,
+  deleteClassAssignmentDeployment,
+} from '~/utils/assignment-deployment.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -158,13 +161,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
           id: string;
           title: string;
           systemKey: string | null;
+          collaborationSupported: boolean;
         }>({
           scopes: teacherClasses.map((klass) => ({
             organizationId: klass.school.organizationId,
             schoolId: klass.school.id,
             teacherProfileId: profile.id,
           })),
-          select: { id: true, title: true, systemKey: true },
+          select: {
+            id: true,
+            title: true,
+            systemKey: true,
+            collaborationSupported: true,
+          },
           orderBy: { position: 'asc' },
         })
       : [];
@@ -184,7 +193,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // free-text prompt, so they are not offered here.
     assignmentCreationTypes: availableAssignmentTypes
       .filter((type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY)
-      .map((type) => ({ id: type.id, title: type.title })),
+      .map((type) => ({
+        id: type.id,
+        title: type.title,
+        collaborationSupported: type.collaborationSupported,
+      })),
   };
 }
 
@@ -235,11 +248,41 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    for (const deployment of deployments) {
-      await deleteClassAssignmentDeployment({
-        assignmentId: deployment.assignmentId,
-        classId: deployment.classId,
-      });
+    const protectedDeployment = await prisma.documentGroup.findFirst({
+      where: {
+        documentId: { not: null },
+        classAssignment: {
+          assignmentId: { in: assignmentIds },
+          class: { teachers: { some: { id: profile.id } }, isArchived: false },
+        },
+      },
+      select: { id: true },
+    });
+    if (protectedDeployment) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'Assignments with shared group work cannot be deleted.',
+        },
+        { status: 409 }
+      );
+    }
+
+    try {
+      for (const deployment of deployments) {
+        await deleteClassAssignmentDeployment({
+          assignmentId: deployment.assignmentId,
+          classId: deployment.classId,
+        });
+      }
+    } catch (error) {
+      if (error instanceof AssignmentHasCollaborativeWorkError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 409 }
+        );
+      }
+      throw error;
     }
 
     return dataResponse({
@@ -298,10 +341,7 @@ function SavedAssignmentsPanel({
 
   return (
     <section className="mb-8" aria-labelledby="saved-assignments-heading">
-      <h2
-        id="saved-assignments-heading"
-        className="mb-2 text-lg font-semibold"
-      >
+      <h2 id="saved-assignments-heading" className="mb-2 text-lg font-semibold">
         My Saved Assignments
       </h2>
       <p className="mb-4 text-base/7 text-muted-foreground sm:text-sm/6">
@@ -317,7 +357,10 @@ function SavedAssignmentsPanel({
           </span>
         </div>
       ) : (
-        <ul className="divide-y rounded-lg bg-muted/50" data-testid="saved-assignments-list">
+        <ul
+          className="divide-y rounded-lg bg-muted/50"
+          data-testid="saved-assignments-list"
+        >
           {savedAssignments.map((savedAssignment) => (
             <li
               key={savedAssignment.id}
@@ -426,7 +469,8 @@ export default function MyAssignmentsRoute() {
     handleSelect,
   } = useTable({
     rows: useMemo(
-      () => filteredAssignments.map(({ assignmentId }) => ({ id: assignmentId })),
+      () =>
+        filteredAssignments.map(({ assignmentId }) => ({ id: assignmentId })),
       [filteredAssignments]
     ),
   });
@@ -519,8 +563,8 @@ export default function MyAssignmentsRoute() {
                 if (
                   !window.confirm(
                     count === 1
-                      ? 'Delete this assignment from your classes? Existing student documents will remain, but they will no longer be linked to this assignment.'
-                      : `Delete ${count} assignments from your classes? Existing student documents will remain, but they will no longer be linked to these assignments.`
+                      ? 'Delete this assignment from your classes? Solo student documents will remain. Assignments with shared group work cannot be deleted.'
+                      : `Delete ${count} assignments from your classes? Solo student documents will remain. Assignments with shared group work cannot be deleted.`
                   )
                 ) {
                   event.preventDefault();

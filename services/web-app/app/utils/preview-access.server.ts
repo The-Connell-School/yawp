@@ -24,6 +24,9 @@ const MASTER_ACCESS_CODE_PATTERN =
 const OPEN_PATHS = new Set([
   '/api/healthcheck',
   '/api/healthcheck/', // be tolerant of a trailing slash from probes
+  // Stripe cannot present the human preview-access cookie. The route itself
+  // remains protected by Stripe's signed webhook secret.
+  '/api/stripe/webhook',
   '/lti/jwks',
   PREVIEW_ACCESS_PATH,
   `${PREVIEW_ACCESS_PATH}.data`,

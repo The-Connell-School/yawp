@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { Prisma } from '@app/prisma';
 import { invariant } from '@epic-web/invariant';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
@@ -52,14 +53,18 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     const actionType = formData.get('action');
 
     if (actionType === 'archive' || actionType === 'unarchive') {
-      const updated = await prisma.document.update({
-        where: { id: params.id, membershipId: profile.id },
+      const updated = await prisma.document.updateMany({
+        where: {
+          id: params.id,
+          artifactKind: 'STUDENT',
+          membershipId: profile.id,
+        },
         data: {
           archivedAt: actionType === 'archive' ? new Date() : null,
         },
       });
 
-      if (!updated) {
+      if (updated.count !== 1) {
         return new Response(null, { status: 404 });
       }
       return new Response(null, { status: 204 });
@@ -67,12 +72,16 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   }
 
   if (request.method === 'DELETE') {
-    const updated = await prisma.document.update({
-      where: { id: params.id, membershipId: profile.id },
+    const updated = await prisma.document.updateMany({
+      where: {
+        id: params.id,
+        artifactKind: 'STUDENT',
+        membershipId: profile.id,
+      },
       data: { deletedAt: new Date() },
     });
 
-    if (!updated) {
+    if (updated.count !== 1) {
       return new Response(null, { status: 404 });
     } else {
       return new Response(null, { status: 204 });
@@ -101,7 +110,15 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   const document = await prisma.document.findFirst({
     where: {
       id: params.id,
-      ...documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin }),
+      ...(snapshotId
+        ? documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin })
+        : {
+            artifactKind: 'STUDENT',
+            ...documentReadWhere({
+              profileId: profile.id,
+              isAdmin: user.isAdmin,
+            }),
+          }),
     },
   });
 
@@ -212,10 +229,15 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   }
 
   if (snapshotId) {
-    const snapshotDocumentAccessWhere = {
+    const snapshotDocumentAccessWhere: Prisma.DocumentWhereInput = {
       deletedAt: null,
       AND: [
-        { membership: { is: { userId: { not: userId } } } },
+        {
+          OR: [
+            { artifactKind: 'ASSIGNMENT_GROUP' },
+            { membership: { is: { userId: { not: userId } } } },
+          ],
+        },
         ...(hasEffectivePlatformAdmin(user.isAdmin)
           ? []
           : [
@@ -241,7 +263,17 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
         releasedAt: true,
         document: {
           select: {
+            artifactKind: true,
             membership: { select: { organizationId: true } },
+            classAssignment: {
+              select: {
+                class: {
+                  select: {
+                    school: { select: { organizationId: true } },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -254,6 +286,29 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     const submissionData: { html?: string; text?: string } = {};
     if (data.html !== undefined) submissionData.html = data.html;
     if (data.text !== undefined) submissionData.text = data.text;
+
+    if (
+      submission.document.artifactKind === 'ASSIGNMENT_GROUP' &&
+      Object.keys(submissionData).length > 0
+    ) {
+      await prisma.documentWriteJournal.update({
+        where: { id: journal.id },
+        data: {
+          status: 'rejected',
+          failureReason: 'teacher_cannot_rewrite_group_submission',
+        },
+      });
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: 'Teachers cannot rewrite a shared group submission.',
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
     if (Object.keys(submissionData).length === 0) {
       await prisma.documentWriteJournal.update({
@@ -295,7 +350,9 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
           });
           if (updated.count !== 1) throw new SubmissionSnapshotConflictError();
           const organizationId =
-            submission.document.membership.organizationId ??
+            submission.document.classAssignment?.class?.school
+              ?.organizationId ??
+            submission.document.membership?.organizationId ??
             profile.organization.id;
           await recordSubmissionActivity(tx, {
             submissionId: submission.id,

@@ -1,4 +1,5 @@
 import { Form } from 'react-router';
+import { Users } from 'lucide-react';
 import { formatDateOnly } from '~/utils/date-only';
 
 export type StudentAssignmentCardAssignment = {
@@ -9,13 +10,15 @@ export type StudentAssignmentCardAssignment = {
   assignment: {
     title: string | null;
     prompt: string | null;
+    collaborationEnabled?: boolean;
     assignmentType: { title: string };
   };
 };
 
 /**
- * One assignment a student can start. Posting to the start action creates the
- * student's own document for the assignment and redirects into the editor.
+ * One assignment a student can open. Solo assignments create/reuse the
+ * student's document; collaborative assignments open the artifact their
+ * teacher already created for the student's group.
  */
 export function StudentAssignmentCard({
   classAssignment,
@@ -46,6 +49,12 @@ export function StudentAssignmentCard({
           <p className="text-xs text-muted-foreground">
             {classAssignment.assignment.assignmentType.title}
           </p>
+          {classAssignment.assignment.collaborationEnabled ? (
+            <p className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+              <Users className="h-3.5 w-3.5" aria-hidden="true" />
+              Open shared group document
+            </p>
+          ) : null}
           {classAssignment.dueAt ? (
             <p className="text-xs text-muted-foreground">
               Due {formatDateOnly(classAssignment.dueAt)}

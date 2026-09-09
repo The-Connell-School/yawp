@@ -30,9 +30,8 @@ mock.module('~/components/ui/tooltip', () => ({
 
 const { AssignmentCreationSheetContent, assignmentCreationClassLabel } =
   await import('./assignment-creation-sheet');
-const { SAVED_ASSIGNMENTS_ENABLED } = await import(
-  '~/domain/assignments/saved-assignments'
-);
+const { SAVED_ASSIGNMENTS_ENABLED } =
+  await import('~/domain/assignments/saved-assignments');
 
 describe('assignmentCreationClassLabel', () => {
   it('shows grade and period when both are present', () => {
@@ -86,8 +85,9 @@ function idleFetcher(data: Record<string, unknown> | null = null) {
 }
 
 const assignmentTypes = [
-  { id: 'type-1', title: 'Literary Analysis' },
-  { id: 'type-2', title: 'Daily Pages' },
+  // type-1 is in the collaborative-drafts pilot; type-2 is not.
+  { id: 'type-1', title: 'Literary Analysis', collaborationSupported: true },
+  { id: 'type-2', title: 'Daily Pages', collaborationSupported: false },
 ];
 
 const teacherClasses = [
@@ -219,7 +219,7 @@ describe('AssignmentCreationSheetContent', () => {
         entryPoint: 'class' as const,
         fixedClassId: 'class-1',
       },
-      expectedAction: null,
+      expectedAction: '/api/assignments/create',
       expectedAssignmentTypeId: 'type-1',
     },
   ])(
@@ -428,13 +428,13 @@ describe('AssignmentCreationSheetContent', () => {
     expectNoText('cut off');
   });
 
-  it('uses the current class route fields when creating from a class page', () => {
+  it('uses the shared creation API fields when creating from a class page', () => {
     root = renderSheet({
       entryPoint: 'class',
       fixedClassId: 'class-1',
     }).root;
 
-    expect(inputByName('classId').value).toBe('class-1');
+    expect(inputByName('classIds').value).toBe('class-1');
     const classControl = controlById('assignment-create-class-class-1');
     expect(isChecked(classControl)).toBe(true);
     expect((classControl as HTMLButtonElement).disabled).toBe(true);
@@ -515,26 +515,29 @@ describe('AssignmentCreationSheetContent', () => {
     }
   );
 
-  it.skipIf(!SAVED_ASSIGNMENTS_ENABLED)('offers to keep the assignment, off by default, on the bulk-create entry points', () => {
-    root = renderSheet({ entryPoint: 'dashboard' }).root;
+  it.skipIf(!SAVED_ASSIGNMENTS_ENABLED)(
+    'offers to keep the assignment, off by default, on the bulk-create entry points',
+    () => {
+      root = renderSheet({ entryPoint: 'dashboard' }).root;
 
-    expectText('Save to My Saved Assignments');
-    const control = controlById('assignment-create-save-for-reuse');
-    expect(isChecked(control)).toBe(false);
-    // The hidden field is what the action reads when the box is left alone.
-    expect(allInputsByName('saveForReuse')[0].value).toBe('false');
+      expectText('Save to My Saved Assignments');
+      const control = controlById('assignment-create-save-for-reuse');
+      expect(isChecked(control)).toBe(false);
+      // The hidden field is what the action reads when the box is left alone.
+      expect(allInputsByName('saveForReuse')[0].value).toBe('false');
 
-    act(() => {
-      control.click();
-    });
+      act(() => {
+        control.click();
+      });
 
-    expect(isChecked(controlById('assignment-create-save-for-reuse'))).toBe(
-      true
-    );
-    expect(
-      allInputsByName('saveForReuse').map((input) => input.value)
-    ).toContain('true');
-  });
+      expect(isChecked(controlById('assignment-create-save-for-reuse'))).toBe(
+        true
+      );
+      expect(
+        allInputsByName('saveForReuse').map((input) => input.value)
+      ).toContain('true');
+    }
+  );
 
   it('hides the keep-for-reuse option on the class entry point, which cannot save', () => {
     root = renderSheet({ entryPoint: 'class', fixedClassId: 'class-1' }).root;
@@ -555,7 +558,9 @@ describe('AssignmentCreationSheetContent', () => {
 
     expect(inputByName('assignmentTypeId').value).toBe('type-2');
     expect(inputByName('title').value).toBe('Ambition in Macbeth');
-    expect(textareaByName('prompt').value).toBe('A prompt kept from last term.');
+    expect(textareaByName('prompt').value).toBe(
+      'A prompt kept from last term.'
+    );
     expect(isChecked(controlById('assignment-create-submit-for-grade'))).toBe(
       false
     );
@@ -573,5 +578,121 @@ describe('AssignmentCreationSheetContent', () => {
     }).root;
 
     expect(inputByName('pointValue').value).toBe('25');
+  });
+
+  describe('collaborative drafts', () => {
+    it('offers the toggle for a kind of writing in the pilot', () => {
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+      }).root;
+
+      expect(
+        controlById('assignment-create-collaboration-enabled')
+      ).not.toBeNull();
+    });
+
+    it('offers the toggle for a kind of writing outside the former pilot', () => {
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-2',
+      }).root;
+
+      expect(
+        document.getElementById('assignment-create-collaboration-enabled')
+      ).not.toBeNull();
+    });
+
+    it('offers every group mode, not just a size', () => {
+      // The sheet shipped with only a size stepper, so the three modes designed
+      // for this feature were unreachable and every assignment silently got the
+      // parser's default.
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+        initialCollaborationEnabled: true,
+      }).root;
+
+      const labels = Array.from(
+        document.querySelectorAll('button[aria-pressed]')
+      ).map((button) => button.textContent ?? '');
+      for (const fragment of [
+        'make the groups',
+        'Group them for me',
+        'whole class',
+      ]) {
+        expect(labels.some((label) => label.includes(fragment))).toBe(true);
+      }
+    });
+
+    it('posts the chosen mode', () => {
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+        initialCollaborationEnabled: true,
+      }).root;
+
+      expect(inputByName('collaborationGroupMode').value).toBe('teacher');
+    });
+
+    it('asks for a group size for the sized modes', () => {
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+        initialCollaborationEnabled: true,
+      }).root;
+
+      expect(
+        document.getElementById('assignment-create-collaboration-group-size')
+      ).not.toBeNull();
+    });
+
+    it('sends the teacher to group setup once the assignment is created', () => {
+      // Closing the sheet was the whole ending, which left a collaborative
+      // assignment looking done while its groups did not exist yet.
+      const went: string[] = [];
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+        createFetcher: idleFetcher({
+          success: true,
+          nextStep: {
+            url: '/app/class-assignments/ca-1/groups',
+            classCount: 1,
+          },
+        }),
+        navigate: (to: string) => went.push(to),
+      }).root;
+
+      expect(went).toEqual(['/app/class-assignments/ca-1/groups']);
+    });
+
+    it('does not navigate for a solo assignment', () => {
+      const went: string[] = [];
+      root = renderSheet({
+        entryPoint: 'dashboard',
+        createFetcher: idleFetcher({ success: true, nextStep: null }),
+        navigate: (to: string) => went.push(to),
+      }).root;
+
+      expect(went).toEqual([]);
+    });
+
+    it('posts collaboration off by default even when the toggle is shown', () => {
+      // A hidden false accompanies the checkbox, so an unchecked box still posts
+      // a value and the server keeps producing solo assignments.
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+      }).root;
+
+      const values = allInputsByName('collaborationEnabled').map(
+        (input) => input.value
+      );
+      expect(values).toContain('false');
+      expect(
+        isChecked(controlById('assignment-create-collaboration-enabled'))
+      ).toBe(false);
+    });
   });
 });

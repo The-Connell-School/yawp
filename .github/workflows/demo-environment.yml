@@ -60,6 +60,15 @@ jobs:
       PREVIEW_MASTER_ACCESS_CODE: ${{ secrets.PREVIEW_MASTER_ACCESS_CODE }}
       PREVIEW_AI_MODEL: ${{ vars.DEMO_AI_MODEL || 'claude-sonnet-4-6' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
+      PREVIEW_UA_STUDENT_BILLING_ENABLED: ${{ vars.DEMO_UA_STUDENT_BILLING_ENABLED || 'false' }}
+      PREVIEW_UA_ORGANIZATION_ID: ${{ vars.DEMO_UA_ORGANIZATION_ID }}
+      PREVIEW_UA_PARTNER_CODE: ${{ vars.DEMO_UA_PARTNER_CODE }}
+      PREVIEW_STRIPE_SECRET_KEY: ${{ secrets.DEMO_STRIPE_SECRET_KEY }}
+      PREVIEW_STRIPE_WEBHOOK_SECRET: ${{ secrets.DEMO_STRIPE_WEBHOOK_SECRET }}
+      PREVIEW_STRIPE_UA_2026_PRICE_ID: ${{ vars.DEMO_STRIPE_UA_2026_PRICE_ID }}
+      PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: ${{ vars.DEMO_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS }}
+      PREVIEW_RESEND_FROM_EMAIL: ${{ vars.DEMO_RESEND_FROM_EMAIL || 'info@yawp.school' }}
+      PREVIEW_RESEND_API_KEY: ${{ secrets.DEMO_RESEND_API_KEY }}
       PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.DEMO_LOGIN_EMAIL || secrets.PREVIEW_LOGIN_EMAIL }}
       PREVIEW_LOGIN_PASSWORD: ${{ secrets.DEMO_LOGIN_PASSWORD || secrets.PREVIEW_LOGIN_PASSWORD }}
@@ -80,6 +89,14 @@ jobs:
           test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing an Anthropic API key secret"; exit 1; }
           test -n "$PREVIEW_POSTGRES_ADMIN_PASSWORD" || { echo "Missing demo secret PREVIEW_DB_PASSWORD"; exit 1; }
           test -n "$PREVIEW_MASTER_ACCESS_CODE" || { echo "Missing repository secret PREVIEW_MASTER_ACCESS_CODE"; exit 1; }
+          if [[ "$PREVIEW_UA_STUDENT_BILLING_ENABLED" == "true" ]]; then
+            test -n "$PREVIEW_UA_ORGANIZATION_ID" || { echo "Missing demo variable DEMO_UA_ORGANIZATION_ID"; exit 1; }
+            test -n "$PREVIEW_UA_PARTNER_CODE" || { echo "Missing demo variable DEMO_UA_PARTNER_CODE"; exit 1; }
+            test -n "$PREVIEW_STRIPE_SECRET_KEY" || { echo "Missing demo secret DEMO_STRIPE_SECRET_KEY"; exit 1; }
+            test -n "$PREVIEW_STRIPE_WEBHOOK_SECRET" || { echo "Missing demo secret DEMO_STRIPE_WEBHOOK_SECRET"; exit 1; }
+            test -n "$PREVIEW_STRIPE_UA_2026_PRICE_ID" || { echo "Missing demo variable DEMO_STRIPE_UA_2026_PRICE_ID"; exit 1; }
+            test -n "$PREVIEW_RESEND_API_KEY" || { echo "Missing demo secret DEMO_RESEND_API_KEY"; exit 1; }
+          fi
           if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[1-9][0-9]{0,2}$ ]] \
             || (( DEMO_BACKUP_RETENTION < 1 || DEMO_BACKUP_RETENTION > 365 )); then
             echo "backup_retention must be between 1 and 365" >&2
@@ -212,6 +229,15 @@ jobs:
             "PREVIEW_MASTER_ACCESS_CODE=$(shell_quote "$PREVIEW_MASTER_ACCESS_CODE")"
             "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
             "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
+            "PREVIEW_UA_STUDENT_BILLING_ENABLED=$(shell_quote "$PREVIEW_UA_STUDENT_BILLING_ENABLED")"
+            "PREVIEW_UA_ORGANIZATION_ID=$(shell_quote "$PREVIEW_UA_ORGANIZATION_ID")"
+            "PREVIEW_UA_PARTNER_CODE=$(shell_quote "$PREVIEW_UA_PARTNER_CODE")"
+            "PREVIEW_STRIPE_SECRET_KEY=$(shell_quote "$PREVIEW_STRIPE_SECRET_KEY")"
+            "PREVIEW_STRIPE_WEBHOOK_SECRET=$(shell_quote "$PREVIEW_STRIPE_WEBHOOK_SECRET")"
+            "PREVIEW_STRIPE_UA_2026_PRICE_ID=$(shell_quote "$PREVIEW_STRIPE_UA_2026_PRICE_ID")"
+            "PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS=$(shell_quote "$PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS")"
+            "PREVIEW_RESEND_FROM_EMAIL=$(shell_quote "$PREVIEW_RESEND_FROM_EMAIL")"
+            "PREVIEW_RESEND_API_KEY=$(shell_quote "$PREVIEW_RESEND_API_KEY")"
             "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
@@ -232,12 +258,14 @@ jobs:
           bash demo-control/scripts/preview/run-host-deploy-detached.sh \
             | tee /tmp/demo-deploy.log
           url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
+          ua_url="$(awk -F= '/^UA_PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           master_org_gate_enabled="$(awk -F= '/^PREVIEW_MASTER_ORG_GATE_ENABLED=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           test -n "$url" || { echo "Deploy did not print PREVIEW_URL"; exit 1; }
           test -n "$access_code" || { echo "Deploy did not print PREVIEW_ACCESS_CODE"; exit 1; }
           {
             echo "url=$url"
+            echo "ua_url=$ua_url"
             echo "access_code=$access_code"
             echo "master_org_gate_enabled=${master_org_gate_enabled:-false}"
           } >> "$GITHUB_OUTPUT"
@@ -295,6 +323,18 @@ jobs:
             esac
           fi
 
+          if [[ "$PREVIEW_UA_STUDENT_BILLING_ENABLED" == "true" ]]; then
+            ua_url="${{ steps.deploy.outputs.ua_url }}"
+            test -n "$ua_url" || { echo "Deploy script did not print UA_PREVIEW_URL"; exit 1; }
+            ua_jar="$(mktemp)"
+            ua_entry="$(curl -skL -m 30 -c "$ua_jar" -b "$ua_jar" \
+              "$ua_url/?code=$access_code&organizationCode=$PREVIEW_UA_PARTNER_CODE")"
+            grep -q 'University of Alabama' <<<"$ua_entry" || {
+              echo "UA demo host did not render the partner landing" >&2
+              exit 1
+            }
+          fi
+
           for attempt in $(seq 1 30); do
             code="$(curl -skL -o /dev/null -m 15 -w '%{http_code}' \
               -b "$cookie_jar" "$url" || true)"
@@ -345,6 +385,7 @@ jobs:
             echo "### Demo environment updated"
             echo
             echo "- **URL:** ${{ steps.deploy.outputs.url }}"
+            echo "- **UA URL:** ${{ steps.deploy.outputs.ua_url }}"
             echo "- **Now running:** \`${{ steps.shipping.outputs.sha }}\` — ${{ steps.shipping.outputs.subject }}"
             echo "- **Was running:** \`${{ steps.previous.outputs.sha }}\`"
             echo "- **Build:** production"

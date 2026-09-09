@@ -147,11 +147,12 @@ describe('preview access gate', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('keeps only the healthcheck and access-code route open', async () => {
+  test('keeps only signed-service and access-code routes open', async () => {
     const next = mock(async () => new Response('ok'));
 
     for (const path of [
       '/api/healthcheck',
+      '/api/stripe/webhook',
       '/auth/preview-access',
       '/auth/preview-access.data',
     ]) {
@@ -165,7 +166,7 @@ describe('preview access gate', () => {
       ).toBeNull();
     }
 
-    expect(next).toHaveBeenCalledTimes(3);
+    expect(next).toHaveBeenCalledTimes(4);
   });
 
   test('fails closed when no access codes are configured', async () => {

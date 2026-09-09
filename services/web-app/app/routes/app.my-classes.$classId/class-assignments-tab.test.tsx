@@ -29,11 +29,9 @@ mock.module('~/components/assignments/assignment-creation-sheet', () => ({
   },
 }));
 
-const { MemoryRouter } = actualReactRouter;
-const {
-  ClassAssignmentsTab,
-  clampAssignmentPaginationSkip,
-} = await import('./class-assignments-tab');
+const { createMemoryRouter, RouterProvider } = actualReactRouter;
+const { ClassAssignmentsTab, clampAssignmentPaginationSkip } =
+  await import('./class-assignments-tab');
 type ClassAssignmentsTabAssignment =
   import('./class-assignments-tab').ClassAssignmentsTabAssignment;
 
@@ -53,6 +51,7 @@ const ASSIGNMENTS: ClassAssignmentsTabAssignment[] = [
     },
     gradedCount: 5,
     documentCount: 12,
+    hasSharedWork: false,
     otherClassCount: 1,
     insight: null,
   },
@@ -71,6 +70,7 @@ const ASSIGNMENTS: ClassAssignmentsTabAssignment[] = [
     },
     gradedCount: 2,
     documentCount: 7,
+    hasSharedWork: false,
     otherClassCount: 0,
     insight: null,
   },
@@ -82,8 +82,11 @@ function render(element: ReactElement) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  const router = createMemoryRouter([{ path: '/', element }], {
+    initialEntries: ['/'],
+  });
   act(() => {
-    root!.render(<MemoryRouter>{element}</MemoryRouter>);
+    root!.render(<RouterProvider router={router} />);
   });
   return container;
 }
@@ -93,7 +96,9 @@ function renderTab(overrides: Record<string, unknown> = {}) {
     <ClassAssignmentsTab
       classOption={{ id: 'class-1', name: 'History · Grade 9 • Period 2' }}
       assignments={ASSIGNMENTS}
-      assignmentTypes={[{ id: 'type-1', title: 'DBQ' }]}
+      assignmentTypes={[
+        { id: 'type-1', title: 'DBQ', collaborationSupported: false },
+      ]}
       classInsightsEnabled
       onViewDocuments={() => {}}
       onSelectAssignment={() => {}}
@@ -138,9 +143,7 @@ describe('ClassAssignmentsTab', () => {
     expect(creationProps).toMatchObject({
       entryPoint: 'class',
       fixedClassId: 'class-1',
-      teacherClasses: [
-        { id: 'class-1', name: 'History · Grade 9 • Period 2' },
-      ],
+      teacherClasses: [{ id: 'class-1', name: 'History · Grade 9 • Period 2' }],
     });
   });
 
@@ -226,6 +229,24 @@ describe('ClassAssignmentsTab', () => {
   it('sets an explicit themed foreground for inherited table and action text', () => {
     const el = renderTab();
     expect(el.firstElementChild?.className).toContain('text-foreground');
+  });
+
+  it('disables deletion when the selected assignment has shared group work', () => {
+    const assignments = [
+      { ...ASSIGNMENTS[0], hasSharedWork: true },
+      ASSIGNMENTS[1],
+    ];
+    const el = renderTab({ assignments });
+    const checkbox = el.querySelector(
+      '[aria-label="Select assignment The Gilded Age DBQ"]'
+    ) as HTMLButtonElement;
+
+    act(() => checkbox.click());
+
+    const deleteButton = el.querySelector(
+      '[aria-label="Delete 1 assignment(s)"]'
+    ) as HTMLButtonElement;
+    expect(deleteButton.disabled).toBe(true);
   });
 
   it('keeps the creation close handler stable across tab rerenders', () => {

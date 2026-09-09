@@ -79,6 +79,20 @@ export function getGradingAssistantStrictnessLabel(
   );
 }
 
+export function getGradingAssistantStrictnessInstructions(
+  level: GradingAssistantStrictnessLevel
+) {
+  if (level === 'beginner') {
+    return 'Use beginner calibration. Apply the rubric supportively for a younger student, early-year assignment, or first attempt. Reward partial control of each rubric skill, avoid unnecessarily harsh penalties for developing work, and make the next step feel achievable.';
+  }
+
+  if (level === 'advanced') {
+    return 'Use advanced calibration. Hold the student to an advanced standard for this rubric. Expect precise claims, controlled organization, specific evidence, mature voice, and clean conventions before awarding top scores.';
+  }
+
+  return 'Use intermediate calibration. Apply the rubric at the normal course-level expectation for this assignment.';
+}
+
 export function applyGradingAssistantStrictnessToPercentage(
   percentage: number,
   level: GradingAssistantStrictnessLevel

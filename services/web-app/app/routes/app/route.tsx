@@ -68,10 +68,9 @@ import {
 import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 import { SchoolYearScopeSwitcher } from './school-year-scope';
 import type { Route as RootRoute } from '../../+types/root';
-import {
-  FLAT_SIDEBAR_SECTIONS,
-  SidebarNavLinks,
-} from './sidebar-nav';
+import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
+import { prisma } from '~/utils/db.server';
+import { shouldRedirectClasslessStudent } from '~/utils/classless-student-gate';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -83,6 +82,27 @@ export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+
+  if (profile.role === 'STUDENT' && !profile.isOrgOwner) {
+    const classCount =
+      (
+        await prisma.orgMembership.findUnique({
+          where: { id: profile.id },
+          select: { _count: { select: { classesAsStudent: true } } },
+        })
+      )?._count.classesAsStudent ?? 0;
+
+    if (
+      shouldRedirectClasslessStudent({
+        role: profile.role,
+        isOrgOwner: profile.isOrgOwner,
+        classCount,
+        pathname: new URL(request.url).pathname,
+      })
+    ) {
+      throw redirect('/app');
+    }
+  }
 
   const [selected, options] = await Promise.all([
     resolveSchoolYearScopeForMembership(request, profile),
@@ -124,10 +144,7 @@ function isAppNavLinkActive(linkTo: string, pathname: string) {
     return normalized === '/app';
   }
 
-  return (
-    normalized === linkTo ||
-    normalized.startsWith(`${linkTo}/`)
-  );
+  return normalized === linkTo || normalized.startsWith(`${linkTo}/`);
 }
 
 export default function Route() {
@@ -136,8 +153,7 @@ export default function Route() {
   const { schoolYearScope } = useLoaderData<typeof loader>();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
-  const isReadOnlyImpersonation =
-    rootData?.impersonation?.isReadOnly ?? false;
+  const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -309,7 +325,11 @@ export default function Route() {
                       ? user.selectedMembership?.id === m.id
                       : user.memberships?.[0]?.id === m.id;
                     return (
-                      <Form method="POST" action="/api/membership-id" key={m.id}>
+                      <Form
+                        method="POST"
+                        action="/api/membership-id"
+                        key={m.id}
+                      >
                         <input
                           type="hidden"
                           name="intent"
@@ -540,7 +560,11 @@ function UserSettingsDialog({
           </div>
         </div>
         <DialogFooter className="mt-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Close
           </Button>
         </DialogFooter>

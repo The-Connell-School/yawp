@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { renderPreviewCompose } from './render-compose.mjs';
+
+const requireFromWebApp = createRequire(
+  new URL('../../services/web-app/package.json', import.meta.url)
+);
 
 const deprecatedPreviewSlug = [
   'preview',
@@ -230,6 +235,82 @@ describe('renderPreviewCompose', () => {
     }
   });
 
+  test('keeps UA billing disabled unless the preview is explicitly configured', () => {
+    const compose = renderCompose();
+
+    expect(compose).toContain('UA_STUDENT_BILLING_ENABLED: "false"');
+    expect(compose).not.toContain('STRIPE_SECRET_KEY:');
+    expect(compose).not.toContain('STRIPE_WEBHOOK_SECRET:');
+  });
+
+  test('passes a complete Stripe sandbox configuration to the preview app', () => {
+    const names = [
+      'PREVIEW_UA_STUDENT_BILLING_ENABLED',
+      'PREVIEW_UA_ORGANIZATION_ID',
+      'PREVIEW_UA_PARTNER_CODE',
+      'PREVIEW_STRIPE_SECRET_KEY',
+      'PREVIEW_STRIPE_WEBHOOK_SECRET',
+      'PREVIEW_STRIPE_UA_2026_PRICE_ID',
+      'PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS',
+    ];
+    const previous = Object.fromEntries(
+      names.map((name) => [name, process.env[name]])
+    );
+    Object.assign(process.env, {
+      PREVIEW_UA_STUDENT_BILLING_ENABLED: 'true',
+      PREVIEW_UA_ORGANIZATION_ID: 'university-of-alabama-preview',
+      PREVIEW_UA_PARTNER_CODE: 'UA-PREVIEW-2026',
+      PREVIEW_STRIPE_SECRET_KEY: 'rk_test_preview',
+      PREVIEW_STRIPE_WEBHOOK_SECRET: 'whsec_preview',
+      PREVIEW_STRIPE_UA_2026_PRICE_ID: 'price_ua_2026',
+      PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: 'price_legacy',
+    });
+
+    try {
+      const compose = renderCompose();
+
+      expect(compose).toContain('UA_STUDENT_BILLING_ENABLED: "true"');
+      expect(compose).toContain(
+        'UA_ORGANIZATION_ID: "university-of-alabama-preview"'
+      );
+      expect(compose).toContain('UA_PARTNER_CODE: "UA-PREVIEW-2026"');
+      expect(compose).toContain(
+        'UA_PARTNER_HOSTNAME: "ua-pr-142.preview.yawp.school"'
+      );
+      expect(compose).toContain('STRIPE_SECRET_KEY: "rk_test_preview"');
+      expect(compose).toContain('STRIPE_WEBHOOK_SECRET: "whsec_preview"');
+      expect(compose).toContain(
+        'STRIPE_UA_2026_PRICE_ID: "price_ua_2026"'
+      );
+      expect(compose).toContain(
+        'STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: "price_legacy"'
+      );
+      expect(compose).toContain(
+        'YAWP_APP_ORIGIN: "https://ua-pr-142.preview.yawp.school"'
+      );
+    } finally {
+      for (const name of names) {
+        if (previous[name] === undefined) delete process.env[name];
+        else process.env[name] = previous[name];
+      }
+    }
+  });
+
+  test('fails closed when preview billing is only partly configured', () => {
+    const previousEnabled = process.env.PREVIEW_UA_STUDENT_BILLING_ENABLED;
+    process.env.PREVIEW_UA_STUDENT_BILLING_ENABLED = 'true';
+    try {
+      expect(() => renderCompose()).toThrow(
+        'PREVIEW_UA_ORGANIZATION_ID is required'
+      );
+    } finally {
+      if (previousEnabled === undefined)
+        delete process.env.PREVIEW_UA_STUDENT_BILLING_ENABLED;
+      else
+        process.env.PREVIEW_UA_STUDENT_BILLING_ENABLED = previousEnabled;
+    }
+  });
+
   test('keeps an explicit emergency AI-disabled mode without provider credentials', () => {
     const previousAnthropicKey = process.env.PREVIEW_ANTHROPIC_API_KEY;
     process.env.PREVIEW_ANTHROPIC_API_KEY = 'shared-provider-key';
@@ -306,7 +387,7 @@ describe('renderPreviewCompose', () => {
     // The renderer image and the installed playwright library resolve browsers
     // by revision paths baked into the image, so they must move together.
     test('renderer image ships browsers for the installed playwright version', () => {
-      const { version } = require('playwright-core/package.json');
+      const { version } = requireFromWebApp('@playwright/test/package.json');
       expect(renderCompose({ sourceDir: sourceWithStudio })).toContain(
         `image: mcr.microsoft.com/playwright:v${version}-jammy`
       );

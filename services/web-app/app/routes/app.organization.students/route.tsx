@@ -49,6 +49,7 @@ import { Textarea } from '~/components/ui/textarea';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { formatClassGradePeriod } from '~/utils/class-display';
+import { replaceStudentClassRoster } from '~/domain/collaboration/student-roster.server';
 
 const COLUMNS: CookieColumns = {
   name: {
@@ -409,6 +410,9 @@ export async function action({ request }: ActionFunctionArgs) {
         organizationId: profile.organization.id,
         role: 'STUDENT',
       },
+      select: {
+        id: true,
+      },
     });
 
     if (!existingStudent) {
@@ -432,13 +436,9 @@ export async function action({ request }: ActionFunctionArgs) {
       }
     }
 
-    await prisma.orgMembership.update({
-      where: { id: studentId },
-      data: {
-        classesAsStudent: {
-          set: classIds.map((id) => ({ id })),
-        },
-      },
+    await replaceStudentClassRoster({
+      membershipId: studentId,
+      nextClassIds: classIds,
     });
 
     return dataResponse({ success: true });
@@ -622,7 +622,9 @@ export default function OrganizationStudentsRoute() {
                 {table.skip > 0 && (
                   <div className="flex flex-col items-center gap-3">
                     <p className="text-sm text-muted-foreground">
-                      You're viewing page {Math.floor(table.skip / table.take) + 1}. Results may be on other pages.
+                      You're viewing page{' '}
+                      {Math.floor(table.skip / table.take) + 1}. Results may be
+                      on other pages.
                     </p>
                     <Button
                       variant="default"

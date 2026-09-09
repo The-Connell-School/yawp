@@ -21,6 +21,7 @@ const getLLMCompletion = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
 const buildTeacherClassWhere = mock();
+const buildGradeWriteSubjectWhere = mock();
 const isGradingOwnDocument = mock();
 const redirectWithToast = mock();
 
@@ -36,6 +37,7 @@ mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
   canManageGrades,
   buildTeacherClassWhere,
+  buildGradeWriteSubjectWhere,
   isGradingOwnDocument,
 }));
 mock.module('~/utils/toast.server', () => ({
@@ -219,6 +221,7 @@ describe('api.domain.grade-essay-ai', () => {
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     buildTeacherClassWhere.mockReset();
+    buildGradeWriteSubjectWhere.mockReset().mockReturnValue({});
     isGradingOwnDocument.mockReset();
     redirectWithToast.mockReset();
 

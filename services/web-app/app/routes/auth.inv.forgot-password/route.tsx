@@ -141,24 +141,34 @@ export default function ForgotPasswordRoute() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-md pt-20">
-      <div className="flex flex-col gap-3 text-center">
-        <div className="text-center">
-          <h1>Forgot Password</h1>
-          <p className="text-body-md mt-3 text-muted-foreground">
-            No worries, we'll send you reset instructions.
-          </p>
-        </div>
-        <div className="mx-auto mt-8 min-w-full max-w-sm px-8 sm:min-w-[368px]">
-          <Form method="POST" {...form.getFormProps()}>
-            <FormInput scope={form.scope('email')} type="email" autoFocus />
-
-            <Button className="mt-2 w-full" type="submit" disabled={isLoading}>
-              Recover password
-            </Button>
-          </Form>
-        </div>
-        <Button variant="link" asChild className="mx-auto w-full">
+    <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
+      <div className="flex flex-col items-start gap-2 text-left">
+        <h1 className="text-lg font-semibold">Forgot password?</h1>
+        <p className="text-pretty text-base text-muted-foreground sm:text-sm">
+          We’ll send you reset instructions.
+        </p>
+      </div>
+      <Form
+        method="POST"
+        className="mt-6 flex flex-col gap-5"
+        {...form.getFormProps()}
+      >
+        <FormInput
+          scope={form.scope('email')}
+          type="email"
+          label="Email"
+          autoFocus
+        />
+        <Button
+          className="h-11 w-full text-base sm:h-10 sm:text-sm"
+          type="submit"
+          disabled={isLoading}
+        >
+          Recover password
+        </Button>
+      </Form>
+      <div className="mt-6 border-t border-black/10 pt-4 text-center">
+        <Button variant="link" asChild className="w-full text-base sm:text-sm">
           <Link to="/auth/login">Back to login</Link>
         </Button>
       </div>

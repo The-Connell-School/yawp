@@ -16,10 +16,29 @@
 
 export type ScopedDocument = {
   id: string;
+  artifactKind?: 'STUDENT' | 'ASSIGNMENT_GROUP';
   /** Membership id of the student who owns the document. */
-  membershipId: string;
+  membershipId: string | null;
   /** Membership ids of teachers who teach a class this student is enrolled in. */
   teacherProfileIds: string[];
+  /** Teachers attached to the document's own ClassAssignment. */
+  classAssignmentTeacherProfileIds?: string[];
+  /** Scheduled visibility for the document's deployment. */
+  classAssignmentPostAt?: Date | null;
+  /** Students currently enrolled in the document's deployment class. */
+  classAssignmentStudentProfileIds?: string[];
+  /**
+   * Membership ids of students who co-author this document through its
+   * collaboration group and have NOT been removed from it. Absent on a
+   * single-author document, which is the shape every existing document has.
+   */
+  activeGroupMemberIds?: string[];
+  /**
+   * Membership ids that were once in the group and have since been removed.
+   * Kept separate so a predicate that forgets `removedAt: null` fails the
+   * test rather than silently keeping a moved student's write access.
+   */
+  removedGroupMemberIds?: string[];
 };
 
 export function matchesDocumentWhere(
@@ -35,6 +54,9 @@ export function matchesDocumentWhere(
         break;
       case 'membershipId':
         if (value !== doc.membershipId) return false;
+        break;
+      case 'artifactKind':
+        if (value !== (doc.artifactKind ?? 'STUDENT')) return false;
         break;
       case 'OR':
         if (
@@ -57,6 +79,50 @@ export function matchesDocumentWhere(
           ?.id;
         if (typeof teacherId !== 'string') return false;
         if (!doc.teacherProfileIds.includes(teacherId)) return false;
+        break;
+      }
+      case 'classAssignment': {
+        const nested = ((value as any)?.is ?? value) as Record<string, unknown>;
+        const teacherId = (nested as any)?.class?.teachers?.some?.id;
+        if (typeof teacherId === 'string') {
+          if (
+            !(doc.classAssignmentTeacherProfileIds ?? []).includes(teacherId)
+          ) {
+            return false;
+          }
+          break;
+        }
+        const studentId = (nested as any)?.class?.students?.some?.id;
+        if (
+          typeof studentId === 'string' &&
+          !(doc.classAssignmentStudentProfileIds ?? []).includes(studentId)
+        ) {
+          return false;
+        }
+        const visibility = (nested as any)?.OR;
+        if (!Array.isArray(visibility)) return false;
+        const postAt = doc.classAssignmentPostAt ?? null;
+        const visible = visibility.some((branch: any) => {
+          if (branch.postAt === null) return postAt === null;
+          const cutoff = branch.postAt?.lte;
+          return cutoff instanceof Date && postAt !== null && postAt <= cutoff;
+        });
+        if (!visible) return false;
+        break;
+      }
+      case 'group': {
+        // Co-authorship through the document's collaboration group. `removedAt`
+        // is checked rather than ignored: a predicate that omits it would keep
+        // write access for a student the teacher moved to another group, so the
+        // omission has to be observable as a failing test.
+        const nested = ((value as any)?.is ?? value) as Record<string, unknown>;
+        const some = (nested?.members as any)?.some as
+          Record<string, unknown> | undefined;
+        if (!some || typeof some !== 'object') return false;
+        if (!('removedAt' in some) || some.removedAt !== null) return false;
+        const memberId = some.membershipId;
+        if (typeof memberId !== 'string') return false;
+        if (!(doc.activeGroupMemberIds ?? []).includes(memberId)) return false;
         break;
       }
       default:
