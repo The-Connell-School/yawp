@@ -8,15 +8,15 @@ const row = (id = 'membership-1', organizationId = 'org-1') => ({
 const request = (query = '', credential = key) => new Request(`https://yawp.test/api/internal/v1/users${query}`, {
   headers: { authorization: `Bearer ${credential}` },
 });
-function fixture(secret: string | undefined = key) {
+function fixture(secret: string | null = key) {
   const findMany = mock(async (_args: unknown) => [row()]);
-  const handlers = createUserManagementHandlers({ findMany }, () => secret);
+  const handlers = createUserManagementHandlers({ findMany }, () => secret ?? undefined);
   return { ...handlers, findMany };
 }
 
 describe('internal user management boundary', () => {
   test('disabled or invalid machine authentication never queries users', async () => {
-    for (const secret of [undefined, key]) {
+    for (const secret of [null, key]) {
       const handler = fixture(secret);
       const response = await handler.search(request('', 'wrong'));
       expect(response.status).toBe(secret ? 401 : 404);
