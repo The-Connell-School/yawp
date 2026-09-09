@@ -1241,6 +1241,38 @@ model TeacherAssignmentType {
   @@index([assignmentTypeId])
 }
 
+// Separate from ordinary Yawp sessions: service-issued access must retain its actor.
+model InternalImpersonationSession {
+  id               String    @id
+  cookieTokenHash  String    @unique
+  actorId          String
+  userId           String
+  organizationId   String
+  membershipId     String
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  expiresAt        DateTime  @db.Timestamptz(6)
+  endedAt          DateTime? @db.Timestamptz(6)
+  remoteEndPending Boolean   @default(false)
+
+  @@index([remoteEndPending, createdAt])
+}
+
+// Immutable attribution snapshots survive membership/user removal.
+model InternalImpersonationEvent {
+  id             String   @id @default(cuid())
+  sessionId      String
+  actorId        String
+  userId         String
+  organizationId String
+  action         String
+  resourceType   String
+  resourceId     String
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([sessionId, createdAt])
+  @@index([organizationId, createdAt])
+}
+
 model Session {
   id             String   @id @default(cuid())
   createdAt      DateTime @default(now()) @db.Timestamptz(6)

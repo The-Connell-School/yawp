@@ -10,6 +10,27 @@ Lookup returns `{ id, organizationId, privileged }` for an active membership. Ei
 
 These endpoints do not establish login sessions. The fragment-token handoff, attributed session, persistent banner/exit, per-request revalidation, mutation audit, and background-job attribution still need implementation. Existing app authentication is unchanged.
 
+## Attributed session lifecycle
+
+`InternalImpersonationClient` implements the existing Internal redeem/context/end service protocol. It accepts only a plain HTTPS origin and a backend credential, disables redirects, sets a 10-second deadline, validates returned identities and at-most-one-hour lifetimes, and never retries a consumed link. It accepts Internal's 204 response to end. No HTTP route or ordinary app login is activated by this client.
+
+`InternalImpersonationSessions` persists a separate session tied to operator, assumed user, selected organization, and active membership. Only a SHA-256 hash of its random 32-byte browser credential is stored. The initial magic-link token is never stored in Yawp. Both administrator flags make a target ineligible.
+
+Resolving a session revalidates with Internal on every call, compares the full identity and original expiration, then checks the local session and membership again. Revocation, upstream failure, target privilege changes, membership deactivation and local termination deny access. There is no authorization-cache fallback.
+
+Session start/end and their attribution events use one database transaction. Deferred database guards reject lifecycle changes without matching audit. Attribution and lifetime cannot be changed; ended sessions cannot reopen. Audit rows reject UPDATE/DELETE and retain identity snapshots without cascading user relations. Database owners still control schema/trigger administration; deployment must restrict the application database role accordingly.
+
+Exit first ends local access. If Internal cannot be reached, remote termination remains durably pending. `flushPendingEnds` attempts up to 20 pending terminations; it still needs scheduling when the HTTP integration is wired. A consumed grant that fails local creation is ended upstream on a best-effort basis; it never becomes an ordinary session.
+
+Validation:
+
+```sh
+./bin/project test --profile internal-impersonation --json
+./bin/project test --profile internal-impersonation-integration --json
+```
+
+The latter uses the isolated worktree database, restores any temporary teacher/membership flags, removes its session records, and retains synthetic append-only audit events. The remote service is a controlled test double. The HTTP handoff, cookie authentication middleware, always-visible banner/exit, application mutation auditing, job propagation and end-retry scheduling remain unfinished. Session-lifecycle audit is not yet application-action audit; do not activate production impersonation until that request boundary is wired and verified.
+
 Validation commands:
 
 ```sh

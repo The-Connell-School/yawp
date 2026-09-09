@@ -7,6 +7,7 @@ const identitySchema = z.object({
   expiresAt: z.string().datetime(),
 }).strict();
 export type InternalImpersonationIdentity = z.infer<typeof identitySchema>;
+type Transport = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export class InactiveImpersonationError extends Error {
   constructor() { super('Impersonation is inactive'); }
 }
@@ -14,7 +15,7 @@ export class InactiveImpersonationError extends Error {
 /** No authorization cache and no retries: redemption is a single-use operation. */
 export class InternalImpersonationClient {
   private origin: string;
-  constructor(origin: string, private key: string, private transport: typeof fetch = fetch) {
+  constructor(origin: string, private key: string, private transport: Transport = fetch) {
     const url = new URL(origin);
     if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
       throw new Error('Internal platform requires a plain HTTPS origin');

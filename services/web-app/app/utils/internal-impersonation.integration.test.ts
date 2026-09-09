@@ -39,6 +39,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed sessi
     expect(JSON.stringify(stored)).not.toContain(linkToken);
     expect(JSON.stringify(stored)).not.toContain(created.cookieToken);
     expect(await prisma.internalImpersonationEvent.count({ where: { sessionId: identity.id, action: 'session.started' } })).toBe(1);
+    await expect(Promise.resolve(prisma.internalImpersonationEvent.deleteMany({ where: { sessionId: identity.id } }))).rejects.toThrow();
+    await expect(Promise.resolve(prisma.internalImpersonationEvent.updateMany({ where: { sessionId: identity.id }, data: { actorId: 'tampered' } }))).rejects.toThrow();
     expect((await service.resolve(created.cookieToken)).actorId).toBe(identity.actorId);
     expect((await service.resolve(created.cookieToken)).userId).toBe(teacher.id);
     expect(reads).toBe(2);
@@ -65,7 +67,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed sessi
   } finally {
     await prisma.orgMembership.update({ where: { id: membership.id }, data: { isActive: membership.isActive } });
     await prisma.user.update({ where: { id: teacher.id }, data: { isAdmin: teacher.isAdmin } });
-    await prisma.internalImpersonationEvent.deleteMany({ where: { sessionId: identity.id } });
+    // Lifecycle audit remains append-only, including for synthetic local fixtures.
     await prisma.internalImpersonationSession.deleteMany({ where: { id: identity.id } });
     await prisma.$disconnect();
   }

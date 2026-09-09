@@ -12,7 +12,7 @@ describe('Internal impersonation service client', () => {
   });
   test('posts only the token on redemption with redirects disabled and a deadline', async () => {
     const transport = mock(async (_url: string | URL | Request, _init?: RequestInit) => Response.json(identity));
-    const client = new InternalImpersonationClient('https://internal.test', key, transport as typeof fetch);
+    const client = new InternalImpersonationClient('https://internal.test', key, transport);
     expect(await client.redeem('a'.repeat(43))).toEqual(identity);
     expect(transport).toHaveBeenCalledTimes(1);
     const [url, init] = transport.mock.calls[0]!;
@@ -28,21 +28,21 @@ describe('Internal impersonation service client', () => {
       { ...identity, expiresAt: new Date(Date.now() + 7200000).toISOString() },
       { ...identity, id: 'a1fe2f5d-7bb2-43c2-a4e3-f2d2f43025f1' },
     ]) {
-      const client = new InternalImpersonationClient('https://internal.test', key, (async () => Response.json(value)) as typeof fetch);
+      const client = new InternalImpersonationClient('https://internal.test', key, (async () => Response.json(value)));
       await expect(client.context(identity.id)).rejects.toThrow();
     }
   });
   test('never retries an uncertain single-use redemption or exposes upstream details', async () => {
     const transport = mock(async () => { throw new Error(`network ${key}`); });
-    const client = new InternalImpersonationClient('https://internal.test', key, transport as typeof fetch);
+    const client = new InternalImpersonationClient('https://internal.test', key, transport);
     await expect(client.redeem('a'.repeat(43))).rejects.toThrow('Internal impersonation unavailable');
     expect(transport).toHaveBeenCalledTimes(1);
-    const denied = new InternalImpersonationClient('https://internal.test', key, (async () => new Response(key, { status: 403 })) as typeof fetch);
+    const denied = new InternalImpersonationClient('https://internal.test', key, (async () => new Response(key, { status: 403 })));
     await expect(denied.context(identity.id)).rejects.toThrow('Impersonation is inactive');
   });
   test('end sends only the authoritative session ID', async () => {
     const transport = mock(async (_url: string | URL | Request, _init?: RequestInit) => new Response(null, { status: 204 }));
-    const client = new InternalImpersonationClient('https://internal.test', key, transport as typeof fetch);
+    const client = new InternalImpersonationClient('https://internal.test', key, transport);
     await client.end(identity.id);
     expect(transport.mock.calls[0]![1]?.body).toBe(JSON.stringify({ sessionId: identity.id }));
   });
