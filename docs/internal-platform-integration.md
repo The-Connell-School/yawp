@@ -51,7 +51,13 @@ The facade supports normal awaited operations, callback transactions and Prisma 
 
 Async descendants using the shared application client retain attribution after a response, regain remote authorization, and receive a request-tail job identifier. They start new transactions rather than reusing a completed transaction. This does not yet cover a durable job deserialized by another process or a worker that creates its own Prisma client; those producers/consumers still require explicit attribution propagation.
 
-`./bin/project test --profile internal-impersonation-writes --json` verifies real Postgres row events, no row-value copying, atomic rollback, bulk/array/callback transactions, cached methods, pooled context isolation, revoked async tails, truncate rejection, uncovered-table rejection and seed-reset audit preservation. The seed-reset proof is rolled back to retain the local fixture.
+`./bin/project test --profile internal-impersonation-writes --json` verifies real Postgres row events, no row-value copying, atomic rollback, bulk/array/callback transactions, cached methods, pooled context isolation, successful post-response tails with exact actor/request/job attribution, revoked async tails, truncate rejection, uncovered-table rejection and seed-reset audit preservation. The seed-reset proof is rolled back to retain the local fixture.
+
+### Current background-work boundary
+
+A source inventory at this integration revision found no durable user-job producer or consumer in `services` or `packages`, no queue model in Prisma, and no queue runtime dependency or worker command in the web app package. AI grading in `api.domain.grade-essay-ai/route.ts` awaits its model call, database writes and Blackboard posting in the web process. The EventBridge-triggered `api.domain.retention/route.ts` is independently authenticated maintenance, not a continuation of a user's impersonated request.
+
+Current in-process descendants are covered by the shared-client attribution above. This inventory is not a guarantee for future workers: introducing a separate process or durable queue must carry authenticated original operator, target, organization, session and operation identifiers, revalidate authorization before execution, and test attribution and revocation through the actual producer/consumer. AsyncLocalStorage does not cross that boundary. Do not treat a caller-supplied actor or job ID as authority.
 
 ## Browser integration (opt-in)
 
@@ -65,7 +71,7 @@ A fixed root banner shows the assumed account, operator and organization with an
 
 `./bin/project test --profile internal-impersonation-browser --json` starts the real app on the owned app port and uses its local fixture database. A temporary HTTPS authority simulates only the Internal protocol. Chromium verifies fragment removal, target identity/banner, authentication heartbeat, organization-switch denial, request/lifecycle audit attribution, exit and remote revocation. The server processes/certificate are removed afterward; synthetic append-only audit records remain. Stop an already-running owned dev server before this test. `internal-impersonation-http` covers CSRF/origin failures, invalid-cookie fallback prevention, unavailable audit and termination services, cookie replacement and response caching.
 
-The local two-app pairing now verifies stored grant issuance, HTTPS browser login, token replay rejection, an actual profile mutation and its audit read through Internal, revocation and exit. HTTPS cookies are Secure even on local development origins. The deployed pairing, durable cross-process jobs, retry scheduling and deployment configuration remain outstanding. See Internal tests/pair/yawp.ts for the repeatable paired proof.
+The local two-app pairing now verifies stored grant issuance, HTTPS browser login, token replay rejection, an actual profile mutation and its audit read through Internal, revocation and exit. HTTPS cookies are Secure even on local development origins. The deployed pairing and deployment configuration remain outstanding. Pending termination delivery now retries automatically; the paired test verifies recovery after an upstream outage. See Internal tests/pair/yawp.ts for the repeatable paired proof.
 
 ## Bootstrap recovery details
 

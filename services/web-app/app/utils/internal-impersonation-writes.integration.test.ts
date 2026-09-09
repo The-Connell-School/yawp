@@ -98,6 +98,28 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
     await expect(tail).rejects.toThrow('tail revoked');
     expect(rechecks).toBe(1);
     expect(await prisma.setting.count({ where: { name: `${prefix}-tail` } })).toBe(0);
+    const delayedRequest = randomUUID();
+    let releaseAllowed!: () => void;
+    let allowedTail!: Promise<unknown>;
+    let allowedChecks = 0;
+    await runWithImpersonation(context, { requestId: delayedRequest, action: 'test.delayed' }, async () => {
+      allowedChecks++;
+      return context;
+    }, async () => {
+      await wrapped.$transaction(async () => {
+        allowedTail = new Promise<void>(resolve => { releaseAllowed = resolve; }).then(() =>
+          cachedSettings.create({ data: { name: `${prefix}-allowed-tail`, value: 'attributed after response' } }));
+      });
+    });
+    expect(await prisma.setting.count({ where: { name: `${prefix}-allowed-tail` } })).toBe(0);
+    releaseAllowed();
+    await allowedTail;
+    expect(allowedChecks).toBe(1);
+    const delayedEvents = await prisma.internalImpersonationEvent.findMany({ where: { sessionId: identity.id, requestId: delayedRequest } });
+    expect(delayedEvents).toHaveLength(1);
+    expect(delayedEvents[0]).toMatchObject({ actorId: context.actorId, userId: context.userId, organizationId: context.organizationId,
+      requestAction: 'test.delayed', jobId: `tail-${delayedRequest}`, action: 'row.created', resourceType: 'Setting' });
+
     const { truncateAllPublicTables } = await import('../../../../packages/prisma/scripts/local-dev/truncate-all');
     await expect(prisma.$transaction(async tx => {
       await truncateAllPublicTables(tx);
