@@ -46,6 +46,7 @@ import {
 import { requireAdmin, requireMutableRequest } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { deleteSmallObject } from '~/services/s3.server';
+import { readRendererStatus } from '~/utils/renderer-status.server';
 import {
   getMarketingMediaDir,
   getMarketingRenderTarget,
@@ -171,6 +172,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return dataResponse({
     renderTarget: getMarketingRenderTarget(),
+    // Whether this environment can actually film, said plainly, so a blocked
+    // renderer is visible here instead of only in a container log.
+    rendererStatus: readRendererStatus(mediaDir),
     assignmentTypes,
     library: MARKETING_LIBRARY.map((entry) => {
       // Library storyboards are hand-verified and covered by a test, so this
@@ -581,7 +585,7 @@ function PipelineStep({
 }
 
 export default function Route() {
-  const { jobs, assignmentTypes, renderTarget, library, stats } =
+  const { jobs, assignmentTypes, renderTarget, library, stats, rendererStatus } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -650,6 +654,34 @@ export default function Route() {
               Filming <code className="font-mono">{renderTarget}</code> — demo
               data only, never real student work.
             </p>
+            {/* A queued job that never moves used to be indistinguishable from
+                a busy renderer. This is the difference, on the screen where
+                somebody is waiting. */}
+            {rendererStatus?.state === 'ready' && !rendererStatus.stale ? (
+              <p
+                data-testid="marketing-renderer-status"
+                className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-400"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Renderer ready
+              </p>
+            ) : (
+              <p
+                data-testid="marketing-renderer-status"
+                className="mt-2 inline-flex max-w-xl items-start gap-1.5 rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-200"
+              >
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+                <span>
+                  {rendererStatus?.state === 'blocked' && rendererStatus.reason
+                    ? `No renderer can film here: ${rendererStatus.reason}. Renders will wait until it can start.`
+                    : rendererStatus?.state === 'starting'
+                      ? 'A renderer is starting up — the first render after a deploy waits for it to install a browser.'
+                      : rendererStatus?.stale
+                        ? 'The renderer that was here has stopped reporting. Renders will wait until one is back.'
+                        : 'No renderer has reported in yet. Renders will queue and wait for one.'}
+                </span>
+              </p>
+            )}
           </div>
           <div className="flex flex-col items-end gap-4">
           <div className="flex flex-wrap items-center gap-2">

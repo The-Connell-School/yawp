@@ -20,6 +20,10 @@
  */
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import {
+  RENDERER_STATUS_FILE,
+  type RendererState,
+} from '@app/marketing-media';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
@@ -43,10 +47,41 @@ const MAX_RESTART_DELAY_MS = 5 * 60 * 1000;
  * its lock expires and another worker refilms it.
  */
 const DEFAULT_STOP_GRACE_MS = 60_000;
+/** Comfortably inside RENDERER_STATUS_STALE_MS, so a live worker stays believed. */
+const RENDERER_HEARTBEAT_MS = 60_000;
 /** One trial launch of the browser; the real launches in render.ts allow 60s. */
 const LAUNCH_CHECK_TIMEOUT_MS = 45_000;
 /** Between attempts to get a browser that launches, once the immediate fixes are spent. */
 const LAUNCH_RETRY_DELAY_MS = 5 * 60 * 1000;
+
+/**
+ * Tell the studio what this renderer can do, beside the media it produces.
+ * Best effort: a renderer that cannot write its status still films, and one
+ * that cannot film has already logged why — this only makes the log visible
+ * on the screen where somebody is waiting for a render.
+ */
+function publishStatus(
+  env: NodeJS.ProcessEnv,
+  state: RendererState,
+  reason?: string
+): void {
+  const dir = env.MARKETING_MEDIA_DIR?.trim();
+  if (!dir) return;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, RENDERER_STATUS_FILE),
+      JSON.stringify({
+        state,
+        reason,
+        at: new Date().toISOString(),
+        workerId: env.MARKETING_RENDERER_WORKER_ID,
+      })
+    );
+  } catch {
+    // Nothing to do: the log line beside this call is the fallback.
+  }
+}
 
 function log(message: string, extra: Record<string, unknown> = {}) {
   // eslint-disable-next-line no-console
@@ -428,6 +463,7 @@ async function installSystemDeps(env: NodeJS.ProcessEnv): Promise<boolean> {
  * back every few minutes so a transient apt failure heals on its own.
  */
 async function ensureBrowserLaunches(env: NodeJS.ProcessEnv): Promise<void> {
+  publishStatus(env, 'starting');
   for (let attempt = 1; ; attempt += 1) {
     await ensureChromium(env);
     let result = await verifyChromiumLaunch(env);
@@ -447,11 +483,15 @@ async function ensureBrowserLaunches(env: NodeJS.ProcessEnv): Promise<void> {
     }
     if (result.ok) {
       log('Chromium launches; starting the worker');
+      publishStatus(env, 'ready');
       return;
     }
+    const reason = describeLaunchFailure(result.error);
     log('no working browser; jobs will wait as "no renderer attached"', {
       retryInMs: LAUNCH_RETRY_DELAY_MS,
+      reason,
     });
+    publishStatus(env, 'blocked', reason);
     await new Promise((resolve) => setTimeout(resolve, LAUNCH_RETRY_DELAY_MS));
   }
 }
@@ -486,6 +526,15 @@ async function superviseWorker(
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
 
+  // The claim to be ready has to stay fresh, or the studio correctly stops
+  // believing it: a worker that is quietly filming looks the same as one
+  // whose container has gone.
+  const heartbeat = setInterval(
+    () => publishStatus(env, 'ready'),
+    RENDERER_HEARTBEAT_MS
+  );
+  heartbeat.unref();
+
   while (!stopping) {
     const startedAt = Date.now();
     log('starting worker', {
@@ -514,6 +563,7 @@ async function superviseWorker(
     log('worker exited; restarting', { exitCode: code, inMs: delay });
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
+  clearInterval(heartbeat);
 }
 
 async function main() {
