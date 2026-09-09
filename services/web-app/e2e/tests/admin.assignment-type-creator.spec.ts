@@ -1,7 +1,17 @@
+import type { Page } from '@playwright/test';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 
 const OOPS = /Oops! Something didn't work quite right/i;
+
+async function addCompleteRubric(page: Page) {
+  await page.getByTestId('rubric-add-category').click();
+  await page.getByTestId('rubric-category-row-0').click();
+  await page.getByLabel('Label', { exact: true }).fill('Evidence');
+  await page.getByLabel('Weight %').fill('100');
+  await page.locator('#category-edit-description').fill('Support claims with relevant evidence.');
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+}
 
 test.describe('Admin assignment type creator', () => {
   test('create page renders without oops', async ({ page, signIn }) => {
@@ -13,6 +23,88 @@ test.describe('Admin assignment type creator', () => {
       page.getByRole('heading', { name: 'Create assignment type' })
     ).toBeVisible();
     await expect(page.getByText(OOPS)).toHaveCount(0);
+  });
+
+  test('validation preserves a new assignment type until its rubric is complete', async ({
+    page,
+    signIn,
+  }) => {
+    test.setTimeout(90_000);
+    const prisma = createE2EPrismaClient();
+    const title = `Creator Validation QA ${Date.now()}`;
+    const description = 'Keep this input while correcting the rubric.';
+    try {
+      await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
+      await page.goto('/app/admin/assignment-types/new');
+      await page.locator('input[name="title"]').fill(title);
+      await page.getByLabel('Description', { exact: true }).fill(description);
+      await page.getByRole('button', { name: 'Create', exact: true }).click();
+      await expect(page.getByRole('alert')).toContainText(
+        'Every rubric category'
+      );
+      await expect(page.getByText(OOPS)).toHaveCount(0);
+      await expect(page.locator('input[name="title"]')).toHaveValue(title);
+      await expect(page.getByLabel('Description', { exact: true })).toHaveValue(
+        description
+      );
+      expect(await prisma.assignmentType.count({ where: { title } })).toBe(0);
+
+      await page.getByTestId('rubric-add-category').click();
+      await page.getByTestId('rubric-category-row-0').click();
+      await page.getByLabel('Label', { exact: true }).fill('Evidence');
+      await page.getByLabel('Weight %').fill('100');
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await page.getByRole('button', { name: 'Create', exact: true }).click();
+      await expect(page.getByRole('alert')).toContainText(
+        'Every rubric category'
+      );
+      await expect(page.getByText(OOPS)).toHaveCount(0);
+      await expect(page.locator('input[name="title"]')).toHaveValue(title);
+      await expect(page.getByTestId('rubric-category-row-0')).toContainText(
+        'Evidence'
+      );
+      expect(await prisma.assignmentType.count({ where: { title } })).toBe(0);
+
+      await page.getByTestId('rubric-category-row-0').click();
+      await page
+        .locator('#category-edit-description')
+        .fill('Support claims with relevant evidence.');
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await page.getByRole('button', { name: 'Create', exact: true }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Edit assignment type' })
+      ).toBeVisible();
+      await expect(page.getByText(OOPS)).toHaveCount(0);
+      const created = await prisma.assignmentType.findFirstOrThrow({
+        where: { title },
+      });
+      expect(created.description).toBe(description);
+      expect(created.rubricJson).toMatchObject({
+        categories: [
+          {
+            label: 'Evidence',
+            description: 'Support claims with relevant evidence.',
+            weight: 1,
+          },
+        ],
+      });
+      await page.reload();
+      await expect(page.locator('input[name="title"]')).toHaveValue(title);
+    } finally {
+      const types = await prisma.assignmentType.findMany({
+        where: { title },
+        select: { id: true },
+      });
+      const ids = types.map((row) => row.id);
+      await prisma.assignmentModule.deleteMany({
+        where: { assignmentTypeId: { in: ids } },
+      });
+      await prisma.organizationAssignmentType.deleteMany({
+        where: { assignmentTypeId: { in: ids } },
+      });
+      await prisma.assignmentType.deleteMany({ where: { id: { in: ids } } });
+      await prisma.$disconnect();
+    }
   });
 
   test('saving a new assignment type must not show the oops screen', async ({
@@ -33,6 +125,7 @@ test.describe('Admin assignment type creator', () => {
       await page
         .getByLabel('Description')
         .fill('Minimal assignment type creator QA test.');
+      await addCompleteRubric(page);
 
       await Promise.all([
         page.waitForURL(
@@ -76,7 +169,7 @@ test.describe('Admin assignment type creator', () => {
     }
   });
 
-  test('a new assignment type saves first and can then choose a library rubric', async ({
+  test('a new assignment type saves its rubric and can then update it', async ({
     page,
     signIn,
   }) => {
@@ -90,8 +183,7 @@ test.describe('Admin assignment type creator', () => {
       await page.waitForLoadState('networkidle');
 
       await page.getByLabel('Title').fill(title);
-      await expect(page.getByTestId('rubric-add-category')).toHaveCount(0);
-      await expect(page.getByTestId('rubric-library-select')).toHaveCount(0);
+      await addCompleteRubric(page);
 
       await Promise.all([
         page.waitForURL(
@@ -108,22 +200,21 @@ test.describe('Admin assignment type creator', () => {
       await expect(
         page.getByRole('heading', { name: 'Edit assignment type' })
       ).toBeVisible();
-      await page.getByTestId('rubric-library-select').click();
-      await page
-        .getByRole('option', { name: 'Daily Pages engagement' })
-        .click();
-      await expect(page.getByRole('button', { name: 'Update' })).toBeEnabled();
-      await page.getByRole('button', { name: 'Update' }).click();
+      await page.getByTestId('rubric-category-row-0').click();
+      await page.getByLabel('Label', { exact: true }).fill('Evidence updated');
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Update', exact: true })).toBeEnabled();
+      await page.getByRole('button', { name: 'Update', exact: true }).click();
 
       await expect
         .poll(async () => {
           const selected = await prisma.assignmentType.findUnique({
             where: { id: assignmentTypeId! },
-            select: { rubric: { select: { name: true } } },
+            select: { rubricJson: true },
           });
-          return selected?.rubric?.name;
+          return (selected?.rubricJson as { categories: Array<{ label: string }> })?.categories[0]?.label;
         })
-        .toBe('daily-pages-engagement');
+        .toBe('Evidence updated');
     } finally {
       if (assignmentTypeId) {
         await prisma.assignmentModule.deleteMany({
@@ -164,13 +255,12 @@ test.describe('Admin assignment type creator', () => {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto(`/app/admin/assignment-types/${assignmentTypeId}`);
       await page.waitForLoadState('networkidle');
-      await expect(page.getByTestId('rubric-library-select')).toBeVisible();
-      await expect(page.getByTestId('rubric-add-category')).toHaveCount(0);
-      await expect(page.getByTestId('rubric-paste-open')).toHaveCount(0);
+      await expect(page.getByTestId('rubric-add-category')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Paste text', exact: true })).toBeVisible();
       await expect(page.getByText(OOPS)).toHaveCount(0);
 
       await page.locator('input[name="title"]').fill(`${title} Updated`);
-      await expect(page.getByRole('button', { name: 'Update' })).toBeEnabled();
+      await expect(page.getByRole('button', { name: 'Update', exact: true })).toBeEnabled();
       const updateResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'POST' &&
@@ -178,7 +268,7 @@ test.describe('Admin assignment type creator', () => {
             .url()
             .includes(`/app/admin/assignment-types/${assignmentTypeId}.data`)
       );
-      await page.getByRole('button', { name: 'Update' }).click();
+      await page.getByRole('button', { name: 'Update', exact: true }).click();
       expect((await updateResponse).ok()).toBe(true);
       await expect
         .poll(async () => {
@@ -210,7 +300,7 @@ test.describe('Admin assignment type creator', () => {
     }
   });
 
-  test('updating basics leaves legacy rubric configuration unchanged', async ({
+  test('updating basics preserves legacy rubric categories', async ({
     page,
     signIn,
   }) => {
@@ -244,7 +334,9 @@ test.describe('Admin assignment type creator', () => {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto(`/app/admin/assignment-types/${assignmentTypeId}`);
       await page.locator('input[name="title"]').fill(`${title} Updated`);
-      await page.getByRole('button', { name: 'Update' }).click();
+      const saved = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes(`/app/admin/assignment-types/${assignmentTypeId}.data`));
+      await page.getByRole('button', { name: 'Update', exact: true }).click();
+      expect((await saved).ok()).toBe(true);
 
       await expect(page.getByText(OOPS)).toHaveCount(0);
       await expect(page.locator('input[name="title"]')).toHaveValue(
@@ -259,9 +351,9 @@ test.describe('Admin assignment type creator', () => {
           gradingAssistantVersion: true,
         },
       });
-      expect(updated.rubricJson).toEqual(legacyRubric);
+      expect(updated.rubricJson).toMatchObject(legacyRubric);
       expect(updated.rubricId).toBeNull();
-      expect(updated.gradingAssistantVersion).toBe(7);
+      expect(updated.gradingAssistantVersion).toBe(8);
     } finally {
       if (assignmentTypeId) {
         await prisma.assignmentModule.deleteMany({
