@@ -918,7 +918,7 @@ describe('assignment-type evaluations action', () => {
     expect(runAssignmentTypeEvaluationSuite).toHaveBeenCalledWith(expect.objectContaining({ gradingConfig: expect.objectContaining({
       minScore: 0, maxScore: 30, step: 10,
       rubricCategories: [expect.objectContaining({ key: 'engagement_with_prompt' })],
-      promptTemplate: { systemMessage: 'Draft system {{student_first_name}}', userMessage: 'Draft user {{document}}' },
+      promptTemplate: { systemMessage: 'Draft system {{student_first_name}}', userMessage: 'Draft user {{rubric}} {{document}}' },
     }) }));
   });
 
