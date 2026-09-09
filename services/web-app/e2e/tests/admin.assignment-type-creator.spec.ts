@@ -143,6 +143,72 @@ test.describe('Admin assignment type creator', () => {
     }
   });
 
+  test('creation selects the new Daily Pages reflection static rubric', async ({
+    page,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const title = `Reflection Creator QA ${Date.now()}`;
+    let assignmentTypeId: string | null = null;
+
+    try {
+      await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
+      await page.goto('/app/admin/assignment-types/new');
+      await page.waitForLoadState('networkidle');
+      await expect(page.getByText(OOPS)).toHaveCount(0);
+
+      await page.getByLabel('Title').fill(title);
+      await page
+        .getByLabel('Description')
+        .fill('Minimal assignment type creator QA test.');
+
+      await page.getByTestId('rubric-library-select').click();
+      await page.getByRole('option', { name: 'Daily Pages reflection', exact: true }).click();
+      const reflection = await prisma.rubric.findUniqueOrThrow({ where: { name: 'daily-pages-reflection' } });
+      await Promise.all([
+        page.waitForURL(
+          (url) =>
+            url.pathname.startsWith('/app/admin/assignment-types/') &&
+            url.pathname !== '/app/admin/assignment-types/new',
+          { timeout: 15_000 }
+        ),
+        page.getByRole('button', { name: 'Create' }).click(),
+      ]);
+
+      assignmentTypeId = page.url().split('/').pop() ?? null;
+      expect(assignmentTypeId).toBeTruthy();
+
+      await expect(page.getByText(OOPS)).toHaveCount(0);
+      await expect(
+        page.getByRole('heading', { name: 'Edit assignment type' })
+      ).toBeVisible();
+      await expect(page.locator('input[name="title"]')).toHaveValue(title);
+
+      const created = await prisma.assignmentType.findUniqueOrThrow({
+        where: { id: assignmentTypeId! },
+        select: { title: true, kind: true, rubricId: true },
+      });
+      expect(created.title).toBe(title);
+      expect(created.kind).toBeNull();
+      expect(created.rubricId).toBe(reflection.id);
+      await page.reload();
+      await expect(page.getByTestId('rubric-library-select')).toContainText('Daily Pages reflection');
+    } finally {
+      if (assignmentTypeId) {
+        await prisma.assignmentModule.deleteMany({
+          where: { assignmentTypeId },
+        });
+        await prisma.organizationAssignmentType.deleteMany({
+          where: { assignmentTypeId },
+        });
+        await prisma.assignmentType.deleteMany({
+          where: { id: assignmentTypeId },
+        });
+      }
+      await prisma.$disconnect();
+    }
+  });
+
   test('a new assignment type saves first and can then choose a library rubric', async ({
     page,
     signIn,

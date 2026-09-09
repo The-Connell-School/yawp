@@ -13,6 +13,7 @@ import {
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import { type Command, commands, COMMAND_STYLE } from './commands';
+import { DocumentImageButton } from './document-image-button';
 import camelCase from 'lodash/camelCase';
 
 const DROPDOWN_WIDTH = 32;
@@ -24,10 +25,17 @@ export type BarProps = {
   editor: Editor | null;
   documentId: string;
   isEditable?: boolean;
+  canUploadImages?: boolean;
   onCommentCreated?: (comment: unknown) => void;
 };
 
-export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }: BarProps) => {
+export const Bar = ({
+  editor,
+  documentId,
+  isEditable = true,
+  canUploadImages = false,
+  onCommentCreated,
+}: BarProps) => {
   const [visibleCommands, setVisibleCommands] = useState(commands);
   const [hiddenCommands, setHiddenCommands] = useState<Command[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -92,6 +100,9 @@ export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }:
             }
           )
         : null}
+      {isEditable && canUploadImages ? (
+        <DocumentImageButton editor={editor} documentId={documentId} />
+      ) : null}
       {isEditable ? (
         <Tooltip text="Comment" delayDuration={300}>
           <div

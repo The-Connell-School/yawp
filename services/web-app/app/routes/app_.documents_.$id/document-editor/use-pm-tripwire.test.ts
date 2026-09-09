@@ -14,6 +14,7 @@ import {
   checkPmTransaction,
   installPmTripwire,
   RECOVERY_SOURCE,
+  TOOLBAR_SOURCE,
 } from './use-pm-tripwire';
 
 describe('checkPmTransaction (pure predicate)', () => {
@@ -34,6 +35,10 @@ describe('checkPmTransaction (pure predicate)', () => {
 
   it('returns null when transaction is tagged recovery-on-mount', () => {
     expect(checkPmTransaction(fakeTx(true, RECOVERY_SOURCE))).toBeNull();
+  });
+
+  it('returns null when transaction is tagged toolbar', () => {
+    expect(checkPmTransaction(fakeTx(true, TOOLBAR_SOURCE))).toBeNull();
   });
 
   it('returns error message when docChanged transaction has no source meta', () => {
