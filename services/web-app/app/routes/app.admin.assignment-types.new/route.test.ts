@@ -5,6 +5,9 @@ const prisma = {
     count: mock(),
     create: mock(),
   },
+  rubric: {
+    findUnique: mock(),
+  },
 };
 
 const requireAdmin = mock();
@@ -19,10 +22,12 @@ describe('admin assignment type new action', () => {
     requireAdmin.mockReset();
     prisma.assignmentType.count.mockReset();
     prisma.assignmentType.create.mockReset();
+    prisma.rubric.findUnique.mockReset();
 
     requireAdmin.mockResolvedValue(undefined);
     prisma.assignmentType.count.mockResolvedValue(4);
     prisma.assignmentType.create.mockResolvedValue({ id: 'at-new' });
+    prisma.rubric.findUnique.mockResolvedValue({ id: 'rubric-daily-pages' });
   });
 
   test('creates assignment type with rubric and grading config', async () => {
@@ -122,6 +127,35 @@ describe('admin assignment type new action', () => {
         kind: null,
         description: 'Choose its database rubric after saving.',
         position: 4,
+      },
+    });
+  });
+
+  test('creates an assignment type linked to a selected static library rubric', async () => {
+    const form = new FormData();
+    form.set('title', 'Daily reflection');
+    form.set('rubricId', 'rubric-daily-pages');
+
+    await action({
+      request: new Request('https://example.test/app/admin/assignment-types/new', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+      context: {} as never,
+    } as never);
+
+    expect(prisma.rubric.findUnique).toHaveBeenCalledWith({
+      where: { id: 'rubric-daily-pages' },
+      select: { id: true },
+    });
+    expect(prisma.assignmentType.create).toHaveBeenCalledWith({
+      data: {
+        title: 'Daily reflection',
+        kind: null,
+        description: null,
+        position: 4,
+        rubricId: 'rubric-daily-pages',
       },
     });
   });

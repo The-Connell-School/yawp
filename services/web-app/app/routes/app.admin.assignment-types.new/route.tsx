@@ -2,6 +2,7 @@ import {
   data as dataResponse,
   redirect,
   useActionData,
+  useLoaderData,
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
@@ -14,6 +15,10 @@ import {
   parseRubric,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
+import {
+  listRubrics,
+  seedStarterRubrics,
+} from '~/domain/rubrics/rubric-library.server';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -61,7 +66,14 @@ function parseGradingConfig(formData: FormData) {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
-  return dataResponse({});
+  await seedStarterRubrics();
+  const rubrics = (await listRubrics()).map(({ id, name, title, json }) => ({
+    id,
+    name,
+    title,
+    json,
+  }));
+  return dataResponse({ rubrics });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -69,9 +81,25 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const title = formData.get('title')?.toString().trim();
   const description = formData.get('description')?.toString().trim() || null;
+  const rawRubricId = formData.get('rubricId')?.toString().trim();
+  const rubricId =
+    rawRubricId && rawRubricId !== '__none__' ? rawRubricId : null;
 
   if (!title) {
     return dataResponse({ error: 'Title is required' }, { status: 400 });
+  }
+
+  if (rubricId) {
+    const rubric = await prisma.rubric.findUnique({
+      where: { id: rubricId },
+      select: { id: true },
+    });
+    if (!rubric) {
+      return dataResponse(
+        { error: 'That rubric no longer exists. Choose another rubric.' },
+        { status: 400 }
+      );
+    }
   }
 
   let gradingConfigData: ReturnType<typeof parseGradingConfig>;
@@ -91,6 +119,7 @@ export async function action({ request }: ActionFunctionArgs) {
       kind: null,
       description,
       position: count,
+      ...(formData.has('rubricId') ? { rubricId } : {}),
       ...gradingConfigData,
     },
   });
@@ -99,8 +128,15 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function NewAssignmentTypeRoute() {
+  const { rubrics } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  return <AssignmentTypeEditorForm mode="create" error={actionData?.error} />;
+  return (
+    <AssignmentTypeEditorForm
+      mode="create"
+      rubrics={rubrics}
+      error={actionData?.error}
+    />
+  );
 }
 
 export function ErrorBoundary() {

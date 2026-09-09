@@ -107,7 +107,7 @@ test.describe('Admin assignment type creator', () => {
     }
   });
 
-  test('saving a new assignment type must not show the oops screen', async ({
+  test('a new assignment type can select a static library rubric without showing the oops screen', async ({
     page,
     signIn,
   }) => {
@@ -125,7 +125,10 @@ test.describe('Admin assignment type creator', () => {
       await page
         .getByLabel('Description')
         .fill('Minimal assignment type creator QA test.');
-      await addCompleteRubric(page);
+      await page.getByTestId('rubric-library-select').click();
+      await page
+        .getByRole('option', { name: 'Daily Pages reflection' })
+        .click();
 
       await Promise.all([
         page.waitForURL(
@@ -148,11 +151,15 @@ test.describe('Admin assignment type creator', () => {
 
       const created = await prisma.assignmentType.findUniqueOrThrow({
         where: { id: assignmentTypeId! },
-        select: { title: true, kind: true, rubricId: true },
+        select: {
+          title: true,
+          kind: true,
+          rubric: { select: { name: true } },
+        },
       });
       expect(created.title).toBe(title);
       expect(created.kind).toBeNull();
-      expect(created.rubricId).toBeNull();
+      expect(created.rubric?.name).toBe('daily-pages-reflection');
     } finally {
       if (assignmentTypeId) {
         await prisma.assignmentModule.deleteMany({
