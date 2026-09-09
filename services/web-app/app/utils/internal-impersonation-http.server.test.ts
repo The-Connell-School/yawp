@@ -129,3 +129,14 @@ test('replacement closes the previous session before redeeming another link', as
   expect(response.status).toBe(403);
   expect(f.counts().starts).toBe(1);
 });
+
+test('impersonation error reporting excludes cookies, tokens, queries and exception details', async () => {
+  const { reportImpersonationError } = await import('./internal-impersonation-error.server');
+  const records: unknown[] = [];
+  const report = (entry: unknown) => { records.push(entry); };
+  expect(reportImpersonationError(new Request('https://yawp.test/app?token=secret', { headers: { cookie: 'yawp_internal_impersonation=secret', authorization: 'Bearer secret' } }), report)).toBe(true);
+  expect(reportImpersonationError(new Request('https://yawp.test/auth/internal-impersonation?token=secret'), report)).toBe(true);
+  expect(reportImpersonationError(new Request('https://yawp.test/app', { headers: { cookie: 'ordinary=session' } }), report)).toBe(false);
+  expect(records).toEqual([{ event: 'internal_impersonation_request_failed' }, { event: 'internal_impersonation_request_failed' }]);
+  expect(JSON.stringify(records)).not.toContain('secret');
+});
