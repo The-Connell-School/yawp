@@ -53,6 +53,10 @@ import {
 } from '~/components/ui/popover';
 import useBreakpoint from '~/hooks/useBreakpoint';
 import { useUser } from '~/hooks/useUser';
+import {
+  DOCUMENT_IMAGE_KILL_SWITCH_ENV,
+  isDocumentImageUploadEnabled,
+} from '~/domain/document-images/document-images';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
@@ -265,6 +269,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          allowsImageUploads: true,
+          rubric: { select: { name: true } },
         },
       },
       assignment: {
@@ -465,6 +471,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     nextCmId,
     shouldSaveVersion,
     hasPreviousCms: currentCmsIdx > 0,
+    // GBA 300's expansion report is graded on its graphics, so its authors get
+    // the "Add image" control. Every other assignment type sees the toolbar it
+    // has always seen.
+    canUploadImages:
+      isOwner &&
+      isDocumentImageUploadEnabled({
+        rubricName: doc.assignmentType?.rubric?.name ?? null,
+        allowsImageUploads: doc.assignmentType?.allowsImageUploads ?? false,
+        killSwitch: process.env[DOCUMENT_IMAGE_KILL_SWITCH_ENV],
+      }),
     canSelfUnsubmit:
       isOwner &&
       profile.role === 'STUDENT' &&
@@ -1113,6 +1129,7 @@ export default function Route() {
                 serverUpdatedAt={data.doc.updatedAt}
                 initialRevision={data.doc.revision}
                 isEditable={isEditorEditable}
+                canUploadImages={data.canUploadImages}
                 onBridgeReady={(b) => {
                   editorBridgeRef.current = b;
                 }}

@@ -99,6 +99,10 @@ export type E2EContext = {
   dailyPagesAssignmentTypeId: string;
   thesisEssayAssignmentTypeId: string;
   apHistoryAssignmentTypeId: string;
+  /** Assignment type with allowsImageUploads on (the GBA 300 expansion rollout). */
+  imageUploadAssignmentTypeId: string;
+  /** Student-owned document on that assignment type. */
+  imageUploadDocumentId: string;
   apHistoryDbqEntryKey: string;
   apHistoryLeqEntryKey: string;
   assignmentId: string;
@@ -622,6 +626,53 @@ export async function seedE2E(): Promise<E2EContext> {
   });
 
   // 1. Fresh document — minimal content, no revisions
+  // Assignment type carrying the student-image-upload opt-in, mirroring the
+  // GBA 300 expansion report the feature was built for.
+  const imageUploadAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'E2E Expansion Report',
+      description: 'Report-style assignment whose students may upload figures.',
+      position: 5,
+      ownerOrgId: org.id,
+      allowsImageUploads: true,
+      organizationAssignments: { create: { organizationId: org.id } },
+      // A module is not optional decoration: the document route redirects a
+      // document whose assignment type has no active modules straight back to
+      // /app, so a type seeded without one can never open its editor.
+      assignmentModules: {
+        create: [
+          {
+            title: 'Industry Analysis',
+            position: 1,
+            description: 'Analyze the industry and support it with graphics.',
+            instructions: {
+              create: [
+                {
+                  title: 'Draft the section',
+                  prompt: 'Write the industry analysis and add your graphics.',
+                  position: 1,
+                  showChatButton: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  const imageUploadDoc = await prisma.document.create({
+    data: {
+      title: 'E2E Expansion Report Draft',
+      text: 'Industry analysis.',
+      html: '<p>Industry analysis.</p>',
+      membershipId: membership.id,
+      assignmentTypeId: imageUploadAssignmentType.id,
+    },
+    select: { id: true },
+  });
+
   const freshDoc = await prisma.document.create({
     data: {
       title: 'Fresh Document',
@@ -957,6 +1008,8 @@ export async function seedE2E(): Promise<E2EContext> {
     dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
     thesisEssayAssignmentTypeId: thesisEssayAssignmentType.id,
     apHistoryAssignmentTypeId: apHistoryAssignmentType.id,
+    imageUploadAssignmentTypeId: imageUploadAssignmentType.id,
+    imageUploadDocumentId: imageUploadDoc.id,
     apHistoryDbqEntryKey: apHistoryDbqEntry.externalKey,
     apHistoryLeqEntryKey: apHistoryLeqEntry.externalKey,
     assignmentId: seededAssignment.id,
