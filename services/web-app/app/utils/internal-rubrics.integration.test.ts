@@ -26,6 +26,13 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('rubric publicati
     const after = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'After publication' } });
     expect(after.rubricRevisionId).toBe(published.id);
     expect(after.rubricRevisionId).not.toBe(pinned.rubricRevisionId);
+    const { resolveAssignmentTypeGradingConfig } = await import('../domain/assignment-types/assignment-type-grading-config.server');
+    const oldConfig = await resolveAssignmentTypeGradingConfig({ assignmentTypeId: type.id, assignmentId: before.id });
+    const newConfig = await resolveAssignmentTypeGradingConfig({ assignmentTypeId: type.id, assignmentId: after.id });
+    expect(oldConfig.rubricCategories[0]!.description).toBe('Original requirement');
+    expect(newConfig.rubricCategories[0]!.description).toBe('New requirement');
+    expect(newConfig.version).toBe(published.version);
+
     expect((await db.rubric.findUniqueOrThrow({ where: { id: rubric.id } })).schemaJson).toEqual(schema);
     await expect(service.publish({ ...request, reason: 'Changed retry' })).rejects.toThrow('Idempotency');
     await expect(service.publish({ ...request, requestId: randomUUID() })).rejects.toThrow('changed');
