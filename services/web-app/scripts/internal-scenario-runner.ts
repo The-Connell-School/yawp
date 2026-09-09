@@ -8,7 +8,9 @@ import { InternalScenarios } from '../app/utils/internal-scenario.server';
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 const targetSchema = z.object({ targetId: id, environment: z.enum(['preview', 'demo']), organizationId: id,
-  databaseUrl: z.string().url(), revision: z.string().regex(/^[a-f0-9]{40}$/).optional() }).strict();
+  seatOrganizationIds: z.array(z.string().regex(/^preview-seat-(?:[2-9]|[1-9][0-9]+)$/)).max(99).optional(),
+  databaseUrl: z.string().url(), revision: z.string().regex(/^[a-f0-9]{40}$/).optional() }).strict().refine(target => target.seatOrganizationIds === undefined ||
+  (target.environment === 'preview' && new Set(target.seatOrganizationIds).size === target.seatOrganizationIds.length && !target.seatOrganizationIds.includes(target.organizationId)), 'Invalid preview seat registration');
 const configSchema = z.object({ targets: z.array(targetSchema).min(1).max(1000) }).strict();
 let db: InstanceType<typeof PrismaClient> | undefined;
 try {
@@ -31,13 +33,15 @@ try {
   if (matches.length !== 1) throw new Error('Unknown or ambiguous target');
   const target = matches[0]!;
   if (target.environment === 'preview' && (!target.revision || target.revision !== request.target.revision)) throw new Error('Preview revision does not match registration');
+  const organizationId = request.target.organizationId ?? target.organizationId;
+  if (organizationId !== target.organizationId && !(target.environment === 'preview' && target.seatOrganizationIds?.includes(organizationId))) throw new Error('Seat is not registered');
   const database = new URL(target.databaseUrl);
   // The executable can only reach the dedicated local preview cluster, never RDS/production.
   if (!['postgres:', 'postgresql:'].includes(database.protocol) ||
       !['localhost', '127.0.0.1', 'yawp-internal-preview-postgres'].includes(database.hostname) ||
       !/^\/yawp_[a-zA-Z0-9_-]+$/.test(database.pathname) || database.search || database.hash) throw new Error('Nonproduction database required');
   db = new PrismaClient({ adapter: new PrismaPg({ connectionString: target.databaseUrl, ssl: false }) });
-  const service = new InternalScenarios(db, { targetId: target.targetId, environment: target.environment, organizationId: target.organizationId });
+  const service = new InternalScenarios(db, { targetId: target.targetId, environment: target.environment, organizationId });
   const receipt = await service.apply(request);
   process.stdout.write(`${JSON.stringify(receipt)}\n`);
 } catch {
