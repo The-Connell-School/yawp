@@ -64,24 +64,28 @@ export function createAttributedPrisma(base: Database): Database {
           : Reflect.apply(value, target, args);
       }
       if (state && property === '$transaction') return (work: unknown, options?: { isolationLevel?: string; timeout?: number; maxWait?: number }) => {
-        if (state.tx && state.transaction?.open) throw new Error('Nested root transactions require an explicit transaction client');
-        if (typeof work === 'function') return transaction(state.scope, tx => work(tx), options);
-        if (!Array.isArray(work) || work.some(query => !(query instanceof AttributedQuery) || query.scope !== state.scope)) {
+        const active = context.getStore();
+        if (!active) return Reflect.apply(value, target, [work, options]);
+        if (active.tx && active.transaction?.open) throw new Error('Nested root transactions require an explicit transaction client');
+        if (typeof work === 'function') return transaction(active.scope, tx => work(tx), options);
+        if (!Array.isArray(work) || work.some(query => !(query instanceof AttributedQuery) || query.scope !== active.scope)) {
           throw new Error('Transaction contains queries outside this impersonation context');
         }
-        return transaction(state.scope, async tx => {
+        return transaction(active.scope, async tx => {
           const results = [];
           for (const query of work as AttributedQuery<unknown>[]) results.push(await query.execute(tx));
           return results;
         }, options);
       };
       const makeQuery = (model: PropertyKey | null, method: PropertyKey, args: unknown[]) => {
+        const active = context.getStore();
+        if (!active) return Reflect.apply(value, target, args);
         const execute = async (tx: Prisma.TransactionClient) => {
           const receiver = model === null ? tx : Reflect.get(tx, model);
           return Reflect.apply(Reflect.get(receiver, method), receiver, args);
         };
-        if (state!.tx && state!.transaction?.open) return execute(state!.tx);
-        return new AttributedQuery(state!.scope, execute, () => transaction(state!.scope, execute));
+        if (active.tx && active.transaction?.open) return execute(active.tx);
+        return new AttributedQuery(active.scope, execute, () => transaction(active.scope, execute));
       };
       if (state && typeof property === 'string' && property.startsWith('$')) {
         if (['$queryRaw', '$executeRaw', '$queryRawUnsafe', '$executeRawUnsafe'].includes(property)) {

@@ -41,8 +41,6 @@ Validation commands:
 
 The integration profile uses only the worktree's local seeded database and makes no data mutations. The focused suite tests credential rejection before queries, bounded organization filtering, cursor scope, privilege flags, and ambiguous lookup.
 
-## Bootstrap recovery
-
 ## Application mutation auditing
 
 The shared application Prisma client now supports `runWithImpersonation` scopes. Ordinary requests retain normal behavior. In an attributed scope, awaited queries execute in a database transaction carrying a transaction-local session ID and request/job metadata. Database triggers derive operator/user/organization from the persisted session and append one event for each inserted, updated or deleted row, including bulk operations and implicit Prisma join-table rows. Events contain table and primary/composite record keys, never copied row values.
