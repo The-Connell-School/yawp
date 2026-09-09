@@ -64,6 +64,10 @@ test.describe.serial('Admin rubric library', () => {
           return row?.rubric?.name;
         })
         .toBe('daily-pages-engagement');
+      // The DB write finishes before loader revalidation hydrates the saved form.
+      // Wait for that visible save cycle before starting the next edit.
+      await expect(updateButton).toBeVisible();
+      await expect(updateButton).toBeDisabled();
 
       const gradingInstructions =
         'Apply the rubric with extra emphasis on concrete supporting details.';
