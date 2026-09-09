@@ -74,6 +74,8 @@ model Rubric {
   title           String
   schemaJson      Json
   assignmentTypes AssignmentType[]
+  currentRevisionId String?
+  currentRevision RubricRevision? @relation("CurrentRubricRevision", fields: [currentRevisionId], references: [id], onDelete: Restrict)
 
   @@index([title])
 }
@@ -254,6 +256,8 @@ model AssignmentTypeEvaluationResult {
 }
 
 model Assignment {
+  rubricRevisionId String?
+  rubricRevision RubricRevision? @relation(fields: [rubricRevisionId], references: [id], onDelete: Restrict)
   id                              String            @id @default(cuid())
   createdAt                       DateTime          @default(now()) @db.Timestamptz(6)
   updatedAt                       DateTime          @default(now()) @db.Timestamptz(6)
@@ -1607,4 +1611,23 @@ model LlmLog {
   @@index([createdAt(sort: Desc)])
   @@index([model])
   @@index([provider])
+}
+
+
+/// Immutable portable rubric history. Names, rather than environment-local rubric
+/// IDs, preserve provenance across local fixture resets and environment transfers.
+model RubricRevision {
+  id String @id
+  rubricName String
+  version Int
+  schemaJson Json
+  fingerprint String
+  requestId String @unique
+  requestHash String
+  createdBy String
+  reason String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  currentFor Rubric[] @relation("CurrentRubricRevision")
+  assignments Assignment[]
+  @@unique([rubricName, version])
 }
