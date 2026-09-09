@@ -49,7 +49,7 @@ Instruction overrides must preserve unrelated stored prompt fields. Clearing a s
 
 - Browser acceptance must show the library selector on both create and edit, select a real library entry, save, reload, and confirm the persisted relationship.
 - A creation test must select a library rubric without manually building inline categories. Default creation must also have an explicit acceptance case.
-- Server and resolver tests must prove that the selected rubric supplies effective scoring bounds, categories, and instructions. Daily Pages selection should resolve its 0–3 scale; canonical Thesis compatibility must remain covered.
+- Server and resolver tests must prove that the selected rubric supplies effective scoring bounds, categories, and instructions. Daily Pages library selection should resolve its production 0–30 scale with step 10 (distinct from the built-in fallback scale); canonical Thesis compatibility must remain covered.
 - Basics-only edits must retain exact legacy grading JSON and an unchanged grading version. Subset equality is insufficient for preservation assertions.
 - Instruction override tests must cover setting, unchanged saving, and clearing while retaining unrelated prompt properties and leaving the shared library schema unchanged.
 - Selection changes and clearing must have explicit persistence coverage. Invalid or deleted selections must produce actionable form feedback without creating a row or losing entered values.
