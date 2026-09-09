@@ -34,6 +34,14 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
     expect(events.filter(e => e.action === 'row.updated')).toHaveLength(2);
     expect(JSON.stringify(events)).not.toContain('sensitive value');
     expect(events.every(e => typeof JSON.parse(e.resourceId).id === 'string')).toBe(true);
+    await expect(withImpersonationTransaction(prisma, context, { requestId: randomUUID(), action: 'test.truncate' }, async tx => {
+      await tx.$executeRaw`TRUNCATE TABLE "Setting"`;
+    })).rejects.toThrow();
+    expect(await prisma.setting.count({ where: { name: { startsWith: prefix } } })).toBe(2);
+    await prisma.$executeRaw`CREATE TABLE "InternalAuditCoverageFixture" (id TEXT PRIMARY KEY)`;
+    try {
+      await expect(withImpersonationTransaction(prisma, context, { requestId: randomUUID(), action: 'test.coverage' }, async () => {})).rejects.toThrow('Impersonation audit coverage is incomplete');
+    } finally { await prisma.$executeRaw`DROP TABLE "InternalAuditCoverageFixture"`; }
 
     const rollbackId = randomUUID();
     await expect(withImpersonationTransaction(prisma, context, { requestId: rollbackId, action: 'test.rollback' }, async tx => {
@@ -52,6 +60,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
     });
     expect(await prisma.internalImpersonationEvent.count({ where: { sessionId: identity.id, jobId, action: 'row.deleted' } })).toBe(3);
     const wrapped = createAttributedPrisma(prisma);
+    const cachedSettings = wrapped.setting;
+    const cachedTransaction = wrapped.$transaction;
     const wrappedRequest = randomUUID();
     let authorizeTail = true;
     let rechecks = 0;
@@ -62,8 +72,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
       if (!authorizeTail) throw new Error('tail revoked');
       return context;
     }, async () => {
-      await wrapped.$transaction([
-        wrapped.setting.create({ data: { name: `${prefix}-array-a`, value: 'one' } }),
+      await cachedTransaction([
+        cachedSettings.create({ data: { name: `${prefix}-array-a`, value: 'one' } }),
         wrapped.setting.create({ data: { name: `${prefix}-array-b`, value: 'two' } }),
       ]);
       await expect(wrapped.$transaction(async tx => {
