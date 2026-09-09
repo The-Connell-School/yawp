@@ -54,6 +54,14 @@ export class InternalQaAccounts {
       } }));
     }, { timeout: 30000 });
   }
+  async list(raw: { organizationId: string; cursor?: string }) {
+    const input = z.object({ organizationId: identifier, cursor: z.string().uuid().optional() }).strict().parse(raw);
+    const rows = await this.db.internalQaFixture.findMany({ where: { organizationId: input.organizationId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 51,
+      ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+    });
+    return { fixtures: rows.slice(0, 50).map(present), nextCursor: rows.length > 50 ? rows[49]!.id : null };
+  }
   async archive(raw: { id: string; actorId: string; organizationId: string }) {
     const input = z.object({ id: z.string().uuid(), actorId: identifier, organizationId: identifier }).strict().parse(raw);
     return this.db.$transaction(async tx => {
