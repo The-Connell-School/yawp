@@ -39,5 +39,13 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('scenario receipt
     const before = await db.user.count();
     await expect(service.apply({ ...input, jobId: randomUUID(), recipe: { ...input.recipe, students: 21 } })).rejects.toThrow('seat limit');
     expect(await db.user.count()).toBe(before);
+    await expect(service.apply({ ...input, jobId: randomUUID(), mode: 'reset', recipe: { ...input.recipe, students: 21 } })).rejects.toThrow('seat limit');
+    expect(await db.orgMembership.count({ where: { organizationId: org.id, isActive: true } })).toBe(3);
+    expect(await db.class.count({ where: { school: { organizationId: org.id }, isArchived: false } })).toBe(2);
+    const saved = await db.internalScenarioReceipt.findUniqueOrThrow({ where: { jobId: input.jobId } });
+    expect(saved.actorId).toBe('operator');
+    expect(saved.retiredByJobId).toBe(reset.jobId);
+    await expect(Promise.resolve(db.$executeRaw`UPDATE "InternalScenarioReceipt" SET "actorId"='forged' WHERE "jobId"=${input.jobId}`)).rejects.toThrow();
+    await expect(Promise.resolve(db.$executeRaw`DELETE FROM "InternalScenarioReceipt" WHERE "jobId"=${input.jobId}`)).rejects.toThrow();
   } finally { await db.$disconnect(); }
 }, 60000);
