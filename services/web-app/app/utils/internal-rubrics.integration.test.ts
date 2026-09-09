@@ -64,7 +64,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('rubric publicati
       db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Concurrent creation' } }),
     ]);
     const racePin = await db.assignment.findUniqueOrThrow({ where: { id: racing.id }, include: { rubricRevision: true } });
-    expect([third.id, fourth.id]).toContain(racePin.rubricRevisionId);
+    expect(racePin.rubricRevisionId).not.toBeNull();
+    expect([third.id, fourth.id]).toContain(racePin.rubricRevisionId!);
     expect((await resolveAssignmentTypeGradingConfig({ assignmentTypeId: type.id, assignmentId: racing.id })).version).toBe(racePin.rubricRevision!.version);
     await expect(resolveAssignmentTypeGradingConfig({ assignmentTypeId: 'wrong-type', assignmentId: before.id })).rejects.toThrow('context');
 
