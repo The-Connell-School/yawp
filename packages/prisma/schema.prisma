@@ -1258,6 +1258,20 @@ model InternalImpersonationSession {
 }
 
 // Immutable attribution snapshots survive membership/user removal.
+model InternalQaFixture {
+  id             String   @id
+  actorId        String
+  organizationId String
+  requestHash    String
+  reason         String
+  users          Json
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  archivedAt     DateTime? @db.Timestamptz(6)
+  archivedBy     String?
+
+  @@index([organizationId, createdAt])
+}
+
 model InternalImpersonationEvent {
   id             String   @id @default(cuid())
   sessionId      String
