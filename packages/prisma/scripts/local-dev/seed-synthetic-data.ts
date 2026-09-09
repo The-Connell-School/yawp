@@ -225,6 +225,10 @@ export async function seedSyntheticLocalDevData(
     assignmentTypes,
     (row) => row.kind === 'daily_pages' || row.title === 'Daily Pages'
   );
+  const classStarterAssignmentTypeId = pickAssignmentTypeId(
+    assignmentTypes,
+    (row) => row.kind === 'class_starter' || row.title === 'Class Starter'
+  );
   const actWritingAssignmentTypeId = pickAssignmentTypeId(
     assignmentTypes,
     (row) => row.title === 'ACT Writing Section'
@@ -299,6 +303,23 @@ export async function seedSyntheticLocalDevData(
     await prisma.classAssignment.create({
       data: {
         assignmentId: dailyAssignment.id,
+        classId: primaryClass.id,
+      },
+    });
+  }
+
+  if (classStarterAssignmentTypeId) {
+    const classStarterAssignment = await prisma.assignment.create({
+      data: {
+        assignmentTypeId: classStarterAssignmentTypeId,
+        title: 'Class Starter - Monday',
+        prompt:
+          'Write freely for ten minutes about something that surprised you this week.',
+      },
+    });
+    await prisma.classAssignment.create({
+      data: {
+        assignmentId: classStarterAssignment.id,
         classId: primaryClass.id,
       },
     });
