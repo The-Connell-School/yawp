@@ -97,6 +97,7 @@ export type E2EContext = {
   teacherEmail: string;
   assignmentTypeId: string;
   dailyPagesAssignmentTypeId: string;
+  classStarterAssignmentTypeId: string;
   thesisEssayAssignmentTypeId: string;
   apHistoryAssignmentTypeId: string;
   apHistoryDbqEntryKey: string;
@@ -466,6 +467,42 @@ export async function seedE2E(): Promise<E2EContext> {
             title: 'Daily Pages',
             position: 1,
             description: 'Short daily writing practice.',
+            instructions: {
+              create: [
+                {
+                  title: 'Write',
+                  prompt: 'Write freely for ten minutes.',
+                  position: 1,
+                  showChatButton: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  const classStarterAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'Class Starter',
+      // The soft, effort-based half of the Daily Pages split. Selects the
+      // Class Starter engagement rubric for a type that saved none of its own.
+      kind: 'class_starter',
+      description:
+        'Open-ended writing to begin class. Graded on engagement: did the student write, and did they reflect.',
+      position: 3,
+      ownerOrgId: org.id,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: [
+          {
+            title: 'Class Starter',
+            position: 1,
+            description: 'Short writing to start the period.',
             instructions: {
               create: [
                 {
@@ -955,6 +992,7 @@ export async function seedE2E(): Promise<E2EContext> {
     teacherEmail: seededTeacherEmail,
     assignmentTypeId: assignmentType.id,
     dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
+    classStarterAssignmentTypeId: classStarterAssignmentType.id,
     thesisEssayAssignmentTypeId: thesisEssayAssignmentType.id,
     apHistoryAssignmentTypeId: apHistoryAssignmentType.id,
     apHistoryDbqEntryKey: apHistoryDbqEntry.externalKey,

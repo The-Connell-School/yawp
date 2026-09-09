@@ -46,6 +46,7 @@ import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
+import { resolvePromptLibraryVariant } from './prompts-library/library-variant';
 import {
   type CognitiveMove,
   COLLECTION_ORDER,
@@ -74,8 +75,8 @@ import {
   type ThesisPrompt,
 } from './thesis-prompts-library/data';
 import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
+import { isDailyPagesSplitEnabled } from '~/domain/assignment-types/daily-pages-split';
 
-const DAILY_PAGES_TITLE = 'daily pages';
 const THESIS_ESSAY_TITLE = 'the thesis-driven essay';
 const ALL_PROMPTS = toLibraryEntries(promptsRaw as LibraryPrompt[]);
 const ALL_THESIS_PROMPTS = toThesisLibraryEntries(
@@ -402,25 +403,30 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const normalizedTitle = assignmentType.title.trim().toLowerCase();
-  const isDailyPages = normalizedTitle === DAILY_PAGES_TITLE;
+  // Class Starter and Daily Pages share the open-ended prompt library; which
+  // of the two this is decides the directions shown above it.
+  const promptLibraryVariant = resolvePromptLibraryVariant({
+    title: assignmentType.title,
+    dailyPagesSplitEnabled: isDailyPagesSplitEnabled(),
+  });
+  const showsOpenEndedLibrary =
+    profile.role === "TEACHER" && promptLibraryVariant !== null;
   const isThesisEssay = normalizedTitle === THESIS_ESSAY_TITLE;
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   // "My prompts": prompts this teacher generated and kept, shown in the same
   // library alongside the fixed corpus and filterable on their own.
-  const savedPrompts =
-    profile.role === "TEACHER" && isDailyPages
-      ? await listSavedDailyPagesPrompts({
-          membershipId: profile.id,
-          assignmentTypeId: assignmentType.id,
-        })
-      : [];
-  const libraryEntries =
-    profile.role === "TEACHER" && isDailyPages
-      ? [...savedPrompts.map(savedPromptToLibraryEntry), ...ALL_PROMPTS]
-      : [];
+  const savedPrompts = showsOpenEndedLibrary
+    ? await listSavedDailyPagesPrompts({
+        membershipId: profile.id,
+        assignmentTypeId: assignmentType.id,
+      })
+    : [];
+  const libraryEntries = showsOpenEndedLibrary
+    ? [...savedPrompts.map(savedPromptToLibraryEntry), ...ALL_PROMPTS]
+    : [];
   const promptLibrary =
-    profile.role === "TEACHER" && isDailyPages
+    showsOpenEndedLibrary && promptLibraryVariant !== null
       ? {
           prompts: applyFilters(
             libraryEntries,
@@ -429,6 +435,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           facets: buildFacets(libraryEntries),
           optionCounts: buildOptionCounts(libraryEntries),
           totalCount: libraryEntries.length,
+          variant: promptLibraryVariant,
         }
       : null;
   // "My prompts": prompts this teacher generated and kept, shown in the same
@@ -705,7 +712,9 @@ export default function AppAssignmentTypesIdRoute() {
             </p>
           </div>
         </div>
-        {showPromptsLibrary ? <TeacherDirections /> : null}
+        {data.promptLibrary ? (
+          <TeacherDirections variant={data.promptLibrary.variant} />
+        ) : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {hasModules ? (
           <Accordion type="single" collapsible>
