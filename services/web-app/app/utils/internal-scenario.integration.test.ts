@@ -13,13 +13,15 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('scenario receipt
   const school = await db.school.create({ data: { name: 'Unrelated school', code: suffix, organizationId: org.id } });
   const unrelated = await db.class.create({ data: { title: 'Unrelated class', code: 'keep', schoolId: school.id } });
   const binding = { environment: 'demo' as const, targetId: `demo-${suffix}`, organizationId: org.id };
-  const service = new InternalScenarios(db, binding);
+  const service = new InternalScenarios(db, binding, () => new Date(2026, 1, 1));
   const input = { jobId: randomUUID(), actorId: 'operator', fingerprint: 'a'.repeat(64), mode: 'populate' as const,
     target: { id: binding.targetId, environment: 'demo' as const, organizationId: org.id },
     recipe: { teachers: 2, students: 4, classes: 2, assignmentsPerClass: 2, submissions: 'mixed' as const } };
   try {
     const receipts = await Promise.all([service.apply(input), service.apply(input)]);
     expect(receipts[0]).toEqual(receipts[1]);
+    const classes = await db.class.findMany({ where: { school: { organizationId: org.id }, id: { not: unrelated.id } } });
+    expect(classes.every(classroom => classroom.schoolYear === '2025-2026')).toBe(true);
     expect(receipts[0]).toMatchObject({ jobId: input.jobId, targetId: binding.targetId, fingerprint: input.fingerprint, counts: { users: 6, classes: 2, assignments: 4, submissions: 8 } });
     expect(await db.orgMembership.count({ where: { organizationId: org.id, isActive: true } })).toBe(6);
     const members = await db.orgMembership.findMany({ where: { organizationId: org.id }, include: { user: { include: { password: true } } } });
