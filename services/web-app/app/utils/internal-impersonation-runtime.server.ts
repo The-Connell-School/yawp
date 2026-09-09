@@ -1,3 +1,4 @@
+import { startEndDelivery } from './internal-impersonation-delivery.server';
 import type { MiddlewareFunction } from 'react-router';
 import { basePrisma } from './db.server';
 import { InternalImpersonationClient } from './internal-impersonation-client.server';
@@ -6,13 +7,7 @@ import { createImpersonationHttp, hasImpersonationCookie } from './internal-impe
 
 const enabled = () => process.env.INTERNAL_IMPERSONATION_ENABLED === 'true';
 
-export function impersonationHttp() {
-  const origin = new URL(process.env.YAWP_PUBLIC_ORIGIN || '');
-  const local = process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(origin.hostname);
-  if ((!local && origin.protocol !== 'https:') || origin.username || origin.password
-    || origin.pathname !== '/' || origin.search || origin.hash) throw new Error('Invalid Yawp public origin');
-  const secrets = process.env.SESSION_SECRET?.split(',').filter(Boolean);
-  if (!secrets?.length) throw new Error('Session signing secret is required');
+function remoteClient() {
   // Local termination must work even after the feature is disabled or the
   // upstream service is unavailable. The lifecycle records pending remote ends.
   const unavailable = async (): Promise<never> => { throw new Error('Internal impersonation unavailable'); };
@@ -24,6 +19,17 @@ export function impersonationHttp() {
     if (key === process.env.YAWP_MANAGEMENT_SERVICE_KEY) throw new Error('Distinct service credentials required');
     remote = new InternalImpersonationClient(process.env.INTERNAL_PLATFORM_ORIGIN || '', key);
   } catch { /* start/resolve fail closed; local end remains available */ }
+  return remote;
+}
+
+export function impersonationHttp() {
+  const origin = new URL(process.env.YAWP_PUBLIC_ORIGIN || '');
+  const local = process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(origin.hostname);
+  if ((!local && origin.protocol !== 'https:') || origin.username || origin.password
+    || origin.pathname !== '/' || origin.search || origin.hash) throw new Error('Invalid Yawp public origin');
+  const secrets = process.env.SESSION_SECRET?.split(',').filter(Boolean);
+  if (!secrets?.length) throw new Error('Session signing secret is required');
+  const remote = remoteClient();
   return createImpersonationHttp({
     origin: origin.origin, secrets, secure: origin.protocol === 'https:' || !local, enabled,
     service: new InternalImpersonationSessions(basePrisma, remote),
@@ -49,4 +55,15 @@ export const internalImpersonationMiddleware: MiddlewareFunction<Response> = asy
 export async function handoffPage() {
   if (!enabled()) throw new Response('Not found', { status: 404 });
   return impersonationHttp().page();
+}
+
+// Explicitly enabled independently of new-session issuance, so draining can
+// continue during a rollout rollback. A single loop survives dev module reloads.
+const deliveryState = globalThis as typeof globalThis & { yawpInternalEndDelivery?: () => void };
+export function startImpersonationEndDelivery() {
+  if (process.env.INTERNAL_END_DELIVERY_ENABLED !== 'true' || deliveryState.yawpInternalEndDelivery) return;
+  deliveryState.yawpInternalEndDelivery = startEndDelivery(
+    () => new InternalImpersonationSessions(basePrisma, remoteClient()).flushPendingEnds(),
+    { reportFailure: () => console.error({ event: 'internal_impersonation_end_delivery_failed' }) },
+  );
 }
