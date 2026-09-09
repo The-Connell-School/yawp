@@ -15,6 +15,18 @@ import {
   DAILY_PAGES_RUBRIC,
   DAILY_PAGES_SCORING_SCALE,
 } from './daily-pages-rubric';
+import {
+  DAILY_PAGES_REFLECTION_PROMPT_CONFIG,
+  DAILY_PAGES_REFLECTION_RUBRIC,
+  DAILY_PAGES_REFLECTION_SCORING_SCALE,
+} from './daily-pages-reflection-rubric';
+import {
+  CLASS_STARTER_ASSIGNMENT_TYPE_KIND,
+  CLASS_STARTER_PROMPT_CONFIG,
+  CLASS_STARTER_RUBRIC,
+  CLASS_STARTER_SCORING_SCALE,
+} from './class-starter-rubric';
+import { isDailyPagesSplitEnabled } from './daily-pages-split';
 
 export const MODULE_RUBRIC_RELATIONSHIPS = [
   'primary',
@@ -29,7 +41,9 @@ export type ModuleRubricRelationship =
 export type AssignmentTypeRubricConfigSource =
   | 'assignment-type'
   | 'thesis-default'
-  | 'daily-pages-default';
+  | 'daily-pages-default'
+  | 'daily-pages-reflection-default'
+  | 'class-starter-default';
 
 export type AssignmentTypeRubricConfigInput = {
   /**
@@ -42,6 +56,12 @@ export type AssignmentTypeRubricConfigInput = {
   gradingPromptConfigJson?: unknown;
   gradingOutputSchemaJson?: unknown;
   gradingCalibrationNotes?: string | null;
+  /**
+   * Overrides the ambient Daily Pages split flag. Present so callers that
+   * already know the rollout state — and tests, which must be able to assert
+   * both sides — do not depend on process environment at call time.
+   */
+  dailyPagesSplitEnabled?: boolean;
 };
 
 export type AssignmentTypeRubricConfig = {
@@ -103,24 +123,65 @@ const thesisDefaultConfig: AssignmentTypeRubricConfig = {
  * A kind listed here needs no data migration: an existing row picks its default
  * up on the next grading run, and a row that saved its own rubric still wins.
  */
+const dailyPagesLegacyConfig: AssignmentTypeRubricConfig = {
+  source: 'daily-pages-default',
+  scoringScale: DAILY_PAGES_SCORING_SCALE,
+  rubric: DAILY_PAGES_RUBRIC,
+  promptConfig: DAILY_PAGES_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'Daily Pages judges engagement only, with overall feedback and no grammar highlighting.',
+  rubricIncomplete: false,
+  defaultLabel: 'Daily Pages engagement',
+};
+
+/**
+ * The soft assistant, under the name it is keeping. Class Starter is what
+ * Daily Pages was: one engagement judgment, overall feedback, no markup.
+ */
+const classStarterConfig: AssignmentTypeRubricConfig = {
+  source: 'class-starter-default',
+  scoringScale: CLASS_STARTER_SCORING_SCALE,
+  rubric: CLASS_STARTER_RUBRIC,
+  promptConfig: CLASS_STARTER_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'Class Starter judges engagement only — that the student wrote and reflected — with overall feedback and no grammar highlighting.',
+  rubricIncomplete: false,
+  defaultLabel: 'Class Starter engagement',
+};
+
+/**
+ * The harder assistant: a reflection on an assigned text or topic, judged on
+ * three categories with per-category feedback. Reached only when the split
+ * flag is on, so no existing Daily Pages row changes how it grades until the
+ * rollout says so.
+ */
+const dailyPagesReflectionConfig: AssignmentTypeRubricConfig = {
+  source: 'daily-pages-reflection-default',
+  scoringScale: DAILY_PAGES_REFLECTION_SCORING_SCALE,
+  rubric: DAILY_PAGES_REFLECTION_RUBRIC,
+  promptConfig: DAILY_PAGES_REFLECTION_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'Daily Pages judges a reflection on an assigned text or topic across engagement with the source, depth of reflection, and clarity, with per-category feedback and no grammar highlighting. Effort alone earns the middle of the scale.',
+  rubricIncomplete: false,
+  defaultLabel: 'Daily Pages reflection',
+};
+
 const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
-  [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: {
-    source: 'daily-pages-default',
-    scoringScale: DAILY_PAGES_SCORING_SCALE,
-    rubric: DAILY_PAGES_RUBRIC,
-    promptConfig: DAILY_PAGES_PROMPT_CONFIG,
-    outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
-    calibrationNotes:
-      'Daily Pages judges engagement only, with overall feedback and no grammar highlighting.',
-    rubricIncomplete: false,
-    defaultLabel: 'Daily Pages engagement',
-  },
+  [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: dailyPagesLegacyConfig,
+  [CLASS_STARTER_ASSIGNMENT_TYPE_KIND]: classStarterConfig,
 };
 
 function getDefaultRubricConfig(
-  assignmentTypeKind: string | null | undefined
+  assignmentTypeKind: string | null | undefined,
+  splitEnabled: boolean
 ): AssignmentTypeRubricConfig {
   if (!assignmentTypeKind) return thesisDefaultConfig;
+  if (assignmentTypeKind === DAILY_PAGES_ASSIGNMENT_TYPE_KIND) {
+    return splitEnabled ? dailyPagesReflectionConfig : dailyPagesLegacyConfig;
+  }
   return defaultRubricConfigsByKind[assignmentTypeKind] ?? thesisDefaultConfig;
 }
 
@@ -190,7 +251,10 @@ export function parseAssignmentTypeRubricConfig(
 
   if (completeness === 'none') {
     return {
-      ...getDefaultRubricConfig(input.assignmentTypeKind),
+      ...getDefaultRubricConfig(
+        input.assignmentTypeKind,
+        input.dailyPagesSplitEnabled ?? isDailyPagesSplitEnabled()
+      ),
       rubricIncomplete: false,
     };
   }

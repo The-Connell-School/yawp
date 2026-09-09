@@ -434,3 +434,115 @@ describe('customizable rubric category options', () => {
     expect(config.rubric.categories[0].grammarHighlighting).toBeUndefined();
   });
 });
+
+describe('the default rubric config for a Class Starter assignment type', () => {
+  test('falls back to the Class Starter engagement rubric', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'class_starter',
+    });
+
+    expect(config.source).toBe('class-starter-default');
+    expect(config.rubric.categories.map((category) => category.key)).toEqual([
+      'engagement',
+    ]);
+    expect(config.scoringScale).toMatchObject({ minScore: 0, maxScore: 3 });
+    expect(config.defaultLabel).toBe('Class Starter engagement');
+  });
+
+  test('does not depend on the split flag: it is the same either way', () => {
+    const off = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'class_starter',
+      dailyPagesSplitEnabled: false,
+    });
+    const on = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'class_starter',
+      dailyPagesSplitEnabled: true,
+    });
+
+    expect(off.source).toBe('class-starter-default');
+    expect(on.source).toBe('class-starter-default');
+  });
+
+  test('a Class Starter type with its own saved rubric keeps that rubric', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'class_starter',
+      rubricJson: {
+        categories: [
+          {
+            key: 'effort',
+            label: 'Effort',
+            description: 'Did they try?',
+            weight: 1,
+          },
+        ],
+      },
+    });
+
+    expect(config.source).toBe('assignment-type');
+  });
+});
+
+describe('the Daily Pages split flag', () => {
+  test('off: Daily Pages grades exactly as it always has', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'daily_pages',
+      dailyPagesSplitEnabled: false,
+    });
+
+    expect(config.source).toBe('daily-pages-default');
+    expect(config.rubric.categories.map((category) => category.key)).toEqual([
+      'engagement',
+    ]);
+  });
+
+  test('on: Daily Pages grades the harder reflection rubric', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'daily_pages',
+      dailyPagesSplitEnabled: true,
+    });
+
+    expect(config.source).toBe('daily-pages-reflection-default');
+    expect(config.rubric.categories).toHaveLength(3);
+    expect(config.scoringScale).toMatchObject({ minScore: 0, maxScore: 4 });
+    expect(config.defaultLabel).toBe('Daily Pages reflection');
+  });
+
+  test('on: a Daily Pages type with its own saved rubric is untouched', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'daily_pages',
+      dailyPagesSplitEnabled: true,
+      rubricJson: {
+        categories: [
+          {
+            key: 'engagement_with_prompt',
+            label: 'Engagement with Prompt',
+            description: 'Production scores this out of thirty.',
+            weight: 1,
+          },
+        ],
+      },
+    });
+
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubric.categories.map((category) => category.key)).toEqual([
+      'engagement_with_prompt',
+    ]);
+  });
+
+  test('the two assistants are different objects, not the same one renamed', () => {
+    const classStarter = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'class_starter',
+    });
+    const dailyPages = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'daily_pages',
+      dailyPagesSplitEnabled: true,
+    });
+
+    expect(dailyPages.promptConfig.gradingInstructions).not.toBe(
+      classStarter.promptConfig.gradingInstructions
+    );
+    expect(dailyPages.rubric.categories.length).toBeGreaterThan(
+      classStarter.rubric.categories.length
+    );
+  });
+});
