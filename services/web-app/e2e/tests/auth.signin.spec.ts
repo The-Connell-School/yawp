@@ -49,12 +49,14 @@ test.describe('Authentication - real sign in', () => {
       await page.locator('input[type="password"]').fill(TEST_USER.password);
       await page.getByRole('button', { name: /log in/i }).click();
 
-      await expect(page).toHaveURL(/\/enter-code$/);
+      await expect(page).toHaveURL(/\/app\/?$/);
+      const classCodeDialog = page.getByRole('dialog');
+      await expect(classCodeDialog).toBeVisible();
       await expect(
-        page.getByRole('button', { name: 'Log out' })
+        classCodeDialog.getByRole('button', { name: 'Sign out' })
       ).toBeVisible();
 
-      await page.getByRole('button', { name: 'Log out' }).click();
+      await classCodeDialog.getByRole('button', { name: 'Sign out' }).click();
       await expect(page).toHaveURL(/\/auth\/login$/);
     } finally {
       await prisma.orgMembership.update({

@@ -1,13 +1,21 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  $transaction: mock(async (fn: any) => fn(prisma)),
+  $queryRaw: mock(),
   class: { findFirst: mock(), findMany: mock() },
   documentClassForensic: { findMany: mock() },
   assignmentType: { findMany: mock() },
-  orgMembership: { findUnique: mock(), findMany: mock() },
+  orgMembership: {
+    findUnique: mock(),
+    findMany: mock(),
+    update: mock(),
+  },
+  documentGroupMember: { updateMany: mock() },
   pasteAlert: { findMany: mock() },
   submission: { findMany: mock() },
   document: { findMany: mock() },
+  documentGroup: { findFirst: mock() },
   assignment: {
     findFirst: mock(),
     findMany: mock(),
@@ -24,14 +32,14 @@ const requireMembership = mock();
 const getSubmittedPapersFilter = mock();
 const createAssignmentDeployedToClasses = mock();
 const deleteClassAssignmentDeployment = mock();
+class AssignmentHasCollaborativeWorkError extends Error {}
 const getAvailableAssignmentTypesForScopes = mock();
 const isAssignmentTypeAvailableForEveryScope = mock();
 const uploadAssignmentPromptAttachment = mock();
 const deleteAssignmentPromptAttachment = mock();
 class AssignmentPromptAttachmentError extends Error {}
-const actualAssignmentPromptAttachment = await import(
-  '~/domain/assignments/assignment-prompt-attachment.server'
-);
+const actualAssignmentPromptAttachment =
+  await import('~/domain/assignments/assignment-prompt-attachment.server');
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -49,28 +57,25 @@ mock.module('~/utils/cookies.server', () => ({
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
 // before any file could mock.module() this path (see comment there).
-const actualAssignmentTypeAccess = globalThis.__realModules[
-  '~/utils/assignment-type-access.server'
-];
+const actualAssignmentTypeAccess =
+  globalThis.__realModules['~/utils/assignment-type-access.server'];
 mock.module('~/utils/assignment-type-access.server', () => ({
   ...actualAssignmentTypeAccess,
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForEveryScope,
 }));
 mock.module('~/utils/assignment-deployment.server', () => ({
+  AssignmentHasCollaborativeWorkError,
   createAssignmentDeployedToClasses,
   deleteClassAssignmentDeployment,
 }));
-mock.module(
-  '~/domain/assignments/assignment-prompt-attachment.server',
-  () => ({
-    ...actualAssignmentPromptAttachment,
-    AssignmentPromptAttachmentError,
-    assignmentPromptAttachmentRequestTooLarge: () => false,
-    deleteAssignmentPromptAttachment,
-    uploadAssignmentPromptAttachment,
-  })
-);
+mock.module('~/domain/assignments/assignment-prompt-attachment.server', () => ({
+  ...actualAssignmentPromptAttachment,
+  AssignmentPromptAttachmentError,
+  assignmentPromptAttachmentRequestTooLarge: () => false,
+  deleteAssignmentPromptAttachment,
+  uploadAssignmentPromptAttachment,
+}));
 
 const {
   action: routeAction,
@@ -104,6 +109,10 @@ describe('class detail loader document visibility', () => {
     isAssignmentTypeAvailableForEveryScope.mockReset();
     uploadAssignmentPromptAttachment.mockReset();
     deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
+    prisma.$transaction
+      .mockReset()
+      .mockImplementation(async (fn: any) => fn(prisma));
+    prisma.$queryRaw.mockReset().mockResolvedValue([]);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -136,6 +145,7 @@ describe('class detail loader document visibility', () => {
     prisma.pasteAlert.findMany.mockResolvedValue([]);
     prisma.submission.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
+    prisma.documentGroup.findFirst.mockResolvedValue(null);
     prisma.classAssignment.findMany.mockResolvedValue([]);
     prisma.classAssignmentInsight.findMany.mockResolvedValue([]);
     prisma.assignment.findMany.mockResolvedValue([]);
@@ -176,9 +186,9 @@ describe('class detail loader document visibility', () => {
         deletedAt: null,
       },
     });
-    expect(prisma.submission.findMany.mock.calls[0][0].where.unsubmittedAt).toBe(
-      null
-    );
+    expect(
+      prisma.submission.findMany.mock.calls[0][0].where.unsubmittedAt
+    ).toBe(null);
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       ...expectedScope,
       deletedAt: null,
@@ -232,7 +242,10 @@ describe('class detail loader document visibility', () => {
         organization: { classInsightsEnabled: true, reporterEnabled: true },
       },
       students: [
-        { id: 'student-1', user: { name: 'Ada Lovelace', email: 'ada@x.test' } },
+        {
+          id: 'student-1',
+          user: { name: 'Ada Lovelace', email: 'ada@x.test' },
+        },
       ],
     });
     prisma.reporterGrowthPlan.findMany.mockResolvedValue([
@@ -293,8 +306,14 @@ describe('class detail loader document visibility', () => {
         organization: { classInsightsEnabled: false, reporterEnabled: false },
       },
       students: [
-        { id: 'student-1', user: { name: 'Ada Lovelace', email: 'ada@x.test' } },
-        { id: 'student-2', user: { name: 'Grace Hopper', email: 'grace@x.test' } },
+        {
+          id: 'student-1',
+          user: { name: 'Ada Lovelace', email: 'ada@x.test' },
+        },
+        {
+          id: 'student-2',
+          user: { name: 'Grace Hopper', email: 'grace@x.test' },
+        },
       ],
     });
     prisma.pasteAlert.findMany.mockResolvedValue([
@@ -368,7 +387,12 @@ describe('class detail loader document visibility', () => {
           teacherProfileId: 'teacher-1',
         },
       ],
-      select: { id: true, title: true, systemKey: true },
+      select: {
+        id: true,
+        title: true,
+        systemKey: true,
+        collaborationSupported: true,
+      },
       orderBy: { position: 'asc' },
     });
     expect(data.assignmentTypes).toEqual([
@@ -395,6 +419,7 @@ describe('class detail loader document visibility', () => {
           _count: { classAssignments: 2 },
         },
         _count: { documents: 2 },
+        documentGroups: [],
       },
     ]);
 
@@ -426,7 +451,6 @@ describe('class detail loader document visibility', () => {
       { id: 'assignment-1' },
       { id: 'assignment-2' },
     ]);
-    prisma.assignment.deleteMany.mockResolvedValue({ count: 2 });
     const form = new FormData();
     form.append('intent', 'delete-assignments');
     form.append('assignmentIds', 'assignment-1');
@@ -452,8 +476,46 @@ describe('class detail loader document visibility', () => {
       },
       select: { id: true },
     });
-    expect(prisma.assignment.deleteMany).toHaveBeenCalledWith({
-      where: { id: { in: ['assignment-1', 'assignment-2'] } },
+    expect(deleteClassAssignmentDeployment).toHaveBeenCalledTimes(2);
+    expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
+      assignmentId: 'assignment-1',
+      classId: 'class-1',
+    });
+    expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
+      assignmentId: 'assignment-2',
+      classId: 'class-1',
+    });
+  });
+
+  test('removing a student withdraws shared-artifact access before enrollment', async () => {
+    prisma.orgMembership.findMany.mockResolvedValue([{ id: 'student-1' }]);
+    prisma.documentGroupMember.updateMany.mockResolvedValue({ count: 2 });
+    prisma.orgMembership.update.mockResolvedValue({});
+    const form = new FormData();
+    form.append('intent', 'remove-students');
+    form.append('studentProfileIds', 'student-1');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toEqual({ success: true });
+    expect(prisma.documentGroupMember.updateMany).toHaveBeenCalledWith({
+      where: {
+        membershipId: { in: ['student-1'] },
+        removedAt: null,
+        group: { classAssignment: { classId: 'class-1' } },
+      },
+      data: { removedAt: expect.any(Date) },
+    });
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith({
+      where: { id: 'student-1' },
+      data: { classesAsStudent: { disconnect: { id: 'class-1' } } },
     });
   });
 
@@ -478,7 +540,27 @@ describe('class detail loader document visibility', () => {
       success: false,
       message: 'Some assignments were not found.',
     });
-    expect(prisma.assignment.deleteMany).not.toHaveBeenCalled();
+    expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
+  });
+
+  test('bulk deletion protects assignments with shared group work', async () => {
+    prisma.assignment.findMany.mockResolvedValue([{ id: 'assignment-1' }]);
+    prisma.documentGroup.findFirst.mockResolvedValue({ id: 'group-1' });
+    const form = new FormData();
+    form.append('intent', 'delete-assignments');
+    form.append('assignmentIds', 'assignment-1');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.init).toMatchObject({ status: 409 });
+    expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
   });
 
   test('deletes one class deployment without directly changing student documents', async () => {
@@ -805,7 +887,8 @@ describe('class detail loader document visibility', () => {
 
     expect(response.data).toMatchObject({
       success: false,
-      message: 'Point value must be a positive whole number no greater than 1000.',
+      message:
+        'Point value must be a positive whole number no greater than 1000.',
     });
     expect(response.init).toMatchObject({ status: 400 });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
@@ -959,6 +1042,19 @@ describe('class detail loader for students', () => {
       archivedAt: null,
       OR: [
         { classAssignment: { classId: 'class-1' }, membershipId: 'student-1' },
+        {
+          classAssignment: {
+            classId: 'class-1',
+            OR: [{ postAt: null }, { postAt: { lte: expect.any(Date) } }],
+          },
+          group: {
+            is: {
+              members: {
+                some: { membershipId: 'student-1', removedAt: null },
+              },
+            },
+          },
+        },
         { classAssignmentId: null, membershipId: 'student-1' },
       ],
     });

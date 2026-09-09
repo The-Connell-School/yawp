@@ -444,12 +444,13 @@ export async function ensureCertificate({
   }
 }
 
-async function residentHostnames(root, domain) {
+export async function residentPreviewHostnames(root, domain) {
   const entries = await readdir(path.join(root, 'previews'), { withFileTypes: true });
   const hostnames = [];
   for (const entry of entries) {
     if (!entry.isDirectory() || !/^pr-[1-9][0-9]*$/.test(entry.name)) continue;
     hostnames.push(`${entry.name}.${domain}`);
+    hostnames.push(`ua-${entry.name}.${domain}`);
     hostnames.push(`blackboard-${entry.name}.${domain}`);
   }
   return hostnames.sort((a, b) => parsePreviewPr(a, domain) - parsePreviewPr(b, domain));
@@ -483,7 +484,7 @@ if (isDirectExecution(import.meta.url)) {
     console.log(`Imported ${imported.length} resident preview certificate(s)`);
   } else {
     const hostnames = mode === '--resident'
-      ? await residentHostnames(root, domain)
+      ? await residentPreviewHostnames(root, domain)
       : [String(mode || '')];
     if (hostnames.length === 0) throw new Error('No resident preview certificates to maintain');
     const report = await maintainCertificates({

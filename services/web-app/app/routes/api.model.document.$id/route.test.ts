@@ -150,6 +150,44 @@ describe('api.model.document.$id', () => {
     expect(activity.changes.body.after.html.length).toBe(22);
   });
 
+  test('a teacher cannot replace the submitted body of a shared artifact', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1' },
+    });
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      text: 'Group body',
+      html: '<p>Group body</p>',
+      updatedAt: new Date('2026-08-20T08:00:00.000Z'),
+      releasedAt: null,
+      document: {
+        artifactKind: 'ASSIGNMENT_GROUP',
+        membership: null,
+      },
+    });
+
+    const form = new FormData();
+    form.append('html', '<p>Teacher rewrite</p>');
+    form.append('text', 'Teacher rewrite');
+    const response = (await action({
+      request: new Request(
+        'https://example.com/api/model/document/doc-1?snapshotId=sub-1',
+        { method: 'PUT', body: form }
+      ),
+      params: { id: 'doc-1' },
+    } as any)) as Response;
+
+    expect(response.status).toBe(403);
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
+    expect(prisma.documentWriteJournal.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'rejected' }),
+      })
+    );
+  });
+
   test('rolls back the protected snapshot mutation when journal acceptance fails', async () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
@@ -269,7 +307,10 @@ describe('api.model.document.$id', () => {
     expect(
       prisma.submission.findFirst.mock.calls[0][0].where.document.is.AND
     ).toContainEqual({
-      membership: { is: { userId: { not: 'user-1' } } },
+      OR: [
+        { artifactKind: 'ASSIGNMENT_GROUP' },
+        { membership: { is: { userId: { not: 'user-1' } } } },
+      ],
     });
     expect(prisma.submission.updateMany).not.toHaveBeenCalled();
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
@@ -294,7 +335,14 @@ describe('api.model.document.$id', () => {
       prisma.submission.findFirst.mock.calls[0][0].where.document.is
     ).toEqual({
       deletedAt: null,
-      AND: [{ membership: { is: { userId: { not: 'user-1' } } } }],
+      AND: [
+        {
+          OR: [
+            { artifactKind: 'ASSIGNMENT_GROUP' },
+            { membership: { is: { userId: { not: 'user-1' } } } },
+          ],
+        },
+      ],
     });
     expect(prisma.submission.updateMany).not.toHaveBeenCalled();
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();

@@ -37,9 +37,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   let result:
-    | { kind: 'not-found' }
-    | { kind: 'own-document' }
-    | { kind: 'success' };
+    { kind: 'not-found' } | { kind: 'own-document' } | { kind: 'success' };
 
   try {
     result = await prisma.$transaction(async (tx) => {
@@ -70,6 +68,15 @@ export async function action({ request }: ActionFunctionArgs) {
                   userId: true,
                 },
               },
+              classAssignment: {
+                select: {
+                  class: {
+                    select: {
+                      school: { select: { organizationId: true } },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -84,7 +91,7 @@ export async function action({ request }: ActionFunctionArgs) {
           actor.membershipId,
           submission.document.membershipId,
           actor.userId,
-          submission.document.membership.userId
+          submission.document.membership?.userId
         )
       ) {
         return { kind: 'own-document' as const };
@@ -98,16 +105,7 @@ export async function action({ request }: ActionFunctionArgs) {
           document: {
             is: {
               deletedAt: null,
-              AND: [
-                {
-                  membership: {
-                    is: {
-                      userId: { not: actor.userId },
-                    },
-                  },
-                },
-                buildTeacherClassWhere(actor),
-              ],
+              ...buildTeacherClassWhere(actor),
             },
           },
         },
@@ -121,7 +119,9 @@ export async function action({ request }: ActionFunctionArgs) {
       }
 
       const organizationId =
-        submission.document.membership.organizationId ?? actor.organizationId;
+        submission.document.classAssignment?.class?.school?.organizationId ??
+        submission.document.membership?.organizationId ??
+        actor.organizationId;
       await recordSubmissionActivity(tx, {
         submissionId: submission.id,
         organizationId,
@@ -192,4 +192,3 @@ export async function action({ request }: ActionFunctionArgs) {
       'Submission withdrawn. The student’s document remains editable for resubmission.',
   });
 }
-

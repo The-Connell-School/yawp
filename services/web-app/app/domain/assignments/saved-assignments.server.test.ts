@@ -28,6 +28,9 @@ const row = (overrides: Record<string, unknown> = {}) => ({
   pointValue: 100,
   gradingAssistantStrictnessLevel: 'intermediate',
   tutorEnabled: true,
+  collaborationEnabled: false,
+  collaborationGroupMode: 'teacher',
+  collaborationGroupSize: null,
   createdAt: new Date('2026-08-08T12:00:00.000Z'),
   assignmentType: { id: 'at-1', title: 'Essay' },
   ...overrides,
@@ -49,6 +52,9 @@ describe('saveAssignmentForReuse', () => {
       pointValue: 100,
       gradingAssistantStrictnessLevel: 'intermediate',
       tutorEnabled: true,
+      collaborationEnabled: false,
+      collaborationGroupMode: 'teacher',
+      collaborationGroupSize: null,
     });
 
     expect(saved).toEqual({
@@ -59,6 +65,9 @@ describe('saveAssignmentForReuse', () => {
       pointValue: 100,
       gradingAssistantStrictnessLevel: 'intermediate',
       tutorEnabled: true,
+      collaborationEnabled: false,
+      collaborationGroupMode: 'teacher',
+      collaborationGroupSize: null,
       assignmentTypeId: 'at-1',
       assignmentTypeTitle: 'Essay',
       savedAt: '2026-08-08T12:00:00.000Z',
@@ -101,6 +110,12 @@ describe('saveAssignmentForReuse', () => {
       pointValue: null,
       gradingAssistantStrictnessLevel: 'advanced',
       tutorEnabled: false,
+      // Re-saving rewrites the collaboration settings along with the rest of the
+      // configuration. Solo here because this caller passes none, which is the
+      // default every existing caller gets.
+      collaborationEnabled: false,
+      collaborationGroupMode: 'teacher',
+      collaborationGroupSize: null,
       archivedAt: null,
     });
   });
@@ -124,6 +139,9 @@ describe('saveAssignmentForReuse', () => {
       pointValue: 100,
       gradingAssistantStrictnessLevel: 'intermediate',
       tutorEnabled: true,
+      collaborationEnabled: false,
+      collaborationGroupMode: 'teacher',
+      collaborationGroupSize: null,
     });
 
     const args = prisma.savedAssignment.upsert.mock.calls[0][0];
@@ -140,6 +158,9 @@ describe('saveAssignmentForReuse', () => {
       pointValue: 100,
       gradingAssistantStrictnessLevel: 'intermediate',
       tutorEnabled: true,
+      collaborationEnabled: false,
+      collaborationGroupMode: 'teacher',
+      collaborationGroupSize: null,
     });
 
     const args = prisma.savedAssignment.upsert.mock.calls[0][0];
@@ -156,6 +177,9 @@ describe('saveAssignmentForReuse', () => {
       pointValue: 100,
       gradingAssistantStrictnessLevel: 'intermediate',
       tutorEnabled: true,
+      collaborationEnabled: false,
+      collaborationGroupMode: 'teacher',
+      collaborationGroupSize: null,
     });
 
     const args = prisma.savedAssignment.upsert.mock.calls[0][0];

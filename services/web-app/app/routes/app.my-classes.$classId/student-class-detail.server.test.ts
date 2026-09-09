@@ -119,13 +119,60 @@ describe('loadStudentClassDetail', () => {
       classId: 'class-1',
     });
 
-    expect(prisma.classAssignment.findMany.mock.calls[0][0].where).toEqual({
+    expect(prisma.classAssignment.findMany.mock.calls[0][0].where.classId).toBe(
+      'class-1'
+    );
+  });
+
+  test('hides a collaborative assignment until this student’s group is open', async () => {
+    // Before the teacher opens groups there is no document to open, so the
+    // assignment stays off the list rather than sitting there refusing the
+    // click. Solo assignments match the first branch and are unaffected.
+    await loadStudentClassDetail({
+      membershipId: 'student-1',
       classId: 'class-1',
+    });
+
+    const where = prisma.classAssignment.findMany.mock.calls[0][0].where;
+    expect(where.AND[0]).toEqual({
       OR: [
-        { postAt: null },
-        { postAt: { lte: expect.any(Date) } },
+        { assignment: { is: { collaborationEnabled: false } } },
+        {
+          documentGroups: {
+            some: {
+              openedAt: { not: null },
+              members: { some: { membershipId: 'student-1', removedAt: null } },
+            },
+          },
+        },
       ],
     });
+  });
+
+  test('hides an assignment until its post date', async () => {
+    await loadStudentClassDetail({
+      membershipId: 'student-1',
+      classId: 'class-1',
+    });
+
+    const where = prisma.classAssignment.findMany.mock.calls[0][0].where;
+    expect(where.AND[1]).toEqual({
+      OR: [{ postAt: null }, { postAt: { lte: expect.any(Date) } }],
+    });
+  });
+
+  test('applies both gates, neither overwriting the other', async () => {
+    // Each gate is expressed as an `OR`, so spreading them side by side would
+    // leave one silently overwriting the other at that key — showing a student
+    // either a group assignment they cannot open, or one before its post date.
+    await loadStudentClassDetail({
+      membershipId: 'student-1',
+      classId: 'class-1',
+    });
+
+    const where = prisma.classAssignment.findMany.mock.calls[0][0].where;
+    expect(where.AND).toHaveLength(2);
+    expect(where.OR).toBeUndefined();
   });
 
   test('scopes documents to this student in this class', async () => {
@@ -141,6 +188,22 @@ describe('loadStudentClassDetail', () => {
         {
           classAssignment: { classId: 'class-1' },
           membershipId: 'student-1',
+        },
+        {
+          classAssignment: {
+            classId: 'class-1',
+            OR: [
+              { postAt: null },
+              { postAt: { lte: expect.any(Date) } },
+            ],
+          },
+          group: {
+            is: {
+              members: {
+                some: { membershipId: 'student-1', removedAt: null },
+              },
+            },
+          },
         },
         { classAssignmentId: null, membershipId: 'student-1' },
       ],

@@ -58,6 +58,8 @@ import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ensureAssignmentModuleSessionsForDocument } from '~/domain/documents.server';
+import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
+import { documentReadWhere } from '~/utils/document-access.server';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { DocumentEditor } from './document-editor/document-editor';
@@ -197,6 +199,34 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: { id: userId },
     select: { isAdmin: true },
   });
+  const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
+
+  // A collaboration room never opens on this page.
+  //
+  // Students and teachers find their work through lists — my-documents, the
+  // dashboard, a class page — and every one of them links at
+  // `/app/documents/:id`. Only the two "start" routes and the share flow send
+  // anyone to the collaborative page, so a group's shared draft reached any
+  // other way landed in the solo editor: no collaborators, no live sync, and a
+  // save path competing with the room's dual-write for the same columns.
+  //
+  // Additive by construction. Every document that predates this feature has no
+  // group, so the predicate matches none of them and the loader below runs
+  // exactly as it did. Scoped to what this person may read so the redirect does
+  // not answer "is this id a shared draft?" for someone guessing ids — they get
+  // the same not-found the query below would have given them.
+  const collaborative = await prisma.document.findFirst({
+    where: {
+      id: params.id,
+      artifactKind: 'STUDENT',
+      ...collaborationRoomWhere(),
+      AND: [documentReadWhere({ profileId: profile.id, isAdmin })],
+    },
+    select: { id: true },
+  });
+  if (collaborative) {
+    throw redirect(`/app/collab-documents/${collaborative.id}${url.search}`);
+  }
 
   const doc = await prisma.document.findFirst({
     where: {
@@ -230,6 +260,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       title: true,
       html: true,
       text: true,
+      group: { select: { id: true } },
       assignmentType: {
         select: {
           id: true,
@@ -303,15 +334,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  if (!doc) {
+  if (!doc || !doc.membership) {
     return redirectWithToast('/app', {
       description: 'Document not found.',
       type: 'error',
     });
   }
+  const ownerMembership = doc.membership;
 
   const submissions = doc.submissions;
-  const isOwner = doc.membership.id === profile.id;
+  const isOwner = ownerMembership.id === profile.id;
   const wantsDraftEditor =
     url.searchParams.get('revise') === '1' ||
     url.searchParams.get('spa') === '1';
@@ -368,13 +400,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       []
     );
     if (created) {
-      assignmentModuleSessions = await prisma.assignmentModuleSession.findMany(
-        {
-          where: { documentId: doc.id, deletedAt: null },
-          orderBy: assignmentModuleSessionsOrderBy,
-          include: assignmentModuleSessionsInclude,
-        }
-      );
+      assignmentModuleSessions = await prisma.assignmentModuleSession.findMany({
+        where: { documentId: doc.id, deletedAt: null },
+        orderBy: assignmentModuleSessionsOrderBy,
+        include: assignmentModuleSessionsInclude,
+      });
     }
   }
 
@@ -417,7 +447,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           (cm) => cm.position === currentCms.assignmentModule.position + 1
         )?.id;
 
-
   const sortedComments = sortDocumentCommentsByMarkupOrder(
     doc.comments,
     doc.html
@@ -426,6 +455,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     doc: {
       ...doc,
+      membership: ownerMembership,
       assignmentModuleSessions: orderedModuleSessions,
       comments: sortedComments,
     },
@@ -534,9 +564,9 @@ export default function Route() {
       : fallbackCmsIdx;
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tutorEnabled = isTutorEnabledForAssignment(data.doc.assignment);
-  const tab =
-    searchParams.get('tab') ?? (tutorEnabled ? 'tutor' : 'editor');
-  const isViewingAsTeacher = data.doc && user.id !== data.doc?.membership.userId;
+  const tab = searchParams.get('tab') ?? (tutorEnabled ? 'tutor' : 'editor');
+  const isViewingAsTeacher =
+    data.doc && user.id !== data.doc?.membership.userId;
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
   const assignment = data.doc.assignment;
@@ -643,7 +673,8 @@ export default function Route() {
       ? allComments
       : activeComments
     : activeComments;
-  const studentName = data.doc.membership.user.name?.trim() || 'Unknown student';
+  const studentName =
+    data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
   const isSubmitting = submit.isSubmitting;
   const submitActionDisabled = isSubmitting || cannotSubmitEmpty;
@@ -730,8 +761,7 @@ export default function Route() {
   useEffect(() => {
     if (submissionUnsubmitFetcher.state !== 'idle') return;
     const body = submissionUnsubmitFetcher.data as
-      | { success?: boolean }
-      | undefined;
+      { success?: boolean } | undefined;
     if (body?.success && submissionToUnsubmit) {
       // The loader's shouldRevalidate never reruns for this fetcher (see
       // below), so update local state directly instead of relying on
@@ -868,7 +898,10 @@ export default function Route() {
                                 </Badge>
                               ) : null}
                               {isWithdrawn ? (
-                                <Badge variant="secondary" className="text-[10px]">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px]"
+                                >
                                   Withdrawn
                                 </Badge>
                               ) : (
@@ -1105,125 +1138,125 @@ export default function Route() {
         open={isFinalizeDialogOpen}
         onOpenChange={setIsFinalizeDialogOpen}
       >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-yellow-600" />
-                Submit Version {versionNumber}
-              </DialogTitle>
-              <DialogDescription asChild>
-                <div className="space-y-4 pt-2">
-                  <div className="space-y-2">
-                    <label
-                      htmlFor="submission-title"
-                      className="text-sm font-medium text-foreground"
-                    >
-                      Submission Title
-                    </label>
-                    <Input
-                      id="submission-title"
-                      value={submissionTitle}
-                      onChange={(e) => setSubmissionTitle(e.target.value)}
-                      placeholder="Enter a title for this submission"
-                    />
-                  </div>
-                  <ul className="list-disc space-y-1.5 pl-5 text-sm">
-                    <li>
-                      Submitting creates a snapshot of your essay for your
-                      teacher to grade.
-                    </li>
-                    <li>You can keep editing and submit again after this.</li>
-                  </ul>
-                  {activeSubmissions.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-foreground">
-                        Previous submissions
-                      </p>
-                      <div className="max-h-32 overflow-y-auto rounded-md border">
-                        {activeSubmissions.map((s) => {
-                          const v = versionLabelForActiveSubmission(
-                            activeSubmissions,
-                            s.id
-                          );
-                          const isGraded = s.releasedAt != null;
-                          const label = displaySubmissionTitle(
-                            s.title,
-                            v,
-                            'Untitled submission'
-                          );
-                          return (
-                            <a
-                              key={s.id}
-                              href={`/app/submissions/${s.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm hover:bg-muted/50 last:border-0"
-                            >
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className="truncate">{label}</span>
-                                <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                              </div>
-                              <Badge
-                                variant={isGraded ? 'success' : 'secondary'}
-                                className="shrink-0 text-[10px]"
-                              >
-                                {isGraded ? 'Graded' : 'Submitted'}
-                              </Badge>
-                            </a>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsFinalizeDialogOpen(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              {cannotSubmitEmpty && !isSubmitting ? (
-                <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
-                  <span
-                    className="inline-flex"
-                    data-testid="document-finalize-submit-empty-trigger"
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-yellow-600" />
+              Submit Version {versionNumber}
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="submission-title"
+                    className="text-sm font-medium text-foreground"
                   >
-                    <Button
-                      variant="default"
-                      data-testid="document-finalize-submit"
-                      disabled
-                    >
-                      {`Submit Version ${versionNumber}`}
-                    </Button>
-                  </span>
-                </Tooltip>
-              ) : (
-                <Button
-                  variant="default"
-                  data-testid="document-finalize-submit"
-                  onClick={() => {
-                    const resolved =
-                      submissionTitle.trim() || getLiveDocumentTitle().trim();
-                    void submit.submitNow(resolved);
-                  }}
-                  disabled={submitActionDisabled}
+                    Submission Title
+                  </label>
+                  <Input
+                    id="submission-title"
+                    value={submissionTitle}
+                    onChange={(e) => setSubmissionTitle(e.target.value)}
+                    placeholder="Enter a title for this submission"
+                  />
+                </div>
+                <ul className="list-disc space-y-1.5 pl-5 text-sm">
+                  <li>
+                    Submitting creates a snapshot of your essay for your teacher
+                    to grade.
+                  </li>
+                  <li>You can keep editing and submit again after this.</li>
+                </ul>
+                {activeSubmissions.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-foreground">
+                      Previous submissions
+                    </p>
+                    <div className="max-h-32 overflow-y-auto rounded-md border">
+                      {activeSubmissions.map((s) => {
+                        const v = versionLabelForActiveSubmission(
+                          activeSubmissions,
+                          s.id
+                        );
+                        const isGraded = s.releasedAt != null;
+                        const label = displaySubmissionTitle(
+                          s.title,
+                          v,
+                          'Untitled submission'
+                        );
+                        return (
+                          <a
+                            key={s.id}
+                            href={`/app/submissions/${s.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm hover:bg-muted/50 last:border-0"
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="truncate">{label}</span>
+                              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            </div>
+                            <Badge
+                              variant={isGraded ? 'success' : 'secondary'}
+                              className="shrink-0 text-[10px]"
+                            >
+                              {isGraded ? 'Graded' : 'Submitted'}
+                            </Badge>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsFinalizeDialogOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            {cannotSubmitEmpty && !isSubmitting ? (
+              <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
+                <span
+                  className="inline-flex"
+                  data-testid="document-finalize-submit-empty-trigger"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    `Submit Version ${versionNumber}`
-                  )}
-                </Button>
-              )}
-            </DialogFooter>
-          </DialogContent>
+                  <Button
+                    variant="default"
+                    data-testid="document-finalize-submit"
+                    disabled
+                  >
+                    {`Submit Version ${versionNumber}`}
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : (
+              <Button
+                variant="default"
+                data-testid="document-finalize-submit"
+                onClick={() => {
+                  const resolved =
+                    submissionTitle.trim() || getLiveDocumentTitle().trim();
+                  void submit.submitNow(resolved);
+                }}
+                disabled={submitActionDisabled}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  `Submit Version ${versionNumber}`
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
       <Dialog
         open={submissionToUnsubmit != null}
@@ -1243,8 +1276,7 @@ export default function Route() {
           </DialogHeader>
           {(
             submissionUnsubmitFetcher.data as
-              | { success?: boolean; message?: string }
-              | undefined
+              { success?: boolean; message?: string } | undefined
           )?.success === false ? (
             <p role="alert" className="text-sm text-destructive">
               {(submissionUnsubmitFetcher.data as { message?: string }).message}

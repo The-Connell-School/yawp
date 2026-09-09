@@ -156,6 +156,22 @@ describe('app index loader assignments', () => {
     expect(getAvailableAssignmentTypesForScopes).not.toHaveBeenCalled();
   });
 
+  test('keeps a classless student on the dashboard and returns blocking class-code state', async () => {
+    prisma.orgMembership.findUnique.mockResolvedValue({
+      _count: { classesAsStudent: 0 },
+    });
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(response).not.toBeInstanceOf(Response);
+    expect(data.requiresClassCode).toBe(true);
+  });
+
   test('does not load documents or assignments for the student dashboard', async () => {
     const response = await loader({
       request: new Request('https://example.test/app'),
@@ -701,7 +717,10 @@ describe('app index loader assignments', () => {
       },
     ]);
     expect(data.assignmentCreationTypes).toEqual([
-      { id: 'type-1', title: 'Daily Pages' },
+      // Defaulted rather than omitted: the sheet reads this to decide whether to
+      // offer collaborative drafts, and an absent flag would read as supported
+      // nowhere but be indistinguishable from a select that forgot to ask.
+      { id: 'type-1', title: 'Daily Pages', collaborationSupported: false },
     ]);
   });
 });

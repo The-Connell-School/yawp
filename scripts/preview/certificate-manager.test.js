@@ -17,6 +17,7 @@ import {
   importResidentTraefikCertificates,
   isDirectExecution,
   maintainCertificates,
+  residentPreviewHostnames,
   validateCertificatePair,
 } from './certificate-manager.mjs';
 
@@ -50,6 +51,19 @@ afterEach(() => {
 });
 
 describe('preview certificate manager', () => {
+  test('includes the UA alias for every resident PR preview', async () => {
+    const root = temporaryRoot('preview-cert-resident-hosts-');
+    mkdirSync(path.join(root, 'previews', 'pr-241'), { recursive: true });
+    mkdirSync(path.join(root, 'previews', 'demo'), { recursive: true });
+
+    expect(
+      await residentPreviewHostnames(root, 'preview.yawp.school')
+    ).toEqual([
+      'pr-241.preview.yawp.school',
+      'ua-pr-241.preview.yawp.school',
+      'blackboard-pr-241.preview.yawp.school',
+    ]);
+  });
   test('runs renewal when systemd invokes the release through the current symlink', () => {
     const root = temporaryRoot('preview-cert-entrypoint-');
     const target = new URL('./certificate-manager.mjs', import.meta.url);

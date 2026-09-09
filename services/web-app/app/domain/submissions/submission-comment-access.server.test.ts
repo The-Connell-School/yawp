@@ -34,6 +34,25 @@ describe('lockSubmissionCommentAccess', () => {
     expect(queryRaw).toHaveBeenCalledTimes(2);
   });
 
+  test('accepts assignment-specific teacher access when the artifact has no owner', async () => {
+    const queryRaw = mock()
+      .mockResolvedValueOnce([
+        anchor({
+          documentMembershipId: null,
+          documentOwnerUserId: null,
+        }),
+      ])
+      .mockResolvedValueOnce([{ id: 'class-assignment-1' }]);
+
+    await expect(
+      lockSubmissionCommentAccess({ $queryRaw: queryRaw } as any, {
+        submissionId: 'sub-1',
+        actorMembershipId: 'teacher-1',
+        actorUserId: 'teacher-user-1',
+      })
+    ).resolves.toBe(true);
+  });
+
   test('locks and accepts legacy class teacher access', async () => {
     const queryRaw = mock()
       .mockResolvedValueOnce([anchor({ classAssignmentId: null })])
@@ -60,14 +79,11 @@ describe('lockSubmissionCommentAccess', () => {
     ]) {
       const queryRaw = mock().mockResolvedValueOnce([deniedAnchor]);
       expect(
-        await lockSubmissionCommentAccess(
-          { $queryRaw: queryRaw } as any,
-          {
-            submissionId: 'sub-1',
-            actorMembershipId: 'teacher-1',
-            actorUserId: 'teacher-user-1',
-          }
-        )
+        await lockSubmissionCommentAccess({ $queryRaw: queryRaw } as any, {
+          submissionId: 'sub-1',
+          actorMembershipId: 'teacher-1',
+          actorUserId: 'teacher-user-1',
+        })
       ).toBe(false);
       expect(queryRaw).toHaveBeenCalledTimes(1);
     }

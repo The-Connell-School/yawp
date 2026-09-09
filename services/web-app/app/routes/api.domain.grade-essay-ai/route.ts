@@ -16,7 +16,7 @@ import {
   ACT_WRITING_SCORING_TYPE,
   rubricScaleGradeFields,
 } from '~/domain/grading/recorded-grade';
-import { firstNameFromFullName } from '~/domain/grading/personalize';
+import { gradingAddressee } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
@@ -29,7 +29,6 @@ import {
   buildGradingPromptShape,
   buildGradingResponseSchemaText,
 } from '~/domain/grading/grading-prompt-shape';
-import { buildGradingRequest } from '~/domain/grading/grading-request';
 import {
   applyGradingAssistantStrictnessToActComposite,
   applyGradingAssistantStrictnessToPercentage,
@@ -37,6 +36,7 @@ import {
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
+import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   extractJsonObjectCandidates,
@@ -48,6 +48,7 @@ import {
 } from '~/utils/ai-context-audit.server';
 import {
   buildTeacherClassWhere,
+  buildGradeWriteSubjectWhere,
   canManageGrades,
   getGradingActor,
   isGradingOwnDocument,
@@ -572,6 +573,9 @@ export async function action({ request }: ActionFunctionArgs) {
         id: true,
         membershipId: true,
         assignmentTypeId: true,
+        // Only to tell a group brief from a solo essay when deciding who the
+        // feedback is addressed to; see `gradingAddressee`.
+        group: { select: { label: true } },
         assignmentType: {
           select: {
             id: true,
@@ -593,7 +597,14 @@ export async function action({ request }: ActionFunctionArgs) {
               select: {
                 id: true,
                 schoolId: true,
-                school: { select: { organizationId: true } },
+                school: {
+                  select: {
+                    organizationId: true,
+                    organization: {
+                      select: { submissionActivityEnabled: true },
+                    },
+                  },
+                },
                 teachers: { select: { id: true } },
               },
             },
@@ -666,7 +677,7 @@ export async function action({ request }: ActionFunctionArgs) {
       actor.membershipId,
       submission.document.membershipId,
       actor.userId,
-      submission.document.membership.userId
+      submission.document.membership?.userId
     )
   ) {
     return dataResponse(
@@ -690,7 +701,9 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const organizationId =
-    submission.document.membership.organizationId ?? actor.organizationId;
+    submission.document.classAssignment?.class?.school?.organizationId ??
+    submission.document.membership?.organizationId ??
+    actor.organizationId;
   const gradeActorMembershipId = resolveSubmissionActivityActorMembershipId({
     actorMembershipId: actor.membershipId,
     actorOrganizationId: actor.organizationId,
@@ -698,8 +711,10 @@ export async function action({ request }: ActionFunctionArgs) {
   });
   if (
     submission.releasedAt != null &&
-    submission.document.membership.organization?.submissionActivityEnabled !==
-      true
+    (submission.document.classAssignment?.class?.school?.organization
+      ?.submissionActivityEnabled ??
+      submission.document.membership?.organization
+        ?.submissionActivityEnabled) !== true
   ) {
     return dataResponse(
       {
@@ -748,15 +763,18 @@ export async function action({ request }: ActionFunctionArgs) {
     scoringType,
     source: resolvedGradingConfig.source,
   };
-  const templateInstructions = resolvedGradingConfig.instructions;
   const gradingInstructionsOverride =
     typeof resolvedGradingConfig.promptConfigSnapshot
       .gradingInstructionsOverride === 'string'
       ? resolvedGradingConfig.promptConfigSnapshot.gradingInstructionsOverride.trim()
       : '';
-  const studentFirstName = firstNameFromFullName(
-    submission.document.membership?.user?.name
-  );
+  // A group brief is addressed to the group. `Document.membershipId` names
+  // whichever member is first in it, so addressing the student here put one
+  // name on feedback about work the whole group wrote.
+  const studentFirstName = gradingAddressee({
+    studentName: submission.document.membership?.user?.name,
+    groupLabel: submission.document.group?.label,
+  });
   // The prompt is derived from the rubric itself: how many judgments it asks
   // for, which words each score carries, and whether it wants per-category
   // feedback or overall feedback alone. No assignment type is named here.
@@ -773,8 +791,6 @@ export async function action({ request }: ActionFunctionArgs) {
     maxScore,
     categoryFeedbackEnabled,
   });
-
-  const assignmentPrompt = submission.document.assignment?.prompt?.trim();
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   const forceFallback = data.llmRetry === 'fallback';
@@ -951,20 +967,10 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
               is: {
                 deletedAt: null,
                 AND: [
-                  {
-                    membership: {
-                      is: {
-                        userId: { not: actor.userId },
-                        ...(submission.releasedAt == null
-                          ? {}
-                          : {
-                              organization: {
-                                is: { submissionActivityEnabled: true },
-                              },
-                            }),
-                      },
-                    },
-                  },
+                  buildGradeWriteSubjectWhere({
+                    actorUserId: actor.userId,
+                    releasedAt: submission.releasedAt,
+                  }),
                   teacherClassWhere,
                 ],
               },
@@ -1017,16 +1023,15 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  const { system, userPrompt } = buildGradingRequest({
-    promptShape,
-    instructions: templateInstructions,
-    label: resolvedGradingConfig.label,
+  const compiledInvocation = compileGradingAssistantInvocation({
+    gradingConfig: resolvedGradingConfig,
     studentFirstName,
-    assignmentPrompt,
-    essayText: submission.text,
+    strictnessLevel: gradingAssistantStrictnessLevel,
+    documentText: submission.text,
   });
+  const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
-    rubricCategories.length
+    rubricKeys.length
   );
 
   let responseText = '';
@@ -1044,8 +1049,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       responseText = await getGradingLlmCompletion({
         model,
         system,
-        messages: [{ role: 'user', content: userPrompt }],
-        maxTokens: rubricEvaluationMaxTokens,
+        messages: compiledInvocation.messages,
+        maxTokens,
         metadata: {
           feature: 'grading',
           kind: 'rubric-evaluation',
@@ -1379,20 +1384,10 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
             is: {
               deletedAt: null,
               AND: [
-                {
-                  membership: {
-                    is: {
-                      userId: { not: actor.userId },
-                      ...(submission.releasedAt == null
-                        ? {}
-                        : {
-                            organization: {
-                              is: { submissionActivityEnabled: true },
-                            },
-                          }),
-                    },
-                  },
-                },
+                buildGradeWriteSubjectWhere({
+                  actorUserId: actor.userId,
+                  releasedAt: submission.releasedAt,
+                }),
                 teacherClassWhere,
               ],
             },

@@ -57,7 +57,11 @@ describe('api.domain.submit-document', () => {
       id: 'profile-1',
       role: 'STUDENT',
       isOrgOwner: false,
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        revisionFlowEnabled: false,
+      },
     });
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
     prisma.document.findFirst.mockResolvedValue({
@@ -108,7 +112,7 @@ describe('api.domain.submit-document', () => {
     });
   });
 
-  test('creates a submission and updates the document', async () => {
+  test('keeps legacy owner submission working while Revision Flow is off', async () => {
     const form = new FormData();
     form.append('documentId', 'doc-1');
 
@@ -137,6 +141,67 @@ describe('api.domain.submit-document', () => {
     );
     expect(JSON.stringify(activity.metadata)).not.toContain('Draft');
   });
+
+  for (const actor of [
+    {
+      name: 'same-organization non-owner student',
+      membershipId: 'profile-same-org-non-owner',
+      organizationId: 'org-1',
+    },
+    {
+      name: 'cross-organization student',
+      membershipId: 'profile-cross-org',
+      organizationId: 'org-2',
+    },
+  ]) {
+    test(`refuses a ${actor.name} before creating a revision submission`, async () => {
+      requireMembership.mockResolvedValue({
+        id: actor.membershipId,
+        role: 'STUDENT',
+        isOrgOwner: false,
+        organization: {
+          id: actor.organizationId,
+          name: 'Other organization',
+          revisionFlowEnabled: true,
+        },
+      });
+      prisma.document.findFirst.mockResolvedValue(null);
+      const form = new FormData();
+      form.append('documentId', 'doc-1');
+
+      const response = await action({
+        request: new Request('https://example.com/api/domain/submit-document', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      expect(response).toBeInstanceOf(Response);
+      expect((response as Response).status).toBe(302);
+      expect(prisma.document.findFirst).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          id: 'doc-1',
+          deletedAt: null,
+          OR: [
+            { membershipId: actor.membershipId },
+            {
+              membership: {
+                classesAsStudent: {
+                  some: {
+                    teachers: { some: { id: actor.membershipId } },
+                  },
+                },
+              },
+            },
+          ],
+        }),
+        select: expect.any(Object),
+      });
+      expect(prisma.documentWriteJournal.create).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.submission.create).not.toHaveBeenCalled();
+    });
+  }
 
   test('fails closed when the required submission audit write is unavailable', async () => {
     const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;

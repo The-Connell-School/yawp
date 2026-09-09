@@ -22,6 +22,12 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
 import { Input } from '~/components/ui/input';
 import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -37,6 +43,7 @@ import {
 } from '~/domain/grading/grammarIssues';
 import { parseAssistantSuggestion } from '~/domain/grading/assistant-suggestion';
 import { resolveGrammarHighlightingEnabled } from '~/domain/assignment-types/rubric-category-options';
+import { resolveRevisionEntryPath } from '~/domain/revisions/revision-flow';
 import { findExcerptRange } from '~/utils/excerpt-position';
 import {
   readLastNonDocumentRoute,
@@ -95,6 +102,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               membership: { organizationId: profile.organization.id },
             },
             {
+              group: {
+                is: {
+                  members: {
+                    some: { membershipId: profile.id, removedAt: null },
+                  },
+                },
+              },
+              classAssignment: {
+                is: {
+                  class: {
+                    school: { organizationId: profile.organization.id },
+                    students: { some: { id: profile.id } },
+                  },
+                },
+              },
+            },
+            {
               ...buildTeacherDocumentAccessWhere({
                 membershipId: profile.id,
                 organizationId: profile.organization.id,
@@ -146,7 +170,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 select: {
                   id: true,
                   schoolId: true,
-                  school: { select: { organizationId: true } },
+                  school: {
+                    select: {
+                      organizationId: true,
+                      organization: {
+                        select: { submissionActivityEnabled: true },
+                      },
+                    },
+                  },
                   teachers: { select: { id: true } },
                 },
               },
@@ -168,6 +199,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   school: { select: { organizationId: true } },
                   teachers: { select: { id: true } },
                 },
+              },
+            },
+          },
+          submissions: {
+            where: { archivedAt: null, unsubmittedAt: null },
+            orderBy: { submittedAt: 'desc' },
+            select: {
+              id: true,
+              title: true,
+              submittedAt: true,
+              releasedAt: true,
+              numericPercentage: true,
+              letterGrade: true,
+              score: true,
+            },
+          },
+          group: {
+            select: {
+              id: true,
+              label: true,
+              members: {
+                where: { removedAt: null },
+                select: { membershipId: true },
               },
             },
           },
@@ -202,7 +256,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   // Determine if viewer is the owner (student) or a teacher
-  const isOwner = submission.document.membership.userId === userId;
+  const isOwner =
+    submission.document.membership?.userId === userId ||
+    Boolean(
+      submission.document.group?.members.some(
+        (member) => member.membershipId === profile.id
+      )
+    );
 
   const isCurrentClassTeacher =
     submission.document.classAssignment?.class?.school.organizationId ===
@@ -212,28 +272,36 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     );
   const isLegacyClassTeacher =
     submission.document.classAssignment == null &&
-    submission.document.membership.classesAsStudent.some(
-      (klass) =>
-        klass.school.organizationId === profile.organization.id &&
-        klass.teachers.some((teacher) => teacher.id === profile.id)
+    Boolean(
+      submission.document.membership?.classesAsStudent.some(
+        (klass) =>
+          klass.school.organizationId === profile.organization.id &&
+          klass.teachers.some((teacher) => teacher.id === profile.id)
+      )
     );
   const isTeacher =
     !isOwner &&
     profile.role === 'TEACHER' &&
-    submission.document.membership.organizationId === profile.organization.id &&
+    (submission.document.classAssignment?.class?.school?.organizationId ??
+      submission.document.membership?.organizationId) ===
+      profile.organization.id &&
     (isCurrentClassTeacher || isLegacyClassTeacher);
 
   const submissionActivityEnabled =
-    submission.document.membership.organization.submissionActivityEnabled ===
-    true;
+    (submission.document.classAssignment?.class?.school?.organization
+      ?.submissionActivityEnabled ??
+      submission.document.membership?.organization
+        ?.submissionActivityEnabled) === true;
 
-  // Unsubmitting is student-initiated and owner-only — /api/domain/unsubmit-
-  // submission refuses teachers and admins — so the only way an owner reaches
-  // an unsubmitted submission is that they withdrew it themselves. Once
-  // withdrawn it stops counting as turned in, so send them back to the
-  // document, which is untouched and open to a new submission.
+  // Unsubmitting is student-initiated: the solo owner or any active member of
+  // the assigned group may withdraw, while teachers and admins are refused.
+  // Once withdrawn it stops counting as turned in, so send the student back to
+  // the untouched solo or shared artifact for revision and resubmission.
   if (isOwner && submission.unsubmittedAt) {
-    return redirectWithToast(`/app/documents/${submission.documentId}`, {
+    const documentPath = submission.document.group
+      ? `/app/collab-documents/${submission.documentId}`
+      : `/app/documents/${submission.documentId}`;
+    return redirectWithToast(documentPath, {
       description:
         'You unsubmitted this document. You can revise and resubmit it.',
       type: 'message',
@@ -262,7 +330,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ? await prisma.submissionActivity.findMany({
           where: {
             submissionId: submission.id,
-            organizationId: submission.document.membership.organizationId,
+            organizationId:
+              submission.document.classAssignment?.class?.school
+                ?.organizationId ??
+              submission.document.membership?.organizationId ??
+              profile.organization.id,
           },
           select: {
             id: true,
@@ -310,6 +382,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   return {
+    revisionFlowEnabled: profile.organization.revisionFlowEnabled === true,
     submission: {
       ...submission,
       comments: sortedComments,
@@ -332,8 +405,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function SubmissionRoute() {
   const loaderData = useLoaderData<typeof loader>();
-  const { submission, isOwner, isTeacher, submissionActivityEnabled } =
-    loaderData;
+  const {
+    submission,
+    isOwner,
+    isTeacher,
+    submissionActivityEnabled,
+    revisionFlowEnabled,
+  } = loaderData;
   const activities = 'activities' in loaderData ? loaderData.activities : [];
   const activityHasMore =
     'activityHasMore' in loaderData ? loaderData.activityHasMore : false;
@@ -430,12 +508,19 @@ export default function SubmissionRoute() {
   const canEditTitle = isOwner || isTeacher;
   const submissionTitleDisplay =
     submission.title.trim() || submission.document.title || '';
+  const submissionVersions = submission.document.submissions ?? [];
 
   // Exit target — same pattern as documents route
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const [exitTarget] = useState<string>(
     () => explicitExitTarget ?? readLastNonDocumentRoute() ?? '/app'
   );
+  const versionHref = (submissionId: string) => {
+    const params = new URLSearchParams();
+    if (explicitExitTarget) params.set('exitTo', explicitExitTarget);
+    const query = params.toString();
+    return `/app/submissions/${submissionId}${query ? `?${query}` : ''}`;
+  };
   const essayRef = useRef<HTMLDivElement>(null);
   const [essayElement, setEssayElement] = useState<HTMLDivElement | null>(null);
   const setEssayRef = useCallback((el: HTMLDivElement | null) => {
@@ -480,19 +565,19 @@ export default function SubmissionRoute() {
     ? isWithdrawn
       ? ('secondary' as const)
       : effectiveReleasedAt
-      ? ('success' as const)
-      : submission.submittedAt
-        ? ('info-outlined' as const)
-        : ('secondary' as const)
-    : isWithdrawn
-      ? ('secondary' as const)
-      : effectiveReleasedAt
-      ? ('success' as const)
-      : lifecycleState === 'graded'
         ? ('success' as const)
         : submission.submittedAt
           ? ('info-outlined' as const)
-          : ('secondary' as const);
+          : ('secondary' as const)
+    : isWithdrawn
+      ? ('secondary' as const)
+      : effectiveReleasedAt
+        ? ('success' as const)
+        : lifecycleState === 'graded'
+          ? ('success' as const)
+          : submission.submittedAt
+            ? ('info-outlined' as const)
+            : ('secondary' as const);
 
   // ── Local comments state (optimistic, no revalidation) ─────────────
   const [comments, setComments] = useState(submission.comments);
@@ -902,15 +987,28 @@ export default function SubmissionRoute() {
   }, [submission.id]);
 
   // ── Paths ──────────────────────────────────────────────────────────
-  const revisePath = `/app/documents/${submission.documentId}?revise=1`;
+  const revisePath = submission.document.group
+    ? `/app/collab-documents/${submission.documentId}`
+    : resolveRevisionEntryPath({
+        revisionFlowEnabled,
+        submissionId: submission.id,
+        documentId: submission.documentId,
+        isReleased: isReleased,
+        isWithdrawn,
+      });
+  const opensRevisionFlow = revisePath.startsWith('/app/revise/');
   const viewDocumentHref = useMemo(() => {
     const returnUrl = `${location.pathname}${location.search}${location.hash}`;
-    return `/app/documents/${submission.documentId}?exitTo=${encodeURIComponent(returnUrl)}`;
+    const documentPath = submission.document.group
+      ? `/app/collab-documents/${submission.documentId}`
+      : `/app/documents/${submission.documentId}`;
+    return `${documentPath}?exitTo=${encodeURIComponent(returnUrl)}`;
   }, [
     location.pathname,
     location.search,
     location.hash,
     submission.documentId,
+    submission.document.group,
   ]);
 
   return (
@@ -930,12 +1028,17 @@ export default function SubmissionRoute() {
         <div className="h-4 w-px bg-border shrink-0" />
 
         <div className="flex min-w-0 items-center gap-2">
-          {isGradingOther && submission.document.membership.user.name ? (
+          {isGradingOther &&
+          (submission.document.group?.label ||
+            submission.document.membership?.user.name) ? (
             <span className="shrink-0 text-sm text-muted-foreground">
-              {submission.document.membership.user.name}
+              {submission.document.group?.label ??
+                submission.document.membership?.user.name}
             </span>
           ) : null}
-          {isGradingOther && submission.document.membership.user.name ? (
+          {isGradingOther &&
+          (submission.document.group?.label ||
+            submission.document.membership?.user.name) ? (
             <span className="text-muted-foreground/40 shrink-0">·</span>
           ) : null}
           {canEditTitle ? (
@@ -974,6 +1077,61 @@ export default function SubmissionRoute() {
           </Badge>
         ) : null}
 
+        {isOwner && submissionVersions.length > 1 ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                data-testid="submission-version-menu"
+              >
+                Versions ({submissionVersions.length})
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-64">
+              {submissionVersions.map((version, index) => {
+                const versionNumber = submissionVersions.length - index;
+                const isCurrent = version.id === submission.id;
+                const gradeLabel =
+                  version.numericPercentage != null
+                    ? `${version.numericPercentage}%${
+                        version.letterGrade ? ` (${version.letterGrade})` : ''
+                      }`
+                    : version.score?.trim() || null;
+                const lifecycleLabel = version.releasedAt
+                  ? gradeLabel
+                    ? `Graded · ${gradeLabel}`
+                    : 'Graded'
+                  : 'Submitted';
+
+                return (
+                  <DropdownMenuItem
+                    key={version.id}
+                    asChild
+                    className={isCurrent ? 'bg-muted' : undefined}
+                  >
+                    <Link
+                      to={versionHref(version.id)}
+                      aria-current={isCurrent ? 'page' : undefined}
+                      data-testid={`submission-version-${version.id}`}
+                      className="flex w-full items-center justify-between gap-4"
+                    >
+                      <span className="font-medium">
+                        Version {versionNumber}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {lifecycleLabel}
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {isGradingOther ? (
             <SubmissionActivitySheet
@@ -1007,10 +1165,17 @@ export default function SubmissionRoute() {
                 : 'Show grammar highlights'}
             </Button>
           ) : null}
-          {/* Student: Revise Essay link */}
+          {/* Shared artifacts stay on their collaborative editor; the solo
+              revision flow assumes one student owner and must not be reused. */}
           {isOwner ? (
             <Button size="sm" variant="outline" asChild>
-              <Link to={revisePath}>Revise Essay</Link>
+              <Link to={revisePath} data-testid="submission-revise-essay">
+                {submission.document.group
+                  ? 'Open shared draft'
+                  : opensRevisionFlow
+                    ? 'Revise with feedback'
+                    : 'Open document editor'}
+              </Link>
             </Button>
           ) : null}
         </div>

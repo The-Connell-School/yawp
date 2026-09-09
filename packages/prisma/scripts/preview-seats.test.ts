@@ -272,6 +272,115 @@ describe('create-only preview seat seeding', () => {
   });
 });
 
+/**
+ * Topping up an existing seat, and the line it must not cross.
+ *
+ * A per-PR preview keeps its database between deploys, so data a branch adds after
+ * that database was created has no other way in — without this, work like a new
+ * demo class is committed, tested, and invisible on the preview it exists for.
+ *
+ * The demo box is the opposite case: long-lived, someone demos from it, and its
+ * whole contract is that redeploying ships code and not data.
+ *
+ * The two are told apart by the database name, because that is the only signal
+ * that reaches this file. `scripts/preview/` is checked out from the default
+ * branch so a pull request cannot change what runs on the shared preview host,
+ * which means an env var set there is inert for the branch that added it.
+ */
+describe('topping up an existing preview seat', () => {
+  const withEnv = async (env: Record<string, string | undefined>) => {
+    const fixture = fakePrisma(brianWorld);
+    const toppedUp: string[] = [];
+    const previous: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(env)) {
+      previous[key] = process.env[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    try {
+      await ensurePreviewSeats(
+        fixture.client as never,
+        buildPreviewSeatDefinitions(1),
+        fixture.createSeat,
+        async (_transaction, seat) => {
+          toppedUp.push(seat.organizationId);
+        }
+      );
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+    return { fixture, toppedUp };
+  };
+
+  const PR_DB =
+    'postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_267';
+  const DEMO_DB =
+    'postgresql://postgres:postgres@preview-postgres:5432/yawp_demo';
+
+  test('tops up a seat on a per-PR preview', async () => {
+    const { fixture, toppedUp } = await withEnv({
+      DATABASE_URL: PR_DB,
+      PREVIEW_SEAT_TOP_UP: undefined,
+    });
+
+    expect(toppedUp).toEqual(['local-dev-org']);
+    // Still not a create: the organization is adopted, not rebuilt.
+    expect(fixture.writes).toEqual([]);
+  });
+
+  test('leaves the demo box alone', async () => {
+    // The one environment that must not be surprised. Nothing about a redeploy
+    // may touch its data.
+    const { fixture, toppedUp } = await withEnv({
+      DATABASE_URL: DEMO_DB,
+      PREVIEW_SEAT_TOP_UP: undefined,
+    });
+
+    expect(toppedUp).toEqual([]);
+    expect(fixture.writes).toEqual([]);
+  });
+
+  test('does not mistake a database that merely mentions a PR for one', async () => {
+    // `yawp_pr_` has to be the database, not a substring of a host or a password,
+    // or a demo box behind a host with that name would start being written to.
+    const { toppedUp } = await withEnv({
+      DATABASE_URL:
+        'postgresql://yawp_pr_267:pw@yawp_pr_267.example:5432/yawp_demo',
+      PREVIEW_SEAT_TOP_UP: undefined,
+    });
+
+    expect(toppedUp).toEqual([]);
+  });
+
+  test('an explicit flag overrides the database name either way', async () => {
+    // So the control plane can turn this off for a preview, or on for an
+    // environment whose name does not say what it is, without a code change.
+    const off = await withEnv({
+      DATABASE_URL: PR_DB,
+      PREVIEW_SEAT_TOP_UP: '0',
+    });
+    expect(off.toppedUp).toEqual([]);
+
+    const on = await withEnv({
+      DATABASE_URL: DEMO_DB,
+      PREVIEW_SEAT_TOP_UP: '1',
+    });
+    expect(on.toppedUp).toEqual(['local-dev-org']);
+  });
+
+  test('no database url at all tops up nothing', async () => {
+    const { toppedUp } = await withEnv({
+      DATABASE_URL: undefined,
+      PREVIEW_SEAT_TOP_UP: undefined,
+    });
+
+    expect(toppedUp).toEqual([]);
+  });
+});
+
 describe('legacy preview seat code backfill', () => {
   test('skips Master, fills null codes only, and never creates missing organizations', async () => {
     const rows: Record<string, string | null> = {

@@ -25,6 +25,7 @@ import {
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
+  AssignmentHasCollaborativeWorkError,
   createAssignmentDeployedToClasses,
   deleteClassAssignmentDeployment,
 } from '~/utils/assignment-deployment.server';
@@ -132,6 +133,10 @@ import {
   lookupStudentEmailForClass,
   sendStudentClassInvite,
 } from './class-student-enrollment.server';
+import {
+  lockClassCollaborationDeployments,
+  lockStudentRosters,
+} from '~/domain/collaboration/class-assignment-lock.server';
 import { filterClassStudentsByQuery } from './class-students-search';
 import {
   StudentGrowthPlansSheet,
@@ -271,9 +276,36 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    await prisma.assignment.deleteMany({
-      where: { id: { in: assignmentIds } },
+    const protectedDeployment = await prisma.documentGroup.findFirst({
+      where: {
+        documentId: { not: null },
+        classAssignment: { classId, assignmentId: { in: assignmentIds } },
+      },
+      select: { id: true },
     });
+    if (protectedDeployment) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'Assignments with shared group work cannot be deleted.',
+        },
+        { status: 409 }
+      );
+    }
+
+    try {
+      for (const assignmentId of assignmentIds) {
+        await deleteClassAssignmentDeployment({ assignmentId, classId });
+      }
+    } catch (error) {
+      if (error instanceof AssignmentHasCollaborativeWorkError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
 
     return dataResponse({
       success: true,
@@ -305,7 +337,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    await deleteClassAssignmentDeployment({ assignmentId, classId });
+    try {
+      await deleteClassAssignmentDeployment({ assignmentId, classId });
+    } catch (error) {
+      if (error instanceof AssignmentHasCollaborativeWorkError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
 
     return dataResponse({
       success: true,
@@ -411,10 +453,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    if (
-      intent === 'create-assignment' &&
-      !gradingAssistantStrictnessLevel
-    ) {
+    if (intent === 'create-assignment' && !gradingAssistantStrictnessLevel) {
       return dataResponse(
         {
           success: false,
@@ -507,8 +546,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             prompt,
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
-            gradingAssistantStrictnessLevel:
-              gradingAssistantStrictnessLevel!,
+            gradingAssistantStrictnessLevel: gradingAssistantStrictnessLevel!,
             tutorEnabled: tutorEnabledResult.value,
             ...promptAttachmentData,
           },
@@ -678,12 +716,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    for (const student of students) {
-      await prisma.orgMembership.update({
-        where: { id: student.id },
-        data: { classesAsStudent: { disconnect: { id: classId } } },
+    await prisma.$transaction(async (tx) => {
+      await lockStudentRosters(tx, studentProfileIds);
+      await lockClassCollaborationDeployments(tx, classId);
+      await tx.documentGroupMember.updateMany({
+        where: {
+          membershipId: { in: studentProfileIds },
+          removedAt: null,
+          group: { classAssignment: { classId } },
+        },
+        data: { removedAt: new Date() },
       });
-    }
+      for (const student of students) {
+        await tx.orgMembership.update({
+          where: { id: student.id },
+          data: { classesAsStudent: { disconnect: { id: classId } } },
+        });
+      }
+    });
 
     return dataResponse({ success: true });
   }
@@ -736,17 +786,31 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    for (const student of students) {
-      await prisma.orgMembership.update({
-        where: { id: student.id },
-        data: {
-          classesAsStudent: {
-            disconnect: { id: classId },
-            connect: { id: targetClassId },
-          },
+    await prisma.$transaction(async (tx) => {
+      await lockStudentRosters(tx, studentProfileIds);
+      for (const lockedClassId of [classId, targetClassId].sort()) {
+        await lockClassCollaborationDeployments(tx, lockedClassId);
+      }
+      await tx.documentGroupMember.updateMany({
+        where: {
+          membershipId: { in: studentProfileIds },
+          removedAt: null,
+          group: { classAssignment: { classId } },
         },
+        data: { removedAt: new Date() },
       });
-    }
+      for (const student of students) {
+        await tx.orgMembership.update({
+          where: { id: student.id },
+          data: {
+            classesAsStudent: {
+              disconnect: { id: classId },
+              connect: { id: targetClassId },
+            },
+          },
+        });
+      }
+    });
 
     return dataResponse({ success: true });
   }
@@ -858,7 +922,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       : { enrolledMembershipIds: klass.students.map((student) => student.id) }
   );
 
-
   // Get all submissions for this class
   const submissions = await prisma.submission.findMany({
     where: {
@@ -912,6 +975,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               },
             },
           },
+          group: {
+            select: {
+              id: true,
+              label: true,
+              members: {
+                where: { removedAt: null },
+                orderBy: { membershipId: 'asc' },
+                select: {
+                  membershipId: true,
+                  membership: {
+                    select: {
+                      id: true,
+                      user: { select: { id: true, name: true, email: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
           assignmentModuleSessions: studentModuleSessionSingleSelect,
         },
       },
@@ -952,6 +1034,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         },
       },
+      group: {
+        select: {
+          id: true,
+          label: true,
+          members: {
+            where: { removedAt: null },
+            orderBy: { membershipId: 'asc' },
+            select: {
+              membershipId: true,
+              membership: {
+                select: {
+                  id: true,
+                  user: { select: { id: true, name: true, email: true } },
+                },
+              },
+            },
+          },
+        },
+      },
       assignmentModuleSessions: studentModuleSessionSingleSelect,
     },
     orderBy: {
@@ -988,6 +1089,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             documents: true,
           },
         },
+        documentGroups: {
+          where: { documentId: { not: null } },
+          take: 1,
+          select: { id: true },
+        },
       },
       orderBy: [{ createdAt: 'desc' }],
     }),
@@ -995,6 +1101,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: string;
       title: string;
       systemKey: string | null;
+      collaborationSupported: boolean;
     }>({
       scopes: [
         {
@@ -1003,7 +1110,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           teacherProfileId: profile.id,
         },
       ],
-      select: { id: true, title: true, systemKey: true },
+      select: {
+        id: true,
+        title: true,
+        systemKey: true,
+        collaborationSupported: true,
+      },
       orderBy: { position: 'asc' },
     }),
   ]);
@@ -1056,6 +1168,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ),
     _count: classAssignment._count,
     insight: insightByClassAssignmentId.get(classAssignment.id) ?? null,
+    hasSharedWork: classAssignment.documentGroups.length > 0,
   }));
 
   const teacherClasses = await prisma.class.findMany({
@@ -1132,7 +1245,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         (assignmentType) =>
           assignmentType.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
       )
-      .map(({ id, title }) => ({ id, title })),
+      .map(({ id, title, collaborationSupported }) => ({
+        id,
+        title,
+        collaborationSupported,
+      })),
     assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,
@@ -1168,6 +1285,7 @@ type ClassDocumentRow = {
     id: string;
     user: { name: string | null; email: string };
   };
+  group: TeacherDocumentWorkRow['group'];
   assignment: {
     id: string;
     title: string | null;
@@ -1483,11 +1601,19 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
     const byDocumentId = new Map<string, ClassDocumentRow>();
 
     for (const document of data.inProgressDocuments) {
+      const subject = document.membership ?? {
+        id: `group:${document.group?.id ?? document.id}`,
+        user: {
+          name: document.group?.label ?? 'Collaborative group',
+          email: '',
+        },
+      };
       byDocumentId.set(document.id, {
         id: document.id,
         title: document.title,
         updatedAt: new Date(document.updatedAt),
-        membership: document.membership,
+        membership: subject,
+        group: document.group,
         assignment: document.assignment,
         submissions: [],
         latestSubmission: null,
@@ -1496,11 +1622,19 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
 
     for (const submission of allSubmissions) {
       const existing = byDocumentId.get(submission.documentId);
+      const subject = submission.document.membership ?? {
+        id: `group:${submission.document.group?.id ?? submission.documentId}`,
+        user: {
+          name: submission.document.group?.label ?? 'Collaborative group',
+          email: '',
+        },
+      };
       const row: ClassDocumentRow = existing ?? {
         id: submission.documentId,
         title: submission.document.title,
         updatedAt: new Date(submission.submittedAt ?? submission.createdAt),
-        membership: submission.document.membership,
+        membership: subject,
+        group: submission.document.group,
         assignment: submission.document.assignment,
         submissions: [],
         latestSubmission: null,
@@ -2232,11 +2366,21 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                   {paginatedData.map((s) => {
                     const studentDocumentCount =
                       data.inProgressDocuments.filter(
-                        (doc) => doc.membership.id === s.id
+                        (doc) =>
+                          doc.membership?.id === s.id ||
+                          doc.group?.members.some(
+                            (member) => member.membershipId === s.id
+                          )
                       ).length +
                       new Set(
                         allSubmissions
-                          .filter((sub) => sub.document.membership.id === s.id)
+                          .filter(
+                            (sub) =>
+                              sub.document.membership?.id === s.id ||
+                              sub.document.group?.members.some(
+                                (member) => member.membershipId === s.id
+                              )
+                          )
                           .map((sub) => sub.documentId)
                       ).size;
 
@@ -2249,7 +2393,9 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                     return (
                       <TableRow
                         key={s.id}
-                        className={cn(studentSheetAvailable && 'cursor-pointer')}
+                        className={cn(
+                          studentSheetAvailable && 'cursor-pointer'
+                        )}
                         onClick={() => {
                           if (!studentSheetAvailable) return;
                           setGrowthPlanStudent({

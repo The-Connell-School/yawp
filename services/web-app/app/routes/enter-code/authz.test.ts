@@ -16,7 +16,10 @@
  * their shape, so these tests fail against the pre-fix route.
  */
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { matchesClassWhere, type ScopedClass } from '~/utils/testing/where-eval';
+import {
+  matchesClassWhere,
+  type ScopedClass,
+} from '~/utils/testing/where-eval';
 
 const prisma = {
   class: { findMany: mock(), findFirst: mock() },
@@ -39,13 +42,44 @@ const { action, loader } = await import('./route');
 
 const CLASSES: ScopedClass[] = [
   // Same code, two schools, one organization: the legitimate ambiguous flow.
-  { id: 'class-a1', code: 'MATH101', isArchived: false, organizationId: 'org-a' },
-  { id: 'class-a2', code: 'MATH101', isArchived: false, organizationId: 'org-a' },
+  {
+    id: 'class-a1',
+    code: 'MATH101',
+    isArchived: false,
+    organizationId: 'org-a',
+  },
+  {
+    id: 'class-a2',
+    code: 'MATH101',
+    isArchived: false,
+    organizationId: 'org-a',
+  },
   // Same code in two different organizations: the cross-tenant collision.
-  { id: 'class-a3', code: 'SHARED', isArchived: false, organizationId: 'org-a' },
-  { id: 'class-b1', code: 'SHARED', isArchived: false, organizationId: 'org-b' },
+  {
+    id: 'class-a3',
+    code: 'SHARED',
+    isArchived: false,
+    organizationId: 'org-a',
+  },
+  {
+    id: 'class-b1',
+    code: 'SHARED',
+    isArchived: false,
+    organizationId: 'org-b',
+  },
   // The class an attacker in another organization wants in on.
-  { id: 'class-a4', code: 'SECRET', isArchived: false, organizationId: 'org-a' },
+  {
+    id: 'class-a4',
+    code: 'SECRET',
+    isArchived: false,
+    organizationId: 'org-a',
+  },
+  {
+    id: 'class-a-archived',
+    code: 'OLDCLASS',
+    isArchived: true,
+    organizationId: 'org-a',
+  },
 ];
 
 function classRow(klass: ScopedClass) {
@@ -76,10 +110,10 @@ function actingAs(membershipId: string, organizationId: string) {
   });
 }
 
-function post(fields: Record<string, string>) {
+function post(fields: Record<string, string>, url = 'https://example.com/enter-code') {
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.append(key, value);
-  return new Request('https://example.com/enter-code', {
+  return new Request(url, {
     method: 'POST',
     body: form,
   });
@@ -124,6 +158,31 @@ describe('enter-code authorization', () => {
     expect(prisma.orgMembership.update).not.toHaveBeenCalled();
   });
 
+  test('a teacher membership cannot self-enroll through the student class-code route', async () => {
+    actingAs('membership-a', 'org-a');
+    requireMembership.mockResolvedValue({
+      id: 'membership-a',
+      role: 'TEACHER',
+      isOrgOwner: false,
+      organization: { id: 'org-a', name: 'org-a' },
+    });
+
+    let response: Response | undefined;
+    try {
+      await action({
+        request: post({ intent: 'validate-code', code: 'SECRET' }),
+        params: {},
+        context: {} as any,
+      } as any);
+    } catch (error) {
+      response = error as Response;
+    }
+
+    expect(response?.status).toBe(403);
+    expect(prisma.class.findMany).not.toHaveBeenCalled();
+    expect(prisma.orgMembership.update).not.toHaveBeenCalled();
+  });
+
   test('assign-class with the wrong code cannot enroll the caller in a class', async () => {
     actingAs('membership-a', 'org-a');
 
@@ -149,6 +208,18 @@ describe('enter-code authorization', () => {
         classId: 'class-a4',
         code: 'SECRET',
       }),
+      params: {},
+      context: {} as any,
+    } as any);
+
+    expect(prisma.orgMembership.update).not.toHaveBeenCalled();
+  });
+
+  test('an archived class code cannot enroll a student', async () => {
+    actingAs('membership-a', 'org-a');
+
+    await action({
+      request: post({ intent: 'validate-code', code: 'OLDCLASS' }),
       params: {},
       context: {} as any,
     } as any);
@@ -196,6 +267,49 @@ describe('enter-code authorization', () => {
       expect.objectContaining({
         where: { id: 'membership-a' },
         data: { classesAsStudent: { connect: { id: 'class-a2' } } },
+      })
+    );
+  });
+
+  test('the dashboard modal keeps ambiguous class selection in place', async () => {
+    actingAs('membership-a', 'org-a');
+
+    const response = (await action({
+      request: post(
+        { intent: 'validate-code', code: 'MATH101' },
+        'https://example.com/enter-code?modal=1'
+      ),
+      params: {},
+      context: {} as any,
+    } as any)) as any;
+
+    const payload = response.data ?? response;
+    expect(payload.status).toBe('select');
+    expect(payload.code).toBe('MATH101');
+    expect(payload.classes.map((klass: any) => klass.id)).toEqual([
+      'class-a1',
+      'class-a2',
+    ]);
+    expect(prisma.orgMembership.update).not.toHaveBeenCalled();
+  });
+
+  test('the dashboard modal reports enrollment without navigating away', async () => {
+    actingAs('membership-a', 'org-a');
+
+    const response = (await action({
+      request: post(
+        { intent: 'validate-code', code: 'SECRET' },
+        'https://example.com/enter-code?modal=1'
+      ),
+      params: {},
+      context: {} as any,
+    } as any)) as any;
+
+    const payload = response.data ?? response;
+    expect(payload.status).toBe('enrolled');
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { classesAsStudent: { connect: { id: 'class-a4' } } },
       })
     );
   });

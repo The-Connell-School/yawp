@@ -44,6 +44,17 @@ test.describe.serial('Admin rubric library', () => {
         .getByRole('option', { name: 'Daily Pages engagement' })
         .click();
 
+      const updateButton = page.getByRole('button', { name: 'Update' });
+      await expect(updateButton).toBeEnabled();
+
+      const beforeSave = await prisma.assignmentType.findUnique({
+        where: { id: assignmentTypeId },
+        select: { rubricId: true },
+      });
+      expect(beforeSave?.rubricId).toBeNull();
+
+      await updateButton.click();
+
       await expect
         .poll(async () => {
           const row = await prisma.assignmentType.findUnique({
@@ -158,6 +169,8 @@ test.describe.serial('Admin rubric library', () => {
       await page.goto(`/app/admin/assignment-types/${assignmentTypeId}`);
       await page.getByTestId('rubric-library-select').click();
       await page.getByRole('option', { name: rubricTitle }).click();
+      await expect(page.getByRole('button', { name: 'Update' })).toBeEnabled();
+      await page.getByRole('button', { name: 'Update' }).click();
 
       await expect
         .poll(async () => {

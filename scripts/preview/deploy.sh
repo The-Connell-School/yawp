@@ -739,12 +739,17 @@ start_blackboard_lti_mock_if_present() {
 }
 
 rollout_demo_web_without_downtime() {
-  local traefik_dynamic_dir
+  local traefik_dynamic_dir additional_hostnames
   traefik_dynamic_dir="$(bash "$SCRIPT_DIR/find-traefik-dynamic-dir.sh")"
+  additional_hostnames=""
+  if [[ "${PREVIEW_UA_STUDENT_BILLING_ENABLED:-false}" == "true" ]]; then
+    additional_hostnames="$UA_HOSTNAME"
+  fi
   PREVIEW_COMPOSE_PROJECT="$COMPOSE_PROJECT" \
     PREVIEW_COMPOSE_FILE="$PREVIEW_DIR/docker-compose.yml" \
     PREVIEW_ROUTER_FILE="$traefik_dynamic_dir/${COMPOSE_PROJECT}-cutover.yml" \
     PREVIEW_HOSTNAME="$HOSTNAME" \
+    PREVIEW_ADDITIONAL_HOSTNAMES="$additional_hostnames" \
     PREVIEW_PUBLIC_URL="$URL" \
     PREVIEW_LOGIN_SMOKE_SCRIPT="$SCRIPT_DIR/smoke-login.mjs" \
     PREVIEW_ACCESS_CODE="$smoke_access_code" \
@@ -822,6 +827,10 @@ start_or_refresh_web
   PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
   PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
     node "$SCRIPT_DIR/certificate-manager.mjs" "$HOSTNAME"
+  PREVIEW_ROOT="$ROOT" \
+  PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
+  PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
+    node "$SCRIPT_DIR/certificate-manager.mjs" "$UA_HOSTNAME"
   if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$PREVIEW_DIR/docker-compose.yml"; then
     PREVIEW_ROOT="$ROOT" \
     PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
@@ -841,6 +850,8 @@ for attempt in $(seq 1 90); do
     elapsed_ms="$((end_ms - start_ms))"
     echo "PREVIEW_URL=$URL"
     echo "PREVIEW_HOSTNAME=$HOSTNAME"
+    echo "UA_PREVIEW_URL=$UA_URL"
+    echo "UA_PREVIEW_HOSTNAME=$UA_HOSTNAME"
     echo "BLACKBOARD_URL=$BLACKBOARD_URL"
     echo "BLACKBOARD_HOSTNAME=$BLACKBOARD_HOSTNAME"
     echo "PREVIEW_ACCESS_CODE=$smoke_access_code"

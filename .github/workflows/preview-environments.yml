@@ -53,6 +53,13 @@ jobs:
       PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
       PREVIEW_AI_MODE: live
+      PREVIEW_UA_STUDENT_BILLING_ENABLED: ${{ vars.PREVIEW_UA_STUDENT_BILLING_ENABLED || 'false' }}
+      PREVIEW_UA_ORGANIZATION_ID: ${{ vars.PREVIEW_UA_ORGANIZATION_ID || 'university-of-alabama-preview' }}
+      PREVIEW_UA_PARTNER_CODE: ${{ vars.PREVIEW_UA_PARTNER_CODE || 'UA-PREVIEW-2026' }}
+      PREVIEW_STRIPE_SECRET_KEY: ${{ secrets.PREVIEW_STRIPE_SECRET_KEY }}
+      PREVIEW_STRIPE_WEBHOOK_SECRET: ${{ secrets.PREVIEW_STRIPE_WEBHOOK_SECRET }}
+      PREVIEW_STRIPE_UA_2026_PRICE_ID: ${{ vars.PREVIEW_STRIPE_UA_2026_PRICE_ID }}
+      PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: ${{ vars.PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS }}
       PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI || 's3://yawp-preview-videos/production.dump' }}
       PREVIEW_DB_DUMP_VERSION: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && vars.PREVIEW_SANITIZED_DUMP_VERSION || vars.PREVIEW_DB_DUMP_VERSION || 'unversioned' }}
       PREVIEW_ACCESS_MASTER_ORGANIZATION_ID: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'default-org' || 'local-dev-org' }}
@@ -73,6 +80,13 @@ jobs:
           test -n "$PREVIEW_POSTGRES_ADMIN_PASSWORD" || { echo "Missing preview-host secret PREVIEW_DB_PASSWORD"; exit 1; }
           test -n "$PREVIEW_MASTER_ACCESS_CODE" || { echo "Missing repository secret PREVIEW_MASTER_ACCESS_CODE"; exit 1; }
           test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing preview-host secret PREVIEW_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY"; exit 1; }
+          if [[ "$PREVIEW_UA_STUDENT_BILLING_ENABLED" == "true" ]]; then
+            test -n "$PREVIEW_UA_ORGANIZATION_ID" || { echo "Missing preview-host variable PREVIEW_UA_ORGANIZATION_ID"; exit 1; }
+            test -n "$PREVIEW_UA_PARTNER_CODE" || { echo "Missing preview-host variable PREVIEW_UA_PARTNER_CODE"; exit 1; }
+            test -n "$PREVIEW_STRIPE_SECRET_KEY" || { echo "Missing preview-host secret PREVIEW_STRIPE_SECRET_KEY"; exit 1; }
+            test -n "$PREVIEW_STRIPE_WEBHOOK_SECRET" || { echo "Missing preview-host secret PREVIEW_STRIPE_WEBHOOK_SECRET"; exit 1; }
+            test -n "$PREVIEW_STRIPE_UA_2026_PRICE_ID" || { echo "Missing preview-host variable PREVIEW_STRIPE_UA_2026_PRICE_ID"; exit 1; }
+          fi
           case "$PREVIEW_DATA_MODE" in
             seed) ;;
             production-dump)
@@ -206,6 +220,13 @@ jobs:
             "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
             "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
             "PREVIEW_AI_MODE=$(shell_quote "$PREVIEW_AI_MODE")"
+            "PREVIEW_UA_STUDENT_BILLING_ENABLED=$(shell_quote "$PREVIEW_UA_STUDENT_BILLING_ENABLED")"
+            "PREVIEW_UA_ORGANIZATION_ID=$(shell_quote "$PREVIEW_UA_ORGANIZATION_ID")"
+            "PREVIEW_UA_PARTNER_CODE=$(shell_quote "$PREVIEW_UA_PARTNER_CODE")"
+            "PREVIEW_STRIPE_SECRET_KEY=$(shell_quote "$PREVIEW_STRIPE_SECRET_KEY")"
+            "PREVIEW_STRIPE_WEBHOOK_SECRET=$(shell_quote "$PREVIEW_STRIPE_WEBHOOK_SECRET")"
+            "PREVIEW_STRIPE_UA_2026_PRICE_ID=$(shell_quote "$PREVIEW_STRIPE_UA_2026_PRICE_ID")"
+            "PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS=$(shell_quote "$PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS")"
             "PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")"
             "PREVIEW_DB_DUMP_VERSION=$(shell_quote "$PREVIEW_DB_DUMP_VERSION")"
             "PREVIEW_ACCESS_MASTER_ORGANIZATION_ID=$(shell_quote "$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID")"
@@ -252,6 +273,7 @@ jobs:
           fi
 
           preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          ua_preview_url="$(awk -F= '/^UA_PREVIEW_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           blackboard_url="$(awk -F= '/^BLACKBOARD_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' /tmp/preview-deploy.log | tail -1)"
@@ -261,6 +283,7 @@ jobs:
           echo "Preview capacity OK: ${running}/${PREVIEW_MAX_RUNNING} running before deploy, ${resident}/${PREVIEW_MAX_RESIDENT} resident."
           {
             echo "url=$preview_url"
+            echo "ua_url=${ua_preview_url:-}"
             echo "blackboard_url=${blackboard_url:-}"
             echo "access_code=$access_code"
             echo "elapsed_ms=${elapsed_ms:-unknown}"
@@ -335,6 +358,18 @@ jobs:
           fi
           echo "Access gate confirmed: anonymous blocked, organization code accepted, supported refs verify master organization selection"
 
+          if [[ "$PREVIEW_UA_STUDENT_BILLING_ENABLED" == "true" ]]; then
+            ua_url="${{ steps.deploy.outputs.ua_url }}"
+            test -n "$ua_url" || { echo "Deploy script did not print UA_PREVIEW_URL"; exit 1; }
+            ua_jar="$(mktemp)"
+            ua_entry="$(curl -skL -m 30 -c "$ua_jar" -b "$ua_jar" \
+              "$ua_url/?code=$access_code&organizationCode=$PREVIEW_UA_PARTNER_CODE")"
+            grep -q 'University of Alabama' <<<"$ua_entry" || {
+              echo "UA preview host did not render the partner landing" >&2
+              exit 1
+            }
+          fi
+
       - name: Comment preview URL on PR
         uses: marocchino/sticky-pull-request-comment@v2
         with:
@@ -345,6 +380,7 @@ jobs:
 
             - **One-click:** ${{ steps.deploy.outputs.url }}/?code=${{ steps.deploy.outputs.access_code }}
             - **URL:** ${{ steps.deploy.outputs.url }}
+            - **UA one-click:** ${{ steps.deploy.outputs.ua_url }}/?code=${{ steps.deploy.outputs.access_code }}&organizationCode=${{ env.PREVIEW_UA_PARTNER_CODE }}
             - **Blackboard:** ${{ steps.deploy.outputs.blackboard_url }}
             - **Access code:** `${{ steps.deploy.outputs.access_code }}`
             - **Runtime:** Docker Compose on the preview environment host

@@ -48,11 +48,10 @@ function buildCommentDocumentAccessWhere({
     deletedAt: null,
     AND: [
       {
-        membership: {
-          is: {
-            userId: { not: userId },
-          },
-        },
+        OR: [
+          { artifactKind: 'ASSIGNMENT_GROUP' },
+          { membership: { is: { userId: { not: userId } } } },
+        ],
       },
       ...(isAdmin
         ? []
@@ -158,7 +157,7 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
       const currentOrganizationId =
-        currentSubmission.document.membership.organizationId ??
+        currentSubmission.document.membership?.organizationId ??
         profile.organization.id;
       await recordSubmissionActivity(tx, {
         submissionId: currentSubmission.id,

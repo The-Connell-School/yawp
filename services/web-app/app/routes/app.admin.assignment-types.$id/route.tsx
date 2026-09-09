@@ -7,13 +7,22 @@ import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
   DEFAULT_OUTPUT_SCHEMA_JSON,
+  parsePromptConfig,
   parseRubric,
+  parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
-import {
-  listRubrics,
-  seedStarterRubrics,
-} from '~/domain/rubrics/rubric-library.server';
+import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { computePromptVersionLabels } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
+import { isPromptVersionControlEnabled } from '~/domain/ai-evaluation/prompt-version-control.server';
+
+const PROMPT_PREVIEW_INPUTS = {
+  studentFirstName: 'Jordan',
+  strictnessLevel: 'intermediate',
+  documentText: '[CASE DOCUMENT CONTENT]',
+} as const;
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -85,20 +94,60 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  // The built-in rubrics are put in the library on first sight, so every
-  // environment offers the same starting set without a deploy step.
-  await seedStarterRubrics();
-  const rubrics = await listRubrics();
+  const currentPromptLabel = await resolveCurrentPromptLabel(course.id);
+
+  if (course.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
+    return dataResponse({
+      course,
+      gradingAssistantPromptPreview: null,
+      gradingAssistantPromptPreviewUnavailableReason:
+        'The AP History prompt is built from the assignment snapshot. Open a graded submission to inspect the full prompt.',
+      currentPromptLabel,
+    });
+  }
+
+  const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
+    assignmentTypeId: course.id,
+    assignmentTypeKind: course.kind,
+    assignmentTypeTitle: course.title,
+  });
+  const compiledInvocation = compileGradingAssistantInvocation({
+    gradingConfig: resolvedGradingConfig,
+    ...PROMPT_PREVIEW_INPUTS,
+  });
 
   return dataResponse({
     course,
-    rubrics: rubrics.map((rubric) => ({
-      id: rubric.id,
-      name: rubric.name,
-      title: rubric.title,
-      json: rubric.json,
-    })),
+    gradingAssistantPromptPreview: {
+      ...compiledInvocation,
+      version: resolvedGradingConfig.version,
+      source: resolvedGradingConfig.source,
+      previewInputs: PROMPT_PREVIEW_INPUTS,
+    },
+    gradingAssistantPromptPreviewUnavailableReason: null,
+    currentPromptLabel,
   });
+}
+
+async function resolveCurrentPromptLabel(assignmentTypeId: string) {
+  if (!isPromptVersionControlEnabled()) return null;
+
+  const promptVersions = await prisma.assignmentTypePromptVersion.findMany({
+    where: { assignmentTypeId },
+    select: { id: true, createdAt: true, status: true },
+  });
+  const production = promptVersions.find(
+    (promptVersion) => promptVersion.status === 'production'
+  );
+  if (!production) return null;
+
+  const labels = computePromptVersionLabels(
+    promptVersions.map((promptVersion) => ({
+      id: promptVersion.id,
+      createdAt: promptVersion.createdAt.toISOString(),
+    }))
+  );
+  return labels.get(production.id) ?? null;
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -138,6 +187,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const hasGradingInstructionsOverrideField = formData.has(
       'gradingInstructionsOverride'
     );
+    const hasRubricIdField = formData.has('rubricId');
+    const rawRubricId = formData.get('rubricId')?.toString() ?? '';
+    const rubricId =
+      rawRubricId && rawRubricId !== '__none__' ? rawRubricId : null;
 
     if (!assignmentTypeId) {
       throw new Response('Not Found', { status: 404 });
@@ -153,6 +206,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
     if (!existing) {
       throw new Response('Not Found', { status: 404 });
+    }
+
+    if (hasRubricIdField && rubricId) {
+      const rubric = await prisma.rubric.findUnique({
+        where: { id: rubricId },
+        select: { id: true },
+      });
+      if (!rubric) {
+        throw new Response('That rubric no longer exists.', { status: 404 });
+      }
     }
 
     const gradingInstructionsOverrideChanged =
@@ -231,6 +294,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           title,
           description: description || null,
+          ...(hasRubricIdField ? { rubricId } : {}),
           ...gradingConfigData,
         },
       });
@@ -286,17 +350,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AssignmentTypeRoute() {
-  const { course, rubrics } = useLoaderData<typeof loader>();
-  const gradingPromptConfig = course.gradingPromptConfigJson;
-  const gradingInstructionsDefaultValue =
-    gradingPromptConfig &&
-    typeof gradingPromptConfig === 'object' &&
-    !Array.isArray(gradingPromptConfig) &&
-    typeof (gradingPromptConfig as Record<string, unknown>)
-      .gradingInstructionsOverride === 'string'
-      ? ((gradingPromptConfig as Record<string, unknown>)
-          .gradingInstructionsOverride as string)
-      : '';
+  const {
+    course,
+    gradingAssistantPromptPreview,
+    gradingAssistantPromptPreviewUnavailableReason,
+    currentPromptLabel,
+  } = useLoaderData<typeof loader>();
 
   return (
     <AssignmentTypeEditorForm
@@ -304,12 +363,17 @@ export default function AssignmentTypeRoute() {
       assignmentTypeId={course.id}
       titleDefaultValue={course.title}
       descriptionDefaultValue={course.description}
-      gradingInstructionsDefaultValue={gradingInstructionsDefaultValue}
+      scoringScale={parseScoringScale(course.scoringScaleJson)}
+      rubric={parseRubric(course.rubricJson)}
+      promptConfig={parsePromptConfig(course.gradingPromptConfigJson)}
+      gradingAssistantPromptPreview={gradingAssistantPromptPreview ?? undefined}
+      gradingAssistantPromptPreviewUnavailableReason={
+        gradingAssistantPromptPreviewUnavailableReason ?? undefined
+      }
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}
-      rubrics={rubrics}
-      selectedRubricId={course.rubricId ?? null}
+      currentPromptLabel={currentPromptLabel}
     />
   );
 }

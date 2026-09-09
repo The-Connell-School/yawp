@@ -63,10 +63,17 @@ export async function action({ request }: ActionFunctionArgs) {
           id: { in: requestedSubmissionIds },
           document: {
             is: {
-              membershipId: { not: actor.membershipId },
               AND: [
-                { membership: { is: { userId: { not: actor.userId } } } },
                 teacherClassWhere,
+                {
+                  OR: [
+                    { artifactKind: 'ASSIGNMENT_GROUP' },
+                    {
+                      membershipId: { not: actor.membershipId },
+                      membership: { is: { userId: { not: actor.userId } } },
+                    },
+                  ],
+                },
               ],
             },
           },
@@ -145,10 +152,17 @@ export async function action({ request }: ActionFunctionArgs) {
           })),
           document: {
             is: {
-              membershipId: { not: actor.membershipId },
               AND: [
-                { membership: { is: { userId: { not: actor.userId } } } },
                 teacherClassWhere,
+                {
+                  OR: [
+                    { artifactKind: 'ASSIGNMENT_GROUP' },
+                    {
+                      membershipId: { not: actor.membershipId },
+                      membership: { is: { userId: { not: actor.userId } } },
+                    },
+                  ],
+                },
               ],
             },
           },
@@ -172,6 +186,8 @@ export async function action({ request }: ActionFunctionArgs) {
         tx,
         submissions.map((submission) => {
           const organizationId =
+            submission.document.classAssignment?.class?.school
+              ?.organizationId ??
             submission.document.membership?.organizationId ??
             actor.organizationId;
           return {
@@ -247,4 +263,3 @@ export async function action({ request }: ActionFunctionArgs) {
     releasedCount: result.releasedCount,
   });
 }
-

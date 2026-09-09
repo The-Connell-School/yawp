@@ -278,6 +278,7 @@ async function fetchScopedGradedRows(where: {
       gradedAt: { not: null },
       archivedAt: null,
       document: {
+        artifactKind: 'STUDENT',
         ...(where.studentMembershipId
           ? { membershipId: where.studentMembershipId }
           : where.studentMembershipIds
@@ -318,20 +319,30 @@ async function fetchScopedGradedRows(where: {
   const sourceTruncated = submissions.length > MAX_SCOPED_SUBMISSIONS;
   const rows = submissions
     .slice(0, MAX_SCOPED_SUBMISSIONS)
-    .map((submission) => ({
-      submissionId: submission.id,
-      studentMembershipId: submission.document.membershipId,
-      studentName:
-        submission.document.membership.user.name ?? 'Unknown student',
-      assignmentTitle:
-        submission.document.classAssignment?.assignment.title ??
-        'Untitled assignment',
-      submittedAt: submission.submittedAt,
-      numericPercentage: submission.numericPercentage,
-      letterGrade: submission.letterGrade,
-      rubricScores: normalizeRubricScores(submission.rubricScores),
-      overallComment: submission.overallComment,
-    }));
+    .flatMap((submission) => {
+      if (
+        !submission.document.membershipId ||
+        !submission.document.membership
+      ) {
+        return [];
+      }
+      return [
+        {
+          submissionId: submission.id,
+          studentMembershipId: submission.document.membershipId,
+          studentName:
+            submission.document.membership.user.name ?? 'Unknown student',
+          assignmentTitle:
+            submission.document.classAssignment?.assignment.title ??
+            'Untitled assignment',
+          submittedAt: submission.submittedAt,
+          numericPercentage: submission.numericPercentage,
+          letterGrade: submission.letterGrade,
+          rubricScores: normalizeRubricScores(submission.rubricScores),
+          overallComment: submission.overallComment,
+        },
+      ];
+    });
   return {
     rows,
     sourceTruncated,
@@ -629,6 +640,7 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
       gradedAt: { not: null },
       archivedAt: null,
       document: {
+        artifactKind: 'STUDENT',
         classAssignment: {
           class: {
             teachers: { some: { id: ctx.membershipId } },
@@ -667,6 +679,12 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
     return {
       error:
         'Submission not found in your classes, or its grade is not released yet.',
+    };
+  }
+
+  if (!submission.document.membership) {
+    return {
+      error: 'Group submissions are not part of individual student reports.',
     };
   }
 

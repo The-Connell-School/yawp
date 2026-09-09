@@ -7,6 +7,7 @@ import {
   Search,
   ArrowUp,
   ArrowDown,
+  Users,
 } from 'lucide-react';
 import { Pagination } from '~/components/table/pagination';
 import { Badge } from '~/components/ui/badge';
@@ -253,6 +254,10 @@ export function TeacherDocumentWorkPanel({
         document.assignment?.title,
         document.membership.user.name,
         document.membership.user.email,
+        ...(document.group?.members.flatMap((member) => [
+          member.membership.user.name,
+          member.membership.user.email,
+        ]) ?? []),
         document.latestSubmission?.title,
         document.resolvedClass
           ? formatClassLabel(document.resolvedClass)
@@ -432,7 +437,13 @@ export function TeacherDocumentWorkPanel({
                 document.membership.user.name || document.membership.user.email
               }
             >
-              {document.membership.user.name || document.membership.user.email}
+              <span className="inline-flex items-center gap-1.5">
+                {document.group ? (
+                  <Users className="h-4 w-4 text-primary" aria-hidden="true" />
+                ) : null}
+                {document.membership.user.name ||
+                  document.membership.user.email}
+              </span>
             </TableCell>
           ) : null}
           <TableCell

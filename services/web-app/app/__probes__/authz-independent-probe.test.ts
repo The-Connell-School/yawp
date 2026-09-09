@@ -30,6 +30,7 @@ type ClassRow = {
 
 type DocRow = {
   id: string;
+  artifactKind: 'STUDENT' | 'ASSIGNMENT_GROUP';
   membershipId: string;
   /** membership ids of teachers who teach a class this doc's owner is enrolled in */
   teacherProfileIds: string[];
@@ -66,7 +67,8 @@ function classMatches(where: unknown, row: ClassRow): boolean {
         if (value !== row.isArchived) return false;
         break;
       case 'school': {
-        const orgId = (value as any)?.organizationId ?? (value as any)?.is?.organizationId;
+        const orgId =
+          (value as any)?.organizationId ?? (value as any)?.is?.organizationId;
         if (typeof orgId !== 'string') return false;
         if (orgId !== row.schoolOrganizationId) return false;
         break;
@@ -97,6 +99,9 @@ function docMatches(where: unknown, row: DocRow): boolean {
         break;
       case 'membershipId':
         if (value !== row.membershipId) return false;
+        break;
+      case 'artifactKind':
+        if (value !== row.artifactKind) return false;
         break;
       case 'OR':
         if (!Array.isArray(value) || !value.some((c) => docMatches(c, row)))
@@ -143,17 +148,43 @@ const LEGACY_GRADE_ID = 'legacy-grade-1';
 
 const CLASSES: ClassRow[] = [
   // Attacker's own org. Real code SHARED1 (two of them, so the ambiguous path exists).
-  { id: 'class-a1', code: 'SHARED1', isArchived: false, schoolOrganizationId: ORG_A },
-  { id: 'class-a2', code: 'SHARED1', isArchived: false, schoolOrganizationId: ORG_A },
-  { id: 'class-a3', code: 'ONLYONE', isArchived: false, schoolOrganizationId: ORG_A },
+  {
+    id: 'class-a1',
+    code: 'SHARED1',
+    isArchived: false,
+    schoolOrganizationId: ORG_A,
+  },
+  {
+    id: 'class-a2',
+    code: 'SHARED1',
+    isArchived: false,
+    schoolOrganizationId: ORG_A,
+  },
+  {
+    id: 'class-a3',
+    code: 'ONLYONE',
+    isArchived: false,
+    schoolOrganizationId: ORG_A,
+  },
   // A different tenant's class. Its code collides with the attacker's org on purpose.
-  { id: 'class-b1', code: 'SHARED1', isArchived: false, schoolOrganizationId: ORG_B },
-  { id: 'class-b2', code: 'SECRETB', isArchived: false, schoolOrganizationId: ORG_B },
+  {
+    id: 'class-b1',
+    code: 'SHARED1',
+    isArchived: false,
+    schoolOrganizationId: ORG_B,
+  },
+  {
+    id: 'class-b2',
+    code: 'SECRETB',
+    isArchived: false,
+    schoolOrganizationId: ORG_B,
+  },
 ];
 
 const DOCS: DocRow[] = [
   {
     id: VICTIM_DOC_ID,
+    artifactKind: 'STUDENT',
     membershipId: VICTIM_PROFILE,
     teacherProfileIds: ['profile-teacher'],
     html: VICTIM_HTML,
@@ -163,6 +194,7 @@ const DOCS: DocRow[] = [
   },
   {
     id: 'doc-attacker',
+    artifactKind: 'STUDENT',
     membershipId: PROFILE_A,
     teacherProfileIds: ['profile-teacher'],
     html: '<p>Attacker essay</p>',
@@ -193,7 +225,13 @@ function resetCalls() {
 
 const MEMBERSHIPS: Record<
   string,
-  { id: string; userId: string; role: string; isOrgOwner: boolean; orgId: string }
+  {
+    id: string;
+    userId: string;
+    role: string;
+    isOrgOwner: boolean;
+    orgId: string;
+  }
 > = {
   [PROFILE_A]: {
     id: PROFILE_A,
@@ -234,7 +272,9 @@ const prisma: any = {
       return membershipPayload(m.id);
     },
     findFirst: async ({ where }: any) => {
-      const m = Object.values(MEMBERSHIPS).find((x) => x.userId === where?.userId);
+      const m = Object.values(MEMBERSHIPS).find(
+        (x) => x.userId === where?.userId
+      );
       return m ? membershipPayload(m.id) : null;
     },
     update: async (args: any) => {
@@ -244,7 +284,10 @@ const prisma: any = {
   },
   user: {
     findUnique: async ({ where }: any) => ({ id: where?.id, isAdmin: false }),
-    findUniqueOrThrow: async ({ where }: any) => ({ id: where?.id, isAdmin: false }),
+    findUniqueOrThrow: async ({ where }: any) => ({
+      id: where?.id,
+      isAdmin: false,
+    }),
     findFirst: async () => null,
   },
   class: {
@@ -332,9 +375,13 @@ mock.module('~/utils/db.server.js', () => ({ prisma }));
 
 // Imported AFTER the prisma mock so the routes and the real auth helpers bind to it.
 const { authSessionStorage, sessionKey } = await (async () => {
-  const storage = await import('~/cookie-session-storages/authentication.server');
+  const storage =
+    await import('~/cookie-session-storages/authentication.server');
   const auth = await import('~/utils/auth.server');
-  return { authSessionStorage: storage.authSessionStorage, sessionKey: auth.sessionKey };
+  return {
+    authSessionStorage: storage.authSessionStorage,
+    sessionKey: auth.sessionKey,
+  };
 })();
 const { membershipIdCookie } = await import('~/cookies/membership-id.server');
 
@@ -379,7 +426,13 @@ describe('PROBE 1 — enter-code assign-class cannot enroll without a valid code
       body: body.toString(),
     });
     try {
-      return { result: await enterCode.action({ request, params: {}, context: {} } as any) };
+      return {
+        result: await enterCode.action({
+          request,
+          params: {},
+          context: {},
+        } as any),
+      };
     } catch (error) {
       return { thrown: error };
     }
@@ -409,14 +462,17 @@ describe('PROBE 1 — enter-code assign-class cannot enroll without a valid code
     await assignClass({ classId: 'class-a2', code: 'SHARED1' });
     expect(calls.orgMembershipUpdate.length).toBe(1);
     expect(calls.orgMembershipUpdate[0].where.id).toBe(PROFILE_A);
-    expect(
-      calls.orgMembershipUpdate[0].data.classesAsStudent.connect.id
-    ).toBe('class-a2');
+    expect(calls.orgMembershipUpdate[0].data.classesAsStudent.connect.id).toBe(
+      'class-a2'
+    );
   });
 
   test("validate-code never matches another organization's class", async () => {
     // SECRETB is org B's code and exists nowhere in org A.
-    const body = new URLSearchParams({ intent: 'validate-code', code: 'SECRETB' });
+    const body = new URLSearchParams({
+      intent: 'validate-code',
+      code: 'SECRETB',
+    });
     const request = new Request('https://example.com/enter-code', {
       method: 'POST',
       headers: {
@@ -425,7 +481,9 @@ describe('PROBE 1 — enter-code assign-class cannot enroll without a valid code
       },
       body: body.toString(),
     });
-    await enterCode.action({ request, params: {}, context: {} } as any).catch(() => {});
+    await enterCode
+      .action({ request, params: {}, context: {} } as any)
+      .catch(() => {});
     expect(calls.orgMembershipUpdate).toEqual([]);
   });
 });
@@ -491,7 +549,11 @@ describe("PROBE 3 — document update writes nothing against another student's d
     );
     try {
       return {
-        result: await documentApi.action({ request, params: { id }, context: {} } as any),
+        result: await documentApi.action({
+          request,
+          params: { id },
+          context: {},
+        } as any),
       };
     } catch (error) {
       return { thrown: error };
@@ -529,7 +591,9 @@ describe("PROBE 3 — document update writes nothing against another student's d
 
     expect(outcome.thrown).toBeUndefined();
     expect(calls.documentWriteJournalCreate.length).toBe(1);
-    expect(calls.documentWriteJournalCreate[0].data.membershipId).toBe(PROFILE_A);
+    expect(calls.documentWriteJournalCreate[0].data.membershipId).toBe(
+      PROFILE_A
+    );
     expect(await statusOf(outcome.result)).toBe(200);
   });
 });

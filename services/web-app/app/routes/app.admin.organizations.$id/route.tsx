@@ -153,6 +153,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       formData.get('writingPracticeEnabled') === 'true';
     const submissionActivityEnabled =
       formData.get('submissionActivityEnabled') === 'true';
+    const revisionFlowEnabled =
+      formData.get('revisionFlowEnabled') === 'true';
     const assignmentTypeIds = Array.from(
       new Set(
         formData
@@ -187,6 +189,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           classInsightsEnabled,
           writingPracticeEnabled,
           submissionActivityEnabled,
+          revisionFlowEnabled,
         },
       }),
       prisma.organizationAssignmentType.deleteMany({
@@ -516,6 +519,24 @@ export default function OrganizationRoute() {
                         <span className="block text-xs text-muted-foreground">
                           Enables released-grade editing and staff-only
                           submission activity history.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="revisionFlowEnabled"
+                        value="true"
+                        defaultChecked={organization.revisionFlowEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          Student revision flow
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Sends "Revise Essay" to the split-screen revision
+                          page. Off keeps the current draft editor.
                         </span>
                       </span>
                     </label>

@@ -4,6 +4,7 @@ import { currentSchoolYear } from '../app/utils/school-year';
 import { createDeployedAssignment } from './db-helpers';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
 import bcrypt from 'bcryptjs';
+import { E2E_UA_ORGANIZATION_ID } from './constants';
 
 let prisma: E2EPrismaClient | null = null;
 
@@ -114,7 +115,49 @@ export type E2EContext = {
   gradeId: string;
   /** Graded but not released; has inline comment (student must not see highlights until release) */
   unreleasedGradedSubmissionId: string;
+  ua: {
+    organizationId: string;
+    schoolId: string;
+    singleClassId: string;
+    singleClassCode: string;
+    ambiguousClassIds: string[];
+    ambiguousClassCode: string;
+    paidClassless: {
+      userId: string;
+      membershipId: string;
+      email: string;
+      password: string;
+    };
+    unpaid: {
+      userId: string;
+      membershipId: string;
+      email: string;
+      password: string;
+    };
+    teacher: {
+      userId: string;
+      membershipId: string;
+      email: string;
+      password: string;
+    };
+  };
+  /** Kind of writing inside the collaboration pilot. */
+  collabAssignmentTypeId: string;
+  /** The group's shared draft, already opened, with two writers in it. */
+  collabDocumentId: string;
+  collabGroupId: string;
+  collabClassAssignmentId: string;
+  /** The second writer in that group, so two browsers can meet in one draft. */
+  secondStudentEmail: string;
+  secondStudentPassword: string;
+  secondStudentName: string;
+  secondStudentMembershipId: string;
 };
+
+/** The group's second writer, so two browsers can meet in one draft. */
+const SECOND_STUDENT_EMAIL = 'riley.e2e@yawp.test';
+const SECOND_STUDENT_PASSWORD = 'riley-e2e-password';
+const SECOND_STUDENT_NAME = 'Riley Park';
 
 export async function seedE2E(): Promise<E2EContext> {
   if (!prisma) {
@@ -130,6 +173,7 @@ export async function seedE2E(): Promise<E2EContext> {
       name: 'The Connell School',
       classInsightsEnabled: true,
       submissionActivityEnabled: true,
+      revisionFlowEnabled: true,
     },
   });
 
@@ -176,6 +220,143 @@ export async function seedE2E(): Promise<E2EContext> {
     select: { id: true },
   });
 
+  // Deterministic University of Alabama fixtures are deliberately separate from
+  // the default organization so enabling the billing gate in E2E cannot change
+  // any pre-existing student or teacher journey.
+  const uaOrganization = await prisma.organization.create({
+    data: {
+      id: E2E_UA_ORGANIZATION_ID,
+      name: 'University of Alabama',
+    },
+  });
+  const uaSchool = await prisma.school.create({
+    data: {
+      id: 'ua-e2e-school',
+      name: 'UA E2E School',
+      code: 'UA-E2E-SCHOOL',
+      organizationId: uaOrganization.id,
+    },
+  });
+  const uaSecondSchool = await prisma.school.create({
+    data: {
+      id: 'ua-e2e-school-two',
+      name: 'UA E2E School Two',
+      code: 'UA-E2E-SCHOOL-TWO',
+      organizationId: uaOrganization.id,
+    },
+  });
+  const uaSingleClassCode = 'UA-SINGLE';
+  const uaAmbiguousClassCode = 'UA-MULTI';
+  const uaSingleClass = await prisma.class.create({
+    data: {
+      id: 'ua-e2e-single-class',
+      code: uaSingleClassCode,
+      schoolYear: currentSchoolYear(),
+      period: '1st',
+      grade: 'Freshman',
+      schoolId: uaSchool.id,
+    },
+  });
+  // Same code in another organization proves the browser flow remains tenant scoped.
+  await prisma.class.create({
+    data: {
+      id: 'non-ua-e2e-colliding-class',
+      code: uaSingleClassCode,
+      schoolYear: currentSchoolYear(),
+      period: '4th',
+      grade: '9th',
+      schoolId: school.id,
+    },
+  });
+  const uaAmbiguousClasses = await Promise.all([
+    prisma.class.create({
+      data: {
+        id: 'ua-e2e-ambiguous-class-one',
+        code: uaAmbiguousClassCode,
+        schoolYear: currentSchoolYear(),
+        period: '2nd',
+        grade: 'Freshman',
+        schoolId: uaSchool.id,
+      },
+    }),
+    prisma.class.create({
+      data: {
+        id: 'ua-e2e-ambiguous-class-two',
+        code: uaAmbiguousClassCode,
+        schoolYear: currentSchoolYear(),
+        period: '3rd',
+        grade: 'Freshman',
+        schoolId: uaSecondSchool.id,
+      },
+    }),
+  ]);
+
+  const uaPassword = 'ua-e2e-password';
+  const prismaClient = prisma;
+  const createUaUser = async ({
+    id,
+    email,
+    role,
+  }: {
+    id: string;
+    email: string;
+    role: 'STUDENT' | 'TEACHER';
+  }) => {
+    const user = await prismaClient.user.create({
+      data: {
+        id,
+        email,
+        name: email.split('@')[0],
+        password: { create: createPassword(uaPassword) },
+        memberships: {
+          create: {
+            id: `${id}-membership`,
+            organizationId: uaOrganization.id,
+            role,
+          },
+        },
+      },
+      include: { memberships: true },
+    });
+    return {
+      userId: user.id,
+      membershipId: user.memberships[0]!.id,
+      email,
+      password: uaPassword,
+    };
+  };
+
+  const uaPaidClassless = await createUaUser({
+    id: 'ua-e2e-paid-classless',
+    email: 'ua.paid.classless@yawp.test',
+    role: 'STUDENT',
+  });
+  const uaUnpaid = await createUaUser({
+    id: 'ua-e2e-unpaid',
+    email: 'ua.unpaid@yawp.test',
+    role: 'STUDENT',
+  });
+  const uaTeacher = await createUaUser({
+    id: 'ua-e2e-teacher',
+    email: 'ua.teacher@yawp.test',
+    role: 'TEACHER',
+  });
+
+  await prisma.studentLicense.create({
+    data: {
+      id: 'ua-e2e-paid-classless-license',
+      membershipId: uaPaidClassless.membershipId,
+      organizationId: uaOrganization.id,
+      cohort: 'ua-2026',
+      status: 'ACTIVE',
+      source: 'EXISTING_SUBSCRIPTION',
+      validUntil: new Date('2027-01-01T06:00:00.000Z'),
+      stripeSubscriptionId: 'sub_ua_e2e_existing',
+      amountPaid: 5_000,
+      currency: 'usd',
+    },
+  });
+
   // Test users
   const users = [
     {
@@ -184,7 +365,11 @@ export async function seedE2E(): Promise<E2EContext> {
       password: { create: createPassword('johndoe') },
       memberships: {
         create: [
-          { organizationId: org.id, isOrgOwner: false, role: 'STUDENT' as const },
+          {
+            organizationId: org.id,
+            isOrgOwner: false,
+            role: 'STUDENT' as const,
+          },
         ],
       },
     },
@@ -195,7 +380,11 @@ export async function seedE2E(): Promise<E2EContext> {
       password: { create: createPassword('admin-e2e-password') },
       memberships: {
         create: [
-          { organizationId: org.id, isOrgOwner: true, role: 'TEACHER' as const },
+          {
+            organizationId: org.id,
+            isOrgOwner: true,
+            role: 'TEACHER' as const,
+          },
         ],
       },
     },
@@ -403,14 +592,16 @@ export async function seedE2E(): Promise<E2EContext> {
     select: { id: true },
   });
 
-  const { assignment: seededAssignment, classAssignment: seededClassAssignment } =
-    await createDeployedAssignment({
-      prisma,
-      classId: seededClass.id,
-      assignmentTypeId: assignmentType.id,
-      title: 'E2E Class Assignment',
-      prompt: 'E2E prompt for class assignment.',
-    });
+  const {
+    assignment: seededAssignment,
+    classAssignment: seededClassAssignment,
+  } = await createDeployedAssignment({
+    prisma,
+    classId: seededClass.id,
+    assignmentTypeId: assignmentType.id,
+    title: 'E2E Class Assignment',
+    prompt: 'E2E prompt for class assignment.',
+  });
 
   const teacherTraining = await prisma.teacherTraining.create({
     data: {
@@ -643,6 +834,111 @@ export async function seedE2E(): Promise<E2EContext> {
     },
   });
 
+  // 7. A shared draft with two writers in it.
+  //
+  // Both roads to a collaborative room converge on a DocumentGroup, and this is
+  // the teacher's one: an assignment with collaboration on, a group with its
+  // members, and `openedAt` set, which is what makes the document a live room
+  // rather than an ordinary draft. Built directly rather than through the
+  // arrange/open endpoints so the fixture states the shape it needs instead of
+  // depending on the UI that produces it.
+  const collabAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'E2E Group Writing',
+      position: 5,
+      ownerOrgId: org.id,
+      collaborationSupported: true,
+      // Owning the type is not the same as offering it. Without this row the
+      // type is invisible to the students enrolled in the org, their course page
+      // 404s, and a test that only asserts a link is absent passes for the wrong
+      // reason — which is exactly what happened.
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: [{ title: 'E2E Group Module', position: 1 }],
+      },
+    },
+    select: { id: true },
+  });
+
+  const {
+    assignment: collabAssignment,
+    classAssignment: collabClassAssignment,
+  } = await createDeployedAssignment({
+    prisma,
+    classId: seededClass.id,
+    assignmentTypeId: collabAssignmentType.id,
+    title: 'E2E Group Assignment',
+    prompt: 'Write this one together.',
+  });
+  await prisma.assignment.update({
+    where: { id: collabAssignment.id },
+    data: { collaborationEnabled: true, collaborationGroupMode: 'teacher' },
+  });
+
+  const secondStudent = await prisma.user.create({
+    data: {
+      email: SECOND_STUDENT_EMAIL,
+      name: SECOND_STUDENT_NAME,
+      password: { create: createPassword(SECOND_STUDENT_PASSWORD) },
+      memberships: {
+        create: [
+          {
+            organizationId: org.id,
+            isOrgOwner: false,
+            role: 'STUDENT' as const,
+            classesAsStudent: { connect: { id: seededClass.id } },
+          },
+        ],
+      },
+    },
+    include: { memberships: true },
+  });
+  const secondStudentMembership = secondStudent.memberships[0];
+
+  // The ownership graph is enforced by deferred database triggers: neither the
+  // document nor the group is valid on its own, but the pair is valid at commit.
+  // Keep fixture creation inside the same transaction as production finalization.
+  const { collabDoc, collabGroup } = await prisma.$transaction(async (tx) => {
+    const collabDoc = await tx.document.create({
+      data: {
+        title: 'E2E Shared Draft',
+        text: '',
+        html: '<p></p>',
+        artifactKind: 'ASSIGNMENT_GROUP',
+        membershipId: null,
+        assignmentTypeId: collabAssignmentType.id,
+        assignmentId: collabAssignment.id,
+        classAssignmentId: collabClassAssignment.id,
+      },
+      select: { id: true },
+    });
+
+    const collabGroup = await tx.documentGroup.create({
+      data: {
+        kind: 'assignment',
+        classAssignmentId: collabClassAssignment.id,
+        label: 'Group 1',
+        ordinal: 0,
+        // Opened and already seeded: an empty room needs no seeding, and stamping
+        // it keeps the server from copying an empty document into itself.
+        openedAt: new Date(),
+        seededAt: new Date(),
+        documentId: collabDoc.id,
+        members: {
+          create: [
+            { membershipId: membership.id },
+            { membershipId: secondStudentMembership.id },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+
+    return { collabDoc, collabGroup };
+  });
+
   return {
     organizationId: org.id,
     schoolId: school.id,
@@ -674,6 +970,25 @@ export async function seedE2E(): Promise<E2EContext> {
     snapshotId: gradedSubmission.id,
     gradeId: gradedSubmission.id,
     unreleasedGradedSubmissionId: unreleasedGradedSubmission.id,
+    ua: {
+      organizationId: uaOrganization.id,
+      schoolId: uaSchool.id,
+      singleClassId: uaSingleClass.id,
+      singleClassCode: uaSingleClassCode,
+      ambiguousClassIds: uaAmbiguousClasses.map((klass) => klass.id),
+      ambiguousClassCode: uaAmbiguousClassCode,
+      paidClassless: uaPaidClassless,
+      unpaid: uaUnpaid,
+      teacher: uaTeacher,
+    },
+    collabAssignmentTypeId: collabAssignmentType.id,
+    collabDocumentId: collabDoc.id,
+    collabGroupId: collabGroup.id,
+    collabClassAssignmentId: collabClassAssignment.id,
+    secondStudentEmail: SECOND_STUDENT_EMAIL,
+    secondStudentPassword: SECOND_STUDENT_PASSWORD,
+    secondStudentName: SECOND_STUDENT_NAME,
+    secondStudentMembershipId: secondStudentMembership.id,
   };
 }
 

@@ -4,8 +4,8 @@ import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 type CommentAccessAnchor = {
   submissionId: string;
   classAssignmentId: string | null;
-  documentMembershipId: string;
-  documentOwnerUserId: string;
+  documentMembershipId: string | null;
+  documentOwnerUserId: string | null;
   documentOrganizationId: string;
   actorOrganizationId: string;
   actorIsActive: boolean;
@@ -36,25 +36,30 @@ export async function lockSubmissionCommentAccess(
       document."classAssignmentId" AS "classAssignmentId",
       owner.id AS "documentMembershipId",
       owner."userId" AS "documentOwnerUserId",
-      owner."organizationId" AS "documentOrganizationId",
+      COALESCE(owner."organizationId", school."organizationId") AS "documentOrganizationId",
       actor."organizationId" AS "actorOrganizationId",
       actor."isActive" AS "actorIsActive",
       actor_user."isAdmin" AS "actorIsAdmin"
     FROM "Submission" submission
     JOIN "Document" document ON document.id = submission."documentId"
-    JOIN "OrgMembership" owner ON owner.id = document."membershipId"
+    LEFT JOIN "OrgMembership" owner ON owner.id = document."membershipId"
+    LEFT JOIN "ClassAssignment" class_assignment
+      ON class_assignment.id = document."classAssignmentId"
+    LEFT JOIN "Class" class ON class.id = class_assignment."classId"
+    LEFT JOIN "School" school ON school.id = class."schoolId"
     JOIN "OrgMembership" actor ON actor.id = ${actorMembershipId}
     JOIN "User" actor_user ON actor_user.id = ${actorUserId}
     WHERE submission.id = ${submissionId}
       AND document."deletedAt" IS NULL
       AND actor."userId" = ${actorUserId}
-    FOR UPDATE OF submission, document, owner, actor, actor_user
+    FOR UPDATE OF submission, document, actor, actor_user
   `);
   const anchor = anchors[0];
   if (
     !anchor ||
     !anchor.actorIsActive ||
-    anchor.documentOwnerUserId === actorUserId
+    (anchor.documentOwnerUserId != null &&
+      anchor.documentOwnerUserId === actorUserId)
   ) {
     return false;
   }

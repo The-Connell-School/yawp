@@ -29,7 +29,12 @@ function buildCommentDocumentAccessWhere({
   return {
     deletedAt: null,
     AND: [
-      { membership: { is: { userId: { not: userId } } } },
+      {
+        OR: [
+          { artifactKind: 'ASSIGNMENT_GROUP' },
+          { membership: { is: { userId: { not: userId } } } },
+        ],
+      },
       ...(isAdmin
         ? []
         : [
@@ -143,7 +148,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         });
         if (deleted.count !== 1) throw new SubmissionCommentConflictError();
         const organizationId =
-          currentComment.submission.document.membership.organizationId ??
+          currentComment.submission.document.membership?.organizationId ??
           profile.organization.id;
         await recordSubmissionActivity(tx, {
           submissionId: currentComment.submission.id,
@@ -244,7 +249,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
       if (updated.count !== 1) throw new SubmissionCommentConflictError();
       const organizationId =
-        currentComment.submission.document.membership.organizationId ??
+        currentComment.submission.document.membership?.organizationId ??
         profile.organization.id;
       await recordSubmissionActivity(tx, {
         submissionId: currentComment.submission.id,

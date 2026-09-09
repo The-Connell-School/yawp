@@ -2,7 +2,9 @@ data "aws_availability_zones" "available" {}
 
 locals {
   production_edge_enabled = var.env == "production" && var.production_domain_name != ""
+  ua_billing_runtime_enabled = var.ua_student_billing_enabled && var.ua_stripe_credentials_configured
   production_domain_zone  = "${trim(var.production_domain_name, ".")}."
+  production_edge_aliases = distinct([var.production_domain_name, var.ua_partner_hostname])
   apprunner_origin_domain = trimsuffix(replace(replace(aws_apprunner_service.web.service_url, "https://", ""), "http://", ""), "/")
 }
 
@@ -300,17 +302,23 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = [
-          aws_secretsmanager_secret.db_url.arn,
-          aws_secretsmanager_secret.honeypot.arn,
-          aws_secretsmanager_secret.openai_org.arn,
-          aws_secretsmanager_secret.openai_key.arn,
-          aws_secretsmanager_secret.anthropic_key.arn,
-          aws_secretsmanager_secret.session.arn,
-          aws_secretsmanager_secret.internal_token.arn,
-          aws_secretsmanager_secret.sentry_dsn.arn,
-          aws_secretsmanager_secret.resend_api_key.arn
-        ]
+        Resource = concat(
+          [
+            aws_secretsmanager_secret.db_url.arn,
+            aws_secretsmanager_secret.honeypot.arn,
+            aws_secretsmanager_secret.openai_org.arn,
+            aws_secretsmanager_secret.openai_key.arn,
+            aws_secretsmanager_secret.anthropic_key.arn,
+            aws_secretsmanager_secret.session.arn,
+            aws_secretsmanager_secret.internal_token.arn,
+            aws_secretsmanager_secret.sentry_dsn.arn,
+            aws_secretsmanager_secret.resend_api_key.arn
+          ],
+          local.ua_billing_runtime_enabled ? [
+            aws_secretsmanager_secret.stripe_secret_key[0].arn,
+            aws_secretsmanager_secret.stripe_webhook_secret[0].arn
+          ] : []
+        )
       },
       {
         Effect = "Allow"
@@ -424,6 +432,28 @@ resource "aws_secretsmanager_secret_version" "sentry_dsn" {
   secret_string = var.sentry_dsn
 }
 
+resource "aws_secretsmanager_secret" "stripe_secret_key" {
+  count = var.ua_stripe_credentials_configured ? 1 : 0
+  name  = "${var.app_name}-${var.env}-stripe-secret-key"
+}
+
+resource "aws_secretsmanager_secret_version" "stripe_secret_key" {
+  count         = var.ua_stripe_credentials_configured ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.stripe_secret_key[0].id
+  secret_string = var.stripe_secret_key
+}
+
+resource "aws_secretsmanager_secret" "stripe_webhook_secret" {
+  count = var.ua_stripe_credentials_configured ? 1 : 0
+  name  = "${var.app_name}-${var.env}-stripe-webhook-secret"
+}
+
+resource "aws_secretsmanager_secret_version" "stripe_webhook_secret" {
+  count         = var.ua_stripe_credentials_configured ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.stripe_webhook_secret[0].id
+  secret_string = var.stripe_webhook_secret
+}
+
 resource "aws_apprunner_service" "web" {
   service_name = "${var.app_name}-${var.env}"
 
@@ -439,7 +469,7 @@ resource "aws_apprunner_service" "web" {
       image_configuration {
         port = "8080"
 
-        runtime_environment_variables = {
+        runtime_environment_variables = merge({
           NODE_ENV = var.env
           PORT = "8080"
           AI_MODEL = "claude-sonnet-4-6"
@@ -451,9 +481,17 @@ resource "aws_apprunner_service" "web" {
           POSTHOG_HOST = var.posthog_host
           AWS_S3_BUCKET_FOR_VIDEOS = aws_s3_bucket.videos.bucket
           AWS_S3_REGION_FOR_VIDEOS = "us-east-1"
-        }
+          UA_STUDENT_BILLING_ENABLED                = tostring(local.ua_billing_runtime_enabled)
+          UA_ORGANIZATION_ID                        = var.ua_organization_id
+          UA_PARTNER_CODE                           = var.ua_partner_code
+          UA_PARTNER_HOSTNAME                       = var.ua_partner_hostname
+          STRIPE_UA_2026_PRICE_ID                   = var.stripe_ua_2026_price_id
+          YAWP_APP_ORIGIN                           = var.yawp_app_origin
+        }, length(var.stripe_ua_existing_subscription_price_ids) > 0 ? {
+          STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS = join(",", var.stripe_ua_existing_subscription_price_ids)
+        } : {})
 
-        runtime_environment_secrets = {
+        runtime_environment_secrets = merge({
           HONEYPOT_SECRET = aws_secretsmanager_secret.honeypot.arn
           OPENAI_ORG_ID = aws_secretsmanager_secret.openai_org.arn
           OPENAI_API_KEY = aws_secretsmanager_secret.openai_key.arn
@@ -463,7 +501,10 @@ resource "aws_apprunner_service" "web" {
           DATABASE_URL = aws_secretsmanager_secret.db_url.arn
           RESEND_API_KEY = aws_secretsmanager_secret.resend_api_key.arn
           SENTRY_DSN = aws_secretsmanager_secret.sentry_dsn.arn
-        }
+        }, local.ua_billing_runtime_enabled ? {
+          STRIPE_SECRET_KEY     = aws_secretsmanager_secret.stripe_secret_key[0].arn
+          STRIPE_WEBHOOK_SECRET = aws_secretsmanager_secret.stripe_webhook_secret[0].arn
+        } : {})
       }
     }
 
@@ -496,11 +537,56 @@ resource "aws_apprunner_service" "web" {
     Environment = var.env
     Project     = var.app_name
   }
+
+  lifecycle {
+    precondition {
+      condition = (
+        (!var.ua_stripe_credentials_configured || (
+          trimspace(var.stripe_secret_key) != "" &&
+          trimspace(var.stripe_webhook_secret) != "" &&
+          trimspace(var.stripe_ua_2026_price_id) != ""
+        )) &&
+        (var.ua_student_billing_enabled ? var.ua_stripe_credentials_configured : true) &&
+        (!var.ua_student_billing_enabled || (
+          trimspace(var.ua_organization_id) != "" &&
+          trimspace(var.ua_partner_code) != "" &&
+          trimspace(var.ua_partner_hostname) != "" &&
+          var.yawp_app_origin == "https://${var.ua_partner_hostname}"
+        ))
+      )
+      error_message = "UA Stripe credential staging requires the Stripe key, webhook secret, and price ID; enabling billing also requires the organization ID, partner code, partner hostname, and a matching HTTPS UA app origin."
+    }
+  }
+}
+
+# CloudFront forwards the viewer Host header so the application can select the
+# UA partner experience. App Runner rejects unassociated Host values at its
+# Envoy edge, so the partner hostname must also be registered here even though
+# public A/AAAA traffic terminates at CloudFront.
+resource "aws_apprunner_custom_domain_association" "ua_partner" {
+  count                = local.production_edge_enabled && var.ua_partner_hostname != var.production_domain_name ? 1 : 0
+  domain_name          = var.ua_partner_hostname
+  enable_www_subdomain = false
+  service_arn          = aws_apprunner_service.web.arn
+}
+
+resource "aws_route53_record" "ua_apprunner_cert_validation" {
+  # App Runner returns two computed validation records. Fixed keys keep the
+  # graph plannable on the first apply, before their names are known.
+  for_each = local.production_edge_enabled && var.ua_partner_hostname != var.production_domain_name ? toset(["0", "1"]) : toset([])
+
+  allow_overwrite = true
+  name            = tolist(aws_apprunner_custom_domain_association.ua_partner[0].certificate_validation_records)[tonumber(each.key)].name
+  records         = [tolist(aws_apprunner_custom_domain_association.ua_partner[0].certificate_validation_records)[tonumber(each.key)].value]
+  ttl             = 60
+  type            = tolist(aws_apprunner_custom_domain_association.ua_partner[0].certificate_validation_records)[tonumber(each.key)].type
+  zone_id         = data.aws_route53_zone.production_domain[0].zone_id
 }
 
 resource "aws_acm_certificate" "web_edge" {
   count             = local.production_edge_enabled ? 1 : 0
   domain_name       = var.production_domain_name
+  subject_alternative_names = var.ua_partner_hostname == var.production_domain_name ? [] : [var.ua_partner_hostname]
   validation_method = "DNS"
 
   lifecycle {
@@ -541,7 +627,7 @@ resource "aws_cloudfront_distribution" "web_edge" {
   enabled         = true
   is_ipv6_enabled = true
   comment         = "${var.app_name}-${var.env} TLS 1.3 edge"
-  aliases         = [var.production_domain_name]
+  aliases         = local.production_edge_aliases
 
   origin {
     domain_name = local.apprunner_origin_domain
@@ -552,6 +638,7 @@ resource "aws_cloudfront_distribution" "web_edge" {
       https_port             = 443
       origin_protocol_policy = "https-only"
       origin_ssl_protocols   = ["TLSv1.2"]
+      origin_read_timeout    = 120
     }
   }
 
@@ -611,6 +698,34 @@ resource "aws_route53_record" "production_domain_aaaa" {
   }
 }
 
+resource "aws_route53_record" "ua_domain_a" {
+  count           = local.production_edge_enabled ? 1 : 0
+  allow_overwrite = true
+  name            = var.ua_partner_hostname
+  type            = "A"
+  zone_id         = data.aws_route53_zone.production_domain[0].zone_id
+
+  alias {
+    name                   = aws_cloudfront_distribution.web_edge[0].domain_name
+    zone_id                = aws_cloudfront_distribution.web_edge[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "ua_domain_aaaa" {
+  count           = local.production_edge_enabled ? 1 : 0
+  allow_overwrite = true
+  name            = var.ua_partner_hostname
+  type            = "AAAA"
+  zone_id         = data.aws_route53_zone.production_domain[0].zone_id
+
+  alias {
+    name                   = aws_cloudfront_distribution.web_edge[0].domain_name
+    zone_id                = aws_cloudfront_distribution.web_edge[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
 # -----------------------
 # S3 bucket for videos/files
 # -----------------------
@@ -653,6 +768,7 @@ resource "aws_s3_bucket_cors_configuration" "videos" {
       "http://localhost:5173",
       "https://${aws_apprunner_service.web.service_url}",
       "https://yawp.school",
+      "https://${var.ua_partner_hostname}",
     ]
     allowed_headers = ["*"]
     expose_headers  = ["ETag", "x-amz-request-id", "x-amz-id-2"]

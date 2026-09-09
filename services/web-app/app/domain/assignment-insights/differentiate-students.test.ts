@@ -3,6 +3,21 @@ import {
   buildDifferentiation,
   type DifferentiationInput,
 } from './differentiate-students';
+import type { InsightRubric } from './insight-rubric';
+
+const GBA_RUBRIC: InsightRubric = {
+  categories: [
+    { key: 'budget', label: 'Budget', weight: 0.5, minScore: 0, maxScore: 100 },
+    {
+      key: 'recommendation',
+      label: 'Recommendation',
+      weight: 0.5,
+      minScore: 0,
+      maxScore: 100,
+    },
+  ],
+};
+
 
 function student(
   name: string,
@@ -202,5 +217,75 @@ describe('buildDifferentiation', () => {
     ]);
     const support = unnamed!.individuals.filter((f) => f.kind === 'support');
     expect(support[0].student.name).toBe('Unknown student');
+  });
+});
+
+describe('differentiating against an assignment type’s own rubric', () => {
+  test('groups students by a category the default rubric has never heard of', () => {
+    const summary = buildDifferentiation(
+      [
+        {
+          submissionId: 's1',
+          studentName: 'Sol',
+          rubricScores: { budget: { score: 20 }, recommendation: { score: 90 } },
+        },
+        {
+          submissionId: 's2',
+          studentName: 'Tao',
+          rubricScores: { budget: { score: 15 }, recommendation: { score: 88 } },
+        },
+        {
+          submissionId: 's3',
+          studentName: 'Uma',
+          rubricScores: { budget: { score: 85 }, recommendation: { score: 92 } },
+        },
+        {
+          submissionId: 's4',
+          studentName: 'Mia',
+          rubricScores: { budget: { score: 90 }, recommendation: { score: 80 } },
+        },
+      ],
+      GBA_RUBRIC
+    );
+
+    expect(summary?.focusGroups).toEqual([
+      {
+        category: 'budget',
+        label: 'Budget',
+        students: [
+          { name: 'Tao', href: null },
+          { name: 'Sol', href: null },
+        ],
+      },
+    ]);
+  });
+
+  test('a hundred-point score is judged as a share of its range', () => {
+    // 90 and 95 out of 100 is the extension pattern for the same reason 4 and 5
+    // out of 5 is. Judged as raw numbers against the old 1-5 thresholds it would
+    // have been true by accident; judged as a share it is true on purpose.
+    const summary = buildDifferentiation(
+      [
+        {
+          submissionId: 's1',
+          studentName: 'Uma',
+          rubricScores: { budget: { score: 90 }, recommendation: { score: 95 } },
+        },
+        {
+          submissionId: 's2',
+          studentName: 'Sol',
+          rubricScores: { budget: { score: 60 }, recommendation: { score: 55 } },
+        },
+      ],
+      GBA_RUBRIC
+    );
+
+    expect(summary?.individuals).toEqual([
+      {
+        kind: 'extension',
+        student: { name: 'Uma', href: null },
+        categoryLabels: ['Budget', 'Recommendation'],
+      },
+    ]);
   });
 });

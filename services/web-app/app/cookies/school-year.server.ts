@@ -44,3 +44,8 @@ export function setSchoolYearScope(scope: SchoolYearScope) {
     maxAge: SCHOOL_YEAR_COOKIE_MAX_AGE_SECONDS,
   });
 }
+
+/** Remove a scope inherited from another signed-in identity. */
+export function clearSchoolYearScope() {
+  return schoolYearCookie.serialize('', { maxAge: 0 });
+}

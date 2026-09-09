@@ -10,6 +10,33 @@ export type GrammarIssue = {
   message: string;
 };
 
+export function sortGrammarIssuesByDocumentOrder(
+  grammarIssues: GrammarIssue[],
+  sourceText: string
+): GrammarIssue[] {
+  return grammarIssues
+    .map((issue, originalIndex) => ({
+      issue,
+      originalIndex,
+      range: findExcerptRange(sourceText, issue.excerpt, issue.occurrence ?? 1),
+    }))
+    .sort((a, b) => {
+      if (a.range && b.range) {
+        if (a.range.start !== b.range.start) {
+          return a.range.start - b.range.start;
+        }
+        if (a.range.end !== b.range.end) return a.range.end - b.range.end;
+      } else if (a.range) {
+        return -1;
+      } else if (b.range) {
+        return 1;
+      }
+
+      return a.originalIndex - b.originalIndex;
+    })
+    .map(({ issue }) => issue);
+}
+
 const MAX_ISSUES = 25;
 const MAX_EXCERPT = 120;
 const MAX_MESSAGE = 280;

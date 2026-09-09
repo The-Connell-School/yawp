@@ -65,14 +65,15 @@ export function renderPreviewCompose({
     ? `\n    ports:\n      - ${q(`127.0.0.1:${env.directPort}:8080`)}`
     : '';
   const routerBase = env.composeProject;
+  const hostRule = `Host(\`${env.hostname}\`) || Host(\`${env.uaHostname}\`)`;
   const tlsLabels = enableTls
-    ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=Host(\`${env.hostname}\`)`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}`
+    ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=${hostRule}`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}`
     : '';
   const legacyTraefikLabels = (!env.prNumber || !customIngressActive)
     ? `    labels:
       - "traefik.enable=true"
       - "traefik.docker.network=preview"
-      - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
+      - ${q(`traefik.http.routers.${routerBase}-http.rule=${hostRule}`)}
       - ${q(`traefik.http.routers.${routerBase}-http.entrypoints=web`)}
       - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}
 ${tlsLabels}
@@ -118,6 +119,32 @@ ${tlsLabels}
   const masterAccessEnvironment = masterOrgGateEnabled
     ? `      PREVIEW_MASTER_ACCESS_CODE: ${q(previewMasterAccessCode)}\n`
     : '';
+  const uaStudentBillingEnabled =
+    optionalEnv('PREVIEW_UA_STUDENT_BILLING_ENABLED', 'false') === 'true';
+  const uaStudentBillingEnvironment = uaStudentBillingEnabled
+    ? `      UA_STUDENT_BILLING_ENABLED: "true"
+      UA_ORGANIZATION_ID: ${q(optionalEnv('PREVIEW_UA_ORGANIZATION_ID'))}
+      UA_PARTNER_CODE: ${q(optionalEnv('PREVIEW_UA_PARTNER_CODE'))}
+      UA_PARTNER_HOSTNAME: ${q(env.directPort ? '127.0.0.1' : env.uaHostname)}
+      STRIPE_SECRET_KEY: ${q(optionalEnv('PREVIEW_STRIPE_SECRET_KEY'))}
+      STRIPE_WEBHOOK_SECRET: ${q(optionalEnv('PREVIEW_STRIPE_WEBHOOK_SECRET'))}
+      STRIPE_UA_2026_PRICE_ID: ${q(optionalEnv('PREVIEW_STRIPE_UA_2026_PRICE_ID'))}
+      STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: ${q(optionalEnv('PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS'))}
+      YAWP_APP_ORIGIN: ${q(env.uaUrl)}
+`
+    : '      UA_STUDENT_BILLING_ENABLED: "false"\n';
+
+  if (uaStudentBillingEnabled) {
+    for (const name of [
+      'PREVIEW_UA_ORGANIZATION_ID',
+      'PREVIEW_UA_PARTNER_CODE',
+      'PREVIEW_STRIPE_SECRET_KEY',
+      'PREVIEW_STRIPE_WEBHOOK_SECRET',
+      'PREVIEW_STRIPE_UA_2026_PRICE_ID',
+    ]) {
+      if (!optionalEnv(name)) throw new Error(`${name} is required`);
+    }
+  }
   const commonEnvironment = `      DATABASE_URL: ${q(env.databaseUrl)}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
       NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
@@ -131,7 +158,7 @@ ${masterAccessEnvironment}      PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
       COOKIE_SECURE: ${cookieSecure}
       AWS_EC2_METADATA_DISABLED: "true"
       SESSION_SECRET: ${q(previewSessionSecret)}
-      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PREVIEW_INTERNAL_COMMAND_TOKEN', 'preview-internal-token'))}
+${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PREVIEW_INTERNAL_COMMAND_TOKEN', 'preview-internal-token'))}
       HONEYPOT_SECRET: ${q(optionalEnv('PREVIEW_HONEYPOT_SECRET', 'preview-honeypot-secret'))}
       AWS_S3_BUCKET_FOR_VIDEOS: ${q(optionalEnv('PREVIEW_AWS_S3_BUCKET_FOR_VIDEOS', 'preview-videos'))}
       AWS_S3_REGION_FOR_VIDEOS: ${q(optionalEnv('PREVIEW_AWS_S3_REGION_FOR_VIDEOS', 'us-east-1'))}

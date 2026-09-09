@@ -80,12 +80,13 @@ export class SyncService {
     }, 2000);
   }
 
-  async forceSave(options?: { trigger?: string }): Promise<void> {
+  async forceSave(options?: { trigger?: string }): Promise<SyncStatus> {
     if (this._debounceTimer) {
       clearTimeout(this._debounceTimer);
       this._debounceTimer = null;
     }
     await this._sync(options?.trigger);
+    return this._status;
   }
 
   private _setStatus(status: SyncStatus): void {

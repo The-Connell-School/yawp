@@ -6,9 +6,7 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
-const resolveStudentSchoolYearScope = mock(() =>
-  Promise.resolve('2025-2026')
-);
+const resolveStudentSchoolYearScope = mock(() => Promise.resolve('2025-2026'));
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
@@ -65,11 +63,14 @@ describe('my documents route', () => {
     expect(prisma.document.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          membershipId: 'profile-1',
-          OR: [
-            { classAssignment: { class: { schoolYear: '2025-2026' } } },
-            { classAssignment: { is: null } },
-          ],
+          AND: expect.arrayContaining([
+            {
+              OR: [
+                { classAssignment: { class: { schoolYear: '2025-2026' } } },
+                { classAssignment: { is: null } },
+              ],
+            },
+          ]),
         }),
       })
     );
@@ -83,14 +84,47 @@ describe('my documents route', () => {
     await load('https://example.test/app/my-documents');
 
     const [{ where }] = prisma.document.findMany.mock.calls[0];
-    expect(where.OR).toBeUndefined();
-    expect(where.membershipId).toBe('profile-1');
+    expect(where.AND).toEqual([
+      {
+        OR: [
+          { membershipId: 'profile-1' },
+          {
+            AND: [
+              {
+                group: {
+                  is: {
+                    members: {
+                      some: { membershipId: 'profile-1', removedAt: null },
+                    },
+                  },
+                },
+              },
+              {
+                classAssignment: {
+                  is: {
+                    OR: [
+                      { postAt: null },
+                      { postAt: { lte: expect.any(Date) } },
+                    ],
+                    class: {
+                      students: { some: { id: 'profile-1' } },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ]);
   });
 
   test('redirects a teacher to the teacher documents/grading surface', async () => {
     requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
 
-    await expect(load('https://example.test/app/my-documents')).rejects.toMatchObject({
+    await expect(
+      load('https://example.test/app/my-documents')
+    ).rejects.toMatchObject({
       status: 302,
     });
   });
@@ -121,7 +155,6 @@ describe('my documents route', () => {
     const response = await load('https://example.test/app/my-documents');
 
     expect(prisma.document.findMany.mock.calls[0][0].where).toMatchObject({
-      membershipId: 'profile-1',
       deletedAt: null,
       archivedAt: null,
     });

@@ -14,39 +14,70 @@ import { Textarea } from '~/components/ui/textarea';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { AssignmentTypeImageThumbnail } from './assignment-type-image-thumbnail';
 import {
-  RubricLibrarySection,
-  type RubricOption,
-} from '~/components/admin/rubric-library-section';
+  DEFAULT_PROMPT_CONFIG,
+  DEFAULT_RUBRIC,
+  DEFAULT_SCORING_SCALE,
+  type PromptConfigData,
+  type RubricData,
+  type ScoringScaleData,
+} from '~/domain/assignment-types/assignment-type-rubric.shared';
+import {
+  PromptConfigEditor,
+  promptConfigSnapshot,
+  RubricConfigurationEditor,
+  rubricSnapshot,
+  scoringScaleSnapshot,
+  type GradingAssistantPromptPreview,
+} from './rubric-config-editors';
 import {
   AssignmentTypeModulesSection,
   type AssignmentTypeModuleRow,
 } from './assignment-type-modules-section';
+import { RubricSourceBanner } from './rubric-source-indicator';
 
 type AssignmentTypeEditorFormProps = {
-  /** Every rubric in the shared library, for the picker. */
-  rubrics?: RubricOption[];
-  /** The rubric this assignment type grades with, if one was chosen. */
-  selectedRubricId?: string | null;
   mode: 'create' | 'edit';
   assignmentTypeId?: string;
   titleDefaultValue?: string;
   descriptionDefaultValue?: string | null;
-  /** Per-assignment-type override applied on top of the resolved rubric's instructions. */
-  gradingInstructionsDefaultValue?: string;
+  scoringScale?: ScoringScaleData;
+  rubric?: RubricData;
+  promptConfig?: PromptConfigData;
+  gradingAssistantPromptPreview?: GradingAssistantPromptPreview;
+  gradingAssistantPromptPreviewUnavailableReason?: string;
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
+  currentPromptLabel?: string | null;
 };
 
 function formSnapshot(values: {
   title: string;
   description: string;
-  gradingInstructions: string;
+  scoringScale: ScoringScaleData;
+  rubric: RubricData;
+  promptConfig: PromptConfigData;
 }) {
   return [
     values.title.trim(),
     values.description.trim(),
-    values.gradingInstructions.trim(),
+    scoringScaleSnapshot(values.scoringScale),
+    rubricSnapshot(values.rubric),
+    promptConfigSnapshot(values.promptConfig),
+  ].join('\u0000');
+}
+
+function promptAffectingSnapshot(values: {
+  title: string;
+  scoringScale: ScoringScaleData;
+  rubric: RubricData;
+  promptConfig: PromptConfigData;
+}) {
+  return [
+    values.title.trim(),
+    scoringScaleSnapshot(values.scoringScale),
+    rubricSnapshot(values.rubric),
+    promptConfigSnapshot(values.promptConfig),
   ].join('\u0000');
 }
 
@@ -101,12 +132,15 @@ export function AssignmentTypeEditorForm({
   assignmentTypeId,
   titleDefaultValue = '',
   descriptionDefaultValue = '',
-  gradingInstructionsDefaultValue = '',
+  scoringScale = DEFAULT_SCORING_SCALE,
+  rubric = DEFAULT_RUBRIC,
+  promptConfig = DEFAULT_PROMPT_CONFIG,
+  gradingAssistantPromptPreview,
+  gradingAssistantPromptPreviewUnavailableReason,
   archivedAt = null,
   imageId = null,
   modules = [],
-  rubrics = [],
-  selectedRubricId = null,
+  currentPromptLabel = null,
 }: AssignmentTypeEditorFormProps) {
   const fetcher = useFetcher();
   const imageFileInputRef = useRef<HTMLInputElement>(null);
@@ -118,23 +152,44 @@ export function AssignmentTypeEditorForm({
 
   const [title, setTitle] = useState(titleDefaultValue);
   const [description, setDescription] = useState(descriptionDefaultValue ?? '');
-  const [gradingInstructions, setGradingInstructions] = useState(
-    gradingInstructionsDefaultValue
-  );
+  const [scoringScaleState, setScoringScaleState] =
+    useState<ScoringScaleData>(scoringScale);
+  const [rubricState, setRubricState] = useState<RubricData>(rubric);
+  const [promptConfigState, setPromptConfigState] =
+    useState<PromptConfigData>(promptConfig);
+  const [editorGeneration, setEditorGeneration] = useState(0);
+  const hasHydratedSavedValues = useRef(false);
+
   const savedSnapshot = useMemo(
     () =>
       formSnapshot({
         title: titleDefaultValue,
         description: descriptionDefaultValue ?? '',
-        gradingInstructions: gradingInstructionsDefaultValue,
+        scoringScale,
+        rubric,
+        promptConfig,
       }),
-    [titleDefaultValue, descriptionDefaultValue, gradingInstructionsDefaultValue]
+    [
+      titleDefaultValue,
+      descriptionDefaultValue,
+      scoringScale,
+      rubric,
+      promptConfig,
+    ]
   );
 
   useEffect(() => {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
-    setGradingInstructions(gradingInstructionsDefaultValue);
+    setScoringScaleState(scoringScale);
+    setRubricState(rubric);
+    setPromptConfigState(promptConfig);
+
+    if (hasHydratedSavedValues.current) {
+      setEditorGeneration((generation) => generation + 1);
+    } else {
+      hasHydratedSavedValues.current = true;
+    }
   }, [savedSnapshot]);
 
   useEffect(() => {
@@ -158,10 +213,37 @@ export function AssignmentTypeEditorForm({
       formSnapshot({
         title,
         description,
-        gradingInstructions,
+        scoringScale: scoringScaleState,
+        rubric: rubricState,
+        promptConfig: promptConfigState,
       }),
-    [title, description, gradingInstructions]
+    [title, description, scoringScaleState, rubricState, promptConfigState]
   );
+
+  const savedPromptAffectingSnapshot = useMemo(
+    () =>
+      promptAffectingSnapshot({
+        title: titleDefaultValue,
+        scoringScale,
+        rubric,
+        promptConfig,
+      }),
+    [titleDefaultValue, scoringScale, rubric, promptConfig]
+  );
+
+  const currentPromptAffectingSnapshot = useMemo(
+    () =>
+      promptAffectingSnapshot({
+        title,
+        scoringScale: scoringScaleState,
+        rubric: rubricState,
+        promptConfig: promptConfigState,
+      }),
+    [title, scoringScaleState, rubricState, promptConfigState]
+  );
+
+  const isPromptPreviewStale =
+    currentPromptAffectingSnapshot !== savedPromptAffectingSnapshot;
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
   const canSubmit = isEdit ? isDirty && !isSubmitting : !isSubmitting;
@@ -176,12 +258,15 @@ export function AssignmentTypeEditorForm({
   function handleCancel() {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
-    setGradingInstructions(gradingInstructionsDefaultValue);
+    setScoringScaleState(scoringScale);
+    setRubricState(rubric);
+    setPromptConfigState(promptConfig);
     setPreviewUrl(null);
     setHasRemovedImage(false);
     if (imageFileInputRef.current) {
       imageFileInputRef.current.value = '';
     }
+    setEditorGeneration((generation) => generation + 1);
   }
 
   function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -295,22 +380,40 @@ export function AssignmentTypeEditorForm({
 
         <Section
           title="Rubric"
-          description="Keep the current production behavior, or choose a database-managed rubric. Rubrics stay view-only; grading assistant instructions can be customized per assignment type."
+          description="The source of truth shared by grading and tutor guidance."
         >
-          {assignmentTypeId ? (
-            <RubricLibrarySection
-              assignmentTypeId={assignmentTypeId}
-              rubrics={rubrics}
-              selectedRubricId={selectedRubricId}
-              gradingInstructions={gradingInstructions}
-              onGradingInstructionsChange={setGradingInstructions}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Shared rubrics become available after this assignment type is
-              saved.
-            </p>
-          )}
+          <RubricSourceBanner rubric={rubricState} />
+          <RubricConfigurationEditor
+            key={`rubric-editor-${editorGeneration}`}
+            initialScoringScale={scoringScaleState}
+            initialRubric={rubricState}
+            namePrefix="assignmentType"
+            excludeAssignmentTypeId={assignmentTypeId ?? null}
+            onScoringScaleChange={setScoringScaleState}
+            onRubricChange={setRubricState}
+          />
+        </Section>
+
+        <Section
+          title="Grading assistant"
+          description="Instructions for applying this rubric during submission review."
+        >
+          <PromptConfigEditor
+            key={`prompt-editor-${editorGeneration}`}
+            initial={promptConfigState}
+            namePrefix="assignmentType"
+            onChange={setPromptConfigState}
+            gradingAssistantPromptPreview={gradingAssistantPromptPreview}
+            gradingAssistantPromptPreviewUnavailableReason={
+              gradingAssistantPromptPreviewUnavailableReason
+            }
+            isPromptPreviewStale={isPromptPreviewStale}
+            assignmentTypeId={assignmentTypeId ?? null}
+            currentPromptLabel={currentPromptLabel}
+            title={title}
+            scoringScale={scoringScaleState}
+            rubric={rubricState}
+          />
         </Section>
 
         {!isEdit ? (

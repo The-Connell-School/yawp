@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PINNED="$(tr -d '[:space:]' < "$ROOT/.node-version")"
+candidates=(
+  "${NVM_DIR:-$HOME/.nvm}/versions/node/v${PINNED}/bin/node"
+  "${VOLTA_HOME:-$HOME/.volta}/bin/node"
+  "$(command -v node 2>/dev/null || true)"
+  "/opt/homebrew/bin/node"
+  "/usr/local/bin/node"
+)
+for candidate in "${candidates[@]}"; do
+  [[ -x "$candidate" ]] || continue
+  major="$($candidate -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)"
+  if [[ "$major" =~ ^[0-9]+$ ]] && (( major >= 22 )); then
+    exec "$candidate" "$ROOT/scripts/project-agent.mjs" "$@"
+  fi
+done
+printf '%s\n' 'project: Node 22+ not found. Activate .node-version, then rerun ./bin/project doctor --json' >&2
+exit 1

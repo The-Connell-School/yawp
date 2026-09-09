@@ -1,4 +1,5 @@
 import { prisma } from '~/utils/db.server.js';
+import { studentVisibleClassAssignmentWhere } from '~/domain/collaboration/visibility';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { buildStudentClassDocumentsScope } from '~/utils/class-assignment-scope.server';
 
@@ -7,26 +8,28 @@ import { buildStudentClassDocumentsScope } from '~/utils/class-assignment-scope.
  *
  * Everything here is scoped to one student in one class: the class lookup only
  * matches when the student is enrolled, and the documents query only ever
- * returns that student's own work. Nothing on this surface exposes the roster,
- * other students' documents, grading controls, or paste alerts — the teacher
- * view (`route.tsx`) owns those.
+ * returns that student's own work plus assignment-owned artifacts they actively
+ * collaborate on. Nothing exposes another group's work or private tutor data.
  */
 export type StudentClassDetail = NonNullable<
   Awaited<ReturnType<typeof loadStudentClassDetail>>
 >;
 
-const STUDENT_DOCUMENT_INCLUDE = {
+const studentDocumentInclude = (membershipId: string) => ({
+  assignment: { select: { id: true, title: true } },
+  group: { select: { id: true, label: true } },
   assignmentModuleSessions: {
+    where: { OR: [{ membershipId: null }, { membershipId }] },
     include: {
       assignmentModule: {
         include: { instructions: { select: { id: true } } },
       },
     },
-    orderBy: { assignmentModule: { position: 'desc' } },
+    orderBy: { assignmentModule: { position: 'desc' as const } },
   },
   submissions: {
     where: { archivedAt: null, unsubmittedAt: null },
-    orderBy: { submittedAt: 'desc' },
+    orderBy: { submittedAt: 'desc' as const },
     select: {
       id: true,
       title: true,
@@ -34,7 +37,7 @@ const STUDENT_DOCUMENT_INCLUDE = {
       submittedAt: true,
     },
   },
-} as const;
+});
 
 /**
  * Loads one class for one student, or `null` when that student is not enrolled
@@ -80,7 +83,18 @@ export async function loadStudentClassDetail({
     prisma.classAssignment.findMany({
       where: {
         classId: klass.id,
-        OR: [{ postAt: null }, { postAt: { lte: new Date() } }],
+        // Two independent rules, both of which must hold — kept in an AND rather
+        // than spread side by side, because each is expressed as an `OR` and one
+        // would silently overwrite the other at that key. Losing the first shows
+        // a student a group assignment they cannot open; losing the second shows
+        // them an assignment before its post date.
+        AND: [
+          // A collaborative assignment has nothing for this student to open
+          // until their teacher opens groups, so it stays off the list until
+          // then rather than sitting there refusing the click.
+          studentVisibleClassAssignmentWhere(membershipId),
+          { OR: [{ postAt: null }, { postAt: { lte: new Date() } }] },
+        ],
       },
       select: {
         id: true,
@@ -91,6 +105,7 @@ export async function loadStudentClassDetail({
             id: true,
             title: true,
             prompt: true,
+            collaborationEnabled: true,
             assignmentType: { select: { id: true, title: true } },
           },
         },
@@ -113,7 +128,7 @@ export async function loadStudentClassDetail({
         archivedAt: null,
         ...buildStudentClassDocumentsScope({ classId: klass.id, membershipId }),
       },
-      include: STUDENT_DOCUMENT_INCLUDE,
+      include: studentDocumentInclude(membershipId),
       orderBy: { createdAt: 'desc' },
     }),
   ]);

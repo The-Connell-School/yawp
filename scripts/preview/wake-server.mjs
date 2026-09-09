@@ -31,6 +31,11 @@ export function parsePreviewHost(host, domain) {
     const pr = Number(blackboard[1]);
     return Number.isSafeInteger(pr) ? { pr, service: 'blackboard' } : null;
   }
+  const ua = labels.match(/^ua-pr-([1-9][0-9]*)$/);
+  if (ua) {
+    const pr = Number(ua[1]);
+    return Number.isSafeInteger(pr) ? { pr, service: 'ua' } : null;
+  }
   const web = labels.match(/^pr-([1-9][0-9]*)$/);
   if (web) {
     const pr = Number(web[1]);
@@ -46,6 +51,7 @@ export function parsePreviewPr(host, domain) {
 export function previewServiceHostname(pr, domain, service = 'web') {
   const safeDomain = String(domain || '').toLowerCase();
   if (service === 'blackboard') return `blackboard-pr-${pr}.${safeDomain}`;
+  if (service === 'ua') return `ua-pr-${pr}.${safeDomain}`;
   return `pr-${pr}.${safeDomain}`;
 }
 

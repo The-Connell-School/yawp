@@ -5,6 +5,8 @@ import { isLocalDatabaseUrl } from './local-dev/connection';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_PERSONAS,
+  UA_PREVIEW_ORG_ID,
+  UA_PREVIEW_ORG_NAME,
 } from './local-dev/dev-personas';
 import {
   loadProdFidelityBundle,
@@ -80,6 +82,18 @@ describe('local dev seed fixtures', () => {
     expect(
       LOCAL_DEV_PERSONAS.every((persona) => persona.password === 'yawp-dev')
     ).toBe(true);
+  });
+
+  test('seeds an isolated University of Alabama organization for preview checkout', () => {
+    const seedSource = readFileSync(
+      join(import.meta.dirname, 'seed-local-dev.ts'),
+      'utf8'
+    );
+
+    expect(UA_PREVIEW_ORG_ID).toBe('university-of-alabama-preview');
+    expect(UA_PREVIEW_ORG_NAME).toBe('University of Alabama');
+    expect(seedSource).toContain('id: UA_PREVIEW_ORG_ID');
+    expect(seedSource).toContain('name: UA_PREVIEW_ORG_NAME');
   });
 
   test('models staff dev personas as teacher, owner, then admin capabilities', () => {
