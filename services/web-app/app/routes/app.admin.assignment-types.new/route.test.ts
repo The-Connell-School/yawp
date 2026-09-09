@@ -136,9 +136,9 @@ describe('admin assignment type new action', () => {
     form.set('rubricJson', JSON.stringify({ categories: [] }));
     form.set('promptConfigJson', JSON.stringify({ gradingInstructions: '' }));
 
-    let thrown: unknown;
+    let result: unknown;
     try {
-      await action({
+      result = await action({
         request: new Request(
           'https://example.test/app/admin/assignment-types/new',
           {
@@ -150,11 +150,13 @@ describe('admin assignment type new action', () => {
         context: {} as never,
       } as never);
     } catch (error) {
-      thrown = error;
+      throw error;
     }
 
-    expect(thrown).toBeInstanceOf(Response);
-    expect((thrown as Response).status).toBe(400);
+    expect(result).toMatchObject({
+      data: { error: expect.stringContaining('Every rubric category') },
+      init: { status: 400 },
+    });
     expect(prisma.assignmentType.create).not.toHaveBeenCalled();
   });
 
@@ -175,9 +177,9 @@ describe('admin assignment type new action', () => {
     );
     form.set('promptConfigJson', JSON.stringify({ gradingInstructions: '' }));
 
-    let thrown: unknown;
+    let result: unknown;
     try {
-      await action({
+      result = await action({
         request: new Request(
           'https://example.test/app/admin/assignment-types/new',
           {
@@ -189,11 +191,40 @@ describe('admin assignment type new action', () => {
         context: {} as never,
       } as never);
     } catch (error) {
-      thrown = error;
+      throw error;
     }
 
-    expect(thrown).toBeInstanceOf(Response);
-    expect((thrown as Response).status).toBe(400);
+    expect(result).toMatchObject({
+      data: { error: expect.stringContaining('Every rubric category') },
+      init: { status: 400 },
+    });
     expect(prisma.assignmentType.create).not.toHaveBeenCalled();
   });
+  test.each([
+    ['missing title', { title: '   ' }, 'Title is required'],
+    [
+      'invalid JSON',
+      { title: 'New type', rubricJson: '{invalid' },
+      'rubricJson must be valid JSON',
+    ],
+  ])(
+    'returns recoverable action data for %s',
+    async (_name, fields, message) => {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(fields)) form.set(key, value);
+      const result = await action({
+        request: new Request(
+          'https://example.test/app/admin/assignment-types/new',
+          { method: 'POST', body: form }
+        ),
+        params: {},
+        context: {} as never,
+      } as never);
+      expect(result).toMatchObject({
+        data: { error: message },
+        init: { status: 400 },
+      });
+      expect(prisma.assignmentType.create).not.toHaveBeenCalled();
+    }
+  );
 });

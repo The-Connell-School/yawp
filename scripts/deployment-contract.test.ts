@@ -313,7 +313,7 @@ describe('worktree local setup contract', () => {
     const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
 
     expect(setupScript).toContain(
-      'write_env_files\n\nbun install\n\nif [[ "$FRESH" -eq 1 ]]'
+      'write_env_files\n\n(cd "$ROOT" && bun install --frozen-lockfile)\n\nif [[ "$FRESH" -eq 1 ]]'
     );
   });
 

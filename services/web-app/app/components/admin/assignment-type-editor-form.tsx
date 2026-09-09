@@ -37,6 +37,7 @@ import { RubricSourceBanner } from './rubric-source-indicator';
 
 type AssignmentTypeEditorFormProps = {
   mode: 'create' | 'edit';
+  error?: string;
   assignmentTypeId?: string;
   titleDefaultValue?: string;
   descriptionDefaultValue?: string | null;
@@ -129,6 +130,7 @@ function Section({
 
 export function AssignmentTypeEditorForm({
   mode,
+  error,
   assignmentTypeId,
   titleDefaultValue = '',
   descriptionDefaultValue = '',
@@ -143,6 +145,10 @@ export function AssignmentTypeEditorForm({
   currentPromptLabel = null,
 }: AssignmentTypeEditorFormProps) {
   const fetcher = useFetcher();
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [hasRemovedImage, setHasRemovedImage] = useState(false);
@@ -349,6 +355,17 @@ export function AssignmentTypeEditorForm({
             />
           ) : null}
         </header>
+
+        {error ? (
+          <div
+            ref={errorRef}
+            role="alert"
+            tabIndex={-1}
+            className="mb-6 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive focus:outline-none focus:ring-2 focus:ring-destructive"
+          >
+            {error}
+          </div>
+        ) : null}
 
         <Section
           title="Basics"
