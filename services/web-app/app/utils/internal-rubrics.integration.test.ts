@@ -17,10 +17,13 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('rubric publicati
     const before = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Before publication' } });
     expect(before.rubricRevisionId).toBeNull();
     const current = await service.inspect(name);
-    const request = { requestId: randomUUID(), actorId: 'internal-operator', reason: 'QA rubric revision', expectedFingerprint: current!.fingerprint, schema: { ...schema, title: 'New rubric', rubric: { categories: [{ ...schema.rubric.categories[0], description: 'New requirement' }] } } };
+    const request = { requestId: randomUUID(), actorId: 'internal-operator', reason: 'QA rubric revision', source: { contentId: randomUUID(), version: 1, fingerprint: 'b'.repeat(64) }, expectedFingerprint: current!.fingerprint, schema: { ...schema, title: 'New rubric', rubric: { categories: [{ ...schema.rubric.categories[0], description: 'New requirement' }] } } };
     const [published, replay] = await Promise.all([service.publish(request), service.publish(request)]);
     expect(published.id).toBe(replay.id);
     expect(published.createdBy).toBe('internal-operator');
+    expect(published.sourceContentId).toBe(request.source.contentId);
+    expect(published.sourceVersion).toBe(request.source.version);
+    expect(published.sourceFingerprint).toBe(request.source.fingerprint);
     const pinned = await db.assignment.findUniqueOrThrow({ where: { id: before.id }, include: { rubricRevision: true } });
     expect(pinned.rubricRevision!.schemaJson).toMatchObject({ rubric: { categories: [{ description: 'Original requirement' }] } });
     const after = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'After publication' } });
