@@ -11,7 +11,7 @@ COPY services/web-app/package.json ./services/web-app/package.json
 RUN bun install --frozen-lockfile --ignore-scripts
 COPY packages/prisma/schema.prisma packages/prisma/prisma.config.ts packages/prisma/index.ts ./packages/prisma/
 RUN cd packages/prisma && node node_modules/prisma/build/index.js generate
-COPY services/web-app/app/utils/internal-scenario.server.ts ./services/web-app/app/utils/
+COPY services/web-app/app/utils/internal-scenario.server.ts services/web-app/app/utils/school-year.ts ./services/web-app/app/utils/
 COPY services/web-app/scripts/internal-scenario-runner.ts ./services/web-app/scripts/
 
 FROM base

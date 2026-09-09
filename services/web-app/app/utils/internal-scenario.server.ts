@@ -1,3 +1,4 @@
+import { currentSchoolYear } from './school-year';
 import { createHash, randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@app/prisma';
 import { z } from 'zod';
@@ -19,7 +20,7 @@ type Db = InstanceType<typeof PrismaClient>;
 /** Invoked only by the trusted runner, with operator-owned target binding and DB credentials. */
 export class InternalScenarios {
   private binding: z.infer<typeof bindingSchema>;
-  constructor(private db: Db, binding: z.input<typeof bindingSchema>) { this.binding = bindingSchema.parse(binding); }
+  constructor(private db: Db, binding: z.input<typeof bindingSchema>, private now: () => Date = () => new Date()) { this.binding = bindingSchema.parse(binding); }
   async apply(raw: z.input<typeof inputSchema>) {
     const input = inputSchema.parse(raw), scope = this.binding;
     if (input.target.environment !== scope.environment || input.target.id !== scope.targetId ||
@@ -70,7 +71,7 @@ export class InternalScenarios {
         }
       }
       for (let c = 0; c < input.recipe.classes; c++) {
-        const classroom = await tx.class.create({ data: { schoolId: resources.schoolId, code: `scenario-${c + 1}`, title: `Scenario Class ${c + 1}`, schoolYear: `${new Date().getUTCFullYear()}-${new Date().getUTCFullYear() + 1}`,
+        const classroom = await tx.class.create({ data: { schoolId: resources.schoolId, code: `scenario-${c + 1}`, title: `Scenario Class ${c + 1}`, schoolYear: currentSchoolYear(this.now()),
           teachers: { connect: teachers.map(id => ({ id })) }, students: { connect: students.map(id => ({ id })) } } });
         resources.classes.push(classroom.id);
         for (let a = 0; a < input.recipe.assignmentsPerClass; a++) {

@@ -15,3 +15,4 @@
 !services/web-app/app/utils/internal-scenario.server.ts
 !services/web-app/scripts/
 !services/web-app/scripts/internal-scenario-runner.ts
+!services/web-app/app/utils/school-year.ts
