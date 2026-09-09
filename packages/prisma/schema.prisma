@@ -1624,6 +1624,9 @@ model RubricRevision {
   fingerprint String
   requestId String @unique
   requestHash String
+  sourceContentId String?
+  sourceVersion Int?
+  sourceFingerprint String?
   createdBy String
   reason String
   createdAt DateTime @default(now()) @db.Timestamptz(6)

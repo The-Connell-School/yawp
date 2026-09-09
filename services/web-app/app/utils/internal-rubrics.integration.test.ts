@@ -18,7 +18,14 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('rubric publicati
     expect(before.rubricRevisionId).toBeNull();
     const current = await service.inspect(name);
     const request = { requestId: randomUUID(), actorId: 'internal-operator', reason: 'QA rubric revision', source: { contentId: randomUUID(), version: 1, fingerprint: 'b'.repeat(64) }, expectedFingerprint: current!.fingerprint, schema: { ...schema, title: 'New rubric', rubric: { categories: [{ ...schema.rubric.categories[0], description: 'New requirement' }] } } };
-    const [published, replay] = await Promise.all([service.publish(request), service.publish(request)]);
+    const { createRubricHttp } = await import('./internal-rubrics-http.server');
+    const key = 'r'.repeat(43);
+    const http = createRubricHttp(service, () => key, () => true);
+    const publishHttp = async () => {
+      const response = await http.publish(new Request('https://yawp.test/api/internal/v1/rubrics', { method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' }, body: JSON.stringify(request) }));
+      expect(response.status).toBe(200); return response.json();
+    };
+    const [published, replay] = await Promise.all([publishHttp(), publishHttp()]);
     expect(published.id).toBe(replay.id);
     expect(published.createdBy).toBe('internal-operator');
     expect(published.sourceContentId).toBe(request.source.contentId);

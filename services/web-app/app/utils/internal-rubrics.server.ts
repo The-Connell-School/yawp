@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { validateRubricPromotion } from '~/domain/rubrics/rubric-promotion';
 import { parseRubricSchema } from '~/domain/rubrics/rubric-schema';
 import { STARTER_RUBRICS } from '~/domain/rubrics/starter-rubrics';
-const request = z.object({ requestId: z.string().uuid(), actorId: z.string().min(1).max(200), reason: z.string().trim().min(1).max(2000), expectedFingerprint: z.string().regex(/^[a-f0-9]{64}$/).nullable(), schema: z.unknown() }).strict();
+export const rubricPublicationInput = z.object({ requestId: z.string().uuid(), actorId: z.string().min(1).max(200), reason: z.string().trim().min(1).max(2000), source: z.object({ contentId: z.string().uuid(), version: z.number().int().min(1).max(2147483647), fingerprint: z.string().regex(/^[a-f0-9]{64}$/) }).strict(), expectedFingerprint: z.string().regex(/^[a-f0-9]{64}$/).nullable(), schema: z.unknown() }).strict();
 const json = (value: unknown): Prisma.InputJsonObject => JSON.parse(JSON.stringify(value));
 function canonical(value: any): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -26,7 +26,7 @@ export class InternalRubrics {
     return { schema, fingerprint: fingerprint(schema), version: 0 };
   }
   async publish(raw: unknown) {
-    const input = request.parse(raw);
+    const input = rubricPublicationInput.parse(raw);
     const validated = validateRubricPromotion(input.schema);
     if (!validated.ok) throw failure('Rubric validation failed', 400);
     const schema = json(validated.schema), name = validated.schema.name;
@@ -58,7 +58,7 @@ export class InternalRubrics {
         // Capture every existing assignment before moving the default pointer.
         await tx.assignment.updateMany({ where: { rubricRevisionId: null, assignmentType: { rubricId: row!.id } }, data: { rubricRevisionId: current.id } });
       }
-      const published = await tx.rubricRevision.create({ data: { id: randomUUID(), rubricName: name, version: ++version, schemaJson: schema, fingerprint: fingerprint(schema), requestId: input.requestId, requestHash: hash, createdBy: input.actorId, reason: input.reason } });
+      const published = await tx.rubricRevision.create({ data: { id: randomUUID(), rubricName: name, version: ++version, schemaJson: schema, fingerprint: fingerprint(schema), sourceContentId: input.source.contentId, sourceVersion: input.source.version, sourceFingerprint: input.source.fingerprint, requestId: input.requestId, requestHash: hash, createdBy: input.actorId, reason: input.reason } });
       if (row) await tx.rubric.update({ where: { id: row.id }, data: { currentRevisionId: published.id } });
       else await tx.rubric.create({ data: { name, title: validated.schema.title, schemaJson: schema, currentRevisionId: published.id } });
       return published;
