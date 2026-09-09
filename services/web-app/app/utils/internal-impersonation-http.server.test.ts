@@ -141,3 +141,28 @@ test('impersonation error reporting excludes cookies, tokens, queries and except
   expect(records).toEqual([{ event: 'internal_impersonation_request_failed' }, { event: 'internal_impersonation_request_failed' }, { event: 'internal_impersonation_request_failed' }]);
   expect(JSON.stringify(records)).not.toContain('secret');
 });
+
+test('pending end delivery recovers after errors, never overlaps and stops without dropping durable work', async () => {
+  const { startEndDelivery } = await import('./internal-impersonation-delivery.server');
+  const scheduled: Array<() => void> = [];
+  let calls = 0, warnings = 0, cancelled = 0;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const stop = startEndDelivery(async () => { calls++; if (calls === 1) throw new Error('private detail'); await pending; }, {
+    schedule: callback => { scheduled.push(callback); return () => { cancelled++; }; },
+    reportFailure: () => { warnings++; },
+  });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(calls).toBe(1);
+  expect(warnings).toBe(1);
+  expect(scheduled).toHaveLength(1);
+  scheduled.shift()!();
+  await Promise.resolve();
+  expect(calls).toBe(2);
+  expect(scheduled).toHaveLength(0);
+  stop();
+  release();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(scheduled).toHaveLength(0);
+  expect(cancelled).toBe(1);
+});
