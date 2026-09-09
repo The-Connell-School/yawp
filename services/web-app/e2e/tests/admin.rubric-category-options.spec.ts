@@ -16,7 +16,7 @@ test.describe.serial('Library rubric category options', () => {
     const schema = {
       name: `category-options-e2e-${suffix}`,
       title: `Category Options Library ${suffix}`,
-      scoringScale: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+      scoringScale: { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 },
       rubric: {
         categories: [
           {
@@ -35,7 +35,7 @@ test.describe.serial('Library rubric category options', () => {
           },
         ],
       },
-      promptConfig: { gradingInstructions: 'Apply the category settings.' },
+      promptConfig: { gradingInstructions: 'Apply the category settings.', systemInstructions: '', instructionsPreset: '' },
       outputSchema: { schemaVersion: 1, responseShape: 'categories_overall_comment' },
       calibrationNotes: null,
     };
