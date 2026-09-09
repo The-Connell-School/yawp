@@ -114,12 +114,21 @@ export async function markSucceeded(params: {
   prisma: JobStore;
   jobId: string;
   outputs: MarketingOutput[];
+  /**
+   * Non-fatal things the render worked around — a framing stage that timed
+   * out and shipped the bare capture, a scene whose optional step found
+   * nothing. The media is still delivered, so the job succeeds; without the
+   * reasons on the row a quietly degraded take is indistinguishable from a
+   * clean one, and the operator re-runs it blind.
+   */
+  warnings?: string[];
 }): Promise<void> {
   await params.prisma.marketingMediaJob.update({
     where: { id: params.jobId },
     data: {
       status: 'SUCCEEDED',
       outputs: params.outputs,
+      warnings: params.warnings?.length ? params.warnings : null,
       error: null,
       finishedAt: new Date(),
       lockedAt: null,

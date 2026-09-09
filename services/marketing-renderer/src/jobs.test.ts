@@ -143,6 +143,31 @@ describe('markSucceeded and markFailed', () => {
     expect(data.finishedAt).toBeInstanceOf(Date);
   });
 
+  // A render that degrades quietly — an unframed clip because the framing
+  // stage timed out — looks identical to one that never had framing. The
+  // reason has to survive onto the row or nobody can act on it.
+  test('keeps the warnings a degraded render collected', async () => {
+    await markSucceeded({
+      prisma: db(),
+      jobId: 'job-1',
+      outputs: [],
+      warnings: ['Framing failed, delivering the unframed capture: killed'],
+    });
+
+    const data = prisma.marketingMediaJob.update.mock.calls[0][0].data;
+    expect(data.warnings).toEqual([
+      'Framing failed, delivering the unframed capture: killed',
+    ]);
+  });
+
+  // Null rather than an empty array, so the job page can ask one question.
+  test('leaves warnings null on a clean render', async () => {
+    await markSucceeded({ prisma: db(), jobId: 'job-1', outputs: [] });
+
+    const data = prisma.marketingMediaJob.update.mock.calls[0][0].data;
+    expect(data.warnings).toBeNull();
+  });
+
   test('re-queues a failure that still has attempts left', async () => {
     await markFailed({
       prisma: db(),

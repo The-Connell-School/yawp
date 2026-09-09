@@ -256,6 +256,45 @@ describe('marketing media job page', () => {
     }
   });
 
+  // A clip that came back unframed because the framing stage timed out is a
+  // SUCCEEDED job with degraded media. Nothing on the page said so, so the
+  // operator saw a bare capture and had no idea whether that was the design.
+  test('surfaces what a succeeded render had to work around', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({
+        status: 'SUCCEEDED',
+        outputs: [],
+        warnings: ['Framing failed, delivering the unframed capture: killed'],
+      })
+    );
+
+    const result = await loader(args(new Request('http://localhost/x')));
+
+    expect(result.data.warnings).toEqual([
+      'Framing failed, delivering the unframed capture: killed',
+    ]);
+  });
+
+  test('has no warnings on a clean render', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(job());
+
+    const result = await loader(args(new Request('http://localhost/x')));
+
+    expect(result.data.warnings).toEqual([]);
+  });
+
+  // The column is Json, so a row written by anything else could hold a shape
+  // the page is not expecting. Non-strings are dropped rather than rendered.
+  test('ignores a warnings value that is not a list of strings', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({ warnings: { note: 'not an array' } })
+    );
+
+    const result = await loader(args(new Request('http://localhost/x')));
+
+    expect(result.data.warnings).toEqual([]);
+  });
+
   test('404s for an unknown job', async () => {
     prisma.marketingMediaJob.findUnique.mockResolvedValue(null);
 

@@ -101,7 +101,12 @@ export async function processNextJob(params: {
             files,
           });
 
-    await markSucceeded({ prisma: params.prisma, jobId: job.id, outputs });
+    await markSucceeded({
+      prisma: params.prisma,
+      jobId: job.id,
+      outputs,
+      warnings,
+    });
     log('rendered', {
       jobId: job.id,
       outputs: outputs.length,

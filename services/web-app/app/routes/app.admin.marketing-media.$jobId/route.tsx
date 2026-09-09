@@ -62,6 +62,16 @@ const ACTIVE_STATUSES = ['GENERATING', 'QUEUED', 'RENDERING'];
 /** A connected renderer polls every few seconds; two minutes queued means nobody is coming. */
 const STALLED_QUEUE_MS = 2 * 60 * 1000;
 
+/**
+ * Non-fatal notes a SUCCEEDED render left behind. The column is Json, so the
+ * shape is checked rather than trusted: anything that is not a list of
+ * strings is dropped instead of reaching the page.
+ */
+function readWarnings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   requireMarketingStudioEnabled();
   await requireAdmin(request);
@@ -81,6 +91,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       model: true,
       targetUrl: true,
       outputs: true,
+      warnings: true,
       error: true,
       attempts: true,
       startedAt: true,
@@ -175,6 +186,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })),
     },
     outputs: signedOutputs,
+    warnings: readWarnings(job.warnings),
     // Null on a first take — there is nothing to have changed from. An empty
     // array is a different statement: this revision moved nothing at all.
     changes: job.parent
@@ -505,6 +517,7 @@ export default function Route() {
   const {
     job,
     outputs,
+    warnings,
     changes,
     storyboard,
     estimatedSeconds,
@@ -727,6 +740,31 @@ export default function Route() {
               <code>bun marketing-renderer:render-once</code> against this
               environment, or see{' '}
               <code>docs/work/marketing-media-studio.md</code>.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* A render can succeed and still have degraded — say which, and how. */}
+      {warnings.length > 0 ? (
+        <Card className="border-amber-300">
+          <CardHeader>
+            <CardTitle className="text-amber-800">
+              This render finished, with notes
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul
+              data-testid="marketing-job-warnings"
+              className="flex list-disc flex-col gap-1 pl-5 text-sm text-amber-800"
+            >
+              {warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-amber-700">
+              The media below is real, but something was worked around to
+              deliver it. Re-render if the take does not look right.
             </p>
           </CardContent>
         </Card>
