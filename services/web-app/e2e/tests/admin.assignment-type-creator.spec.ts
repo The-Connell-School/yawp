@@ -31,6 +31,7 @@ test.describe('Admin assignment type creator', () => {
     finally { await prisma.$disconnect(); }
   });
   test('creation keeps the library rubric and instructions through title validation and reopening', async ({ page, signIn }) => {
+    test.setTimeout(90_000);
     const prisma = createE2EPrismaClient();
     const title = `Creator Selected Rubric QA ${Date.now()}`;
     const instructions = 'Reward concrete supporting details for this assignment.';
@@ -43,7 +44,7 @@ test.describe('Admin assignment type creator', () => {
       await page.getByTestId('rubric-library-select').click();
       await page.getByRole('option', { name: rubric.title, exact: true }).click();
       await page.getByTestId('grading-assistant-instructions').fill(instructions);
-      await page.getByLabel('Title', { exact: true }).fill('   ');
+      await page.locator('input[name="title"]').fill('   ');
       const rejected = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes('/app/admin/assignment-types/new.data'));
       await page.getByRole('button', { name: 'Create', exact: true }).click();
       expect((await rejected).status()).toBe(400);
@@ -51,7 +52,7 @@ test.describe('Admin assignment type creator', () => {
       await expect(page.getByText(OOPS)).toHaveCount(0);
       await expect(page.getByTestId('rubric-library-select')).toContainText(rubric.title);
       await expect(page.getByTestId('grading-assistant-instructions')).toHaveValue(instructions);
-      await page.getByLabel('Title', { exact: true }).fill(title);
+      await page.locator('input[name="title"]').fill(title);
       await page.getByRole('button', { name: 'Create', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Edit assignment type' })).toBeVisible();
       const created = await prisma.assignmentType.findFirstOrThrow({ where: { title }, include: { rubric: true } });
@@ -63,6 +64,21 @@ test.describe('Admin assignment type creator', () => {
       await expect(page.getByTestId('grading-assistant-instructions')).toHaveValue(instructions);
       await page.getByText(`View ${rubric.title}`, { exact: true }).click();
       await expect(page.getByTestId('rubric-library-json')).toContainText('daily-pages-engagement');
+      await page.getByTestId('rubric-library-select').click();
+      await page.getByRole('option', { name: 'Built-in default for this assignment type', exact: true }).click();
+      await page.getByTestId('grading-assistant-instructions').fill('Discard these unsaved instructions.');
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(page.getByTestId('rubric-library-select')).toContainText(rubric.title);
+      await expect(page.getByTestId('grading-assistant-instructions')).toHaveValue(instructions);
+      await page.getByTestId('rubric-library-select').click();
+      await page.getByRole('option', { name: 'Built-in default for this assignment type', exact: true }).click();
+      const cleared = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes(`/app/admin/assignment-types/${created.id}.data`));
+      await page.getByRole('button', { name: 'Update', exact: true }).click();
+      expect((await cleared).ok()).toBe(true);
+      await page.reload();
+      await expect(page.getByTestId('rubric-library-select')).toContainText('Built-in default for this assignment type');
+      await expect(page.getByTestId('grading-assistant-instructions')).toHaveValue(instructions);
+      expect((await prisma.assignmentType.findUniqueOrThrow({ where: { id: created.id } })).rubricId).toBeNull();
       await expect(page.getByTestId('rubric-add-category')).toHaveCount(0);
     } finally {
       const types = await prisma.assignmentType.findMany({ where: { title }, select: { id: true } });
@@ -306,6 +322,10 @@ test.describe('Admin assignment type creator', () => {
           description: 'Legacy rubric preservation QA',
           position: 0,
           rubricJson: legacyRubric,
+          scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+          gradingPromptConfigJson: { gradingInstructions: 'Keep the legacy prompt exactly.', legacyExtra: 'preserve' },
+          gradingOutputSchemaJson: { schemaVersion: 1, responseShape: 'categories_overall_comment', legacyExtra: true },
+          gradingCalibrationNotes: 'Keep legacy calibration.',
           gradingAssistantVersion: 7,
         },
       });
@@ -328,10 +348,18 @@ test.describe('Admin assignment type creator', () => {
         select: {
           rubricJson: true,
           rubricId: true,
+          scoringScaleJson: true,
+          gradingPromptConfigJson: true,
+          gradingOutputSchemaJson: true,
+          gradingCalibrationNotes: true,
           gradingAssistantVersion: true,
         },
       });
       expect(updated.rubricJson).toEqual(legacyRubric);
+      expect(updated.scoringScaleJson).toEqual(created.scoringScaleJson);
+      expect(updated.gradingPromptConfigJson).toEqual(created.gradingPromptConfigJson);
+      expect(updated.gradingOutputSchemaJson).toEqual(created.gradingOutputSchemaJson);
+      expect(updated.gradingCalibrationNotes).toBe(created.gradingCalibrationNotes);
       expect(updated.rubricId).toBeNull();
       expect(updated.gradingAssistantVersion).toBe(7);
     } finally {
