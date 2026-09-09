@@ -6,6 +6,16 @@ import {
   suggestRubricIdentity,
 } from './rubric-schema';
 import { STARTER_RUBRICS } from './starter-rubrics';
+import {
+  CLASS_STARTER_PROMPT_CONFIG,
+  CLASS_STARTER_RUBRIC,
+  CLASS_STARTER_SCORING_SCALE,
+} from '~/domain/assignment-types/class-starter-rubric';
+import {
+  DAILY_PAGES_REFLECTION_PROMPT_CONFIG,
+  DAILY_PAGES_REFLECTION_RUBRIC,
+  DAILY_PAGES_REFLECTION_SCORING_SCALE,
+} from '~/domain/assignment-types/daily-pages-reflection-rubric';
 
 const minimal = {
   name: 'gba-etiquette',
@@ -93,6 +103,8 @@ describe('rubric schema', () => {
       'gba300-international-etiquette',
       'gba300-nonverbal-rubric-STUDENT',
       'cristo-rey-hornbuckle-five-paragraph-essay',
+      'class-starter-engagement',
+      'daily-pages-reflection',
     ]);
 
     const thesis = STARTER_RUBRICS[0];
@@ -240,5 +252,41 @@ describe('rubric schema', () => {
     expect(cristoRey.promptConfig.gradingInstructions).toContain(
       'or another material grading-context observation'
     );
+  });
+});
+
+describe('the two assistants Daily Pages split into', () => {
+  const byName = new Map(STARTER_RUBRICS.map((rubric) => [rubric.name, rubric]));
+
+  test('are both in the library so an admin can pick either', () => {
+    expect(byName.has('class-starter-engagement')).toBe(true);
+    expect(byName.has('daily-pages-reflection')).toBe(true);
+  });
+
+  /**
+   * The library copies must be the same objects grading falls back to. If they
+   * drift, an admin who picks "Daily Pages reflection" from the library gets
+   * something other than what a Daily Pages type grades with by default.
+   */
+  test('carry exactly what the built-in defaults carry', () => {
+    const classStarter = byName.get('class-starter-engagement');
+    expect(classStarter?.scoringScale).toEqual(CLASS_STARTER_SCORING_SCALE);
+    expect(classStarter?.rubric).toEqual(CLASS_STARTER_RUBRIC);
+    expect(classStarter?.promptConfig).toEqual(CLASS_STARTER_PROMPT_CONFIG);
+
+    const reflection = byName.get('daily-pages-reflection');
+    expect(reflection?.scoringScale).toEqual(
+      DAILY_PAGES_REFLECTION_SCORING_SCALE
+    );
+    expect(reflection?.rubric).toEqual(DAILY_PAGES_REFLECTION_RUBRIC);
+    expect(reflection?.promptConfig).toEqual(
+      DAILY_PAGES_REFLECTION_PROMPT_CONFIG
+    );
+  });
+
+  test('leave the Daily Pages rubric production already grades with alone', () => {
+    const legacy = byName.get('daily-pages-engagement');
+    expect(legacy?.scoringScale).toMatchObject({ maxScore: 30, step: 10 });
+    expect(legacy?.rubric.categories).toHaveLength(1);
   });
 });
