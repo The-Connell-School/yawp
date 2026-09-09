@@ -201,3 +201,48 @@ export function carriesFiles(
 ): boolean {
   return filesFromDataTransfer(data).length > 0;
 }
+
+/**
+ * How many figures one document may carry.
+ *
+ * Blobs live in the document's own table, so an unbounded count is unbounded
+ * Postgres growth against a single row's foreign key. GBA 300's rubric asks
+ * for two graphics; fifty is far past any honest report and still a hard stop
+ * on a paste-everything loop.
+ */
+export const DOCUMENT_IMAGE_MAX_PER_DOCUMENT = 50;
+
+/**
+ * The media type the bytes themselves claim, or null if they are none of the
+ * formats we accept.
+ *
+ * `file.type` is whatever the client put in the multipart part header, so it
+ * is a hint and never a fact. These bytes are later served inline from our own
+ * origin, which makes "the caller said it was a PNG" the wrong basis for the
+ * Content-Type we hand a browser. Signatures only -- no full decode; the point
+ * is to reject a document pretending to be an image, not to validate pixels.
+ */
+export function sniffImageContentType(
+  bytes: Uint8Array
+): DocumentImageContentType | null {
+  const startsWith = (...signature: number[]) =>
+    signature.length <= bytes.length &&
+    signature.every((byte, index) => bytes[index] === byte);
+
+  // \x89 P N G \r \n \x1a \n
+  if (startsWith(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return 'image/png';
+  // SOI marker; every JPEG variant shares it.
+  if (startsWith(0xff, 0xd8, 0xff)) return 'image/jpeg';
+  // GIF87a / GIF89a
+  if (startsWith(0x47, 0x49, 0x46, 0x38)) return 'image/gif';
+  // RIFF....WEBP
+  if (
+    startsWith(0x52, 0x49, 0x46, 0x46) &&
+    bytes.length >= 12 &&
+    [0x57, 0x45, 0x42, 0x50].every((byte, index) => bytes[8 + index] === byte)
+  ) {
+    return 'image/webp';
+  }
+
+  return null;
+}

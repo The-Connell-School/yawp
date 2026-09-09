@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { documentReadWhere } from '~/utils/document-access.server';
 
 const prisma = {
   user: { findUniqueOrThrow: mock() },
@@ -61,7 +62,7 @@ describe('api.image.document.$id', () => {
     expect(response.status).toBe(404);
   });
 
-  test('scopes the lookup to the author and their teachers for a non-admin', async () => {
+  test('scopes the lookup to the document audience for a non-admin', async () => {
     await call('img-1');
 
     const where = prisma.documentImage.findFirst.mock.calls[0]![0].where;
@@ -70,12 +71,45 @@ describe('api.image.document.$id', () => {
     expect(JSON.stringify(where.document)).toContain('profile-1');
   });
 
+  test('grants the same audience the document itself grants', async () => {
+    // A teacher reaching a submitted report through its class assignment, and
+    // an active co-author on a shared draft, both read the document itself.
+    // Narrowing the rule here renders their page with every figure broken, so
+    // this asks the same helper the document loader asks.
+    await call('img-1');
+
+    const where = prisma.documentImage.findFirst.mock.calls[0]![0].where;
+    const expected = documentReadWhere({ profileId: 'profile-1', isAdmin: false });
+
+    // Structural, not deep-equal: the shared rule carries a `postAt: { lte: now }`
+    // clause, so two calls a millisecond apart are never identical objects.
+    expect(where.document.OR).toHaveLength(expected.OR!.length);
+    const serialized = JSON.stringify(where.document);
+    expect(serialized).toContain('classAssignment');
+    expect(serialized).toContain('removedAt');
+    expect(serialized).toContain('profile-1');
+  });
+
+  test('will not serve a figure out of a deleted document', async () => {
+    await call('img-1');
+
+    const where = prisma.documentImage.findFirst.mock.calls[0]![0].where;
+    expect(where.document.deletedAt).toBeNull();
+  });
+
   test('lets a platform admin through without the ownership clause', async () => {
     prisma.user.findUniqueOrThrow.mockResolvedValue({ isAdmin: true });
 
     await call('img-1');
 
     const where = prisma.documentImage.findFirst.mock.calls[0]![0].where;
-    expect(where.document).toBeUndefined();
+    // Still scoped to a live document; just not to one audience.
+    expect(where.document).toEqual({ deletedAt: null });
+  });
+
+  test('tells the browser not to sniff its way past the stored type', async () => {
+    // These bytes came from a student, and they are served from our origin.
+    const response = await call('img-1');
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
   });
 });

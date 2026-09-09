@@ -2,7 +2,7 @@ import { invariantResponse } from '@epic-web/invariant';
 import { type LoaderFunctionArgs } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import { documentReadWhere } from '~/utils/document-access.server';
 
 /**
  * Serve one student-uploaded figure.
@@ -31,22 +31,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: {
       id: params.id,
       deletedAt: null,
-      ...(hasEffectivePlatformAdmin(user.isAdmin)
-        ? {}
-        : {
-            document: {
-              OR: [
-                { membershipId: profile.id },
-                {
-                  membership: {
-                    classesAsStudent: {
-                      some: { teachers: { some: { id: profile.id } } },
-                    },
-                  },
-                },
-              ],
-            },
-          }),
+      // The one definition of who may read a document, rather than a second
+      // copy of it here: a teacher reaching a submitted report through its
+      // class assignment, or a co-author on a shared draft, must not get a
+      // page that renders with every figure broken.
+      document: {
+        deletedAt: null,
+        ...documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin }),
+      },
     },
     select: { contentType: true, blob: true, altText: true },
   });
@@ -58,6 +50,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       'Content-Type': image.contentType,
       'Content-Length': Buffer.byteLength(image.blob).toString(),
       'Content-Disposition': `inline; filename="${params.id}"`,
+      // These bytes came from a student. The upload route proves they are a
+      // real raster image before storing them, and this says the browser must
+      // take that stored type at its word rather than sniffing its way to
+      // something scriptable on our own origin.
+      'X-Content-Type-Options': 'nosniff',
       'Cache-Control': 'private, max-age=31536000, immutable',
     },
   });

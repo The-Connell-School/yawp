@@ -86,7 +86,11 @@ export function DocumentImageButton({ editor, documentId }: Props) {
   }
 
   async function onInsert() {
-    if (!file) return;
+    // `busy` disables the footer button, but Enter in the caption field
+    // reaches this directly. Without the guard, a second Enter while the first
+    // upload is still in flight posts the same file twice and inserts the
+    // figure twice.
+    if (!file || busy) return;
     const description = normalizeAltText(altText);
     if (!description) {
       setError('Describe the image so screen-reader users know what it shows.');

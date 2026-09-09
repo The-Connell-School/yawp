@@ -10,6 +10,7 @@ import {
   isDocumentImageUploadEnabled,
   normalizeAltText,
   parseDocumentImageId,
+  sniffImageContentType,
   validateDocumentImageUpload,
 } from './document-images';
 
@@ -209,5 +210,39 @@ describe('carriesFiles', () => {
     // Plain text paste: must fall through to the editor untouched.
     expect(carriesFiles({ files: [] })).toBe(false);
     expect(carriesFiles(null)).toBe(false);
+  });
+});
+
+describe('sniffImageContentType', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+  const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0]);
+  const GIF = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
+  const WEBP = new Uint8Array([
+    0x52, 0x49, 0x46, 0x46, 0x20, 0, 0, 0, 0x57, 0x45, 0x42, 0x50,
+  ]);
+
+  test('reads the format out of the bytes, not the declared type', () => {
+    expect(sniffImageContentType(PNG)).toBe('image/png');
+    expect(sniffImageContentType(JPEG)).toBe('image/jpeg');
+    expect(sniffImageContentType(GIF)).toBe('image/gif');
+    expect(sniffImageContentType(WEBP)).toBe('image/webp');
+  });
+
+  test('rejects a document wearing an image content type', () => {
+    // The whole point: a student can put image/png on any bytes they like.
+    const html = new TextEncoder().encode('<script>alert(1)</script>');
+    expect(sniffImageContentType(html)).toBeNull();
+  });
+
+  test('rejects an SVG, which is script-capable XML we serve from our origin', () => {
+    const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg">');
+    expect(sniffImageContentType(svg)).toBeNull();
+  });
+
+  test('does not read past the end of a truncated file', () => {
+    expect(sniffImageContentType(new Uint8Array([0x89, 0x50]))).toBeNull();
+    expect(sniffImageContentType(new Uint8Array())).toBeNull();
+    // RIFF header with no WEBP tag behind it is some other RIFF container.
+    expect(sniffImageContentType(new Uint8Array([0x52, 0x49, 0x46, 0x46]))).toBeNull();
   });
 });

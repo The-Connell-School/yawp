@@ -3,8 +3,10 @@ import { type ActionFunctionArgs } from 'react-router';
 import {
   DOCUMENT_IMAGE_KILL_SWITCH_ENV,
   DOCUMENT_IMAGE_MAX_BYTES,
+  DOCUMENT_IMAGE_MAX_PER_DOCUMENT,
   buildDocumentImageSrc,
   isDocumentImageUploadEnabled,
+  sniffImageContentType,
   validateDocumentImageUpload,
 } from '~/domain/document-images/document-images';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
@@ -50,6 +52,32 @@ export async function action({ request, params }: ActionFunctionArgs) {
   });
   if (!enabled) return json({ ok: false, reason: 'not-enabled' }, 403);
 
+  // Before parsing: request.formData() materializes the whole body in memory,
+  // so a cap checked afterwards bounds what we store but not what we buffer.
+  // The multipart envelope costs a little over the file itself; one extra MB
+  // of headroom keeps an honest 8 MB upload from being rejected on framing.
+  const declaredLength = Number(request.headers.get('Content-Length') ?? '');
+  if (Number.isFinite(declaredLength) && declaredLength > DOCUMENT_IMAGE_MAX_BYTES + 1024 * 1024) {
+    return json(
+      { ok: false, reason: 'too-large', message: 'That image is too large.' },
+      413
+    );
+  }
+
+  const figureCount = await prisma.documentImage.count({
+    where: { documentId: document.id, deletedAt: null },
+  });
+  if (figureCount >= DOCUMENT_IMAGE_MAX_PER_DOCUMENT) {
+    return json(
+      {
+        ok: false,
+        reason: 'too-many',
+        message: `This report already has ${DOCUMENT_IMAGE_MAX_PER_DOCUMENT} images. Remove one before adding another.`,
+      },
+      400
+    );
+  }
+
   const form = await request.formData();
   const file = form.get('file');
   if (!(file instanceof File)) {
@@ -73,11 +101,27 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return json({ ok: false, reason: 'too-large', message: 'That image is too large.' }, 400);
   }
 
+  // `file.type` is a claim the caller typed into a multipart header, and these
+  // bytes are served back inline from our own origin. Store the format the
+  // bytes actually are, so nothing but a real raster image can ever be handed
+  // to a browser from this table.
+  const sniffed = sniffImageContentType(bytes);
+  if (!sniffed) {
+    return json(
+      {
+        ok: false,
+        reason: 'unsupported-type',
+        message: 'That file is not a PNG, JPEG, GIF, or WebP image.',
+      },
+      400
+    );
+  }
+
   const image = await prisma.documentImage.create({
     data: {
       documentId: document.id,
       altText: validation.altText,
-      contentType: validation.contentType,
+      contentType: sniffed,
       byteSize: bytes.byteLength,
       blob: bytes,
     },
