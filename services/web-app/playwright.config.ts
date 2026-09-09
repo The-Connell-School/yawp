@@ -18,7 +18,16 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:5173',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        // The test server binds IPv4; avoid another local app on IPv6 loopback.
+        launchOptions: {
+          args: ['--host-resolver-rules=MAP ua.localhost 127.0.0.1'],
+        },
+      },
+    },
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
   ],
   webServer: [
