@@ -386,10 +386,10 @@ function runTestProfile(profile, { json }) {
     }) });
   }
   else if (chosen === "internal-impersonation-http") runWebApp("internal-impersonation-http", ["test", "app/utils/internal-impersonation-http.server.test.ts"]);
-  else if (["internal-directory-integration", "internal-impersonation-integration", "internal-impersonation-writes"].includes(chosen)) {
+  else if (["internal-directory-integration", "internal-impersonation-integration", "internal-impersonation-writes", "internal-qa-integration"].includes(chosen)) {
     const local = requireConfig();
     results.push({ id: chosen, ...execute(selected.bun,
-      ["test", chosen === "internal-directory-integration" ? "app/utils/internal-directory.integration.test.ts" : chosen === "internal-impersonation-writes" ? "app/utils/internal-impersonation-writes.integration.test.ts" : "app/utils/internal-impersonation.integration.test.ts"], {
+      ["test", chosen === "internal-qa-integration" ? "app/utils/internal-qa.integration.test.ts" : chosen === "internal-directory-integration" ? "app/utils/internal-directory.integration.test.ts" : chosen === "internal-impersonation-writes" ? "app/utils/internal-impersonation-writes.integration.test.ts" : "app/utils/internal-impersonation.integration.test.ts"], {
         json, cwd: webAppRoot, timeout: 60000,
         env: { ...selected.env, INTERNAL_DIRECTORY_TEST_DATABASE_URL: local.DATABASE_URL },
       }) });
