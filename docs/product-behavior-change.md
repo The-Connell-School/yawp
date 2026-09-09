@@ -21,3 +21,5 @@ Additional tests cover selecting during creation, validation preservation, save/
 ## Review and release gates
 
 Two independent reviews checked requirements and persistence. The second caught prompt/evaluation paths that still read inline configuration; those are included in recovery. Release requires the Record assignment-rubric proof profile and required repository CI, followed by production/demo verification. The incident postmortem is docs/postmortems/2026-09-09-rubric-selector-regression.md.
+
+The broader assignment-type integration test now selects a dedicated shared rubric with the same Thesis/Grammar categories, preserving all prompt-version, evaluation, and tutor-module mapping assertions. Category-options coverage similarly verifies library selection preserves custom labels, feedback settings, and grammar highlighting. The focused browser gate includes these integration and library suites so obsolete inline-editor setup cannot escape local proof again.
