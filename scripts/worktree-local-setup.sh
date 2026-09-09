@@ -3,7 +3,7 @@ set -euo pipefail
 umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"
+WORKTREE_NAME="$(basename "$ROOT")"
 SLUG="$WORKTREE_NAME"
 CONFIG_DIR="$ROOT/.worktree-local"
 CONFIG_FILE="$CONFIG_DIR/config.env"
@@ -35,11 +35,15 @@ ensure_config() {
   if [[ -f "$CONFIG_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$CONFIG_FILE"
-    if [[ "$SLUG" == "$WORKTREE_NAME" ]]; then
-      return
-    fi
-
     SLUG="$WORKTREE_NAME"
+    local slot
+    slot="$(hash_slot "$SLUG" 70)"
+    PG_PORT=$((54320 + slot))
+    DEV_PORT=$((5176 + slot))
+    LTI_MOCK_PORT=$((9473 + slot))
+    CONTAINER_NAME="yawp-${SLUG}-postgres"
+    VOLUME_NAME="yawp-${SLUG}-postgres-data"
+    DB_NAME="yawp_${SLUG}"
   else
     local slot
     slot="$(hash_slot "$SLUG" 70)"
@@ -58,6 +62,9 @@ ensure_config() {
   LTI_MOCK_PORT="${RECORD_PORT_LTI_MOCK:-${LTI_MOCK_PORT:-$((DEV_PORT + 4297))}}"
   PG_USER="${PG_USER:-postgres}"
   PG_PASSWORD="${PG_PASSWORD:-password}"
+  CONTAINER_NAME="yawp-${SLUG}-postgres"
+  VOLUME_NAME="yawp-${SLUG}-postgres-data"
+  DB_NAME="yawp_${SLUG}"
 
   cat >"$CONFIG_FILE" <<EOF
 SLUG=$SLUG
