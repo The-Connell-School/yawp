@@ -112,9 +112,13 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('trusted runner u
     expect((await execute({ ...selected, target: { ...selected.target, organizationId: org.id } })).code).toBe(1);
     expect((await execute({ ...selected, jobId: randomUUID(), target: { ...selected.target, organizationId: otherSeatId } })).code).toBe(1);
     expect(await db.orgMembership.count({ where: { organizationId: otherSeatId } })).toBe(0);
+    await writeFile(configPath, JSON.stringify({ targets: [{ ...registered, seatOrganizationIds: [seatId, otherSeatId] }] }));
+    expect((await execute({ ...selected, jobId: randomUUID(), target: { ...selected.target, organizationId: otherSeatId } })).code).toBe(0);
+    expect(await db.orgMembership.count({ where: { organizationId: otherSeatId, isActive: true } })).toBe(3);
     expect((await execute({ ...selected, jobId: randomUUID(), mode: 'reset' })).code).toBe(0);
     expect(await db.orgMembership.count({ where: { organizationId: seatId, isActive: true } })).toBe(3);
     expect(await db.orgMembership.count({ where: { organizationId: org.id, isActive: true } })).toBe(3);
+    expect(await db.orgMembership.count({ where: { organizationId: otherSeatId, isActive: true } })).toBe(3);
     const saved = await db.internalScenarioReceipt.findUniqueOrThrow({ where: { jobId: selected.jobId } });
     expect(saved.organizationId).toBe(seatId);
     for (const invalid of [
