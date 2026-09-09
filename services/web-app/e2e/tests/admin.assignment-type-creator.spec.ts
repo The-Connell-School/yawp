@@ -39,6 +39,11 @@ test.describe('Admin assignment type creator', () => {
       await expect(page.getByTestId('grading-assistant-instructions')).toHaveValue(instructions);
       await page.getByText(`View ${rubric.title}`, { exact: true }).click();
       await expect(page.getByTestId('rubric-library-json')).toContainText('daily-pages-engagement');
+      await page.getByRole('link', { name: 'Prompt', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'View compiled prompt', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Test prompt', exact: true })).toBeVisible();
+      await page.goto(`/app/admin/assignment-types/${created.id}`);
+      await expect(page.getByTestId('rubric-library-select')).toContainText(rubric.title);
       await page.getByTestId('rubric-library-select').click();
       await page.getByRole('option', { name: 'Built-in default for this assignment type', exact: true }).click();
       await page.getByTestId('grading-assistant-instructions').fill('Discard these unsaved instructions.');

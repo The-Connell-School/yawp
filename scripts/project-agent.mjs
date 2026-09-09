@@ -166,7 +166,7 @@ export function capabilities() {
       qa: "./bin/project qa prepare --json",
     },
     fixtures: ["local-dev"],
-    proofProfiles: ["project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "assignment-rubric-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
+    proofProfiles: ["project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "assignment-rubric-unit", "assignment-prompt-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
     nextCommands: [
       "./bin/project doctor --json",
       "./bin/project fixture verify local-dev --json",
@@ -378,6 +378,10 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "build") run("build", ["run", "web-app:build"]);
   else if (chosen === "qa-smoke") run("qa-smoke", ["run", "web-app:test:e2e:smoke"], 30 * 60 * 1000);
   else if (chosen === "assignment-rubric-unit") runWebApp("assignment-rubric-unit", ["test", "app/routes/app.admin.assignment-types.new/route.test.ts", "app/routes/app.admin.assignment-types.$id/route.test.ts", "app/domain/assignment-types/assignment-type-grading-config.server.test.ts", "app/domain/rubrics/rubric-library.server.test.ts"]);
+  else if (chosen === "assignment-prompt-unit") {
+    runWebApp("prompt-library", ["test", "app/routes/app.admin.assignment-types.$id_.prompt/route.test.ts"]);
+    runWebApp("evaluation-library", ["test", "app/routes/api.domain.assignment-type-evaluations/route.test.ts"]);
+  }
   else if (chosen === "assignment-create") {
     const local = requireConfig();
     const database = new URL(local.DATABASE_URL);
@@ -457,10 +461,10 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|assignment-create|assignment-rubric-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|assignment-create|assignment-rubric-unit|assignment-prompt-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
-    test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|assignment-create|assignment-rubric-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
+    test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|assignment-create|assignment-rubric-unit|assignment-prompt-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
   };
   return pages[topic] || pages.root;
