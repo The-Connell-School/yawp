@@ -1032,7 +1032,8 @@ describe('api.assignments.create', () => {
           assignmentTypeId: 'at-1',
           classIds: ['class-1', 'class-2'],
           exitTicketMode: 'specific',
-          exitTicketFocus: 'clear-up-confusion',
+          exitTicketFocus: 'ask-question',
+          exitTicketAnswerType: 'subjective',
           exitTicketTopic: 'balancing chemical equations',
         }),
         params: {},
@@ -1047,7 +1048,8 @@ describe('api.assignments.create', () => {
       expect(data.exitTicketConfigJson).toEqual({
         schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
         mode: 'specific',
-        focus: 'clear-up-confusion',
+        focus: 'ask-question',
+        answerType: 'subjective',
         topic: 'balancing chemical equations',
       });
     });

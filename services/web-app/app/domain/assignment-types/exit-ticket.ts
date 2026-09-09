@@ -148,13 +148,65 @@ export function defaultExitTicketLessonNotesEnabled(
   return mode === 'specific';
 }
 
+/**
+ * Whether the thing being checked for has a right answer.
+ *
+ * The teacher has to answer this, because the grader cannot infer it from a
+ * topic and the cost of guessing wrong falls on the student: told they are
+ * incorrect for a reading that was defensible all along. There is no default
+ * on the form for the same reason.
+ */
+export const EXIT_TICKET_ANSWER_TYPES = ['objective', 'subjective'] as const;
+
+export type ExitTicketAnswerType = (typeof EXIT_TICKET_ANSWER_TYPES)[number];
+
+/**
+ * What a stored ticket means when it never answered the question. Only rows
+ * written before this field existed land here, and they read as subjective:
+ * a ticket that never claimed a right answer must not be graded as though it
+ * had one.
+ */
+export const EXIT_TICKET_ANSWER_TYPE_FALLBACK: ExitTicketAnswerType =
+  'subjective';
+
+export type ExitTicketAnswerTypeOption = {
+  value: ExitTicketAnswerType;
+  label: string;
+  helperText: string;
+};
+
+export const EXIT_TICKET_ANSWER_TYPE_OPTIONS: ExitTicketAnswerTypeOption[] = [
+  {
+    value: 'objective',
+    label: 'Yes — there is a right answer',
+    helperText:
+      'A response that contradicts it is wrong, and will be told so plainly.',
+  },
+  {
+    value: 'subjective',
+    label: 'No — more than one answer can be right',
+    helperText:
+      'Judged on the reasoning and what it is anchored to, never on landing where you would have. A defensible answer you did not expect is still a good answer.',
+  },
+];
+
+export function exitTicketAnswerType(
+  value: string | null | undefined
+): ExitTicketAnswerType | null {
+  return EXIT_TICKET_ANSWER_TYPES.includes(value as ExitTicketAnswerType)
+    ? (value as ExitTicketAnswerType)
+    : null;
+}
+
+/**
+ * Kept deliberately short. Six focuses made the teacher choose between options
+ * that overlapped, and an exit ticket is a five-minute check — the choice has
+ * to be quicker than writing the prompt would have been.
+ */
 export type ExitTicketFocus =
   | 'explain-concept'
-  | 'apply-skill'
-  | 'understand-text'
-  | 'clear-up-confusion'
-  | 'connect-learning'
-  | 'judge-understanding';
+  | 'ask-question'
+  | 'understand-text';
 
 export type ExitTicketFocusOption = {
   value: ExitTicketFocus;
@@ -193,14 +245,15 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
       'Judge whether the student can restate the idea in their own words and whether their explanation would genuinely help someone who missed the lesson. Fluent phrasing borrowed from the teacher or the textbook, with nothing showing the student has made the idea theirs, is names it only however polished it sounds.',
   },
   {
-    value: 'apply-skill',
-    label: 'Apply a skill',
-    helperText: 'Can they use today’s skill, and show their thinking doing it?',
-    topicPlaceholder: 'e.g., solving a two-step equation',
+    value: 'ask-question',
+    label: 'Ask a question',
+    helperText:
+      'What do they still want to know? A good question shows what they already have.',
+    topicPlaceholder: 'e.g., photosynthesis',
     template:
-      'Show me how you would go about {topic}. Walk through your thinking one step at a time, and explain why each step comes where it does.',
+      'What is one question you still have about {topic}? Ask the real one — the thing you would actually want answered — and say what you have already worked out that led you to it.',
     gradingCriteria:
-      'Judge the reasoning rather than the answer. Look for steps that are sound and visible, and for the student being able to say why each step belongs where it does. A correct final answer with no thinking shown is not full understanding; sound reasoning that goes wrong late is much closer to it.',
+      'The student was asked for a question, so not knowing something is the task here and never a failure. Judge what the question reveals rather than whether they were confident: a question that could only be asked by someone who followed the lesson is strong evidence of understanding, and one that could have been asked before the lesson began is weak evidence of it. Look for what they say they had already worked out. Never score a response down for admitting they do not know something.',
   },
   {
     value: 'understand-text',
@@ -211,37 +264,6 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
       'What is {topic} actually saying? Put it in your own words, then point to what in it made you read it that way.',
     gradingCriteria:
       'Judge whether the reading is the student’s own and whether it is anchored to the source. Look for both: a restatement in their own words, and them pointing at what in the text produced that reading. A plausible summary with nothing pointed at is partly there.',
-  },
-  {
-    value: 'clear-up-confusion',
-    label: 'Surface what’s still confusing',
-    helperText:
-      'Names the fuzzy part, so tomorrow can start where today ran out.',
-    topicPlaceholder: 'e.g., how to balance a chemical equation',
-    template:
-      'What part of {topic} still doesn’t sit right with you? Name the piece that is fuzzy, then say what you think might be going on and where you get stuck.',
-    gradingCriteria:
-      'The student was asked what still confuses them, so being confused is the task and never a failure. Judge the precision of the self-diagnosis: whether they locate the specific piece that is fuzzy rather than saying they do not get any of it, and whether they can say what they think might be going on. Never score a response down for admitting confusion.',
-  },
-  {
-    value: 'connect-learning',
-    label: 'Connect it to earlier learning',
-    helperText: 'Does today sit alongside what came before, or float free?',
-    topicPlaceholder: 'e.g., the New Deal',
-    template:
-      'How does {topic} connect to what we have already worked on this unit? Say what lines up with what you already knew, and what does not fit as neatly as you expected.',
-    gradingCriteria:
-      'Judge whether the connection is real and specific rather than merely asserted. Look for the student naming what lines up with earlier work and what does not fit as neatly as they expected. Noticing a genuine mismatch is stronger evidence of understanding than a tidy connection that costs nothing.',
-  },
-  {
-    value: 'judge-understanding',
-    label: 'Self-assess understanding',
-    helperText: 'Asks them to be honest about where they actually are.',
-    topicPlaceholder: 'e.g., today’s lesson on cell division',
-    template:
-      'How well do you really understand {topic} right now? Be honest — say what you could already teach to someone else, and what you would still get stuck on if I asked you about it tomorrow.',
-    gradingCriteria:
-      'The student was asked to rate their own understanding, so judge calibration rather than confidence. A student who claims to have it and then cannot explain it understands less than one who names exactly what they could teach and what they would still get stuck on. Confident vagueness scores below honest specificity.',
   },
 ];
 
@@ -270,6 +292,7 @@ export type ExitTicketConfig =
       mode: 'specific';
       focus: ExitTicketFocus;
       topic: string;
+      answerType: ExitTicketAnswerType;
     });
 
 /**
@@ -332,6 +355,7 @@ export type ExitTicketConfigInput = {
   mode?: string | null;
   focus?: string | null;
   topic?: string | null;
+  answerType?: string | null;
   lessonMainPoints?: string | null;
   lessonMustMention?: string | null;
   lessonWatchFor?: string | null;
@@ -424,6 +448,14 @@ export function parseExitTicketConfigInput(
     };
   }
 
+  const answerType = exitTicketAnswerType(input.answerType?.toString().trim());
+  if (!answerType) {
+    return {
+      success: false,
+      message: 'Say whether there is a desired response.',
+    };
+  }
+
   return {
     success: true,
     config: withLessonNotes(
@@ -432,6 +464,7 @@ export function parseExitTicketConfigInput(
         mode: 'specific',
         focus: option.value,
         topic,
+        answerType,
       },
       notes
     ),
@@ -476,6 +509,10 @@ export function parseStoredExitTicketConfig(
       mode: 'specific',
       focus: option.value,
       topic,
+      answerType:
+        exitTicketAnswerType(
+          typeof record.answerType === 'string' ? record.answerType : null
+        ) ?? EXIT_TICKET_ANSWER_TYPE_FALLBACK,
     },
     notes
   );

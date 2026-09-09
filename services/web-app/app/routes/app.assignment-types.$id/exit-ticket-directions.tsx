@@ -77,6 +77,19 @@ export function ExitTicketDirections() {
             .replace(/, ([^,]*)$/, ', or $1')}
           .
         </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground/80">
+            It also asks whether there is a desired response, and you have to
+            answer.
+          </span>{' '}
+          Some things you check for have a right answer and some do not, and
+          nothing about a topic tells us which. Say there is one and a response
+          that contradicts it is marked wrong, plainly. Say there is not and the
+          response is judged on its reasoning and what it is anchored to, never
+          on whether it landed where you would have — so a student is not told
+          they are wrong for a defensible answer you did not expect. There is no
+          default on the form because the wrong guess is not a neutral one.
+        </p>
       </div>
 
       <div>

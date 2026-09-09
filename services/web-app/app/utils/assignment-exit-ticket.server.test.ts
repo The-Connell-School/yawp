@@ -36,6 +36,7 @@ describe('parseAssignmentExitTicket', () => {
         exitTicketMode: 'specific',
         exitTicketFocus: 'explain-concept',
         exitTicketTopic: 'the difference between weathering and erosion',
+        exitTicketAnswerType: 'objective',
       })
     );
 
@@ -48,6 +49,7 @@ describe('parseAssignmentExitTicket', () => {
       schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
       mode: 'specific',
       focus: 'explain-concept',
+      answerType: 'objective',
       topic: 'the difference between weathering and erosion',
     });
   });
@@ -71,7 +73,8 @@ describe('parseAssignmentExitTicket', () => {
     const missingTopic = parseAssignmentExitTicket(
       formDataFor({
         exitTicketMode: 'specific',
-        exitTicketFocus: 'apply-skill',
+        exitTicketFocus: 'explain-concept',
+        exitTicketAnswerType: 'objective',
       })
     );
     expect(missingTopic.success).toBe(false);
@@ -86,7 +89,8 @@ describe('parseAssignmentExitTicket', () => {
     const longTopic = parseAssignmentExitTicket(
       formDataFor({
         exitTicketMode: 'specific',
-        exitTicketFocus: 'apply-skill',
+        exitTicketFocus: 'explain-concept',
+        exitTicketAnswerType: 'objective',
         exitTicketTopic: 'a'.repeat(EXIT_TICKET_TOPIC_MAX_LENGTH + 1),
       })
     );
@@ -99,6 +103,7 @@ describe('parseAssignmentExitTicket', () => {
         exitTicketMode: 'specific',
         exitTicketFocus: 'explain-concept',
         exitTicketTopic: 'erosion',
+        exitTicketAnswerType: 'objective',
         exitTicketLessonMainPoints:
           'Erosion moves material; weathering does not.',
         exitTicketLessonMustMention: 'whether the material moves',
@@ -115,6 +120,34 @@ describe('parseAssignmentExitTicket', () => {
     });
     // The answer key stays with the teacher.
     expect(result.value.prompt).not.toInclude('whether the material moves');
+  });
+
+  test('a specific ticket is refused until the teacher answers the desired-response question', () => {
+    // Not defaulted server-side either: a client that omits the field cannot
+    // quietly decide for the teacher whether a student can be marked wrong.
+    const unanswered = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketMode: 'specific',
+        exitTicketFocus: 'explain-concept',
+        exitTicketTopic: 'erosion',
+      })
+    );
+    expect(unanswered.success).toBe(false);
+
+    const answered = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketMode: 'specific',
+        exitTicketFocus: 'explain-concept',
+        exitTicketTopic: 'erosion',
+        exitTicketAnswerType: 'subjective',
+      })
+    );
+    expect(answered.success).toBe(true);
+    if (!answered.success) return;
+    expect(
+      answered.value.exitTicketConfigJson.mode === 'specific' &&
+        answered.value.exitTicketConfigJson.answerType
+    ).toBe('subjective');
   });
 
   test('a form that posts no exit ticket fields still yields a usable ticket', () => {

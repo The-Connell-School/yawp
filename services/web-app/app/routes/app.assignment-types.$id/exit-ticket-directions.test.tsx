@@ -74,6 +74,12 @@ describe('ExitTicketDirections', () => {
     expect(text()).toContain('students never see');
   });
 
+  it('explains the desired-response question and why it has no default', () => {
+    render();
+    expect(text()).toContain('whether there is a desired response');
+    expect(text()).toContain('not told they are wrong');
+  });
+
   it('explains why the tutor starts off', () => {
     render();
     expect(text()).toContain('tutor is switched off by default');

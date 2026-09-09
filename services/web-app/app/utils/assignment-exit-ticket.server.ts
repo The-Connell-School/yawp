@@ -29,6 +29,9 @@ export function parseAssignmentExitTicket(
     mode: formData.get('exitTicketMode')?.toString(),
     focus: formData.get('exitTicketFocus')?.toString(),
     topic: formData.get('exitTicketTopic')?.toString(),
+    // Required on a specific ticket, and deliberately without a default: it
+    // decides whether the grader may tell a student their answer is wrong.
+    answerType: formData.get('exitTicketAnswerType')?.toString(),
     // Teacher-only context. Stored beside the ticket, never composed into the
     // prompt: the sheet renders these fields only while notes are switched on,
     // so a ticket without notes posts nothing here and stores nothing.

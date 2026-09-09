@@ -7,6 +7,7 @@ import type {
 import {
   EXIT_TICKET_LESSON_NOTE_FIELDS,
   exitTicketFocusOption,
+  type ExitTicketAnswerType,
   type ExitTicketConfig,
 } from './exit-ticket';
 
@@ -116,6 +117,24 @@ export const EXIT_TICKET_PROMPT_CONFIG: PromptConfigData = {
  * notes and every ticket created before any of this existed: the grader then
  * judges against the prompt alone, exactly as it did before.
  */
+/**
+ * What the grader is told about whether a wrong answer is even possible here.
+ *
+ * The whole point of asking the teacher is this paragraph. Without it a model
+ * reads every ticket as though there were an answer key behind it, and tells a
+ * student their defensible reading is incorrect because it is not the one the
+ * teacher had in mind.
+ */
+export const EXIT_TICKET_ANSWER_TYPE_GUIDANCE: Record<
+  ExitTicketAnswerType,
+  string
+> = {
+  objective:
+    'The teacher says this has a right answer. A response that contradicts it is wrong, and saying so plainly is part of the feedback — but score the understanding, not the answer: reasoning that is sound and goes wrong late is worth far more than a correct answer with nothing behind it.',
+  subjective:
+    'The teacher says there is no single right answer here. More than one response can be correct, so judge the reasoning and what it is anchored to, never whether the student landed where you or the teacher would have. Do not tell a student they are wrong for an answer that is defensible and supported, however unexpected it is. Only a reading that contradicts the source, or one asserted with nothing behind it, is weak.',
+};
+
 export function buildExitTicketGradingContext(
   config: ExitTicketConfig | null | undefined
 ): string | null {
@@ -131,6 +150,7 @@ export function buildExitTicketGradingContext(
         ].join('\n')
       );
     }
+    sections.push(EXIT_TICKET_ANSWER_TYPE_GUIDANCE[config.answerType]);
   }
 
   const notes = config?.lessonNotes;

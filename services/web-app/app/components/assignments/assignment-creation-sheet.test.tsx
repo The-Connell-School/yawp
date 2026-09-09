@@ -801,6 +801,7 @@ describe('AssignmentCreationSheetContent', () => {
         initialExitTicketMode: 'specific',
         initialExitTicketFocus: 'explain-concept',
         initialExitTicketTopic: 'the causes of World War I',
+        initialExitTicketAnswerType: 'objective',
       }).root;
 
       // The preview is the whole point of the form: the teacher approves the
@@ -812,6 +813,7 @@ describe('AssignmentCreationSheetContent', () => {
       expect(inputByName('exitTicketTopic').value).toBe(
         'the causes of World War I'
       );
+      expect(inputByName('exitTicketAnswerType').value).toBe('objective');
       expect(inputByName('prompt').value).toInclude(
         'the causes of World War I'
       );
@@ -823,6 +825,28 @@ describe('AssignmentCreationSheetContent', () => {
         'button[type="submit"]'
       );
       expect(submit!.disabled).toBe(false);
+    });
+
+    it('will not submit until the teacher says if there is a desired response', () => {
+      // Nothing is preselected, so a teacher cannot create the ticket without
+      // deciding — the answer is what tells the grader whether a student may
+      // be marked wrong.
+      const unanswered = renderExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'explain-concept',
+        initialExitTicketTopic: 'the causes of World War I',
+      });
+      root = unanswered.root;
+
+      expect(inputByName('exitTicketAnswerType').value).toBe('');
+      expect(
+        document.querySelector<HTMLButtonElement>('button[type="submit"]')!
+          .disabled
+      ).toBe(true);
+      // The wording students read does not depend on the answer, so the
+      // teacher can still see what they are about to send.
+      expectText('the causes of World War I');
     });
 
     it('starts the tutor off for an exit ticket, and on for everything else', () => {
@@ -968,7 +992,7 @@ describe('AssignmentCreationSheetContent', () => {
     it('reopens an exit ticket on the answers it was created with', () => {
       root = renderExitTicketSheet({
         initialExitTicketMode: 'specific',
-        initialExitTicketFocus: 'apply-skill',
+        initialExitTicketFocus: 'ask-question',
         initialExitTicketTopic: 'long division',
       }).root;
 
@@ -979,10 +1003,10 @@ describe('AssignmentCreationSheetContent', () => {
         (controlById('assignment-create-exit-ticket-topic') as HTMLInputElement)
           .value
       ).toBe('long division');
-      expect(inputByName('exitTicketFocus').value).toBe('apply-skill');
+      expect(inputByName('exitTicketFocus').value).toBe('ask-question');
       expect(
         EXIT_TICKET_FOCUS_OPTIONS.some(
-          (option) => option.value === 'apply-skill'
+          (option) => option.value === 'ask-question'
         )
       ).toBe(true);
     });

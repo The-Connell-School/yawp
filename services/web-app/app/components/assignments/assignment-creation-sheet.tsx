@@ -25,6 +25,8 @@ import {
 import {
   DEFAULT_EXIT_TICKET_MODE,
   EXIT_TICKETS_ENABLED,
+  EXIT_TICKET_ANSWER_TYPE_OPTIONS,
+  EXIT_TICKET_ANSWER_TYPES,
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_DEFAULT_POINT_VALUE,
   EXIT_TICKET_LESSON_NOTE_FIELDS,
@@ -38,6 +40,7 @@ import {
   exitTicketTargetingHint,
   isExitTicketAssignmentType,
   parseExitTicketConfigInput,
+  type ExitTicketAnswerType,
   type ExitTicketFocus,
   type ExitTicketLessonNotes,
   type ExitTicketMode,
@@ -165,6 +168,8 @@ export type AssignmentCreationSheetProps = {
   initialExitTicketMode?: ExitTicketMode;
   initialExitTicketFocus?: ExitTicketFocus;
   initialExitTicketTopic?: string;
+  /** Absent leaves the question unanswered, which is what blocks submission. */
+  initialExitTicketAnswerType?: ExitTicketAnswerType | null;
   /** Present reopens the notes section filled in; absent leaves the default. */
   initialExitTicketLessonNotes?: ExitTicketLessonNotes | null;
 };
@@ -321,6 +326,7 @@ export function AssignmentCreationSheetContent({
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   initialExitTicketMode = DEFAULT_EXIT_TICKET_MODE,
   initialExitTicketFocus = EXIT_TICKET_FOCUS_OPTIONS[0].value,
+  initialExitTicketAnswerType = null,
   initialExitTicketTopic = '',
   initialExitTicketLessonNotes = null,
   initialPostAt,
@@ -402,6 +408,11 @@ export function AssignmentCreationSheetContent({
   const [exitTicketTopic, setExitTicketTopic] = useState(
     initialExitTicketTopic
   );
+  // Empty until the teacher answers. There is no sensible default: guessing
+  // either way decides for them whether a student can be told they are wrong.
+  const [exitTicketAnswerType, setExitTicketAnswerType] = useState<string>(
+    initialExitTicketAnswerType ?? ''
+  );
   const [lessonNotesEnabled, setLessonNotesEnabled] = useState(
     initialExitTicketLessonNotes
       ? true
@@ -443,7 +454,20 @@ export function AssignmentCreationSheetContent({
     mode: exitTicketMode,
     focus: exitTicketFocus,
     topic: exitTicketTopic,
+    answerType: exitTicketAnswerType,
   });
+  // The desired-response answer never reaches the student, so the preview is
+  // composed without waiting on it — but the real config above is what gates
+  // submission, so the ticket still cannot be created unanswered.
+  const exitTicketPreviewConfig = parseExitTicketConfigInput({
+    mode: exitTicketMode,
+    focus: exitTicketFocus,
+    topic: exitTicketTopic,
+    answerType: exitTicketAnswerType || EXIT_TICKET_ANSWER_TYPES[0],
+  });
+  const exitTicketPreview = exitTicketPreviewConfig.success
+    ? composeExitTicketPrompt(exitTicketPreviewConfig.config)
+    : '';
   const exitTicketPrompt = exitTicketConfig.success
     ? composeExitTicketPrompt(exitTicketConfig.config)
     : '';
@@ -538,6 +562,7 @@ export function AssignmentCreationSheetContent({
     setExitTicketMode(initialExitTicketMode);
     setExitTicketFocus(initialExitTicketFocus);
     setExitTicketTopic(initialExitTicketTopic);
+    setExitTicketAnswerType(initialExitTicketAnswerType ?? '');
     setLessonNotesEnabled(
       initialExitTicketLessonNotes
         ? true
@@ -566,6 +591,7 @@ export function AssignmentCreationSheetContent({
     initialExitTicketMode,
     initialExitTicketFocus,
     initialExitTicketTopic,
+    initialExitTicketAnswerType,
     initialExitTicketLessonNotes,
     editingAssignment,
     initialPostAt,
@@ -975,6 +1001,41 @@ export function AssignmentCreationSheetContent({
                     disabled={isSaving}
                   />
                 </div>
+
+                {/* Nothing is preselected. The grader cannot work out whether
+                    a wrong answer exists here, and guessing costs a student
+                    being told they are incorrect when they are not. */}
+                <div className="space-y-2">
+                  <Label>Is there a desired response?</Label>
+                  <RadioGroup
+                    value={exitTicketAnswerType}
+                    onValueChange={setExitTicketAnswerType}
+                    disabled={isSaving}
+                    className="gap-2"
+                  >
+                    {EXIT_TICKET_ANSWER_TYPE_OPTIONS.map((option) => (
+                      <div
+                        key={option.value}
+                        className="flex items-start gap-2.5"
+                      >
+                        <RadioGroupItem
+                          value={option.value}
+                          id={`assignment-create-exit-ticket-answer-${option.value}`}
+                          className="mt-0.5 size-4 shrink-0"
+                        />
+                        <Label
+                          htmlFor={`assignment-create-exit-ticket-answer-${option.value}`}
+                          className="cursor-pointer font-normal"
+                        >
+                          <span className="font-medium">{option.label}</span>
+                          <span className="mt-0.5 block text-sm text-muted-foreground">
+                            {option.helperText}
+                          </span>
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
               </div>
             ) : null}
 
@@ -1053,12 +1114,12 @@ export function AssignmentCreationSheetContent({
               <Label htmlFor="assignment-create-exit-ticket-preview">
                 What students will see
               </Label>
-              {exitTicketPrompt ? (
+              {exitTicketPreview ? (
                 <p
                   id="assignment-create-exit-ticket-preview"
                   className="whitespace-pre-line rounded-md bg-muted p-3 text-sm"
                 >
-                  {exitTicketPrompt}
+                  {exitTicketPreview}
                 </p>
               ) : (
                 <p
@@ -1083,6 +1144,11 @@ export function AssignmentCreationSheetContent({
                   type="hidden"
                   name="exitTicketTopic"
                   value={exitTicketTopic}
+                />
+                <input
+                  type="hidden"
+                  name="exitTicketAnswerType"
+                  value={exitTicketAnswerType}
                 />
               </>
             ) : null}

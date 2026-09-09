@@ -82,6 +82,15 @@ describe('exit ticket demo data', () => {
     expect(bare.length).toBeGreaterThan(0);
   });
 
+  test('answers the desired-response question both ways', () => {
+    const answers = new Set(
+      EXIT_TICKET_DEMO_TICKETS.flatMap((ticket) =>
+        ticket.config.mode === 'specific' ? [ticket.config.answerType] : []
+      )
+    );
+    expect(answers).toEqual(new Set(['objective', 'subjective']));
+  });
+
   test('covers both grading choices, at more than one point value', () => {
     expect(
       EXIT_TICKET_DEMO_TICKETS.some((ticket) => ticket.submitForGrade)

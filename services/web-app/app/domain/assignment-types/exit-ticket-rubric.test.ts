@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  EXIT_TICKET_ANSWER_TYPE_GUIDANCE,
   EXIT_TICKET_PROMPT_CONFIG,
   EXIT_TICKET_RUBRIC,
   EXIT_TICKET_SCORING_SCALE,
@@ -144,15 +145,16 @@ describe('buildExitTicketGradingContext', () => {
     const text = buildExitTicketGradingContext({
       schemaVersion: 1,
       mode: 'specific',
-      focus: 'apply-skill',
+      focus: 'ask-question',
+      answerType: 'subjective',
       topic: 'long division',
     });
 
     expect(text).toInclude(
-      exitTicketFocusOption('apply-skill')!.gradingCriteria
+      exitTicketFocusOption('ask-question')!.gradingCriteria
     );
-    // Named too, so the grader knows which of the six it is reading.
-    expect(text).toInclude('apply a skill');
+    // Named too, so the grader knows which of the three it is reading.
+    expect(text).toInclude('ask a question');
   });
 
   test('gives every focus its own criteria', () => {
@@ -162,6 +164,7 @@ describe('buildExitTicketGradingContext', () => {
         mode: 'specific',
         focus: option.value,
         topic: 'anything',
+        answerType: 'objective',
       });
       expect(text).toInclude(option.gradingCriteria);
     }
@@ -173,6 +176,7 @@ describe('buildExitTicketGradingContext', () => {
       mode: 'specific',
       focus: 'explain-concept',
       topic: 'erosion',
+      answerType: 'objective',
       lessonNotes: notes,
     });
 
@@ -180,6 +184,44 @@ describe('buildExitTicketGradingContext', () => {
       exitTicketFocusOption('explain-concept')!.gradingCriteria
     );
     expect(text).toInclude(notes.mustMention);
+  });
+
+  test('tells the grader whether a wrong answer is even possible', () => {
+    // Without this the grader reads every ticket as though an answer key sat
+    // behind it, and marks a defensible reading incorrect for not being the
+    // one the teacher had in mind.
+    const open = buildExitTicketGradingContext({
+      schemaVersion: 1,
+      mode: 'specific',
+      focus: 'understand-text',
+      topic: 'the second stanza',
+      answerType: 'subjective',
+    });
+    expect(open).toInclude(EXIT_TICKET_ANSWER_TYPE_GUIDANCE.subjective);
+    expect(open).not.toInclude(EXIT_TICKET_ANSWER_TYPE_GUIDANCE.objective);
+
+    const keyed = buildExitTicketGradingContext({
+      schemaVersion: 1,
+      mode: 'specific',
+      focus: 'explain-concept',
+      topic: 'why the +7 comes off first',
+      answerType: 'objective',
+    });
+    expect(keyed).toInclude(EXIT_TICKET_ANSWER_TYPE_GUIDANCE.objective);
+    expect(keyed).not.toInclude(EXIT_TICKET_ANSWER_TYPE_GUIDANCE.subjective);
+  });
+
+  test('says nothing about right answers on a basic ticket', () => {
+    // A basic ticket names no target, so there is nothing a desired response
+    // could be desired against.
+    const text = buildExitTicketGradingContext({
+      schemaVersion: 1,
+      mode: 'basic',
+      lessonNotes: notes,
+    });
+    for (const guidance of Object.values(EXIT_TICKET_ANSWER_TYPE_GUIDANCE)) {
+      expect(text).not.toInclude(guidance);
+    }
   });
 
   test('a basic ticket gets no focus criteria, because it has no focus', () => {

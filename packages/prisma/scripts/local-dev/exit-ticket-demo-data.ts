@@ -67,6 +67,7 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       mode: 'specific',
       focus: 'explain-concept',
       topic: 'how energy moves through the water cycle',
+      answerType: 'objective',
       lessonNotes: notes({
         mainPoints:
           'Energy enters as sunlight, is carried as latent heat in water vapour, and is released again when the vapour condenses.',
@@ -104,12 +105,13 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
   {
     title: 'Exit ticket: balancing equations',
     demonstrates:
-      'Specific, feedback only: the honest-confusion case the rubric protects.',
+      'Ask a question, feedback only: the honest-confusion case the rubric protects.',
     config: {
       schemaVersion: 1,
       mode: 'specific',
-      focus: 'clear-up-confusion',
+      focus: 'ask-question',
       topic: 'how to balance a chemical equation',
+      answerType: 'subjective',
       lessonNotes: notes({
         mainPoints:
           'Atoms are conserved, so coefficients change but subscripts never do.',
@@ -135,46 +137,15 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
   },
 
   {
-    title: 'Exit ticket: how well do you have cell division?',
-    demonstrates:
-      'Specific, self-assessment: the miscalibrated confident answer.',
-    config: {
-      schemaVersion: 1,
-      mode: 'specific',
-      focus: 'judge-understanding',
-      topic: 'today’s lesson on mitosis and meiosis',
-      lessonNotes: notes({
-        mainPoints:
-          'Mitosis makes two identical cells; meiosis makes four cells with half the chromosomes.',
-        mustMention: 'That meiosis halves the chromosome number.',
-        watchFor: 'Saying both processes make identical cells.',
-      }),
-    },
-    submitForGrade: false,
-    pointValue: null,
-    tutorEnabled: false,
-    responses: [
-      {
-        personaKey: 'student-unreleased',
-        state: 'graded',
-        text: 'I understand this really well. I paid attention the whole lesson and the diagrams made sense to me. I could definitely explain mitosis and meiosis to someone else, they are both ways that cells divide to make new cells. I would say I am at a 9 out of 10 on this one.',
-        score: 36,
-        letterGrade: 'F',
-        overallComment:
-          'Jamal, you sound confident, and that is worth something. But the only thing you actually said about the two processes is that both divide cells, which is the part they share. This ticket was asking you to test yourself: try naming one way meiosis differs from mitosis. If that is harder than it felt in the lesson, that is useful to know now rather than on Friday.',
-      },
-    ],
-  },
-
-  {
     title: 'Exit ticket: two-step equations',
     demonstrates:
       'Specific, graded, whole class: every band on one ticket. The clearest demonstration of what this rubric rewards — the student who gets the wrong answer with sound reasoning outscores the one who gets it right and shows nothing.',
     config: {
       schemaVersion: 1,
       mode: 'specific',
-      focus: 'apply-skill',
-      topic: 'solving a two-step equation like 3x + 7 = 22',
+      focus: 'explain-concept',
+      topic: 'why you undo the +7 before dividing by 3 in 3x + 7 = 22',
+      answerType: 'objective',
       lessonNotes: notes({
         mainPoints:
           'Undo the addition or subtraction first, then undo the multiplication. Whatever you do to one side you do to the other.',
@@ -229,12 +200,13 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
   {
     title: 'Exit ticket: the second stanza',
     demonstrates:
-      'Specific, a text: the same reading, anchored and unanchored.',
+      'Understand a text, with no desired response: the same reading, anchored and unanchored. The clearest case for the open setting — a defensible reading the teacher did not expect is still a good reading.',
     config: {
       schemaVersion: 1,
       mode: 'specific',
       focus: 'understand-text',
       topic: 'the second stanza of “Those Winter Sundays”',
+      answerType: 'subjective',
       lessonNotes: notes({
         mainPoints:
           'The speaker is looking back as an adult and recognising love in his father’s labour that he could not see as a child.',
@@ -272,12 +244,14 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
   {
     title: 'Exit ticket: the New Deal',
     demonstrates:
-      'Specific, connecting to earlier learning: a real mismatch beats a tidy connection.',
+      'Explain a concept, with no desired response: a real mismatch beats a tidy connection, and the grader is told not to expect one particular comparison.',
     config: {
       schemaVersion: 1,
       mode: 'specific',
-      focus: 'connect-learning',
-      topic: 'the New Deal',
+      focus: 'explain-concept',
+      topic:
+        'how the New Deal compares to the Progressive Era reforms we studied',
+      answerType: 'subjective',
       lessonNotes: notes({
         mainPoints:
           'The New Deal expanded federal power in ways the Progressive Era had started, but went much further and faced far less consensus.',
@@ -391,6 +365,7 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       mode: 'specific',
       focus: 'explain-concept',
       topic: 'why every state gets two senators regardless of population',
+      answerType: 'objective',
     },
     submitForGrade: false,
     pointValue: null,
@@ -424,8 +399,9 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
     config: {
       schemaVersion: 1,
       mode: 'specific',
-      focus: 'apply-skill',
-      topic: 'working out speed from a distance-time graph',
+      focus: 'explain-concept',
+      topic: 'how to work out speed from a distance-time graph',
+      answerType: 'objective',
       lessonNotes: notes({
         mainPoints:
           'Speed is the steepness of the line: distance covered divided by the time it took. A flat section means stopped, not slow.',
@@ -463,8 +439,9 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
     config: {
       schemaVersion: 1,
       mode: 'specific',
-      focus: 'clear-up-confusion',
+      focus: 'ask-question',
       topic: 'photosynthesis',
+      answerType: 'subjective',
       lessonNotes: notes({
         watchFor:
           'Thinking the plant takes in food through its roots rather than making it.',

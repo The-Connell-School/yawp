@@ -867,6 +867,11 @@ export default function AssignmentDetailRoute() {
               ? assignment.exitTicket.topic
               : undefined
           }
+          initialExitTicketAnswerType={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.answerType
+              : undefined
+          }
           initialExitTicketLessonNotes={
             assignment.exitTicket?.lessonNotes ?? null
           }
@@ -894,6 +899,11 @@ export default function AssignmentDetailRoute() {
           initialExitTicketTopic={
             assignment.exitTicket?.mode === 'specific'
               ? assignment.exitTicket.topic
+              : undefined
+          }
+          initialExitTicketAnswerType={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.answerType
               : undefined
           }
           initialExitTicketLessonNotes={

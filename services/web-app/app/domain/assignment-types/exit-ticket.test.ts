@@ -38,6 +38,16 @@ describe('the exit ticket assignment type', () => {
     expect(EXIT_TICKET_MODES).toEqual(['basic', 'specific']);
   });
 
+  test('offers exactly three things to check for', () => {
+    // Deliberately short: six overlapping options made the teacher deliberate
+    // for longer than writing the prompt themselves would have taken.
+    expect(EXIT_TICKET_FOCUS_OPTIONS.map((option) => option.value)).toEqual([
+      'explain-concept',
+      'ask-question',
+      'understand-text',
+    ]);
+  });
+
   test('every focus option can build a sentence around a topic', () => {
     expect(EXIT_TICKET_FOCUS_OPTIONS.length).toBeGreaterThan(1);
 
@@ -91,6 +101,7 @@ describe('composeExitTicketPrompt', () => {
       mode: 'specific',
       focus: 'explain-concept',
       topic: 'the causes of World War I',
+      answerType: 'objective',
     });
 
     expect(prompt).toInclude('the causes of World War I');
@@ -107,6 +118,7 @@ describe('composeExitTicketPrompt', () => {
       mode: 'specific',
       focus: 'explain-concept',
       topic: '  how   photosynthesis works.  ',
+      answerType: 'objective',
     });
 
     expect(prompt).toInclude('how photosynthesis works.');
@@ -121,6 +133,7 @@ describe('composeExitTicketPrompt', () => {
         mode: 'specific',
         focus: option.value,
         topic: 'yesterday’s reading',
+        answerType: 'subjective',
       });
 
       expect(prompt).toInclude('yesterday’s reading');
@@ -163,8 +176,9 @@ describe('parseExitTicketConfigInput', () => {
   test('keeps the focus and trimmed topic for a specific exit ticket', () => {
     const result = parseExitTicketConfigInput({
       mode: 'specific',
-      focus: 'apply-skill',
+      focus: 'ask-question',
       topic: '  long division  ',
+      answerType: 'subjective',
     });
 
     expect(result).toEqual({
@@ -172,10 +186,58 @@ describe('parseExitTicketConfigInput', () => {
       config: {
         schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
         mode: 'specific',
-        focus: 'apply-skill',
+        focus: 'ask-question',
         topic: 'long division',
+        answerType: 'subjective',
       },
     });
+  });
+
+  test('a specific exit ticket must say whether there is a desired response', () => {
+    // The teacher has to answer this rather than inherit a default. Whether a
+    // wrong answer exists is not something the grader can infer from a topic,
+    // and getting it wrong tells a student they are incorrect when they are
+    // not.
+    expect(
+      parseExitTicketConfigInput({
+        mode: 'specific',
+        focus: 'explain-concept',
+        topic: 'mitosis',
+      }).success
+    ).toBe(false);
+
+    expect(
+      parseExitTicketConfigInput({
+        mode: 'specific',
+        focus: 'explain-concept',
+        topic: 'mitosis',
+        answerType: 'somewhat',
+      }).success
+    ).toBe(false);
+  });
+
+  test('keeps both answers to the desired-response question', () => {
+    for (const answerType of ['objective', 'subjective'] as const) {
+      const result = parseExitTicketConfigInput({
+        mode: 'specific',
+        focus: 'explain-concept',
+        topic: 'mitosis',
+        answerType,
+      });
+      expect(
+        result.success && result.config.mode === 'specific'
+          ? result.config.answerType
+          : null
+      ).toBe(answerType);
+    }
+  });
+
+  test('a basic exit ticket is not asked the question at all', () => {
+    // Nothing names a target on a basic ticket, so there is nothing for a
+    // desired response to be desired against.
+    const result = parseExitTicketConfigInput({ mode: 'basic' });
+    expect(result.success).toBe(true);
+    expect(result.success && 'answerType' in result.config).toBe(false);
   });
 
   test('rejects an unknown mode rather than guessing', () => {
@@ -226,8 +288,9 @@ describe('parseStoredExitTicketConfig', () => {
     const config = {
       schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
       mode: 'specific' as const,
-      focus: 'clear-up-confusion' as const,
+      focus: 'ask-question' as const,
       topic: 'the water cycle',
+      answerType: 'subjective' as const,
     };
 
     expect(parseStoredExitTicketConfig(config)).toEqual(config);
@@ -306,6 +369,7 @@ describe('lesson notes', () => {
       mode: 'specific',
       focus: 'explain-concept',
       topic: 'erosion',
+      answerType: 'objective',
       lessonMainPoints: notes.mainPoints,
     });
     expect(specific.success).toBe(true);
@@ -352,6 +416,7 @@ describe('lesson notes', () => {
         mode: 'specific' as const,
         focus: 'explain-concept' as const,
         topic: 'erosion',
+        answerType: 'objective' as const,
         lessonNotes: notes,
       },
     ]) {
