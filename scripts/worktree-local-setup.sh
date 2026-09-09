@@ -267,7 +267,7 @@ ensure_config
 ensure_postgres
 write_env_files
 
-bun install
+(cd "$ROOT" && bun install --frozen-lockfile)
 
 if [[ "$FRESH" -eq 1 ]]; then
   reset_database
