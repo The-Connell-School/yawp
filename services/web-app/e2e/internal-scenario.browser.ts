@@ -1,3 +1,4 @@
+import { readSharingPair, discloseSharingPair } from './internal-sharing-pair';
 import { chromium, expect } from '@playwright/test';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync, openSync, closeSync } from 'node:fs';
@@ -16,7 +17,8 @@ const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: database
 const port = Number(process.env.DEV_PORT);
 assert(port > 1024);
 const origin = `http://localhost:${port}`, code = generatePreviewAccessCode();
-const org = await db.organization.create({ data: { name: 'Scenario browser QA', previewSeatCode: code } });
+const sharingPair = readSharingPair();
+const org = await db.organization.create({ data: { ...(sharingPair ? { id: sharingPair.organizationId } : {}), name: 'Scenario browser QA', previewSeatCode: code } });
 const targetId = randomUUID();
 const service = new InternalScenarios(db, { targetId, environment: 'preview', organizationId: org.id });
 const input = { jobId: randomUUID(), actorId: 'browser-scenario-operator', fingerprint: 'e'.repeat(64), mode: 'populate' as const,
@@ -47,9 +49,11 @@ try {
   assert(ready, 'Application must become ready');
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
+  phase = 'Internal seat disclosure';
+  const loginCode = sharingPair ? await discloseSharingPair(sharingPair, code) : code;
   phase = 'preview access';
   await page.goto(origin);
-  await page.getByLabel('Access code', { exact: true }).fill(code);
+  await page.getByLabel('Access code', { exact: true }).fill(loginCode);
   await page.getByRole('button', { name: 'Open preview', exact: true }).click();
   await page.waitForURL(`${origin}/`);
   phase = 'teacher seat login';
