@@ -1,9 +1,9 @@
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import {
   legacyRubricDisplayConfig,
+  parseRubricDisplaySource,
   type RubricDisplayCategory,
   type RubricDisplayConfig,
-  type RubricDisplaySource,
 } from '~/domain/grading/rubric-display';
 import {
   parseOptionalBoolean,
@@ -22,20 +22,6 @@ export type LatestGradingRunRubricSnapshot = {
   assignmentTypeRubricSnapshot: unknown;
   source?: string | null;
 };
-
-const rubricDisplaySources = new Set<string>([
-  'assignment-type',
-  'thesis-default',
-  'daily-pages-default',
-]);
-
-function parseRubricDisplaySource(
-  value: string | null | undefined
-): RubricDisplaySource | undefined {
-  return value && rubricDisplaySources.has(value)
-    ? (value as RubricDisplaySource)
-    : undefined;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
