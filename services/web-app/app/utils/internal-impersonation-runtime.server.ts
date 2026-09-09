@@ -25,7 +25,7 @@ export function impersonationHttp() {
     remote = new InternalImpersonationClient(process.env.INTERNAL_PLATFORM_ORIGIN || '', key);
   } catch { /* start/resolve fail closed; local end remains available */ }
   return createImpersonationHttp({
-    origin: origin.origin, secrets, secure: !local, enabled,
+    origin: origin.origin, secrets, secure: origin.protocol === 'https:' || !local, enabled,
     service: new InternalImpersonationSessions(basePrisma, remote),
     audit: async (identity, operation, action, path) => {
       await basePrisma.internalImpersonationEvent.create({ data: {

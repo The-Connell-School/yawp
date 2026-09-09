@@ -6,7 +6,7 @@
 
 Search accepts `q`, optional `organizationId`, `limit` (1–50, default 50), and `cursor`. It searches active memberships by user name or email. Organization filtering happens before pagination. Each result contains `{ id, organizationId, displayName, email, privileged }`. A user with several memberships can appear once per organization. The cursor is bound to the query and organization. Responses are no-store.
 
-Lookup returns `{ id, organizationId, privileged }` for an active membership. Either `isAdmin` or `isSuperAdmin` makes a user privileged. Missing users/memberships return 404. When a user has multiple active memberships, callers must pass `organizationId`; an ambiguous lookup returns 409. Internal's impersonation form/adapter must carry the selected organization to this endpoint before enabling multi-organization impersonation.
+Lookup returns `{ id, organizationId, privileged }` for an active membership. Either `isAdmin` or `isSuperAdmin` makes a user privileged. Missing users/memberships return 404. When a user has multiple active memberships, callers must pass `organizationId`; an ambiguous lookup returns 409. Internal's impersonation form, API, CLI/MCP and adapter now carry the selected organization to this endpoint.
 
 These directory endpoints do not establish login sessions. The separate, opt-in browser integration below establishes attributed sessions. Ordinary app authentication remains available.
 
@@ -65,7 +65,7 @@ A fixed root banner shows the assumed account, operator and organization with an
 
 `./bin/project test --profile internal-impersonation-browser --json` starts the real app on the owned app port and uses its local fixture database. A temporary HTTPS authority simulates only the Internal protocol. Chromium verifies fragment removal, target identity/banner, authentication heartbeat, organization-switch denial, request/lifecycle audit attribution, exit and remote revocation. The server processes/certificate are removed afterward; synthetic append-only audit records remain. Stop an already-running owned dev server before this test. `internal-impersonation-http` covers CSRF/origin failures, invalid-cookie fallback prevention, unavailable audit and termination services, cookie replacement and response caching.
 
-The full deployed Internal-to-production pairing has not been exercised. Selected-organization forwarding from the Internal UI/adapter, durable cross-process jobs, retry scheduling and deployment configuration remain outstanding.
+The local two-app pairing now verifies stored grant issuance, HTTPS browser login, token replay rejection, an actual profile mutation and its audit read through Internal, revocation and exit. HTTPS cookies are Secure even on local development origins. The deployed pairing, durable cross-process jobs, retry scheduling and deployment configuration remain outstanding. See Internal tests/pair/yawp.ts for the repeatable paired proof.
 
 ## Bootstrap recovery details
 
