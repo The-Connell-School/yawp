@@ -81,6 +81,26 @@ describe('admin assignment type detail action', () => {
     prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
   });
 
+  test('keeps a deleted rubric selection error in the editor', async () => {
+    prisma.rubric.findUnique.mockResolvedValue(null);
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'Keep my edits');
+    form.set('rubricId', 'deleted');
+    const response = await action({ request: new Request('https://example.test/edit', { method: 'POST', body: form }), params: { id: 'at-1' }, context: {} });
+    expect(response).toMatchObject({ data: { error: 'That rubric no longer exists. Choose another rubric.' }, init: { status: 400 } });
+    expect(prisma.assignmentType.update).not.toHaveBeenCalled();
+  });
+
+  test('clears a library relationship without changing the underlying grading configuration', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'Existing type');
+    form.set('rubricId', '__none__');
+    await action({ request: new Request('https://example.test/edit', { method: 'POST', body: form }), params: { id: 'at-1' }, context: {} });
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({ where: { id: 'at-1' }, data: { title: 'Existing type', description: null, rubricId: null } });
+  });
+
   test('archives assignment types instead of hard deleting them', async () => {
     const form = new FormData();
     form.set('intent', 'deleteCourse');

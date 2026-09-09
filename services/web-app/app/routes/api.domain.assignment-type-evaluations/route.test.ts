@@ -910,6 +910,27 @@ describe('assignment-type evaluations action', () => {
     expect(prisma.assignmentTypeEvaluationRun.create).not.toHaveBeenCalled();
   });
 
+  test('runs evaluations against the selected library rubric while retaining the selected prompt version', async () => {
+    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
+    const schema = STARTER_RUBRICS.find(row => row.name === DAILY_PAGES_RUBRIC_NAME)!;
+    prisma.assignmentType.findUnique.mockResolvedValue({ ...assignmentType, rubric: { name: schema.name, schemaJson: schema } });
+    await action({ request: requestWith({ intent: 'runSuite', assignmentTypeId: 'at-1', promptVersionId: 'prompt-draft-8', evaluationSuiteVersionId: 'suite-1' }), params: {}, context: {} } as any);
+    expect(runAssignmentTypeEvaluationSuite).toHaveBeenCalledWith(expect.objectContaining({ gradingConfig: expect.objectContaining({
+      minScore: 0, maxScore: 30, step: 10,
+      rubricCategories: [expect.objectContaining({ key: 'engagement_with_prompt' })],
+      promptTemplate: { systemMessage: 'Draft system {{student_first_name}}', userMessage: 'Draft user {{rubric}} {{document}}' },
+    }) }));
+  });
+
+  test('accepts a selected library category when creating an evaluation case without inline categories', async () => {
+    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
+    const schema = STARTER_RUBRICS.find(row => row.name === DAILY_PAGES_RUBRIC_NAME)!;
+    prisma.assignmentType.findUnique.mockResolvedValue({ ...assignmentType, rubricJson: null, rubric: { name: schema.name, schemaJson: schema } });
+    const response = await action({ request: requestWith({ intent: 'createCase', assignmentTypeId: 'at-1', rubricCategoryKey: 'engagement_with_prompt', title: 'Reflection', documentText: 'I learned something.', criterion: 'Rewards reflection.' }), params: {}, context: {} } as any);
+    expect((response as any).data.success).toBe(true);
+    expect(prisma.assignmentTypeEvaluationCase.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ rubricCategoryKey: 'engagement_with_prompt' }) }));
+  });
+
   test('runs all active cases and persists one immutable prompt-version row', async () => {
     const response = await action({
       request: requestWith({

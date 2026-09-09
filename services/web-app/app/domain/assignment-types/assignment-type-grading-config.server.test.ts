@@ -16,6 +16,56 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     prisma.assignmentType.findUnique.mockReset();
   });
 
+  test('selected library rubric drives the compiled grading invocation instead of stale inline configuration', async () => {
+    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
+    const { compileGradingAssistantInvocation } = await import('~/domain/grading/grading-assistant-invocation');
+    const schema = STARTER_RUBRICS.find(rubric => rubric.name === DAILY_PAGES_RUBRIC_NAME)!;
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'selected-library', title: 'Journal', kind: null,
+      rubric: { name: schema.name, schemaJson: schema },
+      scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+      rubricJson: { categories: [{ key: 'obsolete', label: 'Obsolete criterion', description: 'Do not use this.', weight: 1 }] },
+      gradingPromptConfigJson: { gradingInstructions: 'Obsolete instructions', gradingInstructionsOverride: 'Focus on personal reflection.' },
+      gradingAssistantVersion: 2,
+    });
+    const config = await resolveAssignmentTypeGradingConfig({ assignmentTypeId: 'selected-library' });
+    expect(config.minScore).toBe(0);
+    expect(config.maxScore).toBe(30);
+    expect(config.step).toBe(10);
+    expect(config.rubricCategories.map(category => category.key)).toEqual(['engagement_with_prompt']);
+    const invocation = compileGradingAssistantInvocation({ gradingConfig: config, studentFirstName: 'Jordan', strictnessLevel: 'intermediate', documentText: 'Synthetic reflection.' });
+    const prompt = invocation.system + invocation.userMessage;
+    expect(prompt).toContain('Engagement with Prompt');
+    expect(prompt).toContain('Focus on personal reflection.');
+    expect(prompt).not.toContain('Obsolete criterion');
+    expect(prompt).not.toContain('Obsolete instructions');
+  });
+
+  test.each(['daily-pages-engagement', 'thesis-driven-essay'])('selected %s library rubric preserves promoted prompt templates', async (name) => {
+    const { STARTER_RUBRICS } = await import('~/domain/rubrics/starter-rubrics');
+    const { compileGradingAssistantInvocation } = await import('~/domain/grading/grading-assistant-invocation');
+    const schema = STARTER_RUBRICS.find(rubric => rubric.name === name)!;
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'managed-library', title: 'Managed journal', kind: null,
+      rubric: { name: schema.name, schemaJson: schema },
+      rubricJson: null, scoringScaleJson: null,
+      gradingPromptConfigJson: {
+        systemMessageTemplate: 'Promoted system {{grading_instructions}}',
+        userMessageTemplate: 'Promoted rubric {{rubric}} Document {{document}}',
+        gradingInstructionsOverride: 'Preserved override.',
+      },
+      gradingAssistantVersion: 3,
+    });
+    const config = await resolveAssignmentTypeGradingConfig({ assignmentTypeId: 'managed-library' });
+    expect(config.promptTemplate).toEqual({ systemMessage: 'Promoted system {{grading_instructions}}', userMessage: 'Promoted rubric {{rubric}} Document {{document}}' });
+    expect(config.maxScore).toBe(name === 'daily-pages-engagement' ? 30 : 5);
+    const invocation = compileGradingAssistantInvocation({ gradingConfig: config, studentFirstName: 'Jordan', strictnessLevel: 'intermediate', documentText: 'Synthetic essay.' });
+    expect(invocation.system).toContain('Promoted system');
+    expect(invocation.system).toContain('Preserved override.');
+    expect(invocation.userMessage).toContain('Promoted rubric');
+    expect(invocation.userMessage).toContain('Synthetic essay.');
+  });
+
   test('returns assignment-type-owned rubric and prompt config when present', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'assignment-type-act',

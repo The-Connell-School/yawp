@@ -1,3 +1,4 @@
+import { listRubrics, seedStarterRubrics } from '~/domain/rubrics/rubric-library.server';
 import {
   data as dataResponse,
   redirect,
@@ -15,10 +16,6 @@ import {
   parseRubric,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
-import {
-  listRubrics,
-  seedStarterRubrics,
-} from '~/domain/rubrics/rubric-library.server';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -67,12 +64,7 @@ function parseGradingConfig(formData: FormData) {
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
   await seedStarterRubrics();
-  const rubrics = (await listRubrics()).map(({ id, name, title, json }) => ({
-    id,
-    name,
-    title,
-    json,
-  }));
+  const rubrics = (await listRubrics()).map(({ id, name, title, json }) => ({ id, name, title, json }));
   return dataResponse({ rubrics });
 }
 
@@ -81,25 +73,16 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const title = formData.get('title')?.toString().trim();
   const description = formData.get('description')?.toString().trim() || null;
-  const rawRubricId = formData.get('rubricId')?.toString().trim();
-  const rubricId =
-    rawRubricId && rawRubricId !== '__none__' ? rawRubricId : null;
 
   if (!title) {
     return dataResponse({ error: 'Title is required' }, { status: 400 });
   }
 
+  const rawRubricId = formData.get('rubricId')?.toString().trim();
+  const rubricId = rawRubricId && rawRubricId !== '__none__' ? rawRubricId : null;
   if (rubricId) {
-    const rubric = await prisma.rubric.findUnique({
-      where: { id: rubricId },
-      select: { id: true },
-    });
-    if (!rubric) {
-      return dataResponse(
-        { error: 'That rubric no longer exists. Choose another rubric.' },
-        { status: 400 }
-      );
-    }
+    const rubric = await prisma.rubric.findUnique({ where: { id: rubricId }, select: { id: true } });
+    if (!rubric) return dataResponse({ error: 'That rubric no longer exists. Choose another rubric.' }, { status: 400 });
   }
 
   let gradingConfigData: ReturnType<typeof parseGradingConfig>;
@@ -112,6 +95,12 @@ export async function action({ request }: ActionFunctionArgs) {
     throw error;
   }
 
+  const override = formData.get('gradingInstructionsOverride')?.toString().trim();
+  if (override) {
+    gradingConfigData = { ...gradingConfigData, gradingPromptConfigJson: {
+      ...(gradingConfigData.gradingPromptConfigJson ?? {}), gradingInstructionsOverride: override,
+    } };
+  }
   const count = await prisma.assignmentType.count();
   const assignmentType = await prisma.assignmentType.create({
     data: {
@@ -130,13 +119,7 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function NewAssignmentTypeRoute() {
   const { rubrics } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  return (
-    <AssignmentTypeEditorForm
-      mode="create"
-      rubrics={rubrics}
-      error={actionData?.error}
-    />
-  );
+  return <AssignmentTypeEditorForm mode="create" rubrics={rubrics} error={actionData?.error} />;
 }
 
 export function ErrorBoundary() {
