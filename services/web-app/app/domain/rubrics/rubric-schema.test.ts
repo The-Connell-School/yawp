@@ -255,7 +255,7 @@ describe('rubric schema', () => {
   });
 });
 
-describe('the two assistants Daily Pages split into', () => {
+describe('Daily Pages static library rubrics', () => {
   const byName = new Map(STARTER_RUBRICS.map((rubric) => [rubric.name, rubric]));
 
   test('are both in the library so an admin can pick either', () => {
@@ -264,11 +264,11 @@ describe('the two assistants Daily Pages split into', () => {
   });
 
   /**
-   * The library copies must be the same objects grading falls back to. If they
-   * drift, an admin who picks "Daily Pages reflection" from the library gets
-   * something other than what a Daily Pages type grades with by default.
+   * The library schemas must stay aligned with their static definitions. This
+   * gives the create/edit assignment-type picker the same data that is tested
+   * and reviewed here, rather than a hand-copied variant.
    */
-  test('carry exactly what the built-in defaults carry', () => {
+  test('carry exactly what their static definitions carry', () => {
     const classStarter = byName.get('class-starter-engagement');
     expect(classStarter?.scoringScale).toEqual(CLASS_STARTER_SCORING_SCALE);
     expect(classStarter?.rubric).toEqual(CLASS_STARTER_RUBRIC);
