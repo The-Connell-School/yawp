@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Prisma, type PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@app/prisma';
 import { z } from 'zod';
 import { validateRubricPromotion } from '~/domain/rubrics/rubric-promotion';
 import { parseRubricSchema } from '~/domain/rubrics/rubric-schema';

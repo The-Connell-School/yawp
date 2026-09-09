@@ -46,6 +46,18 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('rubric publicati
     const newest = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Newest' } });
     expect(newest.rubricRevisionId).toBe(third.id);
     expect(await db.rubricRevision.count({ where: { rubricName: name } })).toBe(3);
+    await expect(service.publish({ ...request, requestId: randomUUID(), expectedFingerprint: third.fingerprint, schema: { ...request.schema, rubric: { categories: [] } } })).rejects.toThrow('validation');
+    await expect(service.publish({ ...request, requestId: randomUUID(), schema: { ...request.schema, name: 'daily-pages-engagement' } })).rejects.toThrow('Protected');
+    expect((await service.publish(request)).id).toBe(published.id);
+    const [fourth, racing] = await Promise.all([
+      service.publish({ ...request, requestId: randomUUID(), expectedFingerprint: third.fingerprint, schema: { ...request.schema, title: 'Fourth rubric' } }),
+      db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Concurrent creation' } }),
+    ]);
+    const racePin = await db.assignment.findUniqueOrThrow({ where: { id: racing.id }, include: { rubricRevision: true } });
+    expect([third.id, fourth.id]).toContain(racePin.rubricRevisionId);
+    expect((await resolveAssignmentTypeGradingConfig({ assignmentTypeId: type.id, assignmentId: racing.id })).version).toBe(racePin.rubricRevision!.version);
+    await expect(resolveAssignmentTypeGradingConfig({ assignmentTypeId: 'wrong-type', assignmentId: before.id })).rejects.toThrow('context');
+
   } finally {
     await db.assignment.deleteMany({ where: { assignmentTypeId: type.id } });
     await db.assignmentType.delete({ where: { id: type.id } });

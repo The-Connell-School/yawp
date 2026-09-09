@@ -314,10 +314,12 @@ export function buildResolvedAssignmentTypeGradingConfig({
 
 export async function resolveAssignmentTypeGradingConfig({
   assignmentTypeId,
+  assignmentId,
   assignmentTypeKind = null,
   assignmentTypeTitle = null,
 }: {
   assignmentTypeId: string;
+  assignmentId?: string | null;
   assignmentTypeKind?: string | null;
   assignmentTypeTitle?: string | null;
 }): Promise<ResolvedAssignmentTypeGradingConfig> {
@@ -335,10 +337,25 @@ export async function resolveAssignmentTypeGradingConfig({
       gradingAssistantVersion: true,
       gradingAssistantSourceTemplateId: true,
       gradingAssistantSourceTemplateSlug: true,
-      rubric: { select: { name: true, schemaJson: true } },
+      rubric: { select: { name: true, schemaJson: true, currentRevision: { select: { id: true, version: true, rubricName: true, schemaJson: true } } } },
     },
   });
 
+  // A published default opts this rubric into revision reads. Legacy rows
+  // retain the existing library/column fallback until explicitly published.
+  let revision = assignmentType?.rubric?.currentRevision ?? null;
+  if (assignmentId) {
+    const assignment = await prisma.assignment.findUnique({ where: { id: assignmentId }, select: {
+      assignmentTypeId: true, rubricRevision: { select: { id: true, version: true, rubricName: true, schemaJson: true } },
+    } });
+    if (!assignment || assignment.assignmentTypeId !== assignmentTypeId) throw new Error('Assignment grading context does not match');
+    if (assignment.rubricRevision) revision = assignment.rubricRevision;
+  }
+  const row = revision && assignmentType ? {
+    ...assignmentType,
+    gradingAssistantVersion: revision.version,
+    rubric: { name: revision.rubricName, schemaJson: revision.schemaJson },
+  } : assignmentType;
   return buildResolvedAssignmentTypeGradingConfig({
     assignmentTypeId,
     assignmentTypeKind,
@@ -346,7 +363,7 @@ export async function resolveAssignmentTypeGradingConfig({
     // A rubric chosen from the library replaces the assignment type's own
     // columns wholesale. Everything downstream reads the same shape either
     // way, so nothing else in grading has to know where the rubric came from.
-    row: withLibraryRubric(assignmentType),
+    row: withLibraryRubric(row),
     // The per-assignment-type grading assistant override always applies,
     // even when a library rubric supplies the rest of the prompt config.
     ownGradingInstructionsOverride: getOwnGradingInstructionsOverride(
