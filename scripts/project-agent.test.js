@@ -15,6 +15,38 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
+  test("sibling worktrees receive distinct database identities and honor reassigned Record ports", () => {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "yawp-isolation-"));
+    try {
+      const fakeBin = path.join(fixture, "bin");
+      fs.mkdirSync(fakeBin);
+      fs.writeFileSync(path.join(fakeBin, "bun"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      // Stop after config generation: never contact a real Docker daemon.
+      fs.writeFileSync(path.join(fakeBin, "docker"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+      const configs = [];
+      for (const name of ["first", "second"]) {
+        const workspace = path.join(fixture, name);
+        fs.mkdirSync(path.join(workspace, "scripts"), { recursive: true });
+        const script = path.join(workspace, "scripts/setup.sh");
+        fs.copyFileSync(path.join(root, "scripts/worktree-local-setup.sh"), script);
+        for (const port of [47001, 47002]) {
+          const result = spawnSync("bash", [script, "--no-dev"], {
+            cwd: fixture, encoding: "utf8", timeout: 5000,
+            env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, RECORD_PORT_DATABASE: String(port), RECORD_PORT_APP: "48001" },
+          });
+          expect(result.status).toBe(1);
+          const config = parseEnvFile(fs.readFileSync(path.join(workspace, ".worktree-local/config.env"), "utf8"));
+          expect(config.PG_PORT).toBe(String(port));
+          if (port === 47002) configs.push(config);
+        }
+      }
+      expect(configs[0].CONTAINER_NAME).not.toBe(configs[1].CONTAINER_NAME);
+      expect(configs[0].DB_NAME).not.toBe(configs[1].DB_NAME);
+      expect(configs[0].VOLUME_NAME).not.toBe(configs[1].VOLUME_NAME);
+    } finally {
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
   test("failed dependency validation does not start or reset a database", () => {
     const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "yawp-bootstrap-"));
     try {
