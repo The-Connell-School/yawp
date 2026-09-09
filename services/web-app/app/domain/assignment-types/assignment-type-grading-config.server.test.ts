@@ -41,6 +41,31 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     expect(prompt).not.toContain('Obsolete instructions');
   });
 
+  test.each(['daily-pages-engagement', 'thesis-driven-essay'])('selected %s library rubric preserves promoted prompt templates', async (name) => {
+    const { STARTER_RUBRICS } = await import('~/domain/rubrics/starter-rubrics');
+    const { compileGradingAssistantInvocation } = await import('~/domain/grading/grading-assistant-invocation');
+    const schema = STARTER_RUBRICS.find(rubric => rubric.name === name)!;
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'managed-library', title: 'Managed journal', kind: null,
+      rubric: { name: schema.name, schemaJson: schema },
+      rubricJson: null, scoringScaleJson: null,
+      gradingPromptConfigJson: {
+        systemMessageTemplate: 'Promoted system {{grading_instructions}}',
+        userMessageTemplate: 'Promoted rubric {{rubric}} Document {{document}}',
+        gradingInstructionsOverride: 'Preserved override.',
+      },
+      gradingAssistantVersion: 3,
+    });
+    const config = await resolveAssignmentTypeGradingConfig({ assignmentTypeId: 'managed-library' });
+    expect(config.promptTemplate).toEqual({ systemMessage: 'Promoted system {{grading_instructions}}', userMessage: 'Promoted rubric {{rubric}} Document {{document}}' });
+    expect(config.maxScore).toBe(name === 'daily-pages-engagement' ? 30 : 5);
+    const invocation = compileGradingAssistantInvocation({ gradingConfig: config, studentFirstName: 'Jordan', strictnessLevel: 'intermediate', documentText: 'Synthetic essay.' });
+    expect(invocation.system).toContain('Promoted system');
+    expect(invocation.system).toContain('Preserved override.');
+    expect(invocation.userMessage).toContain('Promoted rubric');
+    expect(invocation.userMessage).toContain('Synthetic essay.');
+  });
+
   test('returns assignment-type-owned rubric and prompt config when present', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'assignment-type-act',
