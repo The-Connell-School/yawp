@@ -24,6 +24,7 @@ const { rows: [user] } = await db.query<{ id: string; email: string; organizatio
   WHERE u.email='dev.teacher@yawp.local' AND m."isActive"=true LIMIT 1`);
 assert(user, 'Run the local-dev fixture first');
 const key = randomBytes(32).toString('base64url');
+const managementKey = randomBytes(32).toString('base64url');
 let token = randomBytes(32).toString('base64url');
 let identity = { id: randomUUID(), actorId: 'browser-qa-operator', userId: user.id,
   organizationId: user.organizationId, expiresAt: new Date(Date.now() + 600000).toISOString() };
@@ -49,7 +50,7 @@ const app = spawn(process.execPath, ['run', 'dev', '--host', 'localhost', '--por
   env: { ...process.env, NODE_EXTRA_CA_CERTS: join(dir, 'cert.pem'),
     INTERNAL_IMPERSONATION_ENABLED: 'true', YAWP_PUBLIC_ORIGIN: origin,
     INTERNAL_PLATFORM_ORIGIN: `https://127.0.0.1:${authorityPort}`, YAWP_PRODUCTION_SERVICE_KEY: key,
-    YAWP_MANAGEMENT_SERVICE_KEY: randomBytes(32).toString('base64url'), NODE_ENV: 'development' },
+    YAWP_MANAGEMENT_SERVICE_KEY: managementKey, NODE_ENV: 'development' },
 });
 closeSync(log);
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
@@ -84,6 +85,24 @@ try {
   assert(events.some(event => event.action.startsWith('request.completed.')));
   assert(events.some(event => event.action === 'session.ended'));
   assert(events.every(event => event.actorId === identity.actorId && event.userId === user.id));
+  const auditIds: string[] = [];
+  let cursor: string | null = null;
+  do {
+    const params = new URLSearchParams({ organizationId: user.organizationId, sessionId, limit: '1' });
+    if (cursor) params.set('cursor', cursor);
+    const response = await page.request.get(`${origin}/api/internal/v1/impersonation-audit?${params}`, {
+      headers: { authorization: `Bearer ${managementKey}` },
+    });
+    assert.equal(response.status(), 200);
+    const audit = await response.json();
+    assert.equal(audit.events.length, 1);
+    assert.equal(audit.events[0].actorId, identity.actorId);
+    assert(!auditIds.includes(audit.events[0].id));
+    auditIds.push(audit.events[0].id); cursor = audit.nextCursor;
+    assert(auditIds.length <= events.length);
+  } while (cursor);
+  assert.equal(auditIds.length, events.length);
+  assert.equal((await page.request.get(`${origin}/api/internal/v1/impersonation-audit`)).status(), 401);
   token = randomBytes(32).toString('base64url');
   identity = { ...identity, id: randomUUID() }; redeemed = false; revoked = false;
   await page.goto(`${origin}/auth/internal-impersonation#token=${token}`);

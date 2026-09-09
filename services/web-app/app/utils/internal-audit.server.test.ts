@@ -26,5 +26,6 @@ test('audit filters before paging and returns only provenance with a scope-bound
   expect((await read(request(`organizationId=org-b&sessionId=session&cursor=${page.nextCursor}`))).status).toBe(400);
   expect(queries).toHaveLength(1);
   expect((await read(request(`organizationId=org-a&sessionId=session&cursor=${page.nextCursor}`))).status).toBe(200);
-  expect(queries[1].where.OR).toEqual([{ createdAt: { lt: new Date('2026-09-09T10:00:00Z') } }, { createdAt: new Date('2026-09-09T10:00:00Z'), id: { lt: 'event-b' } }]);
+  expect(queries[1].cursor).toEqual({ id: 'event-b' });
+  expect(queries[1].skip).toBe(1);
 });

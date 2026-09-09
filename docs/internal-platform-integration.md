@@ -72,3 +72,9 @@ The full deployed Internal-to-production pairing has not been exercised. Selecte
 The recovered setup uses Bun 1.3.1's text `bun.lock`, migrated from the existing binary lock without refreshing dependencies. Frozen dependency validation runs once from the worktree root before configuration/database side effects. The application Dockerfile uses the same text lock. Preview fingerprints already support either lock format.
 
 Resource names now use the exact worktree directory and a path hash rather than the shared parent directory. Record port overrides are honored on subsequent runs. A legacy shared-resource configuration receives newly named resources; the script does not remove its old database/volume. Record's initial failed execution receipt remains historical: subsequent project CLI bootstrap and fixture checks are separate repair evidence, not a rewrite of that receipt.
+
+## Audit read API
+
+`GET /api/internal/v1/impersonation-audit` uses the backend-only `YAWP_MANAGEMENT_SERVICE_KEY` and returns `{ events, nextCursor }`. Optional filters are `organizationId` and `sessionId`; `limit` defaults to 50 and is bounded to 1–100. Each event includes operator, assumed user, organization, session, action, resource type/key, request ID/action, optional job ID and timestamp. It never includes browser credentials, link tokens or copied resource contents.
+
+Pages sort by creation time and ID descending. The cursor binds the organization/session filters and uses the immutable event ID as Prisma's database cursor, preserving PostgreSQL timestamp precision. Audit rows cannot be deleted through the application role. Internal must authorize the caller before this backend lookup and verify returned scope. The browser acceptance profile verifies the real HTTP endpoint against recorded local events, including one-row pagination and unauthenticated rejection.
