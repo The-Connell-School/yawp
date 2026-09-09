@@ -25,6 +25,7 @@ const input = { jobId: randomUUID(), actorId: 'browser-scenario-operator', finge
 const dir = mkdtempSync(join(tmpdir(), 'yawp-scenario-browser-'));
 let app: ReturnType<typeof spawn> | undefined;
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+let phase = 'fixture';
 try {
   await service.apply(input);
   const teacher = await db.user.findFirstOrThrow({ where: { memberships: { some: { organizationId: org.id, role: 'TEACHER' } } } });
@@ -46,31 +47,41 @@ try {
   assert(ready, 'Application must become ready');
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
+  phase = 'preview access';
   await page.goto(origin);
   await page.getByLabel('Access code', { exact: true }).fill(code);
   await page.getByRole('button', { name: 'Open preview', exact: true }).click();
-  await page.getByRole('link', { name: 'Log In', exact: true }).click();
+  await page.waitForURL(`${origin}/`);
+  phase = 'teacher seat login';
+  await page.goto(`${origin}/auth/login`);
   await page.getByRole('button', { name: /Open dev login menu/ }).click();
+  phase = 'select generated teacher';
   await page.getByRole('button', { name: /Scenario Teacher 1/ }).click();
+  phase = 'authenticated teacher redirect';
   await page.waitForURL(/\/app/);
+  phase = 'classroom data';
   await page.goto(`${origin}/app/my-classes/${classroom.id}?tab=documents`);
   const table = page.getByRole('table', { name: /class documents/i });
   await expect(table).toBeVisible({ timeout: 45000 });
   await expect(table.getByText('In Progress', { exact: true }).first()).toBeVisible();
   await expect(table.getByText('Needs Grading', { exact: true }).first()).toBeVisible();
   assert.equal((await page.request.post(`${origin}/auth/dev-login`, { form: { email: 'dev.teacher@yawp.local' }, maxRedirects: 0 })).status(), 404);
+  phase = 'reset and replacement users';
   await service.apply({ ...input, jobId: randomUUID(), mode: 'reset' });
-  const options = await page.request.get(`${origin}/auth/dev-login/options`);
+  await page.goto(`${origin}/auth/login`);
+  await page.getByRole('button', { name: /Open dev login menu/ }).click();
+  await expect(page.getByRole('button', { name: /Scenario Teacher 1/ })).toHaveCount(1);
+  const options = await page.request.get(`${origin}/auth/dev-login/options`, { maxRedirects: 0 });
   assert.equal(options.status(), 200);
   const menu = await options.json();
   assert.equal(menu.options.length, 3, 'Reset should list only the replacement scenario users');
   assert(!menu.options.some((option: { email: string }) => option.email === teacher.email), 'Retired teacher must disappear from the menu');
   assert.equal((await page.request.post(`${origin}/auth/dev-login`, { form: { email: teacher.email }, maxRedirects: 0 })).status(), 404);
   console.log('PASS: seat code, beaker teacher login, real draft/submission classroom UI, cross-seat rejection and retired-user exclusion');
-} catch (error) {
+} catch {
   const page = browser?.contexts()[0]?.pages()[0];
   if (page) console.error('Scenario page:', page.url(), (await page.locator('body').innerText()).slice(0, 900));
-  throw error;
+  throw new Error(`Scenario browser acceptance failed during ${phase}`);
 } finally {
   await browser?.close();
   if (app?.pid) {
