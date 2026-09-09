@@ -180,6 +180,34 @@ describe('app.group-drafts.$documentId loader', () => {
     expect(body.backTo).toBe('/app');
   });
 
+  test('goes back where the teacher came from when told', async () => {
+    // Group work is now reachable from the grading queue as well as the group
+    // board, so the fixed destination stranded anyone arriving from the queue.
+    const body = await readBody(
+      await loader({
+        request: new Request(
+          'https://example.com/app/group-drafts/doc-1?exitTo=%2Fapp%2Fmy-classes%2Fclass-1'
+        ),
+        params: { documentId: 'doc-1' },
+      } as any)
+    );
+
+    expect(body.backTo).toBe('/app/my-classes/class-1');
+  });
+
+  test('ignores an exitTo pointing off the app', async () => {
+    const body = await readBody(
+      await loader({
+        request: new Request(
+          'https://example.com/app/group-drafts/doc-1?exitTo=https%3A%2F%2Fevil.test%2Fx'
+        ),
+        params: { documentId: 'doc-1' },
+      } as any)
+    );
+
+    expect(body.backTo).toBe('/app/class-assignments/ca-1/groups');
+  });
+
   test('prefers the assignment title over the document title', async () => {
     const body = await readBody(await get());
 

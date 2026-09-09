@@ -427,6 +427,17 @@ function GroupGradeCard({ groupGrade }: { groupGrade: GroupGrade | null }) {
         >
           {released ? 'Take back' : 'Save and share with the group'}
         </Button>
+        {/* The rubric lives on the submission page and only there. A group's
+            work used to open that page once it was handed in, so sending every
+            group here instead would have taken the per-category scores away
+            rather than moved them. This is the way back to them. */}
+        <a
+          href={`/app/submissions/${groupGrade.submissionId}?edit=1`}
+          className="text-sm underline underline-offset-2"
+          data-testid="group-grade-rubric-link"
+        >
+          Rubric and full feedback
+        </a>
       </div>
     </fetcher.Form>
   );

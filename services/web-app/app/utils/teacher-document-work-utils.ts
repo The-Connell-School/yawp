@@ -99,12 +99,26 @@ export function getTeacherDocumentWorkDetailLink(params: {
 }) {
   const encodedExitTo = encodeURIComponent(params.exitTo);
 
-  if (params.document.latestSubmission?.id) {
-    return `/app/submissions/${params.document.latestSubmission.id}?edit=1&exitTo=${encodedExitTo}`;
-  }
-
+  // Group work goes to the group page whatever state it is in, and the check
+  // comes before the submission one deliberately.
+  //
+  // The other order sent a group somewhere else the moment it pressed submit:
+  // drafting groups opened the contribution table, the draft coloured by
+  // author, the group grade and the individual grade cards, and submitted ones
+  // opened the solo submission editor, which has none of those. Same
+  // assignment, same group, two unrelated screens depending on a state the
+  // teacher was not thinking about — and the individual grades, which only
+  // exist on the group page, became unreachable exactly when they were needed.
+  //
+  // The group page has never depended on being unsubmitted: `readGroupGrade`
+  // reads the group's live `Submission`, so it renders and saves the group
+  // grade for a submitted or graded group the same way it does for a fresh one.
   if (params.document.group) {
     return `/app/group-drafts/${params.document.id}?exitTo=${encodedExitTo}`;
+  }
+
+  if (params.document.latestSubmission?.id) {
+    return `/app/submissions/${params.document.latestSubmission.id}?edit=1&exitTo=${encodedExitTo}`;
   }
 
   return `/app/documents/${params.document.id}?left=tutor&exitTo=${encodedExitTo}`;

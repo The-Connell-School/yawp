@@ -30,6 +30,7 @@ import {
 import { suggestMemberGrades } from '~/domain/collaboration/member-grade-suggestions.server';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { sanitizeExitTarget } from '~/utils/document-exit';
 import { prisma } from '~/utils/db.server';
 import {
   documentReadWhere,
@@ -130,9 +131,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     // `??` would let a blank title through.
     title: doc.assignment?.title?.trim() || doc.title?.trim() || 'Shared draft',
     groupLabel: doc.group?.label ?? 'Group',
-    backTo: doc.group?.classAssignmentId
-      ? `/app/class-assignments/${doc.group.classAssignmentId}/groups`
-      : '/app',
+    // Where the teacher came from, when they came from somewhere that said so.
+    //
+    // The group board used to be the only way in, so a fixed destination was
+    // right. It is not any more: the work lists send a group's draft here
+    // whatever state it is in, and a teacher arriving from the grading queue
+    // was being returned to a board they had never opened. `sanitizeExitTarget`
+    // is what keeps the parameter from becoming an open redirect — same helper
+    // the submission and document pages pass their own `exitTo` through.
+    backTo:
+      sanitizeExitTarget(
+        new URL(request.url).searchParams.get('exitTo')
+      ) ??
+      (doc.group?.classAssignmentId
+        ? `/app/class-assignments/${doc.group.classAssignmentId}/groups`
+        : '/app'),
     breakdown,
   });
 }
