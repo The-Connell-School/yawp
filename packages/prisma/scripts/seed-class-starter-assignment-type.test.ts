@@ -205,3 +205,43 @@ describe('the Class Starter assignment type image', () => {
     expect(args.update).toEqual({});
   });
 });
+
+/**
+ * The preview workflow runs on `pull_request_target`, so `scripts/preview/deploy.sh`
+ * is always checked out from the default branch — a PR's own edit to it cannot
+ * affect that PR's preview. Only the application source under `$SOURCE_DIR` comes
+ * from the PR head, so the seed has to be reachable from a script the deploy
+ * already invokes out of that source, or a preview shows the code with no row.
+ *
+ * `seed-local-dev` covers a freshly created preview database, and
+ * `sync-prod-fidelity-fixtures` covers one that already existed. The deploy runs
+ * exactly one of the two, so both need it.
+ */
+describe('the seed is reachable from the scripts a preview actually runs', () => {
+  const entryPoints = [
+    'seed-local-dev.ts',
+    'sync-prod-fidelity-fixtures.ts',
+  ] as const;
+
+  test.each(entryPoints)('%s calls the Class Starter seed', (fileName) => {
+    const source = readFileSync(
+      new URL(`./${fileName}`, import.meta.url),
+      'utf8'
+    );
+
+    expect(source).toContain('seedClassStarterAssignmentType');
+    expect(source).toContain('./seed-class-starter-assignment-type');
+  });
+
+  test.each(entryPoints)(
+    '%s does not let a missing organization fail the run',
+    (fileName) => {
+      const source = readFileSync(
+        new URL(`./${fileName}`, import.meta.url),
+        'utf8'
+      );
+
+      expect(source).toContain('MissingOrganizationError');
+    }
+  );
+});

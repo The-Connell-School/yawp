@@ -78,11 +78,26 @@ Nothing, until the flag is turned on.
    artwork keeps it, and replacing the seeded one means deleting the
    `AssignmentTypeImage` row and re-running.
 
-   Preview environments run this seed themselves, after whichever data path
-   created an organization and before the assignment-type release gate, so
-   every PR preview has a Class Starter to click on. Its files are part of the
-   tooling fingerprint — without that, a preview whose database already exists
-   would skip tooling wholesale and never run the seed.
+   Preview environments run this seed themselves, so every PR preview has a
+   Class Starter to click on. It is invoked from two places, and the reason is
+   worth knowing before changing either:
+
+   - `seed-local-dev` and `sync-prod-fidelity-fixtures` both call it. The
+     preview deploy runs exactly one of the two — the first for a freshly
+     created database, the second for one that already existed — so both need
+     it. These run from the PR's own source.
+   - `scripts/preview/deploy.sh` also calls it, which covers the
+     `production-dump` and `sanitized-production` data modes where neither of
+     those two scripts runs. Its files are also in the tooling fingerprint,
+     without which a preview whose database already exists would skip tooling
+     wholesale and never run the seed.
+
+   The deploy.sh half only takes effect once merged. The preview workflow is
+   `pull_request_target`, so it checks the control scripts out of the default
+   branch — a PR's own edit to `deploy.sh` cannot affect that PR's preview.
+   Only the application source under `$SOURCE_DIR` comes from the PR head,
+   which is why the seed has to be reachable from a script the deploy already
+   invokes out of that source.
 
    Then move the freewrite assignments onto the new type.
 3. Turn the flag on in staging, then for a pilot org. Watch scores: the

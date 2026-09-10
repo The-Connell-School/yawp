@@ -13,6 +13,10 @@ import { seedStarterGradingEvaluations } from './local-dev/starter-grading-evalu
 import { truncateAllPublicTables } from './local-dev/truncate-all';
 import { enableClassInsightsForOrganizations } from './local-dev/class-insights';
 import {
+  MissingOrganizationError,
+  seedClassStarterAssignmentType,
+} from './seed-class-starter-assignment-type';
+import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
   LOCAL_DEV_PASSWORD,
@@ -111,6 +115,22 @@ try {
       2
     )
   );
+
+  // Class Starter's `kind` cannot be set through the admin UI, so the row has to
+  // come from a seed. It is here and in sync-prod-fidelity-fixtures because a
+  // preview deploy runs exactly one of the two: this for a freshly created
+  // database, that one for a database that already existed.
+  try {
+    await seedClassStarterAssignmentType(prisma);
+    console.log('Class Starter assignment type ready.');
+  } catch (error) {
+    // Never fail a whole seed run over the one case that is legitimately absent.
+    if (error instanceof MissingOrganizationError) {
+      console.warn(`${error.message} Skipping.`);
+    } else {
+      throw error;
+    }
+  }
 } catch (error) {
   console.error(error);
   process.exitCode = 1;
