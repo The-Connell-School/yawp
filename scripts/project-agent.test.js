@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -83,5 +84,84 @@ describe("Yawp project agent CLI", () => {
     const ci = fs.readFileSync(path.join(root, ".github", "workflows", "ci.yml"), "utf8");
     expect(ci).not.toMatch(/node-version:\s*20\b/);
     expect(ci).toMatch(/node-version:\s*22\b/);
+  });
+
+  test("worktree setup preserves Record-reserved ports from existing config", () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "yawp-worktree-setup-"));
+    const fakeBin = path.join(tempRoot, "fake-bin");
+    const scriptsDir = path.join(tempRoot, "scripts");
+    const configDir = path.join(tempRoot, ".worktree-local");
+    fs.mkdirSync(fakeBin);
+    fs.mkdirSync(scriptsDir);
+    fs.mkdirSync(configDir);
+    fs.mkdirSync(path.join(tempRoot, "packages", "prisma"), { recursive: true });
+    fs.mkdirSync(path.join(tempRoot, "services", "web-app"), { recursive: true });
+    fs.copyFileSync(
+      path.join(root, "scripts", "worktree-local-setup.sh"),
+      path.join(scriptsDir, "worktree-local-setup.sh")
+    );
+    fs.chmodSync(path.join(scriptsDir, "worktree-local-setup.sh"), 0o755);
+    fs.writeFileSync(
+      path.join(configDir, "config.env"),
+      [
+        "SLUG=record-capsule",
+        "PG_PORT=47330",
+        "DEV_PORT=48185",
+        "LTI_MOCK_PORT=46386",
+        "CONTAINER_NAME=yawp-record-capsule-postgres",
+        "VOLUME_NAME=yawp-record-capsule-postgres-data",
+        "DB_NAME=yawp_record_capsule",
+        "PG_USER=postgres",
+        "PG_PASSWORD=password",
+        "DATABASE_URL=postgresql://postgres:password@127.0.0.1:47330/yawp_record_capsule",
+        "",
+      ].join("\n")
+    );
+    fs.writeFileSync(
+      path.join(fakeBin, "docker"),
+      `#!/usr/bin/env bash
+case "$1" in
+  ps) exit 0 ;;
+  inspect)
+    if [[ "$2" == "-f" ]]; then echo true; fi
+    exit 0
+    ;;
+  exec)
+    if [[ "$3" == "pg_isready" ]]; then exit 0; fi
+    if [[ "$5" == "postgres" ]]; then exit 0; fi
+    echo 1
+    exit 0
+    ;;
+  port)
+    echo "127.0.0.1:47330"
+    exit 0
+    ;;
+  *) exit 0 ;;
+esac
+`
+    );
+    fs.writeFileSync(path.join(fakeBin, "bun"), "#!/usr/bin/env bash\nexit 0\n");
+    fs.writeFileSync(path.join(fakeBin, "curl"), "#!/usr/bin/env bash\nexit 22\n");
+    fs.chmodSync(path.join(fakeBin, "docker"), 0o755);
+    fs.chmodSync(path.join(fakeBin, "bun"), 0o755);
+    fs.chmodSync(path.join(fakeBin, "curl"), 0o755);
+
+    const result = spawnSync("bash", [path.join(scriptsDir, "worktree-local-setup.sh"), "--no-dev"], {
+      cwd: tempRoot,
+      encoding: "utf8",
+      env: {
+        PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+        HOME: tempRoot,
+      },
+    });
+    expect(result.status).toBe(0);
+
+    const config = fs.readFileSync(path.join(configDir, "config.env"), "utf8");
+    expect(parseEnvFile(config)).toMatchObject({
+      PG_PORT: "47330",
+      DEV_PORT: "48185",
+      LTI_MOCK_PORT: "46386",
+      DATABASE_URL: "postgresql://postgres:password@127.0.0.1:47330/yawp_record_capsule",
+    });
   });
 });
