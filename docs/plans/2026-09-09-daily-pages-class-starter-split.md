@@ -78,6 +78,12 @@ Nothing, until the flag is turned on.
    artwork keeps it, and replacing the seeded one means deleting the
    `AssignmentTypeImage` row and re-running.
 
+   Preview environments run this seed themselves, after whichever data path
+   created an organization and before the assignment-type release gate, so
+   every PR preview has a Class Starter to click on. Its files are part of the
+   tooling fingerprint — without that, a preview whose database already exists
+   would skip tooling wholesale and never run the seed.
+
    Then move the freewrite assignments onto the new type.
 3. Turn the flag on in staging, then for a pilot org. Watch scores: the
    reflection rubric should pull the middle of the distribution down relative to

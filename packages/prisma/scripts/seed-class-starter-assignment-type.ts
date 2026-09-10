@@ -20,6 +20,14 @@ import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
 
+/**
+ * Raised when the database has no organization to attach the type to. Named so
+ * the CLI can treat it as a skip: this seed runs inside the preview deploy's
+ * `&&` chain, and an empty database should not fail a whole deployment. Every
+ * other failure still exits non-zero.
+ */
+export class MissingOrganizationError extends Error {}
+
 /** Must match CLASS_STARTER_ASSIGNMENT_TYPE_KIND in the web app. */
 export const CLASS_STARTER_KIND = 'class_starter';
 
@@ -78,7 +86,7 @@ export async function seedClassStarterAssignmentType(prisma: SeedablePrisma) {
   });
 
   if (!org) {
-    throw new Error(
+    throw new MissingOrganizationError(
       'Cannot seed the Class Starter assignment type without an organization.'
     );
   }
@@ -182,6 +190,10 @@ if (import.meta.main) {
       console.log(`Class Starter assignment type ready: ${assignmentType.id}`);
     })
     .catch((error) => {
+      if (error instanceof MissingOrganizationError) {
+        console.warn(`${error.message} Skipping.`);
+        return;
+      }
       console.error(error);
       process.exit(1);
     })

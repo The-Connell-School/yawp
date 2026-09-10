@@ -615,6 +615,8 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/assignment-type-release-gate.ts \
         packages/prisma/scripts/backfill-class-art-key.ts \
         packages/prisma/scripts/seed-local-dev.ts \
+        packages/prisma/scripts/seed-class-starter-assignment-type.ts \
+        packages/prisma/scripts/assets/class-starter.jpg \
         packages/prisma/scripts/sync-prod-fidelity-fixtures.ts \
         packages/prisma/scripts/preview-seats.ts \
         packages/prisma/scripts/seed-preview-seats.ts \
@@ -693,6 +695,13 @@ run_tooling_if_needed() {
     tooling_command+=' && bun run seed-local-dev'
   elif [[ "$DATA_MODE" == "seed" && -f "$SOURCE_DIR/packages/prisma/scripts/sync-prod-fidelity-fixtures.ts" ]]; then
     tooling_command+=' && bun run sync-prod-fidelity-fixtures'
+  fi
+  # After whichever data path above created an organization, and before the gate
+  # that validates assignment type data. `kind` is not settable through the admin
+  # UI, so without this a preview has no Class Starter to click on. The seed is
+  # idempotent, so it runs on every data mode and on every deploy.
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-class-starter-assignment-type.ts" ]]; then
+    tooling_command+=' && bun run seed-class-starter-assignment-type'
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'

@@ -6,6 +6,7 @@ import {
   CLASS_STARTER_ASSIGNMENT_TYPE_DATA,
   CLASS_STARTER_IMAGE_PATH,
   CLASS_STARTER_KIND,
+  MissingOrganizationError,
   readClassStarterImage,
   seedClassStarterAssignmentType,
 } from './seed-class-starter-assignment-type';
@@ -112,12 +113,21 @@ describe('seedClassStarterAssignmentType', () => {
     });
   });
 
+  /**
+   * This seed runs inside the preview deploy's `&&` chain, so "no organization"
+   * has to be distinguishable from a real failure: the CLI treats this one as a
+   * skip so an empty database cannot take a preview deployment down with it,
+   * while anything else still fails loudly.
+   */
   test('refuses to seed into a database with no organization', async () => {
     const { prisma, calls } = fakePrisma({ orgId: null });
 
-    await expect(seedClassStarterAssignmentType(prisma as never)).rejects.toThrow(
-      /organization/i
+    const error = await seedClassStarterAssignmentType(prisma as never).catch(
+      (thrown: unknown) => thrown
     );
+
+    expect(error).toBeInstanceOf(MissingOrganizationError);
+    expect((error as Error).message).toMatch(/organization/i);
     expect(calls.assignmentTypeUpsert).toHaveLength(0);
   });
 });
