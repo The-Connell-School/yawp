@@ -14,6 +14,8 @@
  *
  *   bun run --cwd packages/prisma seed-class-starter-assignment-type
  */
+import { readFileSync } from 'node:fs';
+
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
@@ -27,6 +29,26 @@ export const CLASS_STARTER_ASSIGNMENT_TYPE_DATA = {
     'Open-ended writing to begin class. Graded on engagement: did the student write, and did they reflect.',
   position: 51,
 } as const;
+
+/**
+ * The card artwork, drawn to sit with the Daily Pages image: same 940x788
+ * frame, same torn paper edge, same scratchy ink and Didone wordmark. It lives
+ * in the repo rather than in a fixture bundle because it is authored art, not
+ * a snapshot of production.
+ */
+export const CLASS_STARTER_IMAGE_PATH = new URL(
+  './assets/class-starter.jpg',
+  import.meta.url
+);
+
+export function readClassStarterImage() {
+  return {
+    blob: readFileSync(CLASS_STARTER_IMAGE_PATH),
+    contentType: 'image/jpeg',
+    altText:
+      'A scratchy ink drawing of a rooster mid-crow standing on the words Class Starter, on torn white paper.',
+  };
+}
 
 const MODULE_DATA = {
   title: 'Class Starter',
@@ -43,7 +65,10 @@ const INSTRUCTION_DATA = {
 
 type SeedablePrisma = Pick<
   PrismaClient,
-  'organization' | 'assignmentType' | 'organizationAssignmentType'
+  | 'organization'
+  | 'assignmentType'
+  | 'organizationAssignmentType'
+  | 'assignmentTypeImage'
 >;
 
 export async function seedClassStarterAssignmentType(prisma: SeedablePrisma) {
@@ -97,6 +122,18 @@ export async function seedClassStarterAssignmentType(prisma: SeedablePrisma) {
     create: {
       organizationId: org.id,
       assignmentTypeId: assignmentType.id,
+    },
+    update: {},
+  });
+
+  // Create-only. An admin who uploaded their own artwork keeps it: re-running
+  // this seed fills a gap, it never reverts somebody's upload. To replace the
+  // image deliberately, delete the AssignmentTypeImage row and run this again.
+  await prisma.assignmentTypeImage.upsert({
+    where: { assignmentTypeId: assignmentType.id },
+    create: {
+      assignmentTypeId: assignmentType.id,
+      ...readClassStarterImage(),
     },
     update: {},
   });

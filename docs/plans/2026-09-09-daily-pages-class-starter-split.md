@@ -71,6 +71,13 @@ Nothing, until the flag is turned on.
    a mistyped kind is a silent grading change, and the set of kinds that mean
    anything is fixed in code, not open-ended.
 
+   The script also attaches the Class Starter card artwork
+   (`packages/prisma/scripts/assets/class-starter.jpg`), drawn to sit with the
+   Daily Pages image: same 940x788 frame, torn paper edge, scratchy ink and
+   Didone wordmark. That attach is create-only — an admin who uploads their own
+   artwork keeps it, and replacing the seeded one means deleting the
+   `AssignmentTypeImage` row and re-running.
+
    Then move the freewrite assignments onto the new type.
 3. Turn the flag on in staging, then for a pilot org. Watch scores: the
    reflection rubric should pull the middle of the distribution down relative to
