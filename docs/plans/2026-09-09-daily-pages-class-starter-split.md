@@ -58,8 +58,20 @@ Nothing, until the flag is turned on.
 
 1. Ship with `DAILY_PAGES_SPLIT_ENABLED` unset. Class Starter becomes available;
    Daily Pages grades as it always has.
-2. Create Class Starter assignment types for pilot orgs and move the freewrite
-   assignments onto them.
+2. Create the Class Starter assignment type:
+   `bun run --cwd packages/prisma seed-class-starter-assignment-type`.
+
+   This is a script rather than a click because `AssignmentType.kind` is what
+   selects a grading assistant, and the admin "New assignment type" form writes
+   `kind: null` — a Class Starter created through the UI would silently grade on
+   the thesis-driven essay rubric. `kind` is unique, so there is one row per
+   database; the script is idempotent and re-running it un-archives the row.
+
+   Letting the form set `kind` was the alternative. It stays closed for now:
+   a mistyped kind is a silent grading change, and the set of kinds that mean
+   anything is fixed in code, not open-ended.
+
+   Then move the freewrite assignments onto the new type.
 3. Turn the flag on in staging, then for a pilot org. Watch scores: the
    reflection rubric should pull the middle of the distribution down relative to
    the old engagement score, because effort no longer earns the top.

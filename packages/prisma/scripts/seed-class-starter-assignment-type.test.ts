@@ -1,0 +1,112 @@
+import { describe, expect, test } from 'bun:test';
+
+import {
+  CLASS_STARTER_ASSIGNMENT_TYPE_DATA,
+  CLASS_STARTER_KIND,
+  seedClassStarterAssignmentType,
+} from './seed-class-starter-assignment-type';
+
+type Call = { args: unknown };
+
+function fakePrisma({ orgId = 'org-1' }: { orgId?: string | null } = {}) {
+  const calls: Record<string, Call[]> = {
+    assignmentTypeUpsert: [],
+    orgAssignmentTypeUpsert: [],
+  };
+
+  const prisma = {
+    organization: {
+      findFirst: async () => (orgId ? { id: orgId } : null),
+    },
+    assignmentType: {
+      upsert: async (args: unknown) => {
+        calls.assignmentTypeUpsert.push({ args });
+        return { id: 'assignment-type-1' };
+      },
+    },
+    organizationAssignmentType: {
+      upsert: async (args: unknown) => {
+        calls.orgAssignmentTypeUpsert.push({ args });
+        return {};
+      },
+    },
+  };
+
+  return { prisma, calls };
+}
+
+describe('seedClassStarterAssignmentType', () => {
+  test('upserts on the class_starter kind, so it can be run twice', async () => {
+    const { prisma, calls } = fakePrisma();
+
+    await seedClassStarterAssignmentType(prisma as never);
+
+    expect(calls.assignmentTypeUpsert).toHaveLength(1);
+    const args = calls.assignmentTypeUpsert[0].args as {
+      where: { kind: string };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    };
+
+    expect(args.where).toEqual({ kind: CLASS_STARTER_KIND });
+    expect(args.create.kind).toBe(CLASS_STARTER_KIND);
+    expect(args.create.title).toBe('Class Starter');
+  });
+
+  /**
+   * `kind` is what selects the Class Starter grading assistant. A row created
+   * without it grades on the thesis-driven essay rubric, which is the failure
+   * this whole script exists to prevent.
+   */
+  test('always carries the kind the grading assistant is keyed to', () => {
+    expect(CLASS_STARTER_KIND).toBe('class_starter');
+    expect(CLASS_STARTER_ASSIGNMENT_TYPE_DATA.title).toBe('Class Starter');
+  });
+
+  test('un-archives an existing row rather than leaving it hidden', async () => {
+    const { prisma, calls } = fakePrisma();
+
+    await seedClassStarterAssignmentType(prisma as never);
+
+    const args = calls.assignmentTypeUpsert[0].args as {
+      update: Record<string, unknown>;
+    };
+    expect(args.update.archivedAt).toBeNull();
+  });
+
+  test('does not reassign the owning org of a row that already exists', async () => {
+    const { prisma, calls } = fakePrisma();
+
+    await seedClassStarterAssignmentType(prisma as never);
+
+    const args = calls.assignmentTypeUpsert[0].args as {
+      update: Record<string, unknown>;
+    };
+    expect(args.update).not.toHaveProperty('ownerOrgId');
+    expect(args.update).not.toHaveProperty('organizationAssignments');
+  });
+
+  test('links the type to the organization so it shows up for teachers', async () => {
+    const { prisma, calls } = fakePrisma({ orgId: 'org-42' });
+
+    await seedClassStarterAssignmentType(prisma as never);
+
+    expect(calls.orgAssignmentTypeUpsert).toHaveLength(1);
+    const args = calls.orgAssignmentTypeUpsert[0].args as {
+      where: { organizationId_assignmentTypeId: Record<string, string> };
+    };
+    expect(args.where.organizationId_assignmentTypeId).toEqual({
+      organizationId: 'org-42',
+      assignmentTypeId: 'assignment-type-1',
+    });
+  });
+
+  test('refuses to seed into a database with no organization', async () => {
+    const { prisma, calls } = fakePrisma({ orgId: null });
+
+    await expect(seedClassStarterAssignmentType(prisma as never)).rejects.toThrow(
+      /organization/i
+    );
+    expect(calls.assignmentTypeUpsert).toHaveLength(0);
+  });
+});
