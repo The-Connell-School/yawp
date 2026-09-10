@@ -81,3 +81,20 @@ describe('internal user management boundary', () => {
     expect(await response.text()).toBe('{"error":"User directory unavailable"}');
   });
 });
+
+import { createOrganizationManagementHandler } from './internal-organizations.server';
+test('organization search authenticates, binds pagination to scope and returns only directory fields', async () => {
+  const calls: any[] = [];
+  const handler = createOrganizationManagementHandler({ findMany: async (args: any) => { calls.push(args); return [{ id: 'org-a', name: 'Alpha' }, { id: 'org-b', name: 'Beta' }]; } }, () => key);
+  const make = (body: any, token = key) => new Request('https://yawp.test/api/internal/v1/organizations/search', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  expect((await handler(make({}, 'bad'))).status).toBe(401); expect(calls).toHaveLength(0);
+  const first = await handler(make({ q: 'School', organizationIds: ['org-a', 'org-b'], limit: 1 }));
+  expect(first.headers.get('cache-control')).toBe('no-store');
+  const page = await first.json(); expect(page.organizations).toEqual([{ id: 'org-a', name: 'Alpha' }]);
+  expect(calls[0]).toMatchObject({ select: { id: true, name: true }, take: 2, where: { id: { in: ['org-a', 'org-b'] }, name: { contains: 'School', mode: 'insensitive' } } });
+  expect((await handler(make({ q: 'School', organizationIds: ['org-a'], cursor: page.nextCursor }))).status).toBe(400);
+  expect((await handler(make({ q: 'School', organizationIds: ['org-b', 'org-a'], cursor: page.nextCursor }))).status).toBe(200);
+  expect(calls[1].where.id.gt).toBe('org-a');
+  expect((await handler(make({ organizationIds: [] }))).status).toBe(400);
+  expect((await handler(make({ actorId: 'spoof' }))).status).toBe(400);
+});
