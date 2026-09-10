@@ -156,12 +156,13 @@ esac
     });
     expect(result.status).toBe(0);
 
+    const slug = path.basename(tempRoot);
     const config = fs.readFileSync(path.join(configDir, "config.env"), "utf8");
     expect(parseEnvFile(config)).toMatchObject({
       PG_PORT: "47330",
       DEV_PORT: "48185",
       LTI_MOCK_PORT: "46386",
-      DATABASE_URL: "postgresql://postgres:password@127.0.0.1:47330/yawp_record_capsule",
+      DATABASE_URL: `postgresql://postgres:password@127.0.0.1:47330/yawp_${slug}`,
     });
   });
 });
