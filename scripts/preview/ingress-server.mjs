@@ -508,10 +508,10 @@ async function findDefaultHostname(certRoot, domain) {
     .sort((a, b) => parsePreviewPr(b, domain) - parsePreviewPr(a, domain))[0] || null;
 }
 
-export function createCertificateStore({ certRoot, domain, defaultHostname }) {
+export function createCertificateStore({ certRoot, domain, defaultHostname, readInternalRoute = () => null }) {
   const cache = new Map();
   function pair(hostname) {
-    if (parsePreviewPr(hostname, domain) === null) return null;
+    if (parsePreviewPr(hostname, domain) === null && !readInternalRoute(hostname)) return null;
     try {
       const loaded = loadCertificatePair(certRoot, hostname.toLowerCase());
       const cached = cache.get(hostname);

@@ -363,9 +363,10 @@ export async function ensureCertificate({
   renewalDays = 30,
   createKeyAndCsr = defaultCreateKeyAndCsr,
   requestTimeoutMs = 15_000,
+  readInternalRoute = () => null,
 }) {
-  if (parsePreviewPr(hostname, domain) === null || hostname !== hostname.toLowerCase()) {
-    throw new Error('Certificate hostname must be an exact lowercase PR preview host');
+  if ((parsePreviewPr(hostname, domain) === null && !readInternalRoute(hostname)) || hostname !== hostname.toLowerCase()) {
+    throw new Error('Certificate hostname must be an exact lowercase registered preview host');
   }
   const target = path.join(certRoot, hostname);
   const keyPath = path.join(target, 'privkey.pem');
