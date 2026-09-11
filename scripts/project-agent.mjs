@@ -373,6 +373,9 @@ function runTestProfile(profile, { json }) {
     const result = execute("git", ["diff", "--check", process.env.RECORD_PROOF_BASE_SHA ? `${process.env.RECORD_PROOF_BASE_SHA}..HEAD` : "HEAD"], { json, env: selected.env, timeout: 30000 });
     results.push({ id: "diff-check", ...result });
   } else if (chosen === "project-cli") run("project-cli", ["test", "./scripts/project-agent.test.js"], 120000);
+  else if (chosen === "internal-integration-infra") {
+    results.push({id: "internal-integration-infra", ...execute("terraform", ["-chdir=infra/modules/internal-integration", "test", "-no-color"], {json, env: selected.env, timeout: 30000})});
+  }
   else if (chosen === "internal-integration-config") run("internal-integration-config", ["test", "./scripts/internal-integration-config.test.ts"]);
   else if (chosen === "internal-qa-http") runWebApp("internal-qa-http", ["test", "app/utils/internal-qa-http.server.test.ts"]);
   else if (chosen === "internal-audit") runWebApp("internal-audit", ["test", "app/utils/internal-audit.server.test.ts"]);
