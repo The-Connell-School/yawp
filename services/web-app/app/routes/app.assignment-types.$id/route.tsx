@@ -76,6 +76,7 @@ import {
 } from './thesis-prompts-library/data';
 import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 import { isDailyPagesSplitEnabled } from '~/domain/assignment-types/daily-pages-split';
+import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 
 const THESIS_ESSAY_TITLE = 'the thesis-driven essay';
 const ALL_PROMPTS = toLibraryEntries(promptsRaw as LibraryPrompt[]);
@@ -482,8 +483,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   }
 
+  // Whether this type's rubric grades grammar, so the creation sheet knows
+  // whether the teacher's grammar-grading toggle is worth offering.
+  const assignmentTypeGradesGrammar = (
+    await getGrammarGradingAssignmentTypeIds([assignmentType.id])
+  ).has(assignmentType.id);
+
   return dataResponse({
     assignmentType,
+    assignmentTypeGradesGrammar,
     documents,
     archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
@@ -662,6 +670,7 @@ export default function AppAssignmentTypesIdRoute() {
                 assignmentTypeCollaborationSupported={
                   data.assignmentType.collaborationSupported
                 }
+                assignmentTypeGradesGrammar={data.assignmentTypeGradesGrammar}
                 teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}

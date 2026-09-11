@@ -69,6 +69,28 @@ Nothing, until the flag is turned on.
   untouched with the flag either way. The `daily-pages-engagement` library entry
   stays in the library for exactly that reason.
 
+## The teacher's grammar toggle
+
+Not every quick write wants correctness graded, and the same teacher may want
+one Daily Pages entry marked up and the next graded on the thinking alone. So
+`Assignment.grammarGradingEnabled` is a per-assignment toggle set at creation,
+alongside the tutor and collaboration toggles.
+
+- **Null** is no preference, and the rubric decides. That is every assignment
+  written before the column existed, so none of them change.
+- **Off** drops the rubric's grammar category for that assignment: it is not
+  scored, the writing is not marked up, and the weighted composite renormalizes
+  over the categories that remain — `computeWeightedBandPercentage` already
+  divides by the weight actually present, so nothing is redistributed by hand.
+- The toggle is offered only for assignment types whose rubric grades grammar,
+  because it only ever turns grammar grading off. Switching it on cannot invent
+  a grammar category for a rubric that has none, so offering it on a Class
+  Starter would be a lie.
+- It is frozen after creation, like the two toggles beside it: work already
+  graded was scored against a rubric that included the category, and flipping
+  it afterwards would silently restate those grades. Making it editable is a
+  reasonable future change, but it needs a re-grade story first.
+
 ## Rollout
 
 1. Ship with `DAILY_PAGES_SPLIT_ENABLED` unset. Class Starter becomes available;

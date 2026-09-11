@@ -52,6 +52,13 @@ export type AssignmentCreationAssignmentType = {
    * absent flag would look exactly like an unsupported type.
    */
   collaborationSupported: boolean;
+  /**
+   * Whether this kind of writing is graded for grammar and syntax at all.
+   * Required for the same reason `collaborationSupported` is: an absent flag
+   * would look exactly like a type that does not grade grammar, and the
+   * teacher would silently lose the toggle.
+   */
+  gradesGrammar: boolean;
 };
 
 export type AssignmentCreationEditingAssignment = {
@@ -244,6 +251,7 @@ export function AssignmentCreationSheetContent({
   const [postAt, setPostAt] = useState<string>('');
   const [dueAt, setDueAt] = useState<string>('');
   const [tutorEnabled, setTutorEnabled] = useState(initialTutorEnabled);
+  const [grammarGradingEnabled, setGrammarGradingEnabled] = useState(true);
   const [collaborationEnabled, setCollaborationEnabled] = useState(
     initialCollaborationEnabled
   );
@@ -272,6 +280,11 @@ export function AssignmentCreationSheetContent({
   const assignmentTypeId =
     fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
   const selectedTypeSupportsCollaboration = Boolean(assignmentTypeId);
+  // Offered only where there is something to turn off. Switching it on cannot
+  // invent a grammar category for a rubric that has none.
+  const selectedTypeGradesGrammar = Boolean(
+    assignmentTypes.find((type) => type.id === assignmentTypeId)?.gradesGrammar
+  );
   const hasFixedClass = Boolean(fixedClassId);
   // Every creation entry point uses the same server workflow. In particular,
   // the class page must not silently drop collaboration fields by posting to
@@ -828,6 +841,51 @@ export function AssignmentCreationSheetContent({
               : "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."}
           </p>
         </div>
+
+        {/* Graded for grammar and syntax. Shown only for assignment types whose
+            rubric grades grammar, because the toggle only ever turns it off.
+            Frozen after creation like the two toggles around it: work already
+            graded was scored against a rubric that included the category, and
+            flipping it afterwards would silently restate those grades. */}
+        {selectedTypeGradesGrammar ? (
+          <div className="pt-6">
+            {isEditing ? null : (
+              <input
+                type="hidden"
+                name="grammarGradingEnabled"
+                value="false"
+              />
+            )}
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                id="assignment-create-grammar-grading-enabled"
+                name={isEditing ? undefined : 'grammarGradingEnabled'}
+                value="true"
+                checked={grammarGradingEnabled}
+                onCheckedChange={(checked) =>
+                  setGrammarGradingEnabled(checked === true)
+                }
+                disabled={isSaving || isEditing}
+                className="size-4 shrink-0"
+              />
+              <Label
+                htmlFor="assignment-create-grammar-grading-enabled"
+                className={
+                  isEditing
+                    ? 'font-normal leading-none text-muted-foreground'
+                    : 'cursor-pointer font-normal leading-none'
+                }
+              >
+                Grade this for grammar and syntax
+              </Label>
+            </div>
+            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+              {isEditing
+                ? 'Grammar grading cannot be switched on or off after an assignment is created — work may already be graded against it.'
+                : 'On by default for this assignment type. Turn it off for a quick write you want graded on the thinking alone: the grammar category is dropped, the writing is not marked up, and the remaining categories carry the whole grade.'}
+            </p>
+          </div>
+        ) : null}
 
         {/* Collaborative drafts. Available for every assignment type, and frozen
             after creation for the same reason the tutor toggle is: students may

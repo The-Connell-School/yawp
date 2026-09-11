@@ -139,6 +139,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               promptAttachmentName: true,
               submitForGrade: true,
               pointValue: true,
+              grammarGradingEnabled: true,
             },
           },
           membership: {
@@ -207,7 +208,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       rubricScores: submission.rubricScores,
     }),
     resolveGrammarHighlightingForAssignmentType(
-      submission.document.assignmentTypeId
+      submission.document.assignmentTypeId,
+      submission.document.assignment?.grammarGradingEnabled
     ),
   ]);
 

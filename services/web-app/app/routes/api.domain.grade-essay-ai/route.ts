@@ -25,6 +25,7 @@ import {
   isScoreInCategoryBands,
   resolveGrammarHighlightingEnabled,
 } from '~/domain/assignment-types/rubric-category-options';
+import { applyAssignmentGrammarGrading } from '~/domain/assignment-types/assignment-grammar-grading';
 import {
   buildGradingPromptShape,
   buildGradingResponseSchemaText,
@@ -587,6 +588,7 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             gradingAssistantStrictnessLevel: true,
+            grammarGradingEnabled: true,
             apHistorySnapshot: true,
             prompt: true,
           },
@@ -749,7 +751,13 @@ export async function action({ request }: ActionFunctionArgs) {
     requestedStrictnessLevel ??
     assignmentStrictnessLevel ??
     DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
-  const rubricCategories = resolvedGradingConfig.rubricCategories;
+  // The teacher's per-assignment answer to "is this graded for grammar". Off
+  // drops the grammar category here, once: scoring, the highlighting pass, and
+  // the grammar category keys are all derived from this list below.
+  const rubricCategories = applyAssignmentGrammarGrading(
+    resolvedGradingConfig.rubricCategories,
+    submission.document.assignment?.grammarGradingEnabled
+  );
   const rubricKeys = rubricCategories.map((category) => category.key);
   const { minScore, maxScore, step, scoringType } = resolvedGradingConfig;
   const rubricConfig = {

@@ -32,6 +32,8 @@ type Props = {
   assignmentTypeTitle: string;
   /** Whether this kind of writing is in the collaborative-drafts pilot. */
   assignmentTypeCollaborationSupported?: boolean;
+  /** Whether this type's rubric grades grammar, so the toggle is worth showing. */
+  assignmentTypeGradesGrammar?: boolean;
   teacherClasses: TeacherClass[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -53,6 +55,7 @@ export function CreateAssignmentSheet({
   assignmentTypeId,
   assignmentTypeTitle,
   assignmentTypeCollaborationSupported = false,
+  assignmentTypeGradesGrammar = false,
   teacherClasses,
   open,
   onOpenChange,
@@ -92,6 +95,7 @@ export function CreateAssignmentSheet({
             id: assignmentTypeId,
             title: assignmentTypeTitle,
             collaborationSupported: assignmentTypeCollaborationSupported,
+            gradesGrammar: assignmentTypeGradesGrammar,
           },
         ]}
         teacherClasses={teacherClasses}

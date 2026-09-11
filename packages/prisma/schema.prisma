@@ -268,6 +268,13 @@ model Assignment {
   pointValue                      Int?              @default(100)
   gradingAssistantStrictnessLevel String            @default("intermediate")
   tutorEnabled                    Boolean           @default(true)
+  /// The teacher's per-assignment toggle: is this one graded for grammar and
+  /// syntax. Null means the rubric decides, which is every assignment that
+  /// predates the toggle. False drops the rubric's grammar category for this
+  /// assignment, so it is neither scored nor marked up and the weighted
+  /// composite renormalizes over what is left. Offered only for assignment
+  /// types whose rubric grades grammar at all.
+  grammarGradingEnabled           Boolean?
   /// The teacher's per-assignment toggle: are students writing one shared
   /// draft per group. Gated at runtime by Organization.collaborativeDraftsEnabled.
   collaborationEnabled            Boolean           @default(false)

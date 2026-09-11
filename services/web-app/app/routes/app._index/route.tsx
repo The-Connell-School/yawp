@@ -37,6 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog';
+import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -244,15 +245,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const enabledTeacherClasses =
     !useStudentExperience && assignmentsEnabled ? teacherClassesOrdered : [];
   const assignmentCreationClasses = enabledTeacherClasses;
-  const assignmentCreationTypes = teacherAssignmentTypes
-    .filter((type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY)
-    .map((type) => ({
-      id: type.id,
-      title: type.title,
-      // AssignmentTypeRow is shared with student-side selects that do not ask
-      // for this column, so it is optional there and defaulted here.
-      collaborationSupported: type.collaborationSupported ?? false,
-    }));
+  const creationTypeRows = teacherAssignmentTypes.filter(
+    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+  );
+  // One query for the whole list, so the creation sheet knows which types can
+  // offer the teacher's grammar-grading toggle.
+  const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
+    creationTypeRows.map((type) => type.id)
+  );
+  const assignmentCreationTypes = creationTypeRows.map((type) => ({
+    id: type.id,
+    title: type.title,
+    // AssignmentTypeRow is shared with student-side selects that do not ask
+    // for this column, so it is optional there and defaulted here.
+    collaborationSupported: type.collaborationSupported ?? false,
+    gradesGrammar: gradesGrammarIds.has(type.id),
+  }));
 
   return dataResponse({
     requiresClassCode: isStudentOnlyWithNoClasses,

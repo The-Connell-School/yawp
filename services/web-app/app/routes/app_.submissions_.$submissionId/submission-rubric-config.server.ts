@@ -5,6 +5,7 @@ import {
   type RubricDisplayCategory,
   type RubricDisplayConfig,
 } from '~/domain/grading/rubric-display';
+import { applyAssignmentGrammarGrading } from '~/domain/assignment-types/assignment-grammar-grading';
 import {
   parseOptionalBoolean,
   parseRubricScoreBands,
@@ -116,18 +117,23 @@ export function buildRubricConfigFromSnapshot(
 }
 
 /**
- * Whether the assignment type's rubric currently asks for grammar highlighting.
+ * Whether this submission's writing should currently be shown marked up.
  *
  * Read separately from the graded snapshot on purpose: the snapshot records
  * what the rubric said at grading time, and a teacher who switches
  * highlighting off afterwards expects the marks to disappear, not to persist
- * because an older run had it on.
+ * because an older run had it on. The assignment's own toggle is read the same
+ * way and for the same reason — turning grammar grading off should take the
+ * marks off work that was already graded with it on.
  */
 export async function resolveGrammarHighlightingForAssignmentType(
-  assignmentTypeId: string
+  assignmentTypeId: string,
+  grammarGradingEnabled?: boolean | null
 ): Promise<boolean> {
   const config = await resolveAssignmentTypeGradingConfig({ assignmentTypeId });
-  return resolveGrammarHighlightingEnabled(config.rubricCategories);
+  return resolveGrammarHighlightingEnabled(
+    applyAssignmentGrammarGrading(config.rubricCategories, grammarGradingEnabled)
+  );
 }
 
 export async function resolveRubricConfigForSubmission({

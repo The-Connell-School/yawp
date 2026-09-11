@@ -30,6 +30,7 @@ import {
 } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentCollaboration } from '~/utils/assignment-collaboration.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
+import { parseAssignmentGrammarGrading } from '~/utils/assignment-grammar-grading.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -106,6 +107,15 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
   const tutorEnabled = tutorEnabledResult.value;
+
+  const grammarGradingResult = parseAssignmentGrammarGrading(formData);
+  if (!grammarGradingResult.success) {
+    return dataResponse(
+      { success: false, message: grammarGradingResult.message },
+      { status: 400 }
+    );
+  }
+  const grammarGradingEnabled = grammarGradingResult.value;
 
   const collaborationResult = parseAssignmentCollaboration(formData);
   if (!collaborationResult.success) {
@@ -249,6 +259,7 @@ export async function action({ request }: ActionFunctionArgs) {
           gradingAssistantStrictnessLevel,
         }),
         tutorEnabled,
+        grammarGradingEnabled,
         ...collaboration,
       },
       classIds: deployClassIds,
@@ -320,6 +331,7 @@ export async function action({ request }: ActionFunctionArgs) {
         prompt,
         gradingAssistantStrictnessLevel,
         tutorEnabled,
+        grammarGradingEnabled,
         ...collaboration,
         ...promptAttachmentData,
         ...(gradingIntent?.success

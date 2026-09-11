@@ -162,6 +162,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               submitForGrade: true,
               pointValue: true,
               gradingAssistantStrictnessLevel: true,
+              grammarGradingEnabled: true,
             },
           },
           classAssignment: {
@@ -321,7 +322,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       rubricScores: submission.rubricScores,
     }),
     resolveGrammarHighlightingForAssignmentType(
-      submission.document.assignmentTypeId
+      submission.document.assignmentTypeId,
+      submission.document.assignment?.grammarGradingEnabled
     ),
   ]);
 

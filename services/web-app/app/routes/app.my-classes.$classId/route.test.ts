@@ -396,7 +396,14 @@ describe('class detail loader document visibility', () => {
       orderBy: { position: 'asc' },
     });
     expect(data.assignmentTypes).toEqual([
-      { id: 'generic-type', title: 'Generic Essay' },
+      {
+        id: 'generic-type',
+        title: 'Generic Essay',
+        collaborationSupported: undefined,
+        // The mocked type has no rubric, so it grades no grammar and the
+        // creation sheet offers the teacher no toggle for it.
+        gradesGrammar: false,
+      },
     ]);
   });
 

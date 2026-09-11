@@ -11,6 +11,7 @@ import {
 } from './assignment-type-rubric-config';
 import type { RubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { normalizeScoreStep } from './score-scale-steps';
+import { isGrammarGradingConfigurable } from './assignment-grammar-grading';
 
 export type AssignmentTypeGradingInstructions =
   | {
@@ -353,4 +354,57 @@ export async function resolveAssignmentTypeGradingConfig({
       assignmentType as AssignmentTypeGradingRow | null
     ),
   });
+}
+
+/**
+ * Which of these assignment types grade grammar at all, in one query.
+ *
+ * The assignment creation sheet needs this to decide whether to offer the
+ * teacher's "graded for grammar and syntax" toggle, and a dashboard can list a
+ * dozen types — so this resolves them together rather than once per type. It
+ * reuses the same builder as `resolveAssignmentTypeGradingConfig`, so a type
+ * whose rubric comes from the shared library is read correctly rather than
+ * from its own (empty) columns.
+ */
+export async function getGrammarGradingAssignmentTypeIds(
+  assignmentTypeIds: string[]
+): Promise<Set<string>> {
+  const ids = Array.from(new Set(assignmentTypeIds.filter(Boolean)));
+  if (ids.length === 0) return new Set();
+
+  const rows = await prisma.assignmentType.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      title: true,
+      kind: true,
+      scoringScaleJson: true,
+      rubricJson: true,
+      gradingPromptConfigJson: true,
+      gradingOutputSchemaJson: true,
+      gradingCalibrationNotes: true,
+      gradingAssistantVersion: true,
+      gradingAssistantSourceTemplateId: true,
+      gradingAssistantSourceTemplateSlug: true,
+      rubric: { select: { name: true, schemaJson: true } },
+    },
+  });
+
+  const gradesGrammar = new Set<string>();
+  for (const row of rows) {
+    const config = buildResolvedAssignmentTypeGradingConfig({
+      assignmentTypeId: row.id,
+      assignmentTypeKind: row.kind,
+      assignmentTypeTitle: row.title,
+      row: withLibraryRubric(row),
+      ownGradingInstructionsOverride: getOwnGradingInstructionsOverride(
+        row as AssignmentTypeGradingRow | null
+      ),
+    });
+    if (isGrammarGradingConfigurable(config.rubricCategories)) {
+      gradesGrammar.add(row.id);
+    }
+  }
+
+  return gradesGrammar;
 }

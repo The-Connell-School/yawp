@@ -107,6 +107,10 @@ describe('app.assignment-types.$id action', () => {
   beforeEach(() => {
     prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentType.findMany.mockReset();
+    // The loader also reads grading config for this type, to decide whether the
+    // creation sheet offers the grammar-grading toggle. No rubric here, so the
+    // default resolves to no toggle.
+    prisma.assignmentType.findMany.mockResolvedValue([]);
     prisma.class.findMany.mockReset();
     prisma.organizationAssignmentType.findMany.mockReset();
     prisma.school.findMany.mockReset();
@@ -243,6 +247,10 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
   beforeEach(() => {
     prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentType.findMany.mockReset();
+    // The loader also reads grading config for this type, to decide whether the
+    // creation sheet offers the grammar-grading toggle. No rubric here, so the
+    // default resolves to no toggle.
+    prisma.assignmentType.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockReset();
     prisma.class.findMany.mockReset();
     prisma.organizationAssignmentType.findMany.mockReset();
