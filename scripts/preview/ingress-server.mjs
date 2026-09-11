@@ -190,6 +190,14 @@ function proxyHttp({ request, response, target, hostname, pr, recordAccess, reco
   });
 }
 
+function parseRegisteredHost(rawHost, domain, readInternalRoute) {
+ const legacy=parsePreviewHost(rawHost,domain);
+ if(legacy) return legacy;
+ const hostname=String(rawHost).toLowerCase().replace(/:\d+$/, '');
+ const route=readInternalRoute(hostname);
+ return route ? {pr:route.environmentId,service:'internal',hostname:route.hostname,state:route.state,internal:true} : null;
+}
+
 export function createPreviewIngress({
   domain,
   readInternalRoute = () => null,
@@ -268,6 +276,7 @@ function writeSocketResponse(socket, status, body) {
 
 export function createWebSocketUpgradeHandler({
   domain,
+  readInternalRoute = () => null,
   resolveTarget,
   authorizeWake,
   ensureRunning,
@@ -282,14 +291,17 @@ export function createWebSocketUpgradeHandler({
     const rawHost = Array.isArray(request.headers.host)
       ? request.headers.host[0]
       : request.headers.host || '';
-    const parsed = parsePreviewHost(rawHost, domain);
+    const parsed = parseRegisteredHost(rawHost, domain, readInternalRoute);
     if (parsed === null) {
       writeSocketResponse(socket, '404 Not Found', 'Not found.\n');
       return;
     }
-    const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
+    if (parsed.internal && parsed.state !== 'active') {
+      writeSocketResponse(socket, '503 Service Unavailable', 'Preview is paused; resume it in Internal.\n'); return;
+    }
+    const hostname = parsed.hostname || previewServiceHostname(parsed.pr, domain, parsed.service);
     let target = await resolveTarget(parsed.pr, { service: parsed.service });
-    if (!target) {
+    if (!target && !parsed.internal) {
       try {
         const authorization = await authorizeWake(parsed.pr, request.url, request);
         if (!authorization) {
@@ -335,7 +347,7 @@ export function createWebSocketUpgradeHandler({
         if (remainder.length) socket.write(remainder);
         responsePreamble = Buffer.alloc(0);
         responseHeadersComplete = true;
-        if (authorized && /^HTTP\/1\.[01] 101\b/.test(lines[0] || '')) {
+        if (!parsed.internal && authorized && /^HTTP\/1\.[01] 101\b/.test(lines[0] || '')) {
           Promise.resolve(recordAccess(parsed.pr)).catch((error) => {
             console.error('Preview activity recording failed', error);
           });
@@ -441,13 +453,13 @@ export function createDockerTargetResolver({
   };
 }
 
-export function createHttpRedirectHandler({ domain, readChallenge }) {
+export function createHttpRedirectHandler({ domain, readChallenge, readInternalRoute = () => null }) {
   const challengePrefix = '/.well-known/acme-challenge/';
   return async (request, response) => {
     const rawHost = Array.isArray(request.headers.host)
       ? request.headers.host[0]
       : request.headers.host || '';
-    const parsed = parsePreviewHost(rawHost, domain);
+    const parsed = parseRegisteredHost(rawHost, domain, readInternalRoute);
     if (parsed === null) {
       send(response, 404, 'Not found.\n');
       return;
@@ -466,7 +478,7 @@ export function createHttpRedirectHandler({ domain, readChallenge }) {
       send(response, 200, keyAuthorization, { 'cache-control': 'no-store' });
       return;
     }
-    const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
+    const hostname = parsed.hostname || previewServiceHostname(parsed.pr, domain, parsed.service);
     response.writeHead(308, { location: `https://${hostname}${request.url || '/'}` });
     response.end();
   };
