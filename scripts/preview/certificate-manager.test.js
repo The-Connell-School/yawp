@@ -283,3 +283,18 @@ test('actual ingress process starts with only a registered named certificate and
   expect(response.status).toBe(503);expect(response.body).toContain('paused');
  } finally {clearTimeout(timer);child.kill();await child.exited;}
 },15000);
+
+test('internal-only certificate command scans new registered routes without a PR directory', async () => {
+ const root=temporaryRoot('internal-certificate-command-'), hostname='rubric-editor.preview.test';
+ const registry=path.join(root,'routes'), certRoot=path.join(root,'certs');
+ mkdirSync(registry);mkdirSync(path.join(certRoot,hostname),{recursive:true});
+ const env={...process.env,PREVIEW_ROOT:root,PREVIEW_DOMAIN:'preview.test',PREVIEW_CERT_ROOT:certRoot,PREVIEW_INTERNAL_ROUTES:registry,PREVIEW_INTERNAL_ROUTE_UID:String(process.getuid())};
+ const invoke=()=>Bun.spawn([process.execPath,path.join(import.meta.dir,'certificate-manager.mjs'),'--internal'],{env,stdout:'pipe',stderr:'pipe'});
+ const empty=invoke();expect(await empty.exited).toBe(0);
+ const pair=createCertificate(root,hostname);
+ writeFileSync(path.join(certRoot,hostname,'privkey.pem'),pair.key);writeFileSync(path.join(certRoot,hostname,'fullchain.pem'),pair.cert);
+ writeFileSync(path.join(registry,'rubric-editor.json'),JSON.stringify({version:1,environmentId:'aeaa755d-aaca-4ae3-8ab4-1b4f95860bfe',slug:'rubric-editor',state:'active'}));
+ writeFileSync(path.join(registry,'untrusted.json'),'{}');
+ const registered=invoke();expect(await registered.exited).toBe(0);
+ expect(await new Response(registered.stdout).text()).toContain(`${hostname}: current`);
+});
