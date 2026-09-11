@@ -288,7 +288,8 @@ describe('preview ingress', () => {
     expect(accesses).toEqual([241]);
   });
 
-  test('tunnels WebSocket upgrades to the resolved preview target', async () => {
+  test.each([false,true])('tunnels WebSocket upgrades (named=%s)', async (named) => {
+    const hostname=named ? 'rubric-editor.preview.yawp.school' : 'pr-241.preview.yawp.school';
     let upstreamRequest = '';
     let clientResponse = '';
     const accesses = [];
@@ -319,6 +320,7 @@ describe('preview ingress', () => {
     });
     const upgrade = createWebSocketUpgradeHandler({
       domain: 'preview.yawp.school',
+      readInternalRoute: host => named && host===hostname ? {hostname,environmentId:'aeaa755d-aaca-4ae3-8ab4-1b4f95860bfe',state:'active'} : null,
       resolveTarget: async () => ({ host: '172.21.0.14', port: 8080 }),
       authorizeWake: async () => false,
       ensureRunning: async () => {},
@@ -332,7 +334,7 @@ describe('preview ingress', () => {
       method: 'GET',
       url: '/socket',
       headers: {
-        host: 'pr-241.preview.yawp.school',
+        host: hostname,
         connection: 'Upgrade',
         upgrade: 'websocket',
         'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==',
@@ -344,9 +346,9 @@ describe('preview ingress', () => {
 
     expect(clientResponse).toContain('101 Switching Protocols');
     expect(clientResponse).not.toContain('X-Yawp-Preview-Authorized');
-    expect(accesses).toEqual([241]);
+    expect(accesses).toEqual(named ? [] : [241]);
     expect(upstreamRequest).toContain('GET /socket HTTP/1.1');
-    expect(upstreamRequest).toContain('host: pr-241.preview.yawp.school');
+    expect(upstreamRequest).toContain(`host: ${hostname}`);
     client.destroy();
     upstream.destroy();
   });
@@ -385,4 +387,15 @@ test('named Internal host proxies to its registered environment without PR wake'
  expect((await request(gateway,{headers:{host:'rubric-editor.preview.test'}})).status).toBe(503);
  expect((await request(gateway,{headers:{host:'unknown.preview.test'}})).status).toBe(404);
  expect(wakeCalls).toBe(0);
+});
+
+test('registered named host supports ACME HTTP validation and HTTPS redirect', async () => {
+ const hostname='rubric-editor.preview.test';
+ const port=await listen(createServer(createHttpRedirectHandler({domain:'preview.test',
+  readInternalRoute:host=>host===hostname ? {hostname,environmentId:'aeaa755d-aaca-4ae3-8ab4-1b4f95860bfe',state:'active'} : null,
+  readChallenge:async()=> 'challenge-value',
+ })));
+ expect((await request(port,{headers:{host:hostname},path:'/.well-known/acme-challenge/token'})).body).toBe('challenge-value');
+ expect((await request(port,{headers:{host:hostname},path:'/classes'})).headers.location).toBe(`https://${hostname}/classes`);
+ expect((await request(port,{headers:{host:'unknown.preview.test'},path:'/.well-known/acme-challenge/token'})).status).toBe(404);
 });
