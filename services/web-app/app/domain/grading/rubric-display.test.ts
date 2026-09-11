@@ -337,7 +337,7 @@ describe('parseRubricDisplaySource', () => {
       'assignment-type',
       'thesis-default',
       'daily-pages-default',
-      'daily-pages-reflection-default',
+      'daily-pages-short-form-default',
       'class-starter-default',
     ]) {
       expect(parseRubricDisplaySource(source)).toBe(source as never);

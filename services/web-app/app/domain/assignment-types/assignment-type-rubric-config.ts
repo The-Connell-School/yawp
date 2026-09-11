@@ -16,10 +16,10 @@ import {
   DAILY_PAGES_SCORING_SCALE,
 } from './daily-pages-rubric';
 import {
-  DAILY_PAGES_REFLECTION_PROMPT_CONFIG,
-  DAILY_PAGES_REFLECTION_RUBRIC,
-  DAILY_PAGES_REFLECTION_SCORING_SCALE,
-} from './daily-pages-reflection-rubric';
+  DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
+  DAILY_PAGES_SHORT_FORM_RUBRIC,
+  DAILY_PAGES_SHORT_FORM_SCORING_SCALE,
+} from './daily-pages-short-form-rubric';
 import {
   CLASS_STARTER_ASSIGNMENT_TYPE_KIND,
   CLASS_STARTER_PROMPT_CONFIG,
@@ -42,7 +42,7 @@ export type AssignmentTypeRubricConfigSource =
   | 'assignment-type'
   | 'thesis-default'
   | 'daily-pages-default'
-  | 'daily-pages-reflection-default'
+  | 'daily-pages-short-form-default'
   | 'class-starter-default';
 
 export type AssignmentTypeRubricConfigInput = {
@@ -152,21 +152,21 @@ const classStarterConfig: AssignmentTypeRubricConfig = {
 };
 
 /**
- * The harder assistant: a reflection on an assigned text or topic, judged on
- * three categories with per-category feedback. Reached only when the split
- * flag is on, so no existing Daily Pages row changes how it grades until the
- * rollout says so.
+ * The formal assistant: a short piece graded the way an essay is, on the
+ * essay's own 1-5 scale, with per-category feedback and grammar marked.
+ * Reached only when the split flag is on, so no existing Daily Pages row
+ * changes how it grades until the rollout says so.
  */
-const dailyPagesReflectionConfig: AssignmentTypeRubricConfig = {
-  source: 'daily-pages-reflection-default',
-  scoringScale: DAILY_PAGES_REFLECTION_SCORING_SCALE,
-  rubric: DAILY_PAGES_REFLECTION_RUBRIC,
-  promptConfig: DAILY_PAGES_REFLECTION_PROMPT_CONFIG,
+const dailyPagesShortFormConfig: AssignmentTypeRubricConfig = {
+  source: 'daily-pages-short-form-default',
+  scoringScale: DAILY_PAGES_SHORT_FORM_SCORING_SCALE,
+  rubric: DAILY_PAGES_SHORT_FORM_RUBRIC,
+  promptConfig: DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
   outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
   calibrationNotes:
-    'Daily Pages judges a reflection on an assigned text or topic across engagement with the source, depth of reflection, and clarity, with per-category feedback and no grammar highlighting. Effort alone earns the middle of the scale.',
+    'Daily Pages grades a short, formal piece on the same five dimensions as an essay — idea, support, structure, voice and grammar — with per-category feedback and grammar highlighting on. Effort alone earns the middle of the scale, and length is never rewarded or penalized on its own.',
   rubricIncomplete: false,
-  defaultLabel: 'Daily Pages reflection',
+  defaultLabel: 'Daily Pages short-form writing',
 };
 
 const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
@@ -180,7 +180,7 @@ function getDefaultRubricConfig(
 ): AssignmentTypeRubricConfig {
   if (!assignmentTypeKind) return thesisDefaultConfig;
   if (assignmentTypeKind === DAILY_PAGES_ASSIGNMENT_TYPE_KIND) {
-    return splitEnabled ? dailyPagesReflectionConfig : dailyPagesLegacyConfig;
+    return splitEnabled ? dailyPagesShortFormConfig : dailyPagesLegacyConfig;
   }
   return defaultRubricConfigsByKind[assignmentTypeKind] ?? thesisDefaultConfig;
 }

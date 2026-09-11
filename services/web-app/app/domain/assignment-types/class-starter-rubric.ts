@@ -11,7 +11,7 @@ import { getCategoryScoreLabel } from './rubric-category-options';
  * Daily Pages was before the split, kept intact under the name teachers
  * actually use for it. Its assistant is deliberately soft — it checks that the
  * student wrote and reflected, and stops there. The harder, text-anchored
- * assistant lives in `daily-pages-reflection-rubric.ts`.
+ * assistant lives in `daily-pages-short-form-rubric.ts`.
  *
  * The scale and the four words are defined here rather than imported from the
  * legacy Daily Pages default so this assignment type stands on its own once
@@ -70,7 +70,7 @@ export const CLASS_STARTER_PROMPT_CONFIG: PromptConfigData = {
     '',
     'Do not grade grammar, spelling, punctuation, or formatting, and do not comment on them. Rough edges are expected here and never lower the score.',
     '',
-    'This is not a graded reflection assignment. Do not ask the entry to be organized, to support its claims, or to build past a first response. Honest effort earns full credit.',
+    'This is not a formally graded writing assignment. Do not ask the entry to be organized, to support its claims, or to build past a first response, and do not mark it up. Honest effort earns full credit.',
     '',
     'Score engagement using these words exactly:',
     '- 3, All in: took the prompt somewhere of their own and stayed with it; the thinking develops.',

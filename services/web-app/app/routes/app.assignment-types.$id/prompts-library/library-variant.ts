@@ -7,9 +7,10 @@
  * library.
  *
  * The variant exists because the two now mean different things to a teacher.
- * A Class Starter prompt is an open invitation to write. A Daily Pages prompt,
- * once the split is on, names a text or topic to reflect on. The prompts and
- * the generator are shared for now; the directions are not.
+ * A Class Starter prompt is an open invitation to write, graded on effort. A
+ * Daily Pages prompt, once the split is on, sets a short piece that is graded
+ * formally — thinking, structure, and grammar alike. The prompts and the
+ * generator are shared for now; the directions are not.
  */
 export const CLASS_STARTER_TITLE = 'class starter';
 export const DAILY_PAGES_TITLE = 'daily pages';
@@ -17,7 +18,7 @@ export const DAILY_PAGES_TITLE = 'daily pages';
 export type PromptLibraryVariant =
   | 'class-starter'
   | 'daily-pages-legacy'
-  | 'daily-pages-reflection';
+  | 'daily-pages-graded';
 
 export function resolvePromptLibraryVariant({
   title,
@@ -30,5 +31,5 @@ export function resolvePromptLibraryVariant({
 
   if (normalized === CLASS_STARTER_TITLE) return 'class-starter';
   if (normalized !== DAILY_PAGES_TITLE) return null;
-  return dailyPagesSplitEnabled ? 'daily-pages-reflection' : 'daily-pages-legacy';
+  return dailyPagesSplitEnabled ? 'daily-pages-graded' : 'daily-pages-legacy';
 }

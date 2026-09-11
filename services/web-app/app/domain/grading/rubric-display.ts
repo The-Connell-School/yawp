@@ -30,7 +30,7 @@ export type RubricDisplaySource =
   | 'assignment-type'
   | 'thesis-default'
   | 'daily-pages-default'
-  | 'daily-pages-reflection-default'
+  | 'daily-pages-short-form-default'
   | 'class-starter-default';
 
 export type RubricDisplayConfig = {
@@ -59,7 +59,7 @@ const rubricDisplaySources = new Set<string>([
   'assignment-type',
   'thesis-default',
   'daily-pages-default',
-  'daily-pages-reflection-default',
+  'daily-pages-short-form-default',
   'class-starter-default',
 ]);
 

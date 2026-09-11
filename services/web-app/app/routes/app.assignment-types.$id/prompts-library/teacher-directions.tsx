@@ -17,10 +17,10 @@ const COPY: Record<
     body: 'Write a prompt, hit New → Assignment, and every student in the class gets a blank document pre-titled with your prompt. Daily Pages is effort-based: Tutor and Teacher feedback focuses on ideas rather than rubric scores or correctness.',
     examplesLabel: 'For inspiration',
   },
-  'daily-pages-reflection': {
+  'daily-pages-graded': {
     heading: 'How Daily Pages works',
-    body: 'Daily Pages is a written reflection on a text or topic you assign, and it asks more of a student than a Class Starter does. Name the reading, the moment, or the question in your prompt: the grading assistant reads for whether the entry stays with those specifics and gets past a first reaction. Effort alone earns the middle of the scale. Grammar is still never marked.',
-    examplesLabel: 'For inspiration — pair one of these with the text you assigned',
+    body: 'Daily Pages is a short piece of writing that is graded formally — the way an essay is graded, at a fraction of the length. The assistant reads first for depth of thought and how far the thinking develops, then scores organization, voice, and grammar, and marks the writing up. Effort alone earns the middle of the scale, and length is never rewarded or penalized on its own. For low-stakes writing that is graded on effort and never marked up, use a Class Starter instead.',
+    examplesLabel: 'For inspiration — expect a graded response to any of these',
   },
 };
 

@@ -495,16 +495,16 @@ describe('the Daily Pages split flag', () => {
     ]);
   });
 
-  test('on: Daily Pages grades the harder reflection rubric', () => {
+  test('on: Daily Pages grades the harder short-form rubric', () => {
     const config = parseAssignmentTypeRubricConfig({
       assignmentTypeKind: 'daily_pages',
       dailyPagesSplitEnabled: true,
     });
 
-    expect(config.source).toBe('daily-pages-reflection-default');
-    expect(config.rubric.categories).toHaveLength(3);
-    expect(config.scoringScale).toMatchObject({ minScore: 0, maxScore: 4 });
-    expect(config.defaultLabel).toBe('Daily Pages reflection');
+    expect(config.source).toBe('daily-pages-short-form-default');
+    expect(config.rubric.categories).toHaveLength(5);
+    expect(config.scoringScale).toMatchObject({ minScore: 1, maxScore: 5 });
+    expect(config.defaultLabel).toBe('Daily Pages short-form writing');
   });
 
   test('on: a Daily Pages type with its own saved rubric is untouched', () => {

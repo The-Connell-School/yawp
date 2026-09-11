@@ -30,13 +30,13 @@ describe('resolvePromptLibraryVariant', () => {
     ).toBe('daily-pages-legacy');
   });
 
-  test('Daily Pages reads as a reflection assignment once the flag is on', () => {
+  test('Daily Pages reads as a graded assignment once the flag is on', () => {
     expect(
       resolvePromptLibraryVariant({
         title: 'Daily Pages',
         dailyPagesSplitEnabled: true,
       })
-    ).toBe('daily-pages-reflection');
+    ).toBe('daily-pages-graded');
   });
 
   test('matches the title the way the route always has: trimmed, case-insensitive', () => {

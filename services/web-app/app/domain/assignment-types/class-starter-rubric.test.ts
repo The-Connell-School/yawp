@@ -64,7 +64,7 @@ describe('the Class Starter rubric shape', () => {
     expect(instructions).toContain('do not grade grammar');
   });
 
-  test('does not ask for the evidence a Daily Pages reflection asks for', () => {
+  test('does not ask for what a graded Daily Pages entry asks for', () => {
     const instructions = (
       CLASS_STARTER_PROMPT_CONFIG.gradingInstructions ?? ''
     ).toLowerCase();
