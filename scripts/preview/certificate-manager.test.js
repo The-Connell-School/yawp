@@ -256,3 +256,30 @@ test('registered named certificates can be reused and selected for SNI, unknown 
  expect(await new Promise(resolve=>store.sniCallback('unknown.preview.test',error=>resolve(!!error)))).toBe(true);
  await expect(ensureCertificate({hostname:'unknown.preview.test',domain:'preview.test',certRoot,readInternalRoute})).rejects.toThrow();
 });
+
+test('actual ingress process starts with only a registered named certificate and serves verified TLS', async () => {
+ const {request}=await import('node:https');
+ const root=temporaryRoot('named-ingress-process-'), hostname='rubric-editor.preview.test';
+ const registry=path.join(root,'routes'), certRoot=path.join(root,'certs');
+ mkdirSync(registry);mkdirSync(path.join(certRoot,hostname),{recursive:true});
+ writeFileSync(path.join(registry,'rubric-editor.json'),JSON.stringify({version:1,environmentId:'aeaa755d-aaca-4ae3-8ab4-1b4f95860bfe',slug:'rubric-editor',state:'paused'}));
+ const pair=createCertificate(root,hostname);
+ writeFileSync(path.join(certRoot,hostname,'privkey.pem'),pair.key);
+ writeFileSync(path.join(certRoot,hostname,'fullchain.pem'),pair.cert);
+ const child=Bun.spawn([process.execPath,path.join(import.meta.dir,'ingress-server.mjs')],{
+  env:{...process.env,PREVIEW_ROOT:root,PREVIEW_DOMAIN:'preview.test',PREVIEW_CERT_ROOT:certRoot,PREVIEW_INTERNAL_ROUTES:registry,PREVIEW_INTERNAL_ROUTE_UID:String(process.getuid()),PREVIEW_HTTP_PORT:'0',PREVIEW_HTTPS_PORT:'0',PREVIEW_INGRESS_BIND:'127.0.0.1'},stdout:'pipe',stderr:'pipe',
+ });
+ let timer;
+ try {
+  const port=await Promise.race([
+   (async()=>{let log='';for await(const chunk of child.stdout){log+=Buffer.from(chunk).toString();const match=log.match(/HTTPS ingress listening on 127\.0\.0\.1:(\d+)/);if(match)return Number(match[1]);}throw new Error('Ingress exited before TLS listener');})(),
+   new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Ingress startup deadline')),10000);}),
+  ]);
+  clearTimeout(timer);
+  const response=await new Promise((resolve,reject)=>{
+   const req=request({host:'127.0.0.1',port,servername:hostname,ca:pair.cert,headers:{host:hostname}},res=>{let body='';res.on('data',chunk=>body+=chunk);res.on('end',()=>resolve({status:res.statusCode,body}));});
+   req.on('error',reject);req.setTimeout(3000,()=>req.destroy(new Error('HTTPS deadline')));req.end();
+  });
+  expect(response.status).toBe(503);expect(response.body).toContain('paused');
+ } finally {clearTimeout(timer);child.kill();await child.exited;}
+},15000);
