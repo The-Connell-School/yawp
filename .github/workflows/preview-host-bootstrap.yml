@@ -71,6 +71,7 @@ jobs:
             scripts/preview/bootstrap-host.sh \
             scripts/preview/certificate-manager.mjs \
             scripts/preview/ingress-server.mjs \
+            scripts/preview/internal-routes.mjs \
             scripts/preview/migrate-resident-database-roles.sh \
             scripts/preview/publish-host-metrics.sh \
             scripts/preview/install-host-metrics.sh \

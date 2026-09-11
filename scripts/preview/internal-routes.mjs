@@ -1,4 +1,4 @@
-import { constants,openSync,closeSync,fstatSync,readFileSync,lstatSync } from 'node:fs';
+import { constants,openSync,closeSync,fstatSync,readFileSync,lstatSync,readdirSync } from 'node:fs';
 import path from 'node:path';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const SLUG=/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -22,4 +22,15 @@ export function createInternalRouteReader({directory,domain,ownerUid}={}) {
    return {environmentId:route.environmentId,hostname,state:route.state};
   } catch {return null;} finally {if(fd!==undefined) closeSync(fd);}
  };
+}
+
+export function internalRoutesFromEnvironment(env,domain) {
+ const directory=env.PREVIEW_INTERNAL_ROUTES, rawUid=env.PREVIEW_INTERNAL_ROUTE_UID;
+ if(!directory && !rawUid) return {readInternalRoute:()=>null,hostnames:()=>[]};
+ if(!directory || !path.isAbsolute(directory) || !/^(0|[1-9][0-9]*)$/.test(rawUid || '') || !Number.isSafeInteger(Number(rawUid))) throw new Error('Configure an absolute Internal route directory and owner UID together');
+ const readInternalRoute=createInternalRouteReader({directory,domain,ownerUid:Number(rawUid)});
+ return {readInternalRoute,hostnames:()=>{
+  try {return readdirSync(directory).filter(name=>name.endsWith('.json')).map(name=>`${name.slice(0,-5)}.${domain}`).filter(name=>readInternalRoute(name)).sort();}
+  catch(error){if(error.code==='ENOENT')return [];throw error;}
+ }};
 }

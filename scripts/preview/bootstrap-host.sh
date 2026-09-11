@@ -168,8 +168,9 @@ flock -u 8
 source_wake_server="$ROOT/bootstrap/scripts/preview/wake-server.mjs"
 source_ingress_server="$ROOT/bootstrap/scripts/preview/ingress-server.mjs"
 source_certificate_manager="$ROOT/bootstrap/scripts/preview/certificate-manager.mjs"
+source_internal_routes="$ROOT/bootstrap/scripts/preview/internal-routes.mjs"
 source_wake_script="$ROOT/bootstrap/scripts/preview/wake-preview.sh"
-[[ -f "$source_wake_server" && -f "$source_ingress_server" && -f "$source_certificate_manager" && -f "$source_wake_script" ]] || {
+[[ -f "$source_internal_routes" && -f "$source_wake_server" && -f "$source_ingress_server" && -f "$source_certificate_manager" && -f "$source_wake_script" ]] || {
   echo "Preview ingress, certificate, wake server, and wake script must be synced before bootstrap" >&2
   exit 1
 }
@@ -177,6 +178,7 @@ release_id="$(sha256sum \
   "$source_wake_server" \
   "$source_ingress_server" \
   "$source_certificate_manager" \
+  "$source_internal_routes" \
   "$source_wake_script" \
   | sha256sum \
   | awk '{print $1}')"
@@ -185,6 +187,7 @@ mkdir -p "$release_dir"
 install -m 0644 "$source_wake_server" "$release_dir/wake-server.mjs"
 install -m 0644 "$source_ingress_server" "$release_dir/ingress-server.mjs"
 install -m 0644 "$source_certificate_manager" "$release_dir/certificate-manager.mjs"
+install -m 0644 "$source_internal_routes" "$release_dir/internal-routes.mjs"
 install -m 0755 "$source_wake_script" "$release_dir/wake-preview.sh"
 ingress_server="$release_dir/ingress-server.mjs"
 certificate_manager="$release_dir/certificate-manager.mjs"
@@ -318,6 +321,7 @@ Environment=PREVIEW_HTTP_PORT=$HTTP_PORT
 Environment=PREVIEW_HTTPS_PORT=$HTTPS_PORT
 Environment=PREVIEW_TLS_DEFAULT_HOST=$default_hostname
 Environment=PREVIEW_WAKE_SCRIPT=$ROOT/ingress/current/wake-preview.sh
+EnvironmentFile=-/etc/yawp-internal/ingress.env
 ExecStart=$node_path $ROOT/ingress/current/ingress-server.mjs
 Restart=always
 RestartSec=2
@@ -344,6 +348,7 @@ User=$WAKE_USER
 Environment=PREVIEW_ROOT=$ROOT
 Environment=PREVIEW_DOMAIN=$DOMAIN
 Environment=PREVIEW_ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+EnvironmentFile=-/etc/yawp-internal/ingress.env
 ExecStart=/usr/bin/flock -w 900 $ROOT/preview-host.lock $node_path $ROOT/ingress/current/certificate-manager.mjs --resident
 TimeoutStartSec=900
 UMask=0077

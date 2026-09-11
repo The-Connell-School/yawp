@@ -1,0 +1,13 @@
+# Internal named preview ingress
+
+This extension is disabled unless both `PREVIEW_INTERNAL_ROUTES` and `PREVIEW_INTERNAL_ROUTE_UID` are configured. The directory must be absolute and its numeric owner UID must match the trusted Internal runner. Ingress and the certificate manager share the same optional root-owned `/etc/yawp-internal/ingress.env` through their systemd units. It contains only those two settings. No such file is installed or populated automatically.
+
+The existing bootstrap now includes `internal-routes.mjs` in its immutable release hash and file installation; its bootstrap workflow transfers the module. Existing PR, UA and Blackboard host parsing/wake behavior remains first priority. Internal registrations cannot reserve PR-style names. A registered named hostname maps only to `yawp-env-<UUID>-web-1` on the existing preview Docker network; arbitrary upstream URLs and addresses are unsupported.
+
+HTTP and WebSocket requests resolve the current registration. Unknown names return 404. Paused or unavailable named environments return 503 without invoking the PR wake script. Resume remains an explicit Internal lifecycle operation. The application still enforces the preview access gate. Named access is not recorded as a PR access event; Internal idle activity/automatic sleeping is not introduced here.
+
+The HTTP listener accepts ACME challenges for registered names and redirects ordinary traffic to HTTPS. SNI accepts only PR or registered named hosts with installed certificates. When no PR certificate exists, startup may select a registered named certificate as its default. The certificate manager permits issuance for registered names and includes registered names in resident renewal. A paused registration retains its certificate so HTTPS can return its paused response.
+
+The existing certificate timer checks daily. It does **not** provide timely first issuance for a newly created named environment. First-issuance triggering must be integrated with Internal route publication before calling this deployment-ready; the route writer itself does not have access to the ingress ACME account. Do not solve this by exposing account keys in feature containers or reporting readiness before the authenticated public smoke check passes.
+
+Local proof covers legacy and named HTTP/WebSocket routing, registered HTTP challenges, unknown-host rejection, current certificate selection, and actual process startup with a verified TLS client using a temporary named certificate. Public ACME issuance, live bootstrap, first-certificate latency, authenticated Yawp access and the shared EC2 performance target remain unverified. No host service or DNS record has been changed by these commits.

@@ -1,3 +1,4 @@
+import { internalRoutesFromEnvironment } from './internal-routes.mjs';
 import { execFile } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import {
@@ -473,6 +474,7 @@ export async function maintainCertificates({ hostnames, ensure = ensureCertifica
 if (isDirectExecution(import.meta.url)) {
   const root = process.env.PREVIEW_ROOT || '/srv/yawp-preview';
   const domain = process.env.PREVIEW_DOMAIN || '';
+  const internalRoutes=internalRoutesFromEnvironment(process.env,domain);
   const email = process.env.PREVIEW_ACME_EMAIL || '';
   const certRoot = process.env.PREVIEW_CERT_ROOT || path.join(root, 'ingress', 'certs');
   const accountRoot = process.env.PREVIEW_ACME_ROOT || path.join(root, 'ingress', 'acme');
@@ -485,12 +487,13 @@ if (isDirectExecution(import.meta.url)) {
     console.log(`Imported ${imported.length} resident preview certificate(s)`);
   } else {
     const hostnames = mode === '--resident'
-      ? await residentPreviewHostnames(root, domain)
+      ? [...await residentPreviewHostnames(root, domain), ...internalRoutes.hostnames()]
       : [String(mode || '')];
     if (hostnames.length === 0) throw new Error('No resident preview certificates to maintain');
     const report = await maintainCertificates({
       hostnames,
       options: {
+        readInternalRoute:internalRoutes.readInternalRoute,
         domain,
         certRoot,
         accountRoot,

@@ -1,3 +1,4 @@
+import { internalRoutesFromEnvironment } from './internal-routes.mjs';
 import { request as httpRequest, createServer } from 'node:http';
 import { createServer as createSecureServer } from 'node:https';
 import { readFile, readdir, stat } from 'node:fs/promises';
@@ -500,12 +501,12 @@ function loadCertificatePair(certRoot, hostname) {
   };
 }
 
-async function findDefaultHostname(certRoot, domain) {
+async function findDefaultHostname(certRoot, domain, readInternalRoute = () => null) {
   const entries = await readdir(certRoot, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isDirectory() && parsePreviewHost(entry.name, domain)?.service === 'web')
     .map((entry) => entry.name)
-    .sort((a, b) => parsePreviewPr(b, domain) - parsePreviewPr(a, domain))[0] || null;
+    .sort((a, b) => parsePreviewPr(b, domain) - parsePreviewPr(a, domain))[0] || entries.find(entry=>entry.isDirectory() && readInternalRoute(entry.name))?.name || null;
 }
 
 export function createCertificateStore({ certRoot, domain, defaultHostname, readInternalRoute = () => null }) {
@@ -538,6 +539,7 @@ export function createCertificateStore({ certRoot, domain, defaultHostname, read
 if (isDirectExecution(import.meta.url)) {
   const root = process.env.PREVIEW_ROOT || '/srv/yawp-preview';
   const domain = process.env.PREVIEW_DOMAIN || '';
+  const {readInternalRoute}=internalRoutesFromEnvironment(process.env,domain);
   const certRoot = process.env.PREVIEW_CERT_ROOT || path.join(root, 'ingress', 'certs');
   const httpPort = Number(process.env.PREVIEW_HTTP_PORT || '80');
   const httpsPort = Number(process.env.PREVIEW_HTTPS_PORT || '443');
@@ -547,24 +549,26 @@ if (isDirectExecution(import.meta.url)) {
   const wakeScript = process.env.PREVIEW_WAKE_SCRIPT
     || path.join(root, 'bootstrap', 'scripts', 'preview', 'wake-preview.sh');
   const defaultHostname = process.env.PREVIEW_TLS_DEFAULT_HOST
-    || await findDefaultHostname(certRoot, domain);
+    || await findDefaultHostname(certRoot, domain, readInternalRoute);
   if (!defaultHostname) throw new Error('Preview ingress requires at least one provisioned certificate');
 
   const operations = createDefaultWakeOperations({ root, wakeScript, maxRunning });
   const resolveTarget = createDockerTargetResolver();
   const ingress = createPreviewIngress({
     domain,
+    readInternalRoute,
     resolveTarget,
     maxConcurrentWakes,
     ...operations,
   });
   const upgrades = createWebSocketUpgradeHandler({
     domain,
+    readInternalRoute,
     resolveTarget,
     maxConcurrentWakes,
     ...operations,
   });
-  const certificateStore = createCertificateStore({ certRoot, domain, defaultHostname });
+  const certificateStore = createCertificateStore({ certRoot, domain, defaultHostname, readInternalRoute });
   const tlsServer = createSecureServer({
     key: certificateStore.defaultPair.key,
     cert: certificateStore.defaultPair.cert,
@@ -572,12 +576,13 @@ if (isDirectExecution(import.meta.url)) {
   }, ingress);
   tlsServer.on('upgrade', upgrades);
   tlsServer.listen(httpsPort, bind, () => {
-    console.log(`Yawp preview HTTPS ingress listening on ${bind}:${httpsPort}`);
+    console.log(`Yawp preview HTTPS ingress listening on ${bind}:${tlsServer.address().port}`);
   });
 
   const challengeRoot = path.join(root, 'ingress', 'challenges');
   const redirect = createServer(createHttpRedirectHandler({
     domain,
+    readInternalRoute,
     readChallenge: async (token) => {
       try {
         const target = path.join(challengeRoot, token);
@@ -590,6 +595,6 @@ if (isDirectExecution(import.meta.url)) {
     },
   }));
   redirect.listen(httpPort, bind, () => {
-    console.log(`Yawp preview HTTP redirect and ACME service listening on ${bind}:${httpPort}`);
+    console.log(`Yawp preview HTTP redirect and ACME service listening on ${bind}:${redirect.address().port}`);
   });
 }
