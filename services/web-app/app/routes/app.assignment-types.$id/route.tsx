@@ -422,14 +422,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // "My prompts": prompts this teacher generated and kept, shown in the same
   // library alongside the fixed corpus and filterable on their own.
   const savedPrompts =
-    profile.role === 'TEACHER' && isDailyPages
+    profile.role === "TEACHER" && isDailyPages
       ? await listSavedDailyPagesPrompts({
           membershipId: profile.id,
           assignmentTypeId: assignmentType.id,
         })
       : [];
   const libraryEntries =
-    profile.role === 'TEACHER' && isDailyPages
+    profile.role === "TEACHER" && isDailyPages
       ? [...savedPrompts.map(savedPromptToLibraryEntry), ...ALL_PROMPTS]
       : [];
   const promptLibrary =
@@ -447,21 +447,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // "My prompts": prompts this teacher generated and kept, shown in the same
   // library alongside the fixed corpus and filterable on their own.
   const savedThesisPrompts =
-    profile.role === 'TEACHER' && isThesisEssay
+    profile.role === "TEACHER" && isThesisEssay
       ? await listSavedThesisPrompts({
           membershipId: profile.id,
           assignmentTypeId: assignmentType.id,
         })
       : [];
   const thesisLibraryEntries =
-    profile.role === 'TEACHER' && isThesisEssay
+    profile.role === "TEACHER" && isThesisEssay
       ? [
           ...savedThesisPrompts.map(savedThesisPromptToLibraryEntry),
           ...ALL_THESIS_PROMPTS,
         ]
       : [];
   const thesisPromptLibrary =
-    profile.role === 'TEACHER' && isThesisEssay
+    profile.role === "TEACHER" && isThesisEssay
       ? {
           prompts: applyThesisFilters(
             thesisLibraryEntries,
@@ -724,8 +724,6 @@ export default function AppAssignmentTypesIdRoute() {
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
-                assignmentTypeCollaborationSupported={
-                }
                 assignmentTypeKind={data.assignmentType.kind}
                 teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}

@@ -6,22 +6,7 @@ import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
-import {
-  COLLABORATION_GROUP_MODE_OPTIONS,
-  COLLABORATION_GROUP_SIZE_OPTIONS,
-  DEFAULT_COLLABORATION_GROUP_MODE,
-  DEFAULT_COLLABORATION_GROUP_SIZE,
-  collaborationModeNeedsGroupSize,
-  type CollaborationGroupMode,
-} from '~/domain/assignments/collaboration';
 import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select';
 import {
   DEFAULT_EXIT_TICKET_MODE,
   EXIT_TICKETS_ENABLED,
@@ -46,6 +31,13 @@ import {
   type ExitTicketMode,
 } from '~/domain/assignment-types/exit-ticket';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select';
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -64,22 +56,15 @@ import {
 } from '~/domain/grading/grading-assistant-strictness';
 
 export type AssignmentCreationEntryPoint =
-  | 'dashboard'
-  | 'assignment-type'
-  | 'class';
+  'dashboard' | 'assignment-type' | 'class';
 
 export type AssignmentCreationAssignmentType = {
   id: string;
   title: string;
   /**
-   * Whether this kind of writing is in the collaborative-drafts pilot. Required
-   * rather than optional so a new call site cannot silently drop the toggle: an
-   * absent flag would look exactly like an unsupported type.
-   */
-  /**
    * `AssignmentType.kind`, which decides whether this type gets a prompt box or
-   * a form. Required for the same reason as the flag above: a call site that
-   * forgot to load it would render an exit ticket as a blank prompt.
+   * a form. Required rather than optional: a call site that forgot to load it
+   * would render an exit ticket as a blank prompt.
    */
   kind: string | null;
 };
@@ -268,6 +253,7 @@ export function initialGradingFor({
   };
 }
 
+
 export function AssignmentCreationSheet({
   ...props
 }: AssignmentCreationSheetProps) {
@@ -306,8 +292,6 @@ export function AssignmentCreationSheetContent({
   initialExitTicketAnswerType = null,
   initialExitTicketTopic = '',
   initialExitTicketLessonNotes = null,
-  initialPostAt,
-  initialDueAt,
   createFetcher,
   extractFetcher,
   renderSheet = true,
@@ -346,8 +330,6 @@ export function AssignmentCreationSheetContent({
   const [pointValue, setPointValue] = useState(
     pointValueFieldValue(initialGrading.pointValue)
   );
-  const [postAt, setPostAt] = useState<string>('');
-  const [dueAt, setDueAt] = useState<string>('');
   const [tutorEnabled, setTutorEnabled] = useState(() =>
     initialTutorEnabledFor({
       isEditing: Boolean(editingAssignment),
@@ -362,28 +344,18 @@ export function AssignmentCreationSheetContent({
       initialTutorEnabled,
     })
   );
-  const [collaborationEnabled, setCollaborationEnabled] = useState(
-    initialCollaborationEnabled
-  );
-  const [collaborationGroupMode, setCollaborationGroupMode] =
-    useState<CollaborationGroupMode>(initialCollaborationGroupMode);
-  const [collaborationGroupSize, setCollaborationGroupSize] = useState(
-    initialCollaborationGroupSize ?? DEFAULT_COLLABORATION_GROUP_SIZE
-  );
   const [saveForReuse, setSaveForReuse] = useState(false);
   const [gradingAssistantStrictnessLevel, setGradingAssistantStrictnessLevel] =
     useState<GradingAssistantStrictnessLevel>(
       initialGradingAssistantStrictnessLevel
     );
-  const [exitTicketMode, setExitTicketMode] = useState<ExitTicketMode>(
-    initialExitTicketMode
-  );
+  const [exitTicketMode, setExitTicketMode] =
+    useState<ExitTicketMode>(initialExitTicketMode);
   const [exitTicketFocus, setExitTicketFocus] = useState<ExitTicketFocus>(
     initialExitTicketFocus
   );
-  const [exitTicketTopic, setExitTicketTopic] = useState(
-    initialExitTicketTopic
-  );
+  const [exitTicketTopic, setExitTicketTopic] =
+    useState(initialExitTicketTopic);
   // Empty until the teacher answers. There is no sensible default: guessing
   // either way decides for them whether a student can be told they are wrong.
   const [exitTicketAnswerType, setExitTicketAnswerType] = useState<string>(
@@ -414,9 +386,6 @@ export function AssignmentCreationSheetContent({
   const selectedType = assignmentTypes.find(
     (type) => type.id === assignmentTypeId
   );
-  // Collaboration is offered for every assignment type now, so this only asks
-  // whether a type has been chosen at all.
-  const selectedTypeSupportsCollaboration = Boolean(assignmentTypeId);
   // An exit ticket has no prompt box: the teacher answers the form and the
   // prompt is composed from the answers. With the feature off it falls back to
   // the ordinary prompt box, so an exit ticket type can exist before this does.
@@ -510,8 +479,6 @@ export function AssignmentCreationSheetContent({
     });
     setSubmitForGrade(grading.submitForGrade);
     setPointValue(pointValueFieldValue(grading.pointValue));
-    setPostAt(toDateInputValue(initialPostAt));
-    setDueAt(toDateInputValue(initialDueAt));
     setTutorEnabled(
       initialTutorEnabledFor({
         isEditing: Boolean(editingAssignment),
@@ -525,11 +492,6 @@ export function AssignmentCreationSheetContent({
         ),
         initialTutorEnabled,
       })
-    );
-    setCollaborationEnabled(initialCollaborationEnabled);
-    setCollaborationGroupMode(initialCollaborationGroupMode);
-    setCollaborationGroupSize(
-      initialCollaborationGroupSize ?? DEFAULT_COLLABORATION_GROUP_SIZE
     );
     setSaveForReuse(false);
     setGradingAssistantStrictnessLevel(initialGradingAssistantStrictnessLevel);
@@ -565,8 +527,6 @@ export function AssignmentCreationSheetContent({
     initialExitTicketAnswerType,
     initialExitTicketLessonNotes,
     editingAssignment,
-    initialPostAt,
-    initialDueAt,
     open,
     teacherClasses,
   ]);
@@ -696,11 +656,7 @@ export function AssignmentCreationSheetContent({
               setSubmitForGrade(grading.submitForGrade);
               setPointValue(pointValueFieldValue(grading.pointValue));
             }}
-            disabled={
-              isSaving ||
-              Boolean(fixedAssignmentTypeId) ||
-              Boolean(editingAssignment?.assignmentTypeLocked)
-            }
+            disabled={isSaving || Boolean(fixedAssignmentTypeId)}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select an assignment type" />

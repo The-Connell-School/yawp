@@ -1119,6 +1119,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         (assignmentType) =>
           assignmentType.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
       )
+      .map(({ id, title, kind }) => ({
         id,
         title,
         kind,
