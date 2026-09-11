@@ -12,6 +12,7 @@ import { hasSlideDeck, readSlideDeck, type SlideDeck } from './slide-deck';
 import { readLessonMaterials, type LessonMaterial } from './lesson-material';
 import { readLessonAsks } from './lesson-ask';
 import { inlineDailyPagesExercises } from './daily-pages-block';
+import { inlinePlannedExitTickets } from './exit-ticket-block';
 import { inlineLessonResources } from './lesson-resource';
 import { inlineUnitPlan } from './unit-plan';
 
@@ -234,7 +235,9 @@ export function buildLessonPacket({
     // there is nothing to click, so it prints as the table a teacher can read
     // at a glance and write a date beside.
     const body = inlineUnitPlan(
-      inlineLessonResources(inlineDailyPagesExercises(withWarmUps))
+      inlineLessonResources(
+        inlinePlannedExitTickets(inlineDailyPagesExercises(withWarmUps))
+      )
     );
     // The deck comes out of the prose and is carried as structure. Read from
     // `body` rather than the stripped text below, so a section is still slides

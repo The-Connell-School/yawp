@@ -50,9 +50,13 @@ import {
 import { linkMaterialTitles } from '~/domain/lesson-planner/lesson-material';
 import { LessonResourceCard } from '~/components/ai-chat/lesson-resource-card';
 import { DailyPagesCard } from '~/components/ai-chat/daily-pages-card';
+import { ExitTicketCard } from '~/components/ai-chat/exit-ticket-card';
 import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
 import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
-import { findDailyPagesTypeId } from '~/domain/lesson-planner/yawp-catalog.server';
+import {
+  findDailyPagesTypeId,
+  findExitTicketTypeId,
+} from '~/domain/lesson-planner/yawp-catalog.server';
 import {
   looksLikeLessonPlan,
   mentionsRoomPersonality,
@@ -175,13 +179,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Needed to turn a warm-up the planner wrote into a real assignment. Null
   // for an org without Daily Pages, which just means no button.
-  const dailyPagesTypeId = await findDailyPagesTypeId({
+  const catalogContext = {
     membershipId: access.membership.id,
     organizationId: access.membership.organization.id,
-  });
+  };
+  const dailyPagesTypeId = await findDailyPagesTypeId(catalogContext);
+  // The other end of the lesson: null for an org without the Exit Ticket type,
+  // which again just means no button.
+  const exitTicketTypeId = await findExitTicketTypeId(catalogContext);
 
   return {
     dailyPagesTypeId,
+    exitTicketTypeId,
     conversations: conversations.map((conversation) => ({
       id: conversation.id,
       title: conversation.packetTitle?.trim() || conversation.title,
@@ -239,6 +248,7 @@ export default function LessonPlannerRoute() {
     recommendedPrompts,
     seed,
     dailyPagesTypeId,
+    exitTicketTypeId,
     builtDays,
     unitMapConversation,
   } = useLoaderData<typeof loader>();
@@ -739,6 +749,7 @@ export default function LessonPlannerRoute() {
                   onMaterial={setMaterialAdded}
                   lessonHas={selectedConversation?.lessonHas ?? {}}
                   dailyPagesTypeId={dailyPagesTypeId}
+                  exitTicketTypeId={exitTicketTypeId}
                   conversationId={conversationId}
                   builtDays={builtDays}
                   onSuggestion={send}
@@ -943,6 +954,7 @@ function MessageBubble({
   onMaterial,
   lessonHas,
   dailyPagesTypeId,
+  exitTicketTypeId,
   conversationId,
   builtDays,
   onSuggestion,
@@ -961,6 +973,8 @@ function MessageBubble({
   lessonHas: { deck?: boolean; handout?: boolean };
   /** Where a written warm-up becomes a real assignment; null without the type. */
   dailyPagesTypeId: string | null;
+  /** Where the lesson's check becomes a real assignment; null without the type. */
+  exitTicketTypeId: string | null;
   conversationId: string | null;
   /** Day number → the conversation each already-built day lives in. */
   builtDays: Record<number, string>;
@@ -1058,6 +1072,16 @@ function MessageBubble({
                   key={key}
                   exercise={part.exercise}
                   assignmentTypeId={dailyPagesTypeId}
+                  conversationId={conversationId}
+                />
+              );
+            }
+            if (part.kind === 'exit-ticket') {
+              return (
+                <ExitTicketCard
+                  key={key}
+                  ticket={part.ticket}
+                  assignmentTypeId={exitTicketTypeId}
                   conversationId={conversationId}
                 />
               );

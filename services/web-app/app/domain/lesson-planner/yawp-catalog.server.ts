@@ -12,6 +12,7 @@ import {
   summarizeLoungeMaterials,
   type LoungeTrainingSummary,
 } from './yawp-catalog';
+import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
 import { readDocxText } from '~/domain/office/docx';
 import {
   hasSlideText,
@@ -24,7 +25,16 @@ export type CatalogContext = {
   organizationId: string;
 };
 
-export type AssignableType = { id: string; title: string };
+export type AssignableType = {
+  id: string;
+  title: string;
+  /**
+   * `AssignmentType.kind`. What the type IS, where the title is only what this
+   * org happens to call it — an exit ticket named "Ticket Out The Door" is
+   * still an exit ticket, and a course essay titled "Exit Ticket" is not one.
+   */
+  kind: string | null;
+};
 
 export type YawpCatalogDependencies = {
   prismaClient: Pick<
@@ -250,13 +260,18 @@ export async function listAssignableTypes(
     id: string;
     title: string;
     systemKey: string | null;
+    kind: string | null;
   }>({
     scopes,
-    select: { id: true, title: true, systemKey: true },
+    select: { id: true, title: true, systemKey: true, kind: true },
     orderBy: { position: 'asc' },
   });
 
-  return types.map((type) => ({ id: type.id, title: type.title }));
+  return types.map((type) => ({
+    id: type.id,
+    title: type.title,
+    kind: type.kind ?? null,
+  }));
 }
 
 /**
@@ -272,4 +287,20 @@ export async function findDailyPagesTypeId(
 ): Promise<string | null> {
   const types = await listAssignableTypes(ctx, dependencies);
   return types.find((type) => isDailyPagesTitle(type.title))?.id ?? null;
+}
+
+/**
+ * The teacher's own Exit Ticket assignment type, if their org has one.
+ *
+ * The planner needs the id to turn the check for understanding it just wrote
+ * into an assignment the class can answer in Yawp. Keyed on `kind` rather than
+ * on the title, so an org that renamed theirs still gets the button and an
+ * essay type that happens to be called "Exit Ticket" does not.
+ */
+export async function findExitTicketTypeId(
+  ctx: CatalogContext,
+  dependencies: YawpCatalogDependencies = productionDependencies
+): Promise<string | null> {
+  const types = await listAssignableTypes(ctx, dependencies);
+  return types.find((type) => isExitTicketAssignmentType(type))?.id ?? null;
 }

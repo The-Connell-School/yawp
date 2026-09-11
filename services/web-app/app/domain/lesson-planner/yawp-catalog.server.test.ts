@@ -8,8 +8,15 @@ const prisma = {
   class: { findMany: mock() },
 };
 
-const { listAssignableTypes, listLoungeMaterials, readLoungeMaterial } =
-  await import('./yawp-catalog.server');
+const {
+  findExitTicketTypeId,
+  listAssignableTypes,
+  listLoungeMaterials,
+  readLoungeMaterial,
+} = await import('./yawp-catalog.server');
+const { EXIT_TICKET_ASSIGNMENT_TYPE_KIND } = await import(
+  '~/domain/assignment-types/exit-ticket'
+);
 const { readFixture } = await import('~/domain/office/fixtures');
 
 const dependencies = {
@@ -53,8 +60,8 @@ beforeEach(() => {
       { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
     ]);
   getAvailableAssignmentTypesForScopes.mockReset().mockResolvedValue([
-    { id: 'at-1', title: 'Daily Pages', systemKey: null },
-    { id: 'at-2', title: 'Argument Essay', systemKey: null },
+    { id: 'at-1', title: 'Daily Pages', systemKey: null, kind: 'daily_pages' },
+    { id: 'at-2', title: 'Argument Essay', systemKey: null, kind: null },
   ]);
 });
 
@@ -97,8 +104,8 @@ describe('listAssignableTypes', () => {
   test('resolves the types this teacher can actually assign', async () => {
     const types = await listAssignableTypes(ctx, dependencies);
     expect(types).toEqual([
-      { id: 'at-1', title: 'Daily Pages' },
-      { id: 'at-2', title: 'Argument Essay' },
+      { id: 'at-1', title: 'Daily Pages', kind: 'daily_pages' },
+      { id: 'at-2', title: 'Argument Essay', kind: null },
     ]);
   });
 
@@ -243,5 +250,37 @@ describe('readLoungeMaterial', () => {
 
     expect((result as { error: string }).error).toMatch(/no readable text/);
     expect((result as { error: string }).error).toMatch(/say nothing about/i);
+  });
+});
+
+describe('findExitTicketTypeId', () => {
+  test('finds the type by its kind, whatever the org calls it', async () => {
+    // An org is free to name theirs "Ticket Out The Door". Keying on the
+    // title would lose them the button; keying on kind cannot.
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', title: 'Daily Pages', systemKey: null, kind: 'daily_pages' },
+      {
+        id: 'at-9',
+        title: 'Ticket Out The Door',
+        systemKey: null,
+        kind: EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+      },
+    ]);
+
+    expect(await findExitTicketTypeId(ctx, dependencies)).toBe('at-9');
+  });
+
+  test('is null for a teacher whose org has no exit ticket type', async () => {
+    // No button rather than a link into a page they cannot open. The lesson
+    // still gets its check for understanding; it just stays on paper.
+    expect(await findExitTicketTypeId(ctx, dependencies)).toBeNull();
+  });
+
+  test('ignores a type merely titled "Exit Ticket"', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-3', title: 'Exit Ticket', systemKey: null, kind: null },
+    ]);
+
+    expect(await findExitTicketTypeId(ctx, dependencies)).toBeNull();
   });
 });

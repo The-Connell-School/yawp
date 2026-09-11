@@ -418,6 +418,33 @@ describe('buildLessonPacket — a kept reply that asked with controls', () => {
   });
 });
 
+describe('buildLessonPacket — a kept reply that ends on an exit ticket', () => {
+  test('prints the words students read, not the answers it was built from', () => {
+    // On paper there is no button to press, so the ticket has to arrive as
+    // lesson content. The teacher-only notes are an answer key: printing them
+    // on a page a student might see would give the answer away.
+    const packet = buildLessonPacket({
+      title: 'Lesson',
+      className: null,
+      sections: [
+        {
+          id: 'msg-1',
+          content:
+            '## Closing (4 min)\n\nHand this out with two minutes left.\n\n```yawp-exit-ticket\nmode: specific\nfocus: explain-concept\ntopic: the difference between weathering and erosion\nanswer: objective\nmustMention: Whether the material moves.\n```',
+          keptAudience: 'teacher',
+        },
+      ],
+    });
+
+    const printed = packet.sections[0]!.content;
+    expect(printed).not.toContain('yawp-exit-ticket');
+    expect(printed).not.toContain('focus:');
+    expect(printed).not.toContain('Whether the material moves');
+    expect(printed).toContain('the difference between weathering and erosion');
+    expect(printed).toContain('Hand this out with two minutes left.');
+  });
+});
+
 const DECK = {
   title: 'Beyond the Quote',
   subtitle: 'English 11 · Writing analysis that argues',
