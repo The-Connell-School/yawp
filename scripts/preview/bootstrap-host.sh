@@ -356,6 +356,41 @@ NoNewPrivileges=true
 PrivateTmp=true
 UNIT
 
+# Installed but not enabled: Internal rollout must configure and enable this path explicitly.
+sudo tee /etc/systemd/system/yawp-preview-internal-certificates.service >/dev/null <<UNIT
+[Unit]
+Description=Provision certificates for registered Internal previews
+After=yawp-preview-ingress.service network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+User=$WAKE_USER
+Environment=PREVIEW_ROOT=$ROOT
+Environment=PREVIEW_DOMAIN=$DOMAIN
+Environment=PREVIEW_ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+EnvironmentFile=/etc/yawp-internal/ingress.env
+ExecStart=/usr/bin/flock -w 900 $ROOT/preview-host.lock $node_path $ROOT/ingress/current/certificate-manager.mjs --internal
+TimeoutStartSec=900
+Restart=on-failure
+RestartSec=5min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+UNIT
+
+sudo tee /etc/systemd/system/yawp-preview-internal-certificates.path >/dev/null <<'UNIT'
+[Unit]
+Description=Watch Internal preview routes for certificate provisioning
+
+[Path]
+PathChanged=/srv/yawp-internal-routes
+Unit=yawp-preview-internal-certificates.service
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 sudo tee /etc/systemd/system/yawp-preview-certificate-renewal.timer >/dev/null <<'UNIT'
 [Unit]
 Description=Check Yawp preview TLS certificates daily

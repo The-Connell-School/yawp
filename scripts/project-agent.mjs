@@ -374,6 +374,7 @@ function runTestProfile(profile, { json }) {
     results.push({ id: "diff-check", ...result });
   } else if (chosen === "project-cli") run("project-cli", ["test", "./scripts/project-agent.test.js", "./scripts/deployment-contract.test.ts"], 120000);
   else if (chosen === "internal-ingress") run("internal-ingress", ["test", "./scripts/preview/internal-routes.test.js", "./scripts/preview/ingress-server.test.js", "./scripts/preview/certificate-manager.test.js", "./scripts/preview/bootstrap-host.test.js"]);
+  else if (chosen === "internal-certificate-units") run("internal-certificate-units", ["test", "./scripts/preview/internal-certificate-units.test.js"]);
   else if (chosen === "unit") run("unit", ["run", "--cwd", "services/web-app", "test"]);
   else if (chosen === "typecheck") run("typecheck", ["run", "web-app:typecheck"]);
   else if (chosen === "build") run("build", ["run", "web-app:build"]);

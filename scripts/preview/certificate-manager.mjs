@@ -486,10 +486,10 @@ if (isDirectExecution(import.meta.url)) {
     const imported = await importResidentTraefikCertificates({ acmePath, root, certRoot, domain });
     console.log(`Imported ${imported.length} resident preview certificate(s)`);
   } else {
-    const hostnames = mode === '--resident'
+    const hostnames = mode === '--internal' ? internalRoutes.hostnames() : mode === '--resident'
       ? [...await residentPreviewHostnames(root, domain), ...internalRoutes.hostnames()]
       : [String(mode || '')];
-    if (hostnames.length === 0) throw new Error('No resident preview certificates to maintain');
+    if (hostnames.length === 0 && mode !== '--internal') throw new Error('No resident preview certificates to maintain');
     const report = await maintainCertificates({
       hostnames,
       options: {
