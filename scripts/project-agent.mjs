@@ -373,8 +373,11 @@ function runTestProfile(profile, { json }) {
     const result = execute("git", ["diff", "--check", process.env.RECORD_PROOF_BASE_SHA ? `${process.env.RECORD_PROOF_BASE_SHA}..HEAD` : "HEAD"], { json, env: selected.env, timeout: 30000 });
     results.push({ id: "diff-check", ...result });
   } else if (chosen === "project-cli") run("project-cli", ["test", "./scripts/project-agent.test.js"], 120000);
+  else if (chosen === "internal-integration-infra-root") {
+    results.push({id: "internal-integration-root", ...execute("terraform", ["-chdir=infra", "test", "-filter=internal-integration.tftest.hcl", "-no-color"], {json, env: selected.env, timeout: 120000})});
+  }
   else if (chosen === "internal-integration-infra-validate") {
-    results.push({id: "init-local", ...execute("terraform", ["-chdir=infra", "init", "-backend=false", "-input=false"], {json, env: selected.env, timeout: 120000})});
+    results.push({id: "init-local", ...execute("terraform", ["-chdir=infra", "init", "-backend=false", "-input=false"], {json, env: selected.env, timeout: 600000})});
     results.push({id: "validate", ...execute("terraform", ["-chdir=infra", "validate", "-no-color"], {json, env: selected.env, timeout: 30000})});
   }
   else if (chosen === "internal-integration-infra") {
