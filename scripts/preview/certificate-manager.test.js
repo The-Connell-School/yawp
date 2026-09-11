@@ -237,3 +237,22 @@ describe('preview certificate manager', () => {
     expect(report.failures[0].hostname).toBe('pr-241.preview.yawp.school');
   });
 });
+
+test('registered named certificates can be reused and selected for SNI, unknown names cannot', async () => {
+ const {createInternalRouteReader}=await import('./internal-routes.mjs');
+ const {createCertificateStore}=await import('./ingress-server.mjs');
+ const root=temporaryRoot('named-certificate-'), hostname='rubric-editor.preview.test';
+ const registry=path.join(root,'routes'); mkdirSync(registry);
+ writeFileSync(path.join(registry,'rubric-editor.json'),JSON.stringify({version:1,environmentId:'aeaa755d-aaca-4ae3-8ab4-1b4f95860bfe',slug:'rubric-editor',state:'active'}));
+ const readInternalRoute=createInternalRouteReader({directory:registry,domain:'preview.test',ownerUid:process.getuid()});
+ const pair=createCertificate(root,hostname), certRoot=path.join(root,'certs');
+ mkdirSync(path.join(certRoot,hostname),{recursive:true});
+ writeFileSync(path.join(certRoot,hostname,'privkey.pem'),pair.key);
+ writeFileSync(path.join(certRoot,hostname,'fullchain.pem'),pair.cert);
+ const result=await ensureCertificate({hostname,domain:'preview.test',certRoot,readInternalRoute,fetchFn:async()=>{throw new Error('current certificate must not issue');}});
+ expect(result.status).toBe('current');
+ const store=createCertificateStore({certRoot,domain:'preview.test',defaultHostname:hostname,readInternalRoute});
+ expect(await new Promise(resolve=>store.sniCallback(hostname,(error,context)=>resolve(!error && !!context)))).toBe(true);
+ expect(await new Promise(resolve=>store.sniCallback('unknown.preview.test',error=>resolve(!!error)))).toBe(true);
+ await expect(ensureCertificate({hostname:'unknown.preview.test',domain:'preview.test',certRoot,readInternalRoute})).rejects.toThrow();
+});
