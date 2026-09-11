@@ -367,3 +367,22 @@ describe('preview ingress', () => {
     expect(targetFromDockerInspect({ State: { Running: true }, NetworkSettings: {} })).toBeNull();
   });
 });
+
+test('named Internal host proxies to its registered environment without PR wake', async () => {
+ const environmentId='aeaa755d-aaca-4ae3-8ab4-1b4f95860bfe';
+ const upstream=await listen(createServer((req,res)=>res.end(req.headers.host)));
+ let state='active', wakeCalls=0;
+ const readInternalRoute=hostname=>hostname==='rubric-editor.preview.test' ? {hostname,environmentId,state} : null;
+ const gateway=await listen(createServer(createPreviewIngress({
+  domain:'preview.test',readInternalRoute,
+  resolveTarget:async (id,{service})=>id===environmentId && service==='internal' ? {host:'127.0.0.1',port:upstream}:null,
+  authorizeWake:async()=>{wakeCalls++;return false;},ensureRunning:async()=>{},recordAccess:async()=>{},
+ })));
+ const good=await request(gateway,{headers:{host:'rubric-editor.preview.test'}});
+ expect(good.status).toBe(200);
+ expect(good.body).toBe('rubric-editor.preview.test');
+ state='paused';
+ expect((await request(gateway,{headers:{host:'rubric-editor.preview.test'}})).status).toBe(503);
+ expect((await request(gateway,{headers:{host:'unknown.preview.test'}})).status).toBe(404);
+ expect(wakeCalls).toBe(0);
+});
