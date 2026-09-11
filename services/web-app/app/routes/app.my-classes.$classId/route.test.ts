@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { Prisma } from '@app/prisma';
 
 const prisma = {
   class: { findFirst: mock(), findMany: mock() },
@@ -367,7 +368,7 @@ describe('class detail loader document visibility', () => {
           teacherProfileId: 'teacher-1',
         },
       ],
-      select: { id: true, title: true, systemKey: true },
+      select: { id: true, title: true, systemKey: true, kind: true },
       orderBy: { position: 'asc' },
     });
     expect(data.assignmentTypes).toEqual([
@@ -612,6 +613,10 @@ describe('class detail loader document visibility', () => {
         prompt: 'Updated prompt',
         submitForGrade: true,
         pointValue: 100,
+        // Cleared on every edit that is not an exit ticket, so a type changed
+        // away from Exit Ticket cannot keep a config describing a prompt it no
+        // longer has.
+        exitTicketConfigJson: Prisma.DbNull,
       },
     });
   });
