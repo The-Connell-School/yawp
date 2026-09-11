@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "revision": "7ad4b91d9bbf23f8eb2f84ff30c131e04fb61ded",
+  "files": [
+    {
+      "name": "certificate-manager.mjs",
+      "sha256": "d829ee0733b618845a6e878a8374ae3616fd368af656445bcb4add932eb5f490",
+      "mode": 420,
+      "size": 17985
+    },
+    {
+      "name": "ingress-server.mjs",
+      "sha256": "9ff5f1b1614ec1e01343cfc679241732f60c703fe53d89551cc4d96fde4630b8",
+      "mode": 420,
+      "size": 22127
+    },
+    {
+      "name": "internal-routes.mjs",
+      "sha256": "59ad7ad7aec42fc4095baf050ce974441a34d664d95ef23377dcbbabf69dc476",
+      "mode": 420,
+      "size": 2430
+    },
+    {
+      "name": "wake-preview.sh",
+      "sha256": "72c306da56a57f63d73435d9c54ce2992243f8aff62c672368b9235ceae7c19e",
+      "mode": 493,
+      "size": 15754
+    },
+    {
+      "name": "wake-server.mjs",
+      "sha256": "b8af4f718b79ebd2c97783cf00b40954ac4b1f57a6c1197e3d0b80e5af91cb8f",
+      "mode": 420,
+      "size": 23181
+    }
+  ],
+  "releaseId": "d1c9b8694bac7dd225f29b9d99a27e67f4b847eb27d40502a2ebed427be6aede"
+}
