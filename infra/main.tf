@@ -314,6 +314,7 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
             aws_secretsmanager_secret.sentry_dsn.arn,
             aws_secretsmanager_secret.resend_api_key.arn
           ],
+          module.internal_platform_integration.secret_arns,
           local.ua_billing_runtime_enabled ? [
             aws_secretsmanager_secret.stripe_secret_key[0].arn,
             aws_secretsmanager_secret.stripe_webhook_secret[0].arn
@@ -455,6 +456,7 @@ resource "aws_secretsmanager_secret_version" "stripe_webhook_secret" {
 }
 
 resource "aws_apprunner_service" "web" {
+  depends_on = [aws_iam_role_policy.apprunner_instance_policy]
   service_name = "${var.app_name}-${var.env}"
 
   source_configuration {
@@ -489,7 +491,7 @@ resource "aws_apprunner_service" "web" {
           YAWP_APP_ORIGIN                           = var.yawp_app_origin
         }, length(var.stripe_ua_existing_subscription_price_ids) > 0 ? {
           STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS = join(",", var.stripe_ua_existing_subscription_price_ids)
-        } : {})
+        } : {}, module.internal_platform_integration.variables)
 
         runtime_environment_secrets = merge({
           HONEYPOT_SECRET = aws_secretsmanager_secret.honeypot.arn
@@ -504,7 +506,7 @@ resource "aws_apprunner_service" "web" {
         }, local.ua_billing_runtime_enabled ? {
           STRIPE_SECRET_KEY     = aws_secretsmanager_secret.stripe_secret_key[0].arn
           STRIPE_WEBHOOK_SECRET = aws_secretsmanager_secret.stripe_webhook_secret[0].arn
-        } : {})
+        } : {}, module.internal_platform_integration.secrets)
       }
     }
 

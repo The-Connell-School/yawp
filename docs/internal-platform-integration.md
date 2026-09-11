@@ -127,8 +127,15 @@ Use `./bin/project internal-integration-config INPUT_JSON --json` to validate a 
 
 Generated variables are `INTERNAL_PLATFORM_ORIGIN`, `YAWP_PUBLIC_ORIGIN`, `INTERNAL_IMPERSONATION_ENABLED` and `INTERNAL_END_DELIVERY_ENABLED`. Generated secret mappings are `YAWP_MANAGEMENT_SERVICE_KEY` (Internal calls Yawp) and `YAWP_PRODUCTION_SERVICE_KEY` (Yawp calls Internal). Existing `INTERNAL_COMMAND_TOKEN` is unrelated and must not be repurposed. `YAWP_APP_ORIGIN` does not substitute for the required `YAWP_PUBLIC_ORIGIN`.
 
-The existing production Terraform App Runner resource does not yet merge these mappings or grant its instance role access to their exact ARNs. That wiring and a reviewed production plan remain necessary. Merge the settings into existing maps; never replace existing application environment or secrets. Secret values do not belong in plan input JSON, Git or transcripts.
+The production Terraform App Runner resource now merges these mappings and adds their exact ARNs to its instance role policy when `internal_platform_integration` is configured. A reviewed production plan remains necessary. Merge the settings into existing maps; never replace existing application environment or secrets. Secret values do not belong in plan input JSON, Git or transcripts.
 
 Start with both booleans false while installing/migrating and checking connectivity. Activating session issuance requires `deliverEnds: true`. To stop new impersonations while retaining termination delivery, set `issueSessions: false, deliverEnds: true` and retain the origin/credential mappings. Keep delivery running until pending ends have drained; do not disable both as a blanket rollback. Existing impersonation cookies must continue to be handled by the fail-closed integration rather than reverting to ordinary user authentication.
 
 The preflight tests cover activation/drain behavior and invalid configuration. They do not prove live secret permissions, service connectivity, migrations, production sessions or deployment. The actual public Internal origin and secret ARNs depend on foundation/application provisioning; no live integration settings were created here.
+
+
+### Opt-in Terraform wiring
+
+`infra/internal-integration.tf` accepts an optional `internal_platform_integration` object. Its fields are `internal_origin`, `public_origin`, `management_secret_arn`, `production_secret_arn`, `issue_sessions` and `deliver_ends`; the booleans default false. With the object omitted, the module emits empty maps/list, retaining existing service settings and secret permissions. The module creates no secrets or resources. App Runner waits for its existing instance policy to update before service configuration changes.
+
+`./bin/project test --profile internal-integration-infra --json` runs real provider-free Terraform module plans for defaults, drain mode and rejected activation/credential/origin combinations. `internal-integration-infra-validate` initializes only local providers/modules with backend disabled, then validates the entire root. Neither profile applies AWS changes. Live production planning and both directional credential-value checks remain required. The separate Internal foundation plan/approval does not deploy this Yawp configuration.
