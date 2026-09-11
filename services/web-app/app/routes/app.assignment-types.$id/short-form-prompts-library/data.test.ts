@@ -6,6 +6,7 @@ import {
   SOURCE_NEED_ORDER,
   applyFilters,
   buildFacets,
+  deriveTitleFromPrompt,
   buildOptionCounts,
   readFilters,
   savedPromptToLibraryEntry,
@@ -191,5 +192,39 @@ describe('short-form library facets', () => {
     expect(kindTotal).toBe(entries.length);
     expect(counts.collections.library).toBe(entries.length);
     expect(counts.collections.mine).toBe(0);
+  });
+});
+
+/**
+ * Saved prompts come from the same store the Class Starter library uses, which
+ * records no title — that library shows the prompt text as the row. This one
+ * has a title column, so a saved prompt needs one derived.
+ */
+describe('deriveTitleFromPrompt', () => {
+  test('uses the first sentence when it is short enough to be a heading', () => {
+    expect(
+      deriveTitleFromPrompt('Was the ending earned? Argue from one detail.')
+    ).toBe('Was the ending earned?');
+  });
+
+  test('truncates on a word boundary rather than mid-word', () => {
+    const title = deriveTitleFromPrompt(
+      'Define success the way the main character would define it and then point to the exact moment where that definition fails them completely'
+    );
+
+    expect(title.length).toBeLessThanOrEqual(72);
+    expect(title.endsWith('…')).toBe(true);
+    expect(title).not.toMatch(/\s…$/);
+  });
+
+  test('falls back to a label rather than an empty heading', () => {
+    expect(deriveTitleFromPrompt('   ')).toBe('Saved prompt');
+    expect(deriveTitleFromPrompt('')).toBe('Saved prompt');
+  });
+
+  test('collapses whitespace so a pasted prompt does not break the row', () => {
+    expect(deriveTitleFromPrompt('Two   lines\n\nof prompt.')).toBe(
+      'Two lines of prompt.'
+    );
   });
 });

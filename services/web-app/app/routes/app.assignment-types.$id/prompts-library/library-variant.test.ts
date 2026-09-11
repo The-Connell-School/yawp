@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolvePromptLibraryVariant } from './library-variant';
+import {
+  resolvePromptLibraryVariant,
+  usesOpenEndedLibrary,
+  usesShortFormLibrary,
+} from './library-variant';
 
 describe('resolvePromptLibraryVariant', () => {
   test('Class Starter gets the open-ended prompt library', () => {
@@ -58,5 +62,29 @@ describe('resolvePromptLibraryVariant', () => {
     expect(
       resolvePromptLibraryVariant({ title: '', dailyPagesSplitEnabled: true })
     ).toBeNull();
+  });
+});
+
+describe('which library a variant gets', () => {
+  /**
+   * The freewrite corpus is Class Starter material. Once the split is on, Daily
+   * Pages stops borrowing it and gets the short-form corpus instead — that swap
+   * is the point of having two libraries rather than one shared one.
+   */
+  test('the graded Daily Pages variant uses the short-form library', () => {
+    expect(usesShortFormLibrary('daily-pages-graded')).toBe(true);
+    expect(usesOpenEndedLibrary('daily-pages-graded')).toBe(false);
+  });
+
+  test('Class Starter and legacy Daily Pages keep the open-ended library', () => {
+    for (const variant of ['class-starter', 'daily-pages-legacy'] as const) {
+      expect(usesOpenEndedLibrary(variant)).toBe(true);
+      expect(usesShortFormLibrary(variant)).toBe(false);
+    }
+  });
+
+  test('an assignment type with no library gets neither', () => {
+    expect(usesOpenEndedLibrary(null)).toBe(false);
+    expect(usesShortFormLibrary(null)).toBe(false);
   });
 });

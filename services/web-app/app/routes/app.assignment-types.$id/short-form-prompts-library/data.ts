@@ -122,6 +122,29 @@ export function toLibraryEntries(
   return prompts.map(toLibraryEntry);
 }
 
+const SAVED_TITLE_MAX = 72;
+
+/**
+ * A heading for a saved prompt. The saved-prompt store records no title — the
+ * Class Starter library shows the prompt text as the row and needs none — so
+ * one is derived from the prompt's own first sentence.
+ */
+export function deriveTitleFromPrompt(prompt: string): string {
+  const normalized = prompt.replace(/\s+/g, ' ').trim();
+  if (!normalized) return 'Saved prompt';
+
+  const firstSentence = normalized.match(/^[^.?!]*[.?!]/)?.[0]?.trim();
+  const candidate =
+    firstSentence && firstSentence.length <= SAVED_TITLE_MAX
+      ? firstSentence
+      : normalized;
+  if (candidate.length <= SAVED_TITLE_MAX) return candidate;
+
+  const clipped = candidate.slice(0, SAVED_TITLE_MAX - 1);
+  const lastSpace = clipped.lastIndexOf(' ');
+  return `${(lastSpace > 0 ? clipped.slice(0, lastSpace) : clipped).trimEnd()}…`;
+}
+
 export function savedPromptToLibraryEntry(
   saved: SavedShortFormPrompt
 ): ShortFormLibraryEntry {
@@ -217,28 +240,43 @@ export const LENGTH_TARGET_LABEL: Record<ShortFormLengthTarget, string> = {
 };
 
 /** Stable display order for facets that are not simply alphabetical. */
-export const KIND_ORDER: ShortFormPromptKind[] = [
+export const KIND_ORDER = [
   'close-read',
   'claim-and-defend',
   'one-difference',
   'evaluate-a-choice',
   'define-precisely',
   'exit-synthesis',
-];
+] as const satisfies readonly ShortFormPromptKind[];
 
-export const SOURCE_NEED_ORDER: ShortFormSourceNeed[] = [
+export const SOURCE_NEED_ORDER = [
   'required',
   'optional',
   'none',
-];
+] as const satisfies readonly ShortFormSourceNeed[];
 
-export const LENGTH_TARGET_ORDER: ShortFormLengthTarget[] = [
+export const LENGTH_TARGET_ORDER = [
   'paragraph',
   'half-page',
   'page',
-];
+] as const satisfies readonly ShortFormLengthTarget[];
 
 export const GRADE_ORDER: GradeBand[] = ['9', '10', '11', '12'];
+
+/**
+ * The runtime vocabulary arrays. Separate from the ordering constants above
+ * because the generator's schema needs real arrays to build enums from, and a
+ * tag the model invents has to be recognisably outside the set.
+ */
+export const COGNITIVE_MOVES = [
+  'analyze',
+  'argue-a-position',
+  'compare',
+  'define-a-term',
+  'evaluate',
+  'interpret',
+  'synthesize',
+] as const satisfies readonly ShortFormCognitiveMove[];
 
 /**
  * Guidance shown above the library. Says the two things a teacher most needs to

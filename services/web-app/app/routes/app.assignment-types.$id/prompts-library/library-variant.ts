@@ -20,6 +20,28 @@ export type PromptLibraryVariant =
   | 'daily-pages-legacy'
   | 'daily-pages-graded';
 
+/**
+ * The variants that read from the open-ended freewrite corpus in this folder.
+ * That corpus is Class Starter material — its prompts invite writing without
+ * asking for the backing — so the graded Daily Pages variant is deliberately
+ * not one of them.
+ */
+export type OpenEndedPromptLibraryVariant = Exclude<
+  PromptLibraryVariant,
+  'daily-pages-graded'
+>;
+
+export function usesOpenEndedLibrary(
+  variant: PromptLibraryVariant | null
+): variant is OpenEndedPromptLibraryVariant {
+  return variant === 'class-starter' || variant === 'daily-pages-legacy';
+}
+
+/** The graded Daily Pages library, whose prompts always ask for the support. */
+export function usesShortFormLibrary(variant: PromptLibraryVariant | null) {
+  return variant === 'daily-pages-graded';
+}
+
 export function resolvePromptLibraryVariant({
   title,
   dailyPagesSplitEnabled,

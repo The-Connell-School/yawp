@@ -46,7 +46,25 @@ import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
-import { resolvePromptLibraryVariant } from './prompts-library/library-variant';
+import {
+  resolvePromptLibraryVariant,
+  usesOpenEndedLibrary,
+  usesShortFormLibrary,
+  type OpenEndedPromptLibraryVariant,
+} from './prompts-library/library-variant';
+import { ShortFormPromptsLibrary } from './short-form-prompts-library/short-form-prompts-library';
+import { ShortFormTeacherDirections } from './short-form-prompts-library/short-form-teacher-directions';
+import {
+  applyFilters as applyShortFormFilters,
+  buildFacets as buildShortFormFacets,
+  buildOptionCounts as buildShortFormOptionCounts,
+  deriveTitleFromPrompt,
+  readFilters as readShortFormFilters,
+  savedPromptToLibraryEntry as savedShortFormPromptToLibraryEntry,
+  toLibraryEntries as toShortFormLibraryEntries,
+  type ShortFormPrompt,
+} from './short-form-prompts-library/data';
+import shortFormPromptsRaw from './short-form-prompts-library/prompts.json';
 import {
   type CognitiveMove,
   COLLECTION_ORDER,
@@ -82,6 +100,9 @@ const THESIS_ESSAY_TITLE = 'the thesis-driven essay';
 const ALL_PROMPTS = toLibraryEntries(promptsRaw as LibraryPrompt[]);
 const ALL_THESIS_PROMPTS = toThesisLibraryEntries(
   thesisPromptsRaw as ThesisPrompt[]
+);
+const ALL_SHORT_FORM_PROMPTS = toShortFormLibraryEntries(
+  shortFormPromptsRaw as ShortFormPrompt[]
 );
 const SERIOUSNESS_ORDER: PromptSeriousness[] = [
   'playful',
@@ -410,8 +431,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     title: assignmentType.title,
     dailyPagesSplitEnabled: isDailyPagesSplitEnabled(),
   });
+  const isTeacher = profile.role === "TEACHER";
+  // The freewrite corpus is Class Starter material. Once the split flag is on,
+  // Daily Pages stops borrowing it and reads the short-form corpus instead —
+  // whose prompts always ask for the backing the rubric grades.
   const showsOpenEndedLibrary =
-    profile.role === "TEACHER" && promptLibraryVariant !== null;
+    isTeacher && usesOpenEndedLibrary(promptLibraryVariant);
+  const showsShortFormLibrary =
+    isTeacher && usesShortFormLibrary(promptLibraryVariant);
   const isThesisEssay = normalizedTitle === THESIS_ESSAY_TITLE;
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -436,9 +463,44 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           facets: buildFacets(libraryEntries),
           optionCounts: buildOptionCounts(libraryEntries),
           totalCount: libraryEntries.length,
-          variant: promptLibraryVariant,
+          variant: promptLibraryVariant as OpenEndedPromptLibraryVariant,
         }
       : null;
+
+  // "My prompts" comes from the same saved-prompt store either way: they are
+  // this teacher's prompts for this assignment type, and which corpus is on
+  // screen does not change whose they are. The store records no title, so one
+  // is derived for the short-form library's row heading.
+  const savedShortFormPrompts = showsShortFormLibrary
+    ? await listSavedDailyPagesPrompts({
+        membershipId: profile.id,
+        assignmentTypeId: assignmentType.id,
+      })
+    : [];
+  const shortFormEntries = showsShortFormLibrary
+    ? [
+        ...savedShortFormPrompts.map((saved) =>
+          savedShortFormPromptToLibraryEntry({
+            id: saved.id,
+            title: deriveTitleFromPrompt(saved.prompt),
+            prompt: saved.prompt,
+            savedAt: saved.savedAt,
+          })
+        ),
+        ...ALL_SHORT_FORM_PROMPTS,
+      ]
+    : [];
+  const shortFormPromptLibrary = showsShortFormLibrary
+    ? {
+        prompts: applyShortFormFilters(
+          shortFormEntries,
+          readShortFormFilters(new URL(request.url))
+        ),
+        facets: buildShortFormFacets(shortFormEntries),
+        optionCounts: buildShortFormOptionCounts(shortFormEntries),
+        totalCount: shortFormEntries.length,
+      }
+    : null;
   // "My prompts": prompts this teacher generated and kept, shown in the same
   // library alongside the fixed corpus and filterable on their own.
   const savedThesisPrompts =
@@ -496,6 +558,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
+    shortFormPromptLibrary,
     thesisPromptLibrary,
     apHistoryLibrary,
   });
@@ -606,6 +669,7 @@ export default function AppAssignmentTypesIdRoute() {
     essayType: string;
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
+  const showShortFormLibrary = data.shortFormPromptLibrary != null;
   const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -724,6 +788,7 @@ export default function AppAssignmentTypesIdRoute() {
         {data.promptLibrary ? (
           <TeacherDirections variant={data.promptLibrary.variant} />
         ) : null}
+        {showShortFormLibrary ? <ShortFormTeacherDirections /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {hasModules ? (
           <Accordion type="single" collapsible>
@@ -767,6 +832,21 @@ export default function AppAssignmentTypesIdRoute() {
               facets={data.promptLibrary.facets}
               optionCounts={data.promptLibrary.optionCounts}
               totalCount={data.promptLibrary.totalCount}
+              onSelectPrompt={(prompt) => {
+                setApHistoryEntry(null);
+                setLibraryPrompt(prompt);
+                setIsAssignmentSheetOpen(true);
+              }}
+            />
+          </div>
+        ) : null}
+        {data.shortFormPromptLibrary ? (
+          <div className="pb-6">
+            <ShortFormPromptsLibrary
+              prompts={data.shortFormPromptLibrary.prompts}
+              facets={data.shortFormPromptLibrary.facets}
+              optionCounts={data.shortFormPromptLibrary.optionCounts}
+              totalCount={data.shortFormPromptLibrary.totalCount}
               onSelectPrompt={(prompt) => {
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
