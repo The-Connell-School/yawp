@@ -19,9 +19,27 @@ function safeSecretEqual(actual, expected) {
     && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
-export function parsePreviewHost(host, domain) {
+function parseConfiguredHostAlias(hostname, aliases) {
+  for (const entry of String(aliases || '').split(',')) {
+    const [alias, target] = entry.split('=').map((value) => value?.trim());
+    const match = target?.match(/^([1-9][0-9]*):(web|ua|blackboard)$/);
+    if (alias?.toLowerCase() !== hostname || !match) continue;
+    const pr = Number(match[1]);
+    if (!Number.isSafeInteger(pr)) return null;
+    return { pr, service: match[2], hostname };
+  }
+  return null;
+}
+
+export function parsePreviewHost(
+  host,
+  domain,
+  aliases = process.env.PREVIEW_HOST_ALIASES
+) {
   if (typeof host !== 'string' || typeof domain !== 'string' || !domain) return null;
   const hostname = host.toLowerCase().replace(/:\d+$/, '');
+  const configuredAlias = parseConfiguredHostAlias(hostname, aliases);
+  if (configuredAlias) return configuredAlias;
   const suffix = `.${domain.toLowerCase()}`;
   if (!hostname.endsWith(suffix)) return null;
   const labels = hostname.slice(0, -suffix.length);

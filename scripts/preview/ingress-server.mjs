@@ -230,7 +230,7 @@ export function createPreviewIngress({
       send(response, 404, 'Not found.\n');
       return;
     }
-    const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
+    const hostname = parsed.hostname || previewServiceHostname(parsed.pr, domain, parsed.service);
     let target = await resolveTarget(parsed.pr, { service: parsed.service });
     if (!target) {
       try {
