@@ -164,6 +164,7 @@ export function capabilities() {
       fixture: "./bin/project fixture apply local-dev --json",
       test: "./bin/project test --profile changed --json",
       qa: "./bin/project qa prepare --json",
+      ingressRelease: "./bin/project ingress-release prepare --revision SHA --output ABSOLUTE_PATH --json",
     },
     fixtures: ["local-dev"],
     proofProfiles: ["project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "assignment-rubric-unit", "assignment-prompt-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
@@ -468,6 +469,7 @@ function help(topic = "root") {
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
     test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|assignment-create|assignment-rubric-unit|assignment-prompt-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
+    "ingress-release": "Usage: ./bin/project ingress-release prepare --revision FULL_SHA --output ABSOLUTE_PATH [--json] | verify --output ABSOLUTE_PATH --release-id SHA256 [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
   };
   return pages[topic] || pages.root;
@@ -496,6 +498,7 @@ function validateOptions(options, allowed) {
 function validatePositionals(command, operation, positional) {
   const exact = { capabilities: 1, doctor: 1, bootstrap: 1, test: 1 };
   if (exact[command] && positional.length !== exact[command]) throw Object.assign(new Error(`unexpected arguments for ${command}`), { code: 'unexpected_argument' });
+  if (command === 'ingress-release' && (!['prepare','verify'].includes(operation) || positional.length !== 2)) throw Object.assign(new Error('Use ingress-release prepare or verify'),{code:'unknown_command'});
   if (command === 'fixture' && (!['apply', 'reset', 'verify', 'list'].includes(operation) || positional.length > 3)) {
     throw Object.assign(new Error(`invalid fixture command: ${positional.join(' ')}`), { code: 'unknown_command' });
   }
@@ -521,10 +524,18 @@ export async function main(argv = process.argv.slice(2)) {
   if (command === "help" || parsed.options.help === true) return output(help(command === "help" ? operation || "root" : command), false);
   const allowedByCommand = {
     capabilities: ['json'], doctor: ['json'], bootstrap: ['json', 'fresh'], fixture: ['json'],
-    dev: ['json'], test: ['json', 'profile'], qa: ['json', 'routes']
+    dev: ['json'], test: ['json', 'profile'], qa: ['json', 'routes'],
+    'ingress-release': ['json','revision','output','release-id']
   };
   validateOptions(parsed.options, allowedByCommand[command] || ['json']);
   validatePositionals(command, operation, parsed.positional);
+  if (command === "ingress-release") {
+    const {prepareIngressRelease,verifyIngressRelease}=await import('./preview/ingress-release.mjs');
+    const result=operation==='prepare'
+      ? await prepareIngressRelease({repository:ROOT,revision:parsed.options.revision,output:parsed.options.output})
+      : await verifyIngressRelease(parsed.options.output,parsed.options['release-id']);
+    return output(result,json);
+  }
   if (command === "capabilities") return output(capabilities(), json);
   if (command === "doctor") {
     const result = doctor();
