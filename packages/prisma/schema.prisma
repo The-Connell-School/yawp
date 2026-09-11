@@ -116,6 +116,12 @@ model Assignment {
   gradingAssistantStrictnessLevel String            @default("intermediate")
   tutorEnabled                    Boolean           @default(true)
   apHistorySnapshot               Json?
+  /// What the teacher answered in the exit ticket form: basic, or specific
+  /// with its focus and topic. The composed student-facing prompt is written
+  /// to `prompt` as well, so every existing reader keeps working and this
+  /// column only records what the prompt was built from. Null on every
+  /// assignment that is not an exit ticket.
+  exitTicketConfigJson            Json?
   classAssignments                ClassAssignment[]
   documents                       Document[]
 

@@ -15,6 +15,12 @@ import {
   DAILY_PAGES_RUBRIC,
   DAILY_PAGES_SCORING_SCALE,
 } from './daily-pages-rubric';
+import { EXIT_TICKET_ASSIGNMENT_TYPE_KIND } from './exit-ticket';
+import {
+  EXIT_TICKET_PROMPT_CONFIG,
+  EXIT_TICKET_RUBRIC,
+  EXIT_TICKET_SCORING_SCALE,
+} from './exit-ticket-rubric';
 
 export const MODULE_RUBRIC_RELATIONSHIPS = [
   'primary',
@@ -29,7 +35,8 @@ export type ModuleRubricRelationship =
 export type AssignmentTypeRubricConfigSource =
   | 'assignment-type'
   | 'thesis-default'
-  | 'daily-pages-default';
+  | 'daily-pages-default'
+  | 'exit-ticket-default';
 
 export type AssignmentTypeRubricConfigInput = {
   /**
@@ -115,6 +122,17 @@ const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
     rubricIncomplete: false,
     defaultLabel: 'Daily Pages engagement',
   },
+  [EXIT_TICKET_ASSIGNMENT_TYPE_KIND]: {
+    source: 'exit-ticket-default',
+    scoringScale: EXIT_TICKET_SCORING_SCALE,
+    rubric: EXIT_TICKET_RUBRIC,
+    promptConfig: EXIT_TICKET_PROMPT_CONFIG,
+    outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+    calibrationNotes:
+      'Exit Tickets judge understanding only, scored inside written bands so the grade honors the point value, with overall feedback and no grammar highlighting.',
+    rubricIncomplete: false,
+    defaultLabel: 'Exit Ticket understanding',
+  },
 };
 
 function getDefaultRubricConfig(
@@ -137,9 +155,9 @@ export type AssignmentTypeRubricCompleteness = 'none' | 'partial' | 'complete';
 function isCategoryComplete(category: RubricCategory) {
   return Boolean(
     category.key.trim() &&
-      category.label.trim() &&
-      category.description.trim() &&
-      Number.isFinite(category.weight)
+    category.label.trim() &&
+    category.description.trim() &&
+    Number.isFinite(category.weight)
   );
 }
 

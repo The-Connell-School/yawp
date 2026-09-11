@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildReleaseGradeRows,
   formatClassLabel,
+  getTeacherDocumentWorkStatusDisplay,
   type TeacherDocumentWorkRow,
 } from './teacher-document-work-utils';
 
@@ -112,5 +113,54 @@ describe('buildReleaseGradeRows', () => {
         },
       },
     ]);
+  });
+});
+
+describe('getTeacherDocumentWorkStatusDisplay on work that is not for a grade', () => {
+  const released = {
+    id: 'submission-1',
+    numericPercentage: 82,
+    letterGrade: 'B',
+    releasedAt: new Date('2026-06-11T12:00:00.000Z'),
+    gradedAt: new Date('2026-06-11T11:00:00.000Z'),
+  };
+
+  test('says the feedback was released rather than leaving a bare status', () => {
+    // There is no grade to append, and "Released" on its own reads as though
+    // grading failed — which is what an exit ticket read for understanding
+    // looked like.
+    const display = getTeacherDocumentWorkStatusDisplay(
+      documentRow({
+        id: 'doc-1',
+        assignment: {
+          id: 'assignment-1',
+          title: 'Exit ticket: balancing equations',
+          submitForGrade: false,
+          pointValue: null,
+        },
+        latestSubmission: released as never,
+      })
+    );
+
+    expect(display.label).toContain('Feedback only');
+    expect(display.label).not.toContain('82');
+  });
+
+  test('still appends the grade when the work is submitted for one', () => {
+    const display = getTeacherDocumentWorkStatusDisplay(
+      documentRow({
+        id: 'doc-2',
+        assignment: {
+          id: 'assignment-2',
+          title: 'Exit ticket: the water cycle',
+          submitForGrade: true,
+          pointValue: 10,
+        },
+        latestSubmission: released as never,
+      })
+    );
+
+    expect(display.label).toContain('8 / 10');
+    expect(display.label).not.toContain('Feedback only');
   });
 });

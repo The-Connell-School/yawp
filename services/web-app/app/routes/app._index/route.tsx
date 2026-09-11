@@ -35,6 +35,7 @@ export type AssignmentTypeRow = {
   id: string;
   title: string;
   systemKey?: string | null;
+  kind?: string | null;
   image?: { id: string } | null;
 };
 
@@ -261,6 +262,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             id: true,
             title: true,
             systemKey: true,
+            kind: true,
             image: { select: { id: true } },
           },
           orderBy: { position: 'asc' },
@@ -275,6 +277,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     .map((type) => ({
       id: type.id,
       title: type.title,
+      // AssignmentTypeRow is shared with student-side selects that do not ask
+      // for this column, so it is optional there and defaulted here.
+      kind: type.kind ?? null,
     }));
 
   return dataResponse({

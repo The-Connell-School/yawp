@@ -68,6 +68,12 @@ mock.module('~/domain/assignments/saved-assignments.server', () => ({
 }));
 
 const { action } = await import('./route');
+const {
+  BASIC_EXIT_TICKET_PROMPT,
+  EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+  EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+  EXIT_TICKET_ELABORATION_NOTE,
+} = await import('~/domain/assignment-types/exit-ticket');
 
 afterAll(() => {
   mock.restore();
@@ -103,8 +109,13 @@ function responseStatus(response: any) {
 function mockAssignmentTypeAvailable({
   id = 'at-1',
   systemKey = 'generic_essay',
+  kind = null as string | null,
 } = {}) {
-  prisma.assignmentType.findFirst.mockResolvedValue({ id, systemKey });
+  prisma.assignmentType.findFirst.mockResolvedValue({
+    id,
+    systemKey,
+    kind,
+  });
 }
 
 describe('api.assignments.create', () => {
@@ -178,7 +189,7 @@ describe('api.assignments.create', () => {
         id: 'at-1',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true },
+      select: { id: true, systemKey: true, kind: true },
     });
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -454,7 +465,7 @@ describe('api.assignments.create', () => {
         id: 'at-forbidden',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true },
+      select: { id: true, systemKey: true, kind: true },
     });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
@@ -701,5 +712,397 @@ describe('api.assignments.create', () => {
     expect(body.message).toBe(
       'Assignment created and applied to classes, but it could not be saved for reuse.'
     );
+  });
+  describe('collaborative drafts', () => {
+    // One class only, so it matches the single classIds entry the helper posts.
+    const singleClass = () => {
+      prisma.class.findMany.mockResolvedValue([
+        { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
+      ]);
+    };
+    // Legacy flag values prove creation no longer depends on assignment type.
+    const enablePilot = () => {
+      singleClass();
+    };
+    const disablePilot = () => {
+      singleClass();
+    };
+
+    const createWithCollaboration = (
+      extra: Record<string, string | string[]> = {}
+    ) =>
+      action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Write the essay.',
+          title: 'Essay',
+          collaborationEnabled: 'true',
+          collaborationGroupMode: 'teacher',
+          collaborationGroupSize: '3',
+          ...extra,
+        }),
+        params: {},
+      } as any);
+
+    test('stores the settings when the assignment type is in the pilot', async () => {
+      enablePilot();
+
+      const body = await readBody(await createWithCollaboration());
+
+      expect(body.success).toBe(true);
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            collaborationEnabled: true,
+            collaborationGroupMode: 'teacher',
+            collaborationGroupSize: 3,
+          }),
+        })
+      );
+    });
+
+    test('rejects collaborative creation when a selected class has no students', async () => {
+      enablePilot();
+      prisma.class.findFirst.mockResolvedValue({ id: 'class-1' });
+
+      const response = await createWithCollaboration();
+      const body = await readBody(response);
+
+      expect(responseStatus(response)).toBe(400);
+      expect(body.message).toMatch(/add students/i);
+      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
+
+    test('stores collaboration for an assignment type outside the former pilot', async () => {
+      disablePilot();
+
+      const body = await readBody(await createWithCollaboration());
+
+      expect(body.success).toBe(true);
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            collaborationEnabled: true,
+            collaborationGroupMode: 'teacher',
+            collaborationGroupSize: 3,
+          }),
+        })
+      );
+    });
+
+    test('creates a solo assignment when the form omits the toggle entirely', async () => {
+      // Backward compatibility: an older deployed client posts no collaboration
+      // fields at all and must keep producing single-author assignments.
+      enablePilot();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Write the essay.',
+          title: 'Essay',
+        }),
+        params: {},
+      } as any);
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ collaborationEnabled: false }),
+        })
+      );
+    });
+
+    test('passes the chosen mode through to the assignment', async () => {
+      // The sheet posts a mode now; before, every collaborative assignment
+      // silently took the parser's default because nothing rendered a picker.
+      enablePilot();
+
+      await createWithCollaboration({ collaborationGroupMode: 'random' });
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ collaborationGroupMode: 'random' }),
+        })
+      );
+    });
+
+    test('arranges groups at creation for the modes that describe one', async () => {
+      enablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
+
+      await createWithCollaboration({ collaborationGroupMode: 'random' });
+
+      expect(autoArrangeNewAssignment).toHaveBeenCalledWith({
+        assignmentId: 'assignment-1',
+        mode: 'random',
+        groupSize: 3,
+      });
+    });
+
+    test('whole class drops the posted size', async () => {
+      // The group is the roster, so a size would be meaningless -- and the
+      // stepper is hidden for this mode, so a posted one is stale.
+      enablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
+
+      await createWithCollaboration({ collaborationGroupMode: 'whole-class' });
+
+      expect(autoArrangeNewAssignment).toHaveBeenCalledWith(
+        expect.objectContaining({ mode: 'whole-class', groupSize: null })
+      );
+    });
+
+    test('does not arrange a solo assignment', async () => {
+      enablePilot();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Write the essay.',
+          title: 'Essay',
+        }),
+        params: {},
+      } as any);
+
+      expect(autoArrangeNewAssignment).not.toHaveBeenCalled();
+    });
+
+    test('arranges groups for an assignment type outside the former pilot', async () => {
+      disablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
+
+      await createWithCollaboration({ collaborationGroupMode: 'random' });
+
+      expect(autoArrangeNewAssignment).toHaveBeenCalledWith({
+        assignmentId: 'assignment-1',
+        mode: 'random',
+        groupSize: 3,
+      });
+    });
+
+    test('sends the teacher on to group setup, because creating is not the end', async () => {
+      // The sheet used to just close, leaving a collaborative assignment looking
+      // finished while its groups did not exist and no student could see it.
+      enablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { id: 'ca-1', classId: 'class-1' },
+      ]);
+
+      const body = await readBody(await createWithCollaboration());
+
+      expect(body.nextStep).toEqual({
+        url: '/app/class-assignments/ca-1/groups',
+        classCount: 1,
+      });
+    });
+
+    test('says plainly that students cannot see it yet', async () => {
+      enablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { id: 'ca-1', classId: 'class-1' },
+      ]);
+
+      const body = await readBody(await createWithCollaboration());
+
+      expect(body.message).toMatch(/cannot see it until you finalize groups/i);
+    });
+
+    test('a solo assignment has no next step and keeps its old message', async () => {
+      enablePilot();
+
+      const body = await readBody(
+        await action({
+          request: requestFor({
+            intent: 'create-assignment',
+            assignmentTypeId: 'at-1',
+            classIds: ['class-1'],
+            prompt: 'Write the essay.',
+            title: 'Essay',
+          }),
+          params: {},
+        } as any)
+      );
+
+      expect(body.nextStep).toBeNull();
+      expect(body.message).toBe('Assignment created and applied to classes.');
+    });
+
+    test('rejects an invalid group size before touching the database', async () => {
+      enablePilot();
+      createAssignmentDeployedToClasses.mockClear();
+
+      const response = await createWithCollaboration({
+        collaborationGroupSize: '99',
+      });
+      const body = await readBody(response);
+
+      expect(responseStatus(response)).toBe(400);
+      expect(body.success).toBe(false);
+      expect(body.message).toBe('Group size must be between 2 and 8 students.');
+      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('exit tickets', () => {
+    function mockExitTicketType() {
+      mockAssignmentTypeAvailable({
+        systemKey: null as any,
+        kind: EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+      });
+    }
+
+    test('composes the standard prompt for a basic exit ticket', async () => {
+      mockExitTicketType();
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'basic',
+          title: 'Exit ticket: Tuesday',
+        }),
+        params: {},
+      } as any);
+
+      const body = await readBody(response);
+      expect(body.success).toBe(true);
+
+      const data = createAssignmentDeployedToClasses.mock.calls[0][0].data;
+      expect(data.prompt).toInclude(BASIC_EXIT_TICKET_PROMPT);
+      expect(data.prompt).toInclude(EXIT_TICKET_ELABORATION_NOTE);
+      expect(data.exitTicketConfigJson).toEqual({
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'basic',
+      });
+    });
+
+    test('composes the focused prompt for a specific exit ticket', async () => {
+      mockExitTicketType();
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'specific',
+          exitTicketFocus: 'ask-question',
+          exitTicketAnswerType: 'subjective',
+          exitTicketTopic: 'balancing chemical equations',
+        }),
+        params: {},
+      } as any);
+
+      const body = await readBody(response);
+      expect(body.success).toBe(true);
+
+      const data = createAssignmentDeployedToClasses.mock.calls[0][0].data;
+      expect(data.prompt).toInclude('balancing chemical equations');
+      expect(data.prompt).not.toInclude(BASIC_EXIT_TICKET_PROMPT);
+      expect(data.exitTicketConfigJson).toEqual({
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'specific',
+        focus: 'ask-question',
+        answerType: 'subjective',
+        topic: 'balancing chemical equations',
+      });
+    });
+
+    test('an exit ticket needs no posted prompt', async () => {
+      // Every other type rejects a blank prompt. An exit ticket has no prompt
+      // field at all, so the same request must succeed here.
+      mockExitTicketType();
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'basic',
+        }),
+        params: {},
+      } as any);
+
+      expect((await readBody(response)).success).toBe(true);
+    });
+
+    test('never lets a posted prompt become what students read', async () => {
+      mockExitTicketType();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'basic',
+          prompt: 'Write about whatever you feel like.',
+        }),
+        params: {},
+      } as any);
+
+      const data = createAssignmentDeployedToClasses.mock.calls[0][0].data;
+      expect(data.prompt).not.toInclude('whatever you feel like');
+      expect(data.prompt).toInclude(BASIC_EXIT_TICKET_PROMPT);
+    });
+
+    test('refuses a specific exit ticket with nothing to be specific about', async () => {
+      mockExitTicketType();
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'specific',
+          exitTicketFocus: 'explain-concept',
+        }),
+        params: {},
+      } as any);
+
+      const body = await readBody(response);
+      expect(body.success).toBe(false);
+      expect(responseStatus(response)).toBe(400);
+      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
+
+    test('leaves every other assignment type alone', async () => {
+      // The exit ticket fields are ignored for a type that is not one, and no
+      // config is written, so nothing existing gains a column value.
+      mockAssignmentTypeAvailable();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          prompt: 'Write the essay.',
+          exitTicketMode: 'specific',
+          exitTicketFocus: 'explain-concept',
+          exitTicketTopic: 'mitosis',
+        }),
+        params: {},
+      } as any);
+
+      const data = createAssignmentDeployedToClasses.mock.calls[0][0].data;
+      expect(data.prompt).toBe('Write the essay.');
+      expect(data.exitTicketConfigJson).toBeUndefined();
+    });
   });
 });

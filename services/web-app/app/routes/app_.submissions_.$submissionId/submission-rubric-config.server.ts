@@ -27,6 +27,7 @@ const rubricDisplaySources = new Set<string>([
   'assignment-type',
   'thesis-default',
   'daily-pages-default',
+  'exit-ticket-default',
 ]);
 
 function parseRubricDisplaySource(

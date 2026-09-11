@@ -1,3 +1,4 @@
+import type { Prisma } from '@app/prisma';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import {
   buildAssignmentCreateInputFromApHistoryEntry,
@@ -27,6 +28,7 @@ import {
   parseAssignmentGradingIntent,
 } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
+import { resolveAssignmentPrompt } from '~/utils/assignment-exit-ticket.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -145,7 +147,7 @@ export async function action({ request }: ActionFunctionArgs) {
       id: assignmentTypeId,
       archivedAt: null,
     },
-    select: { id: true, systemKey: true },
+    select: { id: true, systemKey: true, kind: true },
   });
 
   if (!assignmentTypeAvailable || !assignmentType) {
@@ -198,7 +200,26 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
-  if (!prompt) {
+  // Exit tickets do not carry a teacher-written prompt. The teacher answered
+  // the form instead, and the prompt is composed from those answers here —
+  // not taken from the request — so what a student reads is the product's
+  // wording. Every other assignment type keeps the prompt it posted.
+  const resolvedPrompt = resolveAssignmentPrompt({
+    assignmentTypeKind: assignmentType.kind,
+    postedPrompt: prompt,
+    formData,
+  });
+  if (!resolvedPrompt.success) {
+    return dataResponse(
+      { success: false, message: resolvedPrompt.message },
+      { status: 400 }
+    );
+  }
+  const assignmentPrompt = resolvedPrompt.prompt;
+  const exitTicketConfigJson =
+    resolvedPrompt.exitTicketConfigJson as Prisma.InputJsonValue | null;
+
+  if (!assignmentPrompt) {
     return dataResponse(
       { success: false, message: 'Prompt is required.' },
       { status: 400 }
@@ -229,10 +250,11 @@ export async function action({ request }: ActionFunctionArgs) {
       data: {
         assignmentTypeId: assignmentType.id,
         title,
-        prompt,
+        prompt: assignmentPrompt,
         gradingAssistantStrictnessLevel,
         tutorEnabled,
         ...promptAttachmentData,
+        ...(exitTicketConfigJson ? { exitTicketConfigJson } : {}),
         ...(gradingIntent?.success
           ? {
               submitForGrade: gradingIntent.data.submitForGrade,
@@ -264,7 +286,7 @@ export async function action({ request }: ActionFunctionArgs) {
         membershipId: profile.id,
         assignmentTypeId: assignmentType.id,
         title: title ?? '',
-        prompt,
+        prompt: assignmentPrompt,
         submitForGrade: gradingIntent?.success
           ? gradingIntent.data.submitForGrade
           : true,

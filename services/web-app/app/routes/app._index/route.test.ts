@@ -576,7 +576,14 @@ describe('app index loader assignments', () => {
       },
     ]);
     expect(data.assignmentCreationTypes).toEqual([
-      { id: 'type-1', title: 'Daily Pages' },
+      // Defaulted rather than omitted: the sheet reads these to decide whether
+      // to offer collaborative drafts and which form to show, and an absent
+      // value would be indistinguishable from a select that forgot to ask.
+      {
+        id: 'type-1',
+        title: 'Daily Pages',
+        kind: null,
+      },
     ]);
   });
 });

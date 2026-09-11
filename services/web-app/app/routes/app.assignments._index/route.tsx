@@ -158,13 +158,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
           id: string;
           title: string;
           systemKey: string | null;
+          kind: string | null;
         }>({
           scopes: teacherClasses.map((klass) => ({
             organizationId: klass.school.organizationId,
             schoolId: klass.school.id,
             teacherProfileId: profile.id,
           })),
-          select: { id: true, title: true, systemKey: true },
+          select: {
+            id: true,
+            title: true,
+            systemKey: true,
+            kind: true,
+          },
           orderBy: { position: 'asc' },
         })
       : [];
@@ -184,7 +190,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // free-text prompt, so they are not offered here.
     assignmentCreationTypes: availableAssignmentTypes
       .filter((type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY)
-      .map((type) => ({ id: type.id, title: type.title })),
+      .map((type) => ({
+        id: type.id,
+        title: type.title,
+        kind: type.kind,
+      })),
   };
 }
 

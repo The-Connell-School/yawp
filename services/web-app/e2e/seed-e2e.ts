@@ -96,6 +96,7 @@ export type E2EContext = {
   teacherEmail: string;
   assignmentTypeId: string;
   dailyPagesAssignmentTypeId: string;
+  exitTicketAssignmentTypeId: string;
   thesisEssayAssignmentTypeId: string;
   apHistoryAssignmentTypeId: string;
   apHistoryDbqEntryKey: string;
@@ -291,6 +292,42 @@ export async function seedE2E(): Promise<E2EContext> {
                   prompt: 'Write freely for ten minutes.',
                   position: 1,
                   showChatButton: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  const exitTicketAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'Exit Ticket',
+      // The web app keys every exit ticket behaviour off this, not the title.
+      kind: 'exit_ticket',
+      description:
+        'A short piece of writing at the end of a lesson that shows whether it landed.',
+      position: 4,
+      ownerOrgId: org.id,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: [
+          {
+            title: 'Exit Ticket',
+            position: 1,
+            description: 'Answer the exit ticket in your own words.',
+            instructions: {
+              create: [
+                {
+                  title: 'Write',
+                  prompt:
+                    'Answer the prompt in your own words, and explain your thinking.',
+                  position: 1,
+                  showChatButton: false,
                 },
               ],
             },
@@ -668,6 +705,7 @@ export async function seedE2E(): Promise<E2EContext> {
     teacherEmail: seededTeacherEmail,
     assignmentTypeId: assignmentType.id,
     dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
+    exitTicketAssignmentTypeId: exitTicketAssignmentType.id,
     thesisEssayAssignmentTypeId: thesisEssayAssignmentType.id,
     apHistoryAssignmentTypeId: apHistoryAssignmentType.id,
     apHistoryDbqEntryKey: apHistoryDbqEntry.externalKey,

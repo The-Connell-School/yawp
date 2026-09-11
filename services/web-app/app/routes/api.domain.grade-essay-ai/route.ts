@@ -6,6 +6,8 @@ import crypto from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
+import { parseStoredExitTicketConfig } from '~/domain/assignment-types/exit-ticket';
+import { buildExitTicketGradingContext } from '~/domain/assignment-types/exit-ticket-rubric';
 import {
   computeWeightedBandPercentage,
   formatGrade,
@@ -548,6 +550,7 @@ export async function action({ request }: ActionFunctionArgs) {
             gradingAssistantStrictnessLevel: true,
             apHistorySnapshot: true,
             prompt: true,
+            exitTicketConfigJson: true,
           },
         },
         classAssignment: {
@@ -707,6 +710,14 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const assignmentPrompt = submission.document.assignment?.prompt?.trim();
+  // How to read the rubric for this ticket, plus whatever the teacher said the
+  // lesson covered. Null for every other assignment, leaving the payload
+  // exactly as it was.
+  const gradingContext = buildExitTicketGradingContext(
+    parseStoredExitTicketConfig(
+      submission.document.assignment?.exitTicketConfigJson
+    )
+  );
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   const forceFallback = data.llmRetry === 'fallback';
@@ -895,6 +906,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     label: resolvedGradingConfig.label,
     studentFirstName,
     assignmentPrompt,
+    gradingContext,
     essayText: submission.text,
   });
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
