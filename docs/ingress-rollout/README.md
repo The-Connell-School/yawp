@@ -1,6 +1,6 @@
 # Named-preview ingress rollout packet
 
-Prepared for review; no upload, installation, restart or activation has occurred.
+Approved and activated on the preview host on 2026-09-11. See the live evidence below; full application lifecycle verification remains outstanding.
 
 ## Candidate and observed baseline
 
@@ -36,3 +36,17 @@ If existing PR or alias checks fail, disable the new route watcher, restore the 
 ## Evidence and outstanding checks
 
 Local release/CLI tests: two tests / 11 assertions, including dirty-working-copy exclusion, existing-output refusal, tampering/symlink rejection and externally pinned verification. Project-CLI checks: 81 tests / 4213 assertions. Expanded ingress/wake suite: 82 tests / 328 assertions. Earlier named startup uses a real test process and hostname-verified HTTPS; Linux systemd validates the certificate units. Public ACME issuance, filesystem-watch delivery, real access-gate behavior, restart/recovery and latency still require target-host proof. Broader Yawp backend proof has existing failures and must not be represented as green.
+
+## Approved rollout evidence — 2026-09-11
+
+User approved the pending preview-host rollout. Rechecked all four live baseline hashes and the original symlink before staging. SSM command `9b7d9aa0-efe0-439e-9a9a-72453aa2a7fb` staged and verified the five files at `/srv/yawp-preview/ingress/releases/internal-d1c9b8694bac7dd225f29b9d99a27e67f4b847eb27d40502a2ebed427be6aede`.
+
+Activation command `bd95397c-639c-4ef5-8394-79a2a1855a4b` installed only the route configuration, ingress/renewal drop-ins, and certificate service/path. It preserved the `official-ua-alias.conf` drop-in, switched the current symlink and restarted ingress. Target systemd validation succeeded (an unrelated existing acpid legacy-path warning was emitted). The watcher is enabled/active; empty reconciliation succeeded. Original release remains available for rollback. No application containers, database volumes or source caches were replaced.
+
+Existing public checks before and after activation: `https://ua.yawp.school/` returned 200; `https://pr-337.preview.yawp.school/` returned its 401 access gate. These are availability/access-gate checks, not authenticated application or WebSocket session proof.
+
+A disposable paused route `internal-ingress-qa-20260911` was atomically registered by command `e15d5183-07c2-44cb-be5e-e6783b681df3`. Without manually starting the certificate service, the path watcher triggered at 19:11:28 UTC and issuance completed at 19:11:35 UTC. Journal evidence is command `e576fb6e-2d12-4220-b734-d6b7fd013b5f`. Public curl with normal certificate verification returned HTTPS 503 and “Preview is paused; resume it in Internal.” HTTP returned 308 to the exact HTTPS hostname; an unknown hostname returned HTTP 404. Seven seconds is certificate provisioning time, not end-to-end preview readiness or build latency.
+
+Cleanup command `14c0d929-c1f2-41f5-b942-6fe34bd41c12` removes only this disposable route registration; issued certificate/account state is retained. The route directory is `/srv/yawp-internal-routes`, owned by ec2-user UID 1000 and outside application mounts. Internal runner configuration must use that directory and owner.
+
+Remaining proof: deployed Internal runner publishing a real application environment, authenticated public readiness, source update, pause/resume with containers, WebSocket reconnect behavior, and complete request-to-usable-page latency. The shared ingress rollout does not deploy the Internal application or production impersonation integration.
