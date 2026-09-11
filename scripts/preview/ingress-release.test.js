@@ -26,3 +26,16 @@ test('release packages exact committed ingress files and detects tampering witho
   await expect(verifyIngressRelease(output,manifest.releaseId)).rejects.toThrow();
  }finally{await rm(root,{recursive:true,force:true});}
 });
+
+test('project CLI prepares and verifies an exact committed release without activation',async()=>{
+ const root=await mkdtemp(path.join(tmpdir(),'ingress-release-cli-'));
+ const revision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+ const output=path.join(root,'release');
+ async function invoke(args){const child=Bun.spawn(['./bin/project','ingress-release',...args,'--json'],{stdout:'pipe',stderr:'pipe'});const stdout=await new Response(child.stdout).text();return {code:await child.exited,stdout};}
+ try{
+  const prepared=await invoke(['prepare','--revision',revision,'--output',output]);expect(prepared.code,prepared.stdout).toBe(0);
+  const manifest=JSON.parse(prepared.stdout);expect(manifest.revision).toBe(revision);
+  expect((await invoke(['verify','--output',output,'--release-id',manifest.releaseId])).code).toBe(0);
+  expect((await invoke(['verify','--output',output,'--release-id','a'.repeat(64)])).code).not.toBe(0);
+ }finally{await rm(root,{recursive:true,force:true});}
+});
