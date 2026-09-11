@@ -192,6 +192,7 @@ function proxyHttp({ request, response, target, hostname, pr, recordAccess, reco
 
 export function createPreviewIngress({
   domain,
+  readInternalRoute = () => null,
   resolveTarget,
   authorizeWake,
   ensureRunning,
@@ -206,6 +207,16 @@ export function createPreviewIngress({
       ? request.headers.host[0]
       : request.headers.host || '';
     const parsed = parsePreviewHost(rawHost, domain);
+    if (parsed === null) {
+      const hostname = String(rawHost).toLowerCase().replace(/:\d+$/, '');
+      const route = readInternalRoute(hostname);
+      if (!route) { send(response, 404, 'Not found.\n'); return; }
+      if (route.state !== 'active') { send(response, 503, 'Preview is paused; resume it in Internal.\n'); return; }
+      const target = await resolveTarget(route.environmentId, {service:'internal'});
+      if (!target) { send(response, 503, 'Preview is starting; retry shortly.\n', {'retry-after':'5'}); return; }
+      await proxyHttp({request,response,target,hostname:route.hostname,pr:route.environmentId,recordAccess:async () => {}});
+      return;
+    }
     if (parsed === null) {
       send(response, 404, 'Not found.\n');
       return;
@@ -410,11 +421,12 @@ export function createDockerTargetResolver({
 } = {}) {
   const cache = new Map();
   return async (pr, { fresh = false, service = 'web' } = {}) => {
+    if (service === 'internal' && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(String(pr))) return null;
     const now = Date.now();
     const cacheKey = `${service}:${pr}`;
     const cached = cache.get(cacheKey);
     if (!fresh && cached && cached.expires > now) return cached.target;
-    const container = service === 'blackboard'
+    const container = service === 'internal' ? `yawp-env-${pr}-web-1` : service === 'blackboard'
       ? `yawp-pr-${pr}-blackboard-lti-mock-1`
       : `yawp-pr-${pr}-web-1`;
     const port = service === 'blackboard' ? 9473 : 8080;
