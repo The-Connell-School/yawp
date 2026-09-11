@@ -374,7 +374,7 @@ function runTestProfile(profile, { json }) {
     const result = execute("git", ["diff", "--check", process.env.RECORD_PROOF_BASE_SHA ? `${process.env.RECORD_PROOF_BASE_SHA}..HEAD` : "HEAD"], { json, env: selected.env, timeout: 30000 });
     results.push({ id: "diff-check", ...result });
   } else if (chosen === "project-cli") run("project-cli", ["test", "./scripts/project-agent.test.js", "./scripts/deployment-contract.test.ts"], 120000);
-  else if (chosen === "internal-ingress") run("internal-ingress", ["test", "./scripts/preview/internal-routes.test.js", "./scripts/preview/ingress-server.test.js", "./scripts/preview/certificate-manager.test.js", "./scripts/preview/bootstrap-host.test.js"]);
+  else if (chosen === "internal-ingress") run("internal-ingress", ["test", "./scripts/preview/internal-routes.test.js", "./scripts/preview/ingress-server.test.js", "./scripts/preview/certificate-manager.test.js", "./scripts/preview/bootstrap-host.test.js", "./scripts/preview/wake-server.test.js", "./scripts/preview/wake-preview.test.js"]);
   else if (chosen === "internal-certificate-units") run("internal-certificate-units", ["test", "./scripts/preview/internal-certificate-units.test.js"]);
   else if (chosen === "ingress-release") run("ingress-release", ["test", "./scripts/preview/ingress-release.test.js"]);
   else if (chosen === "unit") run("unit", ["run", "--cwd", "services/web-app", "test"]);

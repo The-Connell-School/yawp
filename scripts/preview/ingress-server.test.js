@@ -399,3 +399,14 @@ test('registered named host supports ACME HTTP validation and HTTPS redirect', a
  expect((await request(port,{headers:{host:hostname},path:'/classes'})).headers.location).toBe(`https://${hostname}/classes`);
  expect((await request(port,{headers:{host:'unknown.preview.test'},path:'/.well-known/acme-challenge/token'})).status).toBe(404);
 });
+
+test('preserves the configured live alias in upstream Host headers',async()=>{
+ const previous=process.env.PREVIEW_HOST_ALIASES;
+ process.env.PREVIEW_HOST_ALIASES='review.example.test=337:ua';
+ try{
+  const upstream=await listen(createServer((req,res)=>res.end(req.headers.host)));
+  const port=await listen(createServer(createPreviewIngress({domain:'preview.test',resolveTarget:async()=>({host:'127.0.0.1',port:upstream}),authorizeWake:async()=>false,ensureRunning:async()=>{},recordAccess:async()=>{}})));
+  const response=await request(port,{headers:{host:'review.example.test'}});
+  expect(response.status).toBe(200);expect(response.body).toBe('review.example.test');
+ }finally{if(previous===undefined)delete process.env.PREVIEW_HOST_ALIASES;else process.env.PREVIEW_HOST_ALIASES=previous;}
+});

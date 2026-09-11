@@ -681,3 +681,12 @@ describe('preview wake server', () => {
     expect(accesses).toEqual([241, 242]);
   });
 });
+
+test('retains explicit host aliases used by the live ingress without accepting suffix lookalikes',()=>{
+ const aliases='review.example.test=337:ua,learn.example.test=337:blackboard';
+ expect(parsePreviewHost('review.example.test:443','preview.test',aliases)).toEqual({pr:337,service:'ua',hostname:'review.example.test'});
+ expect(parsePreviewHost('learn.example.test','preview.test',aliases)).toEqual({pr:337,service:'blackboard',hostname:'learn.example.test'});
+ expect(parsePreviewHost('review.example.test.evil.test','preview.test',aliases)).toBeNull();
+ expect(parsePreviewHost('review.example.test','preview.test','review.example.test=0:web')).toBeNull();
+ expect(parsePreviewHost('pr-241.preview.test','preview.test',aliases)).toEqual({pr:241,service:'web'});
+});
