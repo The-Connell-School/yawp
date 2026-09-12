@@ -192,3 +192,11 @@ Diagnostic outputs: `/tmp/yawp-shipping-grading-route-control.txt` and
 this section preserves the conclusions and limitations. Both controls restored
 a clean checkout. No credentials, production data, deployment configuration, or
 cloud resources were changed. These results do not certify production readiness.
+
+
+The subsequent isolation repair changes the route-loader test to stub only
+`./document-editor/editor`, leaving the real `DocumentEditor` hydration boundary
+available to its own test. The full unit run now passes that hydration test and
+all loader tests: 2,636 pass, nine skip, eight fail (the same grading assertions),
+8,031 assertions across 337 files. No application implementation or hydration
+assertion changed. Output: `/tmp/yawp-hydration-leaf-proof.txt`.
