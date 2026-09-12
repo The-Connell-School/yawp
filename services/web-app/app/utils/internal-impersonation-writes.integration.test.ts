@@ -8,6 +8,14 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
   process.env.DATABASE_URL = connection;
   process.env.E2E_DATABASE_URL = connection;
   const { basePrisma: prisma } = await import('./db.server');
+  const uncovered = await prisma.$queryRaw<Array<{name:string}>>`
+    SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname=current_schema() AND c.relkind='r'
+    AND c.relname NOT IN ('_prisma_migrations','InternalImpersonationSession','InternalImpersonationEvent')
+    AND (NOT EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid AND t.tgname='internal_impersonation_mutation_audit' AND t.tgfoid=to_regprocedure('internal_impersonation_mutation_audit()') AND t.tgtype=29 AND t.tgenabled IN ('O','A'))
+      OR NOT EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid AND t.tgname='internal_impersonation_truncate_guard' AND t.tgfoid=to_regprocedure('internal_impersonation_truncate_guard()') AND t.tgtype=34 AND t.tgenabled IN ('O','A')))
+    ORDER BY c.relname`;
+  expect(uncovered).toEqual([]);
   const { InternalImpersonationSessions } = await import('./internal-impersonation-sessions.server');
   const { withImpersonationTransaction } = await import('./internal-impersonation-writes.server');
   const { createAttributedPrisma, runWithImpersonation } = await import('./internal-impersonation-context.server');
