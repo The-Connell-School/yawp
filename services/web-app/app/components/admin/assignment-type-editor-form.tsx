@@ -6,7 +6,7 @@ import {
   type ChangeEvent,
   type ReactNode,
 } from 'react';
-import { Form, Link, useFetcher } from 'react-router';
+import { Form, Link, useFetcher, useNavigation } from 'react-router';
 import { ArchiveIcon, ArrowLeft, RotateCcwIcon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -14,70 +14,43 @@ import { Textarea } from '~/components/ui/textarea';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { AssignmentTypeImageThumbnail } from './assignment-type-image-thumbnail';
 import {
-  DEFAULT_PROMPT_CONFIG,
-  DEFAULT_RUBRIC,
-  DEFAULT_SCORING_SCALE,
-  type PromptConfigData,
-  type RubricData,
-  type ScoringScaleData,
-} from '~/domain/assignment-types/assignment-type-rubric.shared';
-import {
-  PromptConfigEditor,
-  promptConfigSnapshot,
-  RubricConfigurationEditor,
-  rubricSnapshot,
-  scoringScaleSnapshot,
-  type GradingAssistantPromptPreview,
-} from './rubric-config-editors';
+  RubricLibrarySection,
+  type RubricOption,
+} from '~/components/admin/rubric-library-section';
 import {
   AssignmentTypeModulesSection,
   type AssignmentTypeModuleRow,
 } from './assignment-type-modules-section';
-import { RubricSourceBanner } from './rubric-source-indicator';
 
 type AssignmentTypeEditorFormProps = {
+  /** Every rubric in the shared library, for the picker. */
+  rubrics?: RubricOption[];
+  /** The rubric this assignment type grades with, if one was chosen. */
+  selectedRubricId?: string | null;
   mode: 'create' | 'edit';
+  error?: string;
+  currentPromptLabel?: string | null;
   assignmentTypeId?: string;
   titleDefaultValue?: string;
   descriptionDefaultValue?: string | null;
-  scoringScale?: ScoringScaleData;
-  rubric?: RubricData;
-  promptConfig?: PromptConfigData;
-  gradingAssistantPromptPreview?: GradingAssistantPromptPreview;
-  gradingAssistantPromptPreviewUnavailableReason?: string;
+  /** Per-assignment-type override applied on top of the resolved rubric's instructions. */
+  gradingInstructionsDefaultValue?: string;
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
-  currentPromptLabel?: string | null;
 };
 
 function formSnapshot(values: {
   title: string;
   description: string;
-  scoringScale: ScoringScaleData;
-  rubric: RubricData;
-  promptConfig: PromptConfigData;
+  gradingInstructions: string;
+  rubricId: string | null;
 }) {
   return [
     values.title.trim(),
     values.description.trim(),
-    scoringScaleSnapshot(values.scoringScale),
-    rubricSnapshot(values.rubric),
-    promptConfigSnapshot(values.promptConfig),
-  ].join('\u0000');
-}
-
-function promptAffectingSnapshot(values: {
-  title: string;
-  scoringScale: ScoringScaleData;
-  rubric: RubricData;
-  promptConfig: PromptConfigData;
-}) {
-  return [
-    values.title.trim(),
-    scoringScaleSnapshot(values.scoringScale),
-    rubricSnapshot(values.rubric),
-    promptConfigSnapshot(values.promptConfig),
+    values.gradingInstructions.trim(),
+    values.rubricId ?? '',
   ].join('\u0000');
 }
 
@@ -129,67 +102,57 @@ function Section({
 
 export function AssignmentTypeEditorForm({
   mode,
+  error,
+  currentPromptLabel = null,
   assignmentTypeId,
   titleDefaultValue = '',
   descriptionDefaultValue = '',
-  scoringScale = DEFAULT_SCORING_SCALE,
-  rubric = DEFAULT_RUBRIC,
-  promptConfig = DEFAULT_PROMPT_CONFIG,
-  gradingAssistantPromptPreview,
-  gradingAssistantPromptPreviewUnavailableReason,
+  gradingInstructionsDefaultValue = '',
   archivedAt = null,
   imageId = null,
   modules = [],
-  currentPromptLabel = null,
+  rubrics = [],
+  selectedRubricId = null,
 }: AssignmentTypeEditorFormProps) {
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<{ error?: string }>();
+  const navigation = useNavigation();
+  const formError = error ?? fetcher.data?.error;
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (formError) errorRef.current?.focus(); }, [formError]);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [hasRemovedImage, setHasRemovedImage] = useState(false);
   const isEdit = mode === 'edit';
-  const isSubmitting = isEdit && fetcher.state !== 'idle';
+  const isSubmitting = isEdit ? fetcher.state !== 'idle' : navigation.state !== 'idle';
   const FormComponent = isEdit ? fetcher.Form : Form;
 
   const [title, setTitle] = useState(titleDefaultValue);
   const [description, setDescription] = useState(descriptionDefaultValue ?? '');
-  const [scoringScaleState, setScoringScaleState] =
-    useState<ScoringScaleData>(scoringScale);
-  const [rubricState, setRubricState] = useState<RubricData>(rubric);
-  const [promptConfigState, setPromptConfigState] =
-    useState<PromptConfigData>(promptConfig);
-  const [editorGeneration, setEditorGeneration] = useState(0);
-  const hasHydratedSavedValues = useRef(false);
-
+  const [gradingInstructions, setGradingInstructions] = useState(
+    gradingInstructionsDefaultValue
+  );
+  const [rubricId, setRubricId] = useState<string | null>(selectedRubricId);
   const savedSnapshot = useMemo(
     () =>
       formSnapshot({
         title: titleDefaultValue,
         description: descriptionDefaultValue ?? '',
-        scoringScale,
-        rubric,
-        promptConfig,
+        gradingInstructions: gradingInstructionsDefaultValue,
+        rubricId: selectedRubricId,
       }),
     [
       titleDefaultValue,
       descriptionDefaultValue,
-      scoringScale,
-      rubric,
-      promptConfig,
+      gradingInstructionsDefaultValue,
+      selectedRubricId,
     ]
   );
 
   useEffect(() => {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
-    setScoringScaleState(scoringScale);
-    setRubricState(rubric);
-    setPromptConfigState(promptConfig);
-
-    if (hasHydratedSavedValues.current) {
-      setEditorGeneration((generation) => generation + 1);
-    } else {
-      hasHydratedSavedValues.current = true;
-    }
+    setGradingInstructions(gradingInstructionsDefaultValue);
+    setRubricId(selectedRubricId);
   }, [savedSnapshot]);
 
   useEffect(() => {
@@ -213,37 +176,11 @@ export function AssignmentTypeEditorForm({
       formSnapshot({
         title,
         description,
-        scoringScale: scoringScaleState,
-        rubric: rubricState,
-        promptConfig: promptConfigState,
+        gradingInstructions,
+        rubricId,
       }),
-    [title, description, scoringScaleState, rubricState, promptConfigState]
+    [title, description, gradingInstructions, rubricId]
   );
-
-  const savedPromptAffectingSnapshot = useMemo(
-    () =>
-      promptAffectingSnapshot({
-        title: titleDefaultValue,
-        scoringScale,
-        rubric,
-        promptConfig,
-      }),
-    [titleDefaultValue, scoringScale, rubric, promptConfig]
-  );
-
-  const currentPromptAffectingSnapshot = useMemo(
-    () =>
-      promptAffectingSnapshot({
-        title,
-        scoringScale: scoringScaleState,
-        rubric: rubricState,
-        promptConfig: promptConfigState,
-      }),
-    [title, scoringScaleState, rubricState, promptConfigState]
-  );
-
-  const isPromptPreviewStale =
-    currentPromptAffectingSnapshot !== savedPromptAffectingSnapshot;
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
   const canSubmit = isEdit ? isDirty && !isSubmitting : !isSubmitting;
@@ -258,15 +195,13 @@ export function AssignmentTypeEditorForm({
   function handleCancel() {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
-    setScoringScaleState(scoringScale);
-    setRubricState(rubric);
-    setPromptConfigState(promptConfig);
+    setGradingInstructions(gradingInstructionsDefaultValue);
+    setRubricId(selectedRubricId);
     setPreviewUrl(null);
     setHasRemovedImage(false);
     if (imageFileInputRef.current) {
       imageFileInputRef.current.value = '';
     }
-    setEditorGeneration((generation) => generation + 1);
   }
 
   function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -350,6 +285,12 @@ export function AssignmentTypeEditorForm({
           ) : null}
         </header>
 
+        {formError ? (
+          <div ref={errorRef} role="alert" tabIndex={-1} className="mb-6 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive focus:outline-none focus:ring-2 focus:ring-destructive">
+            {formError}
+          </div>
+        ) : null}
+
         <Section
           title="Basics"
           description="Identity and teacher-facing description for this assignment base."
@@ -380,41 +321,27 @@ export function AssignmentTypeEditorForm({
 
         <Section
           title="Rubric"
-          description="The source of truth shared by grading and tutor guidance."
+          description="Keep the current production behavior, or choose a database-managed rubric. Rubrics stay view-only; grading assistant instructions can be customized per assignment type."
         >
-          <RubricSourceBanner rubric={rubricState} />
-          <RubricConfigurationEditor
-            key={`rubric-editor-${editorGeneration}`}
-            initialScoringScale={scoringScaleState}
-            initialRubric={rubricState}
-            namePrefix="assignmentType"
-            excludeAssignmentTypeId={assignmentTypeId ?? null}
-            onScoringScaleChange={setScoringScaleState}
-            onRubricChange={setRubricState}
-          />
+          <RubricLibrarySection
+              rubrics={rubrics}
+              selectedRubricId={rubricId}
+              onRubricChange={setRubricId}
+              gradingInstructions={gradingInstructions}
+              onGradingInstructionsChange={setGradingInstructions}
+            />
         </Section>
 
-        <Section
-          title="Grading assistant"
-          description="Instructions for applying this rubric during submission review."
-        >
-          <PromptConfigEditor
-            key={`prompt-editor-${editorGeneration}`}
-            initial={promptConfigState}
-            namePrefix="assignmentType"
-            onChange={setPromptConfigState}
-            gradingAssistantPromptPreview={gradingAssistantPromptPreview}
-            gradingAssistantPromptPreviewUnavailableReason={
-              gradingAssistantPromptPreviewUnavailableReason
-            }
-            isPromptPreviewStale={isPromptPreviewStale}
-            assignmentTypeId={assignmentTypeId ?? null}
-            currentPromptLabel={currentPromptLabel}
-            title={title}
-            scoringScale={scoringScaleState}
-            rubric={rubricState}
-          />
-        </Section>
+        {assignmentTypeId ? (
+          <Section title="Grading assistant" description="Manage prompt configuration and evaluation tests.">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" asChild>
+                <Link to={`/app/admin/assignment-types/${assignmentTypeId}/prompt`}>Prompt</Link>
+              </Button>
+              {currentPromptLabel ? <span className="text-sm text-muted-foreground">Production prompt: {currentPromptLabel}</span> : null}
+            </div>
+          </Section>
+        ) : null}
 
         {!isEdit ? (
           <Section

@@ -24,6 +24,7 @@ export function RubricLibrarySection({
   onRubricChange,
   gradingInstructions,
   onGradingInstructionsChange,
+  showGradingInstructions = true,
 }: {
   rubrics: RubricOption[];
   selectedRubricId: string | null;
@@ -31,6 +32,8 @@ export function RubricLibrarySection({
   /** Per-assignment-type override layered on top of the resolved rubric's instructions. */
   gradingInstructions: string;
   onGradingInstructionsChange: (value: string) => void;
+  /** The assignment-type editor owns prompt configuration in its own section. */
+  showGradingInstructions?: boolean;
 }) {
   const selected =
     rubrics.find((rubric) => rubric.id === selectedRubricId) ?? null;
@@ -84,7 +87,7 @@ export function RubricLibrarySection({
         </details>
       ) : null}
 
-      <div className="space-y-2">
+      {showGradingInstructions ? <div className="space-y-2">
         <Label htmlFor="grading-assistant-instructions">
           Grading assistant instructions
         </Label>
@@ -102,7 +105,7 @@ export function RubricLibrarySection({
           Optional. Replaces the default grading assistant instructions for this
           assignment type. The rubric itself stays unchanged.
         </p>
-      </div>
+      </div> : null}
     </div>
   );
 }

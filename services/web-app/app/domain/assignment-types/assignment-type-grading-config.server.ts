@@ -184,6 +184,17 @@ export function getAssignmentTypeGradingInstructions(
   };
 }
 
+/** Managed prompt versions belong to the assignment, even when its rubric is shared. */
+function managedPromptTemplates(rawPromptConfig: unknown): Record<string, string> {
+  if (!isRecord(rawPromptConfig)) return {};
+  const { systemMessageTemplate, userMessageTemplate } = rawPromptConfig;
+  if (
+    typeof systemMessageTemplate !== 'string' || !systemMessageTemplate.trim() ||
+    typeof userMessageTemplate !== 'string' || !userMessageTemplate.trim()
+  ) return {};
+  return { systemMessageTemplate, userMessageTemplate };
+}
+
 function withLibraryRubric<
   T extends AssignmentTypeGradingRow & {
     rubric?: { name: string; schemaJson: unknown } | null;
@@ -199,7 +210,10 @@ function withLibraryRubric<
     selectedRubricName: row.rubric.name,
     scoringScaleJson: parsed.schema.scoringScale as never,
     rubricJson: parsed.schema.rubric as never,
-    gradingPromptConfigJson: parsed.schema.promptConfig as never,
+    gradingPromptConfigJson: {
+      ...parsed.schema.promptConfig,
+      ...managedPromptTemplates(row.gradingPromptConfigJson),
+    } as never,
     gradingOutputSchemaJson: parsed.schema.outputSchema as never,
     gradingCalibrationNotes: parsed.schema.calibrationNotes,
   };
@@ -254,14 +268,13 @@ export function buildResolvedAssignmentTypeGradingConfig({
           parsedConfig.promptConfig as Record<string, unknown>
         )
       : (parsedConfig.promptConfig as Record<string, unknown>);
-  const promptConfigSnapshot = applyGradingInstructionsOverride(
-    ownGradingInstructionsOverride
-      ? {
-          ...rawPromptConfigSnapshot,
-          gradingInstructionsOverride: ownGradingInstructionsOverride,
-        }
-      : rawPromptConfigSnapshot
-  );
+  const promptConfigSnapshot = applyGradingInstructionsOverride({
+    ...rawPromptConfigSnapshot,
+    ...managedPromptTemplates(row?.gradingPromptConfigJson),
+    ...(ownGradingInstructionsOverride
+      ? { gradingInstructionsOverride: ownGradingInstructionsOverride }
+      : {}),
+  });
   const { minScore, maxScore } = getScoreBounds(parsedConfig.scoringScale);
   const step = normalizeScoreStep(parsedConfig.scoringScale.step);
   const scoringType = getScoringType(parsedConfig.scoringScale);

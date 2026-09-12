@@ -303,18 +303,22 @@ describe('worktree local setup contract', () => {
     const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
 
     expect(setupScript).toContain(
-      'WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"'
+      'hashlib.sha256(p.encode()).hexdigest()[:12]'
     );
     expect(setupScript).toContain('SLUG="$WORKTREE_NAME"');
-    expect(setupScript).not.toContain('SLUG="$(basename "$ROOT")"');
+    expect(setupScript).not.toContain('WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"');
+    expect(setupScript).toContain('CONTAINER_NAME="yawp-${SLUG}-postgres"');
+    expect(setupScript).toContain('VOLUME_NAME="yawp-${SLUG}-postgres-data"');
   });
 
   test('worktree setup installs dependencies before any Prisma generation', () => {
     const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
 
-    expect(setupScript).toContain(
-      'write_env_files\n\nbun install\n\nif [[ "$FRESH" -eq 1 ]]'
-    );
+    const install = setupScript.indexOf('  bun install --frozen-lockfile');
+    expect(install).toBeGreaterThan(0);
+    expect(install).toBeLessThan(setupScript.lastIndexOf('\nensure_config'));
+    expect(install).toBeLessThan(setupScript.lastIndexOf('\nensure_postgres'));
+    expect(install).toBeLessThan(setupScript.lastIndexOf('\nwrite_env_files'));
   });
 
   test('root dev command loads the isolated worktree app port before starting React Router', () => {
@@ -656,7 +660,7 @@ describe('PR preview deployment contract', () => {
 
     expect(routerConfig).toContain('v8_middleware: true');
     expect(rootRoute).toContain(
-      'export const middleware = [previewAccessMiddleware, uaPartnerMiddleware]'
+      'export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware]'
     );
     expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
     expect(gate).toContain("'/api/healthcheck'");
