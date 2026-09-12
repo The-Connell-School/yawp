@@ -15,6 +15,9 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
+  test("advertises isolated fresh impersonation migration verification", () => {
+    expect(capabilities().proofProfiles).toContain("internal-fresh-migrations");
+  });
   test("sibling worktrees receive distinct database identities and honor reassigned Record ports", () => {
     const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "yawp-isolation-"));
     try {
