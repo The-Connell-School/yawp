@@ -60,7 +60,7 @@ const E2E_GRADING_OUTPUT_SCHEMA = {
   responseShape: 'categories_overall_comment',
 };
 
-async function cleanupDb(prismaClient: E2EPrismaClient) {
+export async function cleanupDb(prismaClient: Pick<E2EPrismaClient, '$queryRaw' | '$executeRawUnsafe'>) {
   const tables = await prismaClient.$queryRaw<Array<{ tablename: string }>>`
     SELECT tablename
     FROM pg_tables

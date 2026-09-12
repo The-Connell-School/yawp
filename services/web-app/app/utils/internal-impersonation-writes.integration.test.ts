@@ -129,12 +129,15 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
       requestAction: 'test.delayed', jobId: `tail-${delayedRequest}`, action: 'row.created', resourceType: 'Setting' });
 
     const { truncateAllPublicTables } = await import('../../../../packages/prisma/scripts/local-dev/truncate-all');
+    const { cleanupDb } = await import('../../e2e/seed-e2e');
+    for (const reset of [truncateAllPublicTables, cleanupDb]) {
     await expect(prisma.$transaction(async tx => {
-      await truncateAllPublicTables(tx);
+      await reset(tx);
       expect(await tx.internalImpersonationEvent.count({ where: { sessionId: identity.id } })).toBeGreaterThan(0);
       expect(await tx.internalImpersonationSession.count({ where: { id: identity.id } })).toBe(1);
       throw new Error('restore fixture after seed reset proof');
     })).rejects.toThrow('restore fixture after seed reset proof');
+    }
     await service.end(created.cookieToken);
     await expect(withImpersonationTransaction(prisma, context, { requestId: randomUUID(), action: 'test.after-exit' }, async tx => {
       await tx.setting.create({ data: { name: `${prefix}-after`, value: 'blocked' } });
