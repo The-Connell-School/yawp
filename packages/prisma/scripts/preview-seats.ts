@@ -268,7 +268,7 @@ export async function ensurePreviewSeats(
         if (appeared) return false;
         await createSeat(transaction, seat);
         return true;
-      });
+      }, { maxWait: 10_000, timeout: 120_000 });
       results.push({
         organizationId: seat.organizationId,
         status: created ? 'created' : 'existing',
@@ -406,9 +406,8 @@ export async function createRuntimePreviewSeat(
           };
         },
         // Seeding a seat loads the prod-fidelity bundle and writes an entire organization.
-        // The deploy path fits inside Prisma's five-second default, but this one runs
-        // inside a web request on a shared preview box, where the margin is thin enough
-        // that a timeout would abort the seat halfway.
+        // Both deploy and request paths need the same bounded allowance on a shared
+        // preview host; the five-second default can abort a whole seat halfway.
         { maxWait: 10_000, timeout: 120_000 }
       );
     } catch (error) {
