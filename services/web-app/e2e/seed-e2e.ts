@@ -1,3 +1,4 @@
+import { truncateAllPublicTables } from '../../../packages/prisma/scripts/local-dev/truncate-all';
 /* eslint-disable no-console */
 import { createE2EPrismaClient, type E2EPrismaClient } from './prisma-client';
 import { currentSchoolYear } from '../app/utils/school-year';
@@ -61,24 +62,7 @@ const E2E_GRADING_OUTPUT_SCHEMA = {
 };
 
 export async function cleanupDb(prismaClient: Pick<E2EPrismaClient, '$queryRaw' | '$executeRawUnsafe'>) {
-  const tables = await prismaClient.$queryRaw<Array<{ tablename: string }>>`
-    SELECT tablename
-    FROM pg_tables
-    WHERE schemaname = 'public'
-      AND tablename <> '_prisma_migrations'
-  `;
-
-  if (tables.length === 0) {
-    return;
-  }
-
-  const quotedTables = tables
-    .map(({ tablename }) => `"public"."${tablename.replace(/"/g, '""')}"`)
-    .join(', ');
-
-  await prismaClient.$executeRawUnsafe(
-    `TRUNCATE TABLE ${quotedTables} RESTART IDENTITY CASCADE;`
-  );
+  await truncateAllPublicTables(prismaClient);
 }
 
 export type E2EContext = {
