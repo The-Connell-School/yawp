@@ -45,3 +45,21 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('real seeded dire
     delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
   }
 }, 30000);
+
+test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('preview seat creation tolerates a shared-host transaction longer than five seconds', async () => {
+  const connection = process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL!;
+  const url = new URL(connection);
+  if (!['localhost','127.0.0.1'].includes(url.hostname) || !url.pathname.startsWith('/yawp_')) throw new Error('Isolated local database required');
+  process.env.DATABASE_URL = connection;
+  const { prisma } = await import('./db.server');
+  const {ensurePreviewSeats,buildPreviewSeatDefinition} = await import('../../../../packages/prisma/scripts/preview-seats');
+  const seat = {...buildPreviewSeatDefinition(2), organizationId: `seat-timeout-${randomBytes(8).toString('hex')}`};
+  try {
+    const result = await ensurePreviewSeats(prisma,[seat],async tx => {
+      await tx.$executeRaw`SELECT pg_sleep(5.2)`;
+      // The query after the delay must still be inside a live transaction.
+      await tx.organization.findUnique({where:{id:seat.organizationId}});
+    });
+    expect(result).toEqual([{organizationId:seat.organizationId,status:'created'}]);
+  } finally { await prisma.$disconnect(); }
+},20000);
