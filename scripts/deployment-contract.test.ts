@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
@@ -53,6 +55,21 @@ function listTrackedRepoFiles(): string[] {
 }
 
 describe('production deployment contract', () => {
+  test('E2E launcher never starts Vite after fixture preparation fails', () => {
+    const command = readRepoFile('services/web-app/playwright.config.ts').match(/"bash -c '([^']+)'"/)?.[1];
+    expect(command).toBeDefined();
+    const directory = mkdtempSync(join(tmpdir(), 'yawp-e2e-launch-'));
+    try {
+      const bin = join(directory, 'bin');
+      mkdirSync(bin);
+      const trace = join(directory, 'trace');
+      writeFileSync(join(bin, 'bun'), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$E2E_LAUNCH_PROBE"\nexit 23\n', { mode: 0o755 });
+      const result = spawnSync('bash', ['-c', command!], { cwd: directory, env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, E2E_LAUNCH_PROBE: trace } });
+      expect(result.status).toBe(23);
+      expect(readFileSync(trace, 'utf8').trim().split('\n')).toEqual(['./e2e/ensure-e2e-env.ts']);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
   test('root build context excludes local credentials and host dependencies', () => {
     const patterns = readRepoFile('.dockerignore').split(/\r?\n/).map(line => line.trim());
     for (const required of ['.git', '**/.env', '**/.env.*', '**/node_modules', '**/build']) {
