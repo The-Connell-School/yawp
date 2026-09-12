@@ -1,5 +1,8 @@
 import { resolve } from 'path';
 
+// Preserve server response semantics before DOM test registration strips cookies.
+globalThis.__serverResponse ??= globalThis.Response;
+
 process.env.SESSION_SECRET = process.env.SESSION_SECRET ?? 'test-secret-for-unit-tests';
 // Provide a benign default so Prisma client construction in imported modules does not throw.
 process.env.DATABASE_URL =
@@ -20,6 +23,7 @@ process.env.DATABASE_URL =
 // (`globalThis.__realModules`) instead of re-importing the path.
 declare global {
   // eslint-disable-next-line no-var
+  var __serverResponse: typeof Response;
   var __realModules: Record<string, Record<string, unknown>>;
 }
 
@@ -49,6 +53,8 @@ if (isWebAppTestFile()) {
     // requireOwner/requireMembership wholesale, which would otherwise mean no test in the
     // suite ever runs the real cross-organization ownership check.
     '~/utils/auth.server': await snapshot('~/utils/auth.server'),
+    '~/routes/app_.documents_.$id/hooks/use-document-submit': await snapshot('~/routes/app_.documents_.$id/hooks/use-document-submit'),
+    '~/domain/student-license/student-license.server': await snapshot('~/domain/student-license/student-license.server'),
     '~/utils/assignment-type-access.server': await snapshot(
       '~/utils/assignment-type-access.server'
     ),
@@ -61,6 +67,7 @@ if (isWebAppTestFile()) {
     // The class-assignment start test stubs findStudentGroupDocument, which would
     // otherwise leave arrangeGroups/openGroups missing for the groups-route test
     // that runs after it.
+    '~/domain/collaboration/assignment-artifact.server': await snapshot('~/domain/collaboration/assignment-artifact.server'),
     '~/domain/collaboration/groups.server': await snapshot(
       '~/domain/collaboration/groups.server'
     ),

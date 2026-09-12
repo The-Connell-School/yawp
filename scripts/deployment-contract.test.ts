@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
@@ -53,6 +55,28 @@ function listTrackedRepoFiles(): string[] {
 }
 
 describe('production deployment contract', () => {
+  test('E2E launcher never starts Vite after fixture preparation fails', () => {
+    const command = readRepoFile('services/web-app/playwright.config.ts').match(/"bash -c '([^']+)'"/)?.[1];
+    expect(command).toBeDefined();
+    const directory = mkdtempSync(join(tmpdir(), 'yawp-e2e-launch-'));
+    try {
+      const bin = join(directory, 'bin');
+      mkdirSync(bin);
+      const trace = join(directory, 'trace');
+      writeFileSync(join(bin, 'bun'), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$E2E_LAUNCH_PROBE"\nexit 23\n', { mode: 0o755 });
+      const result = spawnSync('bash', ['-c', command!], { cwd: directory, env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, E2E_LAUNCH_PROBE: trace } });
+      expect(result.status).toBe(23);
+      expect(readFileSync(trace, 'utf8').trim().split('\n')).toEqual(['./e2e/ensure-e2e-env.ts']);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  test('root build context excludes local credentials and host dependencies', () => {
+    const patterns = readRepoFile('.dockerignore').split(/\r?\n/).map(line => line.trim());
+    for (const required of ['.git', '**/.env', '**/.env.*', '**/node_modules', '**/build']) {
+      expect(patterns).toContain(required);
+    }
+  });
+
   test('tracked gitlinks have matching submodule declarations', () => {
     const gitlinks = execFileSync('git', ['ls-files', '-s'], {
       cwd: repoRoot,
@@ -303,18 +327,22 @@ describe('worktree local setup contract', () => {
     const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
 
     expect(setupScript).toContain(
-      'WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"'
+      'hashlib.sha256(p.encode()).hexdigest()[:12]'
     );
     expect(setupScript).toContain('SLUG="$WORKTREE_NAME"');
-    expect(setupScript).not.toContain('SLUG="$(basename "$ROOT")"');
+    expect(setupScript).not.toContain('WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"');
+    expect(setupScript).toContain('CONTAINER_NAME="yawp-${SLUG}-postgres"');
+    expect(setupScript).toContain('VOLUME_NAME="yawp-${SLUG}-postgres-data"');
   });
 
   test('worktree setup installs dependencies before any Prisma generation', () => {
     const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
 
-    expect(setupScript).toContain(
-      'write_env_files\n\nbun install\n\nif [[ "$FRESH" -eq 1 ]]'
-    );
+    const install = setupScript.indexOf('  bun install --frozen-lockfile');
+    expect(install).toBeGreaterThan(0);
+    expect(install).toBeLessThan(setupScript.lastIndexOf('\nensure_config'));
+    expect(install).toBeLessThan(setupScript.lastIndexOf('\nensure_postgres'));
+    expect(install).toBeLessThan(setupScript.lastIndexOf('\nwrite_env_files'));
   });
 
   test('root dev command loads the isolated worktree app port before starting React Router', () => {
@@ -656,7 +684,7 @@ describe('PR preview deployment contract', () => {
 
     expect(routerConfig).toContain('v8_middleware: true');
     expect(rootRoute).toContain(
-      'export const middleware = [previewAccessMiddleware, uaPartnerMiddleware]'
+      'export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware]'
     );
     expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
     expect(gate).toContain("'/api/healthcheck'");

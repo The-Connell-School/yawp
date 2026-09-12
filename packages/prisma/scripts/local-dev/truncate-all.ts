@@ -5,7 +5,7 @@ export async function truncateAllPublicTables(prisma: Pick<PrismaClient, '$query
     SELECT tablename
     FROM pg_tables
     WHERE schemaname = 'public'
-      AND tablename NOT IN ('_prisma_migrations', 'InternalImpersonationSession', 'InternalImpersonationEvent', 'InternalQaFixture', 'InternalScenarioReceipt')
+      AND tablename NOT IN ('_prisma_migrations', 'InternalImpersonationSession', 'InternalImpersonationEvent', 'InternalQaFixture', 'RubricRevision', 'InternalScenarioReceipt')
   `;
 
   if (tables.length === 0) return;

@@ -8,6 +8,14 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
   process.env.DATABASE_URL = connection;
   process.env.E2E_DATABASE_URL = connection;
   const { basePrisma: prisma } = await import('./db.server');
+  const uncovered = await prisma.$queryRaw<Array<{name:string}>>`
+    SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname=current_schema() AND c.relkind='r'
+    AND c.relname NOT IN ('_prisma_migrations','InternalImpersonationSession','InternalImpersonationEvent')
+    AND (NOT EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid AND t.tgname='internal_impersonation_mutation_audit' AND t.tgfoid=to_regprocedure('internal_impersonation_mutation_audit()') AND t.tgtype=29 AND t.tgenabled IN ('O','A'))
+      OR NOT EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid AND t.tgname='internal_impersonation_truncate_guard' AND t.tgfoid=to_regprocedure('internal_impersonation_truncate_guard()') AND t.tgtype=34 AND t.tgenabled IN ('O','A')))
+    ORDER BY c.relname`;
+  expect(uncovered).toEqual([]);
   const { InternalImpersonationSessions } = await import('./internal-impersonation-sessions.server');
   const { withImpersonationTransaction } = await import('./internal-impersonation-writes.server');
   const { createAttributedPrisma, runWithImpersonation } = await import('./internal-impersonation-context.server');
@@ -98,13 +106,38 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('attributed datab
     await expect(tail).rejects.toThrow('tail revoked');
     expect(rechecks).toBe(1);
     expect(await prisma.setting.count({ where: { name: `${prefix}-tail` } })).toBe(0);
+    const delayedRequest = randomUUID();
+    let releaseAllowed!: () => void;
+    let allowedTail!: Promise<unknown>;
+    let allowedChecks = 0;
+    await runWithImpersonation(context, { requestId: delayedRequest, action: 'test.delayed' }, async () => {
+      allowedChecks++;
+      return context;
+    }, async () => {
+      await wrapped.$transaction(async () => {
+        allowedTail = new Promise<void>(resolve => { releaseAllowed = resolve; }).then(() =>
+          cachedSettings.create({ data: { name: `${prefix}-allowed-tail`, value: 'attributed after response' } }));
+      });
+    });
+    expect(await prisma.setting.count({ where: { name: `${prefix}-allowed-tail` } })).toBe(0);
+    releaseAllowed();
+    await allowedTail;
+    expect(allowedChecks).toBe(1);
+    const delayedEvents = await prisma.internalImpersonationEvent.findMany({ where: { sessionId: identity.id, requestId: delayedRequest } });
+    expect(delayedEvents).toHaveLength(1);
+    expect(delayedEvents[0]).toMatchObject({ actorId: context.actorId, userId: context.userId, organizationId: context.organizationId,
+      requestAction: 'test.delayed', jobId: `tail-${delayedRequest}`, action: 'row.created', resourceType: 'Setting' });
+
     const { truncateAllPublicTables } = await import('../../../../packages/prisma/scripts/local-dev/truncate-all');
+    const { cleanupDb } = await import('../../e2e/seed-e2e');
+    for (const reset of [truncateAllPublicTables, cleanupDb]) {
     await expect(prisma.$transaction(async tx => {
-      await truncateAllPublicTables(tx);
+      await reset(tx);
       expect(await tx.internalImpersonationEvent.count({ where: { sessionId: identity.id } })).toBeGreaterThan(0);
       expect(await tx.internalImpersonationSession.count({ where: { id: identity.id } })).toBe(1);
       throw new Error('restore fixture after seed reset proof');
     })).rejects.toThrow('restore fixture after seed reset proof');
+    }
     await service.end(created.cookieToken);
     await expect(withImpersonationTransaction(prisma, context, { requestId: randomUUID(), action: 'test.after-exit' }, async tx => {
       await tx.setting.create({ data: { name: `${prefix}-after`, value: 'blocked' } });

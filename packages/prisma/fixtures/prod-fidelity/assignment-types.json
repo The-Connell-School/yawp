@@ -240,7 +240,8 @@
     "gradingAssistantVersion": 5,
     "gradingAssistantSourceTemplateId": null,
     "gradingAssistantSourceTemplateSlug": null,
-    "collaborationSupported": true
+    "collaborationSupported": true,
+    "allowsImageUploads": true
   },
   {
     "id": "cmpphw7w303lh01l15z0pr6nd",

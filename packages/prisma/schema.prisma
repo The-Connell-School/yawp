@@ -74,6 +74,8 @@ model Rubric {
   title           String
   schemaJson      Json
   assignmentTypes AssignmentType[]
+  currentRevisionId String?
+  currentRevision RubricRevision? @relation("CurrentRubricRevision", fields: [currentRevisionId], references: [id], onDelete: Restrict)
 
   @@index([title])
 }
@@ -109,6 +111,10 @@ model AssignmentType {
   gradingAssistantVersion            Int                                    @default(1)
   gradingAssistantSourceTemplateId   String?
   gradingAssistantSourceTemplateSlug String?
+  /// Opt-in for student-uploaded figures (charts, graphs, logos) in the
+  /// document editor. Defaults off, so every assignment type that exists today
+  /// keeps the toolbar it has today.
+  allowsImageUploads                 Boolean                       @default(false)
   image                              AssignmentTypeImage?
   organizationAssignments            OrganizationAssignmentType[]
   schoolAssignments                  SchoolAssignmentType[]
@@ -254,6 +260,8 @@ model AssignmentTypeEvaluationResult {
 }
 
 model Assignment {
+  rubricRevisionId String?
+  rubricRevision RubricRevision? @relation(fields: [rubricRevisionId], references: [id], onDelete: Restrict)
   id                              String            @id @default(cuid())
   createdAt                       DateTime          @default(now()) @db.Timestamptz(6)
   updatedAt                       DateTime          @default(now()) @db.Timestamptz(6)
@@ -779,6 +787,7 @@ model Document {
   pasteAlerts              PasteAlert[]
   revisions                DocumentRevision[]
   submissions              Submission[]
+  images                   DocumentImage[]
   /// Set only on a collaborative draft: the group whose shared document this is.
   group                    DocumentGroup?
   collabUpdates            DocumentCollabUpdate[]
@@ -789,6 +798,28 @@ model Document {
   @@index([classAssignmentId])
   @@index([assignmentTypeId])
   @@index([membershipId])
+}
+
+/// Student-uploaded figures (charts, photos, logos) embedded in a document.
+///
+/// Stored as a Postgres blob for the same reason AssignmentTypeImage is: the
+/// only S3 bucket this app has is the videos bucket, and adding a new bucket
+/// plus lifecycle rules is infrastructure work this feature does not need at
+/// its current size cap. Serving goes through /api/image/document/:id so a
+/// document's figures inherit the document's own authorization.
+model DocumentImage {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  deletedAt   DateTime? @db.Timestamptz(6)
+  altText     String
+  contentType String
+  byteSize    Int
+  blob        Bytes
+  documentId  String
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
 }
 
 model DocumentClassForensic {
@@ -1625,4 +1656,25 @@ model InternalScenarioReceipt {
   retiredByJobId  String?
 
   @@index([targetId, organizationId, retiredAt])
+}
+
+/// Immutable portable rubric history. Names, rather than environment-local rubric
+/// IDs, preserve provenance across local fixture resets and environment transfers.
+model RubricRevision {
+  id String @id
+  rubricName String
+  version Int
+  schemaJson Json
+  fingerprint String
+  requestId String @unique
+  requestHash String
+  sourceContentId String?
+  sourceVersion Int?
+  sourceFingerprint String?
+  createdBy String
+  reason String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  currentFor Rubric[] @relation("CurrentRubricRevision")
+  assignments Assignment[]
+  @@unique([rubricName, version])
 }

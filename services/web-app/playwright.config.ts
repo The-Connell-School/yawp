@@ -18,7 +18,16 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:5173',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        // The test server binds IPv4; avoid another local app on IPv6 loopback.
+        launchOptions: {
+          args: ['--host-resolver-rules=MAP ua.localhost 127.0.0.1'],
+        },
+      },
+    },
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
   ],
   webServer: [
@@ -30,7 +39,7 @@ export default defineConfig({
     },
     {
       command:
-        "bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a; E2E=true bun run dev -- --port 5173 --host 127.0.0.1 --strictPort'",
+        "bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a && E2E=true bun run dev -- --port 5173 --host 127.0.0.1 --strictPort'",
       url: 'http://127.0.0.1:5173',
       reuseExistingServer: !process.env.CI,
       timeout: 240 * 1000,

@@ -98,6 +98,9 @@ describe('app.organization.students authorization', () => {
       for (const fn of Object.values(model)) fn.mockReset();
     }
     mock.module('~/utils/auth.server', () => realAuth);
+    // Billing tests can leave PAYMENT_REQUIRED installed globally. Restore the
+    // actual license policy so these teacher fixtures exercise real ownership.
+    mock.module('~/domain/student-license/student-license.server', () => globalThis.__realModules['~/domain/student-license/student-license.server']);
     getMembershipId.mockReset();
     getSession.mockReset();
     setMembershipId.mockResolvedValue('membership-id=; Path=/');

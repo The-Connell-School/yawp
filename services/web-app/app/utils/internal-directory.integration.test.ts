@@ -12,7 +12,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('real seeded dire
   process.env.E2E_DATABASE_URL = connection;
   const key = randomBytes(32).toString('base64url');
   process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
-  const { internalDirectory } = await import('./internal-directory.server');
+  const { internalDirectory, internalOrganizationSearch } = await import('./internal-directory.server');
   const { prisma } = await import('./db.server');
   const request = (query = '', token = key) => new Request(`https://yawp.test/api/internal/v1/users${query}`, {
     headers: { authorization: `Bearer ${token}` },
@@ -24,6 +24,13 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('real seeded dire
     });
     const membership = teacher.memberships.find(value => value.isActive)!;
     expect(membership).toBeTruthy();
+    const orgRequest = (body: unknown) => new Request('https://yawp.test/api/internal/v1/organizations/search', { method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const organization = await prisma.organization.findUniqueOrThrow({ where: { id: membership.organizationId } });
+    const organizations = await internalOrganizationSearch(orgRequest({ q: organization.name, organizationIds: [organization.id] }));
+    expect(await organizations.json()).toEqual({ organizations: [{ id: organization.id, name: organization.name }], nextCursor: null });
+    const absent = await internalOrganizationSearch(orgRequest({ organizationIds: ['missing-org'] }));
+    expect(await absent.json()).toEqual({ organizations: [], nextCursor: null });
+
     const result = await internalDirectory.search(request(`?q=dev.teacher&organizationId=${membership.organizationId}`));
     expect(result.status).toBe(200);
     const page = await result.json();

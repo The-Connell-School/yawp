@@ -560,21 +560,47 @@ describe('carets', () => {
     expect(server.presence.size).toBe(0);
   });
 
-  test('announces departure before a route waits for its final edit flush', async () => {
-    const server = fakeServer();
-    const { make } = pair(server);
-    const sam = make();
-    await sam.provider.start();
-    sam.provider.awareness.setLocalState({ user: {}, cursor: cursorAt(3) });
-    await tick(20);
-    expect(server.presence.size).toBe(1);
+  for (const beaconAccepted of [true, false]) {
+    test(`announces departure before final edit flush (beacon accepted: ${beaconAccepted})`, async () => {
+      const server = fakeServer();
+      const { make } = pair(server);
+      const sam = make();
+      const originalBeacon = globalThis.navigator.sendBeacon;
+      const beacons: { url: string; body: string }[] = [];
+      // Keep all transport on the same fake server. Happy DOM's beacon uses
+      // its own fetch, bypassing the provider's injected transport entirely.
+      globalThis.navigator.sendBeacon = (url, data) => {
+        beacons.push({ url: String(url), body: String(data) });
+        if (beaconAccepted) {
+          void server.fetchImpl(String(url), { method: 'POST', body: String(data) });
+        }
+        return beaconAccepted;
+      };
+      try {
+        await sam.provider.start();
+        sam.provider.awareness.setLocalState({ user: {}, cursor: cursorAt(3) });
+        await tick(20);
+        expect(server.presence.size).toBe(1);
 
-    sam.provider.leave();
-    await tick(20);
+        sam.provider.leave();
+        await tick(20);
 
-    expect(server.presence.size).toBe(0);
-    sam.provider.destroy();
-  });
+        expect(beacons).toHaveLength(1);
+        expect(beacons[0].url).toBe('/api/collab/doc-1/presence');
+        const departure = readAwarenessUpdate(
+          base64ToBytes(JSON.parse(beacons[0].body).awareness)
+        );
+        expect(departure).toEqual([
+          expect.objectContaining({ clientId: sam.provider.awareness.clientID, state: null }),
+        ]);
+        expect(server.presence.size).toBe(0);
+        expect(server.log).toHaveLength(0);
+      } finally {
+        sam.provider.destroy();
+        globalThis.navigator.sendBeacon = originalBeacon;
+      }
+    });
+  }
 
   test('a reader publishes nothing, but still sees the writers', async () => {
     // The teacher's side of the page: they follow a group writing without

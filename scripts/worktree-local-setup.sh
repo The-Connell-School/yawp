@@ -43,9 +43,9 @@ ensure_config() {
     SLUG="$WORKTREE_NAME"
     local slot
     slot="$(hash_slot "$ROOT" 70)"
-    PG_PORT=$((54320 + slot))
-    DEV_PORT=$((5176 + slot))
-    LTI_MOCK_PORT=$((9473 + slot))
+    PG_PORT="${PG_PORT:-$((54320 + slot))}"
+    DEV_PORT="${DEV_PORT:-$((5176 + slot))}"
+    LTI_MOCK_PORT="${LTI_MOCK_PORT:-$((9473 + slot))}"
     CONTAINER_NAME="yawp-${SLUG}-postgres"
     VOLUME_NAME="yawp-${SLUG}-postgres-data"
     DB_NAME="yawp_${SLUG}"
@@ -58,6 +58,9 @@ ensure_config() {
   LTI_MOCK_PORT="${RECORD_PORT_LTI_MOCK:-${LTI_MOCK_PORT:-$((DEV_PORT + 4297))}}"
   PG_USER="${PG_USER:-postgres}"
   PG_PASSWORD="${PG_PASSWORD:-password}"
+  CONTAINER_NAME="yawp-${SLUG}-postgres"
+  VOLUME_NAME="yawp-${SLUG}-postgres-data"
+  DB_NAME="yawp_${SLUG}"
 
   cat >"$CONFIG_FILE" <<EOF
 SLUG=$SLUG

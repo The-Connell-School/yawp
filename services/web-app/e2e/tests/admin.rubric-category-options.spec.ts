@@ -1,10 +1,10 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 
-test.describe.serial('Customizable rubric categories', () => {
+test.describe.serial('Library rubric category options', () => {
   test.setTimeout(90_000);
 
-  test('sets score labels, category feedback, and grammar highlighting per category', async ({
+  test('preserves selected library score labels, category feedback, and grammar highlighting', async ({
     page,
     signIn,
   }) => {
@@ -12,8 +12,39 @@ test.describe.serial('Customizable rubric categories', () => {
     const suffix = Date.now();
     const title = `Category Options E2E Type ${suffix}`;
     let assignmentTypeId: string | null = null;
+    let rubricId: string | null = null;
+    const schema = {
+      name: `category-options-e2e-${suffix}`,
+      title: `Category Options Library ${suffix}`,
+      scoringScale: { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 },
+      rubric: {
+        categories: [
+          {
+            key: 'daily_habit', label: 'Daily Habit', weight: 0.6,
+            description: 'Did the student write today?',
+            scoreLabels: [
+              { value: 1, label: 'Skipped' },
+              { value: 3, label: 'Showed up' },
+              { value: 5, label: 'Every day' },
+            ],
+            feedbackEnabled: false,
+          },
+          {
+            key: 'syntax_and_style', label: 'Syntax And Style', weight: 0.4,
+            description: 'Sentences read cleanly.', grammarHighlighting: true,
+          },
+        ],
+      },
+      promptConfig: { gradingInstructions: 'Apply the category settings.', systemInstructions: '', instructionsPreset: '' },
+      outputSchema: { schemaVersion: 1, responseShape: 'categories_overall_comment' },
+      calibrationNotes: null,
+    };
 
     try {
+      const rubric = await prisma.rubric.create({
+        data: { name: schema.name, title: schema.title, schemaJson: schema },
+      });
+      rubricId = rubric.id;
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto('/app/admin/assignments');
       await expect(
@@ -30,34 +61,10 @@ test.describe.serial('Customizable rubric categories', () => {
         .getByLabel('Description')
         .fill('Created by the customizable rubric category e2e test.');
 
-      await page.getByTestId('rubric-add-category').click();
-      await page.getByTestId('rubric-add-category').click();
-
-      // Category 1: custom score labels, feedback box off, grammar off.
-      await page.getByTestId('rubric-category-row-0').click();
-      await page.getByLabel('Label', { exact: true }).fill('Daily Habit');
-      await page.getByLabel('Weight %').fill('60');
-      await page
-        .locator('#category-edit-description')
-        .fill('Did the student write today?');
-      await page.getByLabel('Score 1 label').fill('Skipped');
-      await page.getByLabel('Score 3 label').fill('Showed up');
-      await page.getByLabel('Score 5 label').fill('Every day');
-      await page.getByLabel('Category feedback').click();
-      await expect(page.getByLabel('Category feedback')).not.toBeChecked();
-      await expect(page.getByLabel('Grammar highlighting')).not.toBeChecked();
-      await page.getByRole('button', { name: 'Done' }).click();
-
-      // Category 2: default feedback box, grammar highlighting explicitly on.
-      await page.getByTestId('rubric-category-row-1').click();
-      await page.getByLabel('Label', { exact: true }).fill('Syntax And Style');
-      await page.getByLabel('Weight %').fill('40');
-      await page
-        .locator('#category-edit-description')
-        .fill('Sentences read cleanly.');
-      await page.getByLabel('Grammar highlighting').click();
-      await expect(page.getByLabel('Grammar highlighting')).toBeChecked();
-      await page.getByRole('button', { name: 'Done' }).click();
+      await expect(page.getByTestId('rubric-add-category')).toHaveCount(0);
+      await expect(page.getByTestId('rubric-paste-open')).toHaveCount(0);
+      await page.getByTestId('rubric-library-select').click();
+      await page.getByRole('option', { name: schema.title, exact: true }).click();
 
       await Promise.all([
         page.waitForURL(
@@ -73,10 +80,12 @@ test.describe.serial('Customizable rubric categories', () => {
 
       const created = await prisma.assignmentType.findUniqueOrThrow({
         where: { id: assignmentTypeId! },
-        select: { rubricJson: true },
+        select: { rubricId: true, rubric: { select: { schemaJson: true } } },
       });
 
-      expect(created.rubricJson).toMatchObject({
+      expect(created.rubricId).toBe(rubricId);
+      expect(created.rubric?.schemaJson).toEqual(schema);
+      expect((created.rubric!.schemaJson as { rubric: unknown }).rubric).toMatchObject({
         categories: [
           {
             key: 'daily_habit',
@@ -103,8 +112,8 @@ test.describe.serial('Customizable rubric categories', () => {
       // The category that never touched a toggle stores nothing for it, so it
       // keeps behaving exactly as rubrics did before these settings existed.
       const storedCategories = (
-        created.rubricJson as { categories: Record<string, unknown>[] }
-      ).categories;
+        created.rubric!.schemaJson as { rubric: { categories: Record<string, unknown>[] } }
+      ).rubric.categories;
       expect(storedCategories[0]).not.toHaveProperty('grammarHighlighting');
       expect(storedCategories[1]).not.toHaveProperty('feedbackEnabled');
       expect(storedCategories[1]).not.toHaveProperty('scoreLabels');
@@ -114,10 +123,23 @@ test.describe.serial('Customizable rubric categories', () => {
       await expect(
         page.getByRole('heading', { name: 'Edit assignment type' })
       ).toBeVisible();
-      await page.getByTestId('rubric-category-row-0').click();
-      await expect(page.getByLabel('Score 1 label')).toHaveValue('Skipped');
-      await expect(page.getByLabel('Score 5 label')).toHaveValue('Every day');
-      await expect(page.getByLabel('Category feedback')).not.toBeChecked();
+      await expect(page.getByTestId('rubric-library-select')).toContainText(schema.title);
+      await page.getByText(`View ${schema.title}`, { exact: true }).click();
+      const visibleSchema = JSON.parse(await page.getByTestId('rubric-library-json').innerText());
+      expect(visibleSchema).toEqual(schema);
+      expect(visibleSchema.rubric.categories[0].scoreLabels).toEqual([
+        { value: 1, label: 'Skipped' },
+        { value: 3, label: 'Showed up' },
+        { value: 5, label: 'Every day' },
+      ]);
+      expect(visibleSchema.rubric.categories[0].feedbackEnabled).toBe(false);
+      expect(visibleSchema.rubric.categories[0]).not.toHaveProperty('grammarHighlighting');
+      expect(visibleSchema.rubric.categories[1].grammarHighlighting).toBe(true);
+      expect(visibleSchema.rubric.categories[1]).not.toHaveProperty('feedbackEnabled');
+      expect(visibleSchema.rubric.categories[1]).not.toHaveProperty('scoreLabels');
+      await expect(page.getByTestId('rubric-add-category')).toHaveCount(0);
+      await expect(page.getByTestId('rubric-category-row-0')).toHaveCount(0);
+      expect((await prisma.rubric.findUniqueOrThrow({ where: { id: rubricId! } })).schemaJson).toEqual(schema);
     } finally {
       if (assignmentTypeId) {
         await prisma.assignmentModule.deleteMany({
@@ -130,6 +152,7 @@ test.describe.serial('Customizable rubric categories', () => {
           where: { id: assignmentTypeId },
         });
       }
+      if (rubricId) await prisma.rubric.deleteMany({ where: { id: rubricId } });
       await prisma.$disconnect();
     }
   });
