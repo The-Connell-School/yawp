@@ -1,3 +1,4 @@
+import {captureMarketingPair} from './internal-marketing-pair';
 import { readSharingPair, discloseSharingPair } from './internal-sharing-pair';
 import { chromium, expect } from '@playwright/test';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -70,6 +71,8 @@ try {
   await expect(table.getByText('In Progress', { exact: true }).first()).toBeVisible();
   await expect(table.getByText('Needs Grading', { exact: true }).first()).toBeVisible();
   assert.equal((await page.request.post(`${origin}/auth/dev-login`, { form: { email: 'dev.teacher@yawp.local' }, maxRedirects: 0 })).status(), 404);
+  phase = 'paired marketing capture';
+  await captureMarketingPair({origin,organizationId:org.id,code:loginCode,teacherEmail:teacher.email,classroomId:classroom.id});
   phase = 'reset and replacement users';
   await service.apply({ ...input, jobId: randomUUID(), mode: 'reset' });
   await page.goto(`${origin}/auth/login`);
