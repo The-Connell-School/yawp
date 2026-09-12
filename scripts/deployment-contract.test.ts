@@ -53,6 +53,13 @@ function listTrackedRepoFiles(): string[] {
 }
 
 describe('production deployment contract', () => {
+  test('root build context excludes local credentials and host dependencies', () => {
+    const patterns = readRepoFile('.dockerignore').split(/\r?\n/).map(line => line.trim());
+    for (const required of ['.git', '**/.env', '**/.env.*', '**/node_modules', '**/build']) {
+      expect(patterns).toContain(required);
+    }
+  });
+
   test('tracked gitlinks have matching submodule declarations', () => {
     const gitlinks = execFileSync('git', ['ls-files', '-s'], {
       cwd: repoRoot,
