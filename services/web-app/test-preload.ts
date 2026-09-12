@@ -62,6 +62,7 @@ if (isWebAppTestFile()) {
     // The class-assignment start test stubs findStudentGroupDocument, which would
     // otherwise leave arrangeGroups/openGroups missing for the groups-route test
     // that runs after it.
+    '~/domain/collaboration/assignment-artifact.server': await snapshot('~/domain/collaboration/assignment-artifact.server'),
     '~/domain/collaboration/groups.server': await snapshot(
       '~/domain/collaboration/groups.server'
     ),
