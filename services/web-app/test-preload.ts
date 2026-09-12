@@ -49,6 +49,7 @@ if (isWebAppTestFile()) {
     // requireOwner/requireMembership wholesale, which would otherwise mean no test in the
     // suite ever runs the real cross-organization ownership check.
     '~/utils/auth.server': await snapshot('~/utils/auth.server'),
+    '~/routes/app_.documents_.$id/hooks/use-document-submit': await snapshot('~/routes/app_.documents_.$id/hooks/use-document-submit'),
     '~/domain/student-license/student-license.server': await snapshot('~/domain/student-license/student-license.server'),
     '~/utils/assignment-type-access.server': await snapshot(
       '~/utils/assignment-type-access.server'
