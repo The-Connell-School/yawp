@@ -1,5 +1,8 @@
 import { resolve } from 'path';
 
+// Preserve server response semantics before DOM test registration strips cookies.
+globalThis.__serverResponse ??= globalThis.Response;
+
 process.env.SESSION_SECRET = process.env.SESSION_SECRET ?? 'test-secret-for-unit-tests';
 // Provide a benign default so Prisma client construction in imported modules does not throw.
 process.env.DATABASE_URL =
@@ -20,6 +23,7 @@ process.env.DATABASE_URL =
 // (`globalThis.__realModules`) instead of re-importing the path.
 declare global {
   // eslint-disable-next-line no-var
+  var __serverResponse: typeof Response;
   var __realModules: Record<string, Record<string, unknown>>;
 }
 
