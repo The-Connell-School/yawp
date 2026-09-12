@@ -1636,3 +1636,12 @@ describe('demo environment deployment contract', () => {
     }
   });
 });
+
+describe('Internal preview database classification', () => {
+  test('recognizes the dedicated local Docker host without disabling production TLS', async () => {
+    const { isLocalDatabaseUrl } = await import('../packages/prisma/scripts/local-dev/database-url');
+    expect(isLocalDatabaseUrl('postgresql://fixture:fixture@yawp-internal-preview-postgres:5432/yawp_fixture')).toBe(true);
+    expect(isLocalDatabaseUrl('postgresql://fixture:fixture@preview-postgres:5432/yawp_fixture')).toBe(true);
+    expect(isLocalDatabaseUrl('postgresql://fixture:fixture@db.cafmse4qcmw7.us-east-1.rds.amazonaws.com:5432/yawp')).toBe(false);
+  });
+});
