@@ -3,6 +3,7 @@ import { PrismaClient } from '@app/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { parse } from 'pg-connection-string';
 import chalk from 'chalk';
+import { createAttributedPrisma } from './internal-impersonation-context.server';
 
 /**
  * Prisma resolves the Postgres namespace from `DATABASE_URL` (e.g. `?schema=pr_7`).
@@ -62,7 +63,7 @@ function pgPoolConfig() {
   };
 }
 
-export const prisma = remember('prisma', () => {
+export const basePrisma = remember('prisma', () => {
   const logThreshold = 20;
 
   const connectionString =
@@ -112,3 +113,7 @@ export const prisma = remember('prisma', () => {
   });
   return client;
 });
+
+// Existing application queries gain audit only inside a validated impersonation
+// scope. Normal requests retain the original Prisma transaction behavior.
+export const prisma = createAttributedPrisma(basePrisma);

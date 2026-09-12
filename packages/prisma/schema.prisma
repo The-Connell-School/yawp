@@ -74,6 +74,8 @@ model Rubric {
   title           String
   schemaJson      Json
   assignmentTypes AssignmentType[]
+  currentRevisionId String?
+  currentRevision RubricRevision? @relation("CurrentRubricRevision", fields: [currentRevisionId], references: [id], onDelete: Restrict)
 
   @@index([title])
 }
@@ -258,6 +260,8 @@ model AssignmentTypeEvaluationResult {
 }
 
 model Assignment {
+  rubricRevisionId String?
+  rubricRevision RubricRevision? @relation(fields: [rubricRevisionId], references: [id], onDelete: Restrict)
   id                              String            @id @default(cuid())
   createdAt                       DateTime          @default(now()) @db.Timestamptz(6)
   updatedAt                       DateTime          @default(now()) @db.Timestamptz(6)
@@ -1268,6 +1272,57 @@ model TeacherAssignmentType {
   @@index([assignmentTypeId])
 }
 
+// Separate from ordinary Yawp sessions: service-issued access must retain its actor.
+model InternalImpersonationSession {
+  id               String    @id
+  cookieTokenHash  String    @unique
+  actorId          String
+  userId           String
+  organizationId   String
+  membershipId     String
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  expiresAt        DateTime  @db.Timestamptz(6)
+  endedAt          DateTime? @db.Timestamptz(6)
+  remoteEndPending Boolean   @default(false)
+
+  @@index([remoteEndPending, createdAt])
+}
+
+// Immutable attribution snapshots survive membership/user removal.
+model InternalQaFixture {
+  id             String   @id
+  actorId        String
+  organizationId String
+  requestHash    String
+  reason         String
+  users          Json
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  archivedAt     DateTime? @db.Timestamptz(6)
+  archivedBy     String?
+
+  @@index([organizationId, createdAt])
+}
+
+model InternalImpersonationEvent {
+  id             String   @id @default(cuid())
+  sessionId      String
+  actorId        String
+  userId         String
+  organizationId String
+  action         String
+  resourceType   String
+  resourceId     String
+  requestId      String?
+  requestAction  String?
+  jobId          String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([sessionId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([requestId])
+  @@index([jobId])
+}
+
 model Session {
   id             String   @id @default(cuid())
   createdAt      DateTime @default(now()) @db.Timestamptz(6)
@@ -1583,4 +1638,26 @@ model LlmLog {
   @@index([createdAt(sort: Desc)])
   @@index([model])
   @@index([provider])
+}
+
+
+/// Immutable portable rubric history. Names, rather than environment-local rubric
+/// IDs, preserve provenance across local fixture resets and environment transfers.
+model RubricRevision {
+  id String @id
+  rubricName String
+  version Int
+  schemaJson Json
+  fingerprint String
+  requestId String @unique
+  requestHash String
+  sourceContentId String?
+  sourceVersion Int?
+  sourceFingerprint String?
+  createdBy String
+  reason String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  currentFor Rubric[] @relation("CurrentRubricRevision")
+  assignments Assignment[]
+  @@unique([rubricName, version])
 }

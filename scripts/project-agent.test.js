@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -15,6 +15,63 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
+  test("advertises isolated fresh impersonation migration verification", () => {
+    expect(capabilities().proofProfiles).toContain("internal-fresh-migrations");
+  });
+  test("sibling worktrees receive distinct database identities and honor reassigned Record ports", () => {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "yawp-isolation-"));
+    try {
+      const fakeBin = path.join(fixture, "bin");
+      fs.mkdirSync(fakeBin);
+      fs.writeFileSync(path.join(fakeBin, "bun"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      // Stop after config generation: never contact a real Docker daemon.
+      fs.writeFileSync(path.join(fakeBin, "docker"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+      const configs = [];
+      for (const name of ["first", "second"]) {
+        const workspace = path.join(fixture, name);
+        fs.mkdirSync(path.join(workspace, "scripts"), { recursive: true });
+        const script = path.join(workspace, "scripts/setup.sh");
+        fs.copyFileSync(path.join(root, "scripts/worktree-local-setup.sh"), script);
+        for (const port of [47001, 47002]) {
+          const result = spawnSync("bash", [script, "--no-dev"], {
+            cwd: fixture, encoding: "utf8", timeout: 5000,
+            env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, RECORD_PORT_DATABASE: String(port), RECORD_PORT_APP: "48001" },
+          });
+          expect(result.status).toBe(1);
+          const config = parseEnvFile(fs.readFileSync(path.join(workspace, ".worktree-local/config.env"), "utf8"));
+          expect(config.PG_PORT).toBe(String(port));
+          if (port === 47002) configs.push(config);
+        }
+      }
+      expect(configs[0].CONTAINER_NAME).not.toBe(configs[1].CONTAINER_NAME);
+      expect(configs[0].DB_NAME).not.toBe(configs[1].DB_NAME);
+      expect(configs[0].VOLUME_NAME).not.toBe(configs[1].VOLUME_NAME);
+    } finally {
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
+  test("failed dependency validation does not start or reset a database", () => {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "yawp-bootstrap-"));
+    try {
+      fs.mkdirSync(path.join(fixture, "scripts"));
+      fs.mkdirSync(path.join(fixture, "bin"));
+      fs.mkdirSync(path.join(fixture, "packages/prisma"), { recursive: true });
+      fs.mkdirSync(path.join(fixture, "services/web-app"), { recursive: true });
+      fs.copyFileSync(path.join(root, "scripts/worktree-local-setup.sh"), path.join(fixture, "scripts/setup.sh"));
+      fs.writeFileSync(path.join(fixture, "bin/bun"), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$BOOTSTRAP_CALLS"\nexit 42\n', { mode: 0o755 });
+      fs.writeFileSync(path.join(fixture, "bin/docker"), '#!/bin/sh\nprintf "docker %s\\n" "$*" >> "$BOOTSTRAP_CALLS"\nexit 0\n', { mode: 0o755 });
+      const calls = path.join(fixture, "calls");
+      const result = spawnSync("bash", [path.join(fixture, "scripts/setup.sh"), "--fresh", "--no-dev"], {
+        cwd: os.tmpdir(), encoding: "utf8", timeout: 5000,
+        env: { ...process.env, PATH: `${fixture}/bin:${process.env.PATH}`, BOOTSTRAP_CALLS: calls },
+      });
+      expect(result.status).toBe(42);
+      expect(fs.readFileSync(calls, "utf8")).toBe("install --frozen-lockfile\n");
+      expect(fs.existsSync(path.join(fixture, ".worktree-local"))).toBe(false);
+    } finally {
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
   test("selects the first Node runtime meeting the declared minimum", () => {
     const selected = selectCompatibleNode(["old", "current", "new"], (candidate) => ({
       old: "v16.2.0",
@@ -156,7 +213,8 @@ esac
     });
     expect(result.status).toBe(0);
 
-    const slug = path.basename(tempRoot);
+    const slug = parseEnvFile(fs.readFileSync(path.join(configDir, "config.env"), "utf8")).SLUG;
+    expect(slug).toMatch(new RegExp(`^${path.basename(tempRoot).toLowerCase().slice(0,40)}-[a-f0-9]{12}$`));
     const config = fs.readFileSync(path.join(configDir, "config.env"), "utf8");
     expect(parseEnvFile(config)).toMatchObject({
       PG_PORT: "47330",

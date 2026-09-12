@@ -12,7 +12,7 @@ const prisma = {
 mock.module('~/utils/db.server', () => ({ prisma }));
 
 const { createAssignmentGroupArtifact, AssignmentArtifactError } =
-  await import('./assignment-artifact.server');
+  globalThis.__realModules['~/domain/collaboration/assignment-artifact.server'] as typeof import('./assignment-artifact.server');
 
 function group(overrides: Record<string, unknown> = {}) {
   return {
@@ -33,6 +33,7 @@ function group(overrides: Record<string, unknown> = {}) {
 
 describe('createAssignmentGroupArtifact', () => {
   beforeEach(() => {
+    mock.module('./assignment-artifact.server', () => globalThis.__realModules['~/domain/collaboration/assignment-artifact.server']);
     tx.documentGroup.findUnique.mockReset().mockResolvedValue(group());
     tx.documentGroup.updateMany.mockReset().mockResolvedValue({ count: 1 });
     tx.document.create

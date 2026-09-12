@@ -727,6 +727,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
     assignmentTypeId: submission.document.assignmentTypeId,
+    assignmentId: submission.document.assignment?.id,
     assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
     assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
   });

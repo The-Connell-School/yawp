@@ -146,10 +146,12 @@ export async function resolveGrammarHighlightingForAssignmentType(
 
 export async function resolveRubricConfigForSubmission({
   assignmentTypeId,
+  assignmentId,
   latestGradingRun,
   rubricScores,
 }: {
   assignmentTypeId: string;
+  assignmentId?: string | null;
   latestGradingRun: LatestGradingRunRubricSnapshot | null;
   rubricScores: unknown;
 }): Promise<RubricDisplayConfig> {
@@ -165,6 +167,7 @@ export async function resolveRubricConfigForSubmission({
   if (!activeConfig) {
     const assignmentTypeConfig = await resolveAssignmentTypeGradingConfig({
       assignmentTypeId,
+      assignmentId,
     });
     activeConfig = {
       categories: assignmentTypeConfig.rubricCategories,
