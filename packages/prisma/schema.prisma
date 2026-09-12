@@ -1640,6 +1640,23 @@ model LlmLog {
   @@index([provider])
 }
 
+/// Durable receipt and provenance for trusted nonproduction scenario generation.
+model InternalScenarioReceipt {
+  jobId          String   @id
+  actorId        String
+  targetId       String
+  environment    String
+  organizationId String
+  requestHash    String
+  fingerprint    String
+  resources      Json
+  receipt        Json
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  retiredAt      DateTime? @db.Timestamptz(6)
+  retiredByJobId  String?
+
+  @@index([targetId, organizationId, retiredAt])
+}
 
 /// Immutable portable rubric history. Names, rather than environment-local rubric
 /// IDs, preserve provenance across local fixture resets and environment transfers.
