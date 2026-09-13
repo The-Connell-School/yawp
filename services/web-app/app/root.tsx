@@ -1,3 +1,5 @@
+import { internalImpersonationMiddleware } from './utils/internal-impersonation-runtime.server';
+import { getImpersonationAttribution } from './utils/internal-impersonation-context.server';
 import {
   type LoaderFunctionArgs,
   type HeadersFunction,
@@ -9,6 +11,7 @@ import {
   Scripts,
   ScrollRestoration,
   Outlet,
+  useRouteLoaderData,
 } from 'react-router';
 import { PostHogProvider } from 'posthog-js/react';
 import { useEffect } from 'react';
@@ -53,7 +56,7 @@ import {
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
 
-export const middleware = [previewAccessMiddleware, uaPartnerMiddleware];
+export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware];
 
 export const links: LinksFunction = () => {
   return [
@@ -85,6 +88,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const timings = makeTimings('root loader');
+  const internal = getImpersonationAttribution();
   const url = new URL(request.url);
   const publicLandingPage =
     url.pathname === '/' ||
@@ -97,10 +101,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const contrastPreference: ContrastPreference =
     contrastCookie.contrast === 'high' ? 'high' : 'standard';
 
-  if (publicLandingPage) {
+  if (publicLandingPage && !internal) {
     return data(
       {
         user: null,
+        internalImpersonation: null,
         requestInfo: {
           hints: getHints(request),
           origin: getDomainUrl(request),
@@ -150,7 +155,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
               email: true,
               isAdmin: true,
               memberships: {
-                ...(previewAccessSeat && isIsolatedPreviewSeatMode()
+                ...(internal ? { where: { id: internal.membershipId, organizationId: internal.organizationId, isActive: true } } : previewAccessSeat && isIsolatedPreviewSeatMode()
                   ? {
                       where: {
                         organizationId: previewAccessSeat.organizationId,
@@ -231,6 +236,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       previewAccessSeat,
       blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
       impersonation,
+      internalImpersonation: internal ? { ...internal, email: user?.email ?? internal.userId } : null,
       toast,
     },
     {
@@ -261,6 +267,7 @@ function Document({
   env?: Record<string, string | boolean | undefined>;
   contrastPreference?: ContrastPreference;
 }) {
+  const internal = useRouteLoaderData<typeof loader>('root')?.internalImpersonation;
   return (
     <html
       lang="en"
@@ -278,7 +285,15 @@ function Document({
         <meta name="theme-color" content="#ffffff" />
         <Links />
       </head>
-      <body>
+      <body style={internal ? { paddingTop: '4rem' } : undefined}>
+        {internal ? (
+          <section aria-label="Active impersonation" className="fixed inset-x-0 top-0 z-[2147483647] flex min-h-16 items-center justify-between gap-4 bg-amber-200 px-4 py-2 text-sm text-amber-950 shadow">
+            <div><strong>Impersonating {internal.email}</strong><br />Actions are audited as {internal.actorId}. Organization: {internal.organizationId}.</div>
+            <form method="post" action="/auth/internal-impersonation/end">
+              <button type="submit" className="whitespace-nowrap rounded border border-amber-900 px-3 py-2 font-semibold">Exit impersonation</button>
+            </form>
+          </section>
+        ) : null}
         {children}
         <script
           nonce={nonce}
@@ -331,7 +346,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
   }, []);
 
   useEffect(() => {
-    if (data.ENV.POSTHOG_API_KEY) {
+    if (data.ENV.POSTHOG_API_KEY && !data.internalImpersonation) {
       posthog.init(data.ENV.POSTHOG_API_KEY, {
         api_host: data.ENV.POSTHOG_HOST,
         person_profiles: 'identified_only',
@@ -368,7 +383,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         });
       }
     }
-  }, [data.ENV.POSTHOG_API_KEY, data.ENV.POSTHOG_HOST, data.user]);
+  }, [data.ENV.POSTHOG_API_KEY, data.ENV.POSTHOG_HOST, data.user, data.internalImpersonation]);
 
   const appChildren = (
     <Document
@@ -376,7 +391,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
       env={data.ENV}
       contrastPreference={contrastPreference}
     >
-      {data.bannerWarning ? (
+      {data.bannerWarning && !data.internalImpersonation ? (
         <LocalDevEnvironmentBar
           bannerWarning={data.bannerWarning}
           localDevQuickLogin={data.localDevQuickLogin}
@@ -396,7 +411,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
   );
 
   // Only mount PostHogProvider when an API key is configured to avoid warnings
-  if (data.ENV.POSTHOG_API_KEY) {
+  if (data.ENV.POSTHOG_API_KEY && !data.internalImpersonation) {
     return (
       <PostHogProvider
         apiKey={data.ENV.POSTHOG_API_KEY}

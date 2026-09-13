@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   class: { findMany: mock() },
@@ -35,7 +35,11 @@ function signup(fields: Record<string, string>) {
 }
 
 describe('UA student signup', () => {
+  let previousResponse: typeof Response;
+  afterEach(() => { globalThis.Response = previousResponse; });
   beforeEach(() => {
+    previousResponse = globalThis.Response;
+    globalThis.Response = globalThis.__serverResponse;
     for (const model of Object.values(prisma)) {
       for (const fn of Object.values(model)) fn.mockReset();
     }
@@ -107,6 +111,7 @@ describe('UA student signup', () => {
     )) as Response;
 
     expect(response.status).toBe(302);
+    expect(commitUaPartnerContext).toHaveBeenCalled();
     expect(response.headers.get('set-cookie')).toContain('yawp_partner');
   });
 

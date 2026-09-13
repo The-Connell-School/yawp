@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const getUserId = mock();
 const requireUserId = mock();
@@ -25,7 +25,11 @@ mock.module('~/cookies/membership-id.server', () => ({ setMembershipId }));
 const { action, loader } = await import('./route');
 
 describe('/ua', () => {
+  let previousResponse: typeof Response;
+  afterEach(() => { globalThis.Response = previousResponse; });
   beforeEach(() => {
+    previousResponse = globalThis.Response;
+    globalThis.Response = globalThis.__serverResponse;
     getUserId.mockReset();
     requireUserId.mockReset();
     commitUaPartnerContext.mockReset();
@@ -67,6 +71,7 @@ describe('/ua', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/ua');
+    expect(commitUaPartnerContext).toHaveBeenCalled();
     expect(response.headers.get('set-cookie')).toContain('partner=ua');
   });
 

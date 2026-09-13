@@ -1,11 +1,11 @@
 import type { PrismaClient } from '../../generated/prisma';
 
-export async function truncateAllPublicTables(prisma: PrismaClient) {
+export async function truncateAllPublicTables(prisma: Pick<PrismaClient, '$queryRaw' | '$executeRawUnsafe'>) {
   const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
     SELECT tablename
     FROM pg_tables
     WHERE schemaname = 'public'
-      AND tablename <> '_prisma_migrations'
+      AND tablename NOT IN ('_prisma_migrations', 'InternalImpersonationSession', 'InternalImpersonationEvent', 'InternalQaFixture', 'RubricRevision', 'InternalScenarioReceipt')
   `;
 
   if (tables.length === 0) return;

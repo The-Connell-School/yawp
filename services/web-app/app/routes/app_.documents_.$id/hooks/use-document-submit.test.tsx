@@ -19,7 +19,8 @@ mock.module('sonner', () => ({
   toast: { error: toastError, success: toastSuccess },
 }));
 
-const { useDocumentSubmit } = await import('./use-document-submit');
+// Route rendering tests replace this hook globally; exercise the real hook here.
+const { useDocumentSubmit } = globalThis.__realModules['~/routes/app_.documents_.$id/hooks/use-document-submit'] as typeof import('./use-document-submit');
 
 type SubmitApi = ReturnType<typeof useDocumentSubmit>;
 

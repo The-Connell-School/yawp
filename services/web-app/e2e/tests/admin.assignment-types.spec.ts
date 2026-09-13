@@ -16,6 +16,22 @@ test.describe.serial('Admin assignment types', () => {
     const title = `Rubric E2E Type ${suffix}`;
     let assignmentTypeId: string | null = null;
     let moduleId: string | null = null;
+    const rubric = await prisma.rubric.create({
+      data: {
+        name: `module-mapping-e2e-${suffix}`,
+        title: `Module mapping rubric ${suffix}`,
+        schemaJson: {
+          name: `module-mapping-e2e-${suffix}`,
+          title: `Module mapping rubric ${suffix}`,
+          scoringScale: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+          rubric: { categories: [
+            { key: 'thesis_e2e', label: 'Thesis E2E', weight: 0.6, description: 'Clear, defensible thesis for the essay.' },
+            { key: 'grammar_e2e', label: 'Grammar E2E', weight: 0.4, description: 'Grammar and syntax support clarity.' },
+          ] },
+        },
+      },
+    });
+
 
     try {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
@@ -34,24 +50,8 @@ test.describe.serial('Admin assignment types', () => {
         .getByLabel('Description')
         .fill('Created by the assignment type rubric e2e test.');
 
-      await page.getByTestId('rubric-add-category').click();
-      await page.getByTestId('rubric-add-category').click();
-
-      await page.getByTestId('rubric-category-row-0').click();
-      await page.getByLabel('Label', { exact: true }).fill('Thesis E2E');
-      await page.getByLabel('Weight %').fill('60');
-      await page
-        .locator('#category-edit-description')
-        .fill('Clear, defensible thesis for the essay.');
-      await page.getByRole('button', { name: 'Done' }).click();
-
-      await page.getByTestId('rubric-category-row-1').click();
-      await page.getByLabel('Label', { exact: true }).fill('Grammar E2E');
-      await page.getByLabel('Weight %').fill('40');
-      await page
-        .locator('#category-edit-description')
-        .fill('Grammar and syntax support clarity.');
-      await page.getByRole('button', { name: 'Done' }).click();
+      await page.getByTestId('rubric-library-select').click();
+      await page.getByRole('option', { name: rubric.title, exact: true }).click();
 
       await Promise.all([
         page.waitForURL(
@@ -69,7 +69,8 @@ test.describe.serial('Admin assignment types', () => {
       await expect(
         page.getByRole('heading', { name: 'Edit assignment type' })
       ).toBeVisible();
-      await expect(page.getByText('Grading instructions')).not.toBeVisible();
+      await expect(page.getByTestId('rubric-library-select')).toContainText(rubric.title);
+      await expect(page.getByTestId('grading-assistant-instructions')).toBeVisible();
 
       await expect(
         page.getByRole('button', { name: 'View compiled prompt' })
@@ -315,6 +316,8 @@ test.describe.serial('Admin assignment types', () => {
           kind: true,
           rubricJson: true,
           scoringScaleJson: true,
+          rubricId: true,
+          rubric: { select: { schemaJson: true } },
           evaluations: {
             select: {
               title: true,
@@ -329,27 +332,11 @@ test.describe.serial('Admin assignment types', () => {
 
       expect(created.title).toBe(title);
       expect(created.kind).toBeNull();
-      expect(created.scoringScaleJson).toMatchObject({
-        type: 'weighted_1_5',
-        minScore: 1,
-        maxScore: 5,
-      });
-      expect(created.rubricJson).toMatchObject({
-        categories: [
-          {
-            key: 'thesis_e2e',
-            label: 'Thesis E2E',
-            weight: 0.6,
-            description: 'Clear, defensible thesis for the essay.',
-          },
-          {
-            key: 'grammar_e2e',
-            label: 'Grammar E2E',
-            weight: 0.4,
-            description: 'Grammar and syntax support clarity.',
-          },
-        ],
-      });
+      expect(created.rubricId).toBe(rubric.id);
+      expect(created.rubric?.schemaJson).toEqual(rubric.schemaJson);
+      // Library selection persists a relationship, without copying or rewriting the schema.
+      expect(created.rubricJson).toBeNull();
+      expect(created.scoringScaleJson).toBeNull();
       expect(created.evaluations).toEqual([
         expect.objectContaining({
           title: 'Encouraging opening',
@@ -421,6 +408,7 @@ test.describe.serial('Admin assignment types', () => {
           where: { id: assignmentTypeId },
         });
       }
+      await prisma.rubric.delete({ where: { id: rubric.id } });
       await prisma.$disconnect();
     }
   });

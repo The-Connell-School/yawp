@@ -166,7 +166,7 @@ export function capabilities() {
       qa: "./bin/project qa prepare --json",
     },
     fixtures: ["local-dev"],
-    proofProfiles: ["project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
+    proofProfiles: ["internal-preview-auth", "internal-scenario-browser", "internal-scenario-container", "internal-scenario-integration", "internal-fresh-migrations", "internal-content-pair", "internal-rubrics-http", "internal-rubrics-integration", "internal-content-validation", "internal-qa-http", "internal-qa-integration", "internal-audit", "internal-impersonation-browser", "internal-impersonation-http", "internal-impersonation-writes", "internal-impersonation", "internal-impersonation-integration", "internal-management", "internal-directory-integration", "project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "assignment-rubric-unit", "assignment-prompt-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
     nextCommands: [
       "./bin/project doctor --json",
       "./bin/project fixture verify local-dev --json",
@@ -372,11 +372,67 @@ function runTestProfile(profile, { json }) {
   if (chosen === "docs") {
     const result = execute("git", ["diff", "--check", process.env.RECORD_PROOF_BASE_SHA ? `${process.env.RECORD_PROOF_BASE_SHA}..HEAD` : "HEAD"], { json, env: selected.env, timeout: 30000 });
     results.push({ id: "diff-check", ...result });
-  } else if (chosen === "project-cli") run("project-cli", ["test", "./scripts/project-agent.test.js"], 120000);
+  } else if (chosen === "project-cli") run("project-cli", ["test", "./scripts/project-agent.test.js", "./scripts/deployment-contract.test.ts"], 120000);
+  else if (chosen === "internal-fresh-migrations") {
+    const local = requireConfig();
+    results.push({id: chosen, ...execute(selected.bun, ["run", "packages/prisma/scripts/internal-fresh-migrations.ts"], {json, env: {...selected.env, INTERNAL_DIRECTORY_TEST_DATABASE_URL: local.DATABASE_URL}, timeout: 240000})});
+  }
+  else if (chosen === "internal-integration-infra-root") {
+    results.push({id: "internal-integration-root", ...execute("terraform", ["-chdir=infra", "test", "-filter=internal-integration.tftest.hcl", "-no-color"], {json, env: selected.env, timeout: 120000})});
+  }
+  else if (chosen === "internal-integration-infra-validate") {
+    results.push({id: "init-local", ...execute("terraform", ["-chdir=infra", "init", "-backend=false", "-input=false"], {json, env: selected.env, timeout: 600000})});
+    results.push({id: "validate", ...execute("terraform", ["-chdir=infra", "validate", "-no-color"], {json, env: selected.env, timeout: 30000})});
+  }
+  else if (chosen === "internal-integration-infra") {
+    results.push({id: "internal-integration-infra", ...execute("terraform", ["-chdir=infra/modules/internal-integration", "test", "-no-color"], {json, env: selected.env, timeout: 30000})});
+  }
+  else if (chosen === "internal-integration-config") run("internal-integration-config", ["test", "./scripts/internal-integration-config.test.ts"]);
+  else if (chosen === "internal-preview-auth") runWebApp("internal-preview-auth", ["test", "app/routes/auth.dev-login/route.test.ts"]);
+  else if (chosen === "internal-qa-http") runWebApp("internal-qa-http", ["test", "app/utils/internal-qa-http.server.test.ts"]);
+  else if (chosen === "internal-audit") runWebApp("internal-audit", ["test", "app/utils/internal-audit.server.test.ts"]);
+  else if (chosen === "internal-rubrics-http") runWebApp("internal-rubrics-http", ["test", "app/utils/internal-rubrics-http.server.test.ts"]);
+  else if (chosen === "internal-content-validation") runWebApp("internal-content-validation", ["test", "app/domain/rubrics/rubric-promotion.test.ts"]);
+  else if (chosen === "internal-management") runWebApp("internal-management", ["test", "app/utils/internal-management.server.test.ts"]);
+  else if (chosen === "internal-impersonation") runWebApp("internal-impersonation", ["test", "app/utils/internal-impersonation-client.server.test.ts"]);
+  else if (["internal-impersonation-browser", "internal-scenario-browser"].includes(chosen)) {
+    const local = requireConfig();
+    if (devStatus().status === "running") throw new Error("Stop the owned dev server before browser acceptance");
+    results.push({ id: chosen, ...execute(selected.bun, ["run", chosen === "internal-scenario-browser" ? "e2e/internal-scenario.browser.ts" : "e2e/internal-impersonation.browser.ts"], {
+      json, cwd: webAppRoot, timeout: 240000,
+      env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, DEV_PORT: local.DEV_PORT,
+        INTERNAL_TEST_AUTHORITY_PORT: process.env.RECORD_PORT_E2E || process.env.E2E_PORT || String(Number(local.DEV_PORT) + 1) },
+    }) });
+  }
+  else if (chosen === "internal-impersonation-http") runWebApp("internal-impersonation-http", ["test", "app/utils/internal-impersonation-http.server.test.ts"]);
+  else if (["internal-scenario-integration", "internal-scenario-container", "internal-content-pair", "internal-rubrics-integration", "internal-directory-integration", "internal-impersonation-integration", "internal-impersonation-writes", "internal-qa-integration"].includes(chosen)) {
+    if (chosen === "internal-content-pair" && !process.env.INTERNAL_PAIR_WORKSPACE) throw new Error("INTERNAL_PAIR_WORKSPACE is required for paired publication proof");
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun,
+      ["test", chosen === "internal-scenario-container" ? "app/utils/internal-scenario.container.test.ts" : chosen === "internal-scenario-integration" ? "app/utils/internal-scenario.integration.test.ts" : chosen === "internal-content-pair" ? "app/utils/internal-content-pair.test.ts" : chosen === "internal-rubrics-integration" ? "app/utils/internal-rubrics.integration.test.ts" : chosen === "internal-qa-integration" ? "app/utils/internal-qa.integration.test.ts" : chosen === "internal-directory-integration" ? "app/utils/internal-directory.integration.test.ts" : chosen === "internal-impersonation-writes" ? "app/utils/internal-impersonation-writes.integration.test.ts" : "app/utils/internal-impersonation.integration.test.ts"], {
+        json, cwd: webAppRoot, timeout: chosen === "internal-scenario-container" ? 900000 : 60000,
+        env: { ...selected.env, INTERNAL_DIRECTORY_TEST_DATABASE_URL: local.DATABASE_URL, INTERNAL_SCENARIO_TEST_CONTAINER: local.CONTAINER_NAME },
+      }) });
+  }
   else if (chosen === "unit") run("unit", ["run", "--cwd", "services/web-app", "test"]);
   else if (chosen === "typecheck") run("typecheck", ["run", "web-app:typecheck"]);
   else if (chosen === "build") run("build", ["run", "web-app:build"]);
   else if (chosen === "qa-smoke") run("qa-smoke", ["run", "web-app:test:e2e:smoke"], 30 * 60 * 1000);
+  else if (chosen === "assignment-rubric-unit") runWebApp("assignment-rubric-unit", ["test", "app/routes/app.admin.assignment-types.new/route.test.ts", "app/routes/app.admin.assignment-types.$id/route.test.ts", "app/domain/assignment-types/assignment-type-grading-config.server.test.ts", "app/domain/rubrics/rubric-library.server.test.ts"]);
+  else if (chosen === "assignment-prompt-unit") {
+    runWebApp("prompt-library", ["test", "app/routes/app.admin.assignment-types.$id_.prompt/route.test.ts"]);
+    runWebApp("evaluation-library", ["test", "app/routes/api.domain.assignment-type-evaluations/route.test.ts"]);
+  }
+  else if (chosen === "assignment-create") {
+    const local = requireConfig();
+    const database = new URL(local.DATABASE_URL);
+    if (!['localhost', '127.0.0.1'].includes(database.hostname)) throw new Error('Assignment creation E2E requires the isolated local database');
+    database.pathname = '/yawp_assignment_create_e2e';
+    results.push({ id: 'assignment-create', ...execute(selected.bun, ['x', 'playwright', 'test', '--project=chromium', 'e2e/tests/admin.assignment-type-creator.spec.ts', 'e2e/tests/admin.assignment-types.spec.ts', 'e2e/tests/admin.rubric-library.spec.ts', 'e2e/tests/admin.rubric-category-options.spec.ts', '--reporter=line', '--retries=0'], {
+      json, cwd: webAppRoot, timeout: 10 * 60 * 1000,
+      env: { ...selected.env, E2E_DATABASE_URL: database.toString(), CI: 'true' },
+    }) });
+  }
   else if (chosen === "ua-billing") runWebApp("ua-billing", ["run", "test:ua:focused"]);
   else if (chosen === "ua-billing-e2e") {
     const local = requireConfig();
@@ -446,10 +502,10 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|internal-preview-auth|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|assignment-rubric-unit|assignment-prompt-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
-    test: "Usage: ./bin/project test --profile <changed|project-cli|unit|typecheck|build|backend|qa-smoke|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
+    test: "Usage: ./bin/project test --profile <changed|project-cli|internal-preview-auth|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|assignment-rubric-unit|assignment-prompt-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
   };
   return pages[topic] || pages.root;
@@ -537,6 +593,11 @@ export async function main(argv = process.argv.slice(2)) {
     if (operation === "start") return output(await devStart({ json }), json);
     if (operation === "status") return output(devStatus(), json);
     if (operation === "stop") return output(devStop(), json);
+  }
+  if (command === "internal-integration-config") {
+    if (!operation) throw new Error("Usage: ./bin/project internal-integration-config INPUT_JSON --json");
+    const { integrationSettings } = await import('./internal-integration-config.mjs');
+    return output(integrationSettings(JSON.parse(fs.readFileSync(operation, 'utf8'))), json);
   }
   if (command === "test") return output(runTestProfile(parsed.options.profile || "changed", { json }), json);
   if (command === "qa" && operation === "prepare") return output(await qaPrepare({ json, routes: parsed.options.routes }), json);

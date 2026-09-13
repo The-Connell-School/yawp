@@ -8,6 +8,7 @@ const prisma = {
     findFirst: mock(),
     update: mock(),
   },
+  assignment: { findUnique: mock() },
   assignmentType: {
     findUnique: mock(),
   },
@@ -86,8 +87,9 @@ function buildOverallCommentJson() {
   });
 }
 
+const assignmentFixtures = new Map<string, {assignmentTypeId: string; rubricRevision: null}>();
 function mockSubmission(overrides: Record<string, unknown> = {}) {
-  return {
+  const submission = {
     id: 'sub-1',
     text: 'Frozen AI essay text',
     html: '<p>Frozen AI essay text</p>',
@@ -122,6 +124,9 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
     },
     ...overrides,
   };
+  const document = submission.document as any;
+  if (document.assignment?.id) assignmentFixtures.set(document.assignment.id, {assignmentTypeId: document.assignmentTypeId, rubricRevision: null});
+  return submission;
 }
 
 function mockAssignmentType(overrides: Record<string, unknown> = {}) {
@@ -214,6 +219,9 @@ describe('api.domain.grade-essay-ai', () => {
     prisma.user.findUnique.mockReset();
     prisma.submission.update.mockReset();
     prisma.assignmentType.findUnique.mockReset();
+    // These are legacy assignments without a published rubric revision pin.
+    assignmentFixtures.clear();
+    prisma.assignment.findUnique.mockReset().mockImplementation(async ({where}: any) => assignmentFixtures.get(where.id) ?? null);
     prisma.submissionGradingAssistantRun.create.mockReset();
     prisma.submissionActivity.create.mockReset();
     prisma.$transaction.mockReset();

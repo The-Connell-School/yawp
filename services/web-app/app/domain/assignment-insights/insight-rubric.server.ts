@@ -28,6 +28,7 @@ export async function readInsightRubric({
     select: {
       assignment: {
         select: {
+          id: true,
           assignmentTypeId: true,
           assignmentType: { select: { kind: true, title: true } },
         },
@@ -40,6 +41,7 @@ export async function readInsightRubric({
 
   const config = await resolveAssignmentTypeGradingConfig({
     assignmentTypeId,
+    assignmentId: classAssignment.assignment.id,
     assignmentTypeKind: classAssignment.assignment.assignmentType?.kind ?? null,
     assignmentTypeTitle:
       classAssignment.assignment.assignmentType?.title ?? null,

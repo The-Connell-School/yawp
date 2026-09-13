@@ -71,8 +71,10 @@ mock.module('./comments', () => ({ Comments: () => null }));
 mock.module('./comments/selection-context', () => ({
   CommentsSelectionProvider: ({ children }: { children: unknown }) => children,
 }));
-mock.module('./document-editor/document-editor', () => ({
-  DocumentEditor: () => null,
+// Loader tests do not mount rich-text editing. Stub that leaf while retaining
+// DocumentEditor's hydration boundary for the tests that run later in this process.
+mock.module('./document-editor/editor', () => ({
+  Editor: () => null,
 }));
 mock.module('./tutor/tutor', () => ({ Tutor: () => null }));
 mock.module('./document-history/document-history', () => ({
