@@ -9,6 +9,7 @@ import { Form, Link, useFetcher, useLoaderData } from 'react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
+import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
@@ -85,6 +86,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          // Drives the "Tutor off" marker: an assignment written without the
+          // tutor is a cold write, and a teacher scanning this list needs to
+          // see which rows those are.
+          tutorEnabled: true,
           assignmentType: { select: { title: true } },
         },
       },
@@ -104,6 +109,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       assignmentId: string;
       title: string;
       assignmentTypeTitle: string;
+      tutorEnabled: boolean;
       documentCount: number;
       classes: { id: string; label: string }[];
     }
@@ -115,6 +121,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       assignmentId: classAssignment.assignment.id,
       title: classAssignment.assignment.title?.trim() || 'Untitled Assignment',
       assignmentTypeTitle: classAssignment.assignment.assignmentType.title,
+      // A property of the Assignment, so it is the same across every class the
+      // assignment was deployed to; collapsing rows cannot disagree about it.
+      tutorEnabled: classAssignment.assignment.tutorEnabled,
       documentCount: 0,
       classes: [],
     };
@@ -703,13 +712,16 @@ export default function MyAssignmentsRoute() {
                     />
                   </TableCell>
                   <TableCell className="font-medium">
-                    <Link
-                      to={assignment.href}
-                      className="[overflow-wrap:anywhere] hover:underline"
-                      data-testid={`my-assignment-open-${assignment.assignmentId}`}
-                    >
-                      {assignment.title}
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        to={assignment.href}
+                        className="[overflow-wrap:anywhere] hover:underline"
+                        data-testid={`my-assignment-open-${assignment.assignmentId}`}
+                      >
+                        {assignment.title}
+                      </Link>
+                      <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
+                    </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     <AssignmentClasses classes={assignment.classes} />
