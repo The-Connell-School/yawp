@@ -4,11 +4,13 @@ import {
   buildGrowthSeries,
   buildPlanProgress,
   buildRubricTrends,
+  buildWriteModeComparison,
   captureRubricLevels,
   findStudentsNeedingAttention,
   humanizeRubricCategory,
   summarizeClassRubrics,
   summarizeStudentGrades,
+  writeModeForTutorEnabled,
   type GradedSubmissionRow,
   type PlanBaseline,
 } from './reporter-report';
@@ -231,7 +233,9 @@ describe('summarizeClassRubrics', () => {
       'thesis_and_content',
       'evidence_and_support',
     ]);
-    const evidence = rubrics.find((r) => r.category === 'evidence_and_support')!;
+    const evidence = rubrics.find(
+      (r) => r.category === 'evidence_and_support'
+    )!;
     // (2 + 3 + 2) / 3 = 2.33 → 2.3
     expect(evidence.averageLevel).toBe(2.3);
     expect(evidence.scoredCount).toBe(3);
@@ -321,7 +325,9 @@ describe('findStudentsNeedingAttention', () => {
       }),
     ];
 
-    const flagged = findStudentsNeedingAttention(rows, { averageThreshold: 80 });
+    const flagged = findStudentsNeedingAttention(rows, {
+      averageThreshold: 80,
+    });
     // Both are below 80, but the 40 is far more severe and sorts first.
     expect(flagged.map((s) => s.studentName)).toEqual([
       'Severe Case',
@@ -373,7 +379,10 @@ describe('buildPlanProgress', () => {
       row({
         submittedAt: new Date('2026-04-01T00:00:00.000Z'),
         numericPercentage: 78,
-        rubricScores: { evidence_and_support: 3, organization_and_structure: 3 },
+        rubricScores: {
+          evidence_and_support: 3,
+          organization_and_structure: 3,
+        },
       }),
     ];
 
@@ -403,13 +412,212 @@ describe('buildPlanProgress', () => {
   });
 
   test('reports null deltas when the current data lacks a targeted skill', () => {
-    const progress = buildPlanProgress(baseline, ['evidence_and_support'], [
-      row({ numericPercentage: null, rubricScores: null }),
-    ]);
+    const progress = buildPlanProgress(
+      baseline,
+      ['evidence_and_support'],
+      [row({ numericPercentage: null, rubricScores: null })]
+    );
     const evidence = progress.skills[0];
     expect(evidence.baselineLevel).toBe(2);
     expect(evidence.currentLevel).toBeNull();
     expect(evidence.delta).toBeNull();
     expect(progress.averagePercentage.delta).toBeNull();
+  });
+});
+
+describe('writeModeForTutorEnabled', () => {
+  test('maps the assignment tutor toggle onto cold/warm', () => {
+    expect(writeModeForTutorEnabled(false)).toBe('cold');
+    expect(writeModeForTutorEnabled(true)).toBe('warm');
+  });
+
+  test('returns null when the tutor setting is unknown', () => {
+    expect(writeModeForTutorEnabled(null)).toBeNull();
+    expect(writeModeForTutorEnabled(undefined)).toBeNull();
+  });
+});
+
+describe('summarizeStudentGrades write-mode split', () => {
+  test('splits each student average into cold and warm writes', () => {
+    const [summary] = summarizeStudentGrades([
+      row({
+        submissionId: 'cold-1',
+        numericPercentage: 70,
+        tutorEnabled: false,
+        submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
+      row({
+        submissionId: 'warm-1',
+        numericPercentage: 90,
+        tutorEnabled: true,
+        submittedAt: new Date('2026-02-01T00:00:00.000Z'),
+      }),
+      row({
+        submissionId: 'warm-2',
+        numericPercentage: 80,
+        tutorEnabled: true,
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+      }),
+    ]);
+
+    expect(summary.averagePercentage).toBe(80);
+    expect(summary.coldGradedCount).toBe(1);
+    expect(summary.coldAveragePercentage).toBe(70);
+    expect(summary.warmGradedCount).toBe(2);
+    expect(summary.warmAveragePercentage).toBe(85);
+  });
+
+  test('leaves the split empty when no assignment recorded a tutor setting', () => {
+    const [summary] = summarizeStudentGrades([row({ numericPercentage: 88 })]);
+
+    expect(summary.averagePercentage).toBe(88);
+    expect(summary.coldGradedCount).toBe(0);
+    expect(summary.coldAveragePercentage).toBeNull();
+    expect(summary.warmGradedCount).toBe(0);
+    expect(summary.warmAveragePercentage).toBeNull();
+  });
+});
+
+describe('buildGrowthSeries write modes', () => {
+  test('labels each point with the mode it was written under', () => {
+    const series = buildGrowthSeries([
+      row({
+        submissionId: 'cold-1',
+        tutorEnabled: false,
+        submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
+      row({
+        submissionId: 'warm-1',
+        tutorEnabled: true,
+        submittedAt: new Date('2026-02-01T00:00:00.000Z'),
+      }),
+      row({
+        submissionId: 'legacy-1',
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+      }),
+    ]);
+
+    expect(series.points.map((point) => point.writeMode)).toEqual([
+      'cold',
+      'warm',
+      null,
+    ]);
+  });
+});
+
+describe('buildWriteModeComparison', () => {
+  const coldFirst = row({
+    submissionId: 'cold-1',
+    numericPercentage: 60,
+    tutorEnabled: false,
+    submittedAt: new Date('2026-01-05T00:00:00.000Z'),
+    rubricScores: { thesis_and_content: 2 },
+  });
+  const coldLater = row({
+    submissionId: 'cold-2',
+    numericPercentage: 74,
+    tutorEnabled: false,
+    submittedAt: new Date('2026-05-05T00:00:00.000Z'),
+    rubricScores: { thesis_and_content: 4 },
+  });
+  const warmFirst = row({
+    submissionId: 'warm-1',
+    numericPercentage: 82,
+    tutorEnabled: true,
+    submittedAt: new Date('2026-02-05T00:00:00.000Z'),
+    rubricScores: { thesis_and_content: 3 },
+  });
+  const warmLater = row({
+    submissionId: 'warm-2',
+    numericPercentage: 88,
+    tutorEnabled: true,
+    submittedAt: new Date('2026-04-05T00:00:00.000Z'),
+    rubricScores: { thesis_and_content: 4 },
+  });
+
+  test('summarizes each mode separately with its own trajectory', () => {
+    const comparison = buildWriteModeComparison([
+      warmLater,
+      coldFirst,
+      warmFirst,
+      coldLater,
+    ]);
+
+    expect(comparison.cold.gradedCount).toBe(2);
+    expect(comparison.cold.averagePercentage).toBe(67);
+    expect(comparison.cold.firstPercentage).toBe(60);
+    expect(comparison.cold.latestPercentage).toBe(74);
+    expect(comparison.cold.deltaPercentage).toBe(14);
+    expect(comparison.cold.trend).toBe('improving');
+    expect(comparison.cold.rubricAverages[0]).toMatchObject({
+      category: 'thesis_and_content',
+      averageLevel: 3,
+      scoredCount: 2,
+    });
+
+    expect(comparison.warm.gradedCount).toBe(2);
+    expect(comparison.warm.averagePercentage).toBe(85);
+    expect(comparison.warm.deltaPercentage).toBe(6);
+    expect(comparison.warm.trend).toBe('improving');
+  });
+
+  test('reports the support gap as warm minus cold and flags comparability', () => {
+    const comparison = buildWriteModeComparison([
+      coldFirst,
+      coldLater,
+      warmFirst,
+      warmLater,
+    ]);
+
+    expect(comparison.comparable).toBe(true);
+    expect(comparison.supportGapPercentage).toBe(18);
+    expect(comparison.caveat).toBeNull();
+  });
+
+  test('counts submissions with no recorded tutor setting separately', () => {
+    const comparison = buildWriteModeComparison([
+      coldFirst,
+      coldLater,
+      warmFirst,
+      warmLater,
+      row({ submissionId: 'legacy-1', numericPercentage: 95 }),
+    ]);
+
+    expect(comparison.unclassifiedCount).toBe(1);
+    expect(comparison.cold.gradedCount).toBe(2);
+    expect(comparison.warm.gradedCount).toBe(2);
+  });
+
+  test('is not comparable without a cold-write baseline', () => {
+    const comparison = buildWriteModeComparison([warmFirst, warmLater]);
+
+    expect(comparison.comparable).toBe(false);
+    expect(comparison.supportGapPercentage).toBeNull();
+    expect(comparison.caveat).toContain('no graded cold writes');
+  });
+
+  test('is not comparable without any warm writes', () => {
+    const comparison = buildWriteModeComparison([coldFirst, coldLater]);
+
+    expect(comparison.comparable).toBe(false);
+    expect(comparison.supportGapPercentage).toBeNull();
+    expect(comparison.caveat).toContain('no graded warm writes');
+  });
+
+  test('warns that a single cold write is a baseline, not a trend', () => {
+    const comparison = buildWriteModeComparison([coldFirst, warmFirst]);
+
+    expect(comparison.comparable).toBe(true);
+    expect(comparison.cold.trend).toBe('insufficient');
+    expect(comparison.caveat).toContain('one graded cold write');
+  });
+
+  test('says nothing at all when there are no graded submissions', () => {
+    const comparison = buildWriteModeComparison([]);
+
+    expect(comparison.comparable).toBe(false);
+    expect(comparison.caveat).toBeNull();
+    expect(comparison.cold.gradedCount).toBe(0);
+    expect(comparison.warm.gradedCount).toBe(0);
   });
 });

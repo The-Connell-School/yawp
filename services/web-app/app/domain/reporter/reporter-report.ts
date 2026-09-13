@@ -20,7 +20,42 @@ export type GradedSubmissionRow = {
   rubricScores?: Record<string, number> | null;
   /** The teacher's / assistant's overall written comment on the submission. */
   overallComment?: string | null;
+  /**
+   * Whether the Yawp tutor was available on the assignment this paper was
+   * written for. `false` is a cold write (independent), `true` a warm write
+   * (tutor-supported). Null/undefined when the source row carries no tutor
+   * setting, which keeps pre-existing callers working unchanged.
+   */
+  tutorEnabled?: boolean | null;
 };
+
+/**
+ * The condition a paper was written under.
+ *
+ * - `cold` — the tutor was off: the student wrote independently. Cold writes
+ *   are the diagnostic/baseline condition, and movement across them is the
+ *   evidence of skills transferring beyond the tutor.
+ * - `warm` — the tutor was on: the student wrote with AI support available.
+ */
+export type WriteMode = 'cold' | 'warm';
+
+export const WRITE_MODE_LABELS: Record<WriteMode, string> = {
+  cold: 'Cold write (tutor off)',
+  warm: 'Warm write (tutor on)',
+};
+
+/**
+ * Classify a submission by the assignment's tutor toggle. Returns null when the
+ * setting is unknown, so unclassified papers are reported as such rather than
+ * being silently folded into either condition.
+ */
+export function writeModeForTutorEnabled(
+  tutorEnabled: boolean | null | undefined
+): WriteMode | null {
+  if (tutorEnabled === true) return 'warm';
+  if (tutorEnabled === false) return 'cold';
+  return null;
+}
 
 export type RubricTrend = {
   category: string;
@@ -37,6 +72,12 @@ export type StudentGradeSummary = {
   gradedCount: number;
   averagePercentage: number | null;
   latestLetterGrade: string | null;
+  /** Graded papers written with the tutor off, and their average. */
+  coldGradedCount: number;
+  coldAveragePercentage: number | null;
+  /** Graded papers written with the tutor on, and their average. */
+  warmGradedCount: number;
+  warmAveragePercentage: number | null;
 };
 
 export type GrowthPoint = {
@@ -45,6 +86,8 @@ export type GrowthPoint = {
   submittedAt: string;
   numericPercentage: number | null;
   letterGrade: string | null;
+  /** Cold (tutor off) or warm (tutor on); null when the setting is unknown. */
+  writeMode: WriteMode | null;
 };
 
 export type GrowthTrend = 'improving' | 'declining' | 'steady' | 'insufficient';
@@ -79,6 +122,16 @@ function sortBySubmittedAtAsc<T extends { submittedAt: Date }>(rows: T[]): T[] {
   );
 }
 
+/** The rows written under one condition, in submission order. */
+function filterByWriteMode(
+  rows: GradedSubmissionRow[],
+  mode: WriteMode
+): GradedSubmissionRow[] {
+  return rows.filter(
+    (row) => writeModeForTutorEnabled(row.tutorEnabled) === mode
+  );
+}
+
 /**
  * Group graded submissions by student and compute each student's average
  * percentage and most-recent letter grade. Students are returned sorted by
@@ -103,6 +156,8 @@ export function summarizeStudentGrades(
     const latestWithLetter = [...chronological]
       .reverse()
       .find((row) => row.letterGrade != null);
+    const cold = filterByWriteMode(studentRows, 'cold');
+    const warm = filterByWriteMode(studentRows, 'warm');
     summaries.push({
       studentMembershipId,
       studentName: chronological[0]?.studentName ?? 'Unknown student',
@@ -111,6 +166,14 @@ export function summarizeStudentGrades(
         studentRows.map((row) => row.numericPercentage)
       ),
       latestLetterGrade: latestWithLetter?.letterGrade ?? null,
+      coldGradedCount: cold.length,
+      coldAveragePercentage: averagePercentage(
+        cold.map((row) => row.numericPercentage)
+      ),
+      warmGradedCount: warm.length,
+      warmAveragePercentage: averagePercentage(
+        warm.map((row) => row.numericPercentage)
+      ),
     });
   }
 
@@ -179,8 +242,7 @@ export function summarizeClassRubrics(
   for (const category of orderRubricCategories(byCategory.keys())) {
     const values = byCategory.get(category);
     if (!values || values.length === 0) continue;
-    const mean =
-      values.reduce((sum, value) => sum + value, 0) / values.length;
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
     summaries.push({
       category,
       label: humanizeRubricCategory(category),
@@ -243,6 +305,7 @@ export function buildGrowthSeries(rows: GradedSubmissionRow[]): GrowthSeries {
     submittedAt: row.submittedAt.toISOString(),
     numericPercentage: row.numericPercentage,
     letterGrade: row.letterGrade,
+    writeMode: writeModeForTutorEnabled(row.tutorEnabled),
   }));
 
   const scored = chronological.filter(
@@ -277,6 +340,120 @@ export function buildGrowthSeries(rows: GradedSubmissionRow[]): GrowthSeries {
     deltaPercentage,
     trend,
   };
+}
+
+export type WriteModeSummary = {
+  mode: WriteMode;
+  label: string;
+  gradedCount: number;
+  averagePercentage: number | null;
+  /** First→latest movement within this condition alone. */
+  firstPercentage: number | null;
+  latestPercentage: number | null;
+  deltaPercentage: number | null;
+  trend: GrowthTrend;
+  /** Per-rubric-skill averages within this condition. */
+  rubricAverages: ClassRubricSummary[];
+};
+
+export type WriteModeComparison = {
+  cold: WriteModeSummary;
+  warm: WriteModeSummary;
+  /** Graded papers whose assignment recorded no tutor setting. */
+  unclassifiedCount: number;
+  /**
+   * Warm average minus cold average: how much higher the tutor-supported work
+   * scores than the independent work. A gap that narrows over time is the
+   * signal that the support is being internalized.
+   */
+  supportGapPercentage: number | null;
+  /** True only when both conditions have at least one graded paper. */
+  comparable: boolean;
+  /** What this data cannot yet support, in plain language, or null. */
+  caveat: string | null;
+};
+
+/** Summarize one condition: its average, its own arc, and its rubric profile. */
+function summarizeWriteMode(
+  rows: GradedSubmissionRow[],
+  mode: WriteMode
+): WriteModeSummary {
+  const modeRows = filterByWriteMode(rows, mode);
+  const growth = buildGrowthSeries(modeRows);
+  return {
+    mode,
+    label: WRITE_MODE_LABELS[mode],
+    gradedCount: modeRows.length,
+    averagePercentage: averagePercentage(
+      modeRows.map((row) => row.numericPercentage)
+    ),
+    firstPercentage: growth.firstPercentage,
+    latestPercentage: growth.latestPercentage,
+    deltaPercentage: growth.deltaPercentage,
+    trend: growth.trend,
+    rubricAverages: summarizeClassRubrics(modeRows),
+  };
+}
+
+/**
+ * Split graded work by the condition it was written under — cold (tutor off)
+ * vs warm (tutor on) — and report each condition's standing and trajectory
+ * separately, plus the gap between them.
+ *
+ * This exists because the two conditions answer different questions. Warm
+ * writes show what a student produces with support available; cold writes show
+ * what they can do without it. Growth in the warm series is expected; growth in
+ * the cold series is the evidence that the skills transferred. Mixing them into
+ * one average hides exactly the distinction teachers are trying to see, so the
+ * reporter keeps them apart and refuses to compare when one side is empty.
+ */
+export function buildWriteModeComparison(
+  rows: GradedSubmissionRow[]
+): WriteModeComparison {
+  const cold = summarizeWriteMode(rows, 'cold');
+  const warm = summarizeWriteMode(rows, 'warm');
+  const unclassifiedCount = rows.filter(
+    (row) => writeModeForTutorEnabled(row.tutorEnabled) === null
+  ).length;
+
+  const comparable = cold.gradedCount > 0 && warm.gradedCount > 0;
+  const supportGapPercentage =
+    comparable &&
+    cold.averagePercentage !== null &&
+    warm.averagePercentage !== null
+      ? warm.averagePercentage - cold.averagePercentage
+      : null;
+
+  return {
+    cold,
+    warm,
+    unclassifiedCount,
+    supportGapPercentage,
+    comparable,
+    caveat: buildWriteModeCaveat(cold, warm),
+  };
+}
+
+/**
+ * Name the specific limit of the data so the reporter states it instead of
+ * over-reading a thin sample. Silence (null) means the comparison stands on
+ * its own; an empty gradebook says nothing rather than warning about nothing.
+ */
+function buildWriteModeCaveat(
+  cold: WriteModeSummary,
+  warm: WriteModeSummary
+): string | null {
+  if (cold.gradedCount === 0 && warm.gradedCount === 0) return null;
+  if (cold.gradedCount === 0) {
+    return 'There are no graded cold writes (tutor off) yet, so there is no independent baseline to compare the tutor-supported work against.';
+  }
+  if (warm.gradedCount === 0) {
+    return 'There are no graded warm writes (tutor on) yet, so the cold-write baseline has nothing to be compared against.';
+  }
+  if (cold.gradedCount === 1) {
+    return 'There is only one graded cold write (tutor off), so it is a baseline, not a trend — transfer cannot be measured until a second independent paper is graded.';
+  }
+  return null;
 }
 
 export type RubricLevelSnapshot = {
@@ -434,7 +611,11 @@ export function findStudentsNeedingAttention(
     let severity = 0;
 
     if (average != null && average < threshold) {
-      flags.push({ type: 'below_average', averagePercentage: average, threshold });
+      flags.push({
+        type: 'below_average',
+        averagePercentage: average,
+        threshold,
+      });
       severity += (threshold - average) * 1.5;
     }
 
