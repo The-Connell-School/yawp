@@ -54,6 +54,16 @@ export function buildReporterCacheableSystemPrompt(): string {
     '- Growth report — about CHANGE over time. Center the trajectory: how grades and each writing skill have moved paper to paper, and what the arc means. Lighter on exhaustive current standing.',
     '- Full / grade report — about CURRENT STANDING. A comprehensive snapshot: overall average, per-skill rubric levels right now, and where the student sits relative to the class.',
     '- Growth plan — about ACTION going forward. Not diagnosis. See below. Offer this whenever a report is concerning.',
+    '- Cold vs warm write report — about TRANSFER. How independent (tutor off) work compares with tutor-supported (tutor on) work, and whether the independent work is improving. See the next section.',
+    '',
+    'Cold writes vs warm writes (the tutor-off / tutor-on distinction):',
+    '- Teachers choose, per assignment, whether the Yawp tutor is available while students draft, and every graded paper the tools return is labeled with that setting. A COLD WRITE is a paper written with the tutor OFF — the student worked independently. A WARM WRITE is a paper written with the tutor ON — AI support was available. Some teachers call warm writes "hot" writes; it means the same thing.',
+    '- Teachers use cold writes as diagnostics: a baseline paper early in the year, then another at the midterm or year end, to see how far a student has come without support. Warm writes are the everyday work in between.',
+    '- Keep the two apart, because they answer different questions. Warm writes show what a student produces WITH support available; cold writes show what they can do WITHOUT it. Rising warm scores are expected — the tutor is helping while it is on. Rising COLD scores are the evidence that the skills transferred and stuck. When a teacher asks whether the tutor is actually teaching anything, the cold-write trajectory is the answer.',
+    '- Do not average cold and warm writes together when the teacher is asking about either one, and never offer a mixed overall average as evidence of independent skill. The class, grade, and growth tools all return `writeModes`, which summarizes each condition on its own: its average, its first→latest arc and trend, and its rubric profile.',
+    '- `writeModes.supportGapPercentage` is the warm average minus the cold average — how much higher the supported work scores. A gap that NARROWS while cold scores rise is the strongest available sign of transfer. Say so plainly when the data shows it.',
+    '- Respect the guardrails in the data. When `comparable` is false, say the comparison cannot be made yet and why, rather than comparing anyway. When `caveat` is non-null, repeat it in your own words — one graded cold write is a baseline, not a trend. Never call a change in cold-write scores "transfer" on the strength of a single paper. When `unclassifiedCount` is above zero, note that some older papers carry no tutor setting and sit outside the split.',
+    '- If a teacher has no cold writes at all, you may note once — briefly, and not in every report — that turning the tutor off for one assignment would give them a baseline to measure independent growth against.',
     '',
     'Growth plans:',
     '- After any student report that is concerning — a declining trend, a below-average/failing standing, or a sharp drop in specific skills — proactively offer a growth plan as a follow-up suggestion (e.g. "Growth plan for Amelia Brooks"). Do not fabricate one unasked inside the report; offer it as the next step.',
@@ -156,6 +166,12 @@ export const RECOMMENDED_REPORTER_PROMPTS: Array<{
     label: 'Growth report for a student',
     prompt:
       'Show me a growth report for a specific student — how their grades have changed over time.',
+  },
+  {
+    id: 'cold-vs-warm-writes',
+    label: 'Cold vs. warm writes',
+    prompt:
+      "Compare my students' cold writes (tutor off) with their warm writes (tutor on). Is their independent writing improving?",
   },
   {
     id: 'needs-attention',
