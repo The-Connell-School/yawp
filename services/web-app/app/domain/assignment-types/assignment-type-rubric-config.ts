@@ -9,12 +9,7 @@ import {
   type RubricData,
   type ScoringScaleData,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
-import {
-  DAILY_PAGES_ASSIGNMENT_TYPE_KIND,
-  DAILY_PAGES_PROMPT_CONFIG,
-  DAILY_PAGES_RUBRIC,
-  DAILY_PAGES_SCORING_SCALE,
-} from './daily-pages-rubric';
+import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from './daily-pages-rubric';
 import {
   DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
   DAILY_PAGES_SHORT_FORM_RUBRIC,
@@ -26,7 +21,6 @@ import {
   CLASS_STARTER_RUBRIC,
   CLASS_STARTER_SCORING_SCALE,
 } from './class-starter-rubric';
-import { isDailyPagesSplitEnabled } from './daily-pages-split';
 
 export const MODULE_RUBRIC_RELATIONSHIPS = [
   'primary',
@@ -41,7 +35,6 @@ export type ModuleRubricRelationship =
 export type AssignmentTypeRubricConfigSource =
   | 'assignment-type'
   | 'thesis-default'
-  | 'daily-pages-default'
   | 'daily-pages-short-form-default'
   | 'class-starter-default';
 
@@ -56,12 +49,6 @@ export type AssignmentTypeRubricConfigInput = {
   gradingPromptConfigJson?: unknown;
   gradingOutputSchemaJson?: unknown;
   gradingCalibrationNotes?: string | null;
-  /**
-   * Overrides the ambient Daily Pages split flag. Present so callers that
-   * already know the rollout state — and tests, which must be able to assert
-   * both sides — do not depend on process environment at call time.
-   */
-  dailyPagesSplitEnabled?: boolean;
 };
 
 export type AssignmentTypeRubricConfig = {
@@ -123,18 +110,6 @@ const thesisDefaultConfig: AssignmentTypeRubricConfig = {
  * A kind listed here needs no data migration: an existing row picks its default
  * up on the next grading run, and a row that saved its own rubric still wins.
  */
-const dailyPagesLegacyConfig: AssignmentTypeRubricConfig = {
-  source: 'daily-pages-default',
-  scoringScale: DAILY_PAGES_SCORING_SCALE,
-  rubric: DAILY_PAGES_RUBRIC,
-  promptConfig: DAILY_PAGES_PROMPT_CONFIG,
-  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
-  calibrationNotes:
-    'Daily Pages judges engagement only, with overall feedback and no grammar highlighting.',
-  rubricIncomplete: false,
-  defaultLabel: 'Daily Pages engagement',
-};
-
 /**
  * The soft assistant, under the name it is keeping. Class Starter is what
  * Daily Pages was: one engagement judgment, overall feedback, no markup.
@@ -154,8 +129,12 @@ const classStarterConfig: AssignmentTypeRubricConfig = {
 /**
  * The formal assistant: a short piece graded the way an essay is, on the
  * essay's own 1-5 scale, with per-category feedback and grammar marked.
- * Reached only when the split flag is on, so no existing Daily Pages row
- * changes how it grades until the rollout says so.
+ *
+ * This is what `daily_pages` grades with now — there is no flag and no legacy
+ * fallback. A Daily Pages type that saved no rubric of its own moves from
+ * judging engagement alone to this, which is a real change in how its work is
+ * scored. A type that configured its own rubric keeps it, which is what leaves
+ * production's 0-30 engagement row untouched.
  */
 const dailyPagesShortFormConfig: AssignmentTypeRubricConfig = {
   source: 'daily-pages-short-form-default',
@@ -170,18 +149,14 @@ const dailyPagesShortFormConfig: AssignmentTypeRubricConfig = {
 };
 
 const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
-  [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: dailyPagesLegacyConfig,
+  [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: dailyPagesShortFormConfig,
   [CLASS_STARTER_ASSIGNMENT_TYPE_KIND]: classStarterConfig,
 };
 
 function getDefaultRubricConfig(
-  assignmentTypeKind: string | null | undefined,
-  splitEnabled: boolean
+  assignmentTypeKind: string | null | undefined
 ): AssignmentTypeRubricConfig {
   if (!assignmentTypeKind) return thesisDefaultConfig;
-  if (assignmentTypeKind === DAILY_PAGES_ASSIGNMENT_TYPE_KIND) {
-    return splitEnabled ? dailyPagesShortFormConfig : dailyPagesLegacyConfig;
-  }
   return defaultRubricConfigsByKind[assignmentTypeKind] ?? thesisDefaultConfig;
 }
 
@@ -251,10 +226,7 @@ export function parseAssignmentTypeRubricConfig(
 
   if (completeness === 'none') {
     return {
-      ...getDefaultRubricConfig(
-        input.assignmentTypeKind,
-        input.dailyPagesSplitEnabled ?? isDailyPagesSplitEnabled()
-      ),
+      ...getDefaultRubricConfig(input.assignmentTypeKind),
       rubricIncomplete: false,
     };
   }

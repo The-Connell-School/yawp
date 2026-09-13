@@ -243,7 +243,7 @@ describe('app.assignment-types.$id action', () => {
   });
 });
 
-describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
+describe('app.assignment-types.$id loader Class Starter prompt library', () => {
   beforeEach(() => {
     prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentType.findMany.mockReset();
@@ -269,7 +269,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
       organization: { id: 'org-1', name: 'Org' },
     });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
-      withOrganizationAssignment(makeAssignmentType()),
+      withOrganizationAssignment(makeAssignmentType({ title: 'Class Starter' })),
     ]);
     prisma.document.findMany.mockResolvedValue([]);
     prisma.class.findMany.mockResolvedValue([
@@ -292,7 +292,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.savedDailyPagesPrompt.findMany.mockResolvedValue([]);
   });
 
-  test('provides prompt library data for teachers viewing Daily Pages', async () => {
+  test('provides prompt library data for teachers viewing Class Starter', async () => {
     const response = (await loader({
       request: new Request('https://example.test/app/assignment-types/at-1'),
       params: { id: 'at-1' },
@@ -485,7 +485,37 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
       params: { id: 'at-1' },
     } as never)) as any;
     expect(dailyPagesResponse.data.thesisPromptLibrary).toBeNull();
-    expect(dailyPagesResponse.data.promptLibrary).not.toBeNull();
+    // Daily Pages reads the graded short-form corpus, not the freewrite one
+    // this folder holds — that swap is the point of having two libraries.
+    expect(dailyPagesResponse.data.promptLibrary).toBeNull();
+    expect(dailyPagesResponse.data.shortFormPromptLibrary).not.toBeNull();
+  });
+
+  test('Daily Pages gets the short-form library and Class Starter the freewrite one', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValueOnce([
+      withOrganizationAssignment(makeAssignmentType({ title: 'Daily Pages' })),
+    ]);
+    const dailyPages = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(dailyPages.data.shortFormPromptLibrary.totalCount).toBeGreaterThan(0);
+    expect(
+      dailyPages.data.shortFormPromptLibrary.facets.sourceNeeds
+    ).toContain('required');
+    expect(dailyPages.data.promptLibrary).toBeNull();
+
+    getAvailableAssignmentTypesForScopes.mockResolvedValueOnce([
+      withOrganizationAssignment(makeAssignmentType({ title: 'Class Starter' })),
+    ]);
+    const classStarter = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(classStarter.data.promptLibrary.totalCount).toBe(200);
+    expect(classStarter.data.shortFormPromptLibrary).toBeNull();
   });
 
   test('returns all teacher classes for assignment creation', async () => {

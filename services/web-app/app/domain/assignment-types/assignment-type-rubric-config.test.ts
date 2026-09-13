@@ -9,6 +9,7 @@ import {
   normalizeModuleRubricAlignment,
   parseAssignmentTypeRubricConfig,
 } from './assignment-type-rubric-config';
+import { resolveGrammarHighlightingEnabled } from './rubric-category-options';
 
 const partiallyFilledRubric = {
   categories: [
@@ -253,50 +254,6 @@ describe('getThesisDefaultRubricConfig', () => {
   });
 });
 
-describe('the default rubric config for a Daily Pages assignment type', () => {
-  test('falls back to the Daily Pages rubric, not the thesis default', () => {
-    const config = parseAssignmentTypeRubricConfig({
-      assignmentTypeKind: 'daily_pages',
-    });
-
-    expect(config.source).toBe('daily-pages-default');
-    expect(config.rubric.categories.map((category) => category.key)).toEqual([
-      'engagement',
-    ]);
-    expect(config.scoringScale).toMatchObject({ minScore: 0, maxScore: 3 });
-    expect(config.promptConfig.gradingInstructions).toContain('engagement');
-  });
-
-  test('a Daily Pages type with its own saved rubric keeps that rubric', () => {
-    const config = parseAssignmentTypeRubricConfig({
-      assignmentTypeKind: 'daily_pages',
-      rubricJson: {
-        categories: [
-          {
-            key: 'effort',
-            label: 'Effort',
-            description: 'Did they try?',
-            weight: 1,
-          },
-        ],
-      },
-    });
-
-    expect(config.source).toBe('assignment-type');
-    expect(config.rubric.categories.map((category) => category.key)).toEqual([
-      'effort',
-    ]);
-  });
-
-  test('every other kind still falls back to the thesis default', () => {
-    expect(
-      parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'thesis_essay' })
-        .source
-    ).toBe('thesis-default');
-    expect(parseAssignmentTypeRubricConfig({}).source).toBe('thesis-default');
-  });
-});
-
 describe('normalizeModuleRubricAlignment', () => {
   const categories = [
     {
@@ -449,20 +406,6 @@ describe('the default rubric config for a Class Starter assignment type', () => 
     expect(config.defaultLabel).toBe('Class Starter engagement');
   });
 
-  test('does not depend on the split flag: it is the same either way', () => {
-    const off = parseAssignmentTypeRubricConfig({
-      assignmentTypeKind: 'class_starter',
-      dailyPagesSplitEnabled: false,
-    });
-    const on = parseAssignmentTypeRubricConfig({
-      assignmentTypeKind: 'class_starter',
-      dailyPagesSplitEnabled: true,
-    });
-
-    expect(off.source).toBe('class-starter-default');
-    expect(on.source).toBe('class-starter-default');
-  });
-
   test('a Class Starter type with its own saved rubric keeps that rubric', () => {
     const config = parseAssignmentTypeRubricConfig({
       assignmentTypeKind: 'class_starter',
@@ -482,23 +425,16 @@ describe('the default rubric config for a Class Starter assignment type', () => 
   });
 });
 
-describe('the Daily Pages split flag', () => {
-  test('off: Daily Pages grades exactly as it always has', () => {
+describe('the default rubric config for a Daily Pages assignment type', () => {
+  /**
+   * Daily Pages is the graded assignment now — there is no flag and no legacy
+   * path. A `daily_pages` type that saved no rubric of its own grades on the
+   * short-form rubric, which is a real change for every such row: a 1-5 scale
+   * with grammar marked, where the old default judged engagement alone.
+   */
+  test('grades on the short-form rubric, unconditionally', () => {
     const config = parseAssignmentTypeRubricConfig({
       assignmentTypeKind: 'daily_pages',
-      dailyPagesSplitEnabled: false,
-    });
-
-    expect(config.source).toBe('daily-pages-default');
-    expect(config.rubric.categories.map((category) => category.key)).toEqual([
-      'engagement',
-    ]);
-  });
-
-  test('on: Daily Pages grades the harder short-form rubric', () => {
-    const config = parseAssignmentTypeRubricConfig({
-      assignmentTypeKind: 'daily_pages',
-      dailyPagesSplitEnabled: true,
     });
 
     expect(config.source).toBe('daily-pages-short-form-default');
@@ -507,10 +443,30 @@ describe('the Daily Pages split flag', () => {
     expect(config.defaultLabel).toBe('Daily Pages short-form writing');
   });
 
-  test('on: a Daily Pages type with its own saved rubric is untouched', () => {
+  test('marks grammar, which the Class Starter default never does', () => {
+    const dailyPages = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'daily_pages',
+    });
+    const classStarter = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'class_starter',
+    });
+
+    expect(resolveGrammarHighlightingEnabled(dailyPages.rubric.categories)).toBe(
+      true
+    );
+    expect(
+      resolveGrammarHighlightingEnabled(classStarter.rubric.categories)
+    ).toBe(false);
+  });
+
+  /**
+   * The one thing that still protects a customer: a type that configured its
+   * own rubric keeps it. Production's Daily Pages row scores engagement out of
+   * thirty and is untouched by this change.
+   */
+  test('a Daily Pages type with its own saved rubric is untouched', () => {
     const config = parseAssignmentTypeRubricConfig({
       assignmentTypeKind: 'daily_pages',
-      dailyPagesSplitEnabled: true,
       rubricJson: {
         categories: [
           {
@@ -535,7 +491,6 @@ describe('the Daily Pages split flag', () => {
     });
     const dailyPages = parseAssignmentTypeRubricConfig({
       assignmentTypeKind: 'daily_pages',
-      dailyPagesSplitEnabled: true,
     });
 
     expect(dailyPages.promptConfig.gradingInstructions).not.toBe(

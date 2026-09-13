@@ -1,8 +1,8 @@
 import { INSPIRATIONAL_EXAMPLES } from './data';
 import type { OpenEndedPromptLibraryVariant } from './library-variant';
 
-// Only the two variants that read this folder's freewrite corpus. Graded Daily
-// Pages has its own library and its own directions.
+// Class Starter is the only reader of this folder's freewrite corpus now.
+// Daily Pages has its own library and its own directions.
 const COPY: Record<
   OpenEndedPromptLibraryVariant,
   { heading: string; body: string; examplesLabel: string }
@@ -12,17 +12,10 @@ const COPY: Record<
     body: 'Write a prompt, hit New → Assignment, and every student in the class gets a blank document pre-titled with your prompt. Class Starter is effort-based: the grading assistant checks that the student wrote and reflected, and Tutor and Teacher feedback focuses on ideas rather than rubric scores or correctness.',
     examplesLabel: 'For inspiration',
   },
-  // Unchanged from before the split, and what a Daily Pages type keeps showing
-  // until the split is turned on.
-  'daily-pages-legacy': {
-    heading: 'How Daily Pages works',
-    body: 'Write a prompt, hit New → Assignment, and every student in the class gets a blank document pre-titled with your prompt. Daily Pages is effort-based: Tutor and Teacher feedback focuses on ideas rather than rubric scores or correctness.',
-    examplesLabel: 'For inspiration',
-  },
 };
 
 export function TeacherDirections({
-  variant = 'daily-pages-legacy',
+  variant = 'class-starter',
 }: {
   variant?: OpenEndedPromptLibraryVariant;
 }) {

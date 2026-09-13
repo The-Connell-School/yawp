@@ -93,7 +93,6 @@ import {
   type ThesisPrompt,
 } from './thesis-prompts-library/data';
 import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
-import { isDailyPagesSplitEnabled } from '~/domain/assignment-types/daily-pages-split';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 
 const THESIS_ESSAY_TITLE = 'the thesis-driven essay';
@@ -429,12 +428,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // of the two this is decides the directions shown above it.
   const promptLibraryVariant = resolvePromptLibraryVariant({
     title: assignmentType.title,
-    dailyPagesSplitEnabled: isDailyPagesSplitEnabled(),
   });
   const isTeacher = profile.role === "TEACHER";
-  // The freewrite corpus is Class Starter material. Once the split flag is on,
-  // Daily Pages stops borrowing it and reads the short-form corpus instead —
-  // whose prompts always ask for the backing the rubric grades.
+  // Class Starter reads the freewrite corpus; Daily Pages reads the short-form
+  // one, whose prompts always ask for the backing its rubric grades.
   const showsOpenEndedLibrary =
     isTeacher && usesOpenEndedLibrary(promptLibraryVariant);
   const showsShortFormLibrary =

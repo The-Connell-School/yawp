@@ -6,35 +6,30 @@
  * That stays; Class Starter simply joins Daily Pages as a title that gets the
  * library.
  *
- * The variant exists because the two now mean different things to a teacher.
- * A Class Starter prompt is an open invitation to write, graded on effort. A
- * Daily Pages prompt, once the split is on, sets a short piece that is graded
- * formally — thinking, structure, and grammar alike. The prompts and the
- * generator are shared for now; the directions are not.
+ * The variant exists because the two mean different things to a teacher. A
+ * Class Starter prompt is an open invitation to write, graded on effort. A
+ * Daily Pages prompt sets a short piece that is graded formally — thinking,
+ * structure, and grammar alike — so it reads a different corpus entirely.
  */
 export const CLASS_STARTER_TITLE = 'class starter';
 export const DAILY_PAGES_TITLE = 'daily pages';
 
-export type PromptLibraryVariant =
-  | 'class-starter'
-  | 'daily-pages-legacy'
-  | 'daily-pages-graded';
+export type PromptLibraryVariant = 'class-starter' | 'daily-pages-graded';
 
 /**
- * The variants that read from the open-ended freewrite corpus in this folder.
- * That corpus is Class Starter material — its prompts invite writing without
- * asking for the backing — so the graded Daily Pages variant is deliberately
- * not one of them.
+ * The freewrite corpus in this folder is Class Starter material: its prompts
+ * invite writing without asking for the backing a graded entry is scored on.
+ * Class Starter is the only thing that reads it now.
  */
-export type OpenEndedPromptLibraryVariant = Exclude<
+export type OpenEndedPromptLibraryVariant = Extract<
   PromptLibraryVariant,
-  'daily-pages-graded'
+  'class-starter'
 >;
 
 export function usesOpenEndedLibrary(
   variant: PromptLibraryVariant | null
 ): variant is OpenEndedPromptLibraryVariant {
-  return variant === 'class-starter' || variant === 'daily-pages-legacy';
+  return variant === 'class-starter';
 }
 
 /** The graded Daily Pages library, whose prompts always ask for the support. */
@@ -44,14 +39,12 @@ export function usesShortFormLibrary(variant: PromptLibraryVariant | null) {
 
 export function resolvePromptLibraryVariant({
   title,
-  dailyPagesSplitEnabled,
 }: {
   title: string;
-  dailyPagesSplitEnabled: boolean;
 }): PromptLibraryVariant | null {
   const normalized = title.trim().toLowerCase();
 
   if (normalized === CLASS_STARTER_TITLE) return 'class-starter';
-  if (normalized !== DAILY_PAGES_TITLE) return null;
-  return dailyPagesSplitEnabled ? 'daily-pages-graded' : 'daily-pages-legacy';
+  if (normalized === DAILY_PAGES_TITLE) return 'daily-pages-graded';
+  return null;
 }

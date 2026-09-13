@@ -28,7 +28,7 @@ const GENERATED_OPTIONS = [
 // model. Mirrors the structured contract the real route returns.
 async function stubGenerator(page: import('@playwright/test').Page) {
   await page.route(
-    '**/api/domain/daily-pages-prompt-generator',
+    '**/api/domain/class-starter-prompt-generator',
     async (route) => {
       if (route.request().method() !== 'POST') {
         await route.continue();
@@ -47,7 +47,7 @@ async function stubGenerator(page: import('@playwright/test').Page) {
   );
 }
 
-test.describe.serial('Daily Pages prompt generator', () => {
+test.describe.serial('Class Starter prompt generator', () => {
   test('teacher can page through generated options and turn one into an assignment', async ({
     page,
     e2eContext,
@@ -56,11 +56,11 @@ test.describe.serial('Daily Pages prompt generator', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await stubGenerator(page);
     await page.goto(
-      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+      `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`
     );
 
     await expect(
-      page.getByRole('heading', { name: 'Daily Pages', level: 1 })
+      page.getByRole('heading', { name: 'Class Starter', level: 1 })
     ).toBeVisible();
 
     await page.getByRole('button', { name: /^New/ }).click();
@@ -118,7 +118,7 @@ test.describe.serial('Daily Pages prompt generator', () => {
   }) => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(
-      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+      `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`
     );
 
     await page.getByRole('button', { name: /^New/ }).click();
@@ -127,7 +127,7 @@ test.describe.serial('Daily Pages prompt generator', () => {
     await expect(page.getByRole('textbox', { name: 'Prompt' })).toHaveValue('');
   });
 
-  test('the generator is teacher-only and scoped to Daily Pages', async ({
+  test('the generator is teacher-only and scoped to Class Starter', async ({
     page,
     e2eContext,
     signIn,
@@ -135,10 +135,10 @@ test.describe.serial('Daily Pages prompt generator', () => {
     // Students never see the teacher New menu, so the option is absent for them.
     await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto(
-      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+      `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`
     );
     await expect(
-      page.getByRole('heading', { name: 'Daily Pages', level: 1 })
+      page.getByRole('heading', { name: 'Class Starter', level: 1 })
     ).toBeVisible();
     // The student New button is a plain submit, not the teacher dropdown, so
     // there is no menu to open and no generator to reach.

@@ -7,80 +7,49 @@ import {
 } from './library-variant';
 
 describe('resolvePromptLibraryVariant', () => {
-  test('Class Starter gets the open-ended prompt library', () => {
-    expect(
-      resolvePromptLibraryVariant({
-        title: 'Class Starter',
-        dailyPagesSplitEnabled: true,
-      })
-    ).toBe('class-starter');
+  test('Class Starter gets the open-ended freewrite library', () => {
+    expect(resolvePromptLibraryVariant({ title: 'Class Starter' })).toBe(
+      'class-starter'
+    );
   });
 
-  test('Class Starter does not wait on the split flag', () => {
-    expect(
-      resolvePromptLibraryVariant({
-        title: 'class starter',
-        dailyPagesSplitEnabled: false,
-      })
-    ).toBe('class-starter');
-  });
-
-  test('Daily Pages keeps its library exactly as it is while the flag is off', () => {
-    expect(
-      resolvePromptLibraryVariant({
-        title: 'Daily Pages',
-        dailyPagesSplitEnabled: false,
-      })
-    ).toBe('daily-pages-legacy');
-  });
-
-  test('Daily Pages reads as a graded assignment once the flag is on', () => {
-    expect(
-      resolvePromptLibraryVariant({
-        title: 'Daily Pages',
-        dailyPagesSplitEnabled: true,
-      })
-    ).toBe('daily-pages-graded');
+  /**
+   * Daily Pages is the graded assignment now, so it reads the short-form
+   * corpus — whose prompts ask for the backing the rubric scores — rather than
+   * borrowing the freewrite corpus it used to share with Class Starter.
+   */
+  test('Daily Pages gets the graded short-form library', () => {
+    expect(resolvePromptLibraryVariant({ title: 'Daily Pages' })).toBe(
+      'daily-pages-graded'
+    );
   });
 
   test('matches the title the way the route always has: trimmed, case-insensitive', () => {
-    expect(
-      resolvePromptLibraryVariant({
-        title: '  DAILY pages  ',
-        dailyPagesSplitEnabled: false,
-      })
-    ).toBe('daily-pages-legacy');
+    expect(resolvePromptLibraryVariant({ title: '  DAILY pages  ' })).toBe(
+      'daily-pages-graded'
+    );
+    expect(resolvePromptLibraryVariant({ title: 'CLASS STARTER' })).toBe(
+      'class-starter'
+    );
   });
 
-  test('any other assignment type gets no open-ended library', () => {
+  test('any other assignment type gets no prompt library', () => {
     expect(
-      resolvePromptLibraryVariant({
-        title: 'The Thesis-Driven Essay',
-        dailyPagesSplitEnabled: true,
-      })
+      resolvePromptLibraryVariant({ title: 'The Thesis-Driven Essay' })
     ).toBeNull();
-    expect(
-      resolvePromptLibraryVariant({ title: '', dailyPagesSplitEnabled: true })
-    ).toBeNull();
+    expect(resolvePromptLibraryVariant({ title: '' })).toBeNull();
   });
 });
 
 describe('which library a variant gets', () => {
-  /**
-   * The freewrite corpus is Class Starter material. Once the split is on, Daily
-   * Pages stops borrowing it and gets the short-form corpus instead — that swap
-   * is the point of having two libraries rather than one shared one.
-   */
-  test('the graded Daily Pages variant uses the short-form library', () => {
-    expect(usesShortFormLibrary('daily-pages-graded')).toBe(true);
+  test('Class Starter is the only reader of the freewrite corpus', () => {
+    expect(usesOpenEndedLibrary('class-starter')).toBe(true);
     expect(usesOpenEndedLibrary('daily-pages-graded')).toBe(false);
   });
 
-  test('Class Starter and legacy Daily Pages keep the open-ended library', () => {
-    for (const variant of ['class-starter', 'daily-pages-legacy'] as const) {
-      expect(usesOpenEndedLibrary(variant)).toBe(true);
-      expect(usesShortFormLibrary(variant)).toBe(false);
-    }
+  test('Daily Pages is the only reader of the short-form corpus', () => {
+    expect(usesShortFormLibrary('daily-pages-graded')).toBe(true);
+    expect(usesShortFormLibrary('class-starter')).toBe(false);
   });
 
   test('an assignment type with no library gets neither', () => {
