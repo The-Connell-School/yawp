@@ -10,6 +10,16 @@ type Scope = {
   finished: boolean;
 };
 const context = new AsyncLocalStorage<{ scope: Scope; tx?: Prisma.TransactionClient; transaction?: { open: boolean } }>();
+const readMethods = new Set<PropertyKey>([
+  'aggregate',
+  'count',
+  'findFirst',
+  'findFirstOrThrow',
+  'findMany',
+  'findUnique',
+  'findUniqueOrThrow',
+  'groupBy',
+]);
 
 export const getImpersonationAttribution = () => context.getStore()?.scope.identity ?? null;
 
@@ -27,7 +37,12 @@ export async function runWithImpersonation<T>(
 class AttributedQuery<T> implements PromiseLike<T> {
   readonly [Symbol.toStringTag] = 'PrismaPromise';
   private result?: Promise<T>;
-  constructor(readonly scope: Scope, readonly execute: (tx: Prisma.TransactionClient) => Promise<T>, private run: () => Promise<T>) {}
+  constructor(
+    readonly scope: Scope,
+    readonly auditCoverage: boolean,
+    readonly execute: (tx: Prisma.TransactionClient) => Promise<T>,
+    private run: () => Promise<T>,
+  ) {}
   then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null, onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null): Promise<TResult1 | TResult2> {
     return (this.result ??= this.run()).then(onfulfilled, onrejected);
   }
@@ -36,7 +51,11 @@ class AttributedQuery<T> implements PromiseLike<T> {
 }
 
 export function createAttributedPrisma(base: Database): Database {
-  async function transaction<T>(scope: Scope, work: (tx: Prisma.TransactionClient) => Promise<T>, options?: { isolationLevel?: string; timeout?: number; maxWait?: number }) {
+  async function transaction<T>(
+    scope: Scope,
+    work: (tx: Prisma.TransactionClient) => Promise<T>,
+    options?: { isolationLevel?: string; timeout?: number; maxWait?: number; auditCoverage?: boolean },
+  ) {
     // Descendant async work retains provenance after the HTTP response. It must
     // regain live authorization rather than inheriting a completed transaction.
     const identity = scope.finished ? await scope.revalidate() : scope.identity;
@@ -67,17 +86,18 @@ export function createAttributedPrisma(base: Database): Database {
         const active = context.getStore();
         if (!active) return Reflect.apply(value, target, [work, options]);
         if (active.tx && active.transaction?.open) throw new Error('Nested root transactions require an explicit transaction client');
-        if (typeof work === 'function') return transaction(active.scope, tx => work(tx), options);
+        if (typeof work === 'function') return transaction(active.scope, tx => work(tx), { ...options, auditCoverage: true });
         if (!Array.isArray(work) || work.some(query => !(query instanceof AttributedQuery) || query.scope !== active.scope)) {
           throw new Error('Transaction contains queries outside this impersonation context');
         }
+        const auditCoverage = work.some(query => query.auditCoverage);
         return transaction(active.scope, async tx => {
           const results = [];
           for (const query of work as AttributedQuery<unknown>[]) results.push(await query.execute(tx));
           return results;
-        }, options);
+        }, { ...options, auditCoverage });
       };
-      const makeQuery = (model: PropertyKey | null, method: PropertyKey, args: unknown[]) => {
+      const makeQuery = (model: PropertyKey | null, method: PropertyKey, args: unknown[], auditCoverage = true) => {
         const active = context.getStore();
         if (!active) return Reflect.apply(value, target, args);
         const execute = async (tx: Prisma.TransactionClient) => {
@@ -85,7 +105,7 @@ export function createAttributedPrisma(base: Database): Database {
           return Reflect.apply(Reflect.get(receiver, method), receiver, args);
         };
         if (active.tx && active.transaction?.open) return execute(active.tx);
-        return new AttributedQuery(active.scope, execute, () => transaction(active.scope, execute));
+        return new AttributedQuery(active.scope, auditCoverage, execute, () => transaction(active.scope, execute, { auditCoverage }));
       };
       if (state && typeof property === 'string' && property.startsWith('$')) {
         if (['$queryRaw', '$executeRaw', '$queryRawUnsafe', '$executeRawUnsafe'].includes(property)) {
@@ -108,7 +128,8 @@ export function createAttributedPrisma(base: Database): Database {
               return Reflect.apply(Reflect.get(receiver, method), receiver, args);
             };
             if (current.tx && current.transaction?.open) return execute(current.tx);
-            return new AttributedQuery(current.scope, execute, () => transaction(current.scope, execute));
+            const auditCoverage = !readMethods.has(method);
+            return new AttributedQuery(current.scope, auditCoverage, execute, () => transaction(current.scope, execute, { auditCoverage }));
           };
         },
       }));

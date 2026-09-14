@@ -9,6 +9,15 @@ const identity = {
   membershipId: 'target-membership',
   expiresAt: new Date(Date.now() + 60000).toISOString(),
 };
+const setting = {
+  id: 'setting-id',
+  name: 'visible',
+  value: 'readable',
+  valueType: 'string',
+  description: null,
+  createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+};
 
 function sqlText(value: unknown) {
   return Array.isArray(value) ? value.join(' ') : String(value);
@@ -28,15 +37,15 @@ function fakeDatabaseWithUncoveredAuditTable() {
       findFirst: async () => ({ id: identity.membershipId }),
     },
     setting: {
-      findMany: async () => [{ name: 'visible', value: 'readable' }],
-      create: async () => ({ name: 'created', value: 'written' }),
+      findMany: async () => [setting],
+      create: async () => ({ ...setting, name: 'created', value: 'written' }),
     },
   };
   const db = {
     $transaction: async (work: (client: typeof tx) => Promise<unknown>) => work(tx),
     setting: {
-      findMany: async () => [{ name: 'outside', value: 'ordinary' }],
-      create: async () => ({ name: 'outside-create', value: 'ordinary' }),
+      findMany: async () => [{ ...setting, name: 'outside', value: 'ordinary' }],
+      create: async () => ({ ...setting, name: 'outside-create', value: 'ordinary' }),
     },
   };
   return { db, calls };
@@ -50,7 +59,7 @@ test('impersonated read queries do not require mutation-audit trigger coverage',
     prisma.setting.findMany({ where: { name: 'visible' } })
   );
 
-  expect(result).toEqual([{ name: 'visible', value: 'readable' }]);
+  expect(result).toEqual([setting]);
   expect(calls.some(call => call.includes('pg_class'))).toBe(false);
 });
 
