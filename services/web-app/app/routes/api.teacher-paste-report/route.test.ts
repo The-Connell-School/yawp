@@ -14,11 +14,12 @@ const prisma = {
 };
 const getGradingActor = mock(async () => actor);
 mock.module('~/utils/db.server', () => ({ prisma }));
+// Keep the real access predicate: Bun module mocks otherwise leak a weaker
+// substitute into unrelated loader tests in the full suite.
+const { buildTeacherDocumentAccessWhere } = await import('~/utils/grading-auth.server');
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
-  buildTeacherDocumentAccessWhere: ({ membershipId, organizationId }: any) => ({
-    scope: { membershipId, organizationId },
-  }),
+  buildTeacherDocumentAccessWhere,
 }));
 const { loader } = await import('./route');
 const load = (query: string) =>
@@ -59,7 +60,10 @@ describe('teacher paste report authorization and snapshot boundary', () => {
       deletedAt: null,
       artifactKind: 'STUDENT',
       membership: { is: { userId: { not: 'teacher-user' } } },
-      scope: { membershipId: 'teacher', organizationId: 'org' },
+      OR: [
+        { classAssignment: { class: { school: { organizationId: 'org' }, teachers: { some: { id: 'teacher', isActive: true } } } } },
+        { classAssignment: { is: null }, membership: { is: { organizationId: 'org', classesAsStudent: { some: { school: { organizationId: 'org' }, teachers: { some: { id: 'teacher', isActive: true } } } } } } },
+      ],
     });
     expect(prisma.pasteAlert.findMany.mock.calls[0][0]).toMatchObject({
       where: { documentId: 'doc' },
@@ -76,7 +80,10 @@ describe('teacher paste report authorization and snapshot boundary', () => {
     expect(
       prisma.submission.findFirst.mock.calls[0][0].where.document.is
     ).toMatchObject({
-      scope: { membershipId: 'teacher', organizationId: 'org' },
+      OR: [
+        { classAssignment: { class: { school: { organizationId: 'org' }, teachers: { some: { id: 'teacher', isActive: true } } } } },
+        { classAssignment: { is: null }, membership: { is: { organizationId: 'org', classesAsStudent: { some: { school: { organizationId: 'org' }, teachers: { some: { id: 'teacher', isActive: true } } } } } } },
+      ],
     });
     expect(prisma.pasteAlert.findMany.mock.calls[0][0].where).toEqual({
       documentId: 'doc',
