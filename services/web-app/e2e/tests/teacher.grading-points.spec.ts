@@ -25,7 +25,7 @@ function hasDailyPagesAssignmentPointScaling(schema: unknown) {
 }
 
 async function ensureRevisedDailyPagesRubric(prisma: ReturnType<typeof createE2EPrismaClient>, assignmentTypeId: string, createdBy: string) {
-  const schema = dailyPagesSchema as unknown as Record<string, unknown>;
+  const schema = dailyPagesSchema;
   const name = String(schema.name);
   let rubric = await prisma.rubric.findUnique({ where: { name }, include: { currentRevision: true } });
   if (!rubric) {
@@ -54,7 +54,7 @@ async function ensureRevisedDailyPagesRubric(prisma: ReturnType<typeof createE2E
         reason: 'E2E fresh Daily Pages point-scale coverage',
       },
     });
-    rubric = await prisma.rubric.update({
+    await prisma.rubric.update({
       where: { id: rubric.id },
       data: { currentRevisionId: revision.id, schemaJson: schema },
       include: { currentRevision: true },
@@ -204,7 +204,8 @@ for (const scenario of [
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/submissions/${submissionId}`);
       const panel = page.getByTestId('submission-lifecycle-panel');
-      await expect(panel).toContainText('Needs grading');
+      await expect(page.getByLabel(`Total points (out of ${scenario.pointValue})`, { exact: true })).toHaveValue('');
+      await expect(panel.getByTestId('submission-lifecycle-save')).toBeDisabled();
 
       const category = page.getByRole('button', { name: /^Engagement with Prompt/ });
       await expect(category).toContainText('Not scored');
@@ -246,7 +247,7 @@ for (const scenario of [
       expect(saved.overallScore).toBe(scenario.selectedScore);
       expect(saved.numericPercentage).toBeNull();
       expect(saved.rubricScores).toEqual({
-        engagement_with_prompt: { score: scenario.selectedScore, comment: '' },
+        engagement_with_prompt: { score: scenario.selectedScore, comment: '', isAi: false },
       });
       expect(saved.gradingAssistantRuns).toHaveLength(0);
     } finally {
