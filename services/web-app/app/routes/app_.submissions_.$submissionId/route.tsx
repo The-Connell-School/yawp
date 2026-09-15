@@ -51,6 +51,7 @@ import {
 } from '~/utils/document-exit';
 import { EssayPanel } from './essay-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
+import { TeacherPasteReport } from '~/components/teacher-paste-report';
 import { SelectionToolbar } from './teacher-grading/selection-toolbar';
 import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
 import { SubmissionLifecyclePanel } from './teacher-grading/submission-lifecycle-panel';
@@ -1264,18 +1265,25 @@ export default function SubmissionRoute() {
 
         {/* Right: Feedback comments */}
         <div className="no-scrollbar max-h-[60vh] w-full shrink-0 overflow-y-auto border-t bg-white md:max-h-none md:w-[320px] md:border-t-0 md:border-l">
-          <GradingCommentsSidebar
-            submissionComments={isPending ? [] : (comments as any)}
+          <TeacherPasteReport
+            key={submission.id}
+            enabled={isGradingOther}
             submissionId={submission.id}
-            sourceText={submission.text ?? ''}
-            readOnly={!isGradingOther}
-            activeGradeCommentId={activeGradeCommentId}
-            onSelectGradeComment={setActiveGradeCommentId}
-            onDraftHighlightChange={setDraftHighlight}
-            onCommentCreated={handleCommentCreated}
-            onCommentDeleted={handleCommentDeleted}
-            onCommentUpdated={handleCommentUpdated}
-          />
+            contentRoot={essayElement}
+          >
+            <GradingCommentsSidebar
+              submissionComments={isPending ? [] : (comments as any)}
+              submissionId={submission.id}
+              sourceText={submission.text ?? ''}
+              readOnly={!isGradingOther}
+              activeGradeCommentId={activeGradeCommentId}
+              onSelectGradeComment={setActiveGradeCommentId}
+              onDraftHighlightChange={setDraftHighlight}
+              onCommentCreated={handleCommentCreated}
+              onCommentDeleted={handleCommentDeleted}
+              onCommentUpdated={handleCommentUpdated}
+            />
+          </TeacherPasteReport>
         </div>
       </div>
 
