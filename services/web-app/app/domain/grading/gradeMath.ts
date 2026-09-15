@@ -30,7 +30,7 @@ export function formatPointGrade(
   percent: number | null | undefined,
   pointValue: number | null | undefined
 ) {
-  if (percent === null || percent === undefined) return null;
+  if (percent === null || percent === undefined || !Number.isFinite(percent)) return null;
   if (
     pointValue === null ||
     pointValue === undefined ||
@@ -42,6 +42,30 @@ export function formatPointGrade(
 
   const earned = Math.round((percent / 100) * pointValue);
   return `${earned} / ${pointValue}`;
+}
+
+/** A recorded raw score carries its denominator; bare numbers are ambiguous. */
+export function parsePointScore(score: string | null | undefined) {
+  const match = /^\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*$/.exec(score ?? '');
+  if (!match) return null;
+  const earned = Number(match[1]);
+  const possible = Number(match[2]);
+  return Number.isFinite(earned) && Number.isFinite(possible) && possible > 0
+    ? { earned, possible }
+    : null;
+}
+
+export function assignmentPointTotal(pointValue: number | null | undefined, fallback: number) {
+  return typeof pointValue === 'number' && Number.isFinite(pointValue) && pointValue > 0
+    ? pointValue : fallback;
+}
+
+/** Proportional whole points; historical source scores and categories are untouched. */
+export function scalePointScore(score: string | null | undefined, pointValue?: number | null) {
+  const parsed = parsePointScore(score);
+  if (!parsed) return null;
+  const possible = assignmentPointTotal(pointValue, parsed.possible);
+  return { earned: Math.round(parsed.earned / parsed.possible * possible), possible };
 }
 
 export function formatAssignmentGrade({
@@ -59,9 +83,19 @@ export function formatAssignmentGrade({
 }) {
   if (submitForGrade === false) return null;
 
+  const rawPoints = scalePointScore(score, pointValue);
+  // A teacher-entered total is stored exactly as X/Y alongside the legacy
+  // integer percentage used by analytics. Prefer it when Y is the configured
+  // total, avoiding a lossy percentage round-trip for large point totals.
+  const exactPoints = parsePointScore(score);
+  if (exactPoints && exactPoints.possible === pointValue) {
+    return `${exactPoints.earned} / ${exactPoints.possible}`;
+  }
+
   return (
     formatPointGrade(numericPercentage, pointValue) ||
     formatGrade(numericPercentage ?? null, letterGrade ?? null) ||
+    (rawPoints && pointValue != null && pointValue > 0 ? `${rawPoints.earned} / ${rawPoints.possible}` : null) ||
     score ||
     null
   );

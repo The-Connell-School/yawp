@@ -218,6 +218,10 @@ describe('raw rubric points on configured assignments', () => {
       expect(formatAssignmentGrade({ submitForGrade: true, numericPercentage: null, pointValue, score: '18/30' })).toBe(expected);
     });
   }
+  test('preserves exact teacher points alongside rounded legacy percentages', () => {
+    expect(formatAssignmentGrade({ submitForGrade: true, numericPercentage: 46, pointValue: 200, score: '91/200' })).toBe('91 / 200');
+    expect(formatAssignmentGrade({ submitForGrade: true, numericPercentage: 89, pointValue: 200, score: '4/5' })).toBe('178 / 200');
+  });
   test('preserves zero and nonnumeric grades', () => {
     expect(formatAssignmentGrade({ submitForGrade: true, numericPercentage: null, pointValue: 90, score: '0/30' })).toBe('0 / 90');
     expect(formatAssignmentGrade({ submitForGrade: true, numericPercentage: null, pointValue: 90, score: 'Complete' })).toBe('Complete');

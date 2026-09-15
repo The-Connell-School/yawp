@@ -11,7 +11,7 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   timeout: 60000,
-  use: { baseURL: origin, trace: 'retain-on-failure', screenshot: 'only-on-failure', video: 'retain-on-failure' },
+  use: { baseURL: origin, trace: 'on', screenshot: 'only-on-failure', video: 'on' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: `bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a && E2E=true bun run dev -- --port ${port} --host 127.0.0.1 --strictPort'`,
