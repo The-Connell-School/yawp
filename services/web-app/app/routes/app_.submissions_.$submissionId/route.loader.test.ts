@@ -496,6 +496,20 @@ describe('submission loader — unsubmitted redirect', () => {
     }
   });
 
+  test('hides private notes from a group owner using another organization membership as admin', async () => {
+    requireUserId.mockResolvedValue('group-owner-user');
+    requireMembership.mockResolvedValue(membership('different-active-membership', 'TEACHER', 'org-2'));
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: true });
+    const submission = buildSubmission() as any;
+    submission.document.group = { id: 'group', members: [{ membershipId: 'owner-membership-org-1', membership: { userId: 'group-owner-user' } }] };
+    submission.gradingAssistantRuns = [{ status: 'succeeded', metadata: { teacherNote: 'PRIVATE_GROUP_OBSERVATION' } }];
+    prisma.submission.findFirst.mockResolvedValue(submission);
+    const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
+    expect(result.isOwner).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_GROUP_OBSERVATION');
+    expect(result).not.toHaveProperty('teacherNote');
+  });
+
   test('group-owner and cross-organization viewers receive no private note', async () => {
     for (const groupOwner of [true, false]) {
       requireUserId.mockResolvedValue('other-user');

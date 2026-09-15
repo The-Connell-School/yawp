@@ -274,6 +274,23 @@ describe('api.domain.grade-essay-ai', () => {
       );
   });
 
+  test.each([
+    { isAdmin: false, sameMembership: true },
+    { isAdmin: true, sameMembership: true },
+    { isAdmin: true, sameMembership: false },
+  ])('refuses AI grading for a group owner before generating private output: %j', async ({ isAdmin, sameMembership }) => {
+    getGradingActor.mockResolvedValue({ membershipId: 'teacher-1', userId: 'owner-user', organizationId: 'org-1', isTeacher: true, isAdmin });
+    const submission = mockSubmission() as any;
+    submission.document.group = { label: 'Group', members: [{ membershipId: sameMembership ? 'teacher-1' : 'other-org-membership', membership: { userId: 'owner-user' } }] };
+    prisma.submission.findFirst.mockResolvedValue(submission);
+    const form = new FormData(); form.set('submissionId', 'sub-1');
+    const result = await action({ request: new Request('https://example.test/api/domain/grade-essay-ai', { method: 'POST', body: form }) } as any) as any;
+    expect(result.init?.status ?? result.status).toBe(403);
+    expect(result.data).not.toHaveProperty('teacherNote');
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   test('returns AI suggestions and persists to submission', async () => {
     prisma.submission.findFirst.mockResolvedValue(
       mockSubmission({ id: 'sub-1' })

@@ -143,6 +143,13 @@ describe('grading auth helpers', () => {
     ).toBe(true);
   });
 
+  test('fences group grade writes against active ownership by the same user across memberships', () => {
+    for (const releasedAt of [null, new Date('2026-09-15')]) {
+      const where = buildGradeWriteSubjectWhere({ actorUserId: 'owner-user', releasedAt }) as any;
+      expect(where.OR.find((branch: any) => branch.artifactKind === 'ASSIGNMENT_GROUP').group).toEqual({ is: { members: { none: { removedAt: null, membership: { is: { userId: 'owner-user' } } } } } });
+    }
+  });
+
   test('allows ownerless assignment artifacts through the grade write subject guard', () => {
     const where = buildGradeWriteSubjectWhere({
       actorUserId: 'teacher-user-1',

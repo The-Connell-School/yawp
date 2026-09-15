@@ -423,8 +423,8 @@ function runTestProfile(profile, { json }) {
     runWebApp("daily-pages-scaling-config", ["test", "app/domain/assignment-types/daily-pages-assignment-points.test.ts", "app/domain/assignment-types/assignment-type-grading-config.server.test.ts"]);
   }
   else if (chosen === "private-notes-unit") {
-    runWebApp("private-notes-generation", ["test", "app/routes/api.domain.grade-essay-ai/route.test.ts", "--test-name-pattern", "private teacher notes|revised production Daily Pages"]);
-    runWebApp("private-notes-projection", ["test", "app/routes/app_.submissions_.$submissionId/route.loader.test.ts", "app/routes/app_.revise_.$submissionId/route.loader.test.ts", "app/domain/grading/grading-assistant-invocation.test.ts", "app/domain/grading/assistant-suggestion.test.ts"]);
+    runWebApp("private-notes-generation", ["test", "app/routes/api.domain.grade-essay-ai/route.test.ts", "--test-name-pattern", "private teacher notes|revised production Daily Pages|refuses AI grading for a group owner"]);
+    runWebApp("private-notes-projection", ["test", "app/routes/app_.submissions_.$submissionId/route.loader.test.ts", "app/routes/app_.revise_.$submissionId/route.loader.test.ts", "app/domain/grading/grading-assistant-invocation.test.ts", "app/domain/grading/assistant-suggestion.test.ts", "app/utils/grading-auth.server.test.ts"]);
   }
   else if (chosen === "private-notes-browser") {
     const local = requireConfig();
