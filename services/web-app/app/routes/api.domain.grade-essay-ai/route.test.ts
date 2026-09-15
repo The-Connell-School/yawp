@@ -2478,6 +2478,7 @@ describe('api.domain.grade-essay-ai', () => {
       expect(call.system).toContain('"teacherNote"');
       expect(call.system).toContain('Never put private observations in overallComment');
       expect(call.system).toContain('Do not infer AI authorship');
+      expect(call.system).toContain('without supplied comparison writing');
     });
 
     test('ignores unsolicited notes from rubrics that have not opted in', async () => {
