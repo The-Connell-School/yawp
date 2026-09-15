@@ -1,3 +1,5 @@
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+try { GlobalRegistrator.register(); } catch {}
 import { describe, expect, test } from 'bun:test';
 import { measurePasteProvenance, selectPasteEvent } from './provenance';
 
