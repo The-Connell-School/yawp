@@ -8,6 +8,7 @@ import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 export const REVISION_INTERVAL_MS = 5 * 60 * 1000;
 
 export type EditorBridge = {
+  getContentElement?: () => HTMLElement;
   getContent: () => { html: string; text: string };
   saveNow: (options?: { source?: string }) => Promise<SyncStatus>;
 };
@@ -216,6 +217,7 @@ export function useEditorSync(
     }
 
     const bridge: EditorBridge = {
+      getContentElement: () => editor.view.dom as HTMLElement,
       getContent: getSnapshot,
       saveNow: async (options) => {
         const { html, text } = getSnapshot();
