@@ -2400,7 +2400,7 @@ describe('api.domain.grade-essay-ai', () => {
   });
 
   describe('the revised production Daily Pages library rubric', () => {
-    async function gradeRevisedDailyPages(engagementScore: number) {
+    async function gradeRevisedDailyPages(engagementScore: number, pointValue = 30, pin?: 'current' | 'legacy') {
       const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
       const schema = STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!;
       prisma.assignmentType.findUnique.mockResolvedValue(mockAssignmentType({
@@ -2413,9 +2413,19 @@ describe('api.domain.grade-essay-ai', () => {
           ...mockSubmission().document,
           assignmentTypeId: 'daily-pages-production',
           assignmentType: { id: 'daily-pages-production', kind: 'daily_pages', title: 'Daily Pages' },
-          assignment: { prompt: 'Describe a place that matters to you.', pointValue: 30 },
+          assignment: { id: 'daily-assignment', prompt: 'Describe a place that matters to you.', pointValue },
         },
       }));
+      const pinnedSchema = structuredClone(schema);
+      if (pin === 'legacy') {
+        delete pinnedSchema.outputSchema.assignmentPointScaling;
+        pinnedSchema.scoringScale.step = 10;
+        delete pinnedSchema.rubric.categories[0].bands;
+      }
+      prisma.assignment.findUnique.mockResolvedValue({
+        assignmentTypeId: 'daily-pages-production',
+        rubricRevision: pin ? { id: 'pinned-revision', version: pin === 'legacy' ? 5 : 7, rubricName: schema.name, schemaJson: pinnedSchema } : null,
+      });
       getLLMCompletion.mockReset();
       getLLMCompletion.mockResolvedValue(JSON.stringify({
         categories: [{ key: 'engagement_with_prompt', score: engagementScore }],
@@ -2438,6 +2448,33 @@ describe('api.domain.grade-essay-ai', () => {
       const call = getLLMCompletion.mock.calls.find((call: any[]) => call[0]?.metadata?.kind === 'rubric-evaluation')?.[0];
       expect(call.messages[0].content).toContain('Assignment prompt: Describe a place that matters to you.');
       expect(getLLMCompletion.mock.calls.filter((call: any[]) => call[0]?.metadata?.kind === 'grammar-issues')).toHaveLength(0);
+    });
+
+    test.each([undefined, 'current'] as const)('grades a new 90-point assignment directly at 55/90 with pin %s', async (pin) => {
+      const response = await gradeRevisedDailyPages(55, 90, pin);
+      expect((response as any).data).toMatchObject({ success: true, overallScore: 55, score: '55/90', rubricConfig: { maxScore: 90, step: 1 } });
+      expect(prisma.submission.update.mock.calls.at(-1)?.[0].data).toMatchObject({ overallScore: 55, score: '55/90', numericPercentage: null, letterGrade: null });
+      const snapshot = prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data.assignmentTypeRubricSnapshot;
+      expect(snapshot.maxScore).toBe(90);
+      expect(snapshot.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual([[0, 0], [21, 39], [51, 69], [84, 90]]);
+      const call = getLLMCompletion.mock.calls.find((call: any[]) => call[0]?.metadata?.kind === 'rubric-evaluation')?.[0];
+      expect(call.system).toContain('"score": 0-90');
+      expect(call.messages[0].content).toContain('51-69 SHOWED UP');
+      expect(call.messages[0].content).toContain('Configured anchor: 60/90');
+    });
+
+    test('scales a 10-point assignment and rejects a score in its scaled gap', async () => {
+      const response = await gradeRevisedDailyPages(7, 10, 'current');
+      expect((response as any).data.score).toBe('7/10');
+      prisma.submission.update.mockClear();
+      const invalid = await gradeRevisedDailyPages(8, 10, 'current');
+      expect((invalid as any).init?.status).toBe(502);
+      expect(prisma.submission.update).not.toHaveBeenCalled();
+    });
+
+    test('does not rescale an explicitly pinned legacy rubric on a 90-point assignment', async () => {
+      const response = await gradeRevisedDailyPages(20, 90, 'legacy');
+      expect((response as any).data).toMatchObject({ score: '20/30', rubricConfig: { maxScore: 30, step: 10 } });
     });
 
     test.each([1, 6, 14, 16, 24, 27])('rejects %i in a gap between authored tiers instead of rounding it', async (score) => {
