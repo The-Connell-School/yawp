@@ -145,8 +145,8 @@ describe('submission loader — unsubmitted redirect', () => {
     prisma.assignment.findUnique.mockResolvedValue({ assignmentTypeId: 'at-1', rubricRevision: { version: 7, rubricName: authored.name, schemaJson: authored } });
     prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1', title: 'Daily Pages', kind: 'daily_pages', rubric: { name: authored.name, schemaJson: authored } });
     const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
-    expect(result.rubricConfig.maxScore).toBe(90);
-    expect(result.rubricConfig.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual([[0, 0], [21, 39], [51, 69], [84, 90]]);
+    expect(result.submission.rubricConfig.maxScore).toBe(90);
+    expect(result.submission.rubricConfig.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual([[0, 0], [21, 39], [51, 69], [84, 90]]);
   });
 
   test('tells the student they unsubmitted it themselves', async () => {
