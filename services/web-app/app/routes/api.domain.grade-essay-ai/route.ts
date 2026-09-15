@@ -442,20 +442,15 @@ function buildDynamicGradeFields({
   rubricCategories: GradingRubricCategory[];
   bandScored: boolean;
 }) {
+  // Bands define valid category scores; the scoring type determines whether
+  // the result is raw points or a percentage. Daily Pages remains 18/30.
+  const nonLegacy = rubricScaleGradeFields({ categories, scoringType, maxScore });
+  if (nonLegacy) return nonLegacy;
+
   if (bandScored) {
-    const banded = computeBandScoredGradeFields({
-      rubricScores,
-      rubricCategories,
-    });
+    const banded = computeBandScoredGradeFields({ rubricScores, rubricCategories });
     if (banded) return banded;
   }
-
-  const nonLegacy = rubricScaleGradeFields({
-    categories,
-    scoringType,
-    maxScore,
-  });
-  if (nonLegacy) return nonLegacy;
 
   return computeLegacyGradeFields({
     categories,
@@ -1029,6 +1024,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     studentFirstName,
     strictnessLevel: gradingAssistantStrictnessLevel,
     documentText: submission.text,
+    assignmentPrompt: submission.document.assignment?.prompt,
   });
   const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
