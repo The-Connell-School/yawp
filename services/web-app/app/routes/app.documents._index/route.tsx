@@ -6,6 +6,7 @@ import {
   type TeacherDocumentWorkFilters,
 } from '~/components/teacher-document-work/teacher-document-work-panel';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
+import { UnsubmitSubmissionsSheet } from '~/components/teacher-document-work/unsubmit-submissions-sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { buildTeacherClassWorkDocumentWhere } from '~/utils/class-assignment-scope.server';
@@ -25,9 +26,11 @@ import {
 } from '~/utils/teacher-document-work-filter-options';
 import {
   buildReleaseGradeRows,
+  buildTeacherUnsubmitRows,
   countTeacherDocumentWorkStatuses,
   formatClassLabel,
   type ReleaseGradeRow,
+  type TeacherUnsubmitRow,
   type TeacherDocumentWorkClassSummary,
   type TeacherDocumentWorkRow,
 } from '~/utils/teacher-document-work-utils';
@@ -324,9 +327,14 @@ export default function StudentWorkRoute() {
   );
   const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
     useState(false);
+  const [isUnsubmitSheetOpen, setIsUnsubmitSheetOpen] = useState(false);
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     ReleaseGradeRow[]
   >([]);
+  const [unsubmitRowsForSheet, setUnsubmitRowsForSheet] = useState<
+    TeacherUnsubmitRow[]
+  >([]);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const hasHydratedStudentWorkPreferences = useRef(false);
   const hasHydratedCollapsedStudentWorkGroups = useRef(false);
   const hasHydratedDocumentSort = useRef(false);
@@ -420,9 +428,28 @@ export default function StudentWorkRoute() {
     mergeStudentWorkViewPreferences(searchParams, { documentSort: next });
   };
 
+  const selectedDocuments = useMemo(() => {
+    const selected = new Set(selectedDocumentIds);
+    return data.documents.filter((document) => selected.has(document.id));
+  }, [data.documents, selectedDocumentIds]);
+
+  useEffect(() => {
+    const currentDocumentIds = new Set(
+      data.documents.map((document) => document.id)
+    );
+    setSelectedDocumentIds((current) =>
+      current.filter((documentId) => currentDocumentIds.has(documentId))
+    );
+  }, [data.documents]);
+
   const unreleasedGrades = useMemo(
-    () => buildReleaseGradeRows(data.documents),
-    [data.documents]
+    () => buildReleaseGradeRows(selectedDocuments),
+    [selectedDocuments]
+  );
+
+  const unsubmitRows = useMemo(
+    () => buildTeacherUnsubmitRows(selectedDocuments),
+    [selectedDocuments]
   );
 
   const openReleaseSheet = () => {
@@ -433,6 +460,19 @@ export default function StudentWorkRoute() {
 
   const handleReleaseGradesSuccess = () => {
     setReleaseGradesForSheet([]);
+    setSelectedDocumentIds([]);
+    window.location.reload();
+  };
+
+  const openUnsubmitSheet = () => {
+    if (unsubmitRows.length === 0) return;
+    setUnsubmitRowsForSheet(unsubmitRows);
+    setIsUnsubmitSheetOpen(true);
+  };
+
+  const handleUnsubmitSuccess = () => {
+    setUnsubmitRowsForSheet([]);
+    setSelectedDocumentIds([]);
     window.location.reload();
   };
 
@@ -541,7 +581,18 @@ export default function StudentWorkRoute() {
               disabled: unreleasedGrades.length === 0,
               onSelect: openReleaseSheet,
             },
+            {
+              id: 'unsubmit',
+              label: 'Unsubmit',
+              count: unsubmitRows.length > 0 ? unsubmitRows.length : undefined,
+              disabled: unsubmitRows.length === 0,
+              onSelect: openUnsubmitSheet,
+            },
           ]}
+          selection={{
+            selectedDocumentIds,
+            onSelectedDocumentIdsChange: setSelectedDocumentIds,
+          }}
           testIds={{
             statusChips: 'student-work-status-chips',
             groupSelect: 'student-work-group-select',
@@ -557,6 +608,12 @@ export default function StudentWorkRoute() {
           isOpen={isReleaseGradesSheetOpen}
           onClose={() => setIsReleaseGradesSheetOpen(false)}
           onSuccess={handleReleaseGradesSuccess}
+        />
+        <UnsubmitSubmissionsSheet
+          submissions={unsubmitRowsForSheet}
+          isOpen={isUnsubmitSheetOpen}
+          onClose={() => setIsUnsubmitSheetOpen(false)}
+          onSuccess={handleUnsubmitSuccess}
         />
       </div>
     </section>

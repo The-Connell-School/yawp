@@ -78,6 +78,22 @@ export type ReleaseGradeRow = {
   };
 };
 
+export type TeacherUnsubmitRow = {
+  id: string;
+  score: string | null;
+  submittedAt: Date | string | null;
+  document: {
+    id: string;
+    title: string;
+    membership: {
+      user: {
+        name: string | null;
+        email: string;
+      };
+    };
+  };
+};
+
 export { formatClassLabel } from '~/utils/class-display';
 
 export function getDraftDisplayTitle(document: {
@@ -211,4 +227,45 @@ export function buildReleaseGradeRows(
         };
       })
   );
+}
+
+export function buildTeacherUnsubmitRows(
+  documents: TeacherDocumentWorkRow[]
+): TeacherUnsubmitRow[] {
+  return documents.flatMap((document) => {
+    const submission = document.latestSubmission;
+    if (!submission) return [];
+
+    const score =
+      formatAssignmentGrade({
+        submitForGrade: document.assignment?.submitForGrade,
+        numericPercentage: submission.numericPercentage ?? null,
+        letterGrade: submission.letterGrade ?? null,
+        pointValue: document.assignment?.pointValue ?? null,
+        score: submission.score,
+      }) ??
+      submission.score ??
+      null;
+
+    return [
+      {
+        id: submission.id,
+        score,
+        submittedAt: submission.submittedAt ?? submission.createdAt ?? null,
+        document: {
+          id: document.id,
+          title:
+            submission.title?.trim() ||
+            document.title?.trim() ||
+            getDraftDisplayTitle(document),
+          membership: {
+            user: {
+              name: document.membership.user.name,
+              email: document.membership.user.email,
+            },
+          },
+        },
+      },
+    ];
+  });
 }

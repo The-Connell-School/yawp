@@ -117,6 +117,11 @@ export type TeacherDocumentWorkAction = {
   disabled?: boolean;
 };
 
+export type TeacherDocumentWorkSelection = {
+  selectedDocumentIds: string[];
+  onSelectedDocumentIdsChange: (documentIds: string[]) => void;
+};
+
 type FilterOption = {
   id: string;
   label: string;
@@ -143,6 +148,7 @@ export type TeacherDocumentWorkPanelProps = {
   ) => void;
   headerActions?: React.ReactNode;
   actions?: TeacherDocumentWorkAction[];
+  selection?: TeacherDocumentWorkSelection;
   pagination?: {
     skip: number;
     take: number;
@@ -176,6 +182,7 @@ export function TeacherDocumentWorkPanel({
   onCollapsedGroupsChange,
   headerActions,
   actions,
+  selection,
   pagination,
   emptyMessageSecondary = 'Try clearing a filter or check another class.',
   testIds,
@@ -355,6 +362,48 @@ export function TeacherDocumentWorkPanel({
     count: effectiveStatusCounts[status],
   }));
 
+  const selectedDocumentIdSet = useMemo(
+    () => new Set(selection?.selectedDocumentIds ?? []),
+    [selection?.selectedDocumentIds]
+  );
+  const selectedDocumentCount = selection?.selectedDocumentIds.length ?? 0;
+  const selectableRowsEnabled = Boolean(selection);
+
+  const setSelectedDocuments = (documentIds: string[]) => {
+    selection?.onSelectedDocumentIdsChange(Array.from(new Set(documentIds)));
+  };
+
+  const toggleDocumentSelection = (documentId: string, checked: boolean) => {
+    if (!selection) return;
+
+    const next = new Set(selection.selectedDocumentIds);
+    if (checked) {
+      next.add(documentId);
+    } else {
+      next.delete(documentId);
+    }
+
+    setSelectedDocuments(Array.from(next));
+  };
+
+  const toggleRowSelectionGroup = (
+    rows: TeacherDocumentWorkRow[],
+    checked: boolean
+  ) => {
+    if (!selection) return;
+
+    const next = new Set(selection.selectedDocumentIds);
+    rows.forEach((document) => {
+      if (checked) {
+        next.add(document.id);
+      } else {
+        next.delete(document.id);
+      }
+    });
+
+    setSelectedDocuments(Array.from(next));
+  };
+
   const renderSortableHead = (
     label: string,
     field: DocumentWorkSortField,
@@ -428,10 +477,28 @@ export function TeacherDocumentWorkPanel({
           }
           tabIndex={clickableRows ? 0 : undefined}
         >
+          {selectableRowsEnabled ? (
+            <TableCell
+              className={cn(
+                'w-10 pl-4 pr-1',
+                rowClasses?.cell,
+                !showStudentColumn && rowClasses?.textCell
+              )}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <SelectionCheckbox
+                checked={selectedDocumentIdSet.has(document.id)}
+                aria-label={`Select ${displayTitle}`}
+                onCheckedChange={(checked) =>
+                  toggleDocumentSelection(document.id, checked)
+                }
+              />
+            </TableCell>
+          ) : null}
           {showStudentColumn ? (
             <TableCell
               className={cn(
-                'pl-4 font-medium',
+                selectableRowsEnabled ? 'font-medium' : 'pl-4 font-medium',
                 rowClasses?.cell,
                 rowClasses?.textCell
               )}
@@ -570,78 +637,110 @@ export function TeacherDocumentWorkPanel({
   const renderDocumentsTable = (
     rows: TeacherDocumentWorkRow[],
     nested = false
-  ) => (
-    <Table
-      aria-label={tableLabel}
-      containerClassName={cn(
-        // The columns can run wider than the viewport, so the horizontal
-        // scrollbar has to be visible for the overflow to be discoverable.
-        'show-scrollbar overflow-x-auto',
-        nested && 'rounded-none border-0 shadow-none'
-      )}
-      className={cn(
-        nested ? undefined : 'rounded-lg bg-muted/50',
-        compactRows && DOCUMENT_TABLE_ROW_CLASSES.table
-      )}
-    >
-      <TableHeader>
-        <TableRow>
-          {showStudentColumn
-            ? renderSortableHead(
-                'Student',
-                'student',
-                compactHeadClassName(compactRows, 'pl-4')
-              )
-            : null}
-          {renderSortableHead(
-            'Document',
-            'document',
-            compactHeadClassName(compactRows)
-          )}
-          {showClassColumn
-            ? renderSortableHead(
-                'Class',
-                'class',
-                compactHeadClassName(compactRows)
-              )
-            : null}
-          {showAssignmentColumn
-            ? renderSortableHead(
-                'Assignment',
-                'assignment',
-                compactHeadClassName(compactRows)
-              )
-            : null}
-          {showStatusColumn
-            ? renderSortableHead(
-                'Status',
-                'status',
-                compactHeadClassName(compactRows)
-              )
-            : null}
-          {renderSortableHead(
-            'Submitted at',
-            'submittedAt',
-            compactHeadClassName(compactRows)
-          )}
-          {renderSortableHead(
-            'Graded at',
-            'gradedAt',
-            compactHeadClassName(compactRows)
-          )}
-          {renderSortableHead(
-            'Last edited',
-            'lastEdited',
-            compactHeadClassName(compactRows)
-          )}
-          {clickableRows ? null : (
-            <TableHead className="pr-4">Action</TableHead>
-          )}
-        </TableRow>
-      </TableHeader>
-      <TableBody>{renderRows(rows)}</TableBody>
-    </Table>
-  );
+  ) => {
+    const selectedInRows = selection
+      ? rows.filter((document) => selectedDocumentIdSet.has(document.id)).length
+      : 0;
+    const allRowsSelected = rows.length > 0 && selectedInRows === rows.length;
+    const someRowsSelected = selectedInRows > 0 && !allRowsSelected;
+
+    return (
+      <Table
+        aria-label={tableLabel}
+        containerClassName={cn(
+          // The columns can run wider than the viewport, so the horizontal
+          // scrollbar has to be visible for the overflow to be discoverable.
+          'show-scrollbar overflow-x-auto',
+          nested && 'rounded-none border-0 shadow-none'
+        )}
+        className={cn(
+          nested ? undefined : 'rounded-lg bg-muted/50',
+          compactRows && DOCUMENT_TABLE_ROW_CLASSES.table
+        )}
+      >
+        <TableHeader>
+          <TableRow>
+            {selectableRowsEnabled ? (
+              <TableHead
+                className={cn(
+                  'w-10 pl-4 pr-1',
+                  compactHeadClassName(compactRows)
+                )}
+              >
+                <SelectionCheckbox
+                  checked={allRowsSelected}
+                  indeterminate={someRowsSelected}
+                  aria-label={
+                    allRowsSelected
+                      ? 'Clear selected documents'
+                      : 'Select visible documents'
+                  }
+                  onCheckedChange={(checked) =>
+                    toggleRowSelectionGroup(rows, checked)
+                  }
+                />
+              </TableHead>
+            ) : null}
+            {showStudentColumn
+              ? renderSortableHead(
+                  'Student',
+                  'student',
+                  compactHeadClassName(
+                    compactRows,
+                    selectableRowsEnabled ? undefined : 'pl-4'
+                  )
+                )
+              : null}
+            {renderSortableHead(
+              'Document',
+              'document',
+              compactHeadClassName(compactRows)
+            )}
+            {showClassColumn
+              ? renderSortableHead(
+                  'Class',
+                  'class',
+                  compactHeadClassName(compactRows)
+                )
+              : null}
+            {showAssignmentColumn
+              ? renderSortableHead(
+                  'Assignment',
+                  'assignment',
+                  compactHeadClassName(compactRows)
+                )
+              : null}
+            {showStatusColumn
+              ? renderSortableHead(
+                  'Status',
+                  'status',
+                  compactHeadClassName(compactRows)
+                )
+              : null}
+            {renderSortableHead(
+              'Submitted at',
+              'submittedAt',
+              compactHeadClassName(compactRows)
+            )}
+            {renderSortableHead(
+              'Graded at',
+              'gradedAt',
+              compactHeadClassName(compactRows)
+            )}
+            {renderSortableHead(
+              'Last edited',
+              'lastEdited',
+              compactHeadClassName(compactRows)
+            )}
+            {clickableRows ? null : (
+              <TableHead className="pr-4">Action</TableHead>
+            )}
+          </TableRow>
+        </TableHeader>
+        <TableBody>{renderRows(rows)}</TableBody>
+      </Table>
+    );
+  };
 
   const toolbarProps: DocumentWorkToolbarProps = {
     tableLabel,
@@ -660,6 +759,10 @@ export function TeacherDocumentWorkPanel({
     hasActiveFilters,
     headerActions,
     actions,
+    selectedDocumentCount,
+    onClearSelection: selection
+      ? () => selection.onSelectedDocumentIdsChange([])
+      : undefined,
     testIds,
     onFiltersChange,
     onClearFilters,
@@ -783,6 +886,8 @@ type DocumentWorkToolbarProps = {
   hasActiveFilters: boolean;
   headerActions?: React.ReactNode;
   actions?: TeacherDocumentWorkAction[];
+  selectedDocumentCount?: number;
+  onClearSelection?: () => void;
   testIds?: TeacherDocumentWorkPanelProps['testIds'];
   onFiltersChange: (updates: Partial<TeacherDocumentWorkFilters>) => void;
   onClearFilters: () => void;
@@ -1122,6 +1227,20 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
           <DocumentWorkStatusPills {...props} />
         </div>
         <div className="flex shrink-0 flex-nowrap items-center gap-2">
+          {props.selectedDocumentCount ? (
+            <div className="inline-flex h-9 items-center gap-2 rounded-full border bg-background px-3 text-sm text-muted-foreground">
+              <span className="tabular-nums">
+                {props.selectedDocumentCount} selected
+              </span>
+              <button
+                type="button"
+                className="font-medium text-foreground hover:underline"
+                onClick={props.onClearSelection}
+              >
+                Clear
+              </button>
+            </div>
+          ) : null}
           <DocumentWorkActionsMenu actions={props.actions} />
           <Popover>
             <PopoverTrigger asChild>
@@ -1193,5 +1312,39 @@ function DocumentWorkActionsMenu({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  onCheckedChange,
+  ...props
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'onChange'> & {
+  checked: boolean;
+  indeterminate?: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <input
+      {...props}
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      className={cn(
+        'size-4 rounded border-border text-primary accent-primary',
+        props.className
+      )}
+      onClick={(event) => event.stopPropagation()}
+      onChange={(event) => onCheckedChange(event.currentTarget.checked)}
+    />
   );
 }

@@ -187,9 +187,9 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       // The teacher sets the overall percentage themselves; the rubric total
       // is theirs to accept or ignore.
       await page.getByTestId('grading-overall-percentage').fill('77');
-      await expect(
-        page.getByTestId('grading-overall-percentage')
-      ).toHaveValue('77');
+      await expect(page.getByTestId('grading-overall-percentage')).toHaveValue(
+        '77'
+      );
 
       await page
         .getByTestId('grading-overall-comment')
@@ -325,6 +325,9 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page.waitForLoadState('networkidle');
 
       await page.getByRole('tab', { name: /documents/i }).click();
+      await page
+        .getByRole('checkbox', { name: 'Select visible documents' })
+        .check();
       const actionsButton = page.getByTestId('teacher-document-work-actions');
       await expect(actionsButton).toBeVisible({
         timeout: 10000,

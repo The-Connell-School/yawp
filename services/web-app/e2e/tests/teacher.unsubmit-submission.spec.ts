@@ -12,15 +12,27 @@ test.describe.serial('Teacher unsubmit submission', () => {
       // Sign in as seeded teacher
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
 
-      // Open the submitted submission details page
+      // The grading page no longer exposes Unsubmit directly.
       await page.goto(`/app/submissions/${e2eContext.submittedSubmissionId}`);
       await page.waitForLoadState('networkidle');
+      await expect(
+        page.getByTestId('submission-lifecycle-unsubmit')
+      ).toHaveCount(0);
 
-      // Click Unsubmit and confirm
-      const unsubmitButton = page.getByTestId('submission-lifecycle-unsubmit');
-      await expect(unsubmitButton).toBeVisible({ timeout: 10000 });
-      await unsubmitButton.click();
-      await page.getByRole('button', { name: /^unsubmit$/i }).click();
+      // Select the submitted document from the worklist and unsubmit via Actions.
+      await page.goto(
+        '/app/documents?status=needs-grading&q=E2E+Essay+submission+title'
+      );
+      await page.waitForLoadState('networkidle');
+      await page
+        .getByRole('checkbox', { name: 'Select E2E Essay submission title' })
+        .check();
+      await page.getByTestId('teacher-document-work-actions').click();
+      await page.getByRole('menuitem', { name: /Unsubmit\s+1/i }).click();
+      await expect(
+        page.getByRole('dialog', { name: /unsubmit documents/i })
+      ).toBeVisible();
+      await page.getByTestId('unsubmit-submissions-confirm').click();
       await page.waitForLoadState('networkidle');
 
       // Verify DB flags updated
@@ -57,9 +69,9 @@ test.describe.serial('Teacher unsubmit submission', () => {
       expect(activity?.actorMembershipId).toBe(e2eContext.teacherMembershipId);
       expect(activity?.occurredAfterRelease).toBe(false);
       // Prior status should be "submitted" and score metadata absent
-      expect(
-        activity?.metadata && (activity.metadata as any).priorStatus
-      ).toBe('submitted');
+      expect(activity?.metadata && (activity.metadata as any).priorStatus).toBe(
+        'submitted'
+      );
       expect(
         activity?.metadata && (activity.metadata as any).priorNumericPercentage
       ).toBeUndefined();
@@ -77,15 +89,25 @@ test.describe.serial('Teacher unsubmit submission', () => {
     try {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
 
-      // Open the graded+released submission
+      // The grading page no longer exposes Unsubmit directly.
       await page.goto(`/app/submissions/${e2eContext.gradeId}`);
       await page.waitForLoadState('networkidle');
+      await expect(
+        page.getByTestId('submission-lifecycle-unsubmit')
+      ).toHaveCount(0);
 
-      // Click Unsubmit and confirm
-      const unsubmitButton = page.getByTestId('submission-lifecycle-unsubmit');
-      await expect(unsubmitButton).toBeVisible({ timeout: 10000 });
-      await unsubmitButton.click();
-      await page.getByRole('button', { name: /^unsubmit$/i }).click();
+      // Select the released document from the worklist and unsubmit via Actions.
+      await page.goto('/app/documents?status=released&q=Graded+Document');
+      await page.waitForLoadState('networkidle');
+      await page
+        .getByRole('checkbox', { name: 'Select Graded Document' })
+        .check();
+      await page.getByTestId('teacher-document-work-actions').click();
+      await page.getByRole('menuitem', { name: /Unsubmit\s+1/i }).click();
+      await expect(
+        page.getByRole('dialog', { name: /unsubmit documents/i })
+      ).toBeVisible();
+      await page.getByTestId('unsubmit-submissions-confirm').click();
       await page.waitForLoadState('networkidle');
 
       // Verify DB flags updated
@@ -136,4 +158,3 @@ test.describe.serial('Teacher unsubmit submission', () => {
     }
   });
 });
-

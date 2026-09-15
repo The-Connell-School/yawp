@@ -60,6 +60,7 @@ import {
 import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
+import { UnsubmitSubmissionsSheet } from '~/components/teacher-document-work/unsubmit-submissions-sheet';
 import {
   ArrowDown,
   ArrowUp,
@@ -118,8 +119,10 @@ import {
 } from '~/utils/teacher-document-status';
 import {
   buildReleaseGradeRows,
+  buildTeacherUnsubmitRows,
   countTeacherDocumentWorkStatuses,
   type ReleaseGradeRow,
+  type TeacherUnsubmitRow,
   type TeacherDocumentWorkRow,
 } from '~/utils/teacher-document-work-utils';
 import { cn } from '~/utils/misc';
@@ -1363,12 +1366,17 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const hasHydratedDocumentSort = useRef(false);
   const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
     useState(false);
+  const [isUnsubmitSheetOpen, setIsUnsubmitSheetOpen] = useState(false);
   const [studentNameSortDirection, setStudentNameSortDirection] =
     useState<SortDirection>('asc');
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     ReleaseGradeRow[]
   >([]);
+  const [unsubmitRowsForSheet, setUnsubmitRowsForSheet] = useState<
+    TeacherUnsubmitRow[]
+  >([]);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [growthPlanStudent, setGrowthPlanStudent] = useState<{
     id: string;
     name: string;
@@ -1678,7 +1686,14 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
     }));
   }, [classDocuments, data.klass]);
 
-  const unreleasedGrades = useMemo(() => {
+  const selectedDocuments = useMemo(() => {
+    const selected = new Set(selectedDocumentIds);
+    return teacherDocumentWorkRows.filter((document) =>
+      selected.has(document.id)
+    );
+  }, [selectedDocumentIds, teacherDocumentWorkRows]);
+
+  const releaseRowsForLegacyDeepLink = useMemo(() => {
     const rows =
       selectedAssignmentIds.length === 0
         ? teacherDocumentWorkRows
@@ -1691,23 +1706,43 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
     return buildReleaseGradeRows(rows);
   }, [selectedAssignmentIds, teacherDocumentWorkRows]);
 
+  useEffect(() => {
+    const currentDocumentIds = new Set(
+      teacherDocumentWorkRows.map((document) => document.id)
+    );
+    setSelectedDocumentIds((current) =>
+      current.filter((documentId) => currentDocumentIds.has(documentId))
+    );
+  }, [teacherDocumentWorkRows]);
+
+  const unreleasedGrades = useMemo(
+    () => buildReleaseGradeRows(selectedDocuments),
+    [selectedDocuments]
+  );
+
+  const unsubmitRows = useMemo(
+    () => buildTeacherUnsubmitRows(selectedDocuments),
+    [selectedDocuments]
+  );
+
   // Handle URL param for to-release action (legacy deep link)
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab === 'to-release') {
-      if (unreleasedGrades.length > 0) {
-        setReleaseGradesForSheet(unreleasedGrades);
+      if (releaseRowsForLegacyDeepLink.length > 0) {
+        setReleaseGradesForSheet(releaseRowsForLegacyDeepLink);
         setIsReleaseGradesSheetOpen(true);
         const next = new URLSearchParams(searchParams);
         next.set('tab', 'documents');
         navigate(`?${next.toString()}`, { replace: true });
       }
     }
-  }, [searchParams, navigate, unreleasedGrades]);
+  }, [searchParams, navigate, releaseRowsForLegacyDeepLink]);
 
   // Handle successful release
   const handleGradingSuccess = () => {
     setReleaseGradesForSheet([]);
+    setSelectedDocumentIds([]);
     window.location.reload();
   };
 
@@ -1715,6 +1750,18 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
     if (unreleasedGrades.length === 0) return;
     setReleaseGradesForSheet(unreleasedGrades);
     setIsReleaseGradesSheetOpen(true);
+  };
+
+  const openUnsubmitSheet = () => {
+    if (unsubmitRows.length === 0) return;
+    setUnsubmitRowsForSheet(unsubmitRows);
+    setIsUnsubmitSheetOpen(true);
+  };
+
+  const handleUnsubmitSuccess = () => {
+    setUnsubmitRowsForSheet([]);
+    setSelectedDocumentIds([]);
+    window.location.reload();
   };
 
   const documentWorkStatusCounts = useMemo(
@@ -1994,7 +2041,18 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
               disabled: unreleasedGrades.length === 0,
               onSelect: openReleaseSheet,
             },
+            {
+              id: 'unsubmit',
+              label: 'Unsubmit',
+              count: unsubmitRows.length > 0 ? unsubmitRows.length : undefined,
+              disabled: unsubmitRows.length === 0,
+              onSelect: openUnsubmitSheet,
+            },
           ]}
+          selection={{
+            selectedDocumentIds,
+            onSelectedDocumentIdsChange: setSelectedDocumentIds,
+          }}
           emptyMessageSecondary="Student documents will appear here once work begins"
           testIds={{
             statusChips: 'class-documents-status-chips',
@@ -2563,6 +2621,13 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
         isOpen={isReleaseGradesSheetOpen}
         onClose={() => setIsReleaseGradesSheetOpen(false)}
         onSuccess={handleGradingSuccess}
+      />
+
+      <UnsubmitSubmissionsSheet
+        submissions={unsubmitRowsForSheet}
+        isOpen={isUnsubmitSheetOpen}
+        onClose={() => setIsUnsubmitSheetOpen(false)}
+        onSuccess={handleUnsubmitSuccess}
       />
 
       <StudentGrowthPlansSheet

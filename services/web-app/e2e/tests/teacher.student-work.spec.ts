@@ -554,9 +554,12 @@ test.describe.serial('Teacher Documents page', () => {
     signIn,
   }) => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto('/app/documents');
+    await page.goto('/app/documents?status=graded');
     await page.waitForLoadState('networkidle');
 
+    await page
+      .getByRole('checkbox', { name: 'Select visible documents' })
+      .check();
     const actionsButton = page.getByTestId('teacher-document-work-actions');
     await expect(actionsButton).toBeVisible();
     await expect(actionsButton).toHaveText(/Actions/);

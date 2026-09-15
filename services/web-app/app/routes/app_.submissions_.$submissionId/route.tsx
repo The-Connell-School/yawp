@@ -33,7 +33,16 @@ import {
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
 import { Input } from '~/components/ui/input';
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '~/components/ui/alert-dialog';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '~/components/ui/alert-dialog';
 import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
@@ -237,7 +246,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               label: true,
               members: {
                 where: { removedAt: null },
-                select: { membershipId: true, membership: { select: { userId: true } } },
+                select: {
+                  membershipId: true,
+                  membership: { select: { userId: true } },
+                },
               },
             },
           },
@@ -276,7 +288,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     submission.document.membership?.userId === userId ||
     Boolean(
       submission.document.group?.members.some(
-        (member) => member.membershipId === profile.id || member.membership?.userId === userId
+        (member) =>
+          member.membershipId === profile.id ||
+          member.membership?.userId === userId
       )
     );
 
@@ -405,10 +419,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // receive the queue, and every row is checked against teacher access.
   const gradingQueueScope =
     (isTeacher || isAdmin) && !isOwner
-      ? (parseGradingQueueScope(sanitizeExitTarget(url.searchParams.get('exitTo'))) ??
-          parseGradingQueueScope(submission.document.classAssignment?.class?.id
+      ? (parseGradingQueueScope(
+          sanitizeExitTarget(url.searchParams.get('exitTo'))
+        ) ??
+        parseGradingQueueScope(
+          submission.document.classAssignment?.class?.id
             ? `/app/my-classes/${submission.document.classAssignment.class.id}?tab=documents&status=needs-grading`
-            : '/app/documents?status=needs-grading'))
+            : '/app/documents?status=needs-grading'
+        ))
       : null;
   const gradingQueue =
     gradingQueueScope && profile.organization.gradingQueueNavEnabled === true
@@ -439,7 +457,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         submission.gradingAssistantRuns[0] ?? null
       ),
     },
-    ...(!isOwner && (isTeacher || isAdmin) ? { teacherNote: readTeacherNote(gradingAssistantRuns[0] ?? null) } : {}),
+    ...(!isOwner && (isTeacher || isAdmin)
+      ? { teacherNote: readTeacherNote(gradingAssistantRuns[0] ?? null) }
+      : {}),
     isOwner,
     isTeacher: isTeacher || isAdmin,
     submissionActivityEnabled,
@@ -453,10 +473,14 @@ export default function SubmissionRoute() {
   const loaderData = useLoaderData<typeof loader>();
   // A different paper gets a fresh grading/editor state. Same-paper loader
   // revalidation keeps the current draft until its normal save/reload handling.
-  return <SubmissionDetail key={loaderData.submission.id} loaderData={loaderData} />;
+  return (
+    <SubmissionDetail key={loaderData.submission.id} loaderData={loaderData} />
+  );
 }
 
-function SubmissionDetail({ loaderData }: {
+function SubmissionDetail({
+  loaderData,
+}: {
   loaderData: ReturnType<typeof useLoaderData<typeof loader>>;
 }) {
   const {
@@ -477,17 +501,28 @@ function SubmissionDetail({ loaderData }: {
   const revalidator = useRevalidator();
   const titleFetcher = useFetcher();
   const isGradingOther = isTeacher && !isOwner;
-  const [gradingNavigationState, setGradingNavigationState] = useState({ hasUnsavedChanges: false, isBusy: false });
-  const protectGrading = isGradingOther && gradingQueue !== null && (gradingNavigationState.hasUnsavedChanges || gradingNavigationState.isBusy);
-  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
-    protectGrading && currentLocation.pathname !== nextLocation.pathname
+  const [gradingNavigationState, setGradingNavigationState] = useState({
+    hasUnsavedChanges: false,
+    isBusy: false,
+  });
+  const protectGrading =
+    isGradingOther &&
+    gradingQueue !== null &&
+    (gradingNavigationState.hasUnsavedChanges || gradingNavigationState.isBusy);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      protectGrading && currentLocation.pathname !== nextLocation.pathname
   );
-  useBeforeUnload(useCallback((event) => {
-    if (!protectGrading) return;
-    event.preventDefault();
-    event.returnValue = '';
-  }, [protectGrading]));
-
+  useBeforeUnload(
+    useCallback(
+      (event) => {
+        if (!protectGrading) return;
+        event.preventDefault();
+        event.returnValue = '';
+      },
+      [protectGrading]
+    )
+  );
 
   const [localGradedAt, setLocalGradedAt] = useState<string | null>(null);
   const [localReleasedAt, setLocalReleasedAt] = useState<string | null>(null);
@@ -1281,9 +1316,12 @@ function SubmissionDetail({ loaderData }: {
         </div>
       ) : null}
 
-      <AlertDialog open={blocker.state === 'blocked'} onOpenChange={(open) => {
-        if (!open && blocker.state === 'blocked') blocker.reset();
-      }}>
+      <AlertDialog
+        open={blocker.state === 'blocked'}
+        onOpenChange={(open) => {
+          if (!open && blocker.state === 'blocked') blocker.reset();
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Unsaved grading changes</AlertDialogTitle>
@@ -1294,9 +1332,17 @@ function SubmissionDetail({ loaderData }: {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => blocker.state === 'blocked' && blocker.reset()}>Stay</AlertDialogCancel>
-            <AlertDialogAction disabled={gradingNavigationState.isBusy}
-              onClick={() => blocker.state === 'blocked' && blocker.proceed()}>Discard and continue</AlertDialogAction>
+            <AlertDialogCancel
+              onClick={() => blocker.state === 'blocked' && blocker.reset()}
+            >
+              Stay
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={gradingNavigationState.isBusy}
+              onClick={() => blocker.state === 'blocked' && blocker.proceed()}
+            >
+              Discard and continue
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1320,6 +1366,11 @@ function SubmissionDetail({ loaderData }: {
               submissionForView={submissionForView}
               documentId={submission.documentId}
               submissionId={submission.id}
+              teacherNote={
+                'teacherNote' in loaderData
+                  ? (loaderData.teacherNote ?? null)
+                  : null
+              }
               existingGrade={teacherExistingGrade}
               pointValue={submission.document.assignment?.pointValue}
               grammarIssues={grammarIssues}
@@ -1351,7 +1402,15 @@ function SubmissionDetail({ loaderData }: {
               </div>
             </>
           )}
-          {isGradingOther ? <TeacherNotes note={'teacherNote' in loaderData ? loaderData.teacherNote ?? null : null} /> : null}
+          {!isGradingOther ? (
+            <TeacherNotes
+              note={
+                'teacherNote' in loaderData
+                  ? (loaderData.teacherNote ?? null)
+                  : null
+              }
+            />
+          ) : null}
         </div>
 
         {/* Center: Essay */}
