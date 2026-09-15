@@ -224,7 +224,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               label: true,
               members: {
                 where: { removedAt: null },
-                select: { membershipId: true },
+                select: { membershipId: true, membership: { select: { userId: true } } },
               },
             },
           },
@@ -263,7 +263,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     submission.document.membership?.userId === userId ||
     Boolean(
       submission.document.group?.members.some(
-        (member) => member.membershipId === profile.id
+        (member) => member.membershipId === profile.id || member.membership?.userId === userId
       )
     );
 

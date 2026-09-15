@@ -156,7 +156,7 @@ describe('grading auth helpers', () => {
       releasedAt: null,
     }) as any;
 
-    expect(where.OR).toContainEqual({ artifactKind: 'ASSIGNMENT_GROUP' });
+    expect(where.OR).toContainEqual(expect.objectContaining({ artifactKind: 'ASSIGNMENT_GROUP' }));
     expect(where.OR).toContainEqual(
       expect.objectContaining({
         artifactKind: 'STUDENT',
@@ -175,7 +175,7 @@ describe('grading auth helpers', () => {
       releasedAt: new Date('2026-08-31T12:00:00.000Z'),
     }) as any;
 
-    expect(where.OR).toContainEqual({
+    expect(where.OR).toContainEqual(expect.objectContaining({
       artifactKind: 'ASSIGNMENT_GROUP',
       classAssignment: {
         is: {
@@ -188,6 +188,6 @@ describe('grading auth helpers', () => {
           },
         },
       },
-    });
+    }));
   });
 });

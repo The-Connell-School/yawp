@@ -575,7 +575,7 @@ export async function action({ request }: ActionFunctionArgs) {
         assignmentTypeId: true,
         // Only to tell a group brief from a solo essay when deciding who the
         // feedback is addressed to; see `gradingAddressee`.
-        group: { select: { label: true } },
+        group: { select: { label: true, members: { where: { removedAt: null }, select: { membershipId: true, membership: { select: { userId: true } } } } } },
         assignmentType: {
           select: {
             id: true,
@@ -679,6 +679,8 @@ export async function action({ request }: ActionFunctionArgs) {
       submission.document.membershipId,
       actor.userId,
       submission.document.membership?.userId
+    ) || submission.document.group?.members.some((member) =>
+      member.membershipId === actor.membershipId || member.membership.userId === actor.userId
     )
   ) {
     return dataResponse(
