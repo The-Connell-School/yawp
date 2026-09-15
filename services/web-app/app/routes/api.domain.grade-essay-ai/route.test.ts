@@ -2398,4 +2398,53 @@ describe('api.domain.grade-essay-ai', () => {
       });
     });
   });
+
+  describe('the revised production Daily Pages library rubric', () => {
+    async function gradeRevisedDailyPages(engagementScore: number) {
+      const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
+      const schema = STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!;
+      prisma.assignmentType.findUnique.mockResolvedValue(mockAssignmentType({
+        id: 'daily-pages-production', title: 'Daily Pages', kind: 'daily_pages',
+        rubric: { name: schema.name, schemaJson: schema },
+      }));
+      prisma.submission.findFirst.mockResolvedValue(mockSubmission({
+        id: 'daily-pages-band',
+        document: {
+          ...mockSubmission().document,
+          assignmentTypeId: 'daily-pages-production',
+          assignmentType: { id: 'daily-pages-production', kind: 'daily_pages', title: 'Daily Pages' },
+          assignment: { prompt: 'Describe a place that matters to you.', pointValue: 30 },
+        },
+      }));
+      getLLMCompletion.mockReset();
+      getLLMCompletion.mockResolvedValue(JSON.stringify({
+        categories: [{ key: 'engagement_with_prompt', score: engagementScore }],
+        overallComment: 'Jordan, the kitchen detail brings the memory alive.',
+      }));
+      const form = new FormData();
+      form.append('submissionId', 'daily-pages-band');
+      return action({ request: new Request('https://example.com/api/domain/grade-essay-ai', { method: 'POST', body: form }) } as any);
+    }
+
+    test.each([0, 7, 13, 17, 18, 23, 28, 29, 30])('preserves %i raw points in storage, response and the immutable suggestion', async (score) => {
+      const response = await gradeRevisedDailyPages(score);
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored).toMatchObject({ overallScore: score, score: `${score}/30`, numericPercentage: null, letterGrade: null });
+      expect(stored.rubricScores.engagement_with_prompt.score).toBe(score);
+      const run = prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data;
+      expect(run.assignmentTypeRubricSnapshot.step).toBe(1);
+      expect(run.metadata.output.score).toBe(`${score}/30`);
+      expect((response as any).data.score).toBe(`${score}/30`);
+      const call = getLLMCompletion.mock.calls.find((call: any[]) => call[0]?.metadata?.kind === 'rubric-evaluation')?.[0];
+      expect(call.messages[0].content).toContain('Assignment prompt: Describe a place that matters to you.');
+      expect(getLLMCompletion.mock.calls.filter((call: any[]) => call[0]?.metadata?.kind === 'grammar-issues')).toHaveLength(0);
+    });
+
+    test.each([1, 6, 14, 16, 24, 27])('rejects %i in a gap between authored tiers instead of rounding it', async (score) => {
+      const response = await gradeRevisedDailyPages(score);
+      expect((response as any).init?.status).toBe(502);
+      expect(prisma.submission.update).not.toHaveBeenCalled();
+    });
+  });
+
 });
