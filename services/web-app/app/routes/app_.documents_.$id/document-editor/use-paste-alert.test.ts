@@ -130,10 +130,11 @@ describe('usePasteAlert', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/api/paste-alert');
     const body = JSON.parse(init.body as string);
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       documentId: DOC_ID,
       textLength: 200,
       content: 'x'.repeat(200),
+      eventId: expect.stringMatching(/^paste_[0-9a-f-]{36}$/),
     });
   });
 
@@ -254,6 +255,8 @@ describe('usePasteAlert', () => {
 
     const html = editor!.getHTML();
     expect(html).toContain('data-pasted-source="external"');
+    const body = JSON.parse((fetchMock.mock.calls[0] as any)[1].body);
+    expect(html).toContain(`data-paste-event-id="${body.eventId}"`);
     expect(html).toContain(`>${'x'.repeat(200)}<`);
   });
 
