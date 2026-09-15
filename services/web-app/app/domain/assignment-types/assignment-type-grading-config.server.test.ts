@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { createHash } from 'node:crypto';
+import dailyPagesLibraryJson from '~/domain/rubrics/library/daily-pages-engagement.json';
 
 const prisma = {
   assignmentType: {
@@ -31,7 +33,7 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     const config = await resolveAssignmentTypeGradingConfig({ assignmentTypeId: 'selected-library' });
     expect(config.minScore).toBe(0);
     expect(config.maxScore).toBe(30);
-    expect(config.step).toBe(10);
+    expect(config.step).toBe(1);
     expect(config.rubricCategories.map(category => category.key)).toEqual(['engagement_with_prompt']);
     const invocation = compileGradingAssistantInvocation({ gradingConfig: config, studentFirstName: 'Jordan', strictnessLevel: 'intermediate', documentText: 'Synthetic reflection.' });
     const prompt = invocation.system + invocation.userMessage;
@@ -265,5 +267,47 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     );
     expect(config.sourceTemplateId).toBeNull();
     expect(config.sourceTemplateSlug).toBeNull();
+  });
+});
+
+
+describe('September 14 Daily Pages library revision', () => {
+  test('preserves the authored deployment text exactly and represents every allowed integer band', async () => {
+    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
+    const { isScoreInCategoryBands } = await import('./rubric-category-options');
+    const { parseRubricSchema } = await import('~/domain/rubrics/rubric-schema');
+    const schema = STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!;
+    expect(createHash('sha256').update(schema.promptConfig.gradingInstructions!.trim() + '\n').digest('hex'))
+      .toBe('e0529c37ba362ac810a13129d547ee1654b92382ffbcf87b249d2391f15a4a86');
+    expect(schema.scoringScale).toMatchObject({ minScore: 0, maxScore: 30, step: 1 });
+    const category = schema.rubric.categories[0];
+    expect(category.feedbackEnabled).toBe(false);
+    expect(category.grammarHighlighting).toBe(false);
+    const allowed = Array.from({ length: 31 }, (_, score) => score).filter(score => isScoreInCategoryBands(category, score));
+    expect(allowed).toEqual([0, 7, 8, 9, 10, 11, 12, 13, 17, 18, 19, 20, 21, 22, 23, 28, 29, 30]);
+    expect(parseRubricSchema(dailyPagesLibraryJson)).toEqual(parseRubricSchema(schema));
+  });
+
+  test('sends actual tier bands, overall-only feedback and the assignment prompt to the model', async () => {
+    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
+    const { compileGradingAssistantInvocation } = await import('~/domain/grading/grading-assistant-invocation');
+    const schema = STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!;
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'daily-pages-linked', title: 'Daily Pages', kind: 'daily_pages',
+      rubric: { name: schema.name, schemaJson: schema },
+      gradingAssistantVersion: 6,
+    });
+    const config = await resolveAssignmentTypeGradingConfig({ assignmentTypeId: 'daily-pages-linked' });
+    const invocation = compileGradingAssistantInvocation({
+      gradingConfig: config, studentFirstName: 'Jordan', strictnessLevel: 'intermediate',
+      assignmentPrompt: 'Describe a place that matters to you.', documentText: 'My grandmother’s kitchen.',
+    });
+    expect(invocation.system).toContain('first decide which band');
+    expect(invocation.system).not.toContain('"comment": string');
+    expect(invocation.userMessage).toContain('28-30 ALL IN');
+    expect(invocation.userMessage).toContain('17-23 SHOWED UP');
+    expect(invocation.userMessage).toContain('7-13 HARDLY THERE');
+    expect(invocation.userMessage).toContain('Assignment prompt: Describe a place that matters to you.');
+    expect(invocation.userMessage).toContain('My grandmother’s kitchen.');
   });
 });
