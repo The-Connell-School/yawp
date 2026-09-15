@@ -320,6 +320,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const [rubricConfig, grammarHighlightingEnabled] = await Promise.all([
     resolveRubricConfigForSubmission({
       assignmentTypeId: submission.document.assignmentTypeId,
+      pointValue: submission.document.assignment?.pointValue,
       assignmentId: submission.document.assignment?.id,
       latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
       rubricScores: submission.rubricScores,
