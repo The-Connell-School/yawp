@@ -225,8 +225,11 @@ test.describe('Released grade editing and submission activity', () => {
       await expect(
         activityList.getByText('After release', { exact: true })
       ).toBeVisible();
-      await expect(activityList.getByText('77', { exact: true })).toBeVisible();
-      await expect(activityList.getByText('92', { exact: true })).toBeVisible();
+      const percentageChange = activityList
+        .getByText('Numeric Percentage', { exact: true })
+        .locator('..');
+      await expect(percentageChange).toBeVisible();
+      await expect(percentageChange.locator('pre')).toHaveText(['77', '92']);
       await lingerForQa(page, 3500);
 
       await page.keyboard.press('Escape');
