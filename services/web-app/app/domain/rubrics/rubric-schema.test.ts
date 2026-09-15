@@ -127,7 +127,7 @@ describe('rubric schema', () => {
     expect(dailyPages.scoringScale).toMatchObject({
       minScore: 0,
       maxScore: 30,
-      step: 10,
+      step: 1,
     });
     expect(dailyPages.rubric.categories[0].key).toBe('engagement_with_prompt');
     expect(dailyPages.rubric.categories[0].scoreLabels).toEqual([
@@ -284,9 +284,9 @@ describe('Daily Pages static library rubrics', () => {
     );
   });
 
-  test('leave the Daily Pages rubric production already grades with alone', () => {
+  test('preserves the production Daily Pages identity with integer engagement bands', () => {
     const legacy = byName.get('daily-pages-engagement');
-    expect(legacy?.scoringScale).toMatchObject({ maxScore: 30, step: 10 });
+    expect(legacy?.scoringScale).toMatchObject({ maxScore: 30, step: 1 });
     expect(legacy?.rubric.categories).toHaveLength(1);
   });
 });
