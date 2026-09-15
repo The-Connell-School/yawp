@@ -2503,11 +2503,14 @@ describe('api.domain.grade-essay-ai', () => {
 
 
   describe('private teacher notes', () => {
-    async function gradeWithNote({ enabled = true, response, fallback }: { enabled?: boolean; response: unknown; fallback?: unknown }) {
+    async function gradeWithNote({ enabled = true, response, fallback, managed = false }: { enabled?: boolean; response: unknown; fallback?: unknown; managed?: boolean }) {
       const { STARTER_RUBRICS } = await import('~/domain/rubrics/starter-rubrics');
       const schema = structuredClone(STARTER_RUBRICS.find(r => r.name === 'daily-pages-engagement')!);
       schema.outputSchema.teacherNotesEnabled = enabled;
-      prisma.assignmentType.findUnique.mockResolvedValue(mockAssignmentType({ rubric: { name: schema.name, schemaJson: schema } }));
+      prisma.assignmentType.findUnique.mockResolvedValue(mockAssignmentType({
+        rubric: { name: schema.name, schemaJson: schema },
+        ...(managed ? { gradingPromptConfigJson: { systemMessageTemplate: '{{grading_instructions}}', userMessageTemplate: '{{document}}' } } : {}),
+      }));
       prisma.submission.findFirst.mockResolvedValue(mockSubmission());
       getLLMCompletion.mockReset();
       getLLMCompletion.mockResolvedValueOnce(JSON.stringify(response));
@@ -2561,6 +2564,25 @@ describe('api.domain.grade-essay-ai', () => {
       expect(repair.system).toContain('Never put them in overallComment');
       expect(repair.messages[0].content).toContain('Never mention grammar, spelling, syntax, or organization');
       expect(prisma.submission.update.mock.calls.at(-1)?.[0].data.overallComment).toBe(overallComment);
+    });
+
+    test.each(['missing-feedback', 'schema-repair'] as const)('preserves authored system-template constraints during %s', async (mode) => {
+      const response = mode === 'missing-feedback'
+        ? { categories, teacherNote }
+        : { categories: [{ key: 'engagement_with_prompt', score: 24 }], teacherNote, overallComment };
+      const result = await gradeWithNote({ managed: true, response, fallback: { categories, teacherNote, overallComment } });
+      expect((result as any).data.teacherNote).toBe(teacherNote);
+      const retry = getLLMCompletion.mock.calls[1][0];
+      const retryPrompt = retry.system + retry.messages[0].content;
+      expect(retryPrompt).toContain('Never mention grammar, spelling, syntax, or organization');
+      expect(retryPrompt).toContain('Never evaluate whether the content is correct');
+      expect(retryPrompt).toContain('Feedback is 1–3 warm sentences');
+      expect(retryPrompt).toContain('don’t penalize on suspicion');
+      expect(retry.system).toContain('without supplied comparison writing');
+      if (mode === 'missing-feedback') {
+        expect(retryPrompt).not.toContain(teacherNote);
+        expect(retry.system).not.toContain('"teacherNote":');
+      }
     });
 
     test('an empty new note clears the prior suggestion instead of retaining an old observation', async () => {
