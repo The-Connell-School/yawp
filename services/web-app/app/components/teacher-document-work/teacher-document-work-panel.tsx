@@ -1222,13 +1222,14 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
 
   return (
     <section className="space-y-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0 lg:flex-1">
-          <DocumentWorkStatusPills {...props} />
-        </div>
-        <div className="flex shrink-0 flex-nowrap items-center gap-2">
+      <DocumentWorkStatusPills {...props} />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-h-9">
           {props.selectedDocumentCount ? (
-            <div className="inline-flex h-9 items-center gap-2 rounded-full border bg-background px-3 text-sm text-muted-foreground">
+            <div
+              className="inline-flex h-9 items-center gap-2 rounded-full border bg-background px-3 text-sm text-muted-foreground"
+              data-testid="teacher-document-work-selection-summary"
+            >
               <span className="tabular-nums">
                 {props.selectedDocumentCount} selected
               </span>
@@ -1241,6 +1242,8 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
               </button>
             </div>
           ) : null}
+        </div>
+        <div className="flex shrink-0 flex-nowrap items-center justify-end gap-2">
           <DocumentWorkActionsMenu actions={props.actions} />
           <Popover>
             <PopoverTrigger asChild>

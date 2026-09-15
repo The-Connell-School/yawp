@@ -564,6 +564,20 @@ test.describe.serial('Teacher Documents page', () => {
     await expect(actionsButton).toBeVisible();
     await expect(actionsButton).toHaveText(/Actions/);
     await expect(actionsButton.locator('.lucide-chevron-down')).toBeVisible();
+    const selectionSummary = page.getByTestId(
+      'teacher-document-work-selection-summary'
+    );
+    await expect(selectionSummary).toHaveText(/1 selected/);
+
+    const statusBox = await page
+      .getByTestId('student-work-status-chips')
+      .boundingBox();
+    const selectionBox = await selectionSummary.boundingBox();
+    expect(statusBox).not.toBeNull();
+    expect(selectionBox).not.toBeNull();
+    expect(statusBox!.y + statusBox!.height).toBeLessThanOrEqual(
+      selectionBox!.y
+    );
 
     await actionsButton.click();
     const releaseGradesAction = page.getByRole('menuitem', {
