@@ -36,3 +36,5 @@ Bryant authorized confirmed meeting implementation and release and resumed it Se
 - Teacher paste reports measure surviving marked characters against actual current/frozen visible text, count each character once, and explain incomplete historical tracking. They do not infer misconduct. Comments remain available. Private teacher notes remain excluded from student payloads and owner access across memberships.
 
 Navigation stays off by default until scoped rollout is resolved. This declaration does not grant production-QA tenant attestation, Internal proof exception, live rubric activation, customer-data access or permission to send invitations. All unresolved approval gates remain binding.
+
+Released-grade activity browser checks likewise assert exact earned/possible totals for teacher and student displays on the seeded 100-point assignment. Raw numericPercentage database/audit assertions, comment confidentiality, and stale-revision protection remain unchanged.

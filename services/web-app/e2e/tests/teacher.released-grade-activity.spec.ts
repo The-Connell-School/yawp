@@ -210,7 +210,7 @@ test.describe('Released grade editing and submission activity', () => {
 
       await page.reload();
       await page.waitForLoadState('networkidle');
-      await expect(panel.getByText('92%').first()).toBeVisible();
+      await expect(panel.getByText('92 / 100', { exact: true }).first()).toBeVisible();
       await expect(
         panel.getByText('Excellent revision after release.')
       ).toBeVisible();
@@ -336,7 +336,7 @@ test.describe('Released grade editing and submission activity', () => {
       await page.goto(`/app/submissions/${submission.id}?edit=1`);
       await page.waitForLoadState('networkidle');
       await expect(page).toHaveURL(`/app/submissions/${submission.id}`);
-      await expect(page.getByText(/92%/).first()).toBeVisible();
+      await expect(page.getByText('92 / 100', { exact: true }).first()).toBeVisible();
       await expect(
         page.getByText('Excellent revision after release.')
       ).toBeVisible();
@@ -435,7 +435,7 @@ test.describe('Released grade editing and submission activity', () => {
       await firstPanel.getByTestId('submission-lifecycle-edit').click();
       await page.getByTestId('grading-overall-percentage').fill('82');
       await firstPanel.getByTestId('submission-lifecycle-save').click();
-      await expect(firstPanel.getByText(/82%/).first()).toBeVisible({
+      await expect(firstPanel.getByText('82 / 100', { exact: true }).first()).toBeVisible({
         timeout: 15000,
       });
 
@@ -446,7 +446,7 @@ test.describe('Released grade editing and submission activity', () => {
       await secondPanel.getByTestId('submission-lifecycle-edit').click();
       await secondPage.getByTestId('grading-overall-percentage').fill('93');
       await secondPanel.getByTestId('submission-lifecycle-save').click();
-      await expect(secondPanel.getByText(/93%/).first()).toBeVisible({
+      await expect(secondPanel.getByText('93 / 100', { exact: true }).first()).toBeVisible({
         timeout: 15000,
       });
 
@@ -465,7 +465,7 @@ test.describe('Released grade editing and submission activity', () => {
           return row.title;
         })
         .toBe(`Revalidated grade revision ${suffix}`);
-      await expect(firstPanel.getByText(/93%/).first()).toBeVisible({
+      await expect(firstPanel.getByText('93 / 100', { exact: true }).first()).toBeVisible({
         timeout: 15000,
       });
 
