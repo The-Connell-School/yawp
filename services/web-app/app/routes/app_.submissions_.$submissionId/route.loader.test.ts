@@ -469,4 +469,45 @@ describe('submission loader — unsubmitted redirect', () => {
     ).toEqual({ organizationId: 'org-2' });
     expect(prisma.submissionActivity.findMany).not.toHaveBeenCalled();
   });
+
+  test.each([
+    { role: 'STUDENT', user: 'user-student', member: STUDENT_MEMBERSHIP_ID, admin: false, released: false, allowed: false },
+    { role: 'STUDENT', user: 'user-student', member: STUDENT_MEMBERSHIP_ID, admin: false, released: true, allowed: false },
+    { role: 'TEACHER', user: 'user-student', member: STUDENT_MEMBERSHIP_ID, admin: true, released: true, allowed: false },
+    { role: 'TEACHER', user: 'user-teacher', member: TEACHER_MEMBERSHIP_ID, admin: false, released: false, allowed: true },
+    { role: 'TEACHER', user: 'user-teacher', member: TEACHER_MEMBERSHIP_ID, admin: false, released: true, allowed: true },
+    { role: 'TEACHER', user: 'user-admin', member: 'admin', admin: true, released: true, allowed: true },
+    { role: 'TEACHER', user: 'unrelated', member: 'unrelated', admin: false, released: true, allowed: false },
+  ])('keeps private teacher notes scoped for $role / $user / released=$released', async ({ role, user, member, admin, released, allowed }) => {
+    requireUserId.mockResolvedValue(user);
+    requireMembership.mockResolvedValue(membership(member, role as 'STUDENT' | 'TEACHER'));
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: admin });
+    const submission = buildSubmission() as any;
+    submission.releasedAt = released ? new Date() : null;
+    submission.gradingAssistantRuns = [{ status: 'succeeded', source: 'assignment-type', metadata: { teacherNote: 'PRIVATE_OBSERVATION: vocabulary shifts in the final paragraph.', output: { rubricScores: { engagement: { score: 18 } }, overallComment: 'Warm public feedback.' } } }];
+    prisma.submission.findFirst.mockResolvedValue(submission);
+    const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
+    expect(result.submission.gradingAssistantRuns).toBeUndefined();
+    expect(JSON.stringify(result.submission)).not.toContain('PRIVATE_OBSERVATION');
+    if (allowed) expect(result.teacherNote).toContain('PRIVATE_OBSERVATION');
+    else {
+      expect(result).not.toHaveProperty('teacherNote');
+      expect(JSON.stringify(result)).not.toContain('PRIVATE_OBSERVATION');
+    }
+  });
+
+  test('group-owner and cross-organization viewers receive no private note', async () => {
+    for (const groupOwner of [true, false]) {
+      requireUserId.mockResolvedValue('other-user');
+      requireMembership.mockResolvedValue(membership(TEACHER_MEMBERSHIP_ID, 'TEACHER', groupOwner ? 'org-1' : 'org-2'));
+      const submission = buildSubmission() as any;
+      if (groupOwner) submission.document.group = { id: 'group', members: [{ membershipId: TEACHER_MEMBERSHIP_ID }] };
+      submission.gradingAssistantRuns = [{ status: 'succeeded', metadata: { teacherNote: 'PRIVATE_OBSERVATION' } }];
+      prisma.submission.findFirst.mockResolvedValue(submission);
+      const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
+      expect(JSON.stringify(result)).not.toContain('PRIVATE_OBSERVATION');
+      expect(result).not.toHaveProperty('teacherNote');
+    }
+  });
+
 });

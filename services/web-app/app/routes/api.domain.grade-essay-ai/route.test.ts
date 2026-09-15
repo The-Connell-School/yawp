@@ -2447,4 +2447,61 @@ describe('api.domain.grade-essay-ai', () => {
     });
   });
 
+
+  describe('private teacher notes', () => {
+    async function gradeWithNote({ enabled = true, response, fallback }: { enabled?: boolean; response: unknown; fallback?: unknown }) {
+      const { STARTER_RUBRICS } = await import('~/domain/rubrics/starter-rubrics');
+      const schema = structuredClone(STARTER_RUBRICS.find(r => r.name === 'daily-pages-engagement')!);
+      schema.outputSchema.teacherNotesEnabled = enabled;
+      prisma.assignmentType.findUnique.mockResolvedValue(mockAssignmentType({ rubric: { name: schema.name, schemaJson: schema } }));
+      prisma.submission.findFirst.mockResolvedValue(mockSubmission());
+      getLLMCompletion.mockReset();
+      getLLMCompletion.mockResolvedValueOnce(JSON.stringify(response));
+      if (fallback) getLLMCompletion.mockResolvedValueOnce(JSON.stringify(fallback));
+      const form = new FormData(); form.append('submissionId', 'sub-1');
+      return action({ request: new Request('https://example.com/api/domain/grade-essay-ai', { method: 'POST', body: form }) } as any);
+    }
+    const categories = [{ key: 'engagement_with_prompt', score: 18 }];
+    const teacherNote = 'The final paragraph shifts from short sentences to specialized vocabulary.';
+    const overallComment = 'Jordan, your kitchen detail makes the memory vivid.';
+
+    test('stores a separate private observation without score penalty or public feedback contamination', async () => {
+      const result = await gradeWithNote({ response: { categories, teacherNote, overallComment } });
+      expect((result as any).data.teacherNote).toBe(teacherNote);
+      const grade = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(grade.score).toBe('18/30');
+      expect(JSON.stringify(grade)).not.toContain(teacherNote);
+      const run = prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data;
+      expect(run.metadata.teacherNote).toBe(teacherNote);
+      expect(JSON.stringify(run.metadata.output)).not.toContain(teacherNote);
+      const call = getLLMCompletion.mock.calls[0][0];
+      expect(call.system).toContain('"teacherNote"');
+      expect(call.system).toContain('Never put private observations in overallComment');
+      expect(call.system).toContain('Do not infer AI authorship');
+    });
+
+    test('ignores unsolicited notes from rubrics that have not opted in', async () => {
+      const result = await gradeWithNote({ enabled: false, response: { categories, teacherNote, overallComment } });
+      expect((result as any).data).not.toHaveProperty('teacherNote');
+      expect(prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data.metadata).not.toHaveProperty('teacherNote');
+      expect(getLLMCompletion.mock.calls[0][0].system).not.toContain('"teacherNote"');
+    });
+
+    test('retains the separate note while generating missing student feedback with the authored constraints', async () => {
+      const result = await gradeWithNote({ response: { categories, teacherNote }, fallback: { overallComment } });
+      expect((result as any).data.teacherNote).toBe(teacherNote);
+      expect((result as any).data.overallComment).toBe(overallComment);
+      const fallbackCall = getLLMCompletion.mock.calls[1][0];
+      expect(fallbackCall.system).toContain('Do not include private observations');
+      expect(fallbackCall.messages[0].content).toContain('Never mention grammar, spelling, syntax, or organization');
+      expect(fallbackCall.messages[0].content).not.toContain(teacherNote);
+    });
+
+    test('an empty new note clears the prior suggestion instead of retaining an old observation', async () => {
+      const result = await gradeWithNote({ response: { categories, overallComment, teacherNote: '   ' } });
+      expect((result as any).data.teacherNote).toBeNull();
+      expect(prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data.metadata.teacherNote).toBeNull();
+    });
+  });
+
 });

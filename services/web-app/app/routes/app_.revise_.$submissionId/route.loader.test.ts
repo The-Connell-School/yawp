@@ -321,4 +321,12 @@ describe('revise loader', () => {
     expect(redirect.to).toBe('/app');
     expect(redirect.payload.description).toBe('Submission not found.');
   });
+
+  test('never serializes private grading-run metadata on the student revision surface', async () => {
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission({ gradingAssistantRuns: [{ status: 'succeeded', metadata: { teacherNote: 'PRIVATE_REVISION_OBSERVATION' } }] }));
+    const result = await call();
+    expect(result.submission.gradingAssistantRuns).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_REVISION_OBSERVATION');
+  });
+
 });
