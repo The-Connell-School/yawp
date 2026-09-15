@@ -136,6 +136,14 @@ describe('revise loader', () => {
     prisma.submission.findFirst.mockResolvedValue(buildSubmission());
   });
 
+  test('passes the assignment pin and total to the no-snapshot revision rubric', async () => {
+    const submission = buildSubmission() as any;
+    submission.document.assignment = { id: 'pinned-daily', pointValue: 90 };
+    prisma.submission.findFirst.mockResolvedValue(submission);
+    await call();
+    expect(resolveRubricConfigForSubmission).toHaveBeenCalledWith(expect.objectContaining({ assignmentId: 'pinned-daily', pointValue: 90, latestGradingRun: null }));
+  });
+
   test('serves the split screen to the owner of a released submission', async () => {
     const result = await call();
 

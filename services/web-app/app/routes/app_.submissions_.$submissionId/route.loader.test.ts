@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   user: { findUnique: mock() },
+  assignment: { findUnique: mock() },
   submission: { findFirst: mock() },
   submissionActivity: { findMany: mock() },
   assignmentType: { findUnique: mock() },
@@ -134,6 +135,20 @@ describe('submission loader — unsubmitted redirect', () => {
 
   // Only a student author can set Submission.unsubmittedAt: the solo owner or
   // an active group member. The endpoint still refuses teachers and admins.
+  test('shows the effective 90-point rubric before the first grading run', async () => {
+    const { default: authored } = await import('~/domain/rubrics/library/daily-pages-engagement.json');
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue(membership(TEACHER_MEMBERSHIP_ID, 'TEACHER'));
+    const submission = buildSubmission() as any;
+    submission.document.assignment = { id: 'fresh-daily', pointValue: 90 };
+    prisma.submission.findFirst.mockResolvedValue(submission);
+    prisma.assignment.findUnique.mockResolvedValue({ assignmentTypeId: 'at-1', rubricRevision: { version: 7, rubricName: authored.name, schemaJson: authored } });
+    prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1', title: 'Daily Pages', kind: 'daily_pages', rubric: { name: authored.name, schemaJson: authored } });
+    const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
+    expect(result.rubricConfig.maxScore).toBe(90);
+    expect(result.rubricConfig.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual([[0, 0], [21, 39], [51, 69], [84, 90]]);
+  });
+
   test('tells the student they unsubmitted it themselves', async () => {
     requireMembership.mockResolvedValue(
       membership(STUDENT_MEMBERSHIP_ID, 'STUDENT')

@@ -421,6 +421,7 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "daily-pages-scaling-unit") {
     runWebApp("daily-pages-scaling-route", ["test", "app/routes/api.domain.grade-essay-ai/route.test.ts", "--test-name-pattern", "revised production Daily Pages"]);
     runWebApp("daily-pages-scaling-config", ["test", "app/domain/assignment-types/daily-pages-assignment-points.test.ts", "app/domain/assignment-types/assignment-type-grading-config.server.test.ts"]);
+    runWebApp("daily-pages-scaling-display", ["test", "app/routes/app_.submissions_.$submissionId/submission-rubric-config.server.test.ts", "app/routes/app_.submissions_.$submissionId/route.loader.test.ts", "app/routes/app_.revise_.$submissionId/route.loader.test.ts"]);
   }
   else if (chosen === "private-notes-unit") {
     runWebApp("private-notes-generation", ["test", "app/routes/api.domain.grade-essay-ai/route.test.ts", "--test-name-pattern", "private teacher notes|revised production Daily Pages|refuses AI grading for a group owner"]);
