@@ -20,6 +20,7 @@ import {
 import { gradingAddressee } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { scaleDailyPagesForAssignment } from '~/domain/assignment-types/daily-pages-assignment-points';
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   isGrammarHighlightCategory,
@@ -588,6 +589,7 @@ export async function action({ request }: ActionFunctionArgs) {
             gradingAssistantStrictnessLevel: true,
             apHistorySnapshot: true,
             prompt: true,
+            pointValue: true,
           },
         },
         classAssignment: {
@@ -724,12 +726,15 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
-    assignmentTypeId: submission.document.assignmentTypeId,
-    assignmentId: submission.document.assignment?.id,
-    assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-    assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
-  });
+  const resolvedGradingConfig = scaleDailyPagesForAssignment(
+    await resolveAssignmentTypeGradingConfig({
+      assignmentTypeId: submission.document.assignmentTypeId,
+      assignmentId: submission.document.assignment?.id,
+      assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+      assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
+    }),
+    submission.document.assignment?.pointValue,
+  );
   const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
     ? parseGradingAssistantStrictnessLevel(data.gradingAssistantStrictnessLevel)
     : null;
