@@ -64,6 +64,7 @@ import {
   countTeacherDocumentWorkStatuses,
   type TeacherDocumentWorkRow,
 } from '~/utils/teacher-document-work-utils';
+import { serializeGradingQueueSort } from '~/domain/grading/grading-queue';
 import {
   assignmentMatchesClassFilters,
   dedupeFilterOptionsById,
@@ -400,6 +401,7 @@ export function TeacherDocumentWorkPanel({
       const detailLink = getTeacherDocumentWorkDetailLink({
         document,
         exitTo,
+        queueSort: sort ? serializeGradingQueueSort(sort) : null,
       });
       const rowClasses = compactRows ? DOCUMENT_TABLE_ROW_CLASSES : null;
 

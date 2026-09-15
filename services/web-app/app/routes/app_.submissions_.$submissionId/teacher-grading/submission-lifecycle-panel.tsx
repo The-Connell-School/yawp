@@ -225,6 +225,7 @@ export function SubmissionLifecyclePanel({
   submissionActivityEnabled = false,
   submissionId,
   documentId,
+  onNavigationStateChange,
   ...teacherGradingPanelProps
 }: {
   lifecycleState: SubmissionLifecycleState;
@@ -239,6 +240,7 @@ export function SubmissionLifecyclePanel({
   submissionActivityEnabled?: boolean;
   submissionId: string;
   documentId: string;
+  onNavigationStateChange?: (state: { hasUnsavedChanges: boolean; isBusy: boolean }) => void;
 } & ComponentProps<typeof TeacherGradingPanel>) {
   const isWithdrawn =
     (submissionForView as any)?.unsubmittedAt != null;
@@ -261,6 +263,15 @@ export function SubmissionLifecyclePanel({
   const [isGradingAssistantPending, setIsGradingAssistantPending] =
     useState(false);
   const wasGeneratingRef = useRef(false);
+
+  useEffect(() => {
+    onNavigationStateChange?.({
+      hasUnsavedChanges: showEditingForm && headerState?.hasUnsavedChanges === true,
+      isBusy: isSavingGrade || isReleasing || headerState?.isBusy === true,
+    });
+  }, [onNavigationStateChange, showEditingForm, headerState?.hasUnsavedChanges, headerState?.isBusy, isSavingGrade, isReleasing]);
+  useEffect(() => () => onNavigationStateChange?.({ hasUnsavedChanges: false, isBusy: false }), [onNavigationStateChange]);
+
 
   useEffect(() => {
     if (!showEditingForm) {

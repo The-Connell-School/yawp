@@ -96,11 +96,21 @@ export function getDraftDisplayTitle(document: {
 export function getTeacherDocumentWorkDetailLink(params: {
   document: TeacherDocumentWorkRow;
   exitTo: string;
+  /**
+   * The list's current column sort, serialized as `field:direction`. The
+   * grading view replays it so its prev/next student arrows walk the stack in
+   * the same order the teacher is looking at here. Filters already travel in
+   * `exitTo`; the sort lives in component state, so it has to be passed along.
+   */
+  queueSort?: string | null;
 }) {
   const encodedExitTo = encodeURIComponent(params.exitTo);
 
   if (params.document.latestSubmission?.id) {
-    return `/app/submissions/${params.document.latestSubmission.id}?edit=1&exitTo=${encodedExitTo}`;
+    const queueSort = params.queueSort
+      ? `&queueSort=${encodeURIComponent(params.queueSort)}`
+      : '';
+    return `/app/submissions/${params.document.latestSubmission.id}?edit=1&exitTo=${encodedExitTo}${queueSort}`;
   }
 
   if (params.document.group) {

@@ -26,7 +26,9 @@ type DocOptions = {
 function doc(options: DocOptions): TeacherDocumentWorkRow {
   const membershipId = options.membershipId ?? `m-${options.id}`;
   const submissionId =
-    options.submissionId === undefined ? `sub-${options.id}` : options.submissionId;
+    options.submissionId === undefined
+      ? `sub-${options.id}`
+      : options.submissionId;
   const submission = submissionId
     ? {
         id: submissionId,
@@ -59,7 +61,12 @@ function doc(options: DocOptions): TeacherDocumentWorkRow {
     },
     group: null,
     assignment: options.assignmentId
-      ? { id: options.assignmentId, title: 'Narrative', submitForGrade: true, pointValue: 100 }
+      ? {
+          id: options.assignmentId,
+          title: 'Narrative',
+          submitForGrade: true,
+          pointValue: 100,
+        }
       : null,
     resolvedClass:
       options.classId === null
@@ -126,16 +133,18 @@ describe('parseGradingQueueScope', () => {
     expect(parseGradingQueueScope('')).toBeNull();
     expect(parseGradingQueueScope('/app')).toBeNull();
     expect(parseGradingQueueScope('/app/my-documents')).toBeNull();
-    expect(parseGradingQueueScope('https://evil.test/app/documents')).toBeNull();
+    expect(
+      parseGradingQueueScope('https://evil.test/app/documents')
+    ).toBeNull();
     expect(parseGradingQueueScope('//evil.test/app/documents')).toBeNull();
   });
 });
 
 describe('grading queue sort round-trip', () => {
   test('serializes and parses', () => {
-    expect(serializeGradingQueueSort({ field: 'student', direction: 'asc' })).toBe(
-      'student:asc'
-    );
+    expect(
+      serializeGradingQueueSort({ field: 'student', direction: 'asc' })
+    ).toBe('student:asc');
     expect(parseGradingQueueSort('student:asc')).toEqual({
       field: 'student',
       direction: 'asc',
@@ -151,9 +160,21 @@ describe('grading queue sort round-trip', () => {
 
 describe('buildGradingQueue', () => {
   const documents = [
-    doc({ id: 'd1', studentName: 'Ana Reyes', updatedAt: '2026-08-03T00:00:00Z' }),
-    doc({ id: 'd2', studentName: 'Ben Cole', updatedAt: '2026-08-02T00:00:00Z' }),
-    doc({ id: 'd3', studentName: 'Cara Diaz', updatedAt: '2026-08-01T00:00:00Z' }),
+    doc({
+      id: 'd1',
+      studentName: 'Ana Reyes',
+      updatedAt: '2026-08-03T00:00:00Z',
+    }),
+    doc({
+      id: 'd2',
+      studentName: 'Ben Cole',
+      updatedAt: '2026-08-02T00:00:00Z',
+    }),
+    doc({
+      id: 'd3',
+      studentName: 'Cara Diaz',
+      updatedAt: '2026-08-01T00:00:00Z',
+    }),
   ];
 
   test('orders the queue by the list sort', () => {
@@ -186,7 +207,10 @@ describe('buildGradingQueue', () => {
 
   test('drops drafts that have nothing submitted to grade', () => {
     const queue = buildGradingQueue({
-      documents: [...documents, doc({ id: 'd4', studentName: 'Dev Patel', submissionId: null })],
+      documents: [
+        ...documents,
+        doc({ id: 'd4', studentName: 'Dev Patel', submissionId: null }),
+      ],
       scope: parseGradingQueueScope('/app/documents')!,
     });
 
@@ -197,7 +221,11 @@ describe('buildGradingQueue', () => {
     const queue = buildGradingQueue({
       documents: [
         doc({ id: 'd1', studentName: 'Ana Reyes' }),
-        doc({ id: 'd2', studentName: 'Ben Cole', releasedAt: '2026-08-05T00:00:00Z' }),
+        doc({
+          id: 'd2',
+          studentName: 'Ben Cole',
+          releasedAt: '2026-08-05T00:00:00Z',
+        }),
       ],
       scope: parseGradingQueueScope('/app/documents?status=needs-grading')!,
     });
@@ -207,9 +235,24 @@ describe('buildGradingQueue', () => {
 
   test('honours class, assignment and free-text filters', () => {
     const pool = [
-      doc({ id: 'd1', studentName: 'Ana Reyes', classId: 'class-1', assignmentId: 'a-1' }),
-      doc({ id: 'd2', studentName: 'Ben Cole', classId: 'class-2', assignmentId: 'a-1' }),
-      doc({ id: 'd3', studentName: 'Cara Diaz', classId: 'class-1', assignmentId: 'a-2' }),
+      doc({
+        id: 'd1',
+        studentName: 'Ana Reyes',
+        classId: 'class-1',
+        assignmentId: 'a-1',
+      }),
+      doc({
+        id: 'd2',
+        studentName: 'Ben Cole',
+        classId: 'class-2',
+        assignmentId: 'a-1',
+      }),
+      doc({
+        id: 'd3',
+        studentName: 'Cara Diaz',
+        classId: 'class-1',
+        assignmentId: 'a-2',
+      }),
     ];
 
     expect(
@@ -239,14 +282,22 @@ describe('buildGradingQueue', () => {
     // Ben's grade must not strand them with no way to reach Cara.
     const queue = buildGradingQueue({
       documents: [
-        doc({ id: 'd1', studentName: 'Ana Reyes', updatedAt: '2026-08-03T00:00:00Z' }),
+        doc({
+          id: 'd1',
+          studentName: 'Ana Reyes',
+          updatedAt: '2026-08-03T00:00:00Z',
+        }),
         doc({
           id: 'd2',
           studentName: 'Ben Cole',
           updatedAt: '2026-08-02T00:00:00Z',
           releasedAt: '2026-08-06T00:00:00Z',
         }),
-        doc({ id: 'd3', studentName: 'Cara Diaz', updatedAt: '2026-08-01T00:00:00Z' }),
+        doc({
+          id: 'd3',
+          studentName: 'Cara Diaz',
+          updatedAt: '2026-08-01T00:00:00Z',
+        }),
       ],
       scope: parseGradingQueueScope('/app/documents?status=needs-grading')!,
       pinnedSubmissionId: 'sub-d2',
@@ -277,15 +328,30 @@ describe('buildGradingQueue', () => {
 describe('resolveGradingQueueNeighbors', () => {
   const queue = buildGradingQueue({
     documents: [
-      doc({ id: 'd1', studentName: 'Ana Reyes', updatedAt: '2026-08-03T00:00:00Z' }),
-      doc({ id: 'd2', studentName: 'Ben Cole', updatedAt: '2026-08-02T00:00:00Z' }),
-      doc({ id: 'd3', studentName: 'Cara Diaz', updatedAt: '2026-08-01T00:00:00Z' }),
+      doc({
+        id: 'd1',
+        studentName: 'Ana Reyes',
+        updatedAt: '2026-08-03T00:00:00Z',
+      }),
+      doc({
+        id: 'd2',
+        studentName: 'Ben Cole',
+        updatedAt: '2026-08-02T00:00:00Z',
+      }),
+      doc({
+        id: 'd3',
+        studentName: 'Cara Diaz',
+        updatedAt: '2026-08-01T00:00:00Z',
+      }),
     ],
     scope: parseGradingQueueScope('/app/documents')!,
   });
 
   test('reports both neighbours and the teacher position in the stack', () => {
-    const middle = resolveGradingQueueNeighbors({ queue, submissionId: 'sub-d2' });
+    const middle = resolveGradingQueueNeighbors({
+      queue,
+      submissionId: 'sub-d2',
+    });
 
     expect(middle?.previous?.studentName).toBe('Ana Reyes');
     expect(middle?.next?.studentName).toBe('Cara Diaz');
@@ -337,29 +403,52 @@ describe('buildGradingQueueHref', () => {
   });
 });
 
-
 describe('meeting ungraded dropdown requirements', () => {
   const scope = parseGradingQueueScope('/app/documents')!;
   test('lists ungraded documents only, preserving multiple papers for one student', () => {
-    const queue = buildGradingQueue({ scope, documents: [
-      doc({ id: 'a1', studentName: 'Ana', title: 'First paper' }),
-      doc({ id: 'a2', studentName: 'Ana', title: 'Second paper' }),
-      doc({ id: 'graded', studentName: 'Ben', gradedAt: '2026-09-15T10:00:00Z' }),
-      doc({ id: 'released', studentName: 'Cara', releasedAt: '2026-09-15T10:00:00Z' }),
-      doc({ id: 'draft', studentName: 'Dee', submissionId: null }),
-    ] });
-    expect(queue.map((entry) => entry.submissionId)).toEqual(['sub-a1', 'sub-a2']);
+    const queue = buildGradingQueue({
+      scope,
+      documents: [
+        doc({ id: 'a1', studentName: 'Ana', title: 'First paper' }),
+        doc({ id: 'a2', studentName: 'Ana', title: 'Second paper' }),
+        doc({
+          id: 'graded',
+          studentName: 'Ben',
+          gradedAt: '2026-09-15T10:00:00Z',
+        }),
+        doc({
+          id: 'released',
+          studentName: 'Cara',
+          releasedAt: '2026-09-15T10:00:00Z',
+        }),
+        doc({ id: 'draft', studentName: 'Dee', submissionId: null }),
+      ],
+    });
+    expect(queue.map((entry) => entry.submissionId)).toEqual([
+      'sub-a1',
+      'sub-a2',
+    ]);
   });
   test('keeps the current graded paper in its original ungraded status-sort position', () => {
-    const queue = buildGradingQueue({ scope, pinnedSubmissionId: 'sub-a', sort: { field: 'status', direction: 'asc' }, documents: [
-      doc({ id: 'a', studentName: 'Ana', gradedAt: '2026-09-15T10:00:00Z' }),
-      doc({ id: 'b', studentName: 'Ben' }),
-    ] });
-    expect(queue.map((entry) => entry.submissionId)).toEqual(['sub-a', 'sub-b']);
+    const queue = buildGradingQueue({
+      scope,
+      pinnedSubmissionId: 'sub-a',
+      sort: { field: 'status', direction: 'asc' },
+      documents: [
+        doc({ id: 'a', studentName: 'Ana', gradedAt: '2026-09-15T10:00:00Z' }),
+        doc({ id: 'b', studentName: 'Ben' }),
+      ],
+    });
+    expect(queue.map((entry) => entry.submissionId)).toEqual([
+      'sub-a',
+      'sub-b',
+    ]);
     expect(queue[0].status).toBe('graded');
   });
   test('recognizes a class assignment detail origin', () => {
-    const result = parseGradingQueueScope('/app/my-classes/class-7/assignments/assignment-9');
+    const result = parseGradingQueueScope(
+      '/app/my-classes/class-7/assignments/assignment-9'
+    );
     expect(result?.classId).toBe('class-7');
     expect(result?.filters.assignmentIds).toEqual(['assignment-9']);
   });
