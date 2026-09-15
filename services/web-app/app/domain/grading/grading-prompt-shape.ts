@@ -1,3 +1,4 @@
+import { TEACHER_NOTES_EVIDENCE_RULE } from './teacher-notes';
 import type { RubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   isBandScoredRubric,
@@ -150,6 +151,7 @@ export function buildGradingPromptShape({
     judgmentRule,
     feedbackRule,
     ...(teacherNotesEnabled ? [
+      TEACHER_NOTES_EVIDENCE_RULE,
       'teacherNote is private to the teacher. Use only observations explicitly requested in the grading instructions; return null when there is no observation.',
       'Never put private observations in overallComment or category comments. Do not infer AI authorship, give an AI probability, or make an accusation. Do not reduce a score on suspicion.',
     ] : []),
