@@ -1,7 +1,7 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
-import dailyPagesSchema from '../../app/domain/rubrics/library/daily-pages-engagement.json';
+import dailyPagesSchema from '../../app/domain/rubrics/library/daily-pages-engagement.json' with { type: 'json' };
 import { randomUUID } from 'node:crypto';
 
 const pointsRubric = {
