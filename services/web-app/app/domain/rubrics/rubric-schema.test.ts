@@ -121,8 +121,8 @@ describe('rubric schema', () => {
       thesis.rubric.categories.every((category) => category.bands === undefined)
     ).toBe(true);
 
-    // Production scores Daily Pages out of 30 in steps of ten, which is not
-    // what the built-in Daily Pages default does.
+    // The production-library Daily Pages revision keeps its 30-point identity
+    // and admits integer scores inside engagement bands.
     const dailyPages = STARTER_RUBRICS[1];
     expect(dailyPages.scoringScale).toMatchObject({
       minScore: 0,
