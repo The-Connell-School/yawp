@@ -1085,17 +1085,27 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     }
   }
 
+  // Retry prompts must retain authored constraints even when a managed
+  // template placed them only in its system message. Keep this separate from
+  // any model output, particularly the private note.
+  const authoredGradingConstraints = [
+    resolvedGradingConfig.instructions.systemInstructions,
+    ...(resolvedGradingConfig.instructions.mode === 'unified'
+      ? [resolvedGradingConfig.instructions.gradingInstructions]
+      : [resolvedGradingConfig.instructions.rubricInstructions, resolvedGradingConfig.instructions.scoreInstructions]),
+  ].filter(Boolean).join('\n\n');
+
   const buildAiResponseFromCategories = async (
     categories: z.infer<typeof AiCategoriesSchema>,
     teacherNote: string | null
   ) => {
     const overallCommentResponseText = await getGradingLlmCompletion({
       model,
-      system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${studentFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.\n- Do not include private observations, notes for the teacher, or speculation about authorship. Write only student feedback and obey the supplied grading constraints.`,
+      system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${studentFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.\n- Do not include private observations, notes for the teacher, or speculation about authorship. Write only student feedback and obey the supplied grading constraints.\n- ${TEACHER_NOTES_EVIDENCE_RULE}`,
       messages: [
         {
           role: 'user',
-          content: `${compiledInvocation.userMessage}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
+          content: `Authored grading constraints:\n${authoredGradingConstraints}\n\n${compiledInvocation.userMessage}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
         },
       ],
       maxTokens: 300,
@@ -1155,7 +1165,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       messages: [
         {
           role: 'user',
-          content: `Grading constraints:\n${compiledInvocation.userMessage}\n\nOriginal grading response:\n${rawResponseText}`,
+          content: `Authored grading constraints:\n${authoredGradingConstraints}\n\n${compiledInvocation.userMessage}\n\nOriginal grading response:\n${rawResponseText}`,
         },
       ],
       maxTokens: rubricEvaluationMaxTokens,
