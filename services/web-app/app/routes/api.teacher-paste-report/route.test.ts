@@ -138,3 +138,18 @@ test('literal source-code text naming an event does not add it to a submission',
     createdAt: { lte: new Date('2026-01-01') },
   });
 });
+
+test('admin scope still excludes same-user owners and every assignment-group artifact', async () => {
+  getGradingActor.mockResolvedValue({
+    ...actor,
+    membershipId: 'other-membership',
+    organizationId: 'other-org',
+    isAdmin: true,
+  });
+  prisma.document.findFirst.mockResolvedValue(null);
+  expect(status(await load('documentId=own-solo-or-group'))).toBe(404);
+  const where = prisma.document.findFirst.mock.calls[0][0].where;
+  expect(where.artifactKind).toBe('STUDENT');
+  expect(where.membership.is.userId).toEqual({ not: 'teacher-user' });
+  expect(prisma.pasteAlert.findMany).not.toHaveBeenCalled();
+});

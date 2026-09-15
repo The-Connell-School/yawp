@@ -341,3 +341,64 @@ test('submission history includes delayed writes linked in its HTML and excludes
     await prisma.$disconnect();
   }
 });
+
+test('an admin using another membership cannot inspect their own solo or group paste report', async ({
+  page,
+  e2eContext,
+  signIn,
+}) => {
+  const prisma = createE2EPrismaClient();
+  const alternate = await prisma.orgMembership.create({
+    data: {
+      userId: e2eContext.userId,
+      organizationId: e2eContext.ua.organizationId,
+      role: 'TEACHER',
+      isActive: true,
+      createdAt: new Date('2000-01-01'),
+    },
+  });
+  try {
+    await prisma.user.update({
+      where: { id: e2eContext.userId },
+      data: { isAdmin: true },
+    });
+    // With no selected-membership cookie, production auth chooses the oldest
+    // active membership. The student's original group membership stays active.
+    expect(
+      (
+        await prisma.orgMembership.findFirstOrThrow({
+          where: { userId: e2eContext.userId, isActive: true },
+          orderBy: { createdAt: 'asc' },
+        })
+      ).id
+    ).toBe(alternate.id);
+    expect(
+      await prisma.documentGroupMember.count({
+        where: {
+          groupId: e2eContext.collabGroupId,
+          membershipId: e2eContext.membershipId,
+          removedAt: null,
+        },
+      })
+    ).toBe(1);
+    await signIn(e2eContext.userEmail, 'johndoe');
+    for (const query of [
+      `documentId=${documentId}`,
+      `submissionId=${submissionId}`,
+      `documentId=${e2eContext.collabDocumentId}`,
+    ]) {
+      const response = await page.request.get(
+        `/api/teacher-paste-report?${query}`
+      );
+      expect(response.status()).toBe(404);
+      expect(await response.text()).not.toContain(eventId);
+    }
+  } finally {
+    await prisma.user.update({
+      where: { id: e2eContext.userId },
+      data: { isAdmin: false },
+    });
+    await prisma.orgMembership.delete({ where: { id: alternate.id } });
+    await prisma.$disconnect();
+  }
+});
