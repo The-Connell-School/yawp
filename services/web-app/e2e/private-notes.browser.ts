@@ -20,12 +20,13 @@ const id = `e2e-private-notes-${randomUUID()}`;
 const note = 'The final paragraph shifts from short sentences to specialized vocabulary.';
 const seed = await db.document.findFirstOrThrow({ where: { membership: { user: { email: 'dev.student@yawp.local' } }, classAssignmentId: { not: null } }, include: { membership: { include: { organization: true } } } });
 const org = seed.membership!.organization;
+const teacher = await db.orgMembership.findFirstOrThrow({ where: { user: { email: 'dev.teacher@yawp.local' }, organizationId: org.id, role: 'TEACHER' } });
 let app: ReturnType<typeof spawn> | undefined;
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 try {
   await db.organization.update({ where: { id: org.id }, data: { revisionFlowEnabled: true } });
   await db.document.create({ data: { id, title: 'Private notes QA', text: 'My grandmother’s kitchen is where we gather.', html: '<p>My grandmother’s kitchen is where we gather.</p>', membershipId: seed.membershipId, assignmentTypeId: seed.assignmentTypeId, assignmentId: seed.assignmentId, classAssignmentId: seed.classAssignmentId } });
-  await db.submission.create({ data: { id, documentId: id, title: 'Private notes QA', text: 'My grandmother’s kitchen is where we gather.', html: '<p>My grandmother’s kitchen is where we gather.</p>', submittedAt: new Date(), gradedAt: new Date(), overallScore: 18, score: '18/30', overallComment: 'Your kitchen detail makes the memory vivid.', rubricScores: { engagement_with_prompt: { score: 18, comment: '', isAi: true } } } });
+  await db.submission.create({ data: { id, documentId: id, title: 'Private notes QA', text: 'My grandmother’s kitchen is where we gather.', html: '<p>My grandmother’s kitchen is where we gather.</p>', submittedAt: new Date(), gradedAt: new Date(), gradedByMembershipId: teacher.id, overallScore: 18, score: '18/30', overallComment: 'Your kitchen detail makes the memory vivid.', rubricScores: { engagement_with_prompt: { score: 18, comment: '', isAi: true } } } });
   const run = await db.submissionGradingAssistantRun.create({ data: { submissionId: id, source: 'assignment-type', status: 'succeeded', assignmentTypeRubricSnapshot: { categories: schema.rubric.categories, minScore: 0, maxScore: 30, step: 1, scoringType: 'rubric_points' }, metadata: { teacherNote: note, output: { rubricScores: { engagement_with_prompt: { score: 18 } }, overallComment: 'Your kitchen detail makes the memory vivid.', score: '18/30' } } } });
   const log = openSync(join(dir, 'app.log'), 'w', 0o600);
   app = spawn(process.execPath, ['run', 'dev', '--host', 'localhost', '--port', String(port), '--strictPort'], { cwd: process.cwd(), detached: true, stdio: ['ignore', log, log], env: { ...process.env, NODE_ENV: 'development', PREVIEW_ACCESS_GATE: 'off' } });
@@ -41,7 +42,8 @@ try {
   browser = await chromium.launch({ headless: true });
   const staff = await browser.newContext({ recordVideo: { dir } });
   const page = await staff.newPage();
-  assert.equal((await page.request.post(`${origin}/auth/dev-login`, { form: { email: 'dev.teacher@yawp.local' }, maxRedirects: 0 })).status(), 302);
+  await page.goto(`${origin}/auth/login`);
+  await page.evaluate(async () => { const response = await fetch('/auth/dev-login', { method: 'POST', body: new URLSearchParams({ email: 'dev.teacher@yawp.local' }) }); if (!response.ok) throw new Error('Teacher dev login failed'); });
   await page.goto(`${origin}/app/submissions/${id}`);
   const notes = page.getByRole('region', { name: 'Notes to the teacher' });
   await expect(notes).toContainText(note, { timeout: 10000 });
@@ -50,7 +52,8 @@ try {
   await page.screenshot({ path: join(dir, 'teacher-before-release.png'), fullPage: true });
   const student = await browser.newContext();
   const studentPage = await student.newPage();
-  assert.equal((await studentPage.request.post(`${origin}/auth/dev-login`, { form: { email: 'dev.student@yawp.local' }, maxRedirects: 0 })).status(), 302);
+  await studentPage.goto(`${origin}/auth/login`);
+  await studentPage.evaluate(async () => { const response = await fetch('/auth/dev-login', { method: 'POST', body: new URLSearchParams({ email: 'dev.student@yawp.local' }) }); if (!response.ok) throw new Error('Student dev login failed'); });
   for (const phase of ['unreleased', 'released']) {
     if (phase === 'released') {
       await page.getByTestId('submission-lifecycle-release').click();
@@ -62,16 +65,16 @@ try {
     }
     const response = await studentPage.goto(`${origin}/app/submissions/${id}`);
     assert(!(await response!.text()).includes(note), `${phase} HTML must omit private notes`);
-    const data = await studentPage.request.get(`${origin}/app/submissions/${id}.data`);
-    assert(!(await data.text()).includes(note), `${phase} loader data must omit private notes`);
+    const data = await studentPage.evaluate(async (path) => (await fetch(path)).text(), `/app/submissions/${id}.data`);
+    assert(!data.includes(note), `${phase} loader data must omit private notes`);
     await expect(studentPage.getByRole('region', { name: 'Notes to the teacher' })).toHaveCount(0);
     await studentPage.screenshot({ path: join(dir, `student-${phase}.png`), fullPage: true });
   }
   const revision = await studentPage.goto(`${origin}/app/revise/${id}`);
   assert(!(await revision!.text()).includes(note), 'Student revision HTML must omit private note');
-  assert(!(await (await studentPage.request.get(`${origin}/app/revise/${id}.data`)).text()).includes(note), 'Student revision loader data must omit private note');
-  const forbidden = await studentPage.request.post(`${origin}/api/domain/grade-essay-ai`, { form: { submissionId: id }, maxRedirects: 0 });
-  assert.equal(forbidden.status(), 403, 'Student cannot generate or read private notes from grading action');
+  assert(!(await studentPage.evaluate(async (path) => (await fetch(path)).text(), `/app/revise/${id}.data`)).includes(note), 'Student revision loader data must omit private note');
+  const forbidden = await studentPage.evaluate(async (id) => (await fetch('/api/domain/grade-essay-ai', { method: 'POST', body: new URLSearchParams({ submissionId: id }) })).status, id);
+  assert.equal(forbidden, 403, 'Student cannot generate or read private notes from grading action');
   await db.submissionGradingAssistantRun.create({ data: { submissionId: id, source: 'assignment-type', status: 'succeeded', assignmentTypeRubricSnapshot: run.assignmentTypeRubricSnapshot!, metadata: { teacherNote: null } } });
   await page.reload();
   await expect(notes).toHaveCount(0);
@@ -81,10 +84,10 @@ try {
 } finally {
   await browser?.close();
   if (app?.pid) { try { process.kill(-app.pid, 'SIGTERM'); } catch {} }
-  await db.submissionGradingAssistantRun.deleteMany({ where: { submissionId: id } });
-  await db.submissionActivity.deleteMany({ where: { submissionId: id } });
-  await db.submission.deleteMany({ where: { id } });
-  await db.document.deleteMany({ where: { id } });
+  // Release writes immutable audit rows. Retain their referenced fixture and
+  // archive only this run's disposable artifact instead of deleting the audit.
+  await db.submission.updateMany({ where: { id }, data: { archivedAt: new Date() } });
+  await db.document.updateMany({ where: { id }, data: { deletedAt: new Date() } });
   await db.organization.update({ where: { id: org.id }, data: { revisionFlowEnabled: org.revisionFlowEnabled } });
   await db.$disconnect();
 }

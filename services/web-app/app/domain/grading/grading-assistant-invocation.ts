@@ -1,3 +1,4 @@
+import { teacherNotesEnabled } from './teacher-notes';
 import { buildGradingPromptShape } from './grading-prompt-shape';
 import type { ResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import {
@@ -126,7 +127,7 @@ export function compileGradingAssistantInvocation({
     | 'rubricCategories'
     | 'instructions'
     | 'promptTemplate'
-  >;
+  > & Partial<Pick<ResolvedAssignmentTypeGradingConfig, 'outputSchemaSnapshot'>>;
   studentFirstName: string;
   strictnessLevel: GradingAssistantStrictnessLevel;
   documentText: string;
@@ -138,6 +139,7 @@ export function compileGradingAssistantInvocation({
     minScore,
     maxScore,
     studentFirstName,
+    teacherNotesEnabled: teacherNotesEnabled(gradingConfig.outputSchemaSnapshot),
   });
   const strictnessLabel = getGradingAssistantStrictnessLabel(strictnessLevel);
   const strictnessInstructions =
@@ -174,7 +176,12 @@ export function compileGradingAssistantInvocation({
     student_first_name: studentFirstName,
     system_instructions: assignmentTypeSystemInstructions ?? '',
   };
-  const system = renderPromptTemplate(template.systemMessage, variables);
+  const renderedSystem = renderPromptTemplate(template.systemMessage, variables);
+  // Older managed templates do not carry the response-contract variable. The
+  // explicit opt-in must still keep private observations out of public fields.
+  const system = teacherNotesEnabled(gradingConfig.outputSchemaSnapshot) && !/{{\s*grading_response_instructions\s*}}/i.test(template.systemMessage)
+    ? `${renderedSystem}\n\n${promptShape.systemPrompt}`
+    : renderedSystem;
   const renderedUserMessage = renderPromptTemplate(template.userMessage, variables);
   // Existing managed templates predate assignment_prompt. Preserve their text
   // while ensuring a real prompt still reaches the grading assistant.

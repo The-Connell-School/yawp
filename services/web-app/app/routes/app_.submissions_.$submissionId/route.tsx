@@ -1,3 +1,5 @@
+import { readTeacherNote } from '~/domain/grading/teacher-notes';
+import { TeacherNotes } from './teacher-grading/teacher-notes';
 import { invariant } from '@epic-web/invariant';
 import {
   type LoaderFunctionArgs,
@@ -383,10 +385,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 
+  const { gradingAssistantRuns, ...publicSubmission } = submission;
+
   return {
     revisionFlowEnabled: profile.organization.revisionFlowEnabled === true,
     submission: {
-      ...submission,
+      ...publicSubmission,
       comments: sortedComments,
       rubricConfig,
       grammarHighlightingEnabled,
@@ -396,6 +400,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         submission.gradingAssistantRuns[0] ?? null
       ),
     },
+    ...(!isOwner && (isTeacher || isAdmin) ? { teacherNote: readTeacherNote(gradingAssistantRuns[0] ?? null) } : {}),
     isOwner,
     isTeacher: isTeacher || isAdmin,
     submissionActivityEnabled,
@@ -1243,6 +1248,7 @@ export default function SubmissionRoute() {
               </div>
             </>
           )}
+          {isGradingOther ? <TeacherNotes note={'teacherNote' in loaderData ? loaderData.teacherNote ?? null : null} /> : null}
         </div>
 
         {/* Center: Essay */}

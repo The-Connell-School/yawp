@@ -211,7 +211,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ),
   ]);
 
-  const { document, ...gradedSubmission } = submission;
+  const { document, gradingAssistantRuns: _privateRuns, ...gradedSubmission } = submission;
 
   return {
     submission: {

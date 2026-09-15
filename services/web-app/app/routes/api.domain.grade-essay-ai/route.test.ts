@@ -1138,7 +1138,7 @@ describe('api.domain.grade-essay-ai', () => {
     expect(prompt).toContain('ACT Writing');
     expect(prompt).toContain('Assignment type grading config: ACT Writing');
     expect(prompt).not.toContain('Grading assistant template:');
-    expect(prompt).not.toContain('Grading assistant strictness:');
+    expect(prompt).toContain('Grading assistant strictness: Advanced');
     expect(prompt).toContain('Ideas and Analysis (25%)');
     expect(prompt).not.toContain('Thesis/Content');
     expect(
@@ -1273,7 +1273,7 @@ describe('api.domain.grade-essay-ai', () => {
         prisma.submissionGradingAssistantRun.create.mock.calls[0]?.[0];
 
       expect(payload.success).toBe(true);
-      expect(prompt).not.toContain('Grading assistant strictness:');
+      expect(prompt).toContain(`Grading assistant strictness: ${strictnessCase.level[0].toUpperCase()}${strictnessCase.level.slice(1)}`);
       expect(payload.numericPercentage).toBe(strictnessCase.expectedPercentage);
       expect(updateCall.data.numericPercentage).toBe(
         strictnessCase.expectedPercentage
@@ -2495,6 +2495,17 @@ describe('api.domain.grade-essay-ai', () => {
       expect(fallbackCall.system).toContain('Do not include private observations');
       expect(fallbackCall.messages[0].content).toContain('Never mention grammar, spelling, syntax, or organization');
       expect(fallbackCall.messages[0].content).not.toContain(teacherNote);
+    });
+
+    test('schema repair keeps a private note separate and obeys the same source constraints', async () => {
+      const result = await gradeWithNote({ response: { categories: [{ key: 'engagement_with_prompt', score: 24 }], teacherNote, overallComment }, fallback: { categories, teacherNote, overallComment } });
+      expect((result as any).data.teacherNote).toBe(teacherNote);
+      expect((result as any).data.score).toBe('18/30');
+      const repair = getLLMCompletion.mock.calls[1][0];
+      expect(repair.system).toContain('"teacherNote"');
+      expect(repair.system).toContain('Never put them in overallComment');
+      expect(repair.messages[0].content).toContain('Never mention grammar, spelling, syntax, or organization');
+      expect(prisma.submission.update.mock.calls.at(-1)?.[0].data.overallComment).toBe(overallComment);
     });
 
     test('an empty new note clears the prior suggestion instead of retaining an old observation', async () => {

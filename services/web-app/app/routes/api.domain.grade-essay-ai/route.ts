@@ -1,3 +1,4 @@
+import { teacherNotesEnabled as hasTeacherNotes, normalizeTeacherNote } from '~/domain/grading/teacher-notes';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import type { Prisma } from '@app/prisma';
 import { parseFormData, validationError } from '@rvf/react-router';
@@ -105,6 +106,7 @@ function buildAiSchemas({
   minScore,
   maxScore,
   categoryFeedbackEnabled = true,
+  teacherNotesEnabled = false,
 }: {
   rubricCategories: GradingRubricCategory[];
   minScore: number;
@@ -115,6 +117,7 @@ function buildAiSchemas({
    * anyway is still kept.
    */
   categoryFeedbackEnabled?: boolean;
+  teacherNotesEnabled?: boolean;
 }) {
   const rubricKeys = rubricCategories.map((category) => category.key);
   const categoryByKey = new Map(
@@ -172,6 +175,7 @@ function buildAiSchemas({
   const AiResponseSchema = z.object({
     categories: AiCategoriesSchema,
     overallComment: z.string().min(1),
+    teacherNote: z.unknown().optional().transform(value => teacherNotesEnabled ? normalizeTeacherNote(value) : null),
   });
 
   return { AiCategoriesSchema, AiResponseSchema };
@@ -774,11 +778,13 @@ export async function action({ request }: ActionFunctionArgs) {
   // The prompt is derived from the rubric itself: how many judgments it asks
   // for, which words each score carries, and whether it wants per-category
   // feedback or overall feedback alone. No assignment type is named here.
+  const teacherNotesEnabled = hasTeacherNotes(resolvedGradingConfig.outputSchemaSnapshot);
   const promptShape = buildGradingPromptShape({
     categories: rubricCategories,
     minScore,
     maxScore,
     studentFirstName,
+    teacherNotesEnabled,
   });
   const categoryFeedbackEnabled = promptShape.categoryFeedbackEnabled;
   const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
@@ -786,6 +792,7 @@ export async function action({ request }: ActionFunctionArgs) {
     minScore,
     maxScore,
     categoryFeedbackEnabled,
+    teacherNotesEnabled,
   });
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
@@ -1072,15 +1079,16 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   }
 
   const buildAiResponseFromCategories = async (
-    categories: z.infer<typeof AiCategoriesSchema>
+    categories: z.infer<typeof AiCategoriesSchema>,
+    teacherNote: string | null
   ) => {
     const overallCommentResponseText = await getGradingLlmCompletion({
       model,
-      system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${studentFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.`,
+      system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${studentFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.\n- Do not include private observations, notes for the teacher, or speculation about authorship. Write only student feedback and obey the supplied grading constraints.`,
       messages: [
         {
           role: 'user',
-          content: `Student first name: ${studentFirstName}\n\nEssay:\n${submission.text}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
+          content: `${compiledInvocation.userMessage}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
         },
       ],
       maxTokens: 300,
@@ -1098,6 +1106,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     return {
       categories,
       overallComment: parsedOverallComment.overallComment,
+      teacherNote,
     };
   };
 
@@ -1120,7 +1129,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     const categories = extractCategories(value);
     if (!categories) return null;
 
-    return { categories, overallComment: null };
+    return { categories, overallComment: null, teacherNote: teacherNotesEnabled && isRecord(value) ? normalizeTeacherNote(value.teacherNote) : null };
   };
 
   const parseAiResponse = async (rawResponseText: string) => {
@@ -1128,18 +1137,18 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     const parsed = tryParseAiResponse(parsedJson);
     if (parsed?.overallComment) return parsed;
     if (parsed?.categories) {
-      return buildAiResponseFromCategories(parsed.categories);
+      return buildAiResponseFromCategories(parsed.categories, parsed.teacherNote);
     }
 
     const repairedResponseText = await getGradingLlmCompletion({
       model,
       system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n${buildGradingResponseSchemaText(
-        { minScore, maxScore, categoryFeedbackEnabled }
-      )}\nCategory-specific score bands:\n${promptShape.rubricText}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Every score must fall inside one declared band for its category.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
+        { minScore, maxScore, categoryFeedbackEnabled, teacherNotesEnabled }
+      )}\nCategory-specific score bands:\n${promptShape.rubricText}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Every score must fall inside one declared band for its category.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Private observations belong only in teacherNote when the schema permits it. Never put them in overallComment or category comments. Do not infer AI authorship or penalize suspicion.\n- Do not include markdown or explanation.`,
       messages: [
         {
           role: 'user',
-          content: `Original grading response:\n${rawResponseText}`,
+          content: `Grading constraints:\n${compiledInvocation.userMessage}\n\nOriginal grading response:\n${rawResponseText}`,
         },
       ],
       maxTokens: rubricEvaluationMaxTokens,
@@ -1155,7 +1164,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     const repairedParsed = tryParseAiResponse(repairedParsedJson);
     if (repairedParsed?.overallComment) return repairedParsed;
     if (repairedParsed?.categories) {
-      return buildAiResponseFromCategories(repairedParsed.categories);
+      return buildAiResponseFromCategories(repairedParsed.categories, repairedParsed.teacherNote);
     }
 
     throw new Error('Malformed grading assistant response');
@@ -1407,6 +1416,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
             model,
             status: 'succeeded',
             metadata: {
+              ...(teacherNotesEnabled ? { teacherNote: parsed.teacherNote } : {}),
               // The suggestions exactly as the assistant produced them. A teacher
               // edits the submission itself afterwards, so this is the only record
               // of what was suggested — it is what "reset to the suggestions"
@@ -1478,6 +1488,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   return dataResponse({
     success: true,
     message: 'Grading Assistant suggestions generated.',
+    ...(teacherNotesEnabled ? { teacherNote: parsed.teacherNote } : {}),
     rubricScores,
     overallScore,
     overallComment,

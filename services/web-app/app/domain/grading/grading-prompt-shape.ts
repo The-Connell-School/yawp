@@ -46,16 +46,18 @@ export function buildGradingResponseSchemaText({
   minScore,
   maxScore,
   categoryFeedbackEnabled,
+  teacherNotesEnabled = false,
 }: {
   minScore: number;
   maxScore: number;
   categoryFeedbackEnabled: boolean;
+  teacherNotesEnabled?: boolean;
 }) {
   const categoryFields = categoryFeedbackEnabled
     ? `{"key": string, "score": ${minScore}-${maxScore}, "comment": string}`
     : `{"key": string, "score": ${minScore}-${maxScore}}`;
 
-  return `{\n  "categories": [${categoryFields}],\n  "overallComment": string\n}`;
+  return `{\n  "categories": [${categoryFields}],\n  "overallComment": string${teacherNotesEnabled ? ',\n  "teacherNote": string | null' : ''}\n}`;
 }
 
 /**
@@ -108,11 +110,13 @@ export function buildGradingPromptShape({
   minScore,
   maxScore,
   studentFirstName,
+  teacherNotesEnabled = false,
 }: {
   categories: GradingPromptCategory[];
   minScore: number;
   maxScore: number;
   studentFirstName: string;
+  teacherNotesEnabled?: boolean;
 }): GradingPromptShape {
   const categoryFeedbackEnabled = resolveCategoryFeedbackEnabled(categories);
   const bandScored = isBandScoredRubric(categories);
@@ -120,11 +124,14 @@ export function buildGradingPromptShape({
     minScore,
     maxScore,
     categoryFeedbackEnabled,
+    teacherNotesEnabled,
   });
 
   const feedbackRule = categoryFeedbackEnabled
     ? 'Provide concise, actionable comments.'
-    : 'Do not write per-category feedback. Every word of feedback belongs in overallComment.';
+    : teacherNotesEnabled
+      ? 'Do not write per-category feedback. Student-facing feedback belongs in overallComment; private observations belong only in teacherNote.'
+      : 'Do not write per-category feedback. Every word of feedback belongs in overallComment.';
 
   const judgmentRule =
     categories.length === 1
@@ -142,6 +149,10 @@ export function buildGradingPromptShape({
     scoringRule,
     judgmentRule,
     feedbackRule,
+    ...(teacherNotesEnabled ? [
+      'teacherNote is private to the teacher. Use only observations explicitly requested in the grading instructions; return null when there is no observation.',
+      'Never put private observations in overallComment or category comments. Do not infer AI authorship, give an AI probability, or make an accusation. Do not reduce a score on suspicion.',
+    ] : []),
     `In overallComment, start with "${studentFirstName}," and continue with cohesive feedback in a warm but professional tone.`,
     `After the name, continue naturally (for example: "${studentFirstName}, you ...").`,
     `Do not use fixed lead-ins like "Overall grade," or "${studentFirstName}, this is your overall feedback."`,
