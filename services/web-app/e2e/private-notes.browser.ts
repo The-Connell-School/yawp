@@ -2,7 +2,7 @@ import { chromium, expect } from '@playwright/test';
 import { PrismaClient } from '../../../packages/prisma/generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, openSync, closeSync } from 'node:fs';
+import { mkdirSync, openSync, closeSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
@@ -42,6 +42,18 @@ try {
   browser = await chromium.launch({ headless: true });
   const staff = await browser.newContext({ recordVideo: { dir } });
   const page = await staff.newPage();
+  const videoStartedAt = Date.now();
+  const prepared = process.env.PRIVATE_NOTES_QA_NARRATION
+    ? JSON.parse(readFileSync(process.env.PRIVATE_NOTES_QA_NARRATION, 'utf8'))
+    : null;
+  const markers: Array<{ index: number; start: number }> = [];
+  const narrateVisible = async (index: number) => {
+    if (!prepared) return;
+    const cue = prepared.cues.find((item: { index: number }) => item.index === index);
+    assert(cue && cue.duration > 0, `Missing narration cue ${index}`);
+    markers.push({ index, start: (Date.now() - videoStartedAt) / 1000 });
+    await page.waitForTimeout(Math.ceil((cue.duration + 1) * 1000));
+  };
   await page.goto(`${origin}/auth/login`);
   await page.evaluate(async () => { const response = await fetch('/auth/dev-login', { method: 'POST', body: new URLSearchParams({ email: 'dev.teacher@yawp.local' }) }); if (!response.ok) throw new Error('Teacher dev login failed'); });
   await page.goto(`${origin}/app/submissions/${id}`);
@@ -50,6 +62,7 @@ try {
   await page.reload();
   await expect(notes).toContainText(note);
   await page.screenshot({ path: join(dir, 'teacher-before-release.png'), fullPage: true });
+  await narrateVisible(1);
   const student = await browser.newContext();
   const studentPage = await student.newPage();
   await studentPage.goto(`${origin}/auth/login`);
@@ -62,6 +75,7 @@ try {
       await page.reload();
       await expect(notes).toContainText(note);
       await page.screenshot({ path: join(dir, 'teacher-after-release.png'), fullPage: true });
+      await narrateVisible(2);
     }
     const response = await studentPage.goto(`${origin}/app/submissions/${id}`);
     assert(!(await response!.text()).includes(note), `${phase} HTML must omit private notes`);
@@ -79,6 +93,8 @@ try {
   await page.reload();
   await expect(notes).toHaveCount(0);
   await page.screenshot({ path: join(dir, 'teacher-empty-note.png'), fullPage: true });
+  await narrateVisible(3);
+  if (prepared) writeFileSync(join(dir, 'markers.json'), JSON.stringify(markers, null, 2) + '\n');
   await staff.close(); await student.close();
   console.log(JSON.stringify({ status: 'passed', proof: ['teacher-visible', 'teacher-reload', 'release-preserved', 'student-before-and-after-release-private', 'student-revision-private', 'student-action-forbidden', 'empty-latest-note-hidden'], artifacts: dir }));
 } finally {
