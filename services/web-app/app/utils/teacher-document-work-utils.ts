@@ -130,6 +130,7 @@ export function getTeacherDocumentWorkStatusDisplay(
         numericPercentage: submission.numericPercentage ?? null,
         letterGrade: submission.letterGrade ?? null,
         pointValue: document.assignment?.pointValue ?? null,
+        score: submission.score,
       })
     : null;
 

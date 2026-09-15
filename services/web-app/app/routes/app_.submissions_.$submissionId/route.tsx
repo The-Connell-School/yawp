@@ -1214,6 +1214,7 @@ export default function SubmissionRoute() {
               documentId={submission.documentId}
               submissionId={submission.id}
               existingGrade={teacherExistingGrade}
+              pointValue={submission.document.assignment?.pointValue}
               grammarIssues={grammarIssues}
               hiddenGrammarIssueIds={hiddenGrammarIssueIds}
               onToggleGrammarIssue={toggleGrammarIssueVisibility}

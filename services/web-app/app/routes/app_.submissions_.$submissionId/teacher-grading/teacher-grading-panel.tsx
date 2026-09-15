@@ -54,6 +54,11 @@ import {
   computeWeightedBandPercentage,
   computeWeightedPercentageForCategories,
   formatGrade,
+  formatAssignmentGrade,
+  assignmentPointTotal,
+  isPointsScaleScoringType,
+  parsePointScore,
+  scalePointScore,
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
 import {
@@ -189,6 +194,7 @@ export function TeacherGradingPanel({
   onGrammarIssuesChange,
   onAiGradingComplete,
   rubricConfig,
+  pointValue,
   assistantSuggestion,
   initialGradingAssistantStrictnessLevel,
   hideHeader = false,
@@ -224,6 +230,7 @@ export function TeacherGradingPanel({
     rubricConfig?: RubricDisplayConfig | null;
   }) => void;
   rubricConfig?: RubricDisplayConfig | null;
+  pointValue?: number | null;
   /**
    * What the Grading Assistant last suggested for this submission, if it has
    * ever run. Absent means the reset action has nothing to restore and is
@@ -277,7 +284,9 @@ export function TeacherGradingPanel({
       ) ?? DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
     );
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
+  const isRawPoints = isPointsScaleScoringType(activeRubricConfig.scoringType) || activeRubricConfig.scoringType === 'act_writing_2_12';
   const computedNumericPercentage = useMemo(() => {
+    if (isRawPoints) return null;
     // A rubric whose categories declare bands is already scored as a
     // percentage, so its overall grade is the weighted average with nothing
     // converted. Everything else keeps the 1-5 mapping.
@@ -292,46 +301,32 @@ export function TeacherGradingPanel({
       rubricScores as unknown as Record<string, unknown>,
       activeRubricConfig.categories
     );
-  }, [activeRubricConfig, rubricScores]);
+  }, [activeRubricConfig, rubricScores, isRawPoints]);
 
   /**
    * The grade this rubric produces on a scale that reports raw points rather
    * than a percentage (Daily Pages, ACT writing). Null on percentage scales,
    * whose grade comes from the overall percentage field.
    */
-  const rubricScaleGrade = useMemo(
-    () =>
-      rubricScaleGradeFieldsFromScores({
-        rubricScores,
-        categories: activeRubricConfig.categories,
-        minScore: activeRubricConfig.minScore,
-        maxScore: activeRubricConfig.maxScore,
-        scoringType: activeRubricConfig.scoringType,
-      }),
-    [activeRubricConfig, rubricScores]
-  );
+  const rubricScaleGrade = useMemo(() => {
+    const grade = rubricScaleGradeFieldsFromScores({
+      rubricScores, categories: activeRubricConfig.categories,
+      minScore: activeRubricConfig.minScore, maxScore: activeRubricConfig.maxScore,
+      scoringType: activeRubricConfig.scoringType,
+    });
+    if (!grade) return null;
+    const scaled = scalePointScore(grade.score, pointValue)!;
+    return { ...grade, overallScore: scaled.earned, score: `${scaled.earned}/${scaled.possible}` };
+  }, [activeRubricConfig, rubricScores, pointValue]);
 
   const resolvedNumericPercentage = useMemo(() => {
-    if (numericPercentage === '') return null;
+    if (isRawPoints || numericPercentage === '') return null;
     const raw = Number(numericPercentage);
     if (!Number.isFinite(raw)) return null;
     const clamped = Math.max(0, Math.min(100, Math.round(raw)));
     return clamped;
-  }, [numericPercentage]);
+  }, [numericPercentage, isRawPoints]);
 
-  const gradeDisplay = useMemo(() => {
-    return (
-      formatGrade(
-        resolvedNumericPercentage,
-        resolvedNumericPercentage === null
-          ? null
-          : letterFromPercent(resolvedNumericPercentage)
-      ) ||
-      rubricScaleGrade?.score ||
-      existingGrade?.score ||
-      '—'
-    );
-  }, [existingGrade?.score, resolvedNumericPercentage, rubricScaleGrade]);
   const gradingAssistantStrictnessLabel = useMemo(
     () => getGradingAssistantStrictnessLabel(gradingAssistantStrictnessLevel),
     [gradingAssistantStrictnessLevel]
@@ -401,12 +396,14 @@ export function TeacherGradingPanel({
             }
           : null,
         rubricConfig: propRubricConfig,
+        pointValue,
         initialGradingAssistantStrictnessLevel,
       }),
     [
       existingGrade,
       initialGradingAssistantStrictnessLevel,
       propRubricConfig,
+      pointValue,
       submissionId,
     ]
   );
@@ -442,11 +439,9 @@ export function TeacherGradingPanel({
       // A points-scale grade is stored as "20/30". Reading it back is what
       // makes reopening the form show the total that was saved rather than
       // recomputing one from the category scores.
-      const savedScaleScore = /^\s*(\d+)\s*\/\s*\d+\s*$/.exec(
-        existingGrade.score ?? ''
-      );
-      if (savedScaleScore) {
-        initialOverallScore = savedScaleScore[1];
+      const savedScaleScore = scalePointScore(existingGrade.score, pointValue);
+      if (savedScaleScore && (initialNormalizedPercent === null || parsePointScore(existingGrade.score)?.possible === pointValue)) {
+        initialOverallScore = String(savedScaleScore.earned);
       }
       initialRubricScores = normalizeRubricScoresForCategories({
         raw: existingGrade.rubricScores,
@@ -470,7 +465,7 @@ export function TeacherGradingPanel({
         grammarIssues,
       })
     );
-  }, [existingGrade, grammarIssues, initializationKey, propRubricConfig]);
+  }, [existingGrade, grammarIssues, initializationKey, propRubricConfig, pointValue]);
 
   useEffect(() => {
     if (
@@ -547,10 +542,11 @@ export function TeacherGradingPanel({
     if (typeof d.overallComment === 'string') {
       setOverallComment(d.overallComment);
     }
-    if (typeof d.numericPercentage === 'number') {
-      setNumericPercentage(d.numericPercentage.toString());
-      setHasManualPercentOverride(false);
-    }
+    setNumericPercentage(typeof d.numericPercentage === 'number' ? String(d.numericPercentage) : '');
+    setHasManualPercentOverride(false);
+    const suggestedPoints = scalePointScore(d.score, pointValue);
+    setOverallScoreInput(suggestedPoints ? String(suggestedPoints.earned) : '');
+    setHasManualScoreOverride(suggestedPoints !== null);
     const responseStrictnessLevel = parseGradingAssistantStrictnessLevel(
       typeof d.gradingAssistantStrictnessLevel === 'string'
         ? d.gradingAssistantStrictnessLevel
@@ -585,6 +581,7 @@ export function TeacherGradingPanel({
           typeof d.numericPercentage === 'number'
             ? d.numericPercentage.toString()
             : '',
+        overallScore: suggestedPoints ? String(suggestedPoints.earned) : '',
         grammarIssues: parseGrammarIssuesPayload(d.grammarIssues),
       })
     );
@@ -592,7 +589,7 @@ export function TeacherGradingPanel({
     pendingAiFormRef.current = null;
     hasRetriedAiFormRef.current = false;
     setIsAiRetrying(false);
-  }, [aiFetcher.data, aiFetcher.state, onGrammarIssuesChange]);
+  }, [aiFetcher.data, aiFetcher.state, onGrammarIssuesChange, pointValue]);
 
   /**
    * Build the full grading payload from current state and persist it.
@@ -612,7 +609,8 @@ export function TeacherGradingPanel({
 
     const trimmedPercent = effectivePercentStr.trim();
     const rawPercent = Number(trimmedPercent);
-    const percent =
+    const percent = isRawPoints ? null : manualScaleScore !== null && scaleScoreOutOf !== null
+      ? Math.round(manualScaleScore / scaleScoreOutOf * 100) :
       trimmedPercent !== '' && Number.isFinite(rawPercent)
         ? Math.max(0, Math.min(100, Math.round(rawPercent)))
         : null;
@@ -658,18 +656,21 @@ export function TeacherGradingPanel({
         : {}),
       ...(grammarChanged ? { grammarIssues: effectiveGrammarIssues } : {}),
     };
-    const scaleDenominator = Number(scaleGrade?.score?.split('/')[1]);
-
-    if (percent !== null) {
-      payload.numericPercentage = percent;
-      if (letter) payload.letterGrade = letter;
-      payload.score = formatGrade(percent, letter) ?? '';
-    } else if (scaleGrade && manualScaleScore !== null) {
+    const scaled = scalePointScore(scaleGrade?.score, pointValue);
+    if (manualScaleScore !== null && scaleScoreOutOf !== null) {
       payload.overallScore = manualScaleScore;
-      payload.score = `${manualScaleScore}/${scaleDenominator}`;
-    } else if (scaleGrade) {
-      payload.overallScore = scaleGrade.overallScore;
-      payload.score = scaleGrade.score;
+      payload.score = `${manualScaleScore}/${scaleScoreOutOf}`;
+      payload.numericPercentage = percent;
+      payload.letterGrade = letter;
+    } else if (scaled) {
+      payload.overallScore = scaled.earned;
+      payload.score = `${scaled.earned}/${scaled.possible}`;
+      payload.numericPercentage = null;
+      payload.letterGrade = null;
+    } else if (percent !== null) {
+      payload.numericPercentage = percent;
+      payload.letterGrade = letter;
+      payload.score = formatGrade(percent, letter) ?? '';
     } else if (existingGrade?.score) {
       payload.score = existingGrade.score;
     }
@@ -688,37 +689,34 @@ export function TeacherGradingPanel({
   };
 
   /**
-   * Overwrite the overall percentage with the total computed from the
-   * current rubric category scores. Does not touch rubric scores, rubric
-   * comments, or overall feedback, and does not save — like every other
-   * field edit in this panel, the change is staged until the teacher clicks
-   * Save (or discarded via Cancel).
+   * Mirror computed rubric points until the teacher enters an overall total.
+   * Category values keep the scale recorded in their rubric snapshot.
    */
   useEffect(() => {
     if (hasManualScoreOverride) return;
-    if (!rubricScaleGrade) return;
-    setOverallScoreInput(String(rubricScaleGrade.overallScore));
-  }, [rubricScaleGrade, hasManualScoreOverride]);
+    if (rubricScaleGrade) {
+      setOverallScoreInput(String(rubricScaleGrade.overallScore));
+    } else if (!isRawPoints && resolvedNumericPercentage !== null) {
+      setOverallScoreInput(String(Math.round(resolvedNumericPercentage / 100 * assignmentPointTotal(pointValue, 100))));
+    }
+  }, [rubricScaleGrade, hasManualScoreOverride, isRawPoints, resolvedNumericPercentage, pointValue]);
 
-  const scaleScoreOutOf = useMemo(() => {
-    const denominator = Number(rubricScaleGrade?.score?.split('/')[1]);
-    return Number.isFinite(denominator) ? denominator : null;
-  }, [rubricScaleGrade]);
+  const scaleScoreOutOf = assignmentPointTotal(pointValue,
+    isRawPoints ? (activeRubricConfig.scoringType === 'act_writing_2_12' ? 12 : activeRubricConfig.maxScore) : 100);
 
   /**
-   * What the total-points field accepts: the rubric's own range and step when
-   * the grade is scored out of that range, so a 0-30 rubric scored in tens
-   * moves 0, 10, 20, 30 and refuses everything between.
+   * Configured assignments accept whole points from zero to their total.
+   * Unconfigured legacy raw scales retain their original range and step.
    */
   const totalPointsBounds = useMemo(() => {
     if (scaleScoreOutOf === null) return null;
     const isRubricRange = scaleScoreOutOf === activeRubricConfig.maxScore;
     return {
-      min: isRubricRange ? activeRubricConfig.minScore : 0,
+      min: isRawPoints && pointValue == null && isRubricRange ? activeRubricConfig.minScore : 0,
       max: scaleScoreOutOf,
-      step: isRubricRange ? (activeRubricConfig.step ?? 1) : 1,
+      step: pointValue != null ? 1 : isRubricRange ? (activeRubricConfig.step ?? 1) : 1,
     };
-  }, [scaleScoreOutOf, activeRubricConfig]);
+  }, [scaleScoreOutOf, activeRubricConfig, pointValue, isRawPoints]);
 
   /**
    * The total the teacher typed, snapped onto the scale — null while the field
@@ -729,7 +727,6 @@ export function TeacherGradingPanel({
   const manualScaleScore = useMemo(() => {
     const typed = Number(overallScoreInput.trim());
     if (
-      !rubricScaleGrade ||
       !hasManualScoreOverride ||
       overallScoreInput.trim() === '' ||
       !Number.isFinite(typed) ||
@@ -741,10 +738,16 @@ export function TeacherGradingPanel({
   }, [
     hasManualScoreOverride,
     overallScoreInput,
-    rubricScaleGrade,
     scaleScoreOutOf,
     totalPointsBounds,
   ]);
+
+  const gradeDisplay = formatAssignmentGrade({
+    submitForGrade: true,
+    numericPercentage: resolvedNumericPercentage,
+    pointValue: pointValue ?? (isRawPoints ? null : 100),
+    score: manualScaleScore !== null ? `${manualScaleScore}/${scaleScoreOutOf}` : rubricScaleGrade?.score ?? existingGrade?.score,
+  }) ?? '—';
 
   /**
    * The suggestions to restore: whatever the assistant produced in this
@@ -771,18 +774,15 @@ export function TeacherGradingPanel({
 
     if (typeof restorableSuggestion.numericPercentage === 'number') {
       setNumericPercentage(String(restorableSuggestion.numericPercentage));
-      setHasManualPercentOverride(false);
+      setHasManualPercentOverride(true);
     }
 
-    // A points scale carries its total separately from the percentage.
-    if (restorableSuggestion.score) {
-      const suggestedTotal = Number(
-        restorableSuggestion.score.split('/')[0]?.trim()
-      );
-      if (Number.isFinite(suggestedTotal)) {
-        setOverallScoreInput(String(suggestedTotal));
-        setHasManualScoreOverride(false);
-      }
+    const suggestedPoints = scalePointScore(restorableSuggestion.score, pointValue);
+    setOverallScoreInput(suggestedPoints ? String(suggestedPoints.earned) : '');
+    setHasManualScoreOverride(suggestedPoints !== null);
+    if (isRawPoints) {
+      setNumericPercentage('');
+      setHasManualPercentOverride(false);
     }
 
     onGrammarIssuesChange(
@@ -820,34 +820,23 @@ export function TeacherGradingPanel({
   const saveDraft = useCallback(() => saveAllRef.current(), []);
 
   const buildSavedGradeSnapshot = useCallback((): SavedGradeSnapshot => {
-    const letter =
-      resolvedNumericPercentage === null
-        ? null
-        : letterFromPercent(resolvedNumericPercentage);
-    // What view mode shows the moment Save returns. It has to agree with what
-    // the save wrote, so a total the teacher typed wins over the one the
-    // category scores imply -- otherwise the grade reverts on screen until the
-    // page is reloaded.
-    const scaleScore =
-      manualScaleScore ?? rubricScaleGrade?.overallScore ?? null;
-    const scaleScoreText =
-      manualScaleScore !== null && scaleScoreOutOf !== null
-        ? `${manualScaleScore}/${scaleScoreOutOf}`
-        : (rubricScaleGrade?.score ?? '');
+    const percent = isRawPoints ? null : manualScaleScore !== null
+      ? Math.round(manualScaleScore / scaleScoreOutOf * 100) : resolvedNumericPercentage;
+    const letter = percent === null ? null : letterFromPercent(percent);
+    const scaleScore = manualScaleScore ?? rubricScaleGrade?.overallScore ?? null;
+    const scaleScoreText = manualScaleScore !== null
+      ? `${manualScaleScore}/${scaleScoreOutOf}` : rubricScaleGrade?.score;
     return {
-      numericPercentage: resolvedNumericPercentage,
+      numericPercentage: percent,
       letterGrade: letter,
-      overallScore: resolvedNumericPercentage === null ? scaleScore : null,
-      score:
-        formatGrade(resolvedNumericPercentage, letter) ||
-        scaleScoreText ||
-        existingGrade?.score ||
-        '',
+      overallScore: scaleScore,
+      score: scaleScoreText || formatGrade(percent, letter) || existingGrade?.score || '',
       overallComment,
       rubricScores,
     };
   }, [
     existingGrade?.score,
+    isRawPoints,
     manualScaleScore,
     overallComment,
     resolvedNumericPercentage,
@@ -869,11 +858,14 @@ export function TeacherGradingPanel({
         rubricScores: Record<string, RubricScore>;
         overallComment: string;
         numericPercentage: string;
+        overallScore?: string;
         grammarIssues: GrammarIssue[];
       };
       setRubricScores(parsed.rubricScores);
       setOverallComment(parsed.overallComment);
       setNumericPercentage(parsed.numericPercentage);
+      setOverallScoreInput(parsed.overallScore ?? '');
+      setHasManualScoreOverride(Boolean(parsed.overallScore));
       setHasManualPercentOverride(parsed.numericPercentage.trim() !== '');
       onGrammarIssuesChange(parsed.grammarIssues ?? []);
     } catch {
@@ -909,7 +901,7 @@ export function TeacherGradingPanel({
       hasDraftToReplace,
       // A grade exists when this rubric's own scale has produced one --
       // a percentage, or the raw points a points scale reports instead.
-      hasGrade: resolvedNumericPercentage !== null || rubricScaleGrade !== null,
+      hasGrade: manualScaleScore !== null || resolvedNumericPercentage !== null || rubricScaleGrade !== null,
       isGenerating,
       isAiRetrying,
       isBusy,
@@ -930,6 +922,7 @@ export function TeacherGradingPanel({
       isGenerating,
       resolvedNumericPercentage,
       rubricScaleGrade,
+      manualScaleScore,
     ]
   );
 
@@ -1084,7 +1077,7 @@ export function TeacherGradingPanel({
         {/* A points scale records earned points and has no percentage at all,
             so showing it an empty percentage box reads as a missing grade.
             It gets the grade its own scale produces instead. */}
-        {rubricScaleGrade ? (
+        {isRawPoints ? (
           <div className="space-y-2">
             <Label htmlFor="overall-score">
               Total points
@@ -1135,23 +1128,28 @@ export function TeacherGradingPanel({
         ) : (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <Label htmlFor="pct">Overall Percentage</Label>
+              <Label htmlFor="pct">Total points (out of {scaleScoreOutOf})</Label>
             </div>
             <Input
               id="pct"
               data-testid="grading-overall-percentage"
               type="number"
               min={0}
-              max={100}
-              value={numericPercentage}
+              max={scaleScoreOutOf}
+              step={1}
+              value={overallScoreInput}
               disabled={isGenerating}
               onChange={(e) => {
-                setNumericPercentage(e.target.value);
-                setHasManualPercentOverride(true);
+                setOverallScoreInput(e.target.value);
+                setHasManualScoreOverride(true);
               }}
               onBlur={(e) => {
+                const typed = Number(e.currentTarget.value.trim());
+                if (e.currentTarget.value.trim() !== '' && Number.isFinite(typed)) {
+                  setOverallScoreInput(String(snapToScaleValue(typed, totalPointsBounds, scaleScoreOutOf)));
+                }
                 if (!hideHeader) {
-                  void saveAll(undefined, undefined, e.currentTarget.value);
+                  void saveAll();
                 }
               }}
             />

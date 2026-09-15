@@ -426,6 +426,8 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "grading-points-unit") {
     runWebApp("grading-math", ["test", "app/domain/grading/gradeMath.test.ts", "app/domain/grading/recorded-grade.test.ts", "app/utils/teacher-document-work-utils.test.ts"]);
     runWebApp("grading-points-panel", ["test", "app/routes/app_.submissions_.$submissionId/teacher-grading/teacher-grading-panel.points-scale.test.tsx"]);
+    runWebApp("grading-panel-regressions", ["test", "app/routes/app_.submissions_.$submissionId/teacher-grading/teacher-grading-panel.test.tsx"]);
+    runWebApp("grading-save", ["test", "app/routes/api.domain.update-submission/route.test.ts"]);
     runWebApp("grading-view", ["test", "app/routes/app_.submissions_.$submissionId/teacher-grading/view-panel.test.tsx"]);
   }
   else if (chosen === "grading-points") {

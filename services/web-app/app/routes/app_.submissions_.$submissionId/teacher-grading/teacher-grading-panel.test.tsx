@@ -43,7 +43,7 @@ mock.module('~/components/ui/tooltip', () => ({
   Tooltip: ({ children, text }: { children: ReactNode; text: ReactNode }) => (
     <>
       {children}
-      <span>{text}</span>
+      <span role="tooltip">{text}</span>
     </>
   ),
 }));
@@ -157,7 +157,9 @@ describe('TeacherGradingPanel', () => {
     expect(document.body.textContent).toContain(
       'The assistant reads demandingly, expecting polished and precise writing.'
     );
-    expect(document.body.textContent).not.toContain('points');
+    for (const tooltip of document.querySelectorAll('[role="tooltip"]')) {
+      expect(tooltip.textContent).not.toContain('points');
+    }
   });
 
   it('applies the assignment strictness level to a grading run', async () => {
