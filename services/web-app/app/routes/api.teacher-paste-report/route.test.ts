@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const actor = { userId: 'teacher-user', membershipId: 'teacher', organizationId: 'org', isTeacher: true, isAdmin: false, teacherProfileId: 'teacher' };
-const prisma = { document: { findFirst: mock() }, submission: { findFirst: mock() }, pasteAlert: { findMany: mock() } };
+const prisma = { document: { findFirst: mock() }, submission: { findFirst: mock() }, pasteAlert: { findMany: mock(), findFirst: mock() } };
 const getGradingActor = mock(async () => actor);
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/grading-auth.server', () => ({
@@ -18,6 +18,7 @@ beforeEach(() => {
   prisma.document.findFirst.mockResolvedValue({ id: 'doc' });
   prisma.submission.findFirst.mockResolvedValue({ documentId: 'doc', submittedAt: new Date('2026-01-01') });
   prisma.pasteAlert.findMany.mockResolvedValue([]);
+  prisma.pasteAlert.findFirst.mockResolvedValue(null);
 });
 describe('teacher paste report authorization and snapshot boundary', () => {
   test('owner students, even with known IDs, never query or receive events', async () => {
@@ -44,6 +45,11 @@ describe('teacher paste report authorization and snapshot boundary', () => {
     await load('submissionId=sub');
     expect(prisma.submission.findFirst.mock.calls[0][0].where.document.is).toMatchObject({ scope: { membershipId: 'teacher', organizationId: 'org' } });
     expect(prisma.pasteAlert.findMany.mock.calls[0][0].where).toEqual({ documentId: 'doc', createdAt: { lte: new Date('2026-01-01') } });
+  });
+  test('a cursor from another document cannot reveal event positions', async () => {
+    expect(status(await load('documentId=doc&cursor=foreign-event'))).toBe(404);
+    expect(prisma.pasteAlert.findFirst.mock.calls[0][0].where).toMatchObject({ id: 'foreign-event', documentId: 'doc' });
+    expect(prisma.pasteAlert.findMany).not.toHaveBeenCalled();
   });
   test('exactly one subject is required, pages are bounded and ordered stably', async () => {
     expect(status(await load(''))).toBe(400);

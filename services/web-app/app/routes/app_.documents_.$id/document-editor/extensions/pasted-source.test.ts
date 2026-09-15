@@ -264,3 +264,23 @@ describe('PastedSource persistence', () => {
     expect(editor.getHTML()).toContain('>borrowed passage<');
   });
 });
+
+
+describe('stable paste event identity', () => {
+  it('keeps an event ID across typed splits, saved HTML, deletion and undo', () => {
+    editor = makeEditor('<p></p>');
+    paste(editor, 'borrowed passage');
+    editor.commands.markLastPasteAsExternal('paste_12345678-1234-4321-8123-123456789abc');
+    editor.commands.insertContentAt(9, 'own');
+    const saved = editor.getHTML();
+    expect(saved.match(/data-paste-event-id=/g)).toHaveLength(2);
+    const reopened = makeEditor(saved);
+    try {
+      expect(reopened.getHTML()).toContain('paste_12345678-1234-4321-8123-123456789abc');
+      reopened.commands.selectAll(); reopened.commands.deleteSelection();
+      expect(reopened.getHTML()).not.toContain('data-paste-event-id');
+      reopened.commands.undo();
+      expect(reopened.getHTML().match(/data-paste-event-id=/g)).toHaveLength(2);
+    } finally { reopened.destroy(); }
+  });
+});

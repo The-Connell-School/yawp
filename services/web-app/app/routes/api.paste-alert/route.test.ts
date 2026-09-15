@@ -34,3 +34,11 @@ test('nonowners cannot record events on another student’s document', async () 
   expect(status(await post(body))).toBe(404);
   expect(prisma.pasteAlert.createMany).not.toHaveBeenCalled();
 });
+
+test('legacy method, missing field, optional content and owner-query contracts remain intact', async () => {
+  expect(status(await action({ request: new Request('http://localhost/api/paste-alert') } as any))).toBe(405);
+  expect(status(await post({ documentId: 'doc' }))).toBe(400);
+  expect(status(await post({ documentId: 'doc', textLength: 250 }))).toBe(200);
+  expect(prisma.document.findFirst.mock.calls[0][0]).toEqual({ where: { id: 'doc', membershipId: 'student' } });
+  expect(prisma.pasteAlert.create.mock.calls[0][0]).toEqual({ data: { documentId: 'doc', membershipId: 'student', textLength: 250, content: null } });
+});
