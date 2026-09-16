@@ -30,12 +30,13 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
       const copiedFromInsideApp = wasCopiedInsideApp(pastedText);
 
       if (textLength >= PASTE_ALERT_MIN_CHARS && !copiedFromInsideApp) {
-        editor.commands.markLastPasteAsExternal?.();
+        const eventId = `paste_${crypto.randomUUID()}`;
+        editor.commands.markLastPasteAsExternal?.(eventId);
 
         fetch('/api/paste-alert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ documentId: docId, textLength, content: pastedText }),
+          body: JSON.stringify({ documentId: docId, textLength, content: pastedText, eventId }),
         }).catch(() => {});
       }
     };

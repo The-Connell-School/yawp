@@ -42,7 +42,7 @@ declare module '@tiptap/core' {
        * outside the app. Returns false when the last change was not a
        * paste, so a mis-timed call can never mark the student's own text.
        */
-      markLastPasteAsExternal: () => ReturnType;
+      markLastPasteAsExternal: (eventId?: string) => ReturnType;
     };
   }
 }
@@ -131,6 +131,11 @@ export const PastedSource = Mark.create<PastedSourceOptions>({
 
   addAttributes() {
     return {
+      eventId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-paste-event-id'),
+        renderHTML: (attributes) => attributes.eventId ? { 'data-paste-event-id': attributes.eventId } : {},
+      },
       at: {
         default: null,
         parseHTML: (element) => element.getAttribute('data-pasted-at'),
@@ -163,7 +168,7 @@ export const PastedSource = Mark.create<PastedSourceOptions>({
 
     return {
       markLastPasteAsExternal:
-        () =>
+        (eventId) =>
         ({ state, tr, dispatch }) => {
           const range = pastedSourceKey.getState(state)?.lastPaste;
           if (!range) return false;
@@ -172,7 +177,7 @@ export const PastedSource = Mark.create<PastedSourceOptions>({
             tr.addMark(
               range.from,
               range.to,
-              state.schema.marks.pastedSource.create({ at: now() })
+              state.schema.marks.pastedSource.create({ at: now(), eventId: eventId ?? null })
             );
             dispatch(tr);
           }

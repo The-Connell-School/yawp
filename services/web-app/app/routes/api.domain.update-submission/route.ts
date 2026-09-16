@@ -225,8 +225,8 @@ export async function action({ request }: ActionFunctionArgs) {
       typeof v === 'number' && Number.isFinite(v) ? v : undefined,
     overallComment: (v) => (typeof v === 'string' ? v : undefined),
     numericPercentage: (v) =>
-      typeof v === 'number' && Number.isFinite(v) ? v : undefined,
-    letterGrade: (v) => (typeof v === 'string' ? v : undefined),
+      v === null || (typeof v === 'number' && Number.isFinite(v)) ? v : undefined,
+    letterGrade: (v) => (v === null || typeof v === 'string' ? v : undefined),
     grammarIssues: (v) => (v != null ? v : undefined),
     promptConfig: (v) => (v != null ? v : undefined),
     aiMeta: (v) => (v != null ? v : undefined),

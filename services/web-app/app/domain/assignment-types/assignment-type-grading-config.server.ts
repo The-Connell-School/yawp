@@ -32,6 +32,8 @@ export type AssignmentTypeGradingInstructions =
     };
 
 export type ResolvedAssignmentTypeGradingConfig = {
+  /** Selected library identity, including the identity on a pinned revision. */
+  rubricName?: string | null;
   source: AssignmentTypeRubricConfigSource;
   /**
    * The assignment type's own rubric is in use but some categories are not
@@ -282,6 +284,7 @@ export function buildResolvedAssignmentTypeGradingConfig({
 
   return {
     source: parsedConfig.source,
+    rubricName: row?.selectedRubricName ?? null,
     rubricIncomplete: parsedConfig.rubricIncomplete,
     assignmentTypeId,
     assignmentTypeKind: row?.kind ?? assignmentTypeKind,

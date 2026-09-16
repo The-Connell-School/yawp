@@ -916,7 +916,7 @@ describe('assignment-type evaluations action', () => {
     prisma.assignmentType.findUnique.mockResolvedValue({ ...assignmentType, rubric: { name: schema.name, schemaJson: schema } });
     await action({ request: requestWith({ intent: 'runSuite', assignmentTypeId: 'at-1', promptVersionId: 'prompt-draft-8', evaluationSuiteVersionId: 'suite-1' }), params: {}, context: {} } as any);
     expect(runAssignmentTypeEvaluationSuite).toHaveBeenCalledWith(expect.objectContaining({ gradingConfig: expect.objectContaining({
-      minScore: 0, maxScore: 30, step: 10,
+      minScore: 0, maxScore: 30, step: 1,
       rubricCategories: [expect.objectContaining({ key: 'engagement_with_prompt' })],
       promptTemplate: { systemMessage: 'Draft system {{student_first_name}}', userMessage: 'Draft user {{rubric}} {{document}}' },
     }) }));

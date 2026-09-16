@@ -1,3 +1,5 @@
+import { teacherNotesEnabled } from './teacher-notes';
+import { buildGradingPromptShape } from './grading-prompt-shape';
 import type { ResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import {
   getGradingAssistantStrictnessInstructions,
@@ -19,8 +21,10 @@ export type GradingAssistantPromptTemplate = {
 
 export const GRADING_ASSISTANT_PROMPT_VARIABLES = [
   'assignment_type',
+  'assignment_prompt',
   'document',
   'grading_instructions',
+  'grading_response_instructions',
   'max_score',
   'min_score',
   'rubric',
@@ -78,7 +82,7 @@ export function defaultGradingAssistantPromptTemplate(
     'instructions'
   >
 ): GradingAssistantPromptTemplate {
-  const gradingSystemBase = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "categories": [{"key": string, "score": {{min_score}}-{{max_score}}, "comment": string}],\n  "overallComment": string\n}\nScores must be integers {{min_score}}-{{max_score}}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nIn overallComment, start with "{{student_first_name}}," and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: "{{student_first_name}}, you ...").\nDo not use fixed lead-ins like "Overall grade," or "{{student_first_name}}, this is your overall feedback."`;
+  const gradingSystemBase = '{{grading_response_instructions}}';
   const systemInstructions =
     'systemInstructions' in gradingConfig.instructions
       ? gradingConfig.instructions.systemInstructions?.trim()
@@ -90,7 +94,7 @@ export function defaultGradingAssistantPromptTemplate(
       : '';
     return {
       systemMessage: `${gradingSystemBase}${assignmentTypeSystemBlock}\nFollow the grading instructions in the user prompt exactly.`,
-      userMessage: `Student first name: {{student_first_name}}\n\nAssignment type grading config: {{assignment_type}}\n\n{{strictness}}\n\nRubric category keys (use these exact keys in categories[].key):\n{{rubric}}\n\nGrading instructions:\n{{grading_instructions}}\n\nEssay:\n{{document}}`,
+      userMessage: `Student first name: {{student_first_name}}\n\nAssignment type grading config: {{assignment_type}}\n\n{{strictness}}\n\nRubric category keys (use these exact keys in categories[].key):\n{{rubric}}\n\nGrading instructions:\n{{grading_instructions}}\n\nAssignment prompt: {{assignment_prompt}}\n\nEssay:\n{{document}}`,
     };
   }
 
@@ -104,7 +108,7 @@ export function defaultGradingAssistantPromptTemplate(
       : '';
   return {
     systemMessage: `${templateSystemInstructions}${gradingSystemBase}${assignmentTypeSystemBlock}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n{{score_instructions}}`,
-    userMessage: `Student first name: {{student_first_name}}\n\nAssignment type grading config: {{assignment_type}}\n\n{{strictness}}\n\nRubric category keys (use these exact keys in categories[].key):\n{{rubric}}\n\nRubric Instructions:\n{{grading_instructions}}\n\nEssay:\n{{document}}`,
+    userMessage: `Student first name: {{student_first_name}}\n\nAssignment type grading config: {{assignment_type}}\n\n{{strictness}}\n\nRubric category keys (use these exact keys in categories[].key):\n{{rubric}}\n\nRubric Instructions:\n{{grading_instructions}}\n\nAssignment prompt: {{assignment_prompt}}\n\nEssay:\n{{document}}`,
   };
 }
 
@@ -113,6 +117,7 @@ export function compileGradingAssistantInvocation({
   studentFirstName,
   strictnessLevel,
   documentText,
+  assignmentPrompt,
 }: {
   gradingConfig: Pick<
     ResolvedAssignmentTypeGradingConfig,
@@ -122,18 +127,20 @@ export function compileGradingAssistantInvocation({
     | 'rubricCategories'
     | 'instructions'
     | 'promptTemplate'
-  >;
+  > & Partial<Pick<ResolvedAssignmentTypeGradingConfig, 'outputSchemaSnapshot'>>;
   studentFirstName: string;
   strictnessLevel: GradingAssistantStrictnessLevel;
   documentText: string;
+  assignmentPrompt?: string | null;
 }): CompiledGradingAssistantInvocation {
   const { minScore, maxScore } = gradingConfig;
-  const rubricText = gradingConfig.rubricCategories
-    .map(
-      (item) =>
-        `${item.key}: ${item.label} (${Math.round(item.weight * 100)}%) - ${item.description}`
-    )
-    .join('\n');
+  const promptShape = buildGradingPromptShape({
+    categories: gradingConfig.rubricCategories,
+    minScore,
+    maxScore,
+    studentFirstName,
+    teacherNotesEnabled: teacherNotesEnabled(gradingConfig.outputSchemaSnapshot),
+  });
   const strictnessLabel = getGradingAssistantStrictnessLabel(strictnessLevel);
   const strictnessInstructions =
     getGradingAssistantStrictnessInstructions(strictnessLevel);
@@ -155,11 +162,13 @@ export function compileGradingAssistantInvocation({
     defaultGradingAssistantPromptTemplate(gradingConfig);
   const variables = {
     assignment_type: gradingConfig.label,
+    assignment_prompt: assignmentPrompt?.trim() || 'No assignment prompt was provided.',
+    grading_response_instructions: promptShape.systemPrompt,
     document: documentText,
     grading_instructions: gradingInstructions,
     max_score: String(maxScore),
     min_score: String(minScore),
-    rubric: rubricText,
+    rubric: promptShape.rubricText,
     score_instructions: scoreInstructions,
     strictness: `Grading assistant strictness: ${strictnessLabel}\n${strictnessInstructions}`,
     strictness_instructions: strictnessInstructions,
@@ -167,8 +176,18 @@ export function compileGradingAssistantInvocation({
     student_first_name: studentFirstName,
     system_instructions: assignmentTypeSystemInstructions ?? '',
   };
-  const system = renderPromptTemplate(template.systemMessage, variables);
-  const userMessage = renderPromptTemplate(template.userMessage, variables);
+  const renderedSystem = renderPromptTemplate(template.systemMessage, variables);
+  // Older managed templates do not carry the response-contract variable. The
+  // explicit opt-in must still keep private observations out of public fields.
+  const system = teacherNotesEnabled(gradingConfig.outputSchemaSnapshot) && !/{{\s*grading_response_instructions\s*}}/i.test(template.systemMessage)
+    ? `${renderedSystem}\n\n${promptShape.systemPrompt}`
+    : renderedSystem;
+  const renderedUserMessage = renderPromptTemplate(template.userMessage, variables);
+  // Existing managed templates predate assignment_prompt. Preserve their text
+  // while ensuring a real prompt still reaches the grading assistant.
+  const userMessage = assignmentPrompt?.trim() && !/{{\s*assignment_prompt\s*}}/i.test(template.userMessage)
+    ? `${renderedUserMessage}\n\nAssignment prompt: ${assignmentPrompt.trim()}`
+    : renderedUserMessage;
 
   return {
     system,

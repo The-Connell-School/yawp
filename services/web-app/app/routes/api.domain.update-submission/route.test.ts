@@ -116,6 +116,21 @@ describe('api.domain.update-submission', () => {
     );
   });
 
+  test('clears stale percent and letter when saving a raw point grade', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1', gradedAt: new Date(), gradedByMembershipId: 'teacher-1',
+      numericPercentage: 60, letterGrade: 'D', score: '60% (D)', unsubmittedAt: null,
+      document: { membershipId: 'student-1', assignment: null, membership: { classesAsStudent: [] } },
+    });
+    const response = await action({ request: makeRequest({ submissionId: 'sub-1',
+      score: '18/30', overallScore: 18, numericPercentage: null, letterGrade: null,
+    }) } as any) as Response;
+    expect(response.status).toBe(200);
+    expect(prisma.submission.updateMany.mock.calls[0][0].data).toMatchObject({
+      score: '18/30', overallScore: 18, numericPercentage: null, letterGrade: null,
+    });
+  });
+
   test('updates grading fields on a submission', async () => {
     buildTeacherClassWhere.mockReturnValue({
       OR: [

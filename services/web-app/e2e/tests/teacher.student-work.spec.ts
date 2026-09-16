@@ -554,13 +554,26 @@ test.describe.serial('Teacher Documents page', () => {
     signIn,
   }) => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto('/app/documents');
+    await page.goto('/app/documents?status=graded');
     await page.waitForLoadState('networkidle');
 
+    await page
+      .getByRole('checkbox', { name: 'Select visible documents' })
+      .check();
     const actionsButton = page.getByTestId('teacher-document-work-actions');
     await expect(actionsButton).toBeVisible();
     await expect(actionsButton).toHaveText(/Actions/);
     await expect(actionsButton.locator('.lucide-chevron-down')).toBeVisible();
+    const selectionToolbar = page.getByTestId(
+      'teacher-document-work-selection-toolbar'
+    );
+    await expect(selectionToolbar).toHaveText(/1 selected/);
+
+    const viewport = page.viewportSize();
+    const selectionBox = await selectionToolbar.boundingBox();
+    expect(viewport).not.toBeNull();
+    expect(selectionBox).not.toBeNull();
+    expect(selectionBox!.y).toBeGreaterThan(viewport!.height / 2);
 
     await actionsButton.click();
     const releaseGradesAction = page.getByRole('menuitem', {

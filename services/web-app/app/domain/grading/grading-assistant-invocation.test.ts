@@ -169,4 +169,16 @@ describe('compileGradingAssistantInvocation', () => {
     );
     expect(invocation.userMessage).not.toContain('{{');
   });
+
+  test('keeps the private-output contract on an opted-in managed prompt', () => {
+    const invocation = compileGradingAssistantInvocation({
+      gradingConfig: gradingConfig({ outputSchemaSnapshot: { teacherNotesEnabled: true }, promptTemplate: { systemMessage: 'Managed grading system.', userMessage: '{{rubric}}\n{{grading_instructions}}\n{{document}}' } }),
+      studentFirstName: 'Jordan', strictnessLevel: 'intermediate', documentText: 'A memory.',
+    });
+    expect(invocation.system).toStartWith('Managed grading system.');
+    expect(invocation.system).toContain('"teacherNote": string | null');
+    expect(invocation.system).toContain('Never put private observations in overallComment');
+    expect(invocation.system).toContain('Do not infer AI authorship');
+  });
+
 });

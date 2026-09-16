@@ -92,12 +92,15 @@ function render(element: ReactElement) {
 function renderPanel({
   rubricConfig,
   existingGrade,
+  pointValue,
 }: {
+  pointValue?: number;
   rubricConfig: Record<string, unknown>;
   existingGrade?: Record<string, unknown>;
 }) {
   return render(
     <TeacherGradingPanel
+      pointValue={pointValue}
       documentId="doc-1"
       submissionId="submission-1"
       existingGrade={
@@ -167,6 +170,22 @@ describe('TeacherGradingPanel on a points scale', () => {
     expect(lastPayload()).toMatchObject({ score: '3/3', overallScore: 3 });
   });
 
+  it('scales saved raw totals and preserves bands as points while saving feedback', () => {
+    ({ root } = renderPanel({
+      pointValue: 90,
+      rubricConfig: { ...dailyPagesConfig, maxScore: 30, step: 1, categories: [{
+        ...dailyPagesConfig.categories[0], scoreLabels: undefined,
+        bands: [{ label: 'Showed up', min: 17, max: 23, description: '' }],
+      }] },
+      existingGrade: { score: '18/30', rubricScores: { engagement: { score: 18, comment: '' } } },
+    }));
+    expect(document.body.textContent).toContain('Total points (out of 90)');
+    expect(document.body.textContent).not.toContain('%');
+    saveViaOverallFeedback('Kept engagement.');
+    expect(lastPayload()).toMatchObject({ score: '54/90', overallScore: 54 });
+    expect(lastPayload().numericPercentage ?? null).toBeNull();
+  });
+
   it('records a grade even when the assistant never graded the submission first', () => {
     ({ root } = renderPanel({
       rubricConfig: dailyPagesConfig,
@@ -216,7 +235,7 @@ describe('TeacherGradingPanel on a points scale', () => {
     }));
 
     const badge = document.querySelector('[data-testid="grading-grade-badge"]');
-    expect(badge?.textContent).toBe('1/3');
+    expect(badge?.textContent).toBe('3/3');
   });
 });
 

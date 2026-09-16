@@ -203,6 +203,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const [rubricConfig, grammarHighlightingEnabled] = await Promise.all([
     resolveRubricConfigForSubmission({
       assignmentTypeId: submission.document.assignmentTypeId,
+      assignmentId: submission.document.assignment?.id,
+      pointValue: submission.document.assignment?.pointValue,
       latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
       rubricScores: submission.rubricScores,
     }),
@@ -211,7 +213,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ),
   ]);
 
-  const { document, ...gradedSubmission } = submission;
+  const { document, gradingAssistantRuns: _privateRuns, ...gradedSubmission } = submission;
 
   return {
     submission: {

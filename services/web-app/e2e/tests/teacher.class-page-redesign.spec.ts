@@ -471,6 +471,9 @@ test.describe.serial('Teacher class page redesign', () => {
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
     await page.waitForLoadState('networkidle');
 
+    await page
+      .getByRole('checkbox', { name: 'Select visible documents' })
+      .check();
     const actionsButton = page.getByTestId('teacher-document-work-actions');
     await expect(actionsButton).toBeVisible();
     await expect(actionsButton).toHaveText(/Actions/);
@@ -652,9 +655,9 @@ test.describe.serial('Teacher class page redesign', () => {
       await expect(
         page.getByTestId('add-student-confirm-message')
       ).toContainText('already in this class');
-      await expect(
-        page.getByTestId('add-student-confirm-button')
-      ).toHaveCount(0);
+      await expect(page.getByTestId('add-student-confirm-button')).toHaveCount(
+        0
+      );
 
       const membershipsAfter = await prisma.orgMembership.findMany({
         where: { user: { email: studentEmail } },
@@ -670,7 +673,9 @@ test.describe.serial('Teacher class page redesign', () => {
         .deleteMany({ where: { email: studentEmail } })
         .catch(() => {});
       if (otherClassId) {
-        await prisma.class.delete({ where: { id: otherClassId } }).catch(() => {});
+        await prisma.class
+          .delete({ where: { id: otherClassId } })
+          .catch(() => {});
       }
       await prisma.$disconnect();
     }

@@ -75,7 +75,7 @@ describe('formatAssignmentGrade', () => {
         pointValue: 25,
         score: '4/5',
       })
-    ).toBe('4/5');
+    ).toBe('20 / 25');
   });
 });
 
@@ -208,5 +208,23 @@ describe('computeWeightedBandPercentage', () => {
         rawPointCategories
       )
     ).toBe(86);
+  });
+});
+
+// The assignment total is independent of the rubric's authored scoring scale.
+describe('raw rubric points on configured assignments', () => {
+  for (const [pointValue, expected] of [[10, '6 / 10'], [30, '18 / 30'], [90, '54 / 90'], [100, '60 / 100'], [1, '1 / 1']] as const) {
+    test(`scales 18/30 to ${pointValue} without treating it as a percentage`, () => {
+      expect(formatAssignmentGrade({ submitForGrade: true, numericPercentage: null, pointValue, score: '18/30' })).toBe(expected);
+    });
+  }
+  test('preserves exact teacher points alongside rounded legacy percentages', () => {
+    expect(formatAssignmentGrade({ submitForGrade: true, numericPercentage: 46, pointValue: 200, score: '91/200' })).toBe('91 / 200');
+    expect(formatAssignmentGrade({ submitForGrade: true, numericPercentage: 89, pointValue: 200, score: '4/5' })).toBe('178 / 200');
+  });
+  test('preserves zero and nonnumeric grades', () => {
+    expect(formatAssignmentGrade({ submitForGrade: true, numericPercentage: null, pointValue: 90, score: '0/30' })).toBe('0 / 90');
+    expect(formatAssignmentGrade({ submitForGrade: true, numericPercentage: null, pointValue: 90, score: 'Complete' })).toBe('Complete');
+    expect(formatAssignmentGrade({ submitForGrade: true, numericPercentage: null, pointValue: 90, score: null })).toBeNull();
   });
 });

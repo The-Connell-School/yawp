@@ -10,12 +10,45 @@ import {
 } from '~/utils/grading-auth.server';
 import {
   buildSubmissionActivityChanges,
-  recordSubmissionActivity,
+  recordSubmissionActivities,
   resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 
-const POST = z.object({ submissionId: z.string().min(1) });
+const POST = z
+  .object({
+    submissionId: z.string().min(1).optional(),
+    submissionIds: z
+      .preprocess(
+        (value) => {
+          if (Array.isArray(value)) return value;
+          if (typeof value === 'string') return [value];
+          return value;
+        },
+        z
+          .array(z.string())
+          .max(100, 'No more than 100 submissions can be unsubmitted at once')
+      )
+      .optional(),
+  })
+  .transform((value, ctx) => {
+    const submissionIds = Array.from(
+      new Set(
+        [...(value.submissionIds ?? []), value.submissionId].filter(Boolean)
+      )
+    ) as string[];
+
+    if (submissionIds.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'At least one submission is required',
+        path: ['submissionIds'],
+      });
+      return z.NEVER;
+    }
+
+    return { submissionIds };
+  });
 
 class TeacherUnsubmitConflictError extends Error {}
 
@@ -37,22 +70,28 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   let result:
-    { kind: 'not-found' } | { kind: 'own-document' } | { kind: 'success' };
+    | { kind: 'not-found'; message: string }
+    | { kind: 'own-document' }
+    | { kind: 'success'; unsubmittedCount: number };
 
   try {
     result = await prisma.$transaction(async (tx) => {
-      const submission = await tx.submission.findFirst({
+      const requestedSubmissionIds = data.submissionIds;
+      const teacherClassWhere = buildTeacherClassWhere(actor);
+      const submissions = await tx.submission.findMany({
         where: {
-          id: data.submissionId,
+          id: { in: requestedSubmissionIds },
           document: {
             is: {
               deletedAt: null,
-              ...buildTeacherClassWhere(actor),
+              ...teacherClassWhere,
             },
           },
+          unsubmittedAt: null,
         },
         select: {
           id: true,
+          updatedAt: true,
           gradedAt: true,
           releasedAt: true,
           unsubmittedAt: true,
@@ -82,30 +121,46 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
 
-      if (!submission) {
-        return { kind: 'not-found' as const };
+      if (submissions.length === 0) {
+        return {
+          kind: 'not-found' as const,
+          message: 'No active submissions found.',
+        };
       }
 
-      if (
+      if (submissions.length !== requestedSubmissionIds.length) {
+        return {
+          kind: 'not-found' as const,
+          message:
+            'One or more submissions are no longer eligible to unsubmit.',
+        };
+      }
+
+      const hasOwnDocument = submissions.some((submission) =>
         isGradingOwnDocument(
           actor.membershipId,
           submission.document.membershipId,
           actor.userId,
           submission.document.membership?.userId
         )
-      ) {
+      );
+      if (hasOwnDocument) {
         return { kind: 'own-document' as const };
       }
 
       const now = new Date();
       const updateResult = await tx.submission.updateMany({
         where: {
-          id: submission.id,
+          id: { in: submissions.map((submission) => submission.id) },
+          OR: submissions.map((submission) => ({
+            id: submission.id,
+            updatedAt: submission.updatedAt,
+          })),
           unsubmittedAt: null,
           document: {
             is: {
               deletedAt: null,
-              ...buildTeacherClassWhere(actor),
+              ...teacherClassWhere,
             },
           },
         },
@@ -114,49 +169,58 @@ export async function action({ request }: ActionFunctionArgs) {
           unsubmittedByMembershipId: actor.membershipId,
         },
       });
-      if (updateResult.count !== 1) {
+      if (updateResult.count !== submissions.length) {
         throw new TeacherUnsubmitConflictError();
       }
 
-      const organizationId =
-        submission.document.classAssignment?.class?.school?.organizationId ??
-        submission.document.membership?.organizationId ??
-        actor.organizationId;
-      await recordSubmissionActivity(tx, {
-        submissionId: submission.id,
-        organizationId,
-        actorMembershipId: resolveSubmissionActivityActorMembershipId({
-          actorMembershipId: actor.membershipId,
-          actorOrganizationId: actor.organizationId,
-          submissionOrganizationId: organizationId,
-        }),
-        actorUserId: actor.userId,
-        eventType: submissionActivityEventTypes.unsubmitted,
-        source: 'teacher-unsubmit-submission',
-        occurredAfterRelease: submission.releasedAt != null,
-        changes: buildSubmissionActivityChanges({
-          before: submission,
-          after: {
-            ...submission,
-            unsubmittedAt: now,
-            unsubmittedByMembershipId: actor.membershipId,
-          } as any,
-          fields: ['unsubmittedAt', 'unsubmittedByMembershipId'],
-        }),
-        metadata: {
-          priorStatus:
-            submission.releasedAt != null
-              ? 'released'
-              : submission.gradedAt != null
-                ? 'graded'
-                : 'submitted',
-          priorNumericPercentage: submission.numericPercentage ?? undefined,
-          priorOverallScore: submission.overallScore ?? undefined,
-          priorScore: submission.score ?? undefined,
-        },
-      });
+      await recordSubmissionActivities(
+        tx,
+        submissions.map((submission) => {
+          const organizationId =
+            submission.document.classAssignment?.class?.school
+              ?.organizationId ??
+            submission.document.membership?.organizationId ??
+            actor.organizationId;
+          return {
+            submissionId: submission.id,
+            organizationId,
+            actorMembershipId: resolveSubmissionActivityActorMembershipId({
+              actorMembershipId: actor.membershipId,
+              actorOrganizationId: actor.organizationId,
+              submissionOrganizationId: organizationId,
+            }),
+            actorUserId: actor.userId,
+            eventType: submissionActivityEventTypes.unsubmitted,
+            source: 'teacher-unsubmit-submission',
+            occurredAfterRelease: submission.releasedAt != null,
+            changes: buildSubmissionActivityChanges({
+              before: submission,
+              after: {
+                ...submission,
+                unsubmittedAt: now,
+                unsubmittedByMembershipId: actor.membershipId,
+              } as any,
+              fields: ['unsubmittedAt', 'unsubmittedByMembershipId'],
+            }),
+            metadata: {
+              priorStatus:
+                submission.releasedAt != null
+                  ? 'released'
+                  : submission.gradedAt != null
+                    ? 'graded'
+                    : 'submitted',
+              priorNumericPercentage: submission.numericPercentage ?? undefined,
+              priorOverallScore: submission.overallScore ?? undefined,
+              priorScore: submission.score ?? undefined,
+            },
+          };
+        })
+      );
 
-      return { kind: 'success' as const };
+      return {
+        kind: 'success' as const,
+        unsubmittedCount: submissions.length,
+      };
     });
   } catch (err) {
     if (err instanceof TeacherUnsubmitConflictError) {
@@ -174,7 +238,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (result.kind === 'not-found') {
     return dataResponse(
-      { success: false, message: 'Submission not found.' },
+      { success: false, message: result.message },
       { status: 404 }
     );
   }
@@ -186,9 +250,13 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  const message =
+    result.unsubmittedCount === 1
+      ? 'Submission withdrawn. The student’s document remains editable for resubmission.'
+      : `${result.unsubmittedCount} submissions withdrawn. Students can edit and resubmit them.`;
+
   return dataResponse({
     success: true,
-    message:
-      'Submission withdrawn. The student’s document remains editable for resubmission.',
+    message,
   });
 }
