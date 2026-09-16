@@ -1222,28 +1222,11 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
 
   return (
     <section className="space-y-3">
-      <DocumentWorkStatusPills {...props} />
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-h-9">
-          {props.selectedDocumentCount ? (
-            <div
-              className="inline-flex h-9 items-center gap-2 rounded-full border bg-background px-3 text-sm text-muted-foreground"
-              data-testid="teacher-document-work-selection-summary"
-            >
-              <span className="tabular-nums">
-                {props.selectedDocumentCount} selected
-              </span>
-              <button
-                type="button"
-                className="font-medium text-foreground hover:underline"
-                onClick={props.onClearSelection}
-              >
-                Clear
-              </button>
-            </div>
-          ) : null}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0 lg:flex-1">
+          <DocumentWorkStatusPills {...props} />
         </div>
-        <div className="flex shrink-0 flex-nowrap items-center justify-end gap-2">
+        <div className="flex shrink-0 flex-nowrap items-center gap-2">
           <DocumentWorkActionsMenu actions={props.actions} />
           <Popover>
             <PopoverTrigger asChild>
@@ -1273,7 +1256,50 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
           <DocumentWorkGroupSelect {...props} triggerClassName="w-[10.5rem]" />
         </div>
       </div>
+      <DocumentWorkSelectionToolbar
+        selectedDocumentCount={props.selectedDocumentCount}
+        onClearSelection={props.onClearSelection}
+      />
     </section>
+  );
+}
+
+function DocumentWorkSelectionToolbar({
+  selectedDocumentCount = 0,
+  onClearSelection,
+}: Pick<
+  DocumentWorkToolbarProps,
+  'selectedDocumentCount' | 'onClearSelection'
+>) {
+  const isVisible = selectedDocumentCount > 0;
+
+  return (
+    <div
+      aria-hidden={!isVisible}
+      className={cn(
+        'fixed inset-x-0 bottom-5 z-50 flex justify-center px-4 transition-all duration-200 ease-out',
+        isVisible
+          ? 'translate-y-0 opacity-100'
+          : 'pointer-events-none translate-y-6 opacity-0'
+      )}
+      data-testid="teacher-document-work-selection-toolbar"
+    >
+      <div className="flex h-11 items-center gap-3 rounded-full border bg-background/95 px-4 text-sm shadow-lg ring-1 ring-black/5 backdrop-blur">
+        <span className="font-medium tabular-nums text-foreground">
+          {selectedDocumentCount} selected
+        </span>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 rounded-full px-3"
+          disabled={!onClearSelection}
+          onClick={onClearSelection}
+        >
+          Clear selection
+        </Button>
+      </div>
+    </div>
   );
 }
 

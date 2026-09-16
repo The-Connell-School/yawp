@@ -15,7 +15,7 @@ export function TeacherNotes({
         'max-h-48 shrink-0 overflow-y-auto px-4 py-3',
         variant === 'footer'
           ? 'border-t'
-          : 'm-4 rounded-md border bg-muted/30'
+          : 'mx-4 mb-4 rounded-md border bg-muted/30'
       )}
       data-testid="teacher-private-notes"
     >

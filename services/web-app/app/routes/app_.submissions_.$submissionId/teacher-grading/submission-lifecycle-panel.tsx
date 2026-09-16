@@ -453,7 +453,6 @@ export function SubmissionLifecyclePanel({
                 student and records the change in Activity.
               </div>
             ) : null}
-            <TeacherNotes note={teacherNote} variant="inline" />
             <TeacherGradingPanel
               {...teacherGradingPanelProps}
               documentId={documentId}
@@ -461,6 +460,7 @@ export function SubmissionLifecyclePanel({
               hideHeader
               onHeaderStateChange={setHeaderState}
             />
+            <TeacherNotes note={teacherNote} variant="inline" />
           </>
         ) : isReadyToRelease || lifecycleState === 'released' ? (
           <>

@@ -253,8 +253,8 @@ describe('TeacherGradingPanel', () => {
       assistantSuggestion: {
         rubricScores: { claim: { score: 5, comment: 'Assistant said this.' } },
         overallComment: 'Assistant feedback.',
-        // The assistant's percentage follows its own rubric scores, which is
-        // why the restored total tracks the restored categories.
+        // The assistant's score follows its own rubric scores, which is why
+        // the restored total tracks the restored categories.
         numericPercentage: 100,
         score: null,
         letterGrade: 'A',
@@ -262,10 +262,11 @@ describe('TeacherGradingPanel', () => {
       },
     }));
 
-    const percentage = document.querySelector<HTMLInputElement>(
-      '[data-testid="grading-overall-percentage"]'
+    const totalPoints = document.querySelector<HTMLInputElement>(
+      '[data-testid="grading-overall-points"]'
     );
-    expect(percentage?.value).toBe('55');
+    expect(totalPoints?.value).toBe('55');
+    expect(document.body.textContent).toContain('Total points (out of 100)');
 
     const reset = document.querySelector<HTMLButtonElement>(
       '[data-testid="grading-reset-to-assistant-suggestions"]'
@@ -278,7 +279,7 @@ describe('TeacherGradingPanel', () => {
 
     expect(
       document.querySelector<HTMLInputElement>(
-        '[data-testid="grading-overall-percentage"]'
+        '[data-testid="grading-overall-points"]'
       )?.value
     ).toBe('100');
     expect(

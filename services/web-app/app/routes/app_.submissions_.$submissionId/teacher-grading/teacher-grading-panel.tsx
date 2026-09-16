@@ -53,7 +53,6 @@ import {
 import {
   computeWeightedBandPercentage,
   computeWeightedPercentageForCategories,
-  formatGrade,
   formatAssignmentGrade,
   assignmentPointTotal,
   isPointsScaleScoringType,
@@ -264,9 +263,8 @@ export function TeacherGradingPanel({
   const [hasManualPercentOverride, setHasManualPercentOverride] =
     useState(false);
   /**
-   * The points-scale equivalent of the overall percentage: editable at all
-   * times, seeded from what the category scores add up to, and left alone once
-   * the teacher types their own number.
+   * The editable total-points score: seeded from what the category scores add
+   * up to, and left alone once the teacher types their own number.
    */
   const [overallScoreInput, setOverallScoreInput] = useState('');
   const [sessionSuggestion, setSessionSuggestion] =
@@ -304,9 +302,9 @@ export function TeacherGradingPanel({
   }, [activeRubricConfig, rubricScores, isRawPoints]);
 
   /**
-   * The grade this rubric produces on a scale that reports raw points rather
-   * than a percentage (Daily Pages, ACT writing). Null on percentage scales,
-   * whose grade comes from the overall percentage field.
+   * The grade this rubric produces on a scale that reports raw points (Daily
+   * Pages, ACT writing). Null on configured scales, whose displayed grade
+   * comes from the total-points field.
    */
   const rubricScaleGrade = useMemo(() => {
     const grade = rubricScaleGradeFieldsFromScores({
@@ -616,10 +614,9 @@ export function TeacherGradingPanel({
         : null;
     const letter = percent === null ? null : letterFromPercent(percent);
 
-    // What the teacher's own scores are worth on this rubric's scale. On a
-    // percentage scale this is null and the overall percentage below is the
-    // grade; on a raw-points scale it *is* the grade, and nothing else will
-    // compute it -- the assistant only runs its own grading route.
+    // What the teacher's own scores are worth on this rubric's scale. Raw
+    // point rubrics produce their own grade; configured rubrics use this to
+    // derive the displayed total-points score.
     const scaleGrade = rubricScaleGradeFieldsFromScores({
       rubricScores: effectiveRubric,
       categories: activeRubricConfig.categories,
@@ -657,9 +654,15 @@ export function TeacherGradingPanel({
       ...(grammarChanged ? { grammarIssues: effectiveGrammarIssues } : {}),
     };
     const scaled = scalePointScore(scaleGrade?.score, pointValue);
-    if (manualScaleScore !== null && scaleScoreOutOf !== null) {
-      payload.overallScore = manualScaleScore;
-      payload.score = `${manualScaleScore}/${scaleScoreOutOf}`;
+    const derivedScaleScore =
+      manualScaleScore ??
+      (scaled ? scaled.earned : null) ??
+      (!isRawPoints && percent !== null && scaleScoreOutOf !== null
+        ? Math.round((percent / 100) * scaleScoreOutOf)
+        : null);
+    if (derivedScaleScore !== null && scaleScoreOutOf !== null) {
+      payload.overallScore = derivedScaleScore;
+      payload.score = `${derivedScaleScore}/${scaleScoreOutOf}`;
       payload.numericPercentage = percent;
       payload.letterGrade = letter;
     } else if (scaled) {
@@ -667,10 +670,6 @@ export function TeacherGradingPanel({
       payload.score = `${scaled.earned}/${scaled.possible}`;
       payload.numericPercentage = null;
       payload.letterGrade = null;
-    } else if (percent !== null) {
-      payload.numericPercentage = percent;
-      payload.letterGrade = letter;
-      payload.score = formatGrade(percent, letter) ?? '';
     } else if (existingGrade?.score) {
       payload.score = existingGrade.score;
     }
@@ -823,14 +822,21 @@ export function TeacherGradingPanel({
     const percent = isRawPoints ? null : manualScaleScore !== null
       ? Math.round(manualScaleScore / scaleScoreOutOf * 100) : resolvedNumericPercentage;
     const letter = percent === null ? null : letterFromPercent(percent);
-    const scaleScore = manualScaleScore ?? rubricScaleGrade?.overallScore ?? null;
-    const scaleScoreText = manualScaleScore !== null
-      ? `${manualScaleScore}/${scaleScoreOutOf}` : rubricScaleGrade?.score;
+    const scaleScore =
+      manualScaleScore ??
+      rubricScaleGrade?.overallScore ??
+      (!isRawPoints && percent !== null && scaleScoreOutOf !== null
+        ? Math.round((percent / 100) * scaleScoreOutOf)
+        : null);
+    const scaleScoreText =
+      scaleScore !== null && scaleScoreOutOf !== null
+        ? `${scaleScore}/${scaleScoreOutOf}`
+        : rubricScaleGrade?.score;
     return {
       numericPercentage: percent,
       letterGrade: letter,
       overallScore: scaleScore,
-      score: scaleScoreText || formatGrade(percent, letter) || existingGrade?.score || '',
+      score: scaleScoreText || existingGrade?.score || '',
       overallComment,
       rubricScores,
     };
@@ -899,8 +905,7 @@ export function TeacherGradingPanel({
       gradeBadgeClassName,
       hasUnsavedChanges,
       hasDraftToReplace,
-      // A grade exists when this rubric's own scale has produced one --
-      // a percentage, or the raw points a points scale reports instead.
+      // A grade exists when this rubric's own scale has produced one.
       hasGrade: manualScaleScore !== null || resolvedNumericPercentage !== null || rubricScaleGrade !== null,
       isGenerating,
       isAiRetrying,
@@ -1074,9 +1079,8 @@ export function TeacherGradingPanel({
       ) : null}
 
       <div className="no-scrollbar flex-1 overflow-y-auto p-3 space-y-4">
-        {/* A points scale records earned points and has no percentage at all,
-            so showing it an empty percentage box reads as a missing grade.
-            It gets the grade its own scale produces instead. */}
+        {/* A points scale records earned points directly, so it gets the grade
+            its own scale produces. */}
         {isRawPoints ? (
           <div className="space-y-2">
             <Label htmlFor="overall-score">
@@ -1128,11 +1132,13 @@ export function TeacherGradingPanel({
         ) : (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <Label htmlFor="pct">Total points (out of {scaleScoreOutOf})</Label>
+              <Label htmlFor="overall-points">
+                Total points (out of {scaleScoreOutOf})
+              </Label>
             </div>
             <Input
-              id="pct"
-              data-testid="grading-overall-percentage"
+              id="overall-points"
+              data-testid="grading-overall-points"
               type="number"
               min={0}
               max={scaleScoreOutOf}
