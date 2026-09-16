@@ -151,7 +151,7 @@ test('dropdown and arrows preserve the class queue and protect unsaved grading',
 
   // Grading changes the current row's status; it stays as an honest current
   // item, and the remaining queue still leads to the right documents.
-  await page.getByTestId('grading-overall-percentage').fill('88');
+  await page.getByTestId('grading-overall-points').fill('88');
   await page.getByTestId('submission-lifecycle-save').click();
   await expect(page.getByTestId('submission-lifecycle-release')).toBeVisible();
   await expect(picker).toHaveValue(entries[3].submissionId);
