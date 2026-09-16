@@ -58,7 +58,7 @@ export function TeacherNotes({
           className="gap-1 border-amber-200 bg-amber-50 py-0.5 pr-2 pl-1 text-amber-800 hover:bg-amber-50 hover:text-amber-800"
         >
           <AlertTriangle className="size-3" aria-hidden="true" />
-          Only shown to teachers
+          Not visible to students
         </Badge>
       </div>
       <ul className="mt-2 space-y-1.5 text-foreground">
