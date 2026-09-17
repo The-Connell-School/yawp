@@ -86,7 +86,10 @@ test.describe.serial('Tutor off badge', () => {
       createdAssignmentId = assignment.id;
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto(`/app/my-classes/${e2eContext.classId}`);
+      // The class page opens on the Students tab and only builds the
+      // assignments table once that tab is active, so the badge is not on the
+      // page without this parameter.
+      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
       await page.waitForLoadState('networkidle');
 
       const coldRow = page
