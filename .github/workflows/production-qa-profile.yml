@@ -68,7 +68,7 @@ jobs:
           PROD_SSH_KEY_PATH: ${{ runner.temp }}/yawp-production-bastion
 
       - name: Install Chromium
-        run: bunx playwright install --with-deps chromium
+        run: bun node_modules/playwright/cli.js install --with-deps chromium
 
       - name: Verify released-grade editing and activity in production
         run: bun run --cwd services/web-app production-qa-released-grade
