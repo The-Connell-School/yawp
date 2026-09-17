@@ -452,6 +452,44 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).not.toContain(deprecatedPreviewSlug);
   });
 
+  test('preview workflow does not gate previews on the pull request base branch', () => {
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+
+    // A stacked pull request based on another feature branch is still a
+    // pull request someone has to click through. The gate that matters for
+    // pull_request_target is a same-repo head, asserted above; the base ref
+    // does no security work, and gating on it left stacked PRs with no
+    // preview at all.
+    expect(previewWorkflow).not.toContain(
+      'github.event.pull_request.base.ref == github.event.repository.default_branch'
+    );
+  });
+
+  test('preview workflow destroys stacked pull request environments on close', () => {
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+
+    // Deploy and destroy must admit the same set of pull requests. If destroy
+    // is narrower, a stacked PR's environment survives its own close and
+    // counts against PREVIEW_MAX_ENVS forever.
+    const destroyStart = previewWorkflow.indexOf('  preview-destroy:');
+    const destroyEnd = previewWorkflow.indexOf('    runs-on:', destroyStart);
+    expect(destroyStart).toBeGreaterThan(-1);
+    expect(destroyEnd).toBeGreaterThan(destroyStart);
+    // The `if:` expression only. Further down, the job checks the control
+    // plane out of the default branch, which is a different thing entirely.
+    const destroyJob = previewWorkflow.slice(destroyStart, destroyEnd);
+
+    expect(destroyJob).toContain("github.event.action == 'closed'");
+    expect(destroyJob).toContain(
+      'github.event.pull_request.head.repo.full_name == github.repository'
+    );
+    expect(destroyJob).not.toContain('github.event.repository.default_branch');
+  });
+
   test('preview workflow no longer uses App Runner, Terraform, ECR pushes, or slash-command previews', () => {
     const previewWorkflow = readRepoFile(
       '.github/workflows/preview-environments.yml'
@@ -781,8 +819,11 @@ describe('PR preview deployment contract', () => {
       'ref: ${{ github.event.repository.default_branch }}'
     );
     expect(previewWorkflow).not.toContain('github.event.pull_request.base.sha');
+    // Same-repo head, not base branch: pull request code never runs outside the
+    // preview containers, so the base ref adds no protection and only decided
+    // which pull requests got a preview at all.
     expect(previewWorkflow).toContain(
-      'github.event.pull_request.base.ref == github.event.repository.default_branch'
+      'github.event.pull_request.head.repo.full_name == github.repository'
     );
     expect(previewWorkflow).toContain('remote_control=');
     expect(previewWorkflow).toContain(

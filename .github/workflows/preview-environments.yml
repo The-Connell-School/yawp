@@ -20,10 +20,13 @@ permissions:
 
 jobs:
   preview-deploy:
+    # Every same-repo pull request gets a preview, whatever its base branch: a
+    # stacked PR based on another feature branch is still a PR someone has to
+    # click through. The same-repo head check below is the gate that matters for
+    # pull_request_target; the base ref does no security work.
     if: >-
       github.event_name == 'pull_request_target' &&
       github.event.action != 'closed' &&
-      github.event.pull_request.base.ref == github.event.repository.default_branch &&
       ((github.event.action != 'labeled' && github.event.action != 'unlabeled') || github.event.label.name == 'preview:keep-awake') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.title, '[skip preview]') == false &&
@@ -399,10 +402,11 @@ jobs:
           ssh -i "$HOME/.ssh/preview_key" "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" "$cleanup_command" || true
 
   preview-destroy:
+    # Admits exactly what preview-deploy admits. Anything narrower leaks the
+    # environments of the pull requests it does not cover.
     if: >-
       github.event_name == 'pull_request_target' &&
       github.event.action == 'closed' &&
-      github.event.pull_request.base.ref == github.event.repository.default_branch &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-22.04
     environment: preview-host
