@@ -7,14 +7,6 @@ import type { E2EContext } from '../seed-e2e';
 async function fixture(context: E2EContext) {
   const prisma = createE2EPrismaClient();
   const suffix = Date.now().toString(36);
-  // The red baseline predates the rollout column; it must fail on missing UI,
-  // rather than on a fixture trying to set a not-yet-created column.
-  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
-    SELECT column_name FROM information_schema.columns
-    WHERE table_name = 'Organization' AND column_name = 'gradingQueueNavEnabled'`;
-  if (columns.length)
-    await prisma.$executeRaw`
-    UPDATE "Organization" SET "gradingQueueNavEnabled" = true WHERE id = ${context.organizationId}`;
   const schoolYear = await prisma.class.findUniqueOrThrow({
     where: { id: context.classId },
     select: { schoolYear: true },
@@ -186,7 +178,7 @@ test('dropdown and arrows preserve the class queue and protect unsaved grading',
   ).toBe('needs-grading');
 });
 
-test('queue stays private and the organization rollout can disable it', async ({
+test('queue stays private for students and active for teachers without a rollout flag', async ({
   page,
   e2eContext,
   signIn,
@@ -198,91 +190,36 @@ test('queue stays private and the organization rollout can disable it', async ({
   await expect(page.getByTestId('grading-queue-nav')).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText('Ben Queue');
   await expect(page.locator('body')).not.toContainText('Cara Queue');
-  const prisma = createE2EPrismaClient();
-  await prisma.$executeRaw`UPDATE "Organization" SET "gradingQueueNavEnabled" = false WHERE id = ${e2eContext.organizationId}`;
-  await prisma.$disconnect();
   await page.context().clearCookies();
   await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
   await page.goto(target);
-  await expect(page.getByTestId('grading-queue-nav')).toHaveCount(0);
+  await expect(page.getByTestId('grading-queue-nav')).toBeVisible();
+  await expect(
+    page.getByRole('combobox', { name: 'Choose ungraded submission' })
+  ).toContainText('Ben Queue');
 });
 
-test('additive migration and admin rollout preserve old writes and support scoped rollback', async ({
+test('migration removes the organization rollout control from schema and admin settings', async ({
   page,
   e2eContext,
   signIn,
 }) => {
   const prisma = createE2EPrismaClient();
-  const suffix = Date.now().toString(36);
-  const organizationId = `queue-rollout-${suffix}`;
-  const untouchedId = `queue-untouched-${suffix}`;
   try {
-    // Old application inserts do not know about the new column. Both still
-    // work, and neither organization gets the feature implicitly.
-    for (const id of [organizationId, untouchedId]) {
-      await prisma.$executeRaw`INSERT INTO "Organization" (id, name, "updatedAt") VALUES (${id}, ${id}, NOW())`;
-      expect(
-        (await prisma.organization.findUniqueOrThrow({ where: { id } }))
-          .gradingQueueNavEnabled
-      ).toBe(false);
-    }
+    const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'Organization' AND column_name = 'gradingQueueNavEnabled'`;
+    expect(columns).toEqual([]);
+
     await signIn(e2eContext.adminEmail, 'admin-e2e-password');
-    await page.goto(`/app/admin/organizations/${organizationId}`);
+    await page.goto(`/app/admin/organizations/${e2eContext.organizationId}`);
     await page
       .getByRole('button', { name: 'Edit Organization', exact: true })
       .click();
     const settings = page.getByRole('dialog');
-    const toggle = settings.locator('input[name="gradingQueueNavEnabled"]');
-    await expect(toggle).not.toBeChecked();
-    await toggle.check();
-    await settings
-      .getByRole('button', { name: 'Save Changes', exact: true })
-      .click();
-    await expect
-      .poll(
-        async () =>
-          (
-            await prisma.organization.findUniqueOrThrow({
-              where: { id: organizationId },
-            })
-          ).gradingQueueNavEnabled
-      )
-      .toBe(true);
-    expect(
-      (
-        await prisma.organization.findUniqueOrThrow({
-          where: { id: untouchedId },
-        })
-      ).gradingQueueNavEnabled
-    ).toBe(false);
-    await page.reload();
-    await page
-      .getByRole('button', { name: 'Edit Organization', exact: true })
-      .click();
-    await expect(toggle).toBeChecked();
-    await toggle.uncheck();
-    await settings
-      .getByRole('button', { name: 'Save Changes', exact: true })
-      .click();
-    await expect
-      .poll(
-        async () =>
-          (
-            await prisma.organization.findUniqueOrThrow({
-              where: { id: organizationId },
-            })
-          ).gradingQueueNavEnabled
-      )
-      .toBe(false);
-    // A legacy reader still sees its unchanged columns after rollback.
-    const legacy = await prisma.$queryRaw<
-      Array<{ name: string }>
-    >`SELECT name FROM "Organization" WHERE id = ${organizationId}`;
-    expect(legacy).toEqual([{ name: organizationId }]);
+    await expect(settings.locator('input[name="gradingQueueNavEnabled"]')).toHaveCount(0);
+    await expect(settings).not.toContainText('Grading queue navigation');
   } finally {
-    await prisma.organization.deleteMany({
-      where: { id: { in: [organizationId, untouchedId] } },
-    });
     await prisma.$disconnect();
   }
 });

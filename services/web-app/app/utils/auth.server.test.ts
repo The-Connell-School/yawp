@@ -60,7 +60,6 @@ const membershipFixture = {
     writingPracticeEnabled: false,
     submissionActivityEnabled: false,
     revisionFlowEnabled: false,
-    gradingQueueNavEnabled: false,
   },
 };
 
@@ -111,7 +110,6 @@ describe('membership auth helpers', () => {
             writingPracticeEnabled: true,
             submissionActivityEnabled: true,
             revisionFlowEnabled: true,
-            gradingQueueNavEnabled: true,
           },
         },
       },
@@ -145,7 +143,6 @@ describe('membership auth helpers', () => {
             writingPracticeEnabled: true,
             submissionActivityEnabled: true,
             revisionFlowEnabled: true,
-            gradingQueueNavEnabled: true,
           },
         },
       },

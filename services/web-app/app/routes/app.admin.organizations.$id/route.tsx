@@ -155,8 +155,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       formData.get('submissionActivityEnabled') === 'true';
     const revisionFlowEnabled =
       formData.get('revisionFlowEnabled') === 'true';
-    const gradingQueueNavEnabled =
-      formData.get('gradingQueueNavEnabled') === 'true';
     const assignmentTypeIds = Array.from(
       new Set(
         formData
@@ -192,7 +190,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           writingPracticeEnabled,
           submissionActivityEnabled,
           revisionFlowEnabled,
-          gradingQueueNavEnabled,
         },
       }),
       prisma.organizationAssignmentType.deleteMany({
@@ -540,24 +537,6 @@ export default function OrganizationRoute() {
                         <span className="block text-xs text-muted-foreground">
                           Sends "Revise Essay" to the split-screen revision
                           page. Off keeps the current draft editor.
-                        </span>
-                      </span>
-                    </label>
-                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
-                      <input
-                        type="checkbox"
-                        name="gradingQueueNavEnabled"
-                        value="true"
-                        defaultChecked={organization.gradingQueueNavEnabled}
-                        className="mt-1 h-4 w-4"
-                      />
-                      <span className="min-w-0">
-                        <span className="block font-medium">
-                          Grading queue navigation
-                        </span>
-                        <span className="block text-xs text-muted-foreground">
-                          Adds an ungraded-submission dropdown and previous/next
-                          arrows beside the student name while grading.
                         </span>
                       </span>
                     </label>

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { TriangleAlert } from 'lucide-react';
+import { CircleCheck, TriangleAlert } from 'lucide-react';
 import {
   measurePasteProvenance,
   getPasteEventRanges,
@@ -47,6 +47,7 @@ function AuthorizedTeacherPasteReport({
   const [forbidden, setForbidden] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [measurement, setMeasurement] = useState<PasteMeasurement | null>(null);
+  const hasPastedText = (measurement?.pastedCharacters ?? 0) > 0;
   const query = submissionId
     ? `submissionId=${encodeURIComponent(submissionId)}`
     : `documentId=${encodeURIComponent(documentId ?? '')}`;
@@ -168,10 +169,19 @@ function AuthorizedTeacherPasteReport({
             className={`flex flex-1 items-center justify-center gap-1.5 px-2 py-3 text-xs font-semibold ${open ? 'border-b-2 border-blue-600' : 'text-muted-foreground'}`}
             onClick={() => setOpen(true)}
           >
-            <TriangleAlert
-              className="h-4 w-4 shrink-0 text-red-600"
-              aria-hidden="true"
-            />{' '}
+            {hasPastedText ? (
+              <TriangleAlert
+                className="h-4 w-4 shrink-0 text-red-600"
+                data-testid="paste-report-warning-icon"
+                aria-hidden="true"
+              />
+            ) : (
+              <CircleCheck
+                className="h-4 w-4 shrink-0 text-muted-foreground"
+                data-testid="paste-report-empty-icon"
+                aria-hidden="true"
+              />
+            )}{' '}
             Pasted text
           </button>
         </div>
@@ -185,7 +195,21 @@ function AuthorizedTeacherPasteReport({
           data-testid="paste-report"
           aria-label="Pasted text report"
         >
-          {measurement ? (
+          {measurement && measurement.pastedCharacters === 0 ? (
+            <div
+              className="flex min-h-40 flex-col items-center justify-center rounded-md border border-dashed bg-muted/20 p-6 text-center"
+              data-testid="paste-report-empty"
+            >
+              <CircleCheck
+                className="h-8 w-8 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <p className="mt-3 text-sm font-medium">No pasted text found</p>
+              <p className="mt-1 max-w-64 text-sm text-muted-foreground">
+                Nothing to report for this {submissionId ? 'snapshot' : 'draft'}.
+              </p>
+            </div>
+          ) : measurement ? (
             <div className="@container rounded-md border bg-muted/25 p-3">
               <div className="grid grid-cols-1 divide-y divide-border/70 @sm:grid-cols-3 @sm:divide-x @sm:divide-y-0">
                 <div className="pb-3 @sm:pb-0 @sm:pr-3">
@@ -249,84 +273,82 @@ function AuthorizedTeacherPasteReport({
               Open the document text to measure this version.
             </p>
           )}
-          <div className="mb-2 mt-4 flex items-center justify-between gap-2">
-            <h3 className="font-medium">Recorded events</h3>
-            <button
-              type="button"
-              className="text-sm text-muted-foreground underline hover:text-foreground"
-              disabled={loading}
-              onClick={() => void load()}
-            >
-              Refresh
-            </button>
-          </div>
-          {error ? (
-            <p role="status" className="my-2 text-sm">
-              The event list could not be loaded. Try Refresh.
-            </p>
-          ) : null}
-          {loading ? (
-            <p role="status" className="my-2 text-sm">
-              Loading events…
-            </p>
-          ) : null}
-          {report && report.events.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No events were recorded. This does not establish that no text was
-              pasted.
-            </p>
-          ) : null}
-          <ol className="space-y-2" role="list">
-            {report?.events.map((event) => {
-              const surviving = measurement?.byEvent[event.id] ?? 0;
-              const linked = event.id.startsWith('paste_');
-              return (
-                <li key={event.id}>
-                  <button
-                    type="button"
-                    data-testid={`paste-event-${event.id}`}
-                    aria-pressed={selectedId === event.id}
-                    disabled={!surviving}
-                    onClick={() => select(event.id)}
-                    className={cn(
-                      'w-full rounded-md border p-3 text-left text-sm transition disabled:cursor-default',
-                      selectedId === event.id
-                        ? 'border-amber-500 bg-amber-50'
-                        : 'border-border bg-background hover:bg-muted/40',
-                      !surviving && 'opacity-80'
-                    )}
-                  >
-                    <span className="flex items-start justify-between gap-3">
-                      <span className="font-medium">
-                        {new Date(event.createdAt).toLocaleString()}
-                      </span>
-                      <span className="shrink-0 tabular-nums text-muted-foreground">
-                        {event.textLength.toLocaleString()} chars
-                      </span>
-                    </span>
-                    <span className="mt-1 block text-muted-foreground">
-                      {surviving
-                        ? `${surviving.toLocaleString()} characters remain — show in document`
-                        : !measurement
-                          ? 'Open the document text to locate this event'
-                          : linked
-                            ? 'No linked text remains in this version (removed or tracking unavailable)'
-                            : 'Earlier event; position unavailable'}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-          {report?.nextCursor ? (
-            <button
-              type="button"
-              className="mt-3 text-sm underline"
-              disabled={loading}
-              onClick={() => void load(report.nextCursor!)}
-            >
-              Load earlier events
-            </button>
+          {hasPastedText ? (
+            <>
+              <div className="mb-2 mt-4 flex items-center justify-between gap-2">
+                <h3 className="font-medium">Recorded events</h3>
+                <button
+                  type="button"
+                  className="text-sm text-muted-foreground underline hover:text-foreground"
+                  disabled={loading}
+                  onClick={() => void load()}
+                >
+                  Refresh
+                </button>
+              </div>
+              {error ? (
+                <p role="status" className="my-2 text-sm">
+                  The event list could not be loaded. Try Refresh.
+                </p>
+              ) : null}
+              {loading ? (
+                <p role="status" className="my-2 text-sm">
+                  Loading events…
+                </p>
+              ) : null}
+              <ol className="space-y-2" role="list">
+                {report?.events.map((event) => {
+                  const surviving = measurement?.byEvent[event.id] ?? 0;
+                  const linked = event.id.startsWith('paste_');
+                  return (
+                    <li key={event.id}>
+                      <button
+                        type="button"
+                        data-testid={`paste-event-${event.id}`}
+                        aria-pressed={selectedId === event.id}
+                        disabled={!surviving}
+                        onClick={() => select(event.id)}
+                        className={cn(
+                          'w-full rounded-md border p-3 text-left text-sm transition disabled:cursor-default',
+                          selectedId === event.id
+                            ? 'border-amber-500 bg-amber-50'
+                            : 'border-border bg-background hover:bg-muted/40',
+                          !surviving && 'opacity-80'
+                        )}
+                      >
+                        <span className="flex items-start justify-between gap-3">
+                          <span className="font-medium">
+                            {new Date(event.createdAt).toLocaleString()}
+                          </span>
+                          <span className="shrink-0 tabular-nums text-muted-foreground">
+                            {event.textLength.toLocaleString()} chars
+                          </span>
+                        </span>
+                        <span className="mt-1 block text-muted-foreground">
+                          {surviving
+                            ? `${surviving.toLocaleString()} characters remain — show in document`
+                            : !measurement
+                              ? 'Open the document text to locate this event'
+                              : linked
+                                ? 'No linked text remains in this version (removed or tracking unavailable)'
+                                : 'Earlier event; position unavailable'}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+              {report?.nextCursor ? (
+                <button
+                  type="button"
+                  className="mt-3 text-sm underline"
+                  disabled={loading}
+                  onClick={() => void load(report.nextCursor!)}
+                >
+                  Load earlier events
+                </button>
+              ) : null}
+            </>
           ) : null}
         </section>
       ) : null}

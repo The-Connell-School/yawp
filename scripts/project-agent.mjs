@@ -457,6 +457,7 @@ function runTestProfile(profile, { json }) {
   }
   else if (chosen === "teacher-paste-unit") {
     for (const file of [
+      "app/components/teacher-paste-report/index.test.tsx",
       "app/components/teacher-paste-report/provenance.test.ts",
       "app/routes/api.teacher-paste-report/route.test.ts",
       "app/routes/api.paste-alert/route.test.ts",
