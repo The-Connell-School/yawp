@@ -42,15 +42,12 @@ function membership(
   id: string,
   role: 'STUDENT' | 'TEACHER',
   organizationId = 'org-1',
-  {
-    revisionFlowEnabled = false,
-    gradingQueueNavEnabled = false,
-  }: { revisionFlowEnabled?: boolean; gradingQueueNavEnabled?: boolean } = {}
+  { revisionFlowEnabled = false }: { revisionFlowEnabled?: boolean } = {}
 ) {
   return {
     id,
     role,
-    organization: { id: organizationId, revisionFlowEnabled, gradingQueueNavEnabled },
+    organization: { id: organizationId, revisionFlowEnabled },
   };
 }
 
@@ -161,9 +158,7 @@ describe('submission loader — unsubmitted redirect', () => {
   test('loads grading queue navigation without an organization rollout flag', async () => {
     requireUserId.mockResolvedValue('user-teacher');
     requireMembership.mockResolvedValue(
-      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER', 'org-1', {
-        gradingQueueNavEnabled: false,
-      })
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
     );
     prisma.submission.findFirst.mockResolvedValue(buildSubmission());
 

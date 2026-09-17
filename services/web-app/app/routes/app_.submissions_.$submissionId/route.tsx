@@ -428,20 +428,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             : '/app/documents?status=needs-grading'
         ))
       : null;
-  const gradingQueue =
-    gradingQueueScope && profile.organization.gradingQueueNavEnabled === true
-      ? await loadGradingQueueNeighbors({
-          request,
-          membershipId: profile.id,
-          organizationId: profile.organization.id,
-          userId,
-          submissionId: submission.id,
-          scope: gradingQueueScope,
-          sort: parseGradingQueueSort(
-            url.searchParams.get(GRADING_QUEUE_SORT_PARAM)
-          ),
-        })
-      : null;
+  const gradingQueue = gradingQueueScope
+    ? await loadGradingQueueNeighbors({
+        request,
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        userId,
+        submissionId: submission.id,
+        scope: gradingQueueScope,
+        sort: parseGradingQueueSort(
+          url.searchParams.get(GRADING_QUEUE_SORT_PARAM)
+        ),
+      })
+    : null;
 
   return {
     revisionFlowEnabled: profile.organization.revisionFlowEnabled === true,
