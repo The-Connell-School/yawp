@@ -160,7 +160,9 @@ try {
   const studentPage = await studentContext.newPage();
   await signIn(studentPage, 'prod.qa.student.v3@brock.software');
   await studentPage.goto(`${baseUrl}${submissionPath}`);
-  await expect(studentPage.getByText('91%')).toBeVisible();
+  await expect(
+    studentPage.getByText('91 / 100', { exact: true }).first()
+  ).toBeVisible();
   await expect(
     studentPage.getByText('Production QA verified released-grade feedback.')
   ).toBeVisible();
