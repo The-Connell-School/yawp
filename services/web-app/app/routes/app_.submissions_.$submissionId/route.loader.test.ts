@@ -10,6 +10,7 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
+const loadGradingQueueNeighbors = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/db.server.js', () => ({ prisma }));
@@ -28,6 +29,9 @@ mock.module('~/utils/toast.server', () => ({
       headers: { 'Content-Type': 'application/json' },
     }),
 }));
+mock.module('~/domain/grading/grading-queue.server', () => ({
+  loadGradingQueueNeighbors,
+}));
 const { loader: routeLoader } = await import('./route');
 const loader = routeLoader as any;
 
@@ -38,12 +42,15 @@ function membership(
   id: string,
   role: 'STUDENT' | 'TEACHER',
   organizationId = 'org-1',
-  { revisionFlowEnabled = false } = {}
+  {
+    revisionFlowEnabled = false,
+    gradingQueueNavEnabled = false,
+  }: { revisionFlowEnabled?: boolean; gradingQueueNavEnabled?: boolean } = {}
 ) {
   return {
     id,
     role,
-    organization: { id: organizationId, revisionFlowEnabled },
+    organization: { id: organizationId, revisionFlowEnabled, gradingQueueNavEnabled },
   };
 }
 
@@ -126,10 +133,12 @@ describe('submission loader — unsubmitted redirect', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     prisma.assignmentType.findUnique.mockReset();
+    loadGradingQueueNeighbors.mockReset();
 
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
     prisma.assignmentType.findUnique.mockResolvedValue(null);
     prisma.submissionActivity.findMany.mockResolvedValue([]);
+    loadGradingQueueNeighbors.mockResolvedValue(null);
     requireUserId.mockResolvedValue('user-student');
   });
 
@@ -147,6 +156,36 @@ describe('submission loader — unsubmitted redirect', () => {
     const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
     expect(result.submission.rubricConfig.maxScore).toBe(90);
     expect(result.submission.rubricConfig.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual([[0, 0], [21, 39], [51, 69], [84, 90]]);
+  });
+
+  test('loads grading queue navigation without an organization rollout flag', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue(
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER', 'org-1', {
+        gradingQueueNavEnabled: false,
+      })
+    );
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission());
+
+    const result = await loader({
+      request: new Request(
+        'https://example.test/app/submissions/sub-1?exitTo=%2Fapp%2Fmy-classes%2Fclass-1%3Ftab%3Ddocuments%26status%3Dneeds-grading'
+      ),
+      params: { submissionId: 'sub-1' },
+    });
+
+    expect(loadGradingQueueNeighbors).toHaveBeenCalledTimes(1);
+    expect(loadGradingQueueNeighbors.mock.calls[0][0]).toMatchObject({
+      membershipId: TEACHER_MEMBERSHIP_ID,
+      organizationId: 'org-1',
+      submissionId: 'sub-1',
+      scope: {
+        kind: 'class',
+        classId: 'class-1',
+        filters: { status: 'needs-grading' },
+      },
+    });
+    expect(result.gradingQueue).toBeNull();
   });
 
   test('tells the student they unsubmitted it themselves', async () => {
