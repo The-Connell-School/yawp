@@ -312,6 +312,31 @@ describe('AssignmentCreationSheetContent', () => {
     );
   });
 
+  it('offers an optional rubric total and keeps step grading as the default', () => {
+    root = renderSheet().root;
+
+    expectText('Rubric total points');
+    expectText('Grading mode');
+    expectText('Step grading');
+    expectText('Bands grading');
+    expectNoText('Edit rubric');
+
+    expect(inputByName('rubricTotalPoints').value).toBe('');
+    expect(inputByName('gradingMode').value).toBe('step');
+    expect(inputByName('pointValue').value).toBe('100');
+  });
+
+  it('lets a teacher opt into bands grading from the assignment creator', () => {
+    root = renderSheet().root;
+
+    act(() => {
+      controlById('assignment-create-grading-mode-bands').click();
+    });
+
+    expect(inputByName('gradingMode').value).toBe('bands');
+    expectText('Any score within the label ranges is allowed.');
+  });
+
   it('preselects but does not lock assignment type from dashboard quick create', () => {
     root = renderSheet({
       entryPoint: 'dashboard',
