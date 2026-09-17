@@ -305,7 +305,7 @@ describe('AssignmentCreationSheetContent', () => {
     expectText(
       'The assistant reads demandingly, expecting polished and precise writing.'
     );
-    expectNoText('points');
+    expectNoText('point adjustment');
 
     expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
       'intermediate'
@@ -324,6 +324,24 @@ describe('AssignmentCreationSheetContent', () => {
     expect(inputByName('rubricTotalPoints').value).toBe('');
     expect(inputByName('gradingMode').value).toBe('step');
     expect(inputByName('pointValue').value).toBe('100');
+  });
+
+  it('reveals the rubric controls when the compact options disclosure is opened', () => {
+    root = renderSheet().root;
+
+    const disclosure = document.querySelector<HTMLDetailsElement>('details');
+    expect(disclosure).not.toBeNull();
+    expect(disclosure!.open).toBe(false);
+
+    act(() => {
+      disclosure!.querySelector('summary')!.click();
+    });
+
+    expect(disclosure!.open).toBe(true);
+    expect(inputByName('rubricTotalPoints').closest('details')).toBe(disclosure);
+    expect(controlById('assignment-create-grading-mode-step').closest('details')).toBe(
+      disclosure
+    );
   });
 
   it('lets a teacher opt into bands grading from the assignment creator', () => {

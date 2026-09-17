@@ -11,13 +11,93 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { resolveAssignmentTypeGradingConfig } =
+const { buildResolvedAssignmentTypeGradingConfig, resolveAssignmentTypeGradingConfig } =
   await import('./assignment-type-grading-config.server');
 
 describe('resolveAssignmentTypeGradingConfig', () => {
   beforeEach(() => {
     prisma.assignmentType.findUnique.mockReset();
     prisma.assignment.findUnique.mockReset();
+  });
+
+  test('scales rubric totals and keeps only labeled scores in the default step mode', () => {
+    const config = buildResolvedAssignmentTypeGradingConfig({
+      assignmentTypeId: 'assignment-type-points',
+      assignmentTypeKind: 'essay',
+      assignmentTypeTitle: 'Points rubric',
+      row: {
+        id: 'assignment-type-points',
+        title: 'Points rubric',
+        kind: 'essay',
+        scoringScaleJson: { type: 'rubric_points', minScore: 0, maxScore: 30 },
+        rubricJson: {
+          categories: [{
+            key: 'engagement',
+            label: 'Engagement',
+            weight: 1,
+            description: 'Shows up.',
+            scoreLabels: [
+              { value: 0, label: 'No-show' },
+              { value: 10, label: 'Mediocre' },
+              { value: 20, label: 'Good' },
+              { value: 30, label: 'Excellent' },
+            ],
+            bands: [
+              { min: 0, max: 0, label: 'No-show', description: 'Missing.' },
+              { min: 7, max: 13, label: 'Mediocre', description: 'Thin.' },
+              { min: 17, max: 23, label: 'Good', description: 'Solid.' },
+              { min: 28, max: 30, label: 'Excellent', description: 'Strong.' },
+            ],
+          }],
+        },
+        gradingPromptConfigJson: { gradingInstructions: 'Grade it.' },
+        gradingOutputSchemaJson: null,
+        gradingCalibrationNotes: null,
+        gradingAssistantVersion: 1,
+        gradingAssistantSourceTemplateId: null,
+        gradingAssistantSourceTemplateSlug: null,
+      },
+      rubricTotalPoints: 50,
+      gradingMode: 'step',
+    });
+
+    expect(config.minScore).toBe(0);
+    expect(config.maxScore).toBe(50);
+    expect(config.rubricCategories[0].scoreLabels?.map((entry) => entry.value)).toEqual([0, 17, 33, 50]);
+    expect(config.rubricCategories[0].allowedScores).toEqual([0, 17, 33, 50]);
+    expect(config.rubricCategories[0].bands?.[1]).toMatchObject({ min: 12, max: 22 });
+  });
+
+  test('preserves bands as the opt-in mode and does not add step restrictions', () => {
+    const config = buildResolvedAssignmentTypeGradingConfig({
+      assignmentTypeId: 'assignment-type-points',
+      assignmentTypeKind: 'essay',
+      assignmentTypeTitle: 'Points rubric',
+      row: {
+        id: 'assignment-type-points',
+        title: 'Points rubric',
+        kind: 'essay',
+        scoringScaleJson: { type: 'rubric_points', minScore: 0, maxScore: 30 },
+        rubricJson: {
+          categories: [{
+            key: 'engagement', label: 'Engagement', weight: 1,
+            description: 'Shows up.',
+            scoreLabels: [{ value: 0, label: 'No-show' }, { value: 10, label: 'Mediocre' }, { value: 20, label: 'Good' }, { value: 30, label: 'Excellent' }],
+            bands: [{ min: 0, max: 0, label: 'No-show', description: 'Missing.' }, { min: 7, max: 13, label: 'Mediocre', description: 'Thin.' }, { min: 17, max: 23, label: 'Good', description: 'Solid.' }, { min: 28, max: 30, label: 'Excellent', description: 'Strong.' }],
+          }],
+        },
+        gradingPromptConfigJson: { gradingInstructions: 'Grade it.' },
+        gradingOutputSchemaJson: null, gradingCalibrationNotes: null,
+        gradingAssistantVersion: 1, gradingAssistantSourceTemplateId: null,
+        gradingAssistantSourceTemplateSlug: null,
+      },
+      rubricTotalPoints: 50,
+      gradingMode: 'bands',
+    });
+
+    expect(config.gradingMode).toBe('bands');
+    expect(config.rubricCategories[0].allowedScores).toBeUndefined();
+    expect(config.rubricCategories[0].bands?.[1]).toMatchObject({ min: 12, max: 22 });
   });
 
   test('selected library rubric drives the compiled grading invocation instead of stale inline configuration', async () => {
