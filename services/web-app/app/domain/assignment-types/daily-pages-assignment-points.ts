@@ -75,6 +75,9 @@ export function scaleDailyPagesForAssignment(
     description: `${category.description}\n\n${scaleContext}${representability}`,
     bands,
     scoreLabels,
+    ...(category.allowedScores
+      ? { allowedScores: [...new Set(scoreLabels.map((entry) => entry.value))] }
+      : {}),
   }];
   return {
     ...config,
