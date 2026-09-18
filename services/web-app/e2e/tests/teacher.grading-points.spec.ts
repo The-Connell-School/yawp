@@ -316,8 +316,8 @@ test('AI grading uses assignment rubric overrides and the final grade uses the a
     data: {
       documentId: document.id,
       title,
-      text: document.text,
-      html: document.html,
+      text: `${title}. I kept writing until the thought became more specific.`,
+      html: `<p>${title}. I kept writing until the thought became more specific.</p>`,
       submittedAt: new Date(),
     },
   });
