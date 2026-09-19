@@ -40,6 +40,9 @@ try {
       numOfStudentSeats: 200,
       numOfTeacherSeats: 40,
       reporterEnabled: true,
+      lessonPlannerEnabled: true,
+      // Left off here on purpose: enableClassInsightsForOrganizations below is
+      // the single place that turns it on, for local dev and preview seats.
       classInsightsEnabled: false,
     },
   });
