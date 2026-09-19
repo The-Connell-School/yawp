@@ -96,6 +96,39 @@ alongside the tutor and collaboration toggles.
   it afterwards would silently restate those grades. Making it editable is a
   reasonable future change, but it needs a re-grade story first.
 
+## Telling teachers what it is
+
+The rubric change is invisible until a teacher assigns something. The page they
+assign from is `/app/assignment-types/:id`, and until now the only teacher copy
+on it explained how to browse the prompt library — how to click, not what they
+were handing out.
+
+So the Daily Pages page opens with an about section
+(`app.assignment-types.$id/about-daily-pages/`) that answers, in order: what an
+entry is, what it is not, how it is graded, how to run it with a class, and how
+to write a prompt of your own.
+
+Two decisions inside it are load-bearing:
+
+- **The weights are read off the rubric, not retyped.** `GRADING_SUMMARY` maps
+  `DAILY_PAGES_SHORT_FORM_RUBRIC.categories`, and a test asserts the keys,
+  labels, and percentages match. Copy that describes the assistant and then
+  drifts from what the assistant does is worse than no copy: a teacher who is
+  told grammar is 15% and finds it is 30% stops trusting the page.
+- **"What it is not" names the alternative each time.** Not a warm-up (that is
+  a Class Starter), not an essay, not a reading check, not a length contest,
+  not a grammar exercise. The Class Starter line is the one teachers get wrong,
+  and it is the distinction the whole split rests on.
+
+The prompt-writing half is the part that does the most work over a year. Most
+Daily Pages prompts a teacher uses will be their own, written the morning of,
+so the section teaches the shape rather than only handing out finished prompts:
+a position to take, an explicit ask for the backing, a named finish line — then
+three before-and-after rewrites and the five signs a prompt will not grade well.
+The ask for the backing is the one that matters most, because a prompt without
+it leaves Development of Thought nothing to read and the entry stalls mid-scale
+no matter how the student writes it.
+
 ## Rollout
 
 1. Create the Class Starter assignment type (see above) and move the freewrite

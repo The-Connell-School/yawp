@@ -11,6 +11,15 @@ something neither of them does.
 | Asks for support | No | **Yes, always** | Yes |
 | Names a shape | No | A target length | Introduction → thesis → body → conclusion |
 
+## Where the teaching copy lives
+
+This folder's directions cover the library and nothing else. What Daily Pages
+is, what it is not, how the assistant grades it, and how a teacher writes a
+prompt of their own live in `../about-daily-pages/`, which renders directly
+above the library on the assignment-type page. Grading claims there are derived
+from the rubric rather than retyped, so add copy about scoring there and not
+here.
+
 ## The design constraint
 
 The short-form rubric scores **Depth of Thought** and **Development of

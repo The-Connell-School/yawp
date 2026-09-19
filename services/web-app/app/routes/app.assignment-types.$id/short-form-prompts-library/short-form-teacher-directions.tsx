@@ -1,5 +1,15 @@
-import { KIND_DESCRIPTION, KIND_LABEL, KIND_ORDER, TEACHING_NOTES } from './data';
+import {
+  KIND_DESCRIPTION,
+  KIND_LABEL,
+  KIND_ORDER,
+  TEACHING_NOTES,
+} from './data';
 
+/**
+ * How to use the library, and only that. What Daily Pages is, how it is graded,
+ * and how to write a prompt live in `../about-daily-pages/`, rendered directly
+ * above this block.
+ */
 export function ShortFormTeacherDirections() {
   return (
     <section className="mb-6 rounded-lg border bg-muted/40 p-4">
@@ -13,11 +23,9 @@ export function ShortFormTeacherDirections() {
         and hit Create Assignment.
       </p>
       <p className="mb-3 text-sm text-muted-foreground">
-        Every prompt here asks the student for the backing as well as the
-        opinion — a reason, a quotation, a case that tests the claim. That is
-        deliberate: Daily Pages is graded on depth of thought and how far the
-        thinking develops, and a prompt that asks only for a reaction leaves
-        those scores with nothing to read.
+        Every prompt here is built to the shape described above: it asks for the
+        backing as well as the opinion, and it names a finish line. Editing one
+        is expected — keep those two parts and it will still grade.
       </p>
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         The six kinds

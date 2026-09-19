@@ -41,6 +41,7 @@ import {
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { AboutDailyPages } from './about-daily-pages/about-daily-pages';
 import { ApHistoryLibrary } from './ap-history-library';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
@@ -785,7 +786,12 @@ export default function AppAssignmentTypesIdRoute() {
         {data.promptLibrary ? (
           <TeacherDirections variant={data.promptLibrary.variant} />
         ) : null}
-        {showShortFormLibrary ? <ShortFormTeacherDirections /> : null}
+        {showShortFormLibrary ? (
+          <>
+            <AboutDailyPages />
+            <ShortFormTeacherDirections />
+          </>
+        ) : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {hasModules ? (
           <Accordion type="single" collapsible>

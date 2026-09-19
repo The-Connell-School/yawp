@@ -279,15 +279,17 @@ export const COGNITIVE_MOVES = [
 ] as const satisfies readonly ShortFormCognitiveMove[];
 
 /**
- * Guidance shown above the library. Says the two things a teacher most needs to
- * know before assigning one of these, both of which follow from the rubric
- * rather than from taste.
+ * Guidance shown above the library, about the library. What the assignment type
+ * is, how it is graded, and how to write a prompt for it belong to the about
+ * section (`../about-daily-pages/`), which sits directly above this one —
+ * repeating any of it here only buries the few things that are true of the
+ * corpus and nothing else.
  */
 export const TEACHING_NOTES: string[] = [
-  'These are graded like short essays: thinking first, then structure, voice, and grammar. For writing you want graded on effort alone, use a Class Starter instead.',
-  'Every prompt asks for the backing as well as the opinion — a reason, a quotation, a case that tests the claim. That is what the Development of Thought score reads.',
-  'Length is never rewarded on its own. Tell students the target on the board; a tight, well-supported paragraph can earn the top of the scale.',
-  'Turn off grammar grading on the assignment itself when you want one of these graded on the thinking alone.',
+  'Filter by “Source required” for the prompts that follow a reading, and by “No source needed” on a day the class has read nothing.',
+  'Every prompt names a target length. Keep it when you edit the wording — it is how a student knows when they are done, and length earns nothing on its own.',
+  'Editing a prompt before you create the assignment is expected. These are starting points; the class in front of you is the reason to change one.',
+  'The six kinds below are also the six shapes worth copying when you write a prompt of your own.',
 ];
 
 /** URL search-param keys. Prefixed `sf_` so they collide with neither library. */
