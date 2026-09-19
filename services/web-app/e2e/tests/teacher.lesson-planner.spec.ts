@@ -1001,19 +1001,36 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page.getByTestId('lesson-packet-bar')).toHaveCount(0);
 
     const replies = page.locator('[data-role="assistant"]');
-    await replies
-      .nth(0)
-      .getByRole('button', { name: /add all of this/i })
-      .click();
+    // The bar counts optimistically, off local state, so it says "1 piece" the
+    // moment the button is clicked — before the write has landed. Waiting on
+    // the write itself is what makes opening the stack next safe.
+    const kept = (run: Promise<unknown>) =>
+      Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.url().includes('/api/domain/lesson-planner/packet') &&
+            response.request().method() === 'POST'
+        ),
+        run,
+      ]);
+
+    await kept(
+      replies
+        .nth(0)
+        .getByRole('button', { name: /add all of this/i })
+        .click()
+    );
 
     const bar = page.getByTestId('lesson-packet-bar');
     await expect(bar).toContainText(/1 piece/i);
 
     // The second reply is a handout, so it is kept for students.
-    await replies
-      .nth(1)
-      .getByRole('button', { name: /add all as a handout/i })
-      .click();
+    await kept(
+      replies
+        .nth(1)
+        .getByRole('button', { name: /add all as a handout/i })
+        .click()
+    );
     await expect(bar).toContainText(/2 pieces/i);
 
     await bar.getByRole('link', { name: /open the stack/i }).click();
