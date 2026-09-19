@@ -248,6 +248,30 @@ describe('buildLessonPlannerSystemPrompt — a warm-up it wrote', () => {
     expect(prompt.toLowerCase()).toContain('never invent one');
   });
 
+  /**
+   * One prompt is a decision made for the teacher. Three is a choice they can
+   * make in the ten seconds they have before first period — and each one
+   * arrives as its own card with its own assign button, so choosing is a tap.
+   */
+  test('offers three warm-up prompts rather than picking one', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('offer three');
+    expect(lower).toContain('one block each');
+    expect(lower).toContain('never hand over a single warm-up');
+  });
+
+  test('keeps the three genuinely different from one another', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('three that differ');
+    expect(lower).toContain('not the same question three ways');
+  });
+
+  test('tells it not to rank the options or write the choice into the plan', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('do not rank them');
+    expect(lower).toContain('do not name one of the three in the step');
+  });
+
   test('bans the "not from the library" disclaimer the teacher never wanted', () => {
     const lower = prompt.toLowerCase();
     expect(lower).toContain('not from the library');

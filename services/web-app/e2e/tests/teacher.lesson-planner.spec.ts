@@ -593,6 +593,61 @@ async function seedWrittenWarmUp(e2eContext: {
 }
 
 /**
+ * The default shape of a warm-up offer: three prompts, one block each.
+ *
+ * Which prompt a room will actually write about at 8am is the teacher's call,
+ * so the planner offers rather than decides. Each block has to arrive as its
+ * own card with its own assign button — three prompts stacked into one card,
+ * or a single button that picks for them, would put the choice back where it
+ * does not belong.
+ */
+async function seedThreeWarmUpOptions(e2eContext: {
+  teacherMembershipId: string;
+  organizationId: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Warm-up options lesson',
+        messages: {
+          create: [
+            {
+              role: 'user',
+              content: 'Plan a lesson on choosing evidence.',
+              createdAt: new Date('2026-08-05T10:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content:
+                '## Warm-up (5 min)\n\nFour minutes to write, then two share aloud. Pick one:\n\n' +
+                '```yawp-daily-pages\n' +
+                'id: FW-001\n' +
+                'Think of the last time you tried to convince someone of something.\n' +
+                '```\n\n' +
+                '```yawp-daily-pages\n' +
+                'Write about a rule you think is wrong, and what you would say to the person who made it.\n' +
+                '```\n\n' +
+                '```yawp-daily-pages\n' +
+                'Describe something you believed last year and no longer believe.\n' +
+                '```\n\n' +
+                '## Mini-lesson\n\nWhat makes a quote prove a claim.',
+              createdAt: new Date('2026-08-05T10:00:01.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/**
  * A plain lesson plan carrying no artifacts, so the follow-on offers are both
  * still on the table. A reply that already built a handout suppresses that
  * offer on purpose, which is a different case.
@@ -2493,6 +2548,46 @@ test.describe('YAWP! Lesson Planner', () => {
     );
     // And the lesson is the one they left, not a blank planner.
     await expect(page.getByTestId('daily-pages-card')).toBeVisible();
+  });
+
+  test('offers three warm-ups, each assignable on its own', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedThreeWarmUpOptions(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    // Three cards, in the order the reply wrote them, never one card holding
+    // three prompts — the teacher chooses by tapping, not by copying.
+    const cards = page.getByTestId('daily-pages-card');
+    await expect(cards).toHaveCount(3);
+    await expect(cards.nth(0)).toContainText(
+      'Think of the last time you tried to convince someone'
+    );
+    await expect(cards.nth(1)).toContainText('a rule you think is wrong');
+    await expect(cards.nth(2)).toContainText(
+      'something you believed last year'
+    );
+
+    // Every option carries its own button, and the step above them names none
+    // of the three, so the lesson reads the same whichever one goes up.
+    await expect(page.getByTestId('daily-pages-create')).toHaveCount(3);
+    await expect(page.locator('main')).toContainText('Pick one:');
+    await expect(page.locator('main')).not.toContainText('yawp-daily-pages');
+
+    // The one they pick is the one that reaches the assignment sheet.
+    await cards.nth(2).getByTestId('daily-pages-create').click();
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+      )
+    );
+    await expect(page.locator('#assignment-create-prompt')).toHaveValue(
+      /something you believed last year/
+    );
   });
 
   test('refuses to present a reply that has no deck in it', async ({
