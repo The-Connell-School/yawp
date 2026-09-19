@@ -505,6 +505,24 @@ describe('buildLessonPlannerSystemPrompt — the plan comes first', () => {
     // That instruction was producing the preamble it is now told not to write.
     expect(prompt).not.toContain('and say that is why');
   });
+
+  /**
+   * The blurb that kept showing up above the title: an acknowledgement of the
+   * teacher's answer, then an account of which Lounge material fit and which
+   * slides of it to skip. None of it is the lesson, and a teacher reopening
+   * the plan reads past it every time.
+   */
+  test('forbids an acknowledgement or a material round-up above the title', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('nothing goes above the title');
+    expect(lower).toContain("here's everything i need");
+  });
+
+  test('keeps slide-range reasoning on the step that projects them', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('passed over');
+    expect(lower).toContain('belongs in the `yawp-resource` block on the step');
+  });
 });
 
 describe('buildLessonPlannerSystemPrompt — bringing material in', () => {
@@ -1030,8 +1048,12 @@ describe('buildLessonPlannerSystemPrompt — handing back several pieces at once
     organizationName: 'Connell School',
   });
 
-  test('says what it built, at the top', () => {
-    expect(prompt.toLowerCase()).toContain('say so at the top');
+  test('accounts for each piece where it is used, never as an opening inventory', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('account for them where they are used');
+    expect(lower).toContain('never open with an inventory');
+    // The old wording invited the very preamble the plan-comes-first rules ban.
+    expect(lower).not.toContain('say so at the top');
   });
 
   test('names each piece by the title on its card', () => {
