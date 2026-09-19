@@ -1,11 +1,16 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
   type ActionFunctionArgs,
   Form,
 } from 'react-router';
-import { Link, useLoaderData, useNavigation } from 'react-router';
+import {
+  Link,
+  useLoaderData,
+  useNavigation,
+  useSearchParams,
+} from 'react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -61,6 +66,8 @@ import {
   toLibraryEntries,
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
+import { isDailyPagesTitle } from '~/domain/lesson-planner/yawp-catalog';
+import { FROM_LESSON_PARAM } from '~/domain/lesson-planner/daily-pages-block';
 import { ThesisPromptsLibrary } from './thesis-prompts-library/thesis-prompts-library';
 import { ThesisPromptGenerator } from './thesis-prompts-library/thesis-prompt-generator';
 import { ThesisTeacherDirections } from './thesis-prompts-library/thesis-teacher-directions';
@@ -75,7 +82,8 @@ import {
 } from './thesis-prompts-library/data';
 import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 
-const DAILY_PAGES_TITLE = 'daily pages';
+/** How the Lesson Planner hands a written warm-up to this page. */
+const NEW_PROMPT_PARAM = 'newPrompt';
 const THESIS_ESSAY_TITLE = 'the thesis-driven essay';
 const ALL_PROMPTS = toLibraryEntries(promptsRaw as LibraryPrompt[]);
 const ALL_THESIS_PROMPTS = toThesisLibraryEntries(
@@ -346,7 +354,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
     }),
-    profile.role === "TEACHER"
+    profile.role === 'TEACHER'
       ? prisma.class.findMany({
           where: {
             teachers: { some: { id: profile.id } },
@@ -402,7 +410,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const normalizedTitle = assignmentType.title.trim().toLowerCase();
-  const isDailyPages = normalizedTitle === DAILY_PAGES_TITLE;
+  const isDailyPages = isDailyPagesTitle(assignmentType.title);
   const isThesisEssay = normalizedTitle === THESIS_ESSAY_TITLE;
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -420,7 +428,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ? [...savedPrompts.map(savedPromptToLibraryEntry), ...ALL_PROMPTS]
       : [];
   const promptLibrary =
-    profile.role === "TEACHER" && isDailyPages
+    profile.role === 'TEACHER' && isDailyPages
       ? {
           prompts: applyFilters(
             libraryEntries,
@@ -459,14 +467,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           totalCount: thesisLibraryEntries.length,
         }
       : null;
-  const enabledTeacherClassIds = profile.role === "TEACHER"
-    ? new Set(teacherClasses.map((klass) => klass.id))
-    : new Set<string>();
-  const assignmentEnabledTeacherClasses = profile.role === "TEACHER"
-    ? teacherClasses
-    : [];
+  const enabledTeacherClassIds =
+    profile.role === 'TEACHER'
+      ? new Set(teacherClasses.map((klass) => klass.id))
+      : new Set<string>();
+  const assignmentEnabledTeacherClasses =
+    profile.role === 'TEACHER' ? teacherClasses : [];
   let apHistoryLibrary = null;
-  if (profile.role === "TEACHER" && isApHistory) {
+  if (profile.role === 'TEACHER' && isApHistory) {
     if (assignmentEnabledTeacherClasses.length > 0) {
       apHistoryLibrary = {
         entries: await listApHistoryLibraryEntries(assignmentType.id),
@@ -488,18 +496,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  const teacherClasses = profile.role === "TEACHER"
-    ? await prisma.class.findMany({
-        where: {
-          teachers: { some: { id: profile.id } },
-          isArchived: false,
-        },
-        select: {
-          id: true,
-          school: { select: { id: true, organizationId: true } },
-        },
-      })
-    : [];
+  const teacherClasses =
+    profile.role === 'TEACHER'
+      ? await prisma.class.findMany({
+          where: {
+            teachers: { some: { id: profile.id } },
+            isArchived: false,
+          },
+          select: {
+            id: true,
+            school: { select: { id: true, organizationId: true } },
+          },
+        })
+      : [];
   const assignmentTypeAvailable = params.id
     ? await isAssignmentTypeAvailableForAnyScope({
         assignmentTypeId: params.id,
@@ -591,6 +600,31 @@ export default function AppAssignmentTypesIdRoute() {
     essayType: string;
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
+
+  // The Lesson Planner sends a teacher here with a warm-up it wrote, to be
+  // assigned rather than retyped. Open the sheet on it once, then drop the
+  // param so a refresh (or the back button) does not reopen it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const incomingPrompt = searchParams.get(NEW_PROMPT_PARAM);
+  // Kept in the URL after the prompt is consumed: a teacher who followed a
+  // button out of a half-finished lesson needs the way back to still be there
+  // once the sheet has done its job.
+  const fromLesson = searchParams.get(FROM_LESSON_PARAM);
+  useEffect(() => {
+    if (!incomingPrompt) return;
+    setLibraryPrompt(incomingPrompt);
+    setApHistoryEntry(null);
+    setIsAssignmentSheetOpen(true);
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete(NEW_PROMPT_PARAM);
+        return next;
+      },
+      { replace: true, preventScrollReset: true }
+    );
+  }, [incomingPrompt, setSearchParams]);
+
   const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -603,10 +637,23 @@ export default function AppAssignmentTypesIdRoute() {
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
       <div className="mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5">
         <div className="mb-4 flex justify-between gap-2">
+          {/* Arriving from a lesson, the way back is to that lesson. The
+              planner embeds this page's creator inside a plan, so a teacher
+              gets here mid-lesson and "Back to dashboard" strands them. */}
           <Button asChild variant="outline">
-            <Link to="/app" className="w-fit">
-              <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
-            </Link>
+            {fromLesson ? (
+              <Link
+                to={`/app/lesson-planner?c=${fromLesson}`}
+                className="w-fit"
+                data-testid="back-to-lesson"
+              >
+                <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to your lesson
+              </Link>
+            ) : (
+              <Link to="/app" className="w-fit">
+                <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
+              </Link>
+            )}
           </Button>
 
           {isTeacher ? (

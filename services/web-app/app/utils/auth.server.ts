@@ -28,6 +28,7 @@ const membershipSelect = {
       name: true,
       reporterEnabled: true,
       classInsightsEnabled: true,
+      lessonPlannerEnabled: true,
       writingPracticeEnabled: true,
       submissionActivityEnabled: true,
       revisionFlowEnabled: true,
