@@ -65,12 +65,18 @@ import {
 } from '~/utils/document-exit';
 import {
   GRADING_QUEUE_SORT_PARAM,
+  buildDocumentNavigationHref,
   buildGradingQueueHref,
   parseGradingQueueScope,
   parseGradingQueueSort,
+  type DocumentNavigationNeighbors,
   type GradingQueueNeighbors,
 } from '~/domain/grading/grading-queue';
-import { loadGradingQueueNeighbors } from '~/domain/grading/grading-queue.server';
+import {
+  loadDocumentNavigationNeighbors,
+  loadGradingQueueNeighbors,
+} from '~/domain/grading/grading-queue.server';
+import { TeacherDocumentNavigation } from '~/components/teacher-document-navigation';
 import { GradingQueueNav } from './teacher-grading/grading-queue-nav';
 import { EssayPanel } from './essay-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
@@ -441,10 +447,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         ),
       })
     : null;
+  const documentNavigationScope =
+    gradingQueueScope?.kind === 'documents' ? gradingQueueScope : null;
+  const documentNavigation = documentNavigationScope
+    ? await loadDocumentNavigationNeighbors({
+        request,
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        userId,
+        documentId: submission.documentId,
+        scope: documentNavigationScope,
+        sort: parseGradingQueueSort(
+          url.searchParams.get(GRADING_QUEUE_SORT_PARAM)
+        ),
+      })
+    : null;
 
   return {
     revisionFlowEnabled: profile.organization.revisionFlowEnabled === true,
     gradingQueue,
+    documentNavigation,
     submission: {
       ...publicSubmission,
       comments: sortedComments,
@@ -491,6 +513,10 @@ function SubmissionDetail({
   } = loaderData;
   const gradingQueue: GradingQueueNeighbors | null =
     'gradingQueue' in loaderData ? (loaderData.gradingQueue ?? null) : null;
+  const documentNavigation: DocumentNavigationNeighbors | null =
+    'documentNavigation' in loaderData
+      ? (loaderData.documentNavigation ?? null)
+      : null;
   const activities = 'activities' in loaderData ? loaderData.activities : [];
   const activityHasMore =
     'activityHasMore' in loaderData ? loaderData.activityHasMore : false;
@@ -1143,7 +1169,24 @@ function SubmissionDetail({
         <div className="h-4 w-px bg-border shrink-0" />
 
         <div className="flex min-w-0 items-center gap-2">
-          {isGradingOther && gradingQueue && gradingStudentName ? (
+          {isGradingOther && documentNavigation ? (
+            <TeacherDocumentNavigation
+              queue={documentNavigation}
+              documentId={submission.documentId}
+              disabled={gradingNavigationState.isBusy}
+              hrefFor={(entry) =>
+                buildDocumentNavigationHref({
+                  entry,
+                  exitTo:
+                    sanitizeExitTarget(searchParams.get('exitTo')) ??
+                    '/app/documents',
+                  sort: parseGradingQueueSort(
+                    searchParams.get(GRADING_QUEUE_SORT_PARAM)
+                  ),
+                })
+              }
+            />
+          ) : isGradingOther && gradingQueue && gradingStudentName ? (
             // The name sits between the arrows: this is a stack of papers, and
             // the control that moves through it belongs on the name it names.
             <GradingQueueNav
