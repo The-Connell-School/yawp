@@ -105,7 +105,7 @@ export function PasteHighlightOverlay({
             <div
               key={rectIndex}
               data-testid="paste-highlight"
-              className="pointer-events-none fixed z-20 rounded-sm border border-amber-600 bg-amber-400/30"
+              className="pointer-events-none fixed z-20 rounded-sm border border-red-600 bg-red-400/30"
               style={rect}
             />
           ))}

@@ -10,10 +10,22 @@ import type {
 import type { DocumentWorkSort } from '~/utils/teacher-document-work-sort';
 import {
   buildGradingQueue,
+  buildDocumentNavigationQueue,
   resolveGradingQueueNeighbors,
+  resolveDocumentNavigationNeighbors,
   type GradingQueueNeighbors,
+  type DocumentNavigationNeighbors,
   type GradingQueueScope,
 } from './grading-queue';
+
+type GradingQueueLoaderParams = {
+  request: Request;
+  membershipId: string;
+  organizationId: string;
+  userId: string;
+  scope: GradingQueueScope;
+  sort?: DocumentWorkSort | null;
+};
 
 /**
  * The grading queue is rebuilt on every grading-view load rather than being
@@ -50,16 +62,29 @@ function resolveDocumentClass(
  * of the open submission. Returns null when the open paper is not in that list
  * — the header then renders exactly as it does today.
  */
-export async function loadGradingQueueNeighbors(params: {
-  request: Request;
-  membershipId: string;
-  organizationId: string;
-  userId: string;
-  submissionId: string;
-  scope: GradingQueueScope;
-  sort?: DocumentWorkSort | null;
-}): Promise<GradingQueueNeighbors | null> {
-  const { request, membershipId, submissionId, scope } = params;
+export function loadGradingQueueNeighbors(
+  params: GradingQueueLoaderParams & {
+    mode?: 'grading';
+    submissionId: string;
+    documentId?: never;
+  }
+): Promise<GradingQueueNeighbors | null>;
+export function loadGradingQueueNeighbors(
+  params: GradingQueueLoaderParams & {
+    mode: 'documents';
+    documentId: string;
+    submissionId?: never;
+  }
+): Promise<DocumentNavigationNeighbors | null>;
+export async function loadGradingQueueNeighbors(params: GradingQueueLoaderParams & {
+  submissionId?: string;
+  documentId?: string;
+  mode?: 'grading' | 'documents';
+}): Promise<GradingQueueNeighbors | DocumentNavigationNeighbors | null> {
+  const { request, membershipId, submissionId, documentId, scope } = params;
+  const mode = params.mode ?? 'grading';
+  if (mode === 'grading' && !submissionId) return null;
+  if (mode === 'documents' && !documentId) return null;
 
   const schoolYearScope = await resolveTeacherSchoolYearScope(
     request,
@@ -124,9 +149,9 @@ export async function loadGradingQueueNeighbors(params: {
             ],
           },
         ],
-        // Only papers with something turned in can be graded, so the queue never
-        // includes untouched drafts.
-        submissions: { some: { unsubmittedAt: null } },
+        ...(mode === 'grading'
+          ? { submissions: { some: { unsubmittedAt: null } } }
+          : {}),
         ...(scope.filters.classAssignmentIds.length > 0
           ? { classAssignmentId: { in: scope.filters.classAssignmentIds } }
           : {}),
@@ -246,6 +271,16 @@ export async function loadGradingQueueNeighbors(params: {
     submissionCount: document._count.submissions,
   })) as TeacherDocumentWorkRow[];
 
+  if (mode === 'documents') {
+    const queue = buildDocumentNavigationQueue({
+      documents,
+      scope,
+      sort: params.sort ?? undefined,
+      pinnedDocumentId: documentId,
+    });
+    return resolveDocumentNavigationNeighbors({ queue, documentId: documentId! });
+  }
+
   const queue = buildGradingQueue({
     documents,
     scope,
@@ -253,5 +288,22 @@ export async function loadGradingQueueNeighbors(params: {
     pinnedSubmissionId: submissionId,
   });
 
-  return resolveGradingQueueNeighbors({ queue, submissionId });
+  return resolveGradingQueueNeighbors({ queue, submissionId: submissionId! });
+}
+
+export async function loadDocumentNavigationNeighbors(params: {
+  request: Request;
+  membershipId: string;
+  organizationId: string;
+  userId: string;
+  documentId: string;
+  scope: GradingQueueScope;
+  sort?: DocumentWorkSort | null;
+}): Promise<DocumentNavigationNeighbors | null> {
+  const result = await loadGradingQueueNeighbors({
+    ...params,
+    documentId: params.documentId,
+    mode: 'documents',
+  });
+  return result;
 }

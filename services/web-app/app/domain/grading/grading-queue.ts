@@ -68,6 +68,26 @@ export type GradingQueueNeighbors = {
   total: number;
 };
 
+/** Navigation through the Documents work list. Unlike grading navigation,
+ * this includes drafts that have no submission yet. */
+export type DocumentNavigationEntry = {
+  documentId: string;
+  submissionId: string | null;
+  studentName: string;
+  documentTitle: string;
+  className: string | null;
+  status: TeacherDocumentStatus;
+  isGroup: boolean;
+};
+
+export type DocumentNavigationNeighbors = {
+  entries: DocumentNavigationEntry[];
+  previous: DocumentNavigationEntry | null;
+  next: DocumentNavigationEntry | null;
+  position: number;
+  total: number;
+};
+
 export function serializeGradingQueueSort(sort: DocumentWorkSort): string {
   return `${sort.field}:${sort.direction}`;
 }
@@ -336,6 +356,100 @@ export function resolveGradingQueueNeighbors(params: {
     position: index + 1,
     total: params.queue.length,
   };
+}
+
+function toDocumentNavigationEntry(
+  document: TeacherDocumentWorkRow
+): DocumentNavigationEntry {
+  return {
+    documentId: document.id,
+    submissionId: document.latestSubmission?.id ?? null,
+    studentName:
+      document.group?.label ??
+      document.membership.user.name ??
+      document.membership.user.email ??
+      'Student',
+    documentTitle: getDraftDisplayTitle(document),
+    className: document.resolvedClass
+      ? formatClassLabel(document.resolvedClass)
+      : null,
+    status: getTeacherDocumentStatus(document.latestSubmission),
+    isGroup: Boolean(document.group),
+  };
+}
+
+/** Builds the full, teacher-visible Documents-page order, including drafts. */
+export function buildDocumentNavigationQueue(params: {
+  documents: TeacherDocumentWorkRow[];
+  scope: GradingQueueScope;
+  sort?: DocumentWorkSort;
+  pinnedDocumentId?: string | null;
+  collator?: Intl.Collator;
+}): DocumentNavigationEntry[] {
+  const sort = params.sort ?? DEFAULT_DOCUMENT_WORK_SORT;
+  const collator =
+    params.collator ?? new Intl.Collator(undefined, { sensitivity: 'base' });
+  const studentOptions = buildStudentFilterOptionsFromDocuments(params.documents);
+  const withinScope = params.documents.filter((document) =>
+    matchesNonStatusFilters(document, params.scope.filters, studentOptions)
+  );
+  const matching = withinScope.filter((document) => {
+    if (document.id === (params.pinnedDocumentId ?? null)) return true;
+    if (params.scope.filters.status === 'all') return true;
+    return (
+      getTeacherDocumentStatus(document.latestSubmission) ===
+      params.scope.filters.status
+    );
+  });
+  return sortTeacherDocumentWorkRows({
+    documents: matching,
+    sort,
+    collator,
+  }).map(toDocumentNavigationEntry);
+}
+
+export function resolveDocumentNavigationNeighbors(params: {
+  queue: DocumentNavigationEntry[];
+  documentId: string;
+}): DocumentNavigationNeighbors | null {
+  const index = params.queue.findIndex(
+    (entry) => entry.documentId === params.documentId
+  );
+  if (index === -1) return null;
+  return {
+    entries: params.queue,
+    previous: params.queue[index - 1] ?? null,
+    next: params.queue[index + 1] ?? null,
+    position: index + 1,
+    total: params.queue.length,
+  };
+}
+
+export function buildDocumentNavigationHref(params: {
+  entry: DocumentNavigationEntry;
+  exitTo: string | null;
+  sort?: DocumentWorkSort | null;
+}): string {
+  const search = new URLSearchParams();
+  if (params.exitTo) search.set('exitTo', params.exitTo);
+  if (params.sort) {
+    search.set(
+      GRADING_QUEUE_SORT_PARAM,
+      serializeGradingQueueSort(params.sort)
+    );
+  }
+  const suffix = search.toString() ? `?${search.toString()}` : '';
+  if (params.entry.submissionId) {
+    return `/app/submissions/${params.entry.submissionId}?edit=1${
+      suffix ? `&${search.toString()}` : ''
+    }`;
+  }
+  if (params.entry.isGroup) {
+    return `/app/group-drafts/${params.entry.documentId}${suffix}`;
+  }
+  return `/app/documents/${params.entry.documentId}?left=tutor${
+    suffix ? `&${search.toString()}` : ''
+  }`;
 }
 
 /** Detail link for a neighbour, carrying the queue context forward. */
