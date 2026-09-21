@@ -108,6 +108,13 @@ So the Daily Pages page opens with an about section
 entry is, what it is not, how it is graded, how to run it with a class, and how
 to write a prompt of your own.
 
+All of that end to end is a page and a half, which nobody reads twice, so only
+the blurb is open. It is the part that answers "what is this" for a teacher
+seeing the type for the first time; the five sections under it are questions
+they come back with later, and each waits behind its own heading. The accordion
+is `type="multiple"` because those questions get compared rather than browsed —
+the grading weights and the prompt recipe want to be open at once.
+
 Two decisions inside it are load-bearing:
 
 - **The weights are read off the rubric, not retyped.** `GRADING_SUMMARY` maps
