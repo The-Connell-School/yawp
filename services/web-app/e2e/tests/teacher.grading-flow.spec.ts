@@ -186,16 +186,16 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
 
       // The teacher sets the overall percentage themselves; the rubric total
       // is theirs to accept or ignore.
-      await page.getByTestId('grading-overall-percentage').fill('77');
-      await expect(
-        page.getByTestId('grading-overall-percentage')
-      ).toHaveValue('77');
+      await page.getByTestId('grading-overall-points').fill('77');
+      await expect(page.getByTestId('grading-overall-points')).toHaveValue(
+        '77'
+      );
 
       await page
         .getByTestId('grading-overall-comment')
         .fill('Manual overall teacher feedback before AI suggestions.');
       // Blur the field to trigger auto-save
-      await page.getByTestId('grading-overall-percentage').click();
+      await page.getByTestId('grading-overall-points').click();
       await expect(page.getByTestId('grading-auto-save-status')).toContainText(
         'Saved',
         { timeout: 15000 }
@@ -255,7 +255,7 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         .toBe(Math.max(0, beforeRemove - 1));
       // Blur a field to trigger auto-save after grammar issue removal
       await page.getByTestId('grading-overall-comment').click();
-      await page.getByTestId('grading-overall-percentage').click();
+      await page.getByTestId('grading-overall-points').click();
       await expect(page.getByTestId('grading-auto-save-status')).toContainText(
         'Saved',
         { timeout: 15000 }
@@ -325,6 +325,9 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page.waitForLoadState('networkidle');
 
       await page.getByRole('tab', { name: /documents/i }).click();
+      await page
+        .getByRole('checkbox', { name: 'Select visible documents' })
+        .check();
       const actionsButton = page.getByTestId('teacher-document-work-actions');
       await expect(actionsButton).toBeVisible({
         timeout: 10000,

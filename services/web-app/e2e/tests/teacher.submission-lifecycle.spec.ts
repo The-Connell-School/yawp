@@ -80,7 +80,7 @@ test.describe.serial('Teacher submission lifecycle panel', () => {
     await expect(saveButton).toBeVisible();
     await expect(saveButton).toBeDisabled();
 
-    await page.getByTestId('grading-overall-percentage').fill('88');
+    await page.getByTestId('grading-overall-points').fill('88');
 
     await expect(saveButton).toBeEnabled();
     await saveButton.click();

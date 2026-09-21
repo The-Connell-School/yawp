@@ -1,3 +1,5 @@
+import { readTeacherNote } from '~/domain/grading/teacher-notes';
+import { TeacherNotes } from './teacher-grading/teacher-notes';
 import { invariant } from '@epic-web/invariant';
 import {
   type LoaderFunctionArgs,
@@ -11,6 +13,8 @@ import {
   useFetcher,
   useLocation,
   useRevalidator,
+  useBlocker,
+  useBeforeUnload,
   redirect,
 } from 'react-router';
 import {
@@ -29,6 +33,16 @@ import {
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
 import { Input } from '~/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '~/components/ui/alert-dialog';
 import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
@@ -49,8 +63,24 @@ import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
 } from '~/utils/document-exit';
+import {
+  GRADING_QUEUE_SORT_PARAM,
+  buildDocumentNavigationHref,
+  buildGradingQueueHref,
+  parseGradingQueueScope,
+  parseGradingQueueSort,
+  type DocumentNavigationNeighbors,
+  type GradingQueueNeighbors,
+} from '~/domain/grading/grading-queue';
+import {
+  loadDocumentNavigationNeighbors,
+  loadGradingQueueNeighbors,
+} from '~/domain/grading/grading-queue.server';
+import { TeacherDocumentNavigation } from '~/components/teacher-document-navigation';
+import { GradingQueueNav } from './teacher-grading/grading-queue-nav';
 import { EssayPanel } from './essay-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
+import { TeacherPasteReport } from '~/components/teacher-paste-report';
 import { SelectionToolbar } from './teacher-grading/selection-toolbar';
 import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
 import { SubmissionLifecyclePanel } from './teacher-grading/submission-lifecycle-panel';
@@ -159,6 +189,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           assignmentTypeId: true,
           assignment: {
             select: {
+              id: true,
               submitForGrade: true,
               pointValue: true,
               gradingAssistantStrictnessLevel: true,
@@ -221,7 +252,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               label: true,
               members: {
                 where: { removedAt: null },
-                select: { membershipId: true },
+                select: {
+                  membershipId: true,
+                  membership: { select: { userId: true } },
+                },
               },
             },
           },
@@ -260,7 +294,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     submission.document.membership?.userId === userId ||
     Boolean(
       submission.document.group?.members.some(
-        (member) => member.membershipId === profile.id
+        (member) =>
+          member.membershipId === profile.id ||
+          member.membership?.userId === userId
       )
     );
 
@@ -317,6 +353,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const [rubricConfig, grammarHighlightingEnabled] = await Promise.all([
     resolveRubricConfigForSubmission({
       assignmentTypeId: submission.document.assignmentTypeId,
+      pointValue: submission.document.assignment?.pointValue,
+      assignmentId: submission.document.assignment?.id,
       latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
       rubricScores: submission.rubricScores,
     }),
@@ -381,10 +419,56 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 
+  const { gradingAssistantRuns, ...publicSubmission } = submission;
+  // Rebuild the ungraded queue from the originating work list and its sort.
+  // Direct links fall back to this submission's class. Student owners never
+  // receive the queue, and every row is checked against teacher access.
+  const gradingQueueScope =
+    (isTeacher || isAdmin) && !isOwner
+      ? (parseGradingQueueScope(
+          sanitizeExitTarget(url.searchParams.get('exitTo'))
+        ) ??
+        parseGradingQueueScope(
+          submission.document.classAssignment?.class?.id
+            ? `/app/my-classes/${submission.document.classAssignment.class.id}?tab=documents&status=needs-grading`
+            : '/app/documents?status=needs-grading'
+        ))
+      : null;
+  const gradingQueue = gradingQueueScope
+    ? await loadGradingQueueNeighbors({
+        request,
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        userId,
+        submissionId: submission.id,
+        scope: gradingQueueScope,
+        sort: parseGradingQueueSort(
+          url.searchParams.get(GRADING_QUEUE_SORT_PARAM)
+        ),
+      })
+    : null;
+  const documentNavigationScope =
+    gradingQueueScope?.kind === 'documents' ? gradingQueueScope : null;
+  const documentNavigation = documentNavigationScope
+    ? await loadDocumentNavigationNeighbors({
+        request,
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        userId,
+        documentId: submission.documentId,
+        scope: documentNavigationScope,
+        sort: parseGradingQueueSort(
+          url.searchParams.get(GRADING_QUEUE_SORT_PARAM)
+        ),
+      })
+    : null;
+
   return {
     revisionFlowEnabled: profile.organization.revisionFlowEnabled === true,
+    gradingQueue,
+    documentNavigation,
     submission: {
-      ...submission,
+      ...publicSubmission,
       comments: sortedComments,
       rubricConfig,
       grammarHighlightingEnabled,
@@ -394,6 +478,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         submission.gradingAssistantRuns[0] ?? null
       ),
     },
+    ...(!isOwner && (isTeacher || isAdmin)
+      ? { teacherNote: readTeacherNote(gradingAssistantRuns[0] ?? null) }
+      : {}),
     isOwner,
     isTeacher: isTeacher || isAdmin,
     submissionActivityEnabled,
@@ -405,6 +492,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function SubmissionRoute() {
   const loaderData = useLoaderData<typeof loader>();
+  // A different paper gets a fresh grading/editor state. Same-paper loader
+  // revalidation keeps the current draft until its normal save/reload handling.
+  return (
+    <SubmissionDetail key={loaderData.submission.id} loaderData={loaderData} />
+  );
+}
+
+function SubmissionDetail({
+  loaderData,
+}: {
+  loaderData: ReturnType<typeof useLoaderData<typeof loader>>;
+}) {
   const {
     submission,
     isOwner,
@@ -412,6 +511,12 @@ export default function SubmissionRoute() {
     submissionActivityEnabled,
     revisionFlowEnabled,
   } = loaderData;
+  const gradingQueue: GradingQueueNeighbors | null =
+    'gradingQueue' in loaderData ? (loaderData.gradingQueue ?? null) : null;
+  const documentNavigation: DocumentNavigationNeighbors | null =
+    'documentNavigation' in loaderData
+      ? (loaderData.documentNavigation ?? null)
+      : null;
   const activities = 'activities' in loaderData ? loaderData.activities : [];
   const activityHasMore =
     'activityHasMore' in loaderData ? loaderData.activityHasMore : false;
@@ -421,6 +526,28 @@ export default function SubmissionRoute() {
   const revalidator = useRevalidator();
   const titleFetcher = useFetcher();
   const isGradingOther = isTeacher && !isOwner;
+  const [gradingNavigationState, setGradingNavigationState] = useState({
+    hasUnsavedChanges: false,
+    isBusy: false,
+  });
+  const protectGrading =
+    isGradingOther &&
+    gradingQueue !== null &&
+    (gradingNavigationState.hasUnsavedChanges || gradingNavigationState.isBusy);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      protectGrading && currentLocation.pathname !== nextLocation.pathname
+  );
+  useBeforeUnload(
+    useCallback(
+      (event) => {
+        if (!protectGrading) return;
+        event.preventDefault();
+        event.returnValue = '';
+      },
+      [protectGrading]
+    )
+  );
 
   const [localGradedAt, setLocalGradedAt] = useState<string | null>(null);
   const [localReleasedAt, setLocalReleasedAt] = useState<string | null>(null);
@@ -514,6 +641,20 @@ export default function SubmissionRoute() {
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const [exitTarget] = useState<string>(
     () => explicitExitTarget ?? readLastNonDocumentRoute() ?? '/app'
+  );
+  const gradingStudentName =
+    submission.document.group?.label ??
+    submission.document.membership?.user.name ??
+    null;
+  const queueSortParam = searchParams.get(GRADING_QUEUE_SORT_PARAM);
+  const gradingQueueHref = useCallback(
+    (nextSubmissionId: string) =>
+      buildGradingQueueHref({
+        submissionId: nextSubmissionId,
+        exitTo: explicitExitTarget,
+        sort: parseGradingQueueSort(queueSortParam),
+      }),
+    [explicitExitTarget, queueSortParam]
   );
   const versionHref = (submissionId: string) => {
     const params = new URLSearchParams();
@@ -1028,17 +1169,41 @@ export default function SubmissionRoute() {
         <div className="h-4 w-px bg-border shrink-0" />
 
         <div className="flex min-w-0 items-center gap-2">
-          {isGradingOther &&
-          (submission.document.group?.label ||
-            submission.document.membership?.user.name) ? (
-            <span className="shrink-0 text-sm text-muted-foreground">
-              {submission.document.group?.label ??
-                submission.document.membership?.user.name}
+          {isGradingOther && documentNavigation ? (
+            <TeacherDocumentNavigation
+              queue={documentNavigation}
+              documentId={submission.documentId}
+              disabled={gradingNavigationState.isBusy}
+              hrefFor={(entry) =>
+                buildDocumentNavigationHref({
+                  entry,
+                  exitTo:
+                    sanitizeExitTarget(searchParams.get('exitTo')) ??
+                    '/app/documents',
+                  sort: parseGradingQueueSort(
+                    searchParams.get(GRADING_QUEUE_SORT_PARAM)
+                  ),
+                })
+              }
+            />
+          ) : isGradingOther && gradingQueue && gradingStudentName ? (
+            // The name sits between the arrows: this is a stack of papers, and
+            // the control that moves through it belongs on the name it names.
+            <GradingQueueNav
+              queue={gradingQueue}
+              submissionId={submission.id}
+              hrefFor={gradingQueueHref}
+              disabled={gradingNavigationState.isBusy}
+            />
+          ) : isGradingOther && gradingStudentName ? (
+            <span
+              className="shrink-0 text-sm text-muted-foreground"
+              data-testid="grading-student-name"
+            >
+              {gradingStudentName}
             </span>
           ) : null}
-          {isGradingOther &&
-          (submission.document.group?.label ||
-            submission.document.membership?.user.name) ? (
+          {isGradingOther && gradingStudentName ? (
             <span className="text-muted-foreground/40 shrink-0">·</span>
           ) : null}
           {canEditTitle ? (
@@ -1193,12 +1358,44 @@ export default function SubmissionRoute() {
         </div>
       ) : null}
 
+      <AlertDialog
+        open={blocker.state === 'blocked'}
+        onOpenChange={(open) => {
+          if (!open && blocker.state === 'blocked') blocker.reset();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved grading changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              {gradingNavigationState.isBusy
+                ? 'Wait for grading to finish before opening another submission.'
+                : 'Your grading changes have not been saved. Stay to save them, or discard them and continue.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => blocker.state === 'blocked' && blocker.reset()}
+            >
+              Stay
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={gradingNavigationState.isBusy}
+              onClick={() => blocker.state === 'blocked' && blocker.proceed()}
+            >
+              Discard and continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* ── Body ────────────────────────────────────────────────────── */}
       <div className="flex min-h-0 grow flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* Left panel: grading (edit/view toggle for teachers) or view-only summary */}
         <div className="no-scrollbar flex h-[70vh] w-full shrink-0 flex-col overflow-hidden border-b bg-white md:h-auto md:w-[380px] md:border-r md:border-b-0">
           {isGradingOther ? (
             <SubmissionLifecyclePanel
+              onNavigationStateChange={setGradingNavigationState}
               lifecycleState={lifecycleState}
               submissionActivityEnabled={submissionActivityEnabled}
               isEditingGrade={isEditingGrade}
@@ -1211,7 +1408,13 @@ export default function SubmissionRoute() {
               submissionForView={submissionForView}
               documentId={submission.documentId}
               submissionId={submission.id}
+              teacherNote={
+                'teacherNote' in loaderData
+                  ? (loaderData.teacherNote ?? null)
+                  : null
+              }
               existingGrade={teacherExistingGrade}
+              pointValue={submission.document.assignment?.pointValue}
               grammarIssues={grammarIssues}
               hiddenGrammarIssueIds={hiddenGrammarIssueIds}
               onToggleGrammarIssue={toggleGrammarIssueVisibility}
@@ -1241,6 +1444,15 @@ export default function SubmissionRoute() {
               </div>
             </>
           )}
+          {!isGradingOther ? (
+            <TeacherNotes
+              note={
+                'teacherNote' in loaderData
+                  ? (loaderData.teacherNote ?? null)
+                  : null
+              }
+            />
+          ) : null}
         </div>
 
         {/* Center: Essay */}
@@ -1262,18 +1474,26 @@ export default function SubmissionRoute() {
 
         {/* Right: Feedback comments */}
         <div className="no-scrollbar max-h-[60vh] w-full shrink-0 overflow-y-auto border-t bg-white md:max-h-none md:w-[320px] md:border-t-0 md:border-l">
-          <GradingCommentsSidebar
-            submissionComments={isPending ? [] : (comments as any)}
+          <TeacherPasteReport
+            key={submission.id}
+            enabled={isGradingOther}
             submissionId={submission.id}
-            sourceText={submission.text ?? ''}
-            readOnly={!isGradingOther}
-            activeGradeCommentId={activeGradeCommentId}
-            onSelectGradeComment={setActiveGradeCommentId}
-            onDraftHighlightChange={setDraftHighlight}
-            onCommentCreated={handleCommentCreated}
-            onCommentDeleted={handleCommentDeleted}
-            onCommentUpdated={handleCommentUpdated}
-          />
+            contentRoot={essayElement}
+          >
+            <GradingCommentsSidebar
+              submissionComments={isPending ? [] : (comments as any)}
+              submissionId={submission.id}
+              sourceText={submission.text ?? ''}
+              readOnly={!isGradingOther}
+              activeGradeCommentId={activeGradeCommentId}
+              onSelectGradeComment={setActiveGradeCommentId}
+              onDraftHighlightChange={setDraftHighlight}
+              onCommentCreated={handleCommentCreated}
+              onCommentDeleted={handleCommentDeleted}
+              onCommentUpdated={handleCommentUpdated}
+              showHeading={false}
+            />
+          </TeacherPasteReport>
         </div>
       </div>
 

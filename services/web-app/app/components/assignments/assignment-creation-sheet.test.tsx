@@ -240,12 +240,12 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Prompt');
       expectText('Extract from PDF');
       expectText('Submit for grade');
-      expectText('Point value');
+      expectText('Default point value');
       expectText('Tutor enabled');
       expectText(
         "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."
       );
-      expectText('Grading assistant strictness');
+      expectText('Grading Assistance');
       expectNoText('Tutor Context');
 
       const form = document.querySelector('form');
@@ -289,7 +289,7 @@ describe('AssignmentCreationSheetContent', () => {
   it('shows the grading assistant strictness picker to teachers', () => {
     root = renderSheet().root;
 
-    expectText('Grading assistant strictness');
+    expectText('Grading Assistance');
     expectText('Beginner');
     expectText('Intermediate');
     expectText('Advanced');
@@ -305,11 +305,89 @@ describe('AssignmentCreationSheetContent', () => {
     expectText(
       'The assistant reads demandingly, expecting polished and precise writing.'
     );
-    expectNoText('points');
+    expectNoText('point adjustment');
 
     expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
       'intermediate'
     );
+  });
+
+  it('shows the rubric default and keeps customization off by default', () => {
+    root = renderSheet({ initialRubricDefaultTotalPoints: 6 }).root;
+
+    expectText('Grade Configuration');
+    expectText('Default point value');
+    expectText('Default grading type');
+    expectText('By default: Step grading');
+    expectText('Rubric default: 6 points');
+    expectText('Customize Grading');
+    expectText('Grading Assistance');
+    expectNoText('Total Point Values');
+    expectNoText('Grading Total');
+    expectNoText('AI');
+    expect(inputByName('rubricTotalPoints').value).toBe('');
+    expect(inputByName('gradingMode').value).toBe('step');
+    expect(inputByName('pointValue').value).toBe('100');
+    expect(controlById('assignment-create-default-point-value')).toHaveProperty(
+      'readOnly',
+      true
+    );
+    expect(
+      isChecked(controlById('assignment-create-customize-rubric-grading'))
+    ).toBe(false);
+  });
+
+  it('reveals compact grading controls when customization is enabled', () => {
+    root = renderSheet({ initialRubricDefaultTotalPoints: 6 }).root;
+
+    act(() => {
+      controlById('assignment-create-customize-rubric-grading').click();
+    });
+
+    expectText('Scoring behavior');
+    expectText('Total Point Values');
+    expectText('Grading Total: 100 points.');
+    expectText('Steps');
+    expectText('Bands');
+    expectText('Scores are only on the rubric labels.');
+    expectText('Scores are within the labeled ranges.');
+    expectNoText('AI');
+    expect(inputByName('rubricTotalPoints').value).toBe('100');
+    expect(inputByName('gradingMode').value).toBe('step');
+  });
+
+  it('lets a teacher opt into bands grading from the assignment creator', () => {
+    root = renderSheet().root;
+
+    act(() => {
+      controlById('assignment-create-customize-rubric-grading').click();
+    });
+    act(() => {
+      controlById('assignment-create-grading-mode-bands').click();
+    });
+
+    expect(inputByName('gradingMode').value).toBe('bands');
+    expectText('Scores are within the labeled ranges.');
+  });
+
+  it('clears the assignment override when customization is turned back off', () => {
+    root = renderSheet({
+      initialRubricTotalPoints: 40,
+      initialGradingMode: 'bands',
+    }).root;
+
+    expect(
+      isChecked(controlById('assignment-create-customize-rubric-grading'))
+    ).toBe(true);
+    expect(inputByName('rubricTotalPoints').value).toBe('40');
+
+    act(() => {
+      controlById('assignment-create-customize-rubric-grading').click();
+    });
+
+    expect(inputByName('rubricTotalPoints').value).toBe('');
+    expect(inputByName('gradingMode').value).toBe('step');
+    expect(inputByName('pointValue').value).toBe('100');
   });
 
   it('preselects but does not lock assignment type from dashboard quick create', () => {

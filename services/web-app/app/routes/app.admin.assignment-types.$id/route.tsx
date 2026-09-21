@@ -1,3 +1,4 @@
+import { listRubrics, seedStarterRubrics } from '~/domain/rubrics/rubric-library.server';
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import { data as dataResponse, redirect, useLoaderData } from 'react-router';
 import type { Prisma } from '@app/prisma';
@@ -7,9 +8,7 @@ import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
   DEFAULT_OUTPUT_SCHEMA_JSON,
-  parsePromptConfig,
   parseRubric,
-  parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
@@ -94,11 +93,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
+  await seedStarterRubrics();
+  const rubrics = (await listRubrics()).map(({ id, name, title, json }) => ({ id, name, title, json }));
   const currentPromptLabel = await resolveCurrentPromptLabel(course.id);
 
   if (course.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
     return dataResponse({
       course,
+      rubrics,
       gradingAssistantPromptPreview: null,
       gradingAssistantPromptPreviewUnavailableReason:
         'The AP History prompt is built from the assignment snapshot. Open a graded submission to inspect the full prompt.',
@@ -118,6 +120,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     course,
+    rubrics,
     gradingAssistantPromptPreview: {
       ...compiledInvocation,
       version: resolvedGradingConfig.version,
@@ -175,7 +178,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (intent === 'updateCourse') {
-    const title = formData.get('title')?.toString();
+    const title = formData.get('title')?.toString().trim();
     const description = formData.get('description')?.toString();
     const imageFile = formData.get('image') as File | null;
     const deleteImage = formData.get('deleteImage') === 'true';
@@ -197,7 +200,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (!title) {
-      throw new Response('Title is required', { status: 400 });
+      return dataResponse({ error: 'Title is required' }, { status: 400 });
     }
 
     const existing = await prisma.assignmentType.findUnique({
@@ -214,7 +217,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         select: { id: true },
       });
       if (!rubric) {
-        throw new Response('That rubric no longer exists.', { status: 404 });
+        return dataResponse({ error: 'That rubric no longer exists. Choose another rubric.' }, { status: 400 });
       }
     }
 
@@ -352,8 +355,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export default function AssignmentTypeRoute() {
   const {
     course,
-    gradingAssistantPromptPreview,
-    gradingAssistantPromptPreviewUnavailableReason,
+    rubrics,
     currentPromptLabel,
   } = useLoaderData<typeof loader>();
 
@@ -363,13 +365,9 @@ export default function AssignmentTypeRoute() {
       assignmentTypeId={course.id}
       titleDefaultValue={course.title}
       descriptionDefaultValue={course.description}
-      scoringScale={parseScoringScale(course.scoringScaleJson)}
-      rubric={parseRubric(course.rubricJson)}
-      promptConfig={parsePromptConfig(course.gradingPromptConfigJson)}
-      gradingAssistantPromptPreview={gradingAssistantPromptPreview ?? undefined}
-      gradingAssistantPromptPreviewUnavailableReason={
-        gradingAssistantPromptPreviewUnavailableReason ?? undefined
-      }
+      rubrics={rubrics}
+      selectedRubricId={course.rubricId ?? null}
+      gradingInstructionsDefaultValue={readGradingInstructionsOverride(course.gradingPromptConfigJson)}
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}

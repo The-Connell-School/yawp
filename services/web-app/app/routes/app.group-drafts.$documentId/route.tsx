@@ -36,6 +36,15 @@ import {
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 import { ContributionPanel } from './contribution-panel';
+import { TeacherDocumentNavigation } from '~/components/teacher-document-navigation';
+import {
+  buildDocumentNavigationHref,
+  GRADING_QUEUE_SORT_PARAM,
+  parseGradingQueueScope,
+  parseGradingQueueSort,
+} from '~/domain/grading/grading-queue';
+import { loadDocumentNavigationNeighbors } from '~/domain/grading/grading-queue.server';
+import { sanitizeExitTarget } from '~/utils/document-exit';
 
 /**
  * The teacher's view of one group's draft: what it says, and who wrote it.
@@ -120,6 +129,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     listDraftComments({ documentId: doc.id, documentLevelOnly: true }),
   ]);
 
+  const exitTo = sanitizeExitTarget(new URL(request.url).searchParams.get('exitTo'));
+  const navigationScope =
+    profile.role === 'TEACHER'
+      ? parseGradingQueueScope(exitTo) ?? parseGradingQueueScope('/app/documents')
+      : null;
+  const documentNavigation = navigationScope && profile.organization?.id
+    ? await loadDocumentNavigationNeighbors({
+        request,
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        userId,
+        documentId: doc.id,
+        scope: navigationScope,
+        sort: parseGradingQueueSort(
+          new URL(request.url).searchParams.get(GRADING_QUEUE_SORT_PARAM)
+        ),
+      })
+    : null;
+
   return dataResponse({
     documentId: doc.id,
     groupId: doc.group?.id ?? null,
@@ -134,6 +162,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ? `/app/class-assignments/${doc.group.classAssignmentId}/groups`
       : '/app',
     breakdown,
+    documentNavigation,
+    exitTo,
+    queueSort: new URL(request.url).searchParams.get(GRADING_QUEUE_SORT_PARAM),
   });
 }
 
@@ -338,6 +369,21 @@ export default function GroupDraftRoute() {
           <p className="text-sm text-muted-foreground">
             {data.groupLabel} · who wrote what
           </p>
+          {data.documentNavigation ? (
+            <div className="mt-3">
+              <TeacherDocumentNavigation
+                queue={data.documentNavigation}
+                documentId={data.documentId}
+                hrefFor={(entry) =>
+                  buildDocumentNavigationHref({
+                    entry,
+                    exitTo: data.exitTo,
+                    sort: parseGradingQueueSort(data.queueSort),
+                  })
+                }
+              />
+            </div>
+          ) : null}
         </header>
 
         <div className="grid gap-6">

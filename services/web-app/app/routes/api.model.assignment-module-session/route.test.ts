@@ -350,9 +350,13 @@ describe('api.model.assignment-module-session on a shared draft', () => {
     teacherProfileIds: [],
     classAssignmentTeacherProfileIds: ['profile-teacher'],
     activeGroupMemberIds: ['student-profile-1', 'student-profile-2'],
+    classAssignmentStudentProfileIds: ['student-profile-1', 'student-profile-2'],
+    classAssignmentPostAt: null,
   };
 
   beforeEach(() => {
+    DOC_SHARED.classAssignmentStudentProfileIds = ['student-profile-1', 'student-profile-2'];
+    DOC_SHARED.classAssignmentPostAt = null;
     prisma.user.findUnique.mockReset().mockResolvedValue({ isAdmin: false });
     prisma.document.findFirst.mockReset();
     prisma.document.findUnique.mockReset();
@@ -367,9 +371,8 @@ describe('api.model.assignment-module-session on a shared draft', () => {
       .mockResolvedValue({ id: 'student-profile-2', role: 'STUDENT' });
 
     prisma.document.findFirst.mockImplementation(async ({ where }: any) => {
-      // The room predicate, told apart by the assignment-type gate no
-      // authorization clause carries.
-      if (where.assignmentType) return { id: DOC_SHARED.id };
+      // The opened assignment-group room check is distinct from caller access.
+      if (where.artifactKind === 'ASSIGNMENT_GROUP' && where.assignment?.is?.collaborationEnabled === true) return { id: DOC_SHARED.id };
       return matchesDocumentWhere(where, DOC_SHARED)
         ? {
             id: DOC_SHARED.id,
@@ -446,6 +449,22 @@ describe('api.model.assignment-module-session on a shared draft', () => {
 
     const body = await readBody(response);
     expect(body.cms.id).toBe('cms-mine');
+  });
+
+  test('a group member no longer enrolled in the deployment class gets no tutor session', async () => {
+    DOC_SHARED.classAssignmentStudentProfileIds = ['student-profile-1'];
+    const response = await post();
+    expect(response.init?.status).toBe(404);
+    expect(prisma.assignmentModuleSession.findFirst).not.toHaveBeenCalled();
+    expect(prisma.assignmentModuleSession.create).not.toHaveBeenCalled();
+  });
+
+  test('a group member cannot open a tutor session before the scheduled assignment is visible', async () => {
+    DOC_SHARED.classAssignmentPostAt = new Date(Date.now() + 86400000);
+    const response = await post();
+    expect(response.init?.status).toBe(404);
+    expect(prisma.assignmentModuleSession.findFirst).not.toHaveBeenCalled();
+    expect(prisma.assignmentModuleSession.create).not.toHaveBeenCalled();
   });
 
   test('a student outside the group gets nothing', async () => {

@@ -1,3 +1,4 @@
+import { scaleDailyPagesForAssignment } from '~/domain/assignment-types/daily-pages-assignment-points';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import {
   legacyRubricDisplayConfig,
@@ -146,10 +147,14 @@ export async function resolveGrammarHighlightingForAssignmentType(
 
 export async function resolveRubricConfigForSubmission({
   assignmentTypeId,
+  assignmentId,
+  pointValue,
   latestGradingRun,
   rubricScores,
 }: {
   assignmentTypeId: string;
+  assignmentId?: string | null;
+  pointValue?: number | null;
   latestGradingRun: LatestGradingRunRubricSnapshot | null;
   rubricScores: unknown;
 }): Promise<RubricDisplayConfig> {
@@ -163,9 +168,10 @@ export async function resolveRubricConfigForSubmission({
     ? { ...snapshotConfig, source: parseRubricDisplaySource(latestGradingRun?.source) }
     : null;
   if (!activeConfig) {
-    const assignmentTypeConfig = await resolveAssignmentTypeGradingConfig({
-      assignmentTypeId,
-    });
+    const assignmentTypeConfig = scaleDailyPagesForAssignment(
+      await resolveAssignmentTypeGradingConfig({ assignmentTypeId, assignmentId }),
+      pointValue,
+    );
     activeConfig = {
       categories: assignmentTypeConfig.rubricCategories,
       minScore: assignmentTypeConfig.minScore,

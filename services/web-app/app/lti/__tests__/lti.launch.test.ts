@@ -1,8 +1,13 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { action, loader } from '~/routes/lti.launch.ts';
 
+const fixtureEnv={BLACKBOARD_LTI_MOCK_URL:'http://127.0.0.1:9473',YAWP_ENVIRONMENT:'preview',PREVIEW_ACCESS_GATE:'on',PREVIEW_DATA_MODE:'seed'};
+const priorEnv=Object.fromEntries(Object.keys(fixtureEnv).map(key=>[key,process.env[key]]));
+const priorResponse = globalThis.Response;
+afterAll(() => { for(const [key,value] of Object.entries(priorEnv)){if(value===undefined)delete process.env[key];else process.env[key]=value;}globalThis.Response=priorResponse; });
 beforeAll(() => {
-  process.env.BLACKBOARD_LTI_MOCK_URL = 'http://127.0.0.1:9473';
+  globalThis.Response=globalThis.__serverResponse;
+  Object.assign(process.env,fixtureEnv);
 });
 
 function formPost(url: string, fields: Record<string, string>) {
@@ -21,7 +26,7 @@ function unsignedIdToken(payload: Record<string, unknown>) {
 }
 
 describe('/lti/launch', () => {
-  test('returns Deep Linking response html', async () => {
+  test('posts the signed deep link server-side and redirects with cleared handshake cookies', async () => {
     const payload = {
       iss: 'https://blackboard.com',
       aud: 'yawp-blackboard-mock',
@@ -44,11 +49,32 @@ describe('/lti/launch', () => {
       'cookie',
       'yawp_lti_state=s1; yawp_lti_nonce=n1; yawp_lti_client=yawp-blackboard-mock'
     );
-    const res = await action({ request: req, params: {} } as any);
-    expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain('/api/v1/lti/deep-linking');
-    expect(html).toContain('name="JWT"');
+    const originalFetch = globalThis.fetch;
+    let postedJwt = '';
+    let posts = 0;
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe('http://127.0.0.1:9473/api/v1/lti/deep-linking');
+      expect(init?.method).toBe('POST');
+      expect(new Headers(init?.headers).get('content-type')).toContain('application/x-www-form-urlencoded');
+      postedJwt = new URLSearchParams(String(init?.body)).get('JWT') ?? '';
+      posts++;
+      return new Response('accepted');
+    }) as typeof fetch;
+    try {
+      const res = await action({ request: req, params: {} } as any);
+      expect(posts).toBe(1);
+      expect(postedJwt.split('.')).toHaveLength(3);
+      expect(postedJwt.split('.')[2].length).toBeGreaterThan(0);
+      const sent = JSON.parse(Buffer.from(postedJwt.split('.')[1], 'base64url').toString());
+      expect(sent.iss).toBe('yawp-blackboard-mock');
+      expect(sent.aud).toBe('https://blackboard.com');
+      expect(sent['https://purl.imsglobal.org/spec/lti-dl/claim/data']).toBe('dl_1');
+      expect(sent['https://purl.imsglobal.org/spec/lti-dl/claim/content_items'][0].url).toBe('https://app.test/lti/launch');
+      expect(res.status).toBe(302);
+      expect(res.headers.get('location')).toBe('/dev/blackboard-lti-mock/dev/deep-links');
+      expect(res.headers.get('set-cookie')).toContain('yawp_lti_state=;');
+      expect(res.headers.get('set-cookie')).toContain('yawp_lti_nonce=;');
+    } finally { globalThis.fetch = originalFetch; }
   });
 
   test('redirects on resource link request', async () => {

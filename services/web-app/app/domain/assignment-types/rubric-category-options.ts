@@ -24,6 +24,7 @@ export type RubricCategoryOptions = {
   bands?: RubricScoreBand[];
   feedbackEnabled?: boolean;
   grammarHighlighting?: boolean;
+  allowedScores?: number[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -121,6 +122,14 @@ export function isScoreInCategoryBands(
 ) {
   if (!category.bands?.length) return true;
   return getCategoryScoreBand(category, score) !== null;
+}
+
+/** Runtime step-grading guard. Categories without labels keep the old range. */
+export function isScoreInCategoryAllowedScores(
+  category: Partial<RubricCategoryOptions>,
+  score: number
+) {
+  return !category.allowedScores?.length || category.allowedScores.includes(score);
 }
 
 /**

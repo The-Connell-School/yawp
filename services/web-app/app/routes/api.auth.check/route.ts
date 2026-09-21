@@ -1,9 +1,11 @@
+import { getImpersonationAttribution } from '~/utils/internal-impersonation-context.server';
 import { type LoaderFunctionArgs, data } from 'react-router';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { sessionKey } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  if (getImpersonationAttribution()) return data({ valid: true });
   const authSession = await authSessionStorage.getSession(
     request.headers.get('cookie')
   );

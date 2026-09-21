@@ -100,7 +100,7 @@ describe('ViewPanel', () => {
     expect(document.body.textContent).not.toContain('Reflection');
   });
 
-  it('still shows a percentage grade the way it always did', () => {
+  it('shows legacy percentage grades as points out of 100', () => {
     ({ root } = render(
       <ViewPanel
         submission={{
@@ -115,7 +115,8 @@ describe('ViewPanel', () => {
       />
     ));
 
-    expect(document.body.textContent).toContain('84%');
+    expect(document.body.textContent).toContain('84 / 100');
+    expect(document.body.textContent).not.toContain('%');
     expect(document.body.textContent).toContain('4/5');
   });
 });

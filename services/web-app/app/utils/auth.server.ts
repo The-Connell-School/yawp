@@ -1,3 +1,4 @@
+import { getImpersonationAttribution } from './internal-impersonation-context.server';
 import {
   type MembershipRole,
   Prisma,
@@ -103,6 +104,8 @@ export async function requireMutableRequest(request: Request) {
 }
 
 export async function getUserId(request: Request) {
+  const internal = getImpersonationAttribution();
+  if (internal) return internal.userId;
   const authSession = await authSessionStorage.getSession(
     request.headers.get('cookie')
   );

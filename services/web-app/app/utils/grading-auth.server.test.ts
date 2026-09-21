@@ -143,13 +143,20 @@ describe('grading auth helpers', () => {
     ).toBe(true);
   });
 
+  test('fences group grade writes against active ownership by the same user across memberships', () => {
+    for (const releasedAt of [null, new Date('2026-09-15')]) {
+      const where = buildGradeWriteSubjectWhere({ actorUserId: 'owner-user', releasedAt }) as any;
+      expect(where.OR.find((branch: any) => branch.artifactKind === 'ASSIGNMENT_GROUP').group).toEqual({ is: { members: { none: { removedAt: null, membership: { is: { userId: 'owner-user' } } } } } });
+    }
+  });
+
   test('allows ownerless assignment artifacts through the grade write subject guard', () => {
     const where = buildGradeWriteSubjectWhere({
       actorUserId: 'teacher-user-1',
       releasedAt: null,
     }) as any;
 
-    expect(where.OR).toContainEqual({ artifactKind: 'ASSIGNMENT_GROUP' });
+    expect(where.OR).toContainEqual(expect.objectContaining({ artifactKind: 'ASSIGNMENT_GROUP' }));
     expect(where.OR).toContainEqual(
       expect.objectContaining({
         artifactKind: 'STUDENT',
@@ -168,7 +175,7 @@ describe('grading auth helpers', () => {
       releasedAt: new Date('2026-08-31T12:00:00.000Z'),
     }) as any;
 
-    expect(where.OR).toContainEqual({
+    expect(where.OR).toContainEqual(expect.objectContaining({
       artifactKind: 'ASSIGNMENT_GROUP',
       classAssignment: {
         is: {
@@ -181,6 +188,6 @@ describe('grading auth helpers', () => {
           },
         },
       },
-    });
+    }));
   });
 });

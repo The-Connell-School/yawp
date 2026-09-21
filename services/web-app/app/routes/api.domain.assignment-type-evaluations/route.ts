@@ -1,7 +1,7 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import type { Prisma } from '@app/prisma';
 import { z } from 'zod';
-import { buildResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { runAssignmentTypeEvaluationSuite } from '~/domain/ai-evaluation/assignment-type-evaluation-suite.server';
 import {
@@ -228,18 +228,18 @@ export async function action({ request }: ActionFunctionArgs) {
   });
   if (!assignmentType) return errorResponse('Assignment type not found.', 404);
 
-  const rubric = parseRubric(assignmentType.rubricJson);
+  const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
+    assignmentTypeId: assignmentType.id,
+    assignmentTypeKind: assignmentType.kind,
+    assignmentTypeTitle: assignmentType.title,
+  });
+  const rubric = parseRubric(resolvedGradingConfig.rubricSnapshot);
   const rubricCategoryKeys = new Set(
     rubric.categories.map((category) => category.key)
   );
 
   if (input.intent === 'createPromptDraft') {
-    const gradingConfig = buildResolvedAssignmentTypeGradingConfig({
-      assignmentTypeId: assignmentType.id,
-      assignmentTypeKind: assignmentType.kind,
-      assignmentTypeTitle: assignmentType.title,
-      row: assignmentType,
-    });
+    const gradingConfig = resolvedGradingConfig;
     const production = await ensureProductionPromptVersion({
       db: prisma,
       assignmentTypeId: assignmentType.id,
@@ -393,12 +393,7 @@ export async function action({ request }: ActionFunctionArgs) {
         'Add an assignment rubric before generating evaluation cases.'
       );
     }
-    const gradingConfig = buildResolvedAssignmentTypeGradingConfig({
-      assignmentTypeId: assignmentType.id,
-      assignmentTypeKind: assignmentType.kind,
-      assignmentTypeTitle: assignmentType.title,
-      row: assignmentType,
-    });
+    const gradingConfig = resolvedGradingConfig;
     const useE2EFixture = process.env.E2E === 'true';
     let rawGeneration: string;
     if (useE2EFixture) {
@@ -546,12 +541,7 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!firstRubricCategoryKey) {
       return errorResponse('Add an assignment rubric before saving cases.');
     }
-    const gradingConfig = buildResolvedAssignmentTypeGradingConfig({
-      assignmentTypeId: assignmentType.id,
-      assignmentTypeKind: assignmentType.kind,
-      assignmentTypeTitle: assignmentType.title,
-      row: assignmentType,
-    });
+    const gradingConfig = resolvedGradingConfig;
     const expectedKeys = [...rubricCategoryKeys].sort();
     const hasInvalidOutput = parsedCases.data.some((evaluationCase) => {
       const actualKeys = evaluationCase.expectedOutput.categories
@@ -651,12 +641,7 @@ export async function action({ request }: ActionFunctionArgs) {
         409
       );
     }
-    const gradingConfig = buildResolvedAssignmentTypeGradingConfig({
-      assignmentTypeId: assignmentType.id,
-      assignmentTypeKind: assignmentType.kind,
-      assignmentTypeTitle: assignmentType.title,
-      row: assignmentType,
-    });
+    const gradingConfig = resolvedGradingConfig;
     const expectedKeys = [...rubricCategoryKeys].sort();
     const hasInvalidOutput = parsedCases.data.some((evaluationCase) => {
       const actualKeys = evaluationCase.expectedOutput.categories
@@ -753,12 +738,7 @@ export async function action({ request }: ActionFunctionArgs) {
     if (sourceEvaluations.length === 0) {
       return errorResponse('Source evaluation not found.', 404);
     }
-    const gradingConfig = buildResolvedAssignmentTypeGradingConfig({
-      assignmentTypeId: assignmentType.id,
-      assignmentTypeKind: assignmentType.kind,
-      assignmentTypeTitle: assignmentType.title,
-      row: assignmentType,
-    });
+    const gradingConfig = resolvedGradingConfig;
     const copiedEvaluations = sourceEvaluations.map((evaluation) => ({
       ...evaluation,
       cases: evaluation.cases.map((evaluationCase) => ({
@@ -895,12 +875,7 @@ export async function action({ request }: ActionFunctionArgs) {
   });
   if (runningRun) return errorResponse(RUN_IN_PROGRESS_MESSAGE, 409);
 
-  const baseGradingConfig = buildResolvedAssignmentTypeGradingConfig({
-    assignmentTypeId: assignmentType.id,
-    assignmentTypeKind: assignmentType.kind,
-    assignmentTypeTitle: assignmentType.title,
-    row: assignmentType,
-  });
+  const baseGradingConfig = resolvedGradingConfig;
   const [promptVersion, evaluationSuiteVersion] = await Promise.all([
     input.promptVersionId
       ? prisma.assignmentTypePromptVersion.findUnique({

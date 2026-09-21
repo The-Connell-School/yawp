@@ -6,7 +6,10 @@ import {
   type PromptWorkspaceContext,
 } from '~/components/admin/rubric-config-editors';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
-import { buildResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import {
+  resolveAssignmentTypeGradingConfig,
+  type ResolvedAssignmentTypeGradingConfig,
+} from '~/domain/assignment-types/assignment-type-grading-config.server';
 import {
   parsePromptConfig,
   parseRubric,
@@ -58,22 +61,10 @@ function normalizePromptStatus(
 }
 
 function buildPromptWorkspaceContext({
-  assignmentType,
+  gradingConfig,
   promptVersions,
 }: {
-  assignmentType: {
-    id: string;
-    title: string;
-    kind: string | null;
-    scoringScaleJson: unknown;
-    rubricJson: unknown;
-    gradingPromptConfigJson: unknown;
-    gradingOutputSchemaJson: unknown;
-    gradingCalibrationNotes: string | null;
-    gradingAssistantVersion: number;
-    gradingAssistantSourceTemplateId: string | null;
-    gradingAssistantSourceTemplateSlug: string | null;
-  };
+  gradingConfig: ResolvedAssignmentTypeGradingConfig;
   promptVersions: Array<{
     id: string;
     version: number;
@@ -81,17 +72,17 @@ function buildPromptWorkspaceContext({
     userMessageTemplate: string;
   }>;
 }): PromptWorkspaceContext | null {
-  const rubric = parseRubric(assignmentType.rubricJson);
+  const rubric = parseRubric(gradingConfig.rubricSnapshot);
   if (rubric.categories.length === 0) return null;
 
-  const scoringScale = parseScoringScale(assignmentType.scoringScaleJson);
-  const promptConfig = parsePromptConfig(assignmentType.gradingPromptConfigJson);
-  const baseGradingConfig = buildResolvedAssignmentTypeGradingConfig({
-    assignmentTypeId: assignmentType.id,
-    assignmentTypeKind: assignmentType.kind,
-    assignmentTypeTitle: assignmentType.title,
-    row: assignmentType,
+  const scoringScale = parseScoringScale({
+    type: gradingConfig.scoringType,
+    minScore: gradingConfig.minScore,
+    maxScore: gradingConfig.maxScore,
+    step: gradingConfig.step,
   });
+  const promptConfig = parsePromptConfig(gradingConfig.promptConfigSnapshot);
+  const baseGradingConfig = gradingConfig;
   const compiledPreviewsByPromptId: Record<string, GradingAssistantPromptPreview> =
     {};
 
@@ -150,14 +141,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
+  const gradingConfig = await resolveAssignmentTypeGradingConfig({
+    assignmentTypeId: assignmentType.id,
+    assignmentTypeKind: assignmentType.kind,
+    assignmentTypeTitle: assignmentType.title,
+  });
   const promptVersionControlEnabled = isPromptVersionControlEnabled();
   if (promptVersionControlEnabled) {
-    const gradingConfig = buildResolvedAssignmentTypeGradingConfig({
-      assignmentTypeId: assignmentType.id,
-      assignmentTypeKind: assignmentType.kind,
-      assignmentTypeTitle: assignmentType.title,
-      row: assignmentType,
-    });
     await Promise.all([
       ensureProductionPromptVersion({
         db: prisma,
@@ -345,7 +335,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     promptVersionControlEnabled,
     copySourceCatalog,
     promptWorkspace: buildPromptWorkspaceContext({
-      assignmentType,
+      gradingConfig,
       promptVersions,
     }),
   });

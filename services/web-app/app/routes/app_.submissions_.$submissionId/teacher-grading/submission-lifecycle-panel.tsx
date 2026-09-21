@@ -1,5 +1,4 @@
 import { type ComponentProps, useEffect, useRef, useState } from 'react';
-import { useFetcher } from 'react-router';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -34,6 +33,7 @@ import {
   type SavedGradeSnapshot,
   type TeacherGradingPanelHeaderState,
 } from './teacher-grading-panel';
+import { TeacherNotes } from './teacher-notes';
 import { ViewPanel, type ViewPanelSubmission } from './view-panel';
 
 export function GradingAssistantSplitButton({
@@ -47,8 +47,7 @@ export function GradingAssistantSplitButton({
   onStart: () => void;
   onAbortStart: () => void;
 }) {
-  const isGenerating =
-    isPendingStart || headerState?.isGenerating === true;
+  const isGenerating = isPendingStart || headerState?.isGenerating === true;
   const isAiRetrying = headerState?.isAiRetrying === true;
   const isBusy = isGenerating || headerState?.isBusy === true;
   const hasDraftToReplace = headerState?.hasDraftToReplace === true;
@@ -172,7 +171,9 @@ export function GradingAssistantSplitButton({
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Replace Existing Grading Feedback?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Replace Existing Grading Feedback?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               Grading Assistant suggestions will replace all current rubric
               comments, overall feedback, and grammar issue suggestions.
@@ -180,8 +181,12 @@ export function GradingAssistantSplitButton({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={onAbortStart}>Go Back</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirm}>Replace</AlertDialogAction>
+            <AlertDialogCancel onClick={onAbortStart}>
+              Go Back
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirm}>
+              Replace
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -225,6 +230,8 @@ export function SubmissionLifecyclePanel({
   submissionActivityEnabled = false,
   submissionId,
   documentId,
+  teacherNote = null,
+  onNavigationStateChange,
   ...teacherGradingPanelProps
 }: {
   lifecycleState: SubmissionLifecycleState;
@@ -239,9 +246,13 @@ export function SubmissionLifecyclePanel({
   submissionActivityEnabled?: boolean;
   submissionId: string;
   documentId: string;
+  teacherNote?: string | null;
+  onNavigationStateChange?: (state: {
+    hasUnsavedChanges: boolean;
+    isBusy: boolean;
+  }) => void;
 } & ComponentProps<typeof TeacherGradingPanel>) {
-  const isWithdrawn =
-    (submissionForView as any)?.unsubmittedAt != null;
+  const isWithdrawn = (submissionForView as any)?.unsubmittedAt != null;
   const label = isWithdrawn
     ? 'Withdrawn'
     : lifecycleState === 'needs_grading'
@@ -261,6 +272,26 @@ export function SubmissionLifecyclePanel({
   const [isGradingAssistantPending, setIsGradingAssistantPending] =
     useState(false);
   const wasGeneratingRef = useRef(false);
+
+  useEffect(() => {
+    onNavigationStateChange?.({
+      hasUnsavedChanges:
+        showEditingForm && headerState?.hasUnsavedChanges === true,
+      isBusy: isSavingGrade || isReleasing || headerState?.isBusy === true,
+    });
+  }, [
+    onNavigationStateChange,
+    showEditingForm,
+    headerState?.hasUnsavedChanges,
+    headerState?.isBusy,
+    isSavingGrade,
+    isReleasing,
+  ]);
+  useEffect(
+    () => () =>
+      onNavigationStateChange?.({ hasUnsavedChanges: false, isBusy: false }),
+    [onNavigationStateChange]
+  );
 
   useEffect(() => {
     if (!showEditingForm) {
@@ -298,10 +329,7 @@ export function SubmissionLifecyclePanel({
     try {
       await headerState.saveDraft();
       draftSaved = true;
-      if (
-        lifecycleState === 'needs_grading' &&
-        headerState.hasGrade
-      ) {
+      if (lifecycleState === 'needs_grading' && headerState.hasGrade) {
         await onMarkGraded();
       }
       // Revalidate only after the final lifecycle mutation. Marking graded
@@ -333,30 +361,6 @@ export function SubmissionLifecyclePanel({
     }
     exitEditMode();
   };
-
-  // Teacher Unsubmit
-  const teacherUnsubmitFetcher = useFetcher();
-  const handleTeacherUnsubmit = () => {
-    const fd = new FormData();
-    fd.set('submissionId', submissionId);
-    teacherUnsubmitFetcher.submit(fd, {
-      method: 'POST',
-      action: '/api/domain/teacher-unsubmit-submission',
-    });
-  };
-  const isUnsubmitting = teacherUnsubmitFetcher.state !== 'idle';
-  // Revalidate after successful unsubmit to refresh status/Activity
-  useEffect(() => {
-    if (teacherUnsubmitFetcher.state !== 'idle') return;
-    const body =
-      (teacherUnsubmitFetcher.data as { success?: boolean } | undefined) ??
-      undefined;
-    if (body?.success) {
-      // Force a full reload of the route to pick up latest status and activity
-      // eslint-disable-next-line no-restricted-globals
-      location.reload();
-    }
-  }, [teacherUnsubmitFetcher.state, teacherUnsubmitFetcher.data]);
 
   return (
     <div
@@ -417,25 +421,6 @@ export function SubmissionLifecyclePanel({
                 onAbortStart={() => setIsGradingAssistantPending(false)}
               />
             ) : null}
-            {!isWithdrawn ? (
-              <ConfirmationDialog
-                title="Unsubmit Submission?"
-                description="Withdraw this submission so the student can continue editing and resubmit."
-                confirmText="Unsubmit"
-                cancelText="Cancel"
-                onConfirm={() => handleTeacherUnsubmit()}
-              >
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  data-testid="submission-lifecycle-unsubmit"
-                  disabled={isUnsubmitting}
-                >
-                  {isUnsubmitting ? 'Unsubmitting...' : 'Unsubmit'}
-                </Button>
-              </ConfirmationDialog>
-            ) : null}
           </div>
         </div>
       </div>
@@ -464,8 +449,8 @@ export function SubmissionLifecyclePanel({
                 role="status"
                 data-testid="released-grade-edit-warning"
               >
-                Saving immediately changes the grade and feedback visible to
-                the student and records the change in Activity.
+                Saving immediately changes the grade and feedback visible to the
+                student and records the change in Activity.
               </div>
             ) : null}
             <TeacherGradingPanel
@@ -475,9 +460,13 @@ export function SubmissionLifecyclePanel({
               hideHeader
               onHeaderStateChange={setHeaderState}
             />
+            <TeacherNotes note={teacherNote} variant="inline" />
           </>
         ) : isReadyToRelease || lifecycleState === 'released' ? (
-          <ViewPanel submission={submissionForView} />
+          <>
+            <ViewPanel submission={submissionForView} />
+            <TeacherNotes note={teacherNote} variant="inline" />
+          </>
         ) : null}
       </div>
 

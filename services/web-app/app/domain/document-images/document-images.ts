@@ -1,0 +1,248 @@
+/**
+ * Student-uploaded figures for report-style assignments.
+ *
+ * GBA 300's International Expansion Plan rubric requires graphics: the
+ * Industry Analysis band asks for "at least two graphics that communicate,"
+ * and the report is expected to carry the invented company's logo and
+ * supporting charts. The course does not assess whether a student can *build*
+ * a chart, so this feature only has to get an image the student made
+ * elsewhere into the document.
+ *
+ * Everything here is pure so the gate, the size cap, and the src allowlist
+ * can be unit-tested and shared by the upload route, the serve route, the
+ * editor extension, and the toolbar.
+ */
+
+/** Rubric name of the GBA 300 International Expansion Plan (see domain/rubrics/library). */
+export const GBA300_EXPANSION_RUBRIC_NAME = 'gba300-international-expansion';
+
+/**
+ * Rubrics whose documents may carry uploaded figures. This list *is* the
+ * rollout gate: it starts as the one course that asked for the feature, and
+ * widening it later is a one-line change with no schema or route work.
+ */
+export const DOCUMENT_IMAGE_ENABLED_RUBRIC_NAMES: readonly string[] = [
+  GBA300_EXPANSION_RUBRIC_NAME,
+];
+
+/**
+ * Raster formats only. SVG is deliberately excluded: it is an XML document
+ * that can carry script, and we serve these bytes from our own origin.
+ */
+export const DOCUMENT_IMAGE_ALLOWED_CONTENT_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+] as const;
+
+export type DocumentImageContentType =
+  (typeof DOCUMENT_IMAGE_ALLOWED_CONTENT_TYPES)[number];
+
+/** 8 MB. Comfortably above a screenshot of a spreadsheet chart or a logo PNG. */
+export const DOCUMENT_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+
+/** Alt text longer than this is almost certainly a pasted paragraph. */
+export const DOCUMENT_IMAGE_MAX_ALT_TEXT_LENGTH = 300;
+
+const DOCUMENT_IMAGE_SRC_PREFIX = '/api/image/document/';
+
+/**
+ * Env kill switch. Set DOCUMENT_IMAGE_UPLOAD_DISABLED=true to take the
+ * feature back out of the product without a deploy of the old code: the
+ * toolbar button disappears, the upload route refuses, and already-uploaded
+ * figures keep rendering (the serve route is not gated, so no student loses
+ * work that is already in their report).
+ */
+export const DOCUMENT_IMAGE_KILL_SWITCH_ENV = 'DOCUMENT_IMAGE_UPLOAD_DISABLED';
+
+/**
+ * Two signals, either of which opens the feature for a document:
+ *
+ * - `allowsImageUploads` on the assignment type. This is the one that carries
+ *   the rollout: production's GBA 300 expansion assignment type stores its
+ *   rubric inline as JSON with no linked Rubric row and no systemKey, so the
+ *   rubric name is not available there at all. The column is backfilled to
+ *   true for that one row and defaults false everywhere else.
+ * - the assignment type's linked rubric name. This covers assignment types
+ *   built from the rubric library, where the GBA expansion rubric *is* a
+ *   Rubric row, so a teacher who spins up a fresh copy of the course gets the
+ *   feature without anyone touching the database.
+ *
+ * The env kill switch overrides both.
+ */
+export function isDocumentImageUploadEnabled({
+  rubricName,
+  allowsImageUploads,
+  killSwitch,
+}: {
+  rubricName?: string | null;
+  allowsImageUploads?: boolean | null;
+  killSwitch?: string | null;
+}): boolean {
+  if (killSwitch?.trim().toLowerCase() === 'true') return false;
+  if (allowsImageUploads === true) return true;
+  if (!rubricName) return false;
+  return DOCUMENT_IMAGE_ENABLED_RUBRIC_NAMES.includes(rubricName);
+}
+
+export function normalizeAltText(raw: string): string {
+  return raw
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, DOCUMENT_IMAGE_MAX_ALT_TEXT_LENGTH);
+}
+
+/** The bare media type, lowercased, with any `; charset=...` parameter dropped. */
+export function normalizeContentType(raw: string): string {
+  return raw.split(';')[0]!.trim().toLowerCase();
+}
+
+export type DocumentImageUploadRejection =
+  | 'unsupported-type'
+  | 'too-large'
+  | 'empty'
+  | 'missing-alt-text';
+
+export type DocumentImageUploadValidation =
+  | { ok: true; contentType: DocumentImageContentType; altText: string }
+  | { ok: false; reason: DocumentImageUploadRejection; message: string };
+
+const REJECTION_MESSAGES: Record<DocumentImageUploadRejection, string> = {
+  'unsupported-type': `That file type is not supported. Upload a PNG, JPEG, GIF, or WebP image.`,
+  'too-large': `That image is too large. The limit is ${Math.round(
+    DOCUMENT_IMAGE_MAX_BYTES / (1024 * 1024)
+  )} MB.`,
+  empty: 'That file is empty.',
+  'missing-alt-text': 'Describe the image so screen-reader users know what it shows.',
+};
+
+export function validateDocumentImageUpload({
+  contentType,
+  byteSize,
+  altText,
+}: {
+  contentType: string;
+  byteSize: number;
+  altText: string;
+}): DocumentImageUploadValidation {
+  const reject = (reason: DocumentImageUploadRejection) => ({
+    ok: false as const,
+    reason,
+    message: REJECTION_MESSAGES[reason],
+  });
+
+  const normalizedType = normalizeContentType(contentType);
+  if (
+    !(DOCUMENT_IMAGE_ALLOWED_CONTENT_TYPES as readonly string[]).includes(normalizedType)
+  ) {
+    return reject('unsupported-type');
+  }
+
+  if (!Number.isFinite(byteSize) || byteSize <= 0) return reject('empty');
+  if (byteSize > DOCUMENT_IMAGE_MAX_BYTES) return reject('too-large');
+
+  const normalizedAlt = normalizeAltText(altText ?? '');
+  if (!normalizedAlt) return reject('missing-alt-text');
+
+  return {
+    ok: true,
+    contentType: normalizedType as DocumentImageContentType,
+    altText: normalizedAlt,
+  };
+}
+
+export function buildDocumentImageSrc(imageId: string): string {
+  return `${DOCUMENT_IMAGE_SRC_PREFIX}${imageId}`;
+}
+
+/**
+ * Only a same-origin src pointing at our own document-image endpoint is
+ * allowed in the editor. This is what keeps a pasted `<img src="https://...">`
+ * — a tracking pixel, a hotlinked asset that 404s the week after it is
+ * graded — from surviving into the saved document.
+ */
+export function isDocumentImageSrc(src: string | null | undefined): boolean {
+  return parseDocumentImageId(src) !== null;
+}
+
+export function parseDocumentImageId(src: string | null | undefined): string | null {
+  if (typeof src !== 'string') return null;
+  if (!src.startsWith(DOCUMENT_IMAGE_SRC_PREFIX)) return null;
+  const id = src.slice(DOCUMENT_IMAGE_SRC_PREFIX.length);
+  // cuid-shaped only: no slashes, no traversal, no query string.
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) return null;
+  return id;
+}
+
+/**
+ * The files carried by a paste or a drop.
+ *
+ * Returns every file, not only the ones with an image media type: a student
+ * who drops a PDF of their chart should be told the format is wrong, not have
+ * the drop silently do nothing. Validation decides what is acceptable; this
+ * only decides whether we are the ones handling the event at all.
+ */
+export function filesFromDataTransfer(
+  data: { files?: ArrayLike<File> | null } | null | undefined
+): File[] {
+  if (!data?.files) return [];
+  return Array.from(data.files as ArrayLike<File>);
+}
+
+/**
+ * Whether a paste or drop is one this feature should intercept.
+ *
+ * A paste carrying no files at all is ordinary text or HTML and must fall
+ * through to the editor's normal handling untouched.
+ */
+export function carriesFiles(
+  data: { files?: ArrayLike<File> | null } | null | undefined
+): boolean {
+  return filesFromDataTransfer(data).length > 0;
+}
+
+/**
+ * How many figures one document may carry.
+ *
+ * Blobs live in the document's own table, so an unbounded count is unbounded
+ * Postgres growth against a single row's foreign key. GBA 300's rubric asks
+ * for two graphics; fifty is far past any honest report and still a hard stop
+ * on a paste-everything loop.
+ */
+export const DOCUMENT_IMAGE_MAX_PER_DOCUMENT = 50;
+
+/**
+ * The media type the bytes themselves claim, or null if they are none of the
+ * formats we accept.
+ *
+ * `file.type` is whatever the client put in the multipart part header, so it
+ * is a hint and never a fact. These bytes are later served inline from our own
+ * origin, which makes "the caller said it was a PNG" the wrong basis for the
+ * Content-Type we hand a browser. Signatures only -- no full decode; the point
+ * is to reject a document pretending to be an image, not to validate pixels.
+ */
+export function sniffImageContentType(
+  bytes: Uint8Array
+): DocumentImageContentType | null {
+  const startsWith = (...signature: number[]) =>
+    signature.length <= bytes.length &&
+    signature.every((byte, index) => bytes[index] === byte);
+
+  // \x89 P N G \r \n \x1a \n
+  if (startsWith(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return 'image/png';
+  // SOI marker; every JPEG variant shares it.
+  if (startsWith(0xff, 0xd8, 0xff)) return 'image/jpeg';
+  // GIF87a / GIF89a
+  if (startsWith(0x47, 0x49, 0x46, 0x38)) return 'image/gif';
+  // RIFF....WEBP
+  if (
+    startsWith(0x52, 0x49, 0x46, 0x46) &&
+    bytes.length >= 12 &&
+    [0x57, 0x45, 0x42, 0x50].every((byte, index) => bytes[8 + index] === byte)
+  ) {
+    return 'image/webp';
+  }
+
+  return null;
+}

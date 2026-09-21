@@ -28,7 +28,19 @@ async function expectStandardizedAssignmentForm(page: Page) {
   await expect(
     dialog.getByRole('checkbox', { name: /submit for grade/i })
   ).toBeChecked();
-  await expect(dialog.getByLabel(/point value/i)).toHaveValue('100');
+  await expect(
+    dialog.getByLabel('Default point value', { exact: true })
+  ).toHaveValue('100');
+  await expect(
+    dialog.getByLabel('Default point value', { exact: true })
+  ).toHaveAttribute('readonly', '');
+  await expect(
+    dialog.getByRole('checkbox', { name: /customize grading/i })
+  ).not.toBeChecked();
+  await expect(dialog.getByText('Default grading type', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('By default: Step grading', { exact: true })).toBeVisible();
+  await expect(dialog.getByText(/rubric default:/i)).toBeVisible();
+  await expect(dialog.getByText('Rubric total points')).toHaveCount(0);
   await expect(
     dialog.getByText(TUTOR_TOGGLE_HELP, { exact: true })
   ).toBeVisible();
@@ -392,7 +404,8 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.getByLabel(CLASS_LABEL).check();
       await page.getByLabel('Title (optional)').fill(title);
       await page.getByLabel('Prompt', { exact: true }).fill(prompt);
-      await page.getByLabel(/point value/i).fill('25');
+      await page.getByRole('checkbox', { name: /customize grading/i }).check();
+      await page.getByLabel('Total Point Values', { exact: true }).fill('25');
       const tutorToggle = page.getByRole('checkbox', {
         name: TUTOR_TOGGLE_LABEL,
         exact: true,
@@ -418,6 +431,60 @@ test.describe.serial('Teacher dashboard workspace', () => {
         pointValue: 25,
         tutorEnabled: false,
       });
+    } finally {
+      await deleteAssignmentsByTitle(title);
+    }
+  });
+
+  test('uses one point value for an assignment-level AI grading override', async ({
+    page,
+    e2eContext,
+    signIn,
+  }, testInfo) => {
+    const title = `Dashboard Rubric Override ${Date.now()}`;
+    const prompt = `Dashboard rubric override prompt ${Date.now()}`;
+
+    try {
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto('/app');
+      await page.waitForLoadState('networkidle');
+      await page
+        .getByTestId('teacher-assignments-grid')
+        .getByLabel('New E2E Course assignment')
+        .click();
+
+      const dialog = page.getByRole('dialog');
+      await dialog.getByLabel(CLASS_LABEL).check();
+      await dialog.getByLabel('Title (optional)').fill(title);
+      await dialog.getByLabel('Prompt', { exact: true }).fill(prompt);
+      await dialog
+        .getByRole('checkbox', { name: /customize grading/i })
+        .check();
+      await dialog.getByLabel('Total Point Values', { exact: true }).fill('25');
+      await expect(dialog.getByText('Grading Total: 25 points.', { exact: true })).toBeVisible();
+      await dialog.getByRole('button', { name: 'Bands' }).click();
+      await expect(
+        dialog.getByRole('button', { name: 'Bands' })
+      ).toHaveAttribute('aria-pressed', 'true');
+      await page.screenshot({
+        path: testInfo.outputPath('assignment-grading-override.png'),
+        fullPage: true,
+      });
+      await dialog.getByRole('button', { name: 'Create Assignment' }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+
+      const prisma = createE2EPrismaClient();
+      try {
+        const created = await prisma.assignment.findFirstOrThrow({
+          where: { title, prompt },
+          select: { pointValue: true, rubricTotalPoints: true, gradingMode: true },
+        });
+        expect(created.pointValue).toBe(25);
+        expect(created.rubricTotalPoints).toBe(25);
+        expect(created.gradingMode).toBe('bands');
+      } finally {
+        await prisma.$disconnect();
+      }
     } finally {
       await deleteAssignmentsByTitle(title);
     }
@@ -470,7 +537,8 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.getByLabel(secondClass.title!).check();
       await page.getByLabel('Title (optional)').fill(title);
       await page.getByLabel('Prompt', { exact: true }).fill(prompt);
-      await page.getByLabel(/point value/i).fill('35');
+      await page.getByRole('checkbox', { name: /customize grading/i }).check();
+      await page.getByLabel('Total Point Values', { exact: true }).fill('35');
       await page.getByRole('button', { name: 'Create Assignment' }).click();
       await expect(page.getByRole('dialog')).toHaveCount(0);
 
@@ -505,10 +573,14 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await page.getByRole('button', { name: /^New/ }).click();
     await page.getByRole('menuitem', { name: 'Assignment' }).click();
     await expectStandardizedAssignmentForm(page);
+    await expect(
+      page.getByRole('dialog').getByText(/Rubric default: \d+ points/i)
+    ).toBeVisible();
     await page.getByLabel(CLASS_LABEL).check();
     await page.getByLabel('Title (optional)').fill(title);
     await page.getByLabel('Prompt', { exact: true }).fill(prompt);
-    await page.getByLabel(/point value/i).fill('40');
+    await page.getByRole('checkbox', { name: /customize grading/i }).check();
+    await page.getByLabel('Total Point Values', { exact: true }).fill('40');
     await page.getByRole('button', { name: 'Create Assignment' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
 

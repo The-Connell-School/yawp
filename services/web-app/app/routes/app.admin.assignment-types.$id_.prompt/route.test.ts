@@ -107,6 +107,23 @@ describe('admin assignment type prompt loader', () => {
     prisma.assignmentTypeEvaluationRun.findMany.mockResolvedValue([]);
   });
 
+  test('opens prompt tools with the selected library rubric and no inline grading JSON', async () => {
+    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
+    const schema = STARTER_RUBRICS.find(row => row.name === DAILY_PAGES_RUBRIC_NAME)!;
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      ...baseAssignmentType, kind: null, rubricJson: null, scoringScaleJson: null,
+      gradingPromptConfigJson: { gradingInstructionsOverride: 'Reward reflection.' },
+      rubric: { name: schema.name, schemaJson: schema }, evaluations: [], evaluationCases: [],
+    });
+    const result = await loader({ request: new Request('https://example.test/prompt'), params: { id: 'at-1' }, context: {} });
+    const workspace = result.data.promptWorkspace;
+    expect(workspace).not.toBeNull();
+    expect(workspace.scoringScale).toMatchObject({ minScore: 0, maxScore: 30, step: 1 });
+    expect(workspace.rubric.categories.map((row: any) => row.key)).toEqual(['engagement_with_prompt']);
+    expect(workspace.promptConfig.gradingInstructions).toBe('Reward reflection.');
+    expect(workspace.compiledPreviewsByPromptId['prompt-1']).toBeDefined();
+  });
+
   test('loads the assignment context and serialized evaluation history', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       ...baseAssignmentType,

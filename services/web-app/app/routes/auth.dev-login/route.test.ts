@@ -131,6 +131,15 @@ describe('auth.dev-login action', () => {
     });
   });
 
+  test('refuses a user without an active seat membership before creating a session', async () => {
+    isPreviewAccessGateEnabled.mockReturnValue(true);
+    getPreviewAccessSeat.mockResolvedValue({ organizationId: 'preview-seat-2', label: 'QA' });
+    prisma.user.findFirst.mockResolvedValue({ id: 'retired-user', memberships: [] });
+    const response = await action(actionArgs(makeRequest('retired@seat.example')));
+    expect(response.status).toBe(404);
+    expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
   test('rejects unknown personas', async () => {
     const response = await action(
       actionArgs(makeRequest('not-a-persona@yawp.local'))
@@ -158,12 +167,12 @@ describe('auth.dev-login action', () => {
     expect(prisma.user.findFirst).toHaveBeenCalledWith({
       where: {
         email: 'student@seat-two.example',
-        memberships: { some: { organizationId: 'preview-seat-2' } },
+        memberships: { some: { isActive: true, organizationId: 'preview-seat-2' } },
       },
       select: {
         id: true,
         memberships: {
-          where: { organizationId: 'preview-seat-2' },
+          where: { isActive: true, organizationId: 'preview-seat-2' },
           select: { id: true, role: true },
           orderBy: { createdAt: 'asc' },
           take: 1,
@@ -208,12 +217,12 @@ describe('auth.dev-login action', () => {
     expect(prisma.user.findFirst).toHaveBeenCalledWith({
       where: {
         email: 'teacher@default-org.example',
-        memberships: { some: { organizationId: 'default-org' } },
+        memberships: { some: { isActive: true, organizationId: 'default-org' } },
       },
       select: {
         id: true,
         memberships: {
-          where: { organizationId: 'default-org' },
+          where: { isActive: true, organizationId: 'default-org' },
           select: { id: true, role: true },
           orderBy: { createdAt: 'asc' },
           take: 1,
@@ -245,13 +254,13 @@ describe('auth.dev-login action', () => {
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
-      where: { memberships: { some: { organizationId: 'preview-seat-2' } } },
+      where: { memberships: { some: { isActive: true, organizationId: 'preview-seat-2' } } },
       select: {
         email: true,
         name: true,
         isAdmin: true,
         memberships: {
-          where: { organizationId: 'preview-seat-2' },
+          where: { isActive: true, organizationId: 'preview-seat-2' },
           select: { role: true, isOrgOwner: true },
           take: 1,
         },
@@ -286,13 +295,13 @@ describe('auth.dev-login action', () => {
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
-      where: { memberships: { some: { organizationId: 'default-org' } } },
+      where: { memberships: { some: { isActive: true, organizationId: 'default-org' } } },
       select: {
         email: true,
         name: true,
         isAdmin: true,
         memberships: {
-          where: { organizationId: 'default-org' },
+          where: { isActive: true, organizationId: 'default-org' },
           select: { role: true, isOrgOwner: true },
           take: 1,
         },
@@ -362,13 +371,13 @@ describe('auth.dev-login options pagination', () => {
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
-      where: { memberships: { some: { organizationId: 'preview-seat-2' } } },
+      where: { memberships: { some: { isActive: true, organizationId: 'preview-seat-2' } } },
       select: {
         email: true,
         name: true,
         isAdmin: true,
         memberships: {
-          where: { organizationId: 'preview-seat-2' },
+          where: { isActive: true, organizationId: 'preview-seat-2' },
           select: { role: true, isOrgOwner: true },
           take: 1,
         },

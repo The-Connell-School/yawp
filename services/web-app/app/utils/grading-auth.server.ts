@@ -52,9 +52,9 @@ export function buildTeacherClassWhere(
 
 /**
  * The graded work must be student work, never the grading teacher's own solo
- * document. Assignment-group artifacts have no student owner, so they match by
- * explicit artifact kind and remain protected by the separate teacher/class
- * predicate at every call site.
+ * document or an active group they belong to through any membership. Recheck
+ * group ownership at the write so a membership change during grading cannot
+ * expose private output. Teacher/class access remains a separate predicate.
  */
 export function buildGradeWriteSubjectWhere({
   actorUserId,
@@ -67,6 +67,7 @@ export function buildGradeWriteSubjectWhere({
     OR: [
       {
         artifactKind: 'ASSIGNMENT_GROUP',
+        group: { is: { members: { none: { removedAt: null, membership: { is: { userId: actorUserId } } } } } },
         ...(releasedAt == null
           ? {}
           : {

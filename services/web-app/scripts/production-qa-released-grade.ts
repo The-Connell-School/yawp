@@ -66,7 +66,7 @@ try {
     fullPage: true,
   });
   await teacherPage.waitForTimeout(2_000);
-  await teacherPage.getByTestId('grading-overall-percentage').fill('91');
+  await teacherPage.getByTestId('grading-overall-points').fill('91');
   await teacherPage
     .getByTestId('grading-overall-comment')
     .fill('Production QA verified released-grade feedback.');
@@ -110,7 +110,9 @@ try {
   await teacherContext.clearCookies();
   await signIn(teacherPage, 'prod.qa.student.v3@brock.software');
   await teacherPage.goto(`${baseUrl}${submissionPath}`);
-  await expect(teacherPage.getByText('91%')).toBeVisible();
+  await expect(
+    teacherPage.getByText('91 / 100', { exact: true }).first()
+  ).toBeVisible();
   await expect(
     teacherPage.getByText('Production QA verified released-grade feedback.')
   ).toBeVisible();
@@ -158,7 +160,9 @@ try {
   const studentPage = await studentContext.newPage();
   await signIn(studentPage, 'prod.qa.student.v3@brock.software');
   await studentPage.goto(`${baseUrl}${submissionPath}`);
-  await expect(studentPage.getByText('91%')).toBeVisible();
+  await expect(
+    studentPage.getByText('91 / 100', { exact: true }).first()
+  ).toBeVisible();
   await expect(
     studentPage.getByText('Production QA verified released-grade feedback.')
   ).toBeVisible();

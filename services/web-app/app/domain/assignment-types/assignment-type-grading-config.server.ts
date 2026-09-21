@@ -11,6 +11,11 @@ import {
 } from './assignment-type-rubric-config';
 import type { RubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { normalizeScoreStep } from './score-scale-steps';
+import {
+  DEFAULT_ASSIGNMENT_GRADING_MODE,
+  parseAssignmentGradingMode,
+  type AssignmentGradingMode,
+} from '~/domain/assignments/rubric-overrides';
 
 export type AssignmentTypeGradingInstructions =
   | {
@@ -32,6 +37,8 @@ export type AssignmentTypeGradingInstructions =
     };
 
 export type ResolvedAssignmentTypeGradingConfig = {
+  /** Selected library identity, including the identity on a pinned revision. */
+  rubricName?: string | null;
   source: AssignmentTypeRubricConfigSource;
   /**
    * The assignment type's own rubric is in use but some categories are not
@@ -47,6 +54,10 @@ export type ResolvedAssignmentTypeGradingConfig = {
   scoringType: string;
   minScore: number;
   maxScore: number;
+  /** Optional assignment-level override for the rubric's total points. */
+  rubricTotalPoints?: number | null;
+  /** `step` is the compatibility default; `bands` opts into ranges. */
+  gradingMode?: AssignmentGradingMode;
   /** Gap between allowed scores; 1 means every value in the range. */
   step: number;
   rubricCategories: RubricCategory[];
@@ -112,6 +123,81 @@ function getManagedPromptTemplate(promptConfig: Record<string, unknown>) {
   }
   if (!systemMessage.trim() || !userMessage.trim()) return null;
   return { systemMessage, userMessage };
+}
+
+function stepScoresForCategory(category: RubricCategory) {
+  if (category.scoreLabels?.length) {
+    return category.scoreLabels.map((entry) => entry.value);
+  }
+  if (category.bands?.length) {
+    return category.bands.map((band) => band.max);
+  }
+  return undefined;
+}
+
+function scaleRubricScore(value: number, sourceMax: number, targetMax: number) {
+  if (sourceMax <= 0 || sourceMax === targetMax) return value;
+  return Math.round((value * targetMax) / sourceMax);
+}
+
+/**
+ * A rubric's authored numbers are its source scale. An assignment-level total
+ * changes that scale proportionally while keeping the rubric's labels and
+ * descriptions attached to the same relative points.
+ */
+function applyRubricTotalPoints(
+  categories: RubricCategory[],
+  sourceMax: number,
+  rubricTotalPoints?: number | null
+) {
+  if (
+    rubricTotalPoints == null ||
+    sourceMax <= 0 ||
+    rubricTotalPoints === sourceMax
+  ) {
+    return categories;
+  }
+
+  return categories.map((category) => ({
+    ...category,
+    ...(category.scoreLabels
+      ? {
+          scoreLabels: category.scoreLabels.map((entry) => ({
+            ...entry,
+            value: scaleRubricScore(
+              entry.value,
+              sourceMax,
+              rubricTotalPoints
+            ),
+          })),
+        }
+      : {}),
+    ...(category.bands
+      ? {
+          bands: category.bands.map((band) => ({
+            ...band,
+            min: scaleRubricScore(band.min, sourceMax, rubricTotalPoints),
+            max: scaleRubricScore(band.max, sourceMax, rubricTotalPoints),
+          })),
+        }
+      : {}),
+  }));
+}
+
+function applyAssignmentGradingMode(
+  categories: RubricCategory[],
+  gradingMode?: AssignmentGradingMode
+) {
+  if (gradingMode !== 'step') return categories;
+
+  return categories.map((category) => {
+    const allowedScores = stepScoresForCategory(category);
+    if (!allowedScores?.length) return category;
+    return {
+      ...category,
+      allowedScores: [...new Set(allowedScores)],
+    };
+  });
 }
 
 function applyGradingInstructionsOverride(
@@ -184,6 +270,17 @@ export function getAssignmentTypeGradingInstructions(
   };
 }
 
+/** Managed prompt versions belong to the assignment, even when its rubric is shared. */
+function managedPromptTemplates(rawPromptConfig: unknown): Record<string, string> {
+  if (!isRecord(rawPromptConfig)) return {};
+  const { systemMessageTemplate, userMessageTemplate } = rawPromptConfig;
+  if (
+    typeof systemMessageTemplate !== 'string' || !systemMessageTemplate.trim() ||
+    typeof userMessageTemplate !== 'string' || !userMessageTemplate.trim()
+  ) return {};
+  return { systemMessageTemplate, userMessageTemplate };
+}
+
 function withLibraryRubric<
   T extends AssignmentTypeGradingRow & {
     rubric?: { name: string; schemaJson: unknown } | null;
@@ -199,7 +296,10 @@ function withLibraryRubric<
     selectedRubricName: row.rubric.name,
     scoringScaleJson: parsed.schema.scoringScale as never,
     rubricJson: parsed.schema.rubric as never,
-    gradingPromptConfigJson: parsed.schema.promptConfig as never,
+    gradingPromptConfigJson: {
+      ...parsed.schema.promptConfig,
+      ...managedPromptTemplates(row.gradingPromptConfigJson),
+    } as never,
     gradingOutputSchemaJson: parsed.schema.outputSchema as never,
     gradingCalibrationNotes: parsed.schema.calibrationNotes,
   };
@@ -222,12 +322,16 @@ export function buildResolvedAssignmentTypeGradingConfig({
   assignmentTypeTitle,
   row,
   ownGradingInstructionsOverride,
+  rubricTotalPoints = null,
+  gradingMode,
 }: {
   assignmentTypeId: string;
   assignmentTypeKind: string | null;
   assignmentTypeTitle: string | null;
   row: AssignmentTypeGradingRow | null;
   ownGradingInstructionsOverride?: string;
+  rubricTotalPoints?: number | null;
+  gradingMode?: AssignmentGradingMode;
 }): ResolvedAssignmentTypeGradingConfig {
   const usesProductionThesis =
     row?.selectedRubricName === THESIS_DRIVEN_ESSAY_RUBRIC_NAME;
@@ -254,21 +358,38 @@ export function buildResolvedAssignmentTypeGradingConfig({
           parsedConfig.promptConfig as Record<string, unknown>
         )
       : (parsedConfig.promptConfig as Record<string, unknown>);
-  const promptConfigSnapshot = applyGradingInstructionsOverride(
-    ownGradingInstructionsOverride
-      ? {
-          ...rawPromptConfigSnapshot,
-          gradingInstructionsOverride: ownGradingInstructionsOverride,
-        }
-      : rawPromptConfigSnapshot
-  );
-  const { minScore, maxScore } = getScoreBounds(parsedConfig.scoringScale);
+  const promptConfigSnapshot = applyGradingInstructionsOverride({
+    ...rawPromptConfigSnapshot,
+    ...managedPromptTemplates(row?.gradingPromptConfigJson),
+    ...(ownGradingInstructionsOverride
+      ? { gradingInstructionsOverride: ownGradingInstructionsOverride }
+      : {}),
+  });
+  const authoredBounds = getScoreBounds(parsedConfig.scoringScale);
+  const minScore =
+    rubricTotalPoints == null
+      ? authoredBounds.minScore
+      : scaleRubricScore(
+          authoredBounds.minScore,
+          authoredBounds.maxScore,
+          rubricTotalPoints
+        );
+  const maxScore = rubricTotalPoints ?? authoredBounds.maxScore;
   const step = normalizeScoreStep(parsedConfig.scoringScale.step);
   const scoringType = getScoringType(parsedConfig.scoringScale);
-  const rubricCategories = parsedConfig.rubric.categories;
+  const scaledCategories = applyRubricTotalPoints(
+    parsedConfig.rubric.categories,
+    authoredBounds.maxScore,
+    rubricTotalPoints
+  );
+  const rubricCategories = applyAssignmentGradingMode(
+    scaledCategories,
+    gradingMode
+  );
 
   return {
     source: parsedConfig.source,
+    rubricName: row?.selectedRubricName ?? null,
     rubricIncomplete: parsedConfig.rubricIncomplete,
     assignmentTypeId,
     assignmentTypeKind: row?.kind ?? assignmentTypeKind,
@@ -287,6 +408,8 @@ export function buildResolvedAssignmentTypeGradingConfig({
     scoringType,
     minScore,
     maxScore,
+    rubricTotalPoints,
+    gradingMode,
     step,
     rubricCategories,
     instructions: getAssignmentTypeGradingInstructions(promptConfigSnapshot),
@@ -294,6 +417,8 @@ export function buildResolvedAssignmentTypeGradingConfig({
       categories: rubricCategories,
       minScore,
       maxScore,
+      ...(rubricTotalPoints === null ? {} : { rubricTotalPoints }),
+      ...(gradingMode ? { gradingMode } : {}),
       step,
       scoringType,
     },
@@ -314,10 +439,12 @@ export function buildResolvedAssignmentTypeGradingConfig({
 
 export async function resolveAssignmentTypeGradingConfig({
   assignmentTypeId,
+  assignmentId,
   assignmentTypeKind = null,
   assignmentTypeTitle = null,
 }: {
   assignmentTypeId: string;
+  assignmentId?: string | null;
   assignmentTypeKind?: string | null;
   assignmentTypeTitle?: string | null;
 }): Promise<ResolvedAssignmentTypeGradingConfig> {
@@ -335,10 +462,39 @@ export async function resolveAssignmentTypeGradingConfig({
       gradingAssistantVersion: true,
       gradingAssistantSourceTemplateId: true,
       gradingAssistantSourceTemplateSlug: true,
-      rubric: { select: { name: true, schemaJson: true } },
+      rubric: { select: { name: true, schemaJson: true, currentRevision: { select: { id: true, version: true, rubricName: true, schemaJson: true } } } },
     },
   });
 
+  // A published default opts this rubric into revision reads. Legacy rows
+  // retain the existing library/column fallback until explicitly published.
+  let revision = assignmentType?.rubric?.currentRevision ?? null;
+  let assignmentRubricTotalPoints: number | null = null;
+  let assignmentGradingMode: AssignmentGradingMode | undefined;
+  if (assignmentId) {
+    const assignment = await prisma.assignment.findUnique({ where: { id: assignmentId }, select: {
+      assignmentTypeId: true,
+      rubricTotalPoints: true,
+      gradingMode: true,
+      rubricRevision: { select: { id: true, version: true, rubricName: true, schemaJson: true } },
+    } });
+    if (!assignment || assignment.assignmentTypeId !== assignmentTypeId) throw new Error('Assignment grading context does not match');
+    assignmentRubricTotalPoints = assignment.rubricTotalPoints;
+    // The migration gives every real row an explicit `step`. An omitted field
+    // can only be an old fixture/legacy read, so preserve its pre-override
+    // band behavior rather than making an un-migrated row fail on a new guard.
+    assignmentGradingMode =
+      typeof assignment.gradingMode === 'string'
+        ? parseAssignmentGradingMode(assignment.gradingMode) ??
+          DEFAULT_ASSIGNMENT_GRADING_MODE
+        : 'bands';
+    if (assignment.rubricRevision) revision = assignment.rubricRevision;
+  }
+  const row = revision && assignmentType ? {
+    ...assignmentType,
+    gradingAssistantVersion: revision.version,
+    rubric: { name: revision.rubricName, schemaJson: revision.schemaJson },
+  } : assignmentType;
   return buildResolvedAssignmentTypeGradingConfig({
     assignmentTypeId,
     assignmentTypeKind,
@@ -346,11 +502,13 @@ export async function resolveAssignmentTypeGradingConfig({
     // A rubric chosen from the library replaces the assignment type's own
     // columns wholesale. Everything downstream reads the same shape either
     // way, so nothing else in grading has to know where the rubric came from.
-    row: withLibraryRubric(assignmentType),
+    row: withLibraryRubric(row),
     // The per-assignment-type grading assistant override always applies,
     // even when a library rubric supplies the rest of the prompt config.
     ownGradingInstructionsOverride: getOwnGradingInstructionsOverride(
       assignmentType as AssignmentTypeGradingRow | null
     ),
+    rubricTotalPoints: assignmentRubricTotalPoints,
+    gradingMode: assignmentGradingMode,
   });
 }

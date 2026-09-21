@@ -86,13 +86,13 @@ export function createDevLoginAction({
             where: {
               email,
               memberships: {
-                some: { organizationId: previewSeat.organizationId },
+                some: { isActive: true, organizationId: previewSeat.organizationId },
               },
             },
             select: {
               id: true,
               memberships: {
-                where: { organizationId: previewSeat.organizationId },
+                where: { isActive: true, organizationId: previewSeat.organizationId },
                 select: { id: true, role: true },
                 orderBy: { createdAt: 'asc' },
                 take: 1,
@@ -104,6 +104,7 @@ export function createDevLoginAction({
             select: {
               id: true,
               memberships: {
+                where: { isActive: true },
                 select: { id: true, role: true },
                 orderBy: { createdAt: 'asc' },
                 take: 1,
@@ -111,7 +112,7 @@ export function createDevLoginAction({
             },
           });
 
-    if (!user) {
+    if (!user || !user.memberships[0]) {
       return Response.json(
         {
           error:
@@ -247,7 +248,7 @@ export async function getLocalDevLoginOptionsPage(
   const users = await prismaClient.user.findMany({
     where: {
       memberships: {
-        some: { organizationId },
+        some: { isActive: true, organizationId },
       },
     },
     select: {
@@ -255,7 +256,7 @@ export async function getLocalDevLoginOptionsPage(
       name: true,
       isAdmin: true,
       memberships: {
-        where: { organizationId },
+        where: { isActive: true, organizationId },
         select: { role: true, isOrgOwner: true },
         take: 1,
       },
