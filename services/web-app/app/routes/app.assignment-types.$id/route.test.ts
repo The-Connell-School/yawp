@@ -4,6 +4,9 @@ const prisma = {
   assignmentType: {
     findFirst: mock(),
     findMany: mock(),
+    // The loader resolves the type's grading config to report its default
+    // total points; without this the whole file dies on the first loader call.
+    findUnique: mock(),
   },
   document: {
     findMany: mock(),
@@ -107,10 +110,14 @@ describe('app.assignment-types.$id action', () => {
   beforeEach(() => {
     prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentType.findMany.mockReset();
+    prisma.assignmentType.findUnique.mockReset();
     // The loader also reads grading config for this type, to decide whether the
     // creation sheet offers the grammar-grading toggle. No rubric here, so the
     // default resolves to no toggle.
     prisma.assignmentType.findMany.mockResolvedValue([]);
+    // And reads the row itself for the default total points. A row with no
+    // rubric of its own falls back to the default for its kind.
+    prisma.assignmentType.findUnique.mockResolvedValue(null);
     prisma.class.findMany.mockReset();
     prisma.organizationAssignmentType.findMany.mockReset();
     prisma.school.findMany.mockReset();
@@ -247,10 +254,14 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
   beforeEach(() => {
     prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentType.findMany.mockReset();
+    prisma.assignmentType.findUnique.mockReset();
     // The loader also reads grading config for this type, to decide whether the
     // creation sheet offers the grammar-grading toggle. No rubric here, so the
     // default resolves to no toggle.
     prisma.assignmentType.findMany.mockResolvedValue([]);
+    // And reads the row itself for the default total points. A row with no
+    // rubric of its own falls back to the default for its kind.
+    prisma.assignmentType.findUnique.mockResolvedValue(null);
     prisma.document.findMany.mockReset();
     prisma.class.findMany.mockReset();
     prisma.organizationAssignmentType.findMany.mockReset();

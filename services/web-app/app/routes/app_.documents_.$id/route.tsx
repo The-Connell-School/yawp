@@ -65,6 +65,7 @@ import { ensureAssignmentModuleSessionsForDocument } from '~/domain/documents.se
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { documentReadWhere } from '~/utils/document-access.server';
 import { Comments } from './comments';
+import { TeacherPasteReport } from '~/components/teacher-paste-report';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { DocumentEditor } from './document-editor/document-editor';
 import type { EditorBridge } from './document-editor/use-editor-sync';
@@ -94,6 +95,14 @@ import {
 import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
 import { AssignmentPromptPanel } from './assignment-prompt-panel';
 import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
+import { TeacherDocumentNavigation } from '~/components/teacher-document-navigation';
+import {
+  buildDocumentNavigationHref,
+  GRADING_QUEUE_SORT_PARAM,
+  parseGradingQueueScope,
+  parseGradingQueueSort,
+} from '~/domain/grading/grading-queue';
+import { loadDocumentNavigationNeighbors } from '~/domain/grading/grading-queue.server';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -350,6 +359,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const submissions = doc.submissions;
   const isOwner = ownerMembership.id === profile.id;
+  const navigationScope =
+    !isOwner && profile.role === 'TEACHER'
+      ? parseGradingQueueScope(
+          sanitizeExitTarget(url.searchParams.get('exitTo'))
+        ) ?? parseGradingQueueScope('/app/documents')
+      : null;
+  const documentNavigation = navigationScope && profile.organization?.id
+    ? await loadDocumentNavigationNeighbors({
+        request,
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        userId,
+        documentId: doc.id,
+        scope: navigationScope,
+        sort: parseGradingQueueSort(url.searchParams.get(GRADING_QUEUE_SORT_PARAM)),
+      })
+    : null;
   const wantsDraftEditor =
     url.searchParams.get('revise') === '1' ||
     url.searchParams.get('spa') === '1';
@@ -485,6 +511,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       isOwner &&
       profile.role === 'STUDENT' &&
       !hasEffectivePlatformAdmin(user?.isAdmin),
+    documentNavigation,
   });
 }
 
@@ -628,6 +655,11 @@ export default function Route() {
 
   // Editor bridge handle — stable ref populated by DocumentEditor.onBridgeReady
   const editorBridgeRef = useRef<EditorBridge | null>(null);
+  const [editorRoot, setEditorRoot] = useState<HTMLElement | null>(null);
+  const handleEditorBridgeReady = useCallback((bridge: EditorBridge | null) => {
+    editorBridgeRef.current = bridge;
+    setEditorRoot(bridge?.getContentElement?.() ?? null);
+  }, []);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   const getLiveDocumentTitle = useCallback(() => {
@@ -990,6 +1022,22 @@ export default function Route() {
               {studentName}
             </p>
           ) : null}
+          {isViewingAsTeacher && data.documentNavigation ? (
+            <TeacherDocumentNavigation
+              queue={data.documentNavigation}
+              documentId={data.doc.id}
+              hrefFor={(entry) =>
+                buildDocumentNavigationHref({
+                  entry,
+                  exitTo: explicitExitTarget,
+                  sort: parseGradingQueueSort(
+                    searchParams.get(GRADING_QUEUE_SORT_PARAM)
+                  ),
+                })
+              }
+              disabled={false}
+            />
+          ) : null}
           <div className="ml-auto flex items-center gap-4">
             {!isViewingAsTeacher && (
               <>
@@ -1118,35 +1166,53 @@ export default function Route() {
                 }
               />
             )}
-            {isMobile && tab !== 'editor' ? null : (
-              <DocumentEditor
-                docId={data.doc.id}
-                // With the tutor off the prompt has its own column, so the
-                // banner over the document would only repeat it.
-                assignment={tutorEnabled ? editorAssignmentPrompt : null}
-                serverHtml={editorServerHtml}
-                serverText={editorServerText}
-                serverUpdatedAt={data.doc.updatedAt}
-                initialRevision={data.doc.revision}
-                isEditable={isEditorEditable}
-                canUploadImages={data.canUploadImages}
-                onBridgeReady={(b) => {
-                  editorBridgeRef.current = b;
-                }}
-                onSyncStatusChange={setSyncStatus}
-                onSubmittableContentChange={handleSubmittableContentChange}
-                onCommentCreated={(c) => commentsState.addComment(c as any)}
-              />
+            {isMobile && tab !== 'editor' && !isViewingAsTeacher ? null : (
+              <div
+                className={isMobile && tab !== 'editor'
+                  ? 'hidden'
+                  : 'flex h-full min-w-0 w-full flex-col'}
+              >
+                <DocumentEditor
+                  docId={data.doc.id}
+                  // With the tutor off the prompt has its own column, so the
+                  // banner over the document would only repeat it.
+                  assignment={tutorEnabled ? editorAssignmentPrompt : null}
+                  serverHtml={editorServerHtml}
+                  serverText={editorServerText}
+                  serverUpdatedAt={data.doc.updatedAt}
+                  initialRevision={data.doc.revision}
+                  isEditable={isEditorEditable}
+                  canUploadImages={data.canUploadImages}
+                  onBridgeReady={handleEditorBridgeReady}
+                  onSyncStatusChange={setSyncStatus}
+                  onSubmittableContentChange={handleSubmittableContentChange}
+                  onCommentCreated={(c) => commentsState.addComment(c as any)}
+                />
+              </div>
             )}
-            {isMobile && tab !== 'comments' ? null : (
-              <Comments
-                className="md:w-3/5"
-                comments={visibleComments as any}
-                readOnly={!isDocumentEditable}
-                onCommentRemoved={commentsState.removeComment}
-                onResponseAdded={commentsState.addResponse}
-                autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
-              />
+            {isMobile && tab !== 'comments' && !isViewingAsTeacher ? null : (
+              <div
+                className={isMobile && tab !== 'comments'
+                  ? 'hidden'
+                  : 'h-full min-w-0 w-full md:w-3/5'}
+              >
+                <TeacherPasteReport
+                  key={data.doc.id}
+                  enabled={isViewingAsTeacher}
+                  documentId={data.doc.id}
+                  contentRoot={editorRoot}
+                  onSelectEvent={() => { if (isMobile) changeTab('editor'); }}
+                >
+                  <Comments
+                    showCollapsibleHeader={!isViewingAsTeacher}
+                    comments={visibleComments as any}
+                    readOnly={!isDocumentEditable}
+                    onCommentRemoved={commentsState.removeComment}
+                    onResponseAdded={commentsState.addResponse}
+                    autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
+                  />
+                </TeacherPasteReport>
+              </div>
             )}
           </div>
         </CommentsSelectionProvider>

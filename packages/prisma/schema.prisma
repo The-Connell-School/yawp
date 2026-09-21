@@ -274,6 +274,11 @@ model Assignment {
   promptAttachmentSize            Int?
   submitForGrade                  Boolean           @default(true)
   pointValue                      Int?              @default(100)
+  /// Optional assignment-level override for the rubric's total score.
+  rubricTotalPoints               Int?
+  /// `step` preserves the original discrete label behavior; `bands` allows
+  /// whole-number scores inside each rubric label's declared range.
+  gradingMode                     String            @default("step")
   gradingAssistantStrictnessLevel String            @default("intermediate")
   tutorEnabled                    Boolean           @default(true)
   /// The teacher's per-assignment toggle: is this one graded for grammar and

@@ -136,6 +136,14 @@ describe('revise loader', () => {
     prisma.submission.findFirst.mockResolvedValue(buildSubmission());
   });
 
+  test('passes the assignment pin and total to the no-snapshot revision rubric', async () => {
+    const submission = buildSubmission() as any;
+    submission.document.assignment = { id: 'pinned-daily', pointValue: 90 };
+    prisma.submission.findFirst.mockResolvedValue(submission);
+    await call();
+    expect(resolveRubricConfigForSubmission).toHaveBeenCalledWith(expect.objectContaining({ assignmentId: 'pinned-daily', pointValue: 90, latestGradingRun: null }));
+  });
+
   test('serves the split screen to the owner of a released submission', async () => {
     const result = await call();
 
@@ -321,4 +329,12 @@ describe('revise loader', () => {
     expect(redirect.to).toBe('/app');
     expect(redirect.payload.description).toBe('Submission not found.');
   });
+
+  test('never serializes private grading-run metadata on the student revision surface', async () => {
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission({ gradingAssistantRuns: [{ status: 'succeeded', metadata: { teacherNote: 'PRIVATE_REVISION_OBSERVATION' } }] }));
+    const result = await call();
+    expect(result.submission.gradingAssistantRuns).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_REVISION_OBSERVATION');
+  });
+
 });

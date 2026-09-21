@@ -14,6 +14,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import type { TeacherGradingPanelHeaderState } from './teacher-grading-panel';
 
 const toastError = mock();
+const router = await import('react-router');
+mock.module('react-router', () => ({
+  ...router,
+  useFetcher: () => ({ state: 'idle', data: undefined, submit: mock() }),
+}));
 
 mock.module('sonner', () => ({
   toast: { error: toastError, success: mock() },
@@ -94,6 +99,37 @@ describe('SubmissionLifecyclePanel save error handling', () => {
   afterEach(() => {
     cleanup(root);
     root = null;
+  });
+
+  it('reports dirty and busy grading state and clears it when the paper unmounts', () => {
+    currentHeaderState = headerState({ hasUnsavedChanges: true, isBusy: true });
+    const onNavigationStateChange = mock();
+    ({ root } = render(
+      <SubmissionLifecyclePanel
+        lifecycleState="needs_grading"
+        isEditingGrade
+        onEditingGradeChange={() => {}}
+        onMarkGraded={async () => {}}
+        onGradeSaved={() => {}}
+        isSavingGrade={false}
+        onRelease={() => {}}
+        isReleasing={false}
+        submissionForView={{} as any}
+        documentId="doc-1"
+        submissionId="sub-1"
+        existingGrade={{ id: 'sub-1' } as any}
+        grammarIssues={[]}
+        hiddenGrammarIssueIds={[]}
+        onToggleGrammarIssue={() => {}}
+        onRemoveGrammarIssue={() => {}}
+        onGrammarIssuesChange={() => {}}
+        onNavigationStateChange={onNavigationStateChange}
+      />
+    ));
+    expect(onNavigationStateChange).toHaveBeenLastCalledWith({ hasUnsavedChanges: true, isBusy: true });
+    cleanup(root);
+    root = null;
+    expect(onNavigationStateChange).toHaveBeenLastCalledWith({ hasUnsavedChanges: false, isBusy: false });
   });
 
   it('shows the server withdrawal message and exits edit mode instead of silently succeeding', async () => {

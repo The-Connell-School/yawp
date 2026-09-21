@@ -68,7 +68,10 @@ jobs:
           PROD_SSH_KEY_PATH: ${{ runner.temp }}/yawp-production-bastion
 
       - name: Install Chromium
-        run: bunx playwright install --with-deps chromium
+        working-directory: services/web-app
+        run: |
+          playwright_version="$(bun -e "console.log(require('@playwright/test/package.json').version)")"
+          bunx --package "@playwright/test@${playwright_version}" playwright install --with-deps chromium
 
       - name: Verify released-grade editing and activity in production
         run: bun run --cwd services/web-app production-qa-released-grade

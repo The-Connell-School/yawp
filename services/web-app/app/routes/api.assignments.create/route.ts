@@ -27,6 +27,7 @@ import { prisma } from '~/utils/db.server';
 import {
   DEFAULT_ASSIGNMENT_POINT_VALUE,
   parseAssignmentGradingIntent,
+  parseAssignmentRubricOverrides,
 } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentCollaboration } from '~/utils/assignment-collaboration.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
@@ -182,6 +183,21 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 400 }
     );
   }
+  const rubricOverrides = parseAssignmentRubricOverrides(formData);
+  if (!rubricOverrides.success) {
+    return dataResponse(
+      { success: false, message: rubricOverrides.message },
+      { status: 400 }
+    );
+  }
+  const rubricOverrideData = {
+    ...(formData.has('rubricTotalPoints')
+      ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
+      : {}),
+    ...(formData.has('gradingMode')
+      ? { gradingMode: rubricOverrides.data.gradingMode }
+      : {}),
+  };
 
   const assignmentTypeAvailable = await isAssignmentTypeAvailableForEveryScope({
     assignmentTypeId,
@@ -260,6 +276,7 @@ export async function action({ request }: ActionFunctionArgs) {
         }),
         tutorEnabled,
         grammarGradingEnabled,
+        ...rubricOverrideData,
         ...collaboration,
       },
       classIds: deployClassIds,
@@ -330,6 +347,7 @@ export async function action({ request }: ActionFunctionArgs) {
         title,
         prompt,
         gradingAssistantStrictnessLevel,
+        ...rubricOverrideData,
         tutorEnabled,
         grammarGradingEnabled,
         ...collaboration,

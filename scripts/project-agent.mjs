@@ -166,7 +166,7 @@ export function capabilities() {
       qa: "./bin/project qa prepare --json",
     },
     fixtures: ["local-dev"],
-    proofProfiles: ["internal-preview-auth", "internal-scenario-browser", "internal-scenario-container", "internal-scenario-integration", "internal-fresh-migrations", "internal-content-pair", "internal-rubrics-http", "internal-rubrics-integration", "internal-content-validation", "internal-qa-http", "internal-qa-integration", "internal-audit", "internal-impersonation-browser", "internal-impersonation-http", "internal-impersonation-writes", "internal-impersonation", "internal-impersonation-integration", "internal-management", "internal-directory-integration", "project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "assignment-rubric-unit", "assignment-prompt-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
+    proofProfiles: ["internal-preview-auth", "internal-scenario-browser", "internal-scenario-container", "internal-scenario-integration", "internal-fresh-migrations", "internal-content-pair", "internal-rubrics-http", "internal-rubrics-integration", "internal-content-validation", "internal-qa-http", "internal-qa-integration", "internal-audit", "internal-impersonation-browser", "internal-impersonation-http", "internal-impersonation-writes", "internal-impersonation", "internal-impersonation-integration", "internal-management", "internal-directory-integration", "project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "grading-queue", "grading-queue-unit", "grading-points", "grading-points-unit", "assignment-rubric-unit", "assignment-prompt-unit", "teacher-paste-unit", "teacher-paste-browser", "private-notes-unit", "private-notes-browser", "daily-pages-scaling-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
     nextCommands: [
       "./bin/project doctor --json",
       "./bin/project fixture verify local-dev --json",
@@ -418,10 +418,79 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "typecheck") run("typecheck", ["run", "web-app:typecheck"]);
   else if (chosen === "build") run("build", ["run", "web-app:build"]);
   else if (chosen === "qa-smoke") run("qa-smoke", ["run", "web-app:test:e2e:smoke"], 30 * 60 * 1000);
-  else if (chosen === "assignment-rubric-unit") runWebApp("assignment-rubric-unit", ["test", "app/routes/app.admin.assignment-types.new/route.test.ts", "app/routes/app.admin.assignment-types.$id/route.test.ts", "app/domain/assignment-types/assignment-type-grading-config.server.test.ts", "app/domain/rubrics/rubric-library.server.test.ts"]);
+  else if (chosen === "daily-pages-scaling-unit") {
+    runWebApp("daily-pages-scaling-route", ["test", "app/routes/api.domain.grade-essay-ai/route.test.ts", "--test-name-pattern", "revised production Daily Pages"]);
+    runWebApp("daily-pages-scaling-config", ["test", "app/domain/assignment-types/daily-pages-assignment-points.test.ts", "app/domain/assignment-types/assignment-type-grading-config.server.test.ts"]);
+    runWebApp("daily-pages-scaling-display", ["test", "app/routes/app_.submissions_.$submissionId/submission-rubric-config.server.test.ts", "app/routes/app_.submissions_.$submissionId/route.loader.test.ts", "app/routes/app_.revise_.$submissionId/route.loader.test.ts"]);
+  }
+  else if (chosen === "private-notes-unit") {
+    runWebApp("private-notes-generation", ["test", "app/routes/api.domain.grade-essay-ai/route.test.ts", "--test-name-pattern", "private teacher notes|revised production Daily Pages|refuses AI grading for a group owner"]);
+    runWebApp("private-notes-projection", ["test", "app/routes/app_.submissions_.$submissionId/route.loader.test.ts", "app/routes/app_.revise_.$submissionId/route.loader.test.ts", "app/domain/grading/grading-assistant-invocation.test.ts", "app/domain/grading/assistant-suggestion.test.ts", "app/utils/grading-auth.server.test.ts"]);
+  }
+  else if (chosen === "private-notes-browser") {
+    const local = requireConfig();
+    if (devStatus().status === "running") throw new Error("Stop the owned dev server before browser acceptance");
+    results.push({id: chosen, ...execute(selected.bun, ["run", "e2e/private-notes.browser.ts"], {json, cwd: webAppRoot, timeout: 240000,
+      env: {...selected.env, DATABASE_URL: local.DATABASE_URL, DEV_PORT: local.DEV_PORT}})});
+  }
+  else if (chosen === "assignment-rubric-unit") runWebApp("assignment-rubric-unit", ["test", "app/routes/app.admin.assignment-types.new/route.test.ts", "app/routes/app.admin.assignment-types.$id/route.test.ts", "app/domain/assignment-types/assignment-type-grading-config.server.test.ts", "app/domain/rubrics/rubric-library.server.test.ts", "app/components/assignments/assignment-creation-sheet.test.tsx"]);
   else if (chosen === "assignment-prompt-unit") {
     runWebApp("prompt-library", ["test", "app/routes/app.admin.assignment-types.$id_.prompt/route.test.ts"]);
     runWebApp("evaluation-library", ["test", "app/routes/api.domain.assignment-type-evaluations/route.test.ts"]);
+  }
+  else if (chosen === "grading-points-unit") {
+    runWebApp("grading-math", ["test", "app/domain/grading/gradeMath.test.ts", "app/domain/grading/recorded-grade.test.ts", "app/utils/teacher-document-work-utils.test.ts"]);
+    runWebApp("grading-points-panel", ["test", "app/routes/app_.submissions_.$submissionId/teacher-grading/teacher-grading-panel.points-scale.test.tsx"]);
+    runWebApp("grading-panel-regressions", ["test", "app/routes/app_.submissions_.$submissionId/teacher-grading/teacher-grading-panel.test.tsx"]);
+    runWebApp("grading-save", ["test", "app/routes/api.domain.update-submission/route.test.ts"]);
+    runWebApp("grading-view", ["test", "app/routes/app_.submissions_.$submissionId/teacher-grading/view-panel.test.tsx"]);
+  }
+  else if (chosen === "grading-points") {
+    const local = requireConfig();
+    const database = new URL(local.DATABASE_URL);
+    if (!['localhost', '127.0.0.1'].includes(database.hostname)) throw new Error('Grading points E2E requires the isolated local database');
+    database.pathname = '/yawp_grading_points_e2e';
+    results.push({ id: 'grading-points', ...execute(selected.bun, ['x', 'playwright', 'test', '--config=playwright.grading-points.config.ts', '--reporter=line'], {
+      json, cwd: webAppRoot, timeout: 10 * 60 * 1000,
+      env: { ...selected.env, E2E_DATABASE_URL: database.toString(), GRADING_POINTS_E2E_PORT: process.env.RECORD_PORT_E2E || process.env.E2E_PORT || String(Number(local.DEV_PORT) + 1), CI: 'true' },
+    }) });
+  }
+  else if (chosen === "teacher-paste-unit") {
+    for (const file of [
+      "app/components/teacher-paste-report/index.test.tsx",
+      "app/components/teacher-paste-report/provenance.test.ts",
+      "app/routes/api.teacher-paste-report/route.test.ts",
+      "app/routes/api.paste-alert/route.test.ts",
+      "app/routes/app_.documents_.$id/document-editor/extensions/pasted-source.test.ts",
+      "app/routes/app_.documents_.$id/document-editor/use-paste-alert.test.ts",
+    ]) runWebApp(file, ["test", file]);
+  }
+  else if (chosen === "teacher-paste-browser") {
+    const local = requireConfig();
+    const database = new URL(local.DATABASE_URL);
+    if (!['localhost', '127.0.0.1'].includes(database.hostname)) throw new Error('Paste report E2E requires the isolated local database');
+    database.pathname = '/yawp_teacher_paste_e2e';
+    results.push({ id: chosen, ...execute(selected.bun, ['x', 'playwright', 'test', '--config=playwright.teacher-paste.config.ts', '--reporter=line', '--retries=0'], {
+      json, cwd: webAppRoot, timeout: 10 * 60 * 1000,
+      env: { ...selected.env, E2E_DATABASE_URL: database.toString(), E2E_PORT: process.env.RECORD_PORT_E2E || process.env.E2E_PORT || String(Number(local.DEV_PORT) + 1), CI: 'true' },
+    }) });
+  }
+  else if (chosen === "grading-queue-unit") {
+    runWebApp("grading-queue", ["test", "app/domain/grading/grading-queue.test.ts"]);
+    runWebApp("grading-queue-access", ["test", "app/domain/grading/grading-queue.server.test.ts"]);
+    runWebApp("grading-queue-rollout-auth", ["test", "app/utils/auth.server.test.ts"]);
+    runWebApp("grading-queue-loader", ["test", "app/routes/app_.submissions_.$submissionId/route.loader.test.ts"]);
+    runWebApp("grading-queue-lifecycle", ["test", "app/routes/app_.submissions_.$submissionId/teacher-grading/submission-lifecycle-panel.save-error.test.tsx"]);
+  }
+  else if (chosen === "grading-queue") {
+    const local = requireConfig();
+    const database = new URL(local.DATABASE_URL);
+    if (!['localhost', '127.0.0.1'].includes(database.hostname)) throw new Error('Grading queue E2E requires the isolated local database');
+    database.pathname = '/yawp_grading_queue_e2e';
+    results.push({ id: 'grading-queue', ...execute(selected.bun, ['x', 'playwright', 'test', '--config=playwright.grading-queue.config.ts', '--reporter=line'], {
+      json, cwd: webAppRoot, timeout: 10 * 60 * 1000,
+      env: { ...selected.env, E2E_DATABASE_URL: database.toString(), GRADING_QUEUE_E2E_PORT: process.env.RECORD_PORT_E2E || process.env.E2E_PORT || String(Number(local.DEV_PORT) + 1), CI: 'true' },
+    }) });
   }
   else if (chosen === "assignment-create") {
     const local = requireConfig();
@@ -502,10 +571,10 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|internal-preview-auth|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|assignment-rubric-unit|assignment-prompt-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|internal-preview-auth|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
-    test: "Usage: ./bin/project test --profile <changed|project-cli|internal-preview-auth|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|assignment-rubric-unit|assignment-prompt-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
+    test: "Usage: ./bin/project test --profile <changed|project-cli|internal-preview-auth|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
   };
   return pages[topic] || pages.root;

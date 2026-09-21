@@ -38,6 +38,7 @@ import {
   isAssignmentTypeAvailableForAnyScope,
   type AssignmentTypeAccessScope,
 } from '~/utils/assignment-type-access.server';
+import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -423,6 +424,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
+  const defaultGradingConfig = await resolveAssignmentTypeGradingConfig({
+    assignmentTypeId: assignmentType.id,
+    assignmentTypeTitle: assignmentType.title,
+  });
+
   const normalizedTitle = assignmentType.title.trim().toLowerCase();
   // Class Starter and Daily Pages share the open-ended prompt library; which
   // of the two this is decides the directions shown above it.
@@ -551,6 +557,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     assignmentType,
     assignmentTypeGradesGrammar,
+    rubricDefaultTotalPoints: defaultGradingConfig.maxScore,
     documents,
     archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
@@ -737,6 +744,7 @@ export default function AppAssignmentTypesIdRoute() {
                   data.assignmentType.collaborationSupported
                 }
                 assignmentTypeGradesGrammar={data.assignmentTypeGradesGrammar}
+                rubricDefaultTotalPoints={data.rubricDefaultTotalPoints}
                 teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}

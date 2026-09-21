@@ -121,13 +121,13 @@ describe('rubric schema', () => {
       thesis.rubric.categories.every((category) => category.bands === undefined)
     ).toBe(true);
 
-    // Production scores Daily Pages out of 30 in steps of ten, which is not
-    // what the built-in Daily Pages default does.
+    // The production-library Daily Pages revision keeps its 30-point identity
+    // and admits integer scores inside engagement bands.
     const dailyPages = STARTER_RUBRICS[1];
     expect(dailyPages.scoringScale).toMatchObject({
       minScore: 0,
       maxScore: 30,
-      step: 10,
+      step: 1,
     });
     expect(dailyPages.rubric.categories[0].key).toBe('engagement_with_prompt');
     expect(dailyPages.rubric.categories[0].scoreLabels).toEqual([
@@ -284,9 +284,9 @@ describe('the two assistants Daily Pages split into', () => {
     );
   });
 
-  test('leave the Daily Pages rubric production already grades with alone', () => {
+  test('preserves the production Daily Pages identity with integer engagement bands', () => {
     const legacy = byName.get('daily-pages-engagement');
-    expect(legacy?.scoringScale).toMatchObject({ maxScore: 30, step: 10 });
+    expect(legacy?.scoringScale).toMatchObject({ maxScore: 30, step: 1 });
     expect(legacy?.rubric.categories).toHaveLength(1);
   });
 });

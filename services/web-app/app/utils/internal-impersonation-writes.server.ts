@@ -11,7 +11,7 @@ export async function withImpersonationTransaction<T>(
   identity: ImpersonationAttribution,
   operation: ImpersonationOperation,
   work: (tx: Prisma.TransactionClient) => Promise<T>,
-  options?: { isolationLevel?: string; timeout?: number; maxWait?: number },
+  options?: { isolationLevel?: string; timeout?: number; maxWait?: number; auditCoverage?: boolean },
 ): Promise<T> {
   if (!/^[a-zA-Z0-9_-]{1,100}$/.test(operation.requestId)
     || !/^[a-zA-Z0-9_.:/ -]{1,200}$/.test(operation.action)
@@ -33,20 +33,22 @@ export async function withImpersonationTransaction<T>(
       isActive: true, user: { isAdmin: false, isSuperAdmin: false },
     }, select: { id: true } });
     if (!member) throw new InactiveImpersonationError();
-    // A new table introduced by a later migration must not silently evade audit.
-    const uncovered = await tx.$queryRaw<Array<{ name: string }>>`
-      SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = current_schema() AND c.relkind = 'r'
-        AND c.relname NOT IN ('_prisma_migrations', 'InternalImpersonationSession', 'InternalImpersonationEvent')
-        AND (NOT EXISTS (SELECT 1 FROM pg_trigger t
-          WHERE t.tgrelid = c.oid AND t.tgname = 'internal_impersonation_mutation_audit'
-            AND t.tgfoid = to_regprocedure('internal_impersonation_mutation_audit()')
-            AND t.tgtype = 29 AND t.tgenabled IN ('O', 'A'))
-          OR NOT EXISTS (SELECT 1 FROM pg_trigger t
-            WHERE t.tgrelid = c.oid AND t.tgname = 'internal_impersonation_truncate_guard'
-              AND t.tgfoid = to_regprocedure('internal_impersonation_truncate_guard()')
-              AND t.tgtype = 34 AND t.tgenabled IN ('O', 'A')))`;
-    if (uncovered.length) throw new Error('Impersonation audit coverage is incomplete');
+    if (options?.auditCoverage !== false) {
+      // A new table introduced by a later migration must not silently evade audit.
+      const uncovered = await tx.$queryRaw<Array<{ name: string }>>`
+        SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = current_schema() AND c.relkind = 'r'
+          AND c.relname NOT IN ('_prisma_migrations', 'InternalImpersonationSession', 'InternalImpersonationEvent')
+          AND (NOT EXISTS (SELECT 1 FROM pg_trigger t
+            WHERE t.tgrelid = c.oid AND t.tgname = 'internal_impersonation_mutation_audit'
+              AND t.tgfoid = to_regprocedure('internal_impersonation_mutation_audit()')
+              AND t.tgtype = 29 AND t.tgenabled IN ('O', 'A'))
+            OR NOT EXISTS (SELECT 1 FROM pg_trigger t
+              WHERE t.tgrelid = c.oid AND t.tgname = 'internal_impersonation_truncate_guard'
+                AND t.tgfoid = to_regprocedure('internal_impersonation_truncate_guard()')
+                AND t.tgtype = 34 AND t.tgenabled IN ('O', 'A')))`;
+      if (uncovered.length) throw new Error('Impersonation audit coverage is incomplete');
+    }
     await tx.$queryRaw`SELECT
       set_config('yawp.impersonation.session', ${identity.id}, true),
       set_config('yawp.impersonation.request', ${operation.requestId}, true),

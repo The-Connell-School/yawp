@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   user: { findUnique: mock() },
+  assignment: { findUnique: mock() },
   submission: { findFirst: mock() },
   submissionActivity: { findMany: mock() },
   assignmentType: { findUnique: mock() },
@@ -9,6 +10,8 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
+const loadGradingQueueNeighbors = mock();
+const loadDocumentNavigationNeighbors = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/db.server.js', () => ({ prisma }));
@@ -27,6 +30,10 @@ mock.module('~/utils/toast.server', () => ({
       headers: { 'Content-Type': 'application/json' },
     }),
 }));
+mock.module('~/domain/grading/grading-queue.server', () => ({
+  loadGradingQueueNeighbors,
+  loadDocumentNavigationNeighbors,
+}));
 const { loader: routeLoader } = await import('./route');
 const loader = routeLoader as any;
 
@@ -37,7 +44,7 @@ function membership(
   id: string,
   role: 'STUDENT' | 'TEACHER',
   organizationId = 'org-1',
-  { revisionFlowEnabled = false } = {}
+  { revisionFlowEnabled = false }: { revisionFlowEnabled?: boolean } = {}
 ) {
   return {
     id,
@@ -125,15 +132,88 @@ describe('submission loader — unsubmitted redirect', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     prisma.assignmentType.findUnique.mockReset();
+    loadGradingQueueNeighbors.mockReset();
+    loadDocumentNavigationNeighbors.mockReset();
 
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
     prisma.assignmentType.findUnique.mockResolvedValue(null);
     prisma.submissionActivity.findMany.mockResolvedValue([]);
+    loadGradingQueueNeighbors.mockResolvedValue(null);
+    loadDocumentNavigationNeighbors.mockResolvedValue(null);
     requireUserId.mockResolvedValue('user-student');
   });
 
   // Only a student author can set Submission.unsubmittedAt: the solo owner or
   // an active group member. The endpoint still refuses teachers and admins.
+  test('shows the effective 90-point rubric before the first grading run', async () => {
+    const { default: authored } = await import('~/domain/rubrics/library/daily-pages-engagement.json');
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue(membership(TEACHER_MEMBERSHIP_ID, 'TEACHER'));
+    const submission = buildSubmission() as any;
+    submission.document.assignment = { id: 'fresh-daily', pointValue: 90 };
+    prisma.submission.findFirst.mockResolvedValue(submission);
+    prisma.assignment.findUnique.mockResolvedValue({ assignmentTypeId: 'at-1', rubricRevision: { version: 7, rubricName: authored.name, schemaJson: authored } });
+    prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1', title: 'Daily Pages', kind: 'daily_pages', rubric: { name: authored.name, schemaJson: authored } });
+    const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
+    expect(result.submission.rubricConfig.maxScore).toBe(90);
+    expect(result.submission.rubricConfig.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual([[0, 0], [21, 39], [51, 69], [84, 90]]);
+  });
+
+  test('loads grading queue navigation without an organization rollout flag', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue(
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
+    );
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission());
+
+    const result = await loader({
+      request: new Request(
+        'https://example.test/app/submissions/sub-1?exitTo=%2Fapp%2Fmy-classes%2Fclass-1%3Ftab%3Ddocuments%26status%3Dneeds-grading'
+      ),
+      params: { submissionId: 'sub-1' },
+    });
+
+    expect(loadGradingQueueNeighbors).toHaveBeenCalledTimes(1);
+    expect(loadGradingQueueNeighbors.mock.calls[0][0]).toMatchObject({
+      membershipId: TEACHER_MEMBERSHIP_ID,
+      organizationId: 'org-1',
+      submissionId: 'sub-1',
+      scope: {
+        kind: 'class',
+        classId: 'class-1',
+        filters: { status: 'needs-grading' },
+      },
+    });
+    expect(result.gradingQueue).toBeNull();
+  });
+
+  test('loads Documents navigation for a submitted row opened from Documents', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue(
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
+    );
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission());
+
+    const result = await loader({
+      request: new Request(
+        'https://example.test/app/submissions/sub-1?exitTo=%2Fapp%2Fdocuments'
+      ),
+      params: { submissionId: 'sub-1' },
+    });
+
+    expect(loadDocumentNavigationNeighbors).toHaveBeenCalledTimes(1);
+    expect(loadDocumentNavigationNeighbors.mock.calls[0][0]).toMatchObject({
+      membershipId: TEACHER_MEMBERSHIP_ID,
+      organizationId: 'org-1',
+      documentId: 'doc-1',
+      scope: {
+        kind: 'documents',
+        filters: { status: 'all' },
+      },
+    });
+    expect(result.documentNavigation).toBeNull();
+  });
+
   test('tells the student they unsubmitted it themselves', async () => {
     requireMembership.mockResolvedValue(
       membership(STUDENT_MEMBERSHIP_ID, 'STUDENT')
@@ -469,4 +549,59 @@ describe('submission loader — unsubmitted redirect', () => {
     ).toEqual({ organizationId: 'org-2' });
     expect(prisma.submissionActivity.findMany).not.toHaveBeenCalled();
   });
+
+  test.each([
+    { role: 'STUDENT', user: 'user-student', member: STUDENT_MEMBERSHIP_ID, admin: false, released: false, allowed: false },
+    { role: 'STUDENT', user: 'user-student', member: STUDENT_MEMBERSHIP_ID, admin: false, released: true, allowed: false },
+    { role: 'TEACHER', user: 'user-student', member: STUDENT_MEMBERSHIP_ID, admin: true, released: true, allowed: false },
+    { role: 'TEACHER', user: 'user-teacher', member: TEACHER_MEMBERSHIP_ID, admin: false, released: false, allowed: true },
+    { role: 'TEACHER', user: 'user-teacher', member: TEACHER_MEMBERSHIP_ID, admin: false, released: true, allowed: true },
+    { role: 'TEACHER', user: 'user-admin', member: 'admin', admin: true, released: true, allowed: true },
+    { role: 'TEACHER', user: 'unrelated', member: 'unrelated', admin: false, released: true, allowed: false },
+  ])('keeps private teacher notes scoped for $role / $user / released=$released', async ({ role, user, member, admin, released, allowed }) => {
+    requireUserId.mockResolvedValue(user);
+    requireMembership.mockResolvedValue(membership(member, role as 'STUDENT' | 'TEACHER'));
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: admin });
+    const submission = buildSubmission() as any;
+    submission.releasedAt = released ? new Date() : null;
+    submission.gradingAssistantRuns = [{ status: 'succeeded', source: 'assignment-type', metadata: { teacherNote: 'PRIVATE_OBSERVATION: vocabulary shifts in the final paragraph.', output: { rubricScores: { engagement: { score: 18 } }, overallComment: 'Warm public feedback.' } } }];
+    prisma.submission.findFirst.mockResolvedValue(submission);
+    const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
+    expect(result.submission.gradingAssistantRuns).toBeUndefined();
+    expect(JSON.stringify(result.submission)).not.toContain('PRIVATE_OBSERVATION');
+    if (allowed) expect(result.teacherNote).toContain('PRIVATE_OBSERVATION');
+    else {
+      expect(result).not.toHaveProperty('teacherNote');
+      expect(JSON.stringify(result)).not.toContain('PRIVATE_OBSERVATION');
+    }
+  });
+
+  test('hides private notes from a group owner using another organization membership as admin', async () => {
+    requireUserId.mockResolvedValue('group-owner-user');
+    requireMembership.mockResolvedValue(membership('different-active-membership', 'TEACHER', 'org-2'));
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: true });
+    const submission = buildSubmission() as any;
+    submission.document.group = { id: 'group', members: [{ membershipId: 'owner-membership-org-1', membership: { userId: 'group-owner-user' } }] };
+    submission.gradingAssistantRuns = [{ status: 'succeeded', metadata: { teacherNote: 'PRIVATE_GROUP_OBSERVATION' } }];
+    prisma.submission.findFirst.mockResolvedValue(submission);
+    const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
+    expect(result.isOwner).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_GROUP_OBSERVATION');
+    expect(result).not.toHaveProperty('teacherNote');
+  });
+
+  test('group-owner and cross-organization viewers receive no private note', async () => {
+    for (const groupOwner of [true, false]) {
+      requireUserId.mockResolvedValue('other-user');
+      requireMembership.mockResolvedValue(membership(TEACHER_MEMBERSHIP_ID, 'TEACHER', groupOwner ? 'org-1' : 'org-2'));
+      const submission = buildSubmission() as any;
+      if (groupOwner) submission.document.group = { id: 'group', members: [{ membershipId: TEACHER_MEMBERSHIP_ID }] };
+      submission.gradingAssistantRuns = [{ status: 'succeeded', metadata: { teacherNote: 'PRIVATE_OBSERVATION' } }];
+      prisma.submission.findFirst.mockResolvedValue(submission);
+      const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
+      expect(JSON.stringify(result)).not.toContain('PRIVATE_OBSERVATION');
+      expect(result).not.toHaveProperty('teacherNote');
+    }
+  });
+
 });

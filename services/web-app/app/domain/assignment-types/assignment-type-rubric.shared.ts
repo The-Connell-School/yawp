@@ -69,6 +69,8 @@ export type RubricCategory = {
    * means fall back to the legacy grammar category keys.
    */
   grammarHighlighting?: boolean;
+  /** Runtime-only allowed values when an assignment uses step grading. */
+  allowedScores?: number[];
 };
 
 export type RubricData = {

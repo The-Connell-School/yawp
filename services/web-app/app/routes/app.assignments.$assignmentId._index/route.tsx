@@ -47,11 +47,15 @@ import {
 import {
   DEFAULT_ASSIGNMENT_POINT_VALUE,
   parseAssignmentGradingIntent,
+  parseAssignmentRubricOverrides,
 } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
-import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import {
+  getGrammarGradingAssignmentTypeIds,
+  resolveAssignmentTypeGradingConfig,
+} from '~/domain/assignment-types/assignment-type-grading-config.server';
 
 /**
  * Page chrome the class route used to provide while this page was nested
@@ -125,6 +129,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           promptAttachmentName: true,
           submitForGrade: true,
           pointValue: true,
+          rubricTotalPoints: true,
+          gradingMode: true,
           tutorEnabled: true,
           collaborationEnabled: true,
           collaborationGroupMode: true,
@@ -132,7 +138,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           gradingAssistantStrictnessLevel: true,
           assignmentTypeId: true,
           assignmentType: {
-            select: { id: true, title: true, systemKey: true },
+            select: { id: true, title: true, systemKey: true, kind: true },
           },
         },
       },
@@ -153,7 +159,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const classInsightsEnabled =
     active.class.school.organization.classInsightsEnabled === true;
 
-  const [insightRow, gradedCount, assignmentTypes] = await Promise.all([
+  const [insightRow, gradedCount, assignmentTypes, defaultGradingConfig] = await Promise.all([
     classInsightsEnabled
       ? prisma.classAssignmentInsight.findUnique({
           where: { classAssignmentId: active.id },
@@ -192,6 +198,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         collaborationSupported: true,
       },
       orderBy: { position: 'asc' },
+    }),
+    resolveAssignmentTypeGradingConfig({
+      assignmentTypeId: active.assignment.assignmentTypeId,
+      assignmentTypeKind: active.assignment.assignmentType?.kind ?? null,
+      assignmentTypeTitle: active.assignment.assignmentType?.title ?? null,
     }),
   ]);
 
@@ -247,6 +258,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       promptAttachmentName: active.assignment.promptAttachmentName,
       submitForGrade: active.assignment.submitForGrade,
       pointValue: active.assignment.pointValue,
+      rubricTotalPoints: active.assignment.rubricTotalPoints,
+      gradingMode: active.assignment.gradingMode,
       tutorEnabled: active.assignment.tutorEnabled,
       collaborationGroupMode: active.assignment.collaborationGroupMode,
       collaborationGroupSize: active.assignment.collaborationGroupSize,
@@ -255,6 +268,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       assignmentTypeId: active.assignment.assignmentTypeId,
       assignmentTypeLocked: active.assignment.collaborationEnabled,
       assignmentType: active.assignment.assignmentType,
+      rubricDefaultTotalPoints: defaultGradingConfig.maxScore,
       documentCount: active._count.documents,
       gradedCount,
       insight,
@@ -383,6 +397,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
+    const rubricOverrides = parseAssignmentRubricOverrides(formData);
+    if (!rubricOverrides.success) {
+      return dataResponse(
+        { success: false, message: rubricOverrides.message },
+        { status: 400 }
+      );
+    }
 
     const promptAttachment = formData.get('promptAttachment');
     let promptAttachmentData:
@@ -459,6 +480,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
             prompt,
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
+            rubricTotalPoints: rubricOverrides.data.rubricTotalPoints,
+            gradingMode: rubricOverrides.data.gradingMode,
             gradingAssistantStrictnessLevel: gradingAssistantStrictnessLevel!,
             tutorEnabled: tutorEnabledResult.value,
             ...promptAttachmentData,
@@ -549,6 +572,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
           prompt,
           submitForGrade: gradingIntent.data.submitForGrade,
           pointValue: gradingIntent.data.pointValue,
+          ...(formData.has('rubricTotalPoints')
+            ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
+            : {}),
+          ...(formData.has('gradingMode')
+            ? { gradingMode: rubricOverrides.data.gradingMode }
+            : {}),
           ...(gradingAssistantStrictnessLevel
             ? { gradingAssistantStrictnessLevel }
             : {}),
@@ -822,6 +851,9 @@ export default function AssignmentDetailRoute() {
           initialDueAt={assignment.dueAt ?? null}
           initialSubmitForGrade={assignment.submitForGrade}
           initialPointValue={assignment.pointValue}
+          initialRubricTotalPoints={assignment.rubricTotalPoints}
+          initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
+          initialRubricDefaultTotalPoints={assignment.rubricDefaultTotalPoints}
           initialTutorEnabled={assignment.tutorEnabled}
           initialCollaborationEnabled={Boolean(data.collaboration)}
           initialCollaborationGroupMode={toCollaborationGroupMode(
@@ -846,6 +878,9 @@ export default function AssignmentDetailRoute() {
           initialAssignmentTypeId={assignment.assignmentTypeId}
           initialTitle={`Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`}
           initialPrompt={assignment.prompt}
+          initialRubricTotalPoints={assignment.rubricTotalPoints}
+          initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
+          initialRubricDefaultTotalPoints={assignment.rubricDefaultTotalPoints}
         />
       </div>
     </PageShell>

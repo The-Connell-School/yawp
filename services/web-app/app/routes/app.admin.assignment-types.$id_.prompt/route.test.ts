@@ -118,7 +118,7 @@ describe('admin assignment type prompt loader', () => {
     const result = await loader({ request: new Request('https://example.test/prompt'), params: { id: 'at-1' }, context: {} });
     const workspace = result.data.promptWorkspace;
     expect(workspace).not.toBeNull();
-    expect(workspace.scoringScale).toMatchObject({ minScore: 0, maxScore: 30, step: 10 });
+    expect(workspace.scoringScale).toMatchObject({ minScore: 0, maxScore: 30, step: 1 });
     expect(workspace.rubric.categories.map((row: any) => row.key)).toEqual(['engagement_with_prompt']);
     expect(workspace.promptConfig.gradingInstructions).toBe('Reward reflection.');
     expect(workspace.compiledPreviewsByPromptId['prompt-1']).toBeDefined();

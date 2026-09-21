@@ -1,3 +1,4 @@
+import authored from '~/domain/rubrics/library/daily-pages-engagement.json';
 import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { ResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 
@@ -448,5 +449,42 @@ describe('a Daily Pages submission graded before Daily Pages had its own rubric'
     ]);
     expect(config.minScore).toBe(1);
     expect(config.maxScore).toBe(5);
+  });
+});
+
+
+describe('fresh Daily Pages display uses the assignment total', () => {
+  function revisedConfig() {
+    return resolvedGradingConfig({
+      rubricName: authored.name, scoringType: 'rubric_points', minScore: 0, maxScore: 30,
+      rubricCategories: structuredClone(authored.rubric.categories),
+      outputSchemaSnapshot: authored.outputSchema,
+    });
+  }
+
+  test.each([1, 2, 10, 90])('fresh %i-point display matches the GA bands and preserves pin identity', async (pointValue) => {
+    const { scaleDailyPagesForAssignment } = await import('~/domain/assignment-types/daily-pages-assignment-points');
+    const original = revisedConfig();
+    resolveAssignmentTypeGradingConfig.mockResolvedValue(original);
+    const config = await resolveRubricConfigForSubmission({ assignmentTypeId: 'daily', assignmentId: 'pinned-daily', pointValue, latestGradingRun: null, rubricScores: null });
+    const ga = scaleDailyPagesForAssignment(original, pointValue);
+    expect(config.maxScore).toBe(pointValue);
+    expect(config.categories).toEqual(ga.rubricCategories);
+    expect(resolveAssignmentTypeGradingConfig).toHaveBeenLastCalledWith({ assignmentTypeId: 'daily', assignmentId: 'pinned-daily' });
+  });
+
+  test('a historical run stays on its saved scale even when the current revision opts in', async () => {
+    resolveAssignmentTypeGradingConfig.mockReset();
+    const snapshot = { categories: authored.rubric.categories, minScore: 0, maxScore: 30, step: 1, scoringType: 'rubric_points' };
+    const config = await resolveRubricConfigForSubmission({ assignmentTypeId: 'daily', pointValue: 90, latestGradingRun: { assignmentTypeRubricSnapshot: snapshot }, rubricScores: { engagement_with_prompt: { score: 18 } } });
+    expect(config.maxScore).toBe(30);
+    expect(config.categories).toEqual(snapshot.categories);
+    expect(resolveAssignmentTypeGradingConfig).not.toHaveBeenCalled();
+  });
+
+  test('a fresh assignment pinned to a legacy revision stays on the authored scale', async () => {
+    resolveAssignmentTypeGradingConfig.mockResolvedValue({ ...revisedConfig(), outputSchemaSnapshot: {} });
+    const config = await resolveRubricConfigForSubmission({ assignmentTypeId: 'daily', assignmentId: 'legacy-pin', pointValue: 90, latestGradingRun: null, rubricScores: null });
+    expect(config.maxScore).toBe(30);
   });
 });

@@ -4,7 +4,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
-import { formatPointGrade } from '~/domain/grading/gradeMath';
+import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
 import { isScored } from '~/domain/grading/rubric-display';
 
@@ -54,20 +54,12 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
   // records raw points and never a percentage, so asking for a percentage
   // here showed a fully graded Daily Pages entry as "Not yet graded".
   const hasGrade = isSubmittedForGrade && hasRecordedGrade(submission);
-  const pointGrade = !isSubmittedForGrade
-    ? null
-    : formatPointGrade(
-        submission.numericPercentage,
-        submission.document?.assignment?.pointValue ?? null
-      );
-  const percentageDisplay =
-    submission.numericPercentage != null
-      ? `${submission.numericPercentage}%${
-          submission.letterGrade ? ` (${submission.letterGrade})` : ''
-        }`
-      : null;
-  const overallGradeDisplay =
-    pointGrade ?? percentageDisplay ?? submission.score ?? null;
+  const overallGradeDisplay = formatAssignmentGrade({
+    submitForGrade: isSubmittedForGrade,
+    numericPercentage: submission.numericPercentage,
+    pointValue: submission.document?.assignment?.pointValue ?? (submission.numericPercentage != null ? 100 : null),
+    score: submission.score,
+  });
 
   return (
     <div className="p-4 space-y-4">
@@ -78,11 +70,6 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
               Overall Grade
             </h3>
             <p className="text-2xl font-semibold">{overallGradeDisplay}</p>
-            {pointGrade && percentageDisplay ? (
-              <p className="text-sm text-muted-foreground">
-                {percentageDisplay}
-              </p>
-            ) : null}
           </div>
           {submission.overallComment ? (
             <div>

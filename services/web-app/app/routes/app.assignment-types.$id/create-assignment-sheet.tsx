@@ -45,6 +45,7 @@ type Props = {
     prompt: string;
     essayType: string;
   } | null;
+  rubricDefaultTotalPoints?: number | null;
 };
 
 function classLabel(klass: TeacherClass) {
@@ -62,6 +63,7 @@ export function CreateAssignmentSheet({
   initialPrompt = '',
   titleRequired = false,
   apHistoryEntry = null,
+  rubricDefaultTotalPoints = null,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   const [selectedClassId, setSelectedClassId] = useState(
@@ -101,6 +103,7 @@ export function CreateAssignmentSheet({
         teacherClasses={teacherClasses}
         initialPrompt={initialPrompt}
         titleRequired={titleRequired}
+        initialRubricDefaultTotalPoints={rubricDefaultTotalPoints}
       />
     );
   }

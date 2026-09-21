@@ -315,11 +315,74 @@ describe('AssignmentCreationSheetContent', () => {
     expectText(
       'The assistant reads demandingly, expecting polished and precise writing.'
     );
-    expectNoText('points');
+    expectNoText('point adjustment');
 
     expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
       'intermediate'
     );
+  });
+
+  it('shows the rubric default and keeps customization off by default', () => {
+    root = renderSheet({ initialRubricDefaultTotalPoints: 6 }).root;
+
+    expectText('Customize AI grading');
+    expectText('Rubric default: 6 points · Step grading');
+    expectNoText('Scoring behavior');
+    expectNoText('Rubric total points');
+    expect(inputByName('rubricTotalPoints').value).toBe('');
+    expect(inputByName('gradingMode').value).toBe('step');
+    expect(inputByName('pointValue').value).toBe('100');
+    expect(
+      isChecked(controlById('assignment-create-customize-rubric-grading'))
+    ).toBe(false);
+  });
+
+  it('reveals compact AI grading controls when customization is enabled', () => {
+    root = renderSheet({ initialRubricDefaultTotalPoints: 6 }).root;
+
+    act(() => {
+      controlById('assignment-create-customize-rubric-grading').click();
+    });
+
+    expectText('Scoring behavior');
+    expectText('AI grading total: 100 points (same as Point value).');
+    expectText('Steps');
+    expectText('Bands');
+    expect(inputByName('rubricTotalPoints').value).toBe('100');
+    expect(inputByName('gradingMode').value).toBe('step');
+  });
+
+  it('lets a teacher opt into bands grading from the assignment creator', () => {
+    root = renderSheet().root;
+
+    act(() => {
+      controlById('assignment-create-customize-rubric-grading').click();
+    });
+    act(() => {
+      controlById('assignment-create-grading-mode-bands').click();
+    });
+
+    expect(inputByName('gradingMode').value).toBe('bands');
+    expectText('Any score within the label ranges is allowed.');
+  });
+
+  it('clears the assignment override when customization is turned back off', () => {
+    root = renderSheet({
+      initialRubricTotalPoints: 40,
+      initialGradingMode: 'bands',
+    }).root;
+
+    expect(
+      isChecked(controlById('assignment-create-customize-rubric-grading'))
+    ).toBe(true);
+    expect(inputByName('rubricTotalPoints').value).toBe('40');
+
+    act(() => {
+      controlById('assignment-create-customize-rubric-grading').click();
+    });
+
+    expect(inputByName('rubricTotalPoints').value).toBe('');
+    expect(inputByName('gradingMode').value).toBe('step');
   });
 
   it('preselects but does not lock assignment type from dashboard quick create', () => {

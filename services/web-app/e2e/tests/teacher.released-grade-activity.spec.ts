@@ -137,7 +137,7 @@ test.describe('Released grade editing and submission activity', () => {
 
       const saveButton = panel.getByTestId('submission-lifecycle-save');
       await expect(saveButton).toBeDisabled();
-      await page.getByTestId('grading-overall-percentage').fill('92');
+      await page.getByTestId('grading-overall-points').fill('92');
       await page
         .getByTestId('grading-overall-comment')
         .fill('Excellent revision after release.');
@@ -210,7 +210,7 @@ test.describe('Released grade editing and submission activity', () => {
 
       await page.reload();
       await page.waitForLoadState('networkidle');
-      await expect(panel.getByText('92%').first()).toBeVisible();
+      await expect(panel.getByText('92 / 100', { exact: true }).first()).toBeVisible();
       await expect(
         panel.getByText('Excellent revision after release.')
       ).toBeVisible();
@@ -225,8 +225,11 @@ test.describe('Released grade editing and submission activity', () => {
       await expect(
         activityList.getByText('After release', { exact: true })
       ).toBeVisible();
-      await expect(activityList.getByText('77', { exact: true })).toBeVisible();
-      await expect(activityList.getByText('92', { exact: true })).toBeVisible();
+      const percentageChange = activityList
+        .getByText('Numeric Percentage', { exact: true })
+        .locator('..');
+      await expect(percentageChange).toBeVisible();
+      await expect(percentageChange.locator('pre')).toHaveText(['77', '92']);
       await lingerForQa(page, 3500);
 
       await page.keyboard.press('Escape');
@@ -336,7 +339,7 @@ test.describe('Released grade editing and submission activity', () => {
       await page.goto(`/app/submissions/${submission.id}?edit=1`);
       await page.waitForLoadState('networkidle');
       await expect(page).toHaveURL(`/app/submissions/${submission.id}`);
-      await expect(page.getByText(/92%/).first()).toBeVisible();
+      await expect(page.getByText('92 / 100', { exact: true }).first()).toBeVisible();
       await expect(
         page.getByText('Excellent revision after release.')
       ).toBeVisible();
@@ -433,9 +436,9 @@ test.describe('Released grade editing and submission activity', () => {
       await page.goto(`/app/submissions/${submission.id}`);
       const firstPanel = page.getByTestId('submission-lifecycle-panel');
       await firstPanel.getByTestId('submission-lifecycle-edit').click();
-      await page.getByTestId('grading-overall-percentage').fill('82');
+      await page.getByTestId('grading-overall-points').fill('82');
       await firstPanel.getByTestId('submission-lifecycle-save').click();
-      await expect(firstPanel.getByText(/82%/).first()).toBeVisible({
+      await expect(firstPanel.getByText('82 / 100', { exact: true }).first()).toBeVisible({
         timeout: 15000,
       });
 
@@ -444,9 +447,9 @@ test.describe('Released grade editing and submission activity', () => {
       await secondPage.goto(`/app/submissions/${submission.id}`);
       const secondPanel = secondPage.getByTestId('submission-lifecycle-panel');
       await secondPanel.getByTestId('submission-lifecycle-edit').click();
-      await secondPage.getByTestId('grading-overall-percentage').fill('93');
+      await secondPage.getByTestId('grading-overall-points').fill('93');
       await secondPanel.getByTestId('submission-lifecycle-save').click();
-      await expect(secondPanel.getByText(/93%/).first()).toBeVisible({
+      await expect(secondPanel.getByText('93 / 100', { exact: true }).first()).toBeVisible({
         timeout: 15000,
       });
 
@@ -465,12 +468,12 @@ test.describe('Released grade editing and submission activity', () => {
           return row.title;
         })
         .toBe(`Revalidated grade revision ${suffix}`);
-      await expect(firstPanel.getByText(/93%/).first()).toBeVisible({
+      await expect(firstPanel.getByText('93 / 100', { exact: true }).first()).toBeVisible({
         timeout: 15000,
       });
 
       await firstPanel.getByTestId('submission-lifecycle-edit').click();
-      await expect(page.getByTestId('grading-overall-percentage')).toHaveValue(
+      await expect(page.getByTestId('grading-overall-points')).toHaveValue(
         '93'
       );
       await page
