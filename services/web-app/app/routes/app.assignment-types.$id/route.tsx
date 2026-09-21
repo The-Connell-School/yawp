@@ -38,6 +38,7 @@ import {
   isAssignmentTypeAvailableForAnyScope,
   type AssignmentTypeAccessScope,
 } from '~/utils/assignment-type-access.server';
+import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -401,6 +402,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
+  const defaultGradingConfig = await resolveAssignmentTypeGradingConfig({
+    assignmentTypeId: assignmentType.id,
+    assignmentTypeTitle: assignmentType.title,
+  });
+
   const normalizedTitle = assignmentType.title.trim().toLowerCase();
   const isDailyPages = normalizedTitle === DAILY_PAGES_TITLE;
   const isThesisEssay = normalizedTitle === THESIS_ESSAY_TITLE;
@@ -477,6 +483,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     assignmentType,
+    rubricDefaultTotalPoints: defaultGradingConfig.maxScore,
     documents,
     archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
@@ -655,6 +662,7 @@ export default function AppAssignmentTypesIdRoute() {
                 assignmentTypeCollaborationSupported={
                   data.assignmentType.collaborationSupported
                 }
+                rubricDefaultTotalPoints={data.rubricDefaultTotalPoints}
                 teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}

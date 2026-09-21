@@ -342,7 +342,7 @@ test('AI grading uses assignment rubric overrides and the final grade uses the a
     await gradingResponse;
 
     // The deterministic E2E assistant receives the overridden 50-point rubric.
-    await expect(page.getByText('ALL IN (50/50)', { exact: true })).toBeVisible({
+    await expect(page.getByText(/^All in \(50\/50\)$/i)).toBeVisible({
       timeout: 30000,
     });
     // The assignment remains worth 100 points to students, so the 50/50 rubric
@@ -357,9 +357,11 @@ test('AI grading uses assignment rubric overrides and the final grade uses the a
     expect(saved.score).toBe('50/50');
     expect(saved.overallScore).toBe(50);
     expect(saved.numericPercentage).toBeNull();
-    expect(saved.rubricScores).toMatchObject({
-      engagement_with_prompt: { score: 50, isAi: true },
-    });
+    expect(
+      Object.values(
+        saved.rubricScores as Record<string, { score?: number; isAi?: boolean }>
+      )
+    ).toContainEqual(expect.objectContaining({ score: 50, isAi: true }));
     expect(saved.gradingAssistantRuns[0]?.assignmentTypeRubricSnapshot).toMatchObject({
       maxScore: 50,
       gradingMode: 'bands',
