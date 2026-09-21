@@ -88,7 +88,7 @@ const CATEGORY_GLOSS: Record<CategoryKey, string> = {
   organization_and_structure:
     'Whether the claim is in the first sentence, the support in the middle, and the close lands. Throat-clearing before the claim is where this score goes.',
   voice_and_style:
-    'Whether the sentences are crisp and direct. First person is fine; the hedge in front of the claim is what costs.',
+    'Whether the prose has been edited. First person is fine; hedges, process narration and filler are what cost, and an unedited draft cannot reach the top two bands.',
   grammar_and_mechanics:
     'Sentence construction, punctuation, usage, spelling. Graded and marked up here, unlike a Class Starter — and switchable per assignment.',
 };
@@ -124,7 +124,7 @@ export const SCORE_SCALE_NOTE =
  * importing whatever it associated with essays.
  */
 export const REGISTER_NOTE =
-  'First person is allowed and is never marked as an error — a student may write "I". What the assistant coaches, in feedback rather than in the score, is the hedge in front of the claim: "I think that…", "In my opinion…". It hands the sentence back with the hedge cut so the student can see the claim underneath. The Tutor coaches the same two things while they draft: put the claim first, then cut the hedge.';
+  'First person is allowed and is never marked as an error — a student may write "I", and first person doing work belongs in a top entry. What the top of the scale asks for is an edited piece: a response still carrying hedges ("I think that…"), narration of its own process ("what I thought was…") or filler scores no higher than Proficient on Voice/Style, however good its ideas are. The assistant coaches the cut rather than deducting for the phrase, and the Tutor coaches the same two things while they draft: put the claim first, then cut the hedge.';
 
 export const HOW_TO_USE_HEADING = 'Using it with a class';
 

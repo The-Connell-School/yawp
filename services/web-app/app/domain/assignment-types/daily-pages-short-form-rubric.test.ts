@@ -227,10 +227,35 @@ describe('first person and hedging', () => {
     expect(instructions).toContain('never mark a student down for it');
   });
 
-  test('coaches the hedge in feedback rather than in the score', () => {
+  test('coaches the hedge rather than deducting for the phrase', () => {
     expect(instructions).toContain('i think that');
     expect(instructions).toContain(
-      'in voice/style feedback rather than in the score'
+      'coach the difference rather than deducting for a phrase'
+    );
+  });
+
+  /**
+   * The ceiling is what stops an unedited draft reaching the top of the scale
+   * on the strength of its ideas alone — which is exactly what the first
+   * seeded exemplar did, at 94%.
+   */
+  test('caps unedited prose below the top two bands', () => {
+    expect(instructions).toContain('unedited first draft');
+    expect(instructions).toContain('no higher than 3 in voice/style');
+    expect(instructions).toContain(
+      'the top two bands are for prose that has been edited'
+    );
+
+    const voice = categories.find(
+      (category) => category.key === 'voice_and_style'
+    );
+    expect(voice?.description).toContain('does not reach the top two bands');
+    expect(voice?.bands?.[2]?.description.toLowerCase()).toContain('unedited');
+  });
+
+  test('still names first person done well as top-entry writing', () => {
+    expect(instructions).toContain(
+      'first person done well belongs in a top entry'
     );
   });
 
