@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en" class="antialiased">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wireframe directions — assignment grading configuration</title>
+    <link rel="preconnect" href="https://rsms.me/" />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --font-sans: "InterVariable", ui-sans-serif, system-ui, sans-serif;
+      }
+
+      @layer base {
+        html {
+          font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01", "ss03";
+        }
+      }
+
+      /* A narrow frame standing in for the right-hand assignment sheet. */
+      @utility sheet {
+        @apply @container w-full max-w-[27.5rem] rounded-xl bg-white p-6 ring-1 ring-zinc-950/10;
+      }
+
+      @utility field-label {
+        @apply text-base font-medium text-zinc-900 sm:text-sm;
+      }
+
+      @utility field-help {
+        @apply text-base text-pretty text-zinc-500 sm:text-sm;
+      }
+
+      @utility wire-input {
+        @apply w-full rounded-md bg-white px-3 py-2 text-base tabular-nums text-zinc-900 ring-1 ring-zinc-950/15 outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 sm:text-sm;
+      }
+
+      /* Card-style choice built on a native radio, styled purely from input state. */
+      @utility choice-card {
+        @apply relative cursor-pointer rounded-lg px-3 py-2.5 ring-1 ring-zinc-950/10 transition-shadow hover:bg-zinc-50 has-checked:bg-zinc-50 has-checked:ring-2 has-checked:ring-zinc-900 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-zinc-900;
+      }
+
+      @utility segment {
+        @apply relative flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-base font-medium text-zinc-600 transition-colors has-checked:bg-white has-checked:text-zinc-900 has-checked:shadow-sm has-checked:ring-1 has-checked:ring-zinc-950/10 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-zinc-900 sm:text-sm;
+      }
+    </style>
+  </head>
+
+  <body class="isolate bg-zinc-100 text-zinc-900">
+    <div class="mx-auto max-w-[110rem] px-6 py-16 sm:px-10 lg:py-24">
+      <header class="max-w-[68ch]">
+        <p class="font-mono text-base tracking-wide text-zinc-500 uppercase sm:text-sm">Yawp · wireframes</p>
+        <h1 class="mt-3 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
+          Assignment sheet — grading configuration
+        </h1>
+        <p class="mt-5 text-lg text-pretty text-zinc-600">
+          Five structurally different answers to the same block. Deliberately grayscale and low fidelity — the point is
+          layout and information hierarchy, not final styling. Each frame is drawn at the real sheet width so the
+          comparison is honest.
+        </p>
+      </header>
+
+      <section class="mt-14 max-w-[68ch] rounded-xl bg-white p-6 ring-1 ring-zinc-950/10 sm:p-8">
+        <h2 class="text-xl font-semibold tracking-tight">What is actually wrong today</h2>
+        <ol role="list" class="mt-4 space-y-3 text-base text-pretty text-zinc-600 sm:text-sm">
+          <li class="flex gap-3">
+            <span class="w-5 shrink-0 font-mono tabular-nums text-zinc-400">01</span>
+            <span
+              >Four separate places show a point number: <em>Default point value</em>, <em>Rubric default</em>,
+              <em>Total Point Values</em>, and <em>Grading Total</em>. A teacher cannot tell which one wins.</span
+            >
+          </li>
+          <li class="flex gap-3">
+            <span class="w-5 shrink-0 font-mono tabular-nums text-zinc-400">02</span>
+            <span
+              >The scoring mode is stated twice — once as a read-only <em>Default grading type</em> box shaped like a
+              dropdown, then again as the <em>Scoring behavior</em> picker that actually controls it.</span
+            >
+          </li>
+          <li class="flex gap-3">
+            <span class="w-5 shrink-0 font-mono tabular-nums text-zinc-400">03</span>
+            <span
+              >Three levels of nested containers — checkbox panel, section, then the Customize Grading card — produce a
+              stack of gray boxes with no hierarchy.</span
+            >
+          </li>
+          <li class="flex gap-3">
+            <span class="w-5 shrink-0 font-mono tabular-nums text-zinc-400">04</span>
+            <span
+              ><em>Customize Grading</em> is a gate in front of two fields. It costs a click and a mental model to reach
+              settings that could simply be editable.</span
+            >
+          </li>
+          <li class="flex gap-3">
+            <span class="w-5 shrink-0 font-mono tabular-nums text-zinc-400">05</span>
+            <span
+              >Both pickers print a full sentence on every card, so the densest, loudest elements on the sheet are
+              explanations rather than the choice itself.</span
+            >
+          </li>
+        </ol>
+      </section>
+
+      <div class="mt-16 grid gap-x-10 gap-y-16 lg:grid-cols-2 2xl:grid-cols-3">
+        <!-- ══════════════════════════════════════════════════════════════
+             OPTION A — Flat settings rows
+             ══════════════════════════════════════════════════════════ -->
+        <section class="flex flex-col gap-6">
+          <div class="max-w-[52ch]">
+            <p class="font-mono text-base tracking-wide text-zinc-500 uppercase sm:text-sm">Option A</p>
+            <h2 class="mt-2 text-2xl font-semibold tracking-tight">Flat settings rows</h2>
+            <p class="mt-2 text-base text-pretty text-zinc-600 sm:text-sm">
+              Delete the Customize Grading gate. Three editable rows separated by hairlines, one line of help under the
+              row it belongs to, no nested boxes at all.
+            </p>
+          </div>
+
+          <div class="sheet">
+            <div class="flex gap-2.5">
+              <span class="h-lh flex items-center text-base sm:text-sm">
+                <span class="group inline-grid size-5 grid-cols-1 sm:size-4">
+                  <input
+                    id="a-submit"
+                    name="a-submit"
+                    type="checkbox"
+                    checked
+                    class="col-start-1 row-start-1 appearance-none rounded-sm border border-zinc-300 bg-white checked:border-zinc-900 checked:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 forced-colors:appearance-auto"
+                  />
+                  <svg
+                    viewBox="0 0 14 14"
+                    fill="none"
+                    class="pointer-events-none col-start-1 row-start-1 size-7/8 self-center justify-self-center stroke-white"
+                  >
+                    <path
+                      d="M3 8L6 11L11 3.5"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="group-not-has-checked:opacity-0"
+                    />
+                  </svg>
+                </span>
+              </span>
+              <div>
+                <label for="a-submit" class="field-label">Submit for grade</label>
+                <p class="field-help mt-0.5">Students can submit this assignment for a recorded grade.</p>
+              </div>
+            </div>
+
+            <div class="mt-5 divide-y divide-zinc-950/5 border-y border-zinc-950/5">
+              <div class="flex items-start justify-between gap-6 py-4">
+                <div class="min-w-0">
+                  <p class="field-label">Point value</p>
+                  <p class="field-help mt-0.5">
+                    Rubric default is 5.
+                    <button type="button" class="font-medium text-zinc-900 underline underline-offset-2">Use it</button>
+                  </p>
+                </div>
+                <label class="sr-only" for="a-points">Point value</label>
+                <input id="a-points" name="a-points" type="number" value="100" class="wire-input w-24 shrink-0 text-right" />
+              </div>
+
+              <div class="py-4">
+                <div class="flex items-center justify-between gap-6">
+                  <p class="field-label">Scoring</p>
+                  <div role="radiogroup" aria-label="Scoring" class="flex shrink-0 gap-1 rounded-lg bg-zinc-100 p-1">
+                    <label class="segment">
+                      <input type="radio" name="a-scoring" value="steps" checked class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Steps
+                    </label>
+                    <label class="segment">
+                      <input type="radio" name="a-scoring" value="bands" class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Bands
+                    </label>
+                  </div>
+                </div>
+                <p class="field-help mt-2">Scores land exactly on a rubric label — 0, 1, 2, 3, 4 or 5.</p>
+              </div>
+
+              <div class="py-4">
+                <div class="flex items-center justify-between gap-6">
+                  <p class="field-label">Strictness</p>
+                  <div role="radiogroup" aria-label="Assistant strictness" class="flex shrink-0 gap-1 rounded-lg bg-zinc-100 p-1">
+                    <label class="segment px-2.5">
+                      <input type="radio" name="a-strict" value="beginner" class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Beginner
+                    </label>
+                    <label class="segment px-2.5">
+                      <input type="radio" name="a-strict" value="intermediate" checked class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Standard
+                    </label>
+                    <label class="segment px-2.5">
+                      <input type="radio" name="a-strict" value="advanced" class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Advanced
+                    </label>
+                  </div>
+                </div>
+                <p class="field-help mt-2">Reads at the level expected for this grade.</p>
+              </div>
+            </div>
+          </div>
+
+          <dl class="grid gap-3 text-base sm:text-sm">
+            <div class="flex gap-3">
+              <dt class="w-16 shrink-0 font-medium text-zinc-900">Good</dt>
+              <dd class="text-pretty text-zinc-600">Shortest path to every setting. Zero nesting. Help text has one obvious owner.</dd>
+            </div>
+            <div class="flex gap-3">
+              <dt class="w-16 shrink-0 font-medium text-zinc-900">Cost</dt>
+              <dd class="text-pretty text-zinc-600">
+                Loses the "these are defaults, you are overriding" signal. Needs a real answer for what happens when the
+                rubric default and the entered value disagree.
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             OPTION B — Quiet summary, opt-in detail
+             ══════════════════════════════════════════════════════════ -->
+        <section class="flex flex-col gap-6">
+          <div class="max-w-[52ch]">
+            <p class="font-mono text-base tracking-wide text-zinc-500 uppercase sm:text-sm">Option B</p>
+            <h2 class="mt-2 text-2xl font-semibold tracking-tight">Quiet summary, opt-in detail</h2>
+            <p class="mt-2 text-base text-pretty text-zinc-600 sm:text-sm">
+              Collapse the whole block to one plain-English sentence. Most teachers accept the defaults and never open
+              it. Keeps the Customize idea but makes it earn its space.
+            </p>
+          </div>
+
+          <div class="sheet">
+            <div class="flex gap-2.5">
+              <span class="h-lh flex items-center text-base sm:text-sm">
+                <span class="group inline-grid size-5 grid-cols-1 sm:size-4">
+                  <input
+                    id="b-submit"
+                    name="b-submit"
+                    type="checkbox"
+                    checked
+                    class="col-start-1 row-start-1 appearance-none rounded-sm border border-zinc-300 bg-white checked:border-zinc-900 checked:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 forced-colors:appearance-auto"
+                  />
+                  <svg
+                    viewBox="0 0 14 14"
+                    fill="none"
+                    class="pointer-events-none col-start-1 row-start-1 size-7/8 self-center justify-self-center stroke-white"
+                  >
+                    <path
+                      d="M3 8L6 11L11 3.5"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="group-not-has-checked:opacity-0"
+                    />
+                  </svg>
+                </span>
+              </span>
+              <div>
+                <label for="b-submit" class="field-label">Submit for grade</label>
+                <p class="field-help mt-0.5">Students can submit this assignment for a recorded grade.</p>
+              </div>
+            </div>
+
+            <p class="mt-6 font-mono text-base tracking-wide text-zinc-400 uppercase sm:text-sm">Resting state</p>
+            <div class="mt-2 flex items-start justify-between gap-4 rounded-lg bg-zinc-50 px-4 py-3.5">
+              <p class="text-base text-pretty text-zinc-700 sm:text-sm">
+                Graded out of <span class="font-medium tabular-nums text-zinc-900">100 points</span> in
+                <span class="font-medium text-zinc-900">steps</span>, read at the
+                <span class="font-medium text-zinc-900">standard</span> level.
+              </p>
+              <button
+                type="button"
+                class="shrink-0 rounded-md bg-white px-2.5 py-1.5 text-base font-medium text-zinc-900 ring-1 ring-zinc-950/10 hover:bg-zinc-50 sm:text-sm"
+              >
+                Change
+              </button>
+            </div>
+
+            <p class="mt-8 font-mono text-base tracking-wide text-zinc-400 uppercase sm:text-sm">Opened state</p>
+            <div class="mt-2 rounded-lg ring-1 ring-zinc-950/10">
+              <div class="flex items-center justify-between gap-4 border-b border-zinc-950/5 px-4 py-3">
+                <p class="field-label">Grading</p>
+                <button type="button" class="text-base font-medium text-zinc-500 hover:text-zinc-900 sm:text-sm">
+                  Reset to defaults
+                </button>
+              </div>
+              <div class="space-y-4 px-4 py-4">
+                <div class="grid gap-4 @sm:grid-cols-2">
+                  <div>
+                    <label for="b-points" class="field-label">Points</label>
+                    <input id="b-points" name="b-points" type="number" value="100" class="wire-input mt-1.5" />
+                  </div>
+                  <div>
+                    <p class="field-label">Scoring</p>
+                    <div role="radiogroup" aria-label="Scoring" class="mt-1.5 flex gap-1 rounded-lg bg-zinc-100 p-1">
+                      <label class="segment flex-1">
+                        <input type="radio" name="b-scoring" value="steps" checked class="absolute inset-0 appearance-none focus:outline-hidden" />
+                        Steps
+                      </label>
+                      <label class="segment flex-1">
+                        <input type="radio" name="b-scoring" value="bands" class="absolute inset-0 appearance-none focus:outline-hidden" />
+                        Bands
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <p class="field-label">Assistant strictness</p>
+                  <div role="radiogroup" aria-label="Assistant strictness" class="mt-1.5 flex gap-1 rounded-lg bg-zinc-100 p-1">
+                    <label class="segment flex-1">
+                      <input type="radio" name="b-strict" value="beginner" class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Beginner
+                    </label>
+                    <label class="segment flex-1">
+                      <input type="radio" name="b-strict" value="intermediate" checked class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Standard
+                    </label>
+                    <label class="segment flex-1">
+                      <input type="radio" name="b-strict" value="advanced" class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Advanced
+                    </label>
+                  </div>
+                  <p class="field-help mt-2">Reads at the level expected for this grade.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <dl class="grid gap-3 text-base sm:text-sm">
+            <div class="flex gap-3">
+              <dt class="w-16 shrink-0 font-medium text-zinc-900">Good</dt>
+              <dd class="text-pretty text-zinc-600">
+                Smallest resting footprint in a already-long sheet. The summary sentence doubles as documentation of
+                what the defaults mean.
+              </dd>
+            </div>
+            <div class="flex gap-3">
+              <dt class="w-16 shrink-0 font-medium text-zinc-900">Cost</dt>
+              <dd class="text-pretty text-zinc-600">
+                Still a disclosure gate, so it inherits some of today's problem. The summary sentence has to stay
+                truthful as options grow.
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             OPTION C — Two-column spec rows
+             ══════════════════════════════════════════════════════════ -->
+        <section class="flex flex-col gap-6">
+          <div class="max-w-[52ch]">
+            <p class="font-mono text-base tracking-wide text-zinc-500 uppercase sm:text-sm">Option C</p>
+            <h2 class="mt-2 text-2xl font-semibold tracking-tight">Two-column spec rows</h2>
+            <p class="mt-2 text-base text-pretty text-zinc-600 sm:text-sm">
+              Label and explanation on the left, control on the right. Gives the descriptions a permanent home instead
+              of stuffing them into the buttons.
+            </p>
+          </div>
+
+          <div class="sheet">
+            <div class="flex gap-2.5">
+              <span class="h-lh flex items-center text-base sm:text-sm">
+                <span class="group inline-grid size-5 grid-cols-1 sm:size-4">
+                  <input
+                    id="c-submit"
+                    name="c-submit"
+                    type="checkbox"
+                    checked
+                    class="col-start-1 row-start-1 appearance-none rounded-sm border border-zinc-300 bg-white checked:border-zinc-900 checked:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 forced-colors:appearance-auto"
+                  />
+                  <svg
+                    viewBox="0 0 14 14"
+                    fill="none"
+                    class="pointer-events-none col-start-1 row-start-1 size-7/8 self-center justify-self-center stroke-white"
+                  >
+                    <path
+                      d="M3 8L6 11L11 3.5"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="group-not-has-checked:opacity-0"
+                    />
+                  </svg>
+                </span>
+              </span>
+              <div>
+                <label for="c-submit" class="field-label">Submit for grade</label>
+                <p class="field-help mt-0.5">Students can submit this assignment for a recorded grade.</p>
+              </div>
+            </div>
+
+            <div class="mt-6 divide-y divide-zinc-950/5 border-t border-zinc-950/5">
+              <div class="grid gap-x-6 gap-y-2 py-5 @sm:grid-cols-[minmax(0,17fr)_minmax(0,13fr)]">
+                <div>
+                  <p class="field-label">Point value</p>
+                  <p class="field-help mt-1">What the assignment is graded out of. The rubric suggests 5.</p>
+                </div>
+                <div>
+                  <label class="sr-only" for="c-points">Point value</label>
+                  <input id="c-points" name="c-points" type="number" value="100" class="wire-input" />
+                </div>
+              </div>
+
+              <div class="grid gap-x-6 gap-y-2 py-5 @sm:grid-cols-[minmax(0,17fr)_minmax(0,13fr)]">
+                <div>
+                  <p class="field-label">Scoring behavior</p>
+                  <p class="field-help mt-1">Whether a score can fall between two rubric labels.</p>
+                </div>
+                <div role="radiogroup" aria-label="Scoring behavior" class="space-y-1.5">
+                  <label class="flex items-center gap-2.5">
+                    <span class="group inline-grid size-5 grid-cols-1 sm:size-4">
+                      <input
+                        type="radio"
+                        name="c-scoring"
+                        value="steps"
+                        checked
+                        class="col-start-1 row-start-1 appearance-none rounded-full border border-zinc-300 bg-white checked:border-zinc-900 checked:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 forced-colors:appearance-auto"
+                      />
+                      <span
+                        class="pointer-events-none col-start-1 row-start-1 size-[round(down,40%,1px)] self-center justify-self-center rounded-full bg-white group-not-has-checked:opacity-0"
+                      ></span>
+                    </span>
+                    <span class="text-base text-zinc-900 sm:text-sm">Steps</span>
+                  </label>
+                  <label class="flex items-center gap-2.5">
+                    <span class="group inline-grid size-5 grid-cols-1 sm:size-4">
+                      <input
+                        type="radio"
+                        name="c-scoring"
+                        value="bands"
+                        class="col-start-1 row-start-1 appearance-none rounded-full border border-zinc-300 bg-white checked:border-zinc-900 checked:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 forced-colors:appearance-auto"
+                      />
+                      <span
+                        class="pointer-events-none col-start-1 row-start-1 size-[round(down,40%,1px)] self-center justify-self-center rounded-full bg-white group-not-has-checked:opacity-0"
+                      ></span>
+                    </span>
+                    <span class="text-base text-zinc-900 sm:text-sm">Bands</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="grid gap-x-6 gap-y-2 py-5 @sm:grid-cols-[minmax(0,17fr)_minmax(0,13fr)]">
+                <div>
+                  <p class="field-label">Assistant strictness</p>
+                  <p class="field-help mt-1">How demanding the assistant is when it reads a draft.</p>
+                </div>
+                <div role="radiogroup" aria-label="Assistant strictness" class="space-y-1.5">
+                  <label class="flex items-center gap-2.5">
+                    <span class="group inline-grid size-5 grid-cols-1 sm:size-4">
+                      <input
+                        type="radio"
+                        name="c-strict"
+                        value="beginner"
+                        class="col-start-1 row-start-1 appearance-none rounded-full border border-zinc-300 bg-white checked:border-zinc-900 checked:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 forced-colors:appearance-auto"
+                      />
+                      <span
+                        class="pointer-events-none col-start-1 row-start-1 size-[round(down,40%,1px)] self-center justify-self-center rounded-full bg-white group-not-has-checked:opacity-0"
+                      ></span>
+                    </span>
+                    <span class="text-base text-zinc-900 sm:text-sm">Beginner</span>
+                  </label>
+                  <label class="flex items-center gap-2.5">
+                    <span class="group inline-grid size-5 grid-cols-1 sm:size-4">
+                      <input
+                        type="radio"
+                        name="c-strict"
+                        value="intermediate"
+                        checked
+                        class="col-start-1 row-start-1 appearance-none rounded-full border border-zinc-300 bg-white checked:border-zinc-900 checked:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 forced-colors:appearance-auto"
+                      />
+                      <span
+                        class="pointer-events-none col-start-1 row-start-1 size-[round(down,40%,1px)] self-center justify-self-center rounded-full bg-white group-not-has-checked:opacity-0"
+                      ></span>
+                    </span>
+                    <span class="text-base text-zinc-900 sm:text-sm">Standard</span>
+                  </label>
+                  <label class="flex items-center gap-2.5">
+                    <span class="group inline-grid size-5 grid-cols-1 sm:size-4">
+                      <input
+                        type="radio"
+                        name="c-strict"
+                        value="advanced"
+                        class="col-start-1 row-start-1 appearance-none rounded-full border border-zinc-300 bg-white checked:border-zinc-900 checked:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 forced-colors:appearance-auto"
+                      />
+                      <span
+                        class="pointer-events-none col-start-1 row-start-1 size-[round(down,40%,1px)] self-center justify-self-center rounded-full bg-white group-not-has-checked:opacity-0"
+                      ></span>
+                    </span>
+                    <span class="text-base text-zinc-900 sm:text-sm">Advanced</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <dl class="grid gap-3 text-base sm:text-sm">
+            <div class="flex gap-3">
+              <dt class="w-16 shrink-0 font-medium text-zinc-900">Good</dt>
+              <dd class="text-pretty text-zinc-600">
+                Scales cleanly — a fourth or fifth setting just adds a row. Reads like a real settings surface rather
+                than a cluster of cards.
+              </dd>
+            </div>
+            <div class="flex gap-3">
+              <dt class="w-16 shrink-0 font-medium text-zinc-900">Cost</dt>
+              <dd class="text-pretty text-zinc-600">
+                Tallest of the five, and the two columns are cramped at sheet width. Only works if the sheet widens or
+                the block moves to a full page.
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             OPTION D — Compact control bar
+             ══════════════════════════════════════════════════════════ -->
+        <section class="flex flex-col gap-6">
+          <div class="max-w-[52ch]">
+            <p class="font-mono text-base tracking-wide text-zinc-500 uppercase sm:text-sm">Option D</p>
+            <h2 class="mt-2 text-2xl font-semibold tracking-tight">Compact control bar</h2>
+            <p class="mt-2 text-base text-pretty text-zinc-600 sm:text-sm">
+              One card, three controls, one shared caption line. Treats grading as a small toolbar rather than a
+              section. Densest option by a wide margin.
+            </p>
+          </div>
+
+          <div class="sheet">
+            <div class="flex gap-2.5">
+              <span class="h-lh flex items-center text-base sm:text-sm">
+                <span class="group inline-grid size-5 grid-cols-1 sm:size-4">
+                  <input
+                    id="d-submit"
+                    name="d-submit"
+                    type="checkbox"
+                    checked
+                    class="col-start-1 row-start-1 appearance-none rounded-sm border border-zinc-300 bg-white checked:border-zinc-900 checked:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 forced-colors:appearance-auto"
+                  />
+                  <svg
+                    viewBox="0 0 14 14"
+                    fill="none"
+                    class="pointer-events-none col-start-1 row-start-1 size-7/8 self-center justify-self-center stroke-white"
+                  >
+                    <path
+                      d="M3 8L6 11L11 3.5"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="group-not-has-checked:opacity-0"
+                    />
+                  </svg>
+                </span>
+              </span>
+              <div>
+                <label for="d-submit" class="field-label">Submit for grade</label>
+                <p class="field-help mt-0.5">Students can submit this assignment for a recorded grade.</p>
+              </div>
+            </div>
+
+            <div class="mt-5 rounded-xl bg-zinc-50 p-4">
+              <div class="flex flex-wrap items-end gap-x-5 gap-y-4">
+                <div class="w-24 shrink-0">
+                  <label for="d-points" class="field-label">Points</label>
+                  <input id="d-points" name="d-points" type="number" value="100" class="wire-input mt-1.5 text-center" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="field-label">Scoring</p>
+                  <div role="radiogroup" aria-label="Scoring" class="mt-1.5 flex gap-1 rounded-lg bg-zinc-200/70 p-1">
+                    <label class="segment flex-1">
+                      <input type="radio" name="d-scoring" value="steps" checked class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Steps
+                    </label>
+                    <label class="segment flex-1">
+                      <input type="radio" name="d-scoring" value="bands" class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Bands
+                    </label>
+                  </div>
+                </div>
+                <div class="min-w-0 flex-1 basis-full">
+                  <p class="field-label">Assistant strictness</p>
+                  <div role="radiogroup" aria-label="Assistant strictness" class="mt-1.5 flex gap-1 rounded-lg bg-zinc-200/70 p-1">
+                    <label class="segment flex-1">
+                      <input type="radio" name="d-strict" value="beginner" class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Beginner
+                    </label>
+                    <label class="segment flex-1">
+                      <input type="radio" name="d-strict" value="intermediate" checked class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Standard
+                    </label>
+                    <label class="segment flex-1">
+                      <input type="radio" name="d-strict" value="advanced" class="absolute inset-0 appearance-none focus:outline-hidden" />
+                      Advanced
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <p class="field-help mt-4 border-t border-zinc-950/5 pt-3">
+                Rubric default 5 points · scores land exactly on a rubric label · read at the standard level.
+              </p>
+            </div>
+          </div>
+
+          <dl class="grid gap-3 text-base sm:text-sm">
+            <div class="flex gap-3">
+              <dt class="w-16 shrink-0 font-medium text-zinc-900">Good</dt>
+              <dd class="text-pretty text-zinc-600">
+                Everything visible and editable in roughly the height of today's collapsed state. Reads as one idea, not
+                three sections.
+              </dd>
+            </div>
+            <div class="flex gap-3">
+              <dt class="w-16 shrink-0 font-medium text-zinc-900">Cost</dt>
+              <dd class="text-pretty text-zinc-600">
+                The shared caption line has to change as selections change, or it becomes stale filler. No room for a
+                fourth setting later.
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             OPTION E — Controls plus outcome preview
+             ══════════════════════════════════════════════════════════ -->
+        <section class="flex flex-col gap-6">
+          <div class="max-w-[52ch]">
+            <p class="font-mono text-base tracking-wide text-zinc-500 uppercase sm:text-sm">Option E</p>
+            <h2 class="mt-2 text-2xl font-semibold tracking-tight">Controls plus outcome preview</h2>
+            <p class="mt-2 text-base text-pretty text-zinc-600 sm:text-sm">
+              Show the resulting grade scale instead of describing it. Steps versus Bands stops being jargon the moment
+              a teacher can see the difference.
+            </p>
+          </div>
+
+          <div class="sheet">
+            <div class="flex gap-2.5">
+              <span class="h-lh flex items-center text-base sm:text-sm">
+                <span class="group inline-grid size-5 grid-cols-1 sm:size-4">
+                  <input
+                    id="e-submit"
+                    name="e-submit"
+                    type="checkbox"
+                    checked
+                    class="col-start-1 row-start-1 appearance-none rounded-sm border border-zinc-300 bg-white checked:border-zinc-900 checked:bg-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 forced-colors:appearance-auto"
+                  />
+                  <svg
+                    viewBox="0 0 14 14"
+                    fill="none"
+                    class="pointer-events-none col-start-1 row-start-1 size-7/8 self-center justify-self-center stroke-white"
+                  >
+                    <path
+                      d="M3 8L6 11L11 3.5"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="group-not-has-checked:opacity-0"
+                    />
+                  </svg>
+                </span>
+              </span>
+              <div>
+                <label for="e-submit" class="field-label">Submit for grade</label>
+                <p class="field-help mt-0.5">Students can submit this assignment for a recorded grade.</p>
+              </div>
+            </div>
+
+            <div class="mt-5 flex items-end gap-4">
+              <div class="w-28 shrink-0">
+                <label for="e-points" class="field-label">Point value</label>
+                <input id="e-points" name="e-points" type="number" value="100" class="wire-input mt-1.5" />
+              </div>
+              <p class="field-help pb-2.5">out of a 5-level rubric</p>
+            </div>
+
+            <p class="field-label mt-5">Scoring</p>
+            <div role="radiogroup" aria-label="Scoring" class="mt-2 grid gap-2 @sm:grid-cols-2">
+              <label class="choice-card">
+                <input type="radio" name="e-scoring" value="steps" checked class="absolute inset-0 appearance-none focus:outline-hidden" />
+                <p class="text-base font-medium text-zinc-900 sm:text-sm">Steps</p>
+                <div class="mt-2.5 flex items-center justify-between gap-1">
+                  <span class="size-2 rounded-full bg-zinc-900 ring-2 ring-white"></span>
+                  <span class="h-px flex-1 bg-zinc-300"></span>
+                  <span class="size-2 rounded-full bg-zinc-900 ring-2 ring-white"></span>
+                  <span class="h-px flex-1 bg-zinc-300"></span>
+                  <span class="size-2 rounded-full bg-zinc-900 ring-2 ring-white"></span>
+                  <span class="h-px flex-1 bg-zinc-300"></span>
+                  <span class="size-2 rounded-full bg-zinc-900 ring-2 ring-white"></span>
+                </div>
+                <p class="mt-2 text-base tabular-nums text-zinc-500 sm:text-sm">20 · 40 · 60 · 80 · 100</p>
+              </label>
+
+              <label class="choice-card">
+                <input type="radio" name="e-scoring" value="bands" class="absolute inset-0 appearance-none focus:outline-hidden" />
+                <p class="text-base font-medium text-zinc-900 sm:text-sm">Bands</p>
+                <div class="mt-2.5 flex items-center gap-1">
+                  <span class="h-2 flex-1 rounded-l-full bg-zinc-300"></span>
+                  <span class="h-2 flex-1 bg-zinc-300"></span>
+                  <span class="h-2 flex-1 bg-zinc-300"></span>
+                  <span class="h-2 flex-1 rounded-r-full bg-zinc-300"></span>
+                </div>
+                <p class="mt-2 text-base tabular-nums text-zinc-500 sm:text-sm">1–20 · 21–40 · 41–60 …</p>
+              </label>
+            </div>
+
+            <p class="field-label mt-6">Assistant strictness</p>
+            <div role="radiogroup" aria-label="Assistant strictness" class="mt-2 flex gap-1 rounded-lg bg-zinc-100 p-1">
+              <label class="segment flex-1">
+                <input type="radio" name="e-strict" value="beginner" class="absolute inset-0 appearance-none focus:outline-hidden" />
+                Beginner
+              </label>
+              <label class="segment flex-1">
+                <input type="radio" name="e-strict" value="intermediate" checked class="absolute inset-0 appearance-none focus:outline-hidden" />
+                Standard
+              </label>
+              <label class="segment flex-1">
+                <input type="radio" name="e-strict" value="advanced" class="absolute inset-0 appearance-none focus:outline-hidden" />
+                Advanced
+              </label>
+            </div>
+
+            <div class="mt-3 rounded-lg bg-zinc-50 px-3.5 py-3">
+              <p class="field-help">
+                <span class="font-medium text-zinc-900">Standard —</span> reads at the level expected for this grade and
+                flags the same issues a teacher would mark.
+              </p>
+            </div>
+          </div>
+
+          <dl class="grid gap-3 text-base sm:text-sm">
+            <div class="flex gap-3">
+              <dt class="w-16 shrink-0 font-medium text-zinc-900">Good</dt>
+              <dd class="text-pretty text-zinc-600">
+                Only option that teaches the Steps/Bands distinction. The strictness caption swaps with the selection,
+                so one line replaces three.
+              </dd>
+            </div>
+            <div class="flex gap-3">
+              <dt class="w-16 shrink-0 font-medium text-zinc-900">Cost</dt>
+              <dd class="text-pretty text-zinc-600">
+                Most bespoke to build and maintain. The preview must stay accurate against real rubric revisions or it
+                actively misleads.
+              </dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+
+      <section class="mt-20 max-w-[68ch] rounded-xl bg-white p-6 ring-1 ring-zinc-950/10 sm:p-8">
+        <h2 class="text-xl font-semibold tracking-tight">Decisions these options are really asking about</h2>
+        <ul role="list" class="mt-4 space-y-3 text-base text-pretty text-zinc-600 sm:text-sm">
+          <li class="flex gap-3">
+            <span class="mt-2 size-1.5 shrink-0 rounded-full bg-zinc-400"></span>
+            <span
+              >Does <em>Customize Grading</em> survive at all? A, C, D and E delete it; B keeps the idea but reframes
+              it as a summary you open.</span
+            >
+          </li>
+          <li class="flex gap-3">
+            <span class="mt-2 size-1.5 shrink-0 rounded-full bg-zinc-400"></span>
+            <span
+              >Is there one point number or two? Every option assumes one editable value with the rubric default shown
+              as a hint. That contradicts the current durable decision to keep the default read-only.</span
+            >
+          </li>
+          <li class="flex gap-3">
+            <span class="mt-2 size-1.5 shrink-0 rounded-full bg-zinc-400"></span>
+            <span
+              >Do the choice descriptions belong on the control, beside it, or under the selected value only? That single
+              call drives most of the height difference between these five.</span
+            >
+          </li>
+          <li class="flex gap-3">
+            <span class="mt-2 size-1.5 shrink-0 rounded-full bg-zinc-400"></span>
+            <span
+              >Does this stay in a narrow right-hand sheet? C and E want more width. If the sheet is fixed, A, B and D
+              are the realistic candidates.</span
+            >
+          </li>
+        </ul>
+      </section>
+    </div>
+  </body>
+</html>
