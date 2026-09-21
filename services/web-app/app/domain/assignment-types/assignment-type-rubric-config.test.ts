@@ -378,7 +378,9 @@ describe('customizable rubric category options', () => {
   };
 
   test('parseAssignmentTypeRubricConfig preserves the new optional category fields', () => {
-    const config = parseAssignmentTypeRubricConfig({ rubricJson: customRubric });
+    const config = parseAssignmentTypeRubricConfig({
+      rubricJson: customRubric,
+    });
 
     expect(config.source).toBe('assignment-type');
     expect(config.rubric.categories[0].scoreLabels).toEqual([
@@ -390,7 +392,9 @@ describe('customizable rubric category options', () => {
   });
 
   test('categories that omit the new fields leave them undefined', () => {
-    const config = parseAssignmentTypeRubricConfig({ rubricJson: customRubric });
+    const config = parseAssignmentTypeRubricConfig({
+      rubricJson: customRubric,
+    });
 
     expect(config.rubric.categories[1].scoreLabels).toBeUndefined();
     expect(config.rubric.categories[1].feedbackEnabled).toBeUndefined();
@@ -432,5 +436,46 @@ describe('customizable rubric category options', () => {
     expect(config.rubric.categories[0].scoreLabels).toBeUndefined();
     expect(config.rubric.categories[0].feedbackEnabled).toBeUndefined();
     expect(config.rubric.categories[0].grammarHighlighting).toBeUndefined();
+  });
+});
+
+describe('the Exit Ticket default rubric', () => {
+  test('is chosen by kind, and only when the type saved none of its own', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'exit_ticket',
+    });
+
+    expect(config.source).toBe('exit-ticket-default');
+    expect(config.rubric.categories[0].key).toBe('understanding');
+    expect(config.rubricIncomplete).toBe(false);
+  });
+
+  test('never displaces a rubric an admin actually configured', () => {
+    // Registering a default for a kind must not change what an existing row
+    // grades with. Its own rubric still wins.
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'exit_ticket',
+      rubricJson: {
+        categories: [
+          {
+            key: 'custom',
+            label: 'Custom',
+            description: 'Configured by an admin.',
+            weight: 1,
+          },
+        ],
+      },
+    });
+
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubric.categories[0].key).toBe('custom');
+  });
+
+  test('leaves every other kind on the rubric it had', () => {
+    expect(parseAssignmentTypeRubricConfig({}).source).toBe('thesis-default');
+    expect(
+      parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'daily_pages' })
+        .source
+    ).toBe('daily-pages-default');
   });
 });

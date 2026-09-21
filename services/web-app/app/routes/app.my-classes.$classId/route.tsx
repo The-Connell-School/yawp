@@ -1,3 +1,4 @@
+import { Prisma } from '@app/prisma';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -21,6 +22,7 @@ import {
   parseAssignmentRubricOverrides,
 } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
+import { resolveAssignmentPrompt } from '~/utils/assignment-exit-ticket.server';
 import {
   formatClassLabel,
   type ClassDisplayFields,
@@ -231,6 +233,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const allowedAssignmentTypes = await getAvailableAssignmentTypesForScopes<{
     id: string;
     systemKey: string | null;
+    kind: string | null;
   }>({
     scopes: [
       {
@@ -239,7 +242,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         teacherProfileId: profile.id,
       },
     ],
-    select: { id: true, systemKey: true },
+    select: { id: true, systemKey: true, kind: true },
   });
   const allowedAssignmentTypeIds = new Set(
     allowedAssignmentTypes
@@ -453,7 +456,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    if (!prompt) {
+    // An exit ticket's prompt is composed from the form answers, here as well
+    // as on the create API, so editing one cannot replace a composed prompt
+    // with whatever the browser happened to post.
+    const resolvedPrompt = resolveAssignmentPrompt({
+      assignmentTypeKind: selectedAssignmentType?.kind,
+      postedPrompt: prompt,
+      formData,
+    });
+    if (!resolvedPrompt.success) {
+      return dataResponse(
+        { success: false, message: resolvedPrompt.message },
+        { status: 400 }
+      );
+    }
+    const assignmentPrompt = resolvedPrompt.prompt;
+    const exitTicketConfigJson = resolvedPrompt.exitTicketConfigJson;
+
+    if (!assignmentPrompt) {
       return dataResponse(
         { success: false, message: 'Prompt is required.' },
         { status: 400 }
@@ -564,7 +584,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
           data: {
             assignmentTypeId,
             title,
-            prompt,
+            prompt: assignmentPrompt,
+            ...(exitTicketConfigJson ? { exitTicketConfigJson } : {}),
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
             ...rubricOverrideData,
@@ -599,7 +620,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           assignmentTypeId,
           title,
-          prompt,
+          prompt: assignmentPrompt,
+          // Cleared rather than left alone: a type changed away from Exit
+          // Ticket must not keep a config describing a prompt it no longer
+          // has. Prisma.DbNull is how a nullable Json column is set to null.
+          exitTicketConfigJson: exitTicketConfigJson ?? Prisma.DbNull,
           submitForGrade: gradingIntent.data.submitForGrade,
           pointValue: gradingIntent.data.pointValue,
           ...(formData.has('rubricTotalPoints')
@@ -1129,6 +1154,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: string;
       title: string;
       systemKey: string | null;
+      kind: string | null;
       collaborationSupported: boolean;
     }>({
       scopes: [
@@ -1142,6 +1168,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         id: true,
         title: true,
         systemKey: true,
+        kind: true,
         collaborationSupported: true,
       },
       orderBy: { position: 'asc' },
@@ -1273,10 +1300,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         (assignmentType) =>
           assignmentType.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
       )
-      .map(({ id, title, collaborationSupported }) => ({
+      .map(({ id, title, collaborationSupported, kind }) => ({
         id,
         title,
         collaborationSupported,
+        kind,
       })),
     assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],

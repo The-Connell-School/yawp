@@ -30,7 +30,10 @@ export type RubricDisplayCategory = {
 };
 
 export type RubricDisplaySource =
-  'assignment-type' | 'thesis-default' | 'daily-pages-default';
+  | 'assignment-type'
+  | 'thesis-default'
+  | 'daily-pages-default'
+  | 'exit-ticket-default';
 
 export type RubricDisplayConfig = {
   categories: RubricDisplayCategory[];
@@ -58,6 +61,7 @@ const rubricDisplaySources = new Set<string>([
   'assignment-type',
   'thesis-default',
   'daily-pages-default',
+  'exit-ticket-default',
 ]);
 
 function parseRubricDisplaySource(

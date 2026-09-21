@@ -614,6 +614,8 @@ compute_tooling_fingerprint() {
         packages/prisma/prisma.config.ts \
         packages/prisma/scripts/assignment-type-release-gate.ts \
         packages/prisma/scripts/backfill-class-art-key.ts \
+        packages/prisma/scripts/exit-ticket-assignment-type-data.ts \
+        packages/prisma/scripts/seed-exit-ticket-assignment-type.ts \
         packages/prisma/scripts/seed-local-dev.ts \
         packages/prisma/scripts/sync-prod-fidelity-fixtures.ts \
         packages/prisma/scripts/preview-seats.ts \
@@ -693,6 +695,13 @@ run_tooling_if_needed() {
     tooling_command+=' && bun run seed-local-dev'
   elif [[ "$DATA_MODE" == "seed" && -f "$SOURCE_DIR/packages/prisma/scripts/sync-prod-fidelity-fixtures.ts" ]]; then
     tooling_command+=' && bun run sync-prod-fidelity-fixtures'
+  fi
+  # The Exit Ticket type is created by a script rather than a migration, because
+  # the admin assignment-type creator cannot set `kind`. A preview database is a
+  # throwaway per-PR copy, so it takes --all-orgs: there is nothing to roll out
+  # to slowly, and without this the type never appears in the assignment picker.
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-exit-ticket-assignment-type.ts" ]]; then
+    tooling_command+=' && bun run scripts/seed-exit-ticket-assignment-type.ts --all-orgs'
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'

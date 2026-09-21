@@ -46,6 +46,11 @@ import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
+import { ExitTicketDirections } from './exit-ticket-directions';
+import {
+  EXIT_TICKETS_ENABLED,
+  isExitTicketAssignmentType,
+} from '~/domain/assignment-types/exit-ticket';
 import {
   type CognitiveMove,
   COLLECTION_ORDER,
@@ -95,6 +100,7 @@ type AssignmentTypeDetailRow = {
   title: string;
   description: string | null;
   systemKey: string | null;
+  kind: string | null;
   collaborationSupported: boolean;
   image: { id: string } | null;
   assignmentModules: Array<{
@@ -346,7 +352,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
     }),
-    profile.role === "TEACHER"
+    profile.role === 'TEACHER'
       ? prisma.class.findMany({
           where: {
             teachers: { some: { id: profile.id } },
@@ -377,6 +383,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title: true,
         description: true,
         systemKey: true,
+        kind: true,
         collaborationSupported: true,
         image: { select: { id: true } },
         assignmentModules: {
@@ -409,18 +416,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // "My prompts": prompts this teacher generated and kept, shown in the same
   // library alongside the fixed corpus and filterable on their own.
   const savedPrompts =
-    profile.role === "TEACHER" && isDailyPages
+    profile.role === 'TEACHER' && isDailyPages
       ? await listSavedDailyPagesPrompts({
           membershipId: profile.id,
           assignmentTypeId: assignmentType.id,
         })
       : [];
   const libraryEntries =
-    profile.role === "TEACHER" && isDailyPages
+    profile.role === 'TEACHER' && isDailyPages
       ? [...savedPrompts.map(savedPromptToLibraryEntry), ...ALL_PROMPTS]
       : [];
   const promptLibrary =
-    profile.role === "TEACHER" && isDailyPages
+    profile.role === 'TEACHER' && isDailyPages
       ? {
           prompts: applyFilters(
             libraryEntries,
@@ -434,21 +441,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // "My prompts": prompts this teacher generated and kept, shown in the same
   // library alongside the fixed corpus and filterable on their own.
   const savedThesisPrompts =
-    profile.role === "TEACHER" && isThesisEssay
+    profile.role === 'TEACHER' && isThesisEssay
       ? await listSavedThesisPrompts({
           membershipId: profile.id,
           assignmentTypeId: assignmentType.id,
         })
       : [];
   const thesisLibraryEntries =
-    profile.role === "TEACHER" && isThesisEssay
+    profile.role === 'TEACHER' && isThesisEssay
       ? [
           ...savedThesisPrompts.map(savedThesisPromptToLibraryEntry),
           ...ALL_THESIS_PROMPTS,
         ]
       : [];
   const thesisPromptLibrary =
-    profile.role === "TEACHER" && isThesisEssay
+    profile.role === 'TEACHER' && isThesisEssay
       ? {
           prompts: applyThesisFilters(
             thesisLibraryEntries,
@@ -459,14 +466,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           totalCount: thesisLibraryEntries.length,
         }
       : null;
-  const enabledTeacherClassIds = profile.role === "TEACHER"
-    ? new Set(teacherClasses.map((klass) => klass.id))
-    : new Set<string>();
-  const assignmentEnabledTeacherClasses = profile.role === "TEACHER"
-    ? teacherClasses
-    : [];
+  const enabledTeacherClassIds =
+    profile.role === 'TEACHER'
+      ? new Set(teacherClasses.map((klass) => klass.id))
+      : new Set<string>();
+  const assignmentEnabledTeacherClasses =
+    profile.role === 'TEACHER' ? teacherClasses : [];
   let apHistoryLibrary = null;
-  if (profile.role === "TEACHER" && isApHistory) {
+  if (profile.role === 'TEACHER' && isApHistory) {
     if (assignmentEnabledTeacherClasses.length > 0) {
       apHistoryLibrary = {
         entries: await listApHistoryLibraryEntries(assignmentType.id),
@@ -483,23 +490,30 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     promptLibrary,
     thesisPromptLibrary,
     apHistoryLibrary,
+    // Teacher-facing guidance, so it follows the same role gate the other
+    // assignment types' directions do.
+    showExitTicketDirections:
+      profile.role === 'TEACHER' &&
+      EXIT_TICKETS_ENABLED &&
+      isExitTicketAssignmentType(assignmentType),
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  const teacherClasses = profile.role === "TEACHER"
-    ? await prisma.class.findMany({
-        where: {
-          teachers: { some: { id: profile.id } },
-          isArchived: false,
-        },
-        select: {
-          id: true,
-          school: { select: { id: true, organizationId: true } },
-        },
-      })
-    : [];
+  const teacherClasses =
+    profile.role === 'TEACHER'
+      ? await prisma.class.findMany({
+          where: {
+            teachers: { some: { id: profile.id } },
+            isArchived: false,
+          },
+          select: {
+            id: true,
+            school: { select: { id: true, organizationId: true } },
+          },
+        })
+      : [];
   const assignmentTypeAvailable = params.id
     ? await isAssignmentTypeAvailableForAnyScope({
         assignmentTypeId: params.id,
@@ -573,11 +587,32 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
 }
 
+/**
+ * Whether the modules accordion earns its place on this page.
+ *
+ * Every assignment type carries at least one module — it is what a direct
+ * document is created from — but an exit ticket's is a single row whose
+ * description restates the prompt, sitting directly under directions that
+ * already explain the whole thing. Hidden there rather than deleted, because
+ * the module itself is still what New -> Document builds from.
+ */
+export function showModulesAccordion(
+  assignmentType: { kind?: string | null },
+  moduleCount: number
+): boolean {
+  if (moduleCount === 0) return false;
+  return !isExitTicketAssignmentType(assignmentType);
+}
+
 export default function AppAssignmentTypesIdRoute() {
   const user = useUser();
   const data = useLoaderData<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const hasModules = data.assignmentType.assignmentModules.length > 0;
+  const modulesVisible = showModulesAccordion(
+    data.assignmentType,
+    data.assignmentType.assignmentModules.length
+  );
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
@@ -655,6 +690,7 @@ export default function AppAssignmentTypesIdRoute() {
                 assignmentTypeCollaborationSupported={
                   data.assignmentType.collaborationSupported
                 }
+                assignmentTypeKind={data.assignmentType.kind}
                 teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
@@ -705,9 +741,10 @@ export default function AppAssignmentTypesIdRoute() {
             </p>
           </div>
         </div>
+        {data.showExitTicketDirections ? <ExitTicketDirections /> : null}
         {showPromptsLibrary ? <TeacherDirections /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
-        {hasModules ? (
+        {modulesVisible ? (
           <Accordion type="single" collapsible>
             <AccordionItem value="modules">
               <AccordionTrigger className="py-2 text-base">

@@ -71,6 +71,12 @@ mock.module('~/domain/assignments/saved-assignments.server', () => ({
 }));
 
 const { action } = await import('./route');
+const {
+  BASIC_EXIT_TICKET_PROMPT,
+  EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+  EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+  EXIT_TICKET_ELABORATION_NOTE,
+} = await import('~/domain/assignment-types/exit-ticket');
 
 afterAll(() => {
   mock.restore();
@@ -106,11 +112,13 @@ function responseStatus(response: any) {
 function mockAssignmentTypeAvailable({
   id = 'at-1',
   systemKey = 'generic_essay',
+  kind = null as string | null,
   collaborationSupported = false,
 } = {}) {
   prisma.assignmentType.findFirst.mockResolvedValue({
     id,
     systemKey,
+    kind,
     collaborationSupported,
   });
 }
@@ -193,7 +201,7 @@ describe('api.assignments.create', () => {
         id: 'at-1',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true },
+      select: { id: true, systemKey: true, kind: true },
     });
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -476,7 +484,7 @@ describe('api.assignments.create', () => {
         id: 'at-forbidden',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true },
+      select: { id: true, systemKey: true, kind: true },
     });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
@@ -978,6 +986,152 @@ describe('api.assignments.create', () => {
       expect(body.success).toBe(false);
       expect(body.message).toBe('Group size must be between 2 and 8 students.');
       expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('exit tickets', () => {
+    function mockExitTicketType() {
+      mockAssignmentTypeAvailable({
+        systemKey: null as any,
+        kind: EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+      });
+    }
+
+    test('composes the standard prompt for a basic exit ticket', async () => {
+      mockExitTicketType();
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'basic',
+          title: 'Exit ticket: Tuesday',
+        }),
+        params: {},
+      } as any);
+
+      const body = await readBody(response);
+      expect(body.success).toBe(true);
+
+      const data = createAssignmentDeployedToClasses.mock.calls[0][0].data;
+      expect(data.prompt).toInclude(BASIC_EXIT_TICKET_PROMPT);
+      expect(data.prompt).toInclude(EXIT_TICKET_ELABORATION_NOTE);
+      expect(data.exitTicketConfigJson).toEqual({
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'basic',
+      });
+    });
+
+    test('composes the focused prompt for a specific exit ticket', async () => {
+      mockExitTicketType();
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'specific',
+          exitTicketFocus: 'ask-question',
+          exitTicketAnswerType: 'subjective',
+          exitTicketTopic: 'balancing chemical equations',
+        }),
+        params: {},
+      } as any);
+
+      const body = await readBody(response);
+      expect(body.success).toBe(true);
+
+      const data = createAssignmentDeployedToClasses.mock.calls[0][0].data;
+      expect(data.prompt).toInclude('balancing chemical equations');
+      expect(data.prompt).not.toInclude(BASIC_EXIT_TICKET_PROMPT);
+      expect(data.exitTicketConfigJson).toEqual({
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'specific',
+        focus: 'ask-question',
+        answerType: 'subjective',
+        topic: 'balancing chemical equations',
+      });
+    });
+
+    test('an exit ticket needs no posted prompt', async () => {
+      // Every other type rejects a blank prompt. An exit ticket has no prompt
+      // field at all, so the same request must succeed here.
+      mockExitTicketType();
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'basic',
+        }),
+        params: {},
+      } as any);
+
+      expect((await readBody(response)).success).toBe(true);
+    });
+
+    test('never lets a posted prompt become what students read', async () => {
+      mockExitTicketType();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'basic',
+          prompt: 'Write about whatever you feel like.',
+        }),
+        params: {},
+      } as any);
+
+      const data = createAssignmentDeployedToClasses.mock.calls[0][0].data;
+      expect(data.prompt).not.toInclude('whatever you feel like');
+      expect(data.prompt).toInclude(BASIC_EXIT_TICKET_PROMPT);
+    });
+
+    test('refuses a specific exit ticket with nothing to be specific about', async () => {
+      mockExitTicketType();
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'specific',
+          exitTicketFocus: 'explain-concept',
+        }),
+        params: {},
+      } as any);
+
+      const body = await readBody(response);
+      expect(body.success).toBe(false);
+      expect(responseStatus(response)).toBe(400);
+      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
+
+    test('leaves every other assignment type alone', async () => {
+      // The exit ticket fields are ignored for a type that is not one, and no
+      // config is written, so nothing existing gains a column value.
+      mockAssignmentTypeAvailable();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          prompt: 'Write the essay.',
+          exitTicketMode: 'specific',
+          exitTicketFocus: 'explain-concept',
+          exitTicketTopic: 'mitosis',
+        }),
+        params: {},
+      } as any);
+
+      const data = createAssignmentDeployedToClasses.mock.calls[0][0].data;
+      expect(data.prompt).toBe('Write the essay.');
+      expect(data.exitTicketConfigJson).toBeUndefined();
     });
   });
 });

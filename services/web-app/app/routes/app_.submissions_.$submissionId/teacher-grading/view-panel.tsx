@@ -4,7 +4,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
-import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
+import { formatAssignmentGrade, formatPointGrade } from '~/domain/grading/gradeMath';
 import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
 import { isScored } from '~/domain/grading/rubric-display';
 
@@ -50,27 +50,57 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
 
   const isSubmittedForGrade =
     submission.document?.assignment?.submitForGrade !== false;
-  // A grade exists when this rubric's own scale recorded one. A points scale
-  // records raw points and never a percentage, so asking for a percentage
-  // here showed a fully graded Daily Pages entry as "Not yet graded".
-  const hasGrade = isSubmittedForGrade && hasRecordedGrade(submission);
+  /**
+   * Whether this was read and scored at all. A points scale records raw points
+   * and never a percentage, so asking for a percentage here showed a fully
+   * graded Daily Pages entry as "Not yet graded".
+   *
+   * Deliberately not conditioned on `submitForGrade`. Work that is not for a
+   * grade is still assessed -- an exit ticket read for understanding is the
+   * common case -- and folding the two together hid the feedback and the rubric
+   * along with the grade, leaving the submission looking untouched.
+   */
+  const hasAssessment = hasRecordedGrade(submission);
+  /** Only work submitted for a grade shows one. */
+  const showsGrade = isSubmittedForGrade && hasAssessment;
   const overallGradeDisplay = formatAssignmentGrade({
     submitForGrade: isSubmittedForGrade,
     numericPercentage: submission.numericPercentage,
-    pointValue: submission.document?.assignment?.pointValue ?? (submission.numericPercentage != null ? 100 : null),
+    pointValue:
+      submission.document?.assignment?.pointValue ??
+      (submission.numericPercentage != null ? 100 : null),
     score: submission.score,
   });
+  const pointGrade = !isSubmittedForGrade
+    ? null
+    : formatPointGrade(
+        submission.numericPercentage,
+        submission.document?.assignment?.pointValue ?? null
+      );
+  const percentageDisplay =
+    submission.numericPercentage != null
+      ? `${submission.numericPercentage}%${
+          submission.letterGrade ? ` (${submission.letterGrade})` : ''
+        }`
+      : null;
 
   return (
     <div className="p-4 space-y-4">
-      {hasGrade ? (
+      {hasAssessment ? (
         <>
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Overall Grade
-            </h3>
-            <p className="text-2xl font-semibold">{overallGradeDisplay}</p>
-          </div>
+          {showsGrade ? (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">
+                Overall Grade
+              </h3>
+              <p className="text-2xl font-semibold">{overallGradeDisplay}</p>
+              {pointGrade && percentageDisplay ? (
+                <p className="text-sm text-muted-foreground">
+                  {percentageDisplay}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {submission.overallComment ? (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground">
