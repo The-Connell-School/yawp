@@ -182,17 +182,19 @@ for (const scenario of [
   {
     pointValue: 10,
     selectedScore: 7,
-    labelledOptions: ['0 - NOT HANDED IN', '7 - SHOWED UP', '10 - ALL IN'],
-    absentOptions: ['20 - SHOWED UP', '30 - ALL IN'],
+    selectedLabel: 'SHOWED UP',
+    labelledOptions: ['NOT HANDED IN', 'HARDLY THERE', 'SHOWED UP', 'ALL IN'],
+    absentOptions: [],
   },
   {
     pointValue: 90,
     selectedScore: 60,
-    labelledOptions: ['0 - NOT HANDED IN', '60 - SHOWED UP', '90 - ALL IN'],
-    absentOptions: ['20 - SHOWED UP', '30 - ALL IN'],
+    selectedLabel: 'SHOWED UP',
+    labelledOptions: ['NOT HANDED IN', 'HARDLY THERE', 'SHOWED UP', 'ALL IN'],
+    absentOptions: [],
   },
 ] as const) {
-  test(`fresh pinned Daily Pages uses ${scenario.pointValue}-point bands before any GA snapshot`, async ({ page, e2eContext, signIn }) => {
+  test(`fresh pinned Daily Pages uses ${scenario.pointValue}-point steps before any GA snapshot`, async ({ page, e2eContext, signIn }) => {
     const prisma = createE2EPrismaClient();
     try {
       const { title, submissionId } = await createFreshPinnedDailyPagesSubmission({
@@ -219,7 +221,7 @@ for (const scenario of [
       for (const option of scenario.absentOptions) {
         await expect(page.getByRole('option', { name: option, exact: true })).toHaveCount(0);
       }
-      await page.getByRole('option', { name: new RegExp(`^${scenario.selectedScore} - `) }).click();
+      await page.getByRole('option', { name: scenario.selectedLabel, exact: true }).click();
 
       await expect(
         page.getByText(new RegExp(`\\(${scenario.selectedScore}/${scenario.pointValue}\\)`))
