@@ -38,6 +38,10 @@ import {
   gradingAssistantStrictnessOptions,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
+import {
+  DEFAULT_ASSIGNMENT_GRADING_MODE,
+  type AssignmentGradingMode,
+} from '~/domain/assignments/rubric-overrides';
 import { toDateInputValue } from '~/utils/date-only';
 
 export type AssignmentCreationEntryPoint =
@@ -128,6 +132,8 @@ export type AssignmentCreationSheetProps = {
   initialCollaborationGroupMode?: CollaborationGroupMode;
   initialCollaborationGroupSize?: number | null;
   initialGradingAssistantStrictnessLevel?: GradingAssistantStrictnessLevel;
+  initialRubricTotalPoints?: number | null;
+  initialGradingMode?: AssignmentGradingMode;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -215,6 +221,8 @@ export function AssignmentCreationSheetContent({
   initialCollaborationGroupMode = DEFAULT_COLLABORATION_GROUP_MODE,
   initialCollaborationGroupSize = null,
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  initialRubricTotalPoints = null,
+  initialGradingMode = DEFAULT_ASSIGNMENT_GRADING_MODE,
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -257,6 +265,12 @@ export function AssignmentCreationSheetContent({
     useState<GradingAssistantStrictnessLevel>(
       initialGradingAssistantStrictnessLevel
     );
+  const [rubricTotalPoints, setRubricTotalPoints] = useState(
+    pointValueFieldValue(initialRubricTotalPoints)
+  );
+  const [gradingMode, setGradingMode] = useState<AssignmentGradingMode>(
+    initialGradingMode
+  );
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [extractionTruncated, setExtractionTruncated] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -334,6 +348,8 @@ export function AssignmentCreationSheetContent({
     );
     setSaveForReuse(false);
     setGradingAssistantStrictnessLevel(initialGradingAssistantStrictnessLevel);
+    setRubricTotalPoints(pointValueFieldValue(initialRubricTotalPoints));
+    setGradingMode(initialGradingMode);
     setAttachmentFile(null);
     setRemoveAttachment(false);
     setExtractionTruncated(false);
@@ -353,6 +369,8 @@ export function AssignmentCreationSheetContent({
     initialCollaborationGroupMode,
     initialCollaborationGroupSize,
     initialGradingAssistantStrictnessLevel,
+    initialRubricTotalPoints,
+    initialGradingMode,
     initialPostAt,
     initialDueAt,
     open,
@@ -741,6 +759,76 @@ export function AssignmentCreationSheetContent({
                     required
                   />
                 </div>
+
+                <details className="rounded-md border bg-muted/20 px-3 py-2">
+                  <summary className="cursor-pointer text-sm font-medium">
+                    Rubric grading options
+                  </summary>
+                  <div className="mt-3 space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="assignment-create-rubric-total-points">
+                        Rubric total points{' '}
+                        <span className="text-muted-foreground">(optional)</span>
+                      </Label>
+                      <Input
+                        id="assignment-create-rubric-total-points"
+                        name="rubricTotalPoints"
+                        type="number"
+                        min={1}
+                        max={1000}
+                        step={1}
+                        inputMode="numeric"
+                        value={rubricTotalPoints}
+                        onChange={(event) => setRubricTotalPoints(event.target.value)}
+                        disabled={isSaving}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Leave blank to use the rubric&apos;s built-in total.
+                      </p>
+                    </div>
+
+                    <input type="hidden" name="gradingMode" value={gradingMode} />
+                    <div className="space-y-2">
+                      <Label>Grading mode</Label>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <button
+                          id="assignment-create-grading-mode-step"
+                          type="button"
+                          className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                            gradingMode === 'step'
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-background hover:bg-muted'
+                          }`}
+                          aria-pressed={gradingMode === 'step'}
+                          onClick={() => setGradingMode('step')}
+                          disabled={isSaving}
+                        >
+                          <span className="block font-medium">Step grading</span>
+                          <span className="mt-1 block text-xs opacity-80">
+                            AI chooses only the rubric&apos;s labels.
+                          </span>
+                        </button>
+                        <button
+                          id="assignment-create-grading-mode-bands"
+                          type="button"
+                          className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                            gradingMode === 'bands'
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-background hover:bg-muted'
+                          }`}
+                          aria-pressed={gradingMode === 'bands'}
+                          onClick={() => setGradingMode('bands')}
+                          disabled={isSaving}
+                        >
+                          <span className="block font-medium">Bands grading</span>
+                          <span className="mt-1 block text-xs opacity-80">
+                            Any score within the label ranges is allowed.
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </details>
 
                 <input
                   type="hidden"

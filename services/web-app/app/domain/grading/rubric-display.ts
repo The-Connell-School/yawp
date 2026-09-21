@@ -25,6 +25,8 @@ export type RubricDisplayCategory = {
   bands?: RubricScoreBand[];
   feedbackEnabled?: boolean;
   grammarHighlighting?: boolean;
+  /** Runtime-only allowed values when an assignment uses step grading. */
+  allowedScores?: number[];
 };
 
 export type RubricDisplaySource =
@@ -140,6 +142,12 @@ export function normalizeRubricDisplayConfig(
           const grammarHighlighting = parseOptionalBoolean(
             category.grammarHighlighting
           );
+          const allowedScores = Array.isArray(category.allowedScores)
+            ? category.allowedScores.filter(
+                (score): score is number =>
+                  typeof score === 'number' && Number.isFinite(score)
+              )
+            : undefined;
           return {
             key,
             label,
@@ -151,6 +159,7 @@ export function normalizeRubricDisplayConfig(
             ...(grammarHighlighting === undefined
               ? {}
               : { grammarHighlighting }),
+            ...(allowedScores?.length ? { allowedScores } : {}),
           };
         })
         .filter(
@@ -307,18 +316,23 @@ export function buildScoreOptions(
   maxScore: number,
   scoreLabels?: RubricScoreLabel[],
   step?: number,
-  bands?: RubricScoreBand[]
+  bands?: RubricScoreBand[],
+  allowedScores?: number[]
 ) {
   // Same grid the rubric editor lays its label rows out on, so the teacher is
   // never offered a score the rubric has no label for.
   const categoryBounds = getCategoryScoreBounds({ key: '', bands });
   const optionMin = categoryBounds?.min ?? minScore;
   const optionMax = categoryBounds?.max ?? maxScore;
-  return buildScoreScaleValues({
+  const scaleValues = buildScoreScaleValues({
     minScore: optionMin,
     maxScore: optionMax,
     step,
-  }).map((score) => {
+  });
+  const values = allowedScores?.length
+    ? scaleValues.filter((score) => allowedScores.includes(score))
+    : scaleValues;
+  return values.map((score) => {
     const configured = scoreLabels
       ? getCategoryScoreLabel({ scoreLabels }, score)
       : null;

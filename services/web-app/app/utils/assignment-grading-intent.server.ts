@@ -1,6 +1,36 @@
 export const DEFAULT_ASSIGNMENT_POINT_VALUE = 100;
 export const MAX_ASSIGNMENT_POINT_VALUE = 1000;
 
+import {
+  DEFAULT_ASSIGNMENT_GRADING_MODE,
+  parseAssignmentGradingMode,
+  parseOptionalRubricTotalPoints,
+  rubricOverrideError,
+  type AssignmentGradingMode,
+} from '~/domain/assignments/rubric-overrides';
+
+export type AssignmentRubricOverrides = {
+  rubricTotalPoints: number | null;
+  gradingMode: AssignmentGradingMode;
+};
+
+export function parseAssignmentRubricOverrides(
+  formData: FormData
+): { success: true; data: AssignmentRubricOverrides } | { success: false; message: string } {
+  const total = parseOptionalRubricTotalPoints(formData.get('rubricTotalPoints'));
+  if (total === false) return { success: false, message: rubricOverrideError() };
+
+  const rawMode = formData.get('gradingMode');
+  const gradingMode = rawMode === null
+    ? DEFAULT_ASSIGNMENT_GRADING_MODE
+    : parseAssignmentGradingMode(rawMode.toString().trim());
+  if (!gradingMode) {
+    return { success: false, message: 'Grading mode is invalid.' };
+  }
+
+  return { success: true, data: { rubricTotalPoints: total, gradingMode } };
+}
+
 type AssignmentGradingIntent =
   | {
       success: true;

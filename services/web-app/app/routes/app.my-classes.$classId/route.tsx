@@ -16,7 +16,10 @@ import {
 } from 'react-router';
 import { Link } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
-import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
+import {
+  parseAssignmentGradingIntent,
+  parseAssignmentRubricOverrides,
+} from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 import {
   formatClassLabel,
@@ -473,6 +476,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
+    const rubricOverrides = parseAssignmentRubricOverrides(formData);
+    if (!rubricOverrides.success) {
+      return dataResponse(
+        { success: false, message: rubricOverrides.message },
+        { status: 400 }
+      );
+    }
+    const rubricOverrideData = {
+      ...(formData.has('rubricTotalPoints')
+        ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
+        : {}),
+      ...(formData.has('gradingMode')
+        ? { gradingMode: rubricOverrides.data.gradingMode }
+        : {}),
+    };
 
     const promptAttachment = formData.get('promptAttachment');
     let promptAttachmentData:
@@ -549,6 +567,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             prompt,
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
+            ...rubricOverrideData,
             gradingAssistantStrictnessLevel: gradingAssistantStrictnessLevel!,
             tutorEnabled: tutorEnabledResult.value,
             ...promptAttachmentData,
@@ -583,6 +602,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
           prompt,
           submitForGrade: gradingIntent.data.submitForGrade,
           pointValue: gradingIntent.data.pointValue,
+          ...(formData.has('rubricTotalPoints')
+            ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
+            : {}),
+          ...(formData.has('gradingMode')
+            ? { gradingMode: rubricOverrides.data.gradingMode }
+            : {}),
           // Both controls now live on the edit form as well as the create
           // form. Only write them when the form actually sent them, so an
           // older caller that omits them leaves the stored value alone.

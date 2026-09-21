@@ -24,6 +24,7 @@ import { scaleDailyPagesForAssignment } from '~/domain/assignment-types/daily-pa
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   isGrammarHighlightCategory,
+  isScoreInCategoryAllowedScores,
   isScoreInCategoryBands,
   resolveGrammarHighlightingEnabled,
 } from '~/domain/assignment-types/rubric-category-options';
@@ -108,6 +109,7 @@ function buildAiSchemas({
   maxScore,
   categoryFeedbackEnabled = true,
   teacherNotesEnabled = false,
+  gradingMode,
 }: {
   rubricCategories: GradingRubricCategory[];
   minScore: number;
@@ -119,6 +121,7 @@ function buildAiSchemas({
    */
   categoryFeedbackEnabled?: boolean;
   teacherNotesEnabled?: boolean;
+  gradingMode?: 'step' | 'bands';
 }) {
   const rubricKeys = rubricCategories.map((category) => category.key);
   const categoryByKey = new Map(
@@ -155,7 +158,11 @@ function buildAiSchemas({
         const configuredCategory = categoryByKey.get(category.key);
         if (
           configuredCategory &&
-          !isScoreInCategoryBands(configuredCategory, category.score)
+          (
+            !isScoreInCategoryBands(configuredCategory, category.score) ||
+            (gradingMode === 'step' &&
+              !isScoreInCategoryAllowedScores(configuredCategory, category.score))
+          )
         ) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -792,6 +799,7 @@ export async function action({ request }: ActionFunctionArgs) {
     maxScore,
     studentFirstName,
     teacherNotesEnabled,
+    gradingMode: resolvedGradingConfig.gradingMode,
   });
   const categoryFeedbackEnabled = promptShape.categoryFeedbackEnabled;
   const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
@@ -800,6 +808,7 @@ export async function action({ request }: ActionFunctionArgs) {
     maxScore,
     categoryFeedbackEnabled,
     teacherNotesEnabled,
+    gradingMode: resolvedGradingConfig.gradingMode,
   });
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';

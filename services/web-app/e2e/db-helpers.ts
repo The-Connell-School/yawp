@@ -17,6 +17,8 @@ export async function createDeployedAssignment(params: {
   prompt: string;
   submitForGrade?: boolean;
   pointValue?: number | null;
+  rubricTotalPoints?: number | null;
+  gradingMode?: 'step' | 'bands';
 }) {
   const assignment = await params.prisma.assignment.create({
     data: {
@@ -28,6 +30,12 @@ export async function createDeployedAssignment(params: {
         : {}),
       ...(params.pointValue !== undefined
         ? { pointValue: params.pointValue }
+        : {}),
+      ...(params.rubricTotalPoints !== undefined
+        ? { rubricTotalPoints: params.rubricTotalPoints }
+        : {}),
+      ...(params.gradingMode !== undefined
+        ? { gradingMode: params.gradingMode }
         : {}),
     },
   });

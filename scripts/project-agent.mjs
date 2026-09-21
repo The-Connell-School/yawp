@@ -433,7 +433,7 @@ function runTestProfile(profile, { json }) {
     results.push({id: chosen, ...execute(selected.bun, ["run", "e2e/private-notes.browser.ts"], {json, cwd: webAppRoot, timeout: 240000,
       env: {...selected.env, DATABASE_URL: local.DATABASE_URL, DEV_PORT: local.DEV_PORT}})});
   }
-  else if (chosen === "assignment-rubric-unit") runWebApp("assignment-rubric-unit", ["test", "app/routes/app.admin.assignment-types.new/route.test.ts", "app/routes/app.admin.assignment-types.$id/route.test.ts", "app/domain/assignment-types/assignment-type-grading-config.server.test.ts", "app/domain/rubrics/rubric-library.server.test.ts"]);
+  else if (chosen === "assignment-rubric-unit") runWebApp("assignment-rubric-unit", ["test", "app/routes/app.admin.assignment-types.new/route.test.ts", "app/routes/app.admin.assignment-types.$id/route.test.ts", "app/domain/assignment-types/assignment-type-grading-config.server.test.ts", "app/domain/rubrics/rubric-library.server.test.ts", "app/components/assignments/assignment-creation-sheet.test.tsx"]);
   else if (chosen === "assignment-prompt-unit") {
     runWebApp("prompt-library", ["test", "app/routes/app.admin.assignment-types.$id_.prompt/route.test.ts"]);
     runWebApp("evaluation-library", ["test", "app/routes/api.domain.assignment-type-evaluations/route.test.ts"]);

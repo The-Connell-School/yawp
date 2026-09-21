@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import { parseAssignmentGradingIntent } from './assignment-grading-intent.server';
+import {
+  parseAssignmentGradingIntent,
+  parseAssignmentRubricOverrides,
+} from './assignment-grading-intent.server';
 
 function formFor(entries: Record<string, string | string[]>) {
   const form = new FormData();
@@ -58,5 +61,38 @@ describe('parseAssignmentGradingIntent', () => {
             : 'Point value must be a positive whole number no greater than 1000.',
       });
     }
+  });
+});
+
+describe('parseAssignmentRubricOverrides', () => {
+  test('defaults legacy forms to the backward-compatible step mode', () => {
+    expect(parseAssignmentRubricOverrides(formFor({}))).toEqual({
+      success: true,
+      data: { rubricTotalPoints: null, gradingMode: 'step' },
+    });
+  });
+
+  test('parses a custom total and bands mode', () => {
+    expect(
+      parseAssignmentRubricOverrides(
+        formFor({ rubricTotalPoints: '50', gradingMode: 'bands' })
+      )
+    ).toEqual({
+      success: true,
+      data: { rubricTotalPoints: 50, gradingMode: 'bands' },
+    });
+  });
+
+  test('rejects invalid totals and modes', () => {
+    expect(
+      parseAssignmentRubricOverrides(
+        formFor({ rubricTotalPoints: '12.5', gradingMode: 'step' })
+      )
+    ).toMatchObject({ success: false });
+    expect(
+      parseAssignmentRubricOverrides(
+        formFor({ rubricTotalPoints: '50', gradingMode: 'range' })
+      )
+    ).toEqual({ success: false, message: 'Grading mode is invalid.' });
   });
 });

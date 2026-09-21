@@ -40,3 +40,15 @@ September17 follow-up: Bryant explicitly approved removing the grading queue nav
 This declaration does not grant production-QA tenant attestation, Internal proof exception, live rubric activation, customer-data access or permission to send invitations. All unrelated unresolved approval gates remain binding.
 
 Released-grade activity browser checks likewise assert exact earned/possible totals for teacher and student displays on the seeded 100-point assignment. Raw numericPercentage database/audit assertions, comment confidentiality, and stale-revision protection remain unchanged.
+
+## Assignment rubric grading modes
+
+The approved default for assignment-level rubric grading is `step`, preserving
+backward-compatible behavior. A step-mode rubric exposes only its authored
+anchor scores, even when the assignment total is scaled (for example, 7/10 or
+60/90 for the revised Daily Pages rubric). `bands` is an explicit assignment
+override that permits scores within each rubric band.
+
+The end-to-end grading proof also covers the existing “submit for grade” flow:
+an assignment worth 100 points can use a 50-point AI rubric override, persist
+the AI result as `50/50`, and display the projected assignment grade as `100`.
