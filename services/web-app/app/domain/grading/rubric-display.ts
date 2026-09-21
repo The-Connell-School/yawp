@@ -1,5 +1,6 @@
 import { rubricCategories } from './rubric';
 import {
+  getCategoryScoreBand,
   getCategoryScoreLabel,
   parseOptionalBoolean,
   parseRubricScoreBands,
@@ -321,12 +322,19 @@ export function buildScoreOptions(
     const configured = scoreLabels
       ? getCategoryScoreLabel({ scoreLabels }, score)
       : null;
+    const bandLabel = bands
+      ? getCategoryScoreBand({ bands }, score)?.label ?? null
+      : null;
     const suffix =
       configured ??
+      bandLabel ??
       (optionMax === 5 && optionMin === 1 ? legacyScoreLabels[score] : null);
     return {
       value: score.toString(),
-      label: suffix ? `${score} - ${suffix}` : score.toString(),
+      // The numeric value is still the stored score and is shown separately
+      // in grade summaries. The picker should show the teacher's configured
+      // band/category label without a misleading numeric engagement prefix.
+      label: suffix ?? score.toString(),
     };
   });
 }

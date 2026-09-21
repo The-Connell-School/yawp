@@ -131,6 +131,20 @@ describe('buildGradingPromptShape for the Daily Pages rubric', () => {
   test('scores on the configured 0-3 range', () => {
     expect(shape.systemPrompt).toContain('integers 0-3');
   });
+
+  test('keeps teacher observations conservative and private when enabled', () => {
+    const teacherShape = buildGradingPromptShape({
+      categories: DAILY_PAGES_RUBRIC.categories,
+      minScore: 0,
+      maxScore: 3,
+      studentFirstName: 'Jordan',
+      teacherNotesEnabled: true,
+    });
+    expect(teacherShape.systemPrompt).toContain('internal inconsistencies');
+    expect(teacherShape.systemPrompt).toContain('Return null when no clear');
+    expect(teacherShape.systemPrompt).toContain('Do not claim or suggest that AI');
+    expect(teacherShape.systemPrompt).toContain('private to the teacher');
+  });
 });
 
 describe('buildGradingPromptShape for a rubric that customizes nothing', () => {

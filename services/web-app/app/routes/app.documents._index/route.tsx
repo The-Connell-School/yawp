@@ -248,6 +248,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
       _count: { select: { submissions: true } },
+      pasteAlerts: {
+        where: { textLength: { gte: 200 } },
+        orderBy: [{ createdAt: 'desc' }],
+        take: 1,
+        select: { id: true },
+      },
     },
     orderBy: { updatedAt: 'desc' },
     take: 250,
@@ -283,6 +289,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       submissions,
       latestSubmission: submissions[0] ?? null,
       submissionCount: document._count.submissions,
+      hasPasteActivity: Boolean(document.pasteAlerts?.length),
     };
   });
 

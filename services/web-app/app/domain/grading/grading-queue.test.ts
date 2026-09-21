@@ -1,11 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import {
   GRADING_QUEUE_SORT_PARAM,
+  buildDocumentNavigationHref,
+  buildDocumentNavigationQueue,
   buildGradingQueue,
   buildGradingQueueHref,
   parseGradingQueueScope,
   parseGradingQueueSort,
   resolveGradingQueueNeighbors,
+  resolveDocumentNavigationNeighbors,
   serializeGradingQueueSort,
 } from './grading-queue';
 import type { TeacherDocumentWorkRow } from '~/utils/teacher-document-work-utils';
@@ -372,6 +375,79 @@ describe('resolveGradingQueueNeighbors', () => {
     expect(
       resolveGradingQueueNeighbors({ queue, submissionId: 'sub-elsewhere' })
     ).toBeNull();
+  });
+});
+
+describe('Documents navigation', () => {
+  test('includes drafts and submitted documents in the Documents-page order', () => {
+    const queue = buildDocumentNavigationQueue({
+      documents: [
+        doc({ id: 'draft', studentName: 'Ana Reyes', submissionId: null }),
+        doc({ id: 'submitted', studentName: 'Ben Cole' }),
+        doc({
+          id: 'released',
+          studentName: 'Cara Diaz',
+          releasedAt: '2026-08-03T00:00:00Z',
+        }),
+      ],
+      scope: parseGradingQueueScope('/app/documents')!,
+    });
+
+    expect(queue.map((entry) => entry.documentId)).toEqual([
+      'draft',
+      'released',
+      'submitted',
+    ]);
+    expect(queue[0].submissionId).toBeNull();
+  });
+
+  test('respects the Documents status filter while pinning the open document', () => {
+    const queue = buildDocumentNavigationQueue({
+      documents: [
+        doc({ id: 'draft', studentName: 'Ana Reyes', submissionId: null }),
+        doc({ id: 'submitted', studentName: 'Ben Cole' }),
+        doc({
+          id: 'released',
+          studentName: 'Cara Diaz',
+          releasedAt: '2026-08-03T00:00:00Z',
+        }),
+      ],
+      scope: parseGradingQueueScope('/app/documents?status=needs-grading')!,
+      pinnedDocumentId: 'released',
+    });
+
+    expect(queue.map((entry) => entry.documentId)).toEqual([
+      'released',
+      'submitted',
+    ]);
+  });
+
+  test('resolves neighbours by document id and routes drafts to the document page', () => {
+    const queue = buildDocumentNavigationQueue({
+      documents: [
+        doc({ id: 'draft', studentName: 'Ana Reyes', submissionId: null }),
+        doc({ id: 'submitted', studentName: 'Ben Cole' }),
+      ],
+      scope: parseGradingQueueScope('/app/documents')!,
+    });
+    const neighbors = resolveDocumentNavigationNeighbors({
+      queue,
+      documentId: 'draft',
+    });
+    expect(neighbors?.next?.documentId).toBe('submitted');
+    expect(
+      buildDocumentNavigationHref({
+        entry: queue[0],
+        exitTo: '/app/documents?status=all',
+        sort: { field: 'student', direction: 'asc' },
+      })
+    ).toContain('/app/documents/draft?left=tutor&exitTo=');
+    expect(
+      buildDocumentNavigationHref({
+        entry: queue[1],
+        exitTo: '/app/documents',
+      })
+    ).toContain('/app/submissions/sub-submitted?edit=1&exitTo=');
   });
 });
 

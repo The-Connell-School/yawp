@@ -8,6 +8,7 @@ import {
   ArrowUp,
   ArrowDown,
   Users,
+  TriangleAlert,
 } from 'lucide-react';
 import { Pagination } from '~/components/table/pagination';
 import { Badge } from '~/components/ui/badge';
@@ -528,9 +529,25 @@ export function TeacherDocumentWorkPanel({
                   className="size-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
                   aria-hidden="true"
                 />
+                {document.hasPasteActivity ? (
+                  <TriangleAlert
+                    className="size-3.5 shrink-0 text-red-600"
+                    aria-label="Copy/paste activity recorded"
+                    data-testid="document-paste-indicator"
+                  />
+                ) : null}
               </span>
             ) : (
-              displayTitle
+              <span className="inline-flex items-center gap-1.5">
+                {displayTitle}
+                {document.hasPasteActivity ? (
+                  <TriangleAlert
+                    className="size-3.5 shrink-0 text-red-600"
+                    aria-label="Copy/paste activity recorded"
+                    data-testid="document-paste-indicator"
+                  />
+                ) : null}
+              </span>
             )}
           </TableCell>
           {showClassColumn ? (

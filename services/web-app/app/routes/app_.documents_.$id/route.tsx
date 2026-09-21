@@ -95,6 +95,14 @@ import {
 import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
 import { AssignmentPromptPanel } from './assignment-prompt-panel';
 import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
+import { TeacherDocumentNavigation } from '~/components/teacher-document-navigation';
+import {
+  buildDocumentNavigationHref,
+  GRADING_QUEUE_SORT_PARAM,
+  parseGradingQueueScope,
+  parseGradingQueueSort,
+} from '~/domain/grading/grading-queue';
+import { loadDocumentNavigationNeighbors } from '~/domain/grading/grading-queue.server';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -351,6 +359,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const submissions = doc.submissions;
   const isOwner = ownerMembership.id === profile.id;
+  const navigationScope =
+    !isOwner && profile.role === 'TEACHER'
+      ? parseGradingQueueScope(
+          sanitizeExitTarget(url.searchParams.get('exitTo'))
+        ) ?? parseGradingQueueScope('/app/documents')
+      : null;
+  const documentNavigation = navigationScope && profile.organization?.id
+    ? await loadDocumentNavigationNeighbors({
+        request,
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        userId,
+        documentId: doc.id,
+        scope: navigationScope,
+        sort: parseGradingQueueSort(url.searchParams.get(GRADING_QUEUE_SORT_PARAM)),
+      })
+    : null;
   const wantsDraftEditor =
     url.searchParams.get('revise') === '1' ||
     url.searchParams.get('spa') === '1';
@@ -486,6 +511,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       isOwner &&
       profile.role === 'STUDENT' &&
       !hasEffectivePlatformAdmin(user?.isAdmin),
+    documentNavigation,
   });
 }
 
@@ -995,6 +1021,22 @@ export default function Route() {
             >
               {studentName}
             </p>
+          ) : null}
+          {isViewingAsTeacher && data.documentNavigation ? (
+            <TeacherDocumentNavigation
+              queue={data.documentNavigation}
+              documentId={data.doc.id}
+              hrefFor={(entry) =>
+                buildDocumentNavigationHref({
+                  entry,
+                  exitTo: explicitExitTarget,
+                  sort: parseGradingQueueSort(
+                    searchParams.get(GRADING_QUEUE_SORT_PARAM)
+                  ),
+                })
+              }
+              disabled={false}
+            />
           ) : null}
           <div className="ml-auto flex items-center gap-4">
             {!isViewingAsTeacher && (
