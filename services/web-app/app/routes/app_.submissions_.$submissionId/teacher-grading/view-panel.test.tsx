@@ -15,6 +15,9 @@ import { createRoot, type Root } from 'react-dom/client';
 import type { ViewPanelSubmission } from './view-panel';
 
 const { ViewPanel } = await import('./view-panel');
+const { EXIT_TICKET_SCORE_BANDS } = await import(
+  '~/domain/assignment-types/exit-ticket-rubric'
+);
 
 let root: Root | null = null;
 
@@ -56,7 +59,17 @@ const feedbackOnlySubmission = {
   score: '82% (B)',
   overallComment: 'Ana, this is exactly the kind of answer that helps me teach.',
   rubricScores: { understanding: { score: 82, comment: '' } },
-  rubricConfig: { minScore: 0, maxScore: 100 },
+  rubricConfig: {
+    minScore: 0,
+    maxScore: 100,
+    categories: [
+      {
+        key: 'understanding',
+        label: 'Understanding',
+        bands: EXIT_TICKET_SCORE_BANDS,
+      },
+    ],
+  },
   document: { assignment: { submitForGrade: false, pointValue: null } },
 };
 
@@ -71,7 +84,9 @@ describe('ViewPanel on work that is not for a grade', () => {
     expect(text()).toContain('exactly the kind of answer that helps me teach');
     expect(text()).toContain('Rubric');
     expect(text()).toContain('Understanding');
-    expect(text()).toContain('82/100');
+    // The band, never the score: 82 is the number the teacher withheld.
+    expect(text()).toContain('Explains it');
+    expect(text()).not.toContain('82/100');
   });
 
   it('withholds the overall grade, which is the whole point of the choice', () => {
@@ -161,10 +176,6 @@ describe('ViewPanel on work that is not for a grade', () => {
     expect(text()).toContain('4/5');
   });
 });
-
-const { EXIT_TICKET_SCORE_BANDS } = await import(
-  '~/domain/assignment-types/exit-ticket-rubric'
-);
 
 /** An exit ticket as it really arrives: one banded category, no category comment. */
 const bandedExitTicket: ViewPanelSubmission = {
@@ -265,5 +276,83 @@ describe('ViewPanel where the rubric scores one banded category', () => {
 
     expect(text()).not.toContain('Partly there');
     expect(text()).toContain('12 / 15');
+  });
+});
+
+describe('ViewPanel where the grade is withheld', () => {
+  const withheld = {
+    ...bandedExitTicket,
+    document: { assignment: { submitForGrade: false, pointValue: null } },
+  };
+
+  it('names the band in the rubric row instead of the score', () => {
+    render(<ViewPanel submission={withheld} />);
+
+    expect(text()).toContain('Rubric');
+    expect(text()).toContain('Understanding');
+    expect(text()).toContain('Partly there');
+    expect(text()).not.toContain('79/100');
+    expect(text()).not.toContain('Overall Grade');
+  });
+
+  it('opens that row on what the band means', () => {
+    // The whole complaint about the old row was a chevron onto nothing. This
+    // one has something to say, so it starts said.
+    render(<ViewPanel submission={withheld} />);
+
+    expect(text()).toContain('The right idea in their own words');
+  });
+
+  it('never prints the score for a rubric with no bands', () => {
+    // The leak this replaces: no band to name, so the row fell back to the
+    // raw score -- the exact number feedback-only exists to withhold.
+    render(
+      <ViewPanel
+        submission={{
+          ...withheld,
+          rubricConfig: { minScore: 0, maxScore: 100 },
+          rubricScores: {
+            understanding: { score: 79, comment: 'Cite the line next time.' },
+          },
+        }}
+      />
+    );
+
+    expect(text()).not.toContain('79/100');
+    expect(text()).toContain('Understanding');
+  });
+
+  it('drops a row with nothing left to say', () => {
+    // No band, no comment, and the score withheld: an empty row under an
+    // empty heading.
+    render(
+      <ViewPanel
+        submission={{
+          ...withheld,
+          rubricConfig: { minScore: 0, maxScore: 100 },
+        }}
+      />
+    );
+
+    expect(text()).not.toContain('Rubric');
+    expect(text()).toContain('Overall Feedback');
+  });
+
+  it('still shows the score when the work is for a grade', () => {
+    // The withholding is what removes the number, not the band feature.
+    render(
+      <ViewPanel
+        submission={{
+          ...bandedExitTicket,
+          rubricScores: {
+            thesis_and_content: { score: 4, comment: '' },
+            organization: { score: 3, comment: '' },
+          },
+          rubricConfig: { minScore: 1, maxScore: 5 },
+        }}
+      />
+    );
+
+    expect(text()).toContain('4/5');
   });
 });

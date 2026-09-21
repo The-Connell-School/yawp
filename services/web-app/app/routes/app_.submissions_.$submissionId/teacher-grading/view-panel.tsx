@@ -57,7 +57,18 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
         typeof val === 'object' && val !== null
           ? (val as { comment?: string }).comment
           : undefined;
-      return { key, score, comment };
+      const band =
+        score != null
+          ? getCategoryScoreBand(
+              {
+                bands: submission.rubricConfig?.categories?.find(
+                  (category) => category.key === key
+                )?.bands,
+              },
+              score
+            )
+          : null;
+      return { key, score, comment, band };
     })
     // A category nobody scored has nothing to report to the student.
     .filter((entry) => isScored(entry.score, minScore));
@@ -100,17 +111,7 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
    * threw the judgement away.
    */
   const soleEntry = rubricEntries.length === 1 ? rubricEntries[0] : null;
-  const soleBand =
-    soleEntry && soleEntry.score != null
-      ? getCategoryScoreBand(
-          {
-            bands: submission.rubricConfig?.categories?.find(
-              (category) => category.key === soleEntry.key
-            )?.bands,
-          },
-          soleEntry.score
-        )
-      : null;
+  const soleBand = soleEntry?.band ?? null;
   /**
    * With one category at weight 1 the category score IS the overall score, so
    * a row carrying no comment of its own can only restate the grade -- and its
@@ -119,7 +120,19 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
    * because then it is the only sign the work was read at all.
    */
   const rubricRestatesTheGrade =
-    soleEntry != null && !soleEntry.comment?.trim() && soleBand != null;
+    showsGrade &&
+    soleEntry != null &&
+    !soleEntry.comment?.trim() &&
+    soleBand != null;
+  /**
+   * A row may never print the score when the grade is withheld -- that number
+   * is precisely what feedback-only exists to hold back, and printing it one
+   * section below the grade it replaced handed it straight back. The band says
+   * what the response was read as without saying what it scored.
+   */
+  const visibleEntries = rubricEntries.filter(
+    (entry) => entry.band != null || showsGrade || entry.comment?.trim()
+  );
 
   const percentageDisplay =
     submission.numericPercentage != null
@@ -157,27 +170,6 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
           ) : null}
             </div>
           ) : null}
-          {/* Work assessed but not for a grade still reports what it was read
-              as -- the band is the only assessment signal it has. */}
-          {!showsGrade && soleBand ? (
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">
-                Assessed
-              </h3>
-          {soleBand ? (
-            <div className="mt-1">
-              <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/[0.06] px-2.5 py-0.5 text-xs font-medium text-foreground/80">
-                {soleBand.label}
-              </span>
-              {soleBand.description ? (
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  {soleBand.description}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-            </div>
-          ) : null}
           {submission.overallComment ? (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground">
@@ -188,13 +180,21 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
               </p>
             </div>
           ) : null}
-          {rubricEntries.length > 0 && !rubricRestatesTheGrade ? (
+          {visibleEntries.length > 0 && !rubricRestatesTheGrade ? (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground">
                 Rubric
               </h3>
-              <Accordion type="multiple" className="mt-2">
-                {rubricEntries.map(({ key, score, comment }) => (
+              <Accordion
+                type="multiple"
+                className="mt-2"
+                defaultValue={
+                  visibleEntries.length === 1 && visibleEntries[0]!.band
+                    ? [visibleEntries[0]!.key]
+                    : []
+                }
+              >
+                {visibleEntries.map(({ key, score, comment, band }) => (
                   <AccordionItem
                     key={key}
                     value={key}
@@ -207,8 +207,14 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
                             .replace(/_/g, ' ')
                             .replace(/\b\w/g, (c) => c.toUpperCase())}
                         </span>
+                        {/* The score only ever appears when the grade is
+                            not being withheld. */}
                         <span className="text-muted-foreground">
-                          {score}/{maxScore}
+                          {band
+                            ? band.label
+                            : showsGrade
+                              ? `${score}/${maxScore}`
+                              : null}
                         </span>
                       </div>
                     </AccordionTrigger>
@@ -216,6 +222,10 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
                       {comment ? (
                         <p className="text-xs text-muted-foreground whitespace-pre-wrap">
                           {comment}
+                        </p>
+                      ) : band?.description ? (
+                        <p className="text-xs text-muted-foreground">
+                          {band.description}
                         </p>
                       ) : (
                         <p className="text-xs text-muted-foreground italic">
