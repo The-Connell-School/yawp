@@ -25,8 +25,13 @@ import {
   TELL_US_BLANK_IS_A_CHOICE,
   TELL_US_HEADING,
   TELL_US_INTRO,
+  TUTOR_BEHAVIOUR,
+  TUTOR_BEHAVIOUR_LEAD,
   TUTOR_HEADING,
   TUTOR_NOTE,
+  TUTOR_TRADE,
+  TUTOR_WHY_ON,
+  TUTOR_WHY_ON_LEAD,
   TWO_WAYS,
   TWO_WAYS_HEADING,
   TWO_WAYS_INTRO,
@@ -165,6 +170,21 @@ export function AboutExitTicket() {
 
         <AboutSection value="tutor" heading={TUTOR_HEADING}>
           <p className="text-sm text-muted-foreground">{TUTOR_NOTE}</p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground/80">
+              {TUTOR_WHY_ON_LEAD}
+            </span>{' '}
+            {TUTOR_WHY_ON}
+          </p>
+          <p className="mb-2 mt-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {TUTOR_BEHAVIOUR_LEAD}
+          </p>
+          <ul className="list-disc space-y-1.5 pl-5 text-sm text-foreground/80">
+            {TUTOR_BEHAVIOUR.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          <p className="mt-3 text-sm text-muted-foreground">{TUTOR_TRADE}</p>
         </AboutSection>
       </Accordion>
     </section>

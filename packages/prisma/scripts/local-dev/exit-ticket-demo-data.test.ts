@@ -6,6 +6,7 @@ import {
   parseStoredExitTicketConfig,
 } from '../../../../services/web-app/app/domain/assignment-types/exit-ticket.ts';
 import { EXIT_TICKET_SCORE_BANDS } from '../../../../services/web-app/app/domain/assignment-types/exit-ticket-rubric.ts';
+import { LOCAL_DEV_PERSONAS } from './dev-personas.ts';
 import {
   EXIT_TICKET_DEMO_TICKETS,
   type DemoExitTicket,
@@ -170,5 +171,27 @@ describe('exit ticket demo data', () => {
     // Distinct titles, so the preview list is readable.
     const titles = new Set(EXIT_TICKET_DEMO_TICKETS.map((t) => t.title));
     expect(titles.size).toBe(EXIT_TICKET_DEMO_TICKETS.length);
+  });
+
+  test('addresses each student by the name the seed actually gives them', () => {
+    // The comments are written to a named student, and the seed attaches them
+    // to whichever persona the response names. Invent a name here and a
+    // teacher clicking through the preview reads a comment addressed to
+    // somebody who is not in the class.
+    const firstNameOf = new Map(
+      LOCAL_DEV_PERSONAS.map((persona) => [
+        persona.key,
+        persona.name.split(' ')[0]!,
+      ])
+    );
+
+    for (const ticket of EXIT_TICKET_DEMO_TICKETS) {
+      for (const response of ticket.responses) {
+        if (response.state !== 'graded') continue;
+        const expected = firstNameOf.get(response.personaKey);
+        expect(expected).toBeTruthy();
+        expect(response.overallComment).toStartWith(`${expected}, `);
+      }
+    }
   });
 });

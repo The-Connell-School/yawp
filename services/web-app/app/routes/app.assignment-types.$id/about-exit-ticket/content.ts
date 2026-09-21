@@ -101,7 +101,24 @@ export const WHAT_MAKES_A_GOOD_ONE: { title: string; detail: string }[] = [
   },
 ];
 
-export const TUTOR_HEADING = 'Why the tutor starts off';
+export const TUTOR_HEADING = 'Why the tutor starts off, and when to turn it on';
 
 export const TUTOR_NOTE =
-  'The tutor is switched off by default here. An exit ticket is asking what a student understands on their own, and a tutor in the document would answer the question for them. Turn it on if you want it.';
+  'The tutor is switched off by default here. An exit ticket is asking what a student understands on their own, and a tutor in the document would answer the question for them. Every other assignment type starts with it on; this one does not.';
+
+export const TUTOR_WHY_ON_LEAD = 'There are lessons where you should turn it on.';
+
+export const TUTOR_WHY_ON =
+  'A blank box and four minutes gets you a sentence and a full stop from students who would have told you plenty if anybody had asked them one more question. That is not them having nothing to say — it is them not knowing that “say more” was an option. Turn the tutor on when the thing you are worried about is silence rather than help: a class that is new to writing for a check, a group that habitually hands in six words, or a ticket asking students to explain reasoning they can do out loud but have never had to put on a page.';
+
+export const TUTOR_BEHAVIOUR_LEAD = 'What it does when it is on:';
+
+export const TUTOR_BEHAVIOUR: string[] = [
+  'Asks rather than answers. It will not give the explanation the ticket is checking for, and it will not write a sentence for a student to keep.',
+  'Pulls for elaboration. “You said the light means hope — what in the chapter made you think so?” is the move, and it is the one most students never make on their own.',
+  'Nudges toward the part they skipped. If a response names a thing without explaining it, the tutor asks about the explanation rather than accepting the name.',
+  'Stops when the student is going. It is there to get them off the blank page, not to accompany every sentence.',
+];
+
+export const TUTOR_TRADE =
+  'The honest trade: what comes back is what the student could reach when prompted, not what they could reach alone, and the score means that too. On a ticket where the point is to find out who has it unaided — a check before a test, a read on what actually landed today — leave it off. On a ticket where the point is to get thinking onto the page at all, the prompted answer is worth far more than the silence it replaces.';

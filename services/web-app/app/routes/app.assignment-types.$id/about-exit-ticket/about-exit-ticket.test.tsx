@@ -27,8 +27,12 @@ const {
   TELL_US_BLANK_IS_A_CHOICE,
   TELL_US_HEADING,
   TELL_US_INTRO,
+  TUTOR_BEHAVIOUR,
   TUTOR_HEADING,
   TUTOR_NOTE,
+  TUTOR_TRADE,
+  TUTOR_WHY_ON,
+  TUTOR_WHY_ON_LEAD,
   TWO_WAYS,
   TWO_WAYS_HEADING,
   TWO_WAYS_INTRO,
@@ -254,5 +258,27 @@ describe('the exit ticket about section', () => {
     const body = openSection(TUTOR_HEADING);
 
     expect(body.textContent).toContain(TUTOR_NOTE);
+  });
+
+  it('says when a teacher should turn the tutor on', () => {
+    // Off-by-default on its own reads as "do not use this". The case for
+    // switching it on is the part a teacher cannot work out from the toggle.
+    renderAbout();
+    const body = openSection(TUTOR_HEADING);
+
+    expect(body.textContent).toContain(TUTOR_WHY_ON_LEAD);
+    expect(body.textContent).toContain(TUTOR_WHY_ON);
+  });
+
+  it('says what the tutor actually does once it is on', () => {
+    renderAbout();
+    const body = openSection(TUTOR_HEADING);
+
+    for (const item of TUTOR_BEHAVIOUR) {
+      expect(body.textContent).toContain(item);
+    }
+    // The one line that keeps the toggle honest: a prompted answer is not an
+    // unaided one, and the score carries that.
+    expect(body.textContent).toContain(TUTOR_TRADE);
   });
 });
