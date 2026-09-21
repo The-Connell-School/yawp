@@ -39,7 +39,7 @@ export type ExitTicketMode = (typeof EXIT_TICKET_MODES)[number];
 export const DEFAULT_EXIT_TICKET_MODE: ExitTicketMode = 'basic';
 
 /**
- * Long enough for "the difference between weathering and erosion", short
+ * Long enough for "the difference between a theme and a topic", short
  * enough that the field cannot quietly become a second prompt box — the
  * composed sentence has to stay readable to a student.
  */
@@ -95,20 +95,20 @@ export const EXIT_TICKET_LESSON_NOTE_FIELDS: ExitTicketLessonNoteField[] = [
     label: 'Main points of the lesson',
     helperText: 'What today was actually about, in a sentence or two.',
     placeholder:
-      'e.g., Weathering breaks rock down in place; erosion carries the pieces away. Both are driven by water, wind, and ice.',
+      'e.g., A topic is what a book is about in a word \u2014 loneliness. A theme is what the book says about it: that loneliness makes people careless with each other.',
   },
   {
     key: 'mustMention',
     label: 'What they absolutely should mention',
     helperText:
       'The one thing a response cannot leave out and still show understanding.',
-    placeholder: 'e.g., The difference is whether the material moves.',
+    placeholder: 'e.g., That a theme has to make a claim, not just name a subject.',
   },
   {
     key: 'watchFor',
     label: 'Mix-ups to watch for',
     helperText: 'The wrong turn students usually take with this.',
-    placeholder: 'e.g., Using “weathering” and “erosion” interchangeably.',
+    placeholder: 'e.g., Using “theme” and “topic” interchangeably.',
   },
 ];
 
@@ -238,7 +238,7 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
     label: 'Explain a concept',
     helperText:
       'Can they put the idea in their own words instead of repeating yours?',
-    topicPlaceholder: 'e.g., the causes of World War I',
+    topicPlaceholder: 'e.g., how to work a quotation into your own sentence',
     template:
       'In your own words, explain {topic}. Write it the way you would explain it to someone who missed class today — not the definition you were given, but what you actually understand it to mean.',
     gradingCriteria:
@@ -249,7 +249,7 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
     label: 'Ask a question',
     helperText:
       'What do they still want to know? A good question shows what they already have.',
-    topicPlaceholder: 'e.g., photosynthesis',
+    topicPlaceholder: 'e.g., semicolons',
     template:
       'What is one question you still have about {topic}? Ask the real one — the thing you would actually want answered — and say what you have already worked out that led you to it.',
     gradingCriteria:

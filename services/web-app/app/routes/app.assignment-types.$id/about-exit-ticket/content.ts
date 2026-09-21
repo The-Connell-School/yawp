@@ -87,7 +87,7 @@ export const WHAT_MAKES_A_GOOD_ONE: { title: string; detail: string }[] = [
   {
     title: 'Ask them to explain, not to recall',
     detail:
-      '“Define photosynthesis” tells you who remembered a sentence. “Explain how the plant gets what it needs” tells you who understood.',
+      '“Define dramatic irony” tells you who remembered a sentence. “Explain why the porter scene is funnier if you know what is upstairs” tells you who understood.',
   },
   {
     title: 'Make honesty worth it',
