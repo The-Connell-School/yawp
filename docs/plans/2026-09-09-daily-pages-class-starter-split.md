@@ -190,6 +190,65 @@ curve.
    a type that configured its own rubric is untouched by the default, which is
    what leaves production's 0–30 engagement row alone.
 
+## Open questions: what the rubric does not say
+
+These are conventions the rubric never states, which means the assistant is
+already deciding them — differently from entry to entry, and by importing what
+it associates with school essays. The sentence doing the deciding is the first
+line of the grading instructions:
+
+> Grade it the way you would grade an essay, scaled to its length.
+
+Nothing qualifies it, and Voice/Style only asks for "a tone that suits the
+assignment" without ever saying what suits this one. So the questions below are
+not hypothetical; they are being answered now, just not by us.
+
+**1. Is first person allowed?** Unstated, so it varies — and "grade it like an
+essay" pulls toward the schoolroom rule against it. Worth settling explicitly,
+because the top Depth band asks for "a position whose cost the student can
+see", which is hard to write without *I*.
+
+**2. Do complete sentences matter, and whose sentence rules apply?** Today: yes,
+essay rules. Grammar/Mechanics (15%) grades "sentence construction … and
+formatting", and the markup comes from one Grammar/Usage Checker prompt shared
+by every assignment type — it does not know this is a ten-minute piece. A
+deliberate fragment ("Not always. Only when it costs something.") is marked an
+error today. Options: essay conventions as-is; complete sentences but relaxed
+formatting; or fragments left alone unless they obscure meaning.
+
+**3. "I think that…" is two questions.** The thinking half is already handled:
+Depth band 2 is "a first reaction and no more", so an entry that opens that way
+and stops there lands at 2 without anyone adding a rule. The register half is
+not: an entry that opens "I think that" and then does real work is currently
+unaddressed. Decide whether a hedged opener earns a style note, a scored
+penalty, or nothing. A style note is the safer instrument — score a phrase and
+students write around the rubric instead of thinking.
+
+**4. Is hedging a Voice problem or a Depth problem?** "Kind of", "I feel like",
+"in my opinion". Today it can land in either category, which means the same
+sentence costs a different amount depending on where the grader files it.
+
+**5. How conversational may an entry be?** Contractions, an aside, a joke. A
+Daily Pages entry is closer to a letter than to an essay, but nothing says so.
+
+**6. Does personal experience count as evidence?** The seeded Casey entry backs
+its claim with a story about a grandmother's painting and scores 94%. That
+looks right for a prompt with no assigned text. The open part is what happens
+when a prompt *does* name a text and the student reaches for an anecdote
+instead — Development, Depth, or neither.
+
+**7. Brief versus underdeveloped.** The instructions say never to mark an entry
+down for being brief; the Development bands mark an entry that does not take a
+step. A three-sentence entry against a half-page target is both at once, and
+nothing says which reading wins.
+
+Most of these are answerable in a sentence each, in
+`DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG.gradingInstructions`, with the answer
+repeated for teachers in the about section's "How it is graded". Question 2 is
+the exception: relaxing sentence rules for this assignment type means the
+shared grammar checker has to learn which type it is grading, which is a code
+change rather than a copy change.
+
 ## Not in this change
 
 - A prompt library of its own for the new Daily Pages. Both types currently
