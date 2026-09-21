@@ -134,6 +134,8 @@ export type AssignmentCreationSheetProps = {
   initialGradingAssistantStrictnessLevel?: GradingAssistantStrictnessLevel;
   initialRubricTotalPoints?: number | null;
   initialGradingMode?: AssignmentGradingMode;
+  /** The rubric's authored total, shown before an assignment override is used. */
+  initialRubricDefaultTotalPoints?: number | null;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -223,6 +225,7 @@ export function AssignmentCreationSheetContent({
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   initialRubricTotalPoints = null,
   initialGradingMode = DEFAULT_ASSIGNMENT_GRADING_MODE,
+  initialRubricDefaultTotalPoints = null,
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -265,6 +268,9 @@ export function AssignmentCreationSheetContent({
     useState<GradingAssistantStrictnessLevel>(
       initialGradingAssistantStrictnessLevel
     );
+  const [customizeRubricGrading, setCustomizeRubricGrading] = useState(
+    initialRubricTotalPoints !== null || initialGradingMode === 'bands'
+  );
   const [rubricTotalPoints, setRubricTotalPoints] = useState(
     pointValueFieldValue(initialRubricTotalPoints)
   );
@@ -348,6 +354,9 @@ export function AssignmentCreationSheetContent({
     );
     setSaveForReuse(false);
     setGradingAssistantStrictnessLevel(initialGradingAssistantStrictnessLevel);
+    setCustomizeRubricGrading(
+      initialRubricTotalPoints !== null || initialGradingMode === 'bands'
+    );
     setRubricTotalPoints(pointValueFieldValue(initialRubricTotalPoints));
     setGradingMode(initialGradingMode);
     setAttachmentFile(null);
@@ -371,6 +380,7 @@ export function AssignmentCreationSheetContent({
     initialGradingAssistantStrictnessLevel,
     initialRubricTotalPoints,
     initialGradingMode,
+    initialRubricDefaultTotalPoints,
     initialPostAt,
     initialDueAt,
     open,
@@ -754,81 +764,105 @@ export function AssignmentCreationSheetContent({
                     step={1}
                     inputMode="numeric"
                     value={pointValue}
-                    onChange={(event) => setPointValue(event.target.value)}
+                    onChange={(event) => {
+                      const nextPointValue = event.target.value;
+                      setPointValue(nextPointValue);
+                      if (customizeRubricGrading) {
+                        setRubricTotalPoints(nextPointValue);
+                      }
+                    }}
                     disabled={isSaving}
                     required
                   />
                 </div>
 
-                <details className="rounded-md border bg-muted/20 px-3 py-2">
-                  <summary className="cursor-pointer text-sm font-medium">
-                    Rubric grading options
-                  </summary>
-                  <div className="mt-3 space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="assignment-create-rubric-total-points">
-                        Rubric total points{' '}
-                        <span className="text-muted-foreground">(optional)</span>
+                <input
+                  type="hidden"
+                  name="rubricTotalPoints"
+                  value={customizeRubricGrading ? rubricTotalPoints : ''}
+                />
+                <input
+                  type="hidden"
+                  name="gradingMode"
+                  value={customizeRubricGrading ? gradingMode : 'step'}
+                />
+                <div className="rounded-md border bg-muted/20 px-3 py-2">
+                  <div className="flex items-start gap-2.5">
+                    <Checkbox
+                      id="assignment-create-customize-rubric-grading"
+                      checked={customizeRubricGrading}
+                      onCheckedChange={(checked) => {
+                        const enabled = checked === true;
+                        setCustomizeRubricGrading(enabled);
+                        setRubricTotalPoints(enabled ? pointValue : '');
+                      }}
+                      disabled={isSaving}
+                      className="mt-0.5 size-4 shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <Label
+                        htmlFor="assignment-create-customize-rubric-grading"
+                        className="cursor-pointer font-medium"
+                      >
+                        Customize AI grading
                       </Label>
-                      <Input
-                        id="assignment-create-rubric-total-points"
-                        name="rubricTotalPoints"
-                        type="number"
-                        min={1}
-                        max={1000}
-                        step={1}
-                        inputMode="numeric"
-                        value={rubricTotalPoints}
-                        onChange={(event) => setRubricTotalPoints(event.target.value)}
-                        disabled={isSaving}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Leave blank to use the rubric&apos;s built-in total.
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Rubric default:{' '}
+                        {initialRubricDefaultTotalPoints
+                          ? `${initialRubricDefaultTotalPoints} points · Step grading`
+                          : 'built-in rubric total · Step grading'}
                       </p>
                     </div>
+                  </div>
 
-                    <input type="hidden" name="gradingMode" value={gradingMode} />
-                    <div className="space-y-2">
-                      <Label>Grading mode</Label>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <button
-                          id="assignment-create-grading-mode-step"
-                          type="button"
-                          className={`rounded-md border px-3 py-2 text-left text-sm transition ${
-                            gradingMode === 'step'
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background hover:bg-muted'
-                          }`}
-                          aria-pressed={gradingMode === 'step'}
-                          onClick={() => setGradingMode('step')}
-                          disabled={isSaving}
-                        >
-                          <span className="block font-medium">Step grading</span>
-                          <span className="mt-1 block text-xs opacity-80">
-                            AI chooses only the rubric&apos;s labels.
-                          </span>
-                        </button>
-                        <button
-                          id="assignment-create-grading-mode-bands"
-                          type="button"
-                          className={`rounded-md border px-3 py-2 text-left text-sm transition ${
-                            gradingMode === 'bands'
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background hover:bg-muted'
-                          }`}
-                          aria-pressed={gradingMode === 'bands'}
-                          onClick={() => setGradingMode('bands')}
-                          disabled={isSaving}
-                        >
-                          <span className="block font-medium">Bands grading</span>
-                          <span className="mt-1 block text-xs opacity-80">
-                            Any score within the label ranges is allowed.
-                          </span>
-                        </button>
+                  {customizeRubricGrading ? (
+                    <div className="mt-3 space-y-3 border-l pl-6">
+                      <p className="text-sm text-muted-foreground">
+                        AI grading total: <strong>{pointValue || '—'}</strong>{' '}
+                        points (same as Point value).
+                      </p>
+                      <div className="space-y-2">
+                        <Label>Scoring behavior</Label>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <button
+                            id="assignment-create-grading-mode-step"
+                            type="button"
+                            className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                              gradingMode === 'step'
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border bg-background hover:bg-muted'
+                            }`}
+                            aria-pressed={gradingMode === 'step'}
+                            onClick={() => setGradingMode('step')}
+                            disabled={isSaving}
+                          >
+                            <span className="block font-medium">Steps</span>
+                            <span className="mt-1 block text-xs opacity-80">
+                              AI chooses only the rubric&apos;s labels.
+                            </span>
+                          </button>
+                          <button
+                            id="assignment-create-grading-mode-bands"
+                            type="button"
+                            className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                              gradingMode === 'bands'
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border bg-background hover:bg-muted'
+                            }`}
+                            aria-pressed={gradingMode === 'bands'}
+                            onClick={() => setGradingMode('bands')}
+                            disabled={isSaving}
+                          >
+                            <span className="block font-medium">Bands</span>
+                            <span className="mt-1 block text-xs opacity-80">
+                              Any score within the label ranges is allowed.
+                            </span>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </details>
+                  ) : null}
+                </div>
 
                 <input
                   type="hidden"
