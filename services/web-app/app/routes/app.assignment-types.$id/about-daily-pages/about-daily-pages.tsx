@@ -25,6 +25,7 @@ import {
   PROMPT_REWRITES,
   PROMPT_WARNINGS,
   PROMPT_WARNINGS_HEADING,
+  REGISTER_NOTE,
   REWRITE_HEADING,
   SCORE_SCALE_LABELS,
   SCORE_SCALE_NOTE,
@@ -163,6 +164,7 @@ export function AboutDailyPages() {
               {SCORE_SCALE_LABELS.join(' · ')}
             </span>
           </p>
+          <p className="mt-3 text-sm text-muted-foreground">{REGISTER_NOTE}</p>
         </AboutSection>
 
         <AboutSection value="how-to-use" heading={HOW_TO_USE_HEADING}>

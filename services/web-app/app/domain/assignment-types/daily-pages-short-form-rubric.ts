@@ -8,21 +8,31 @@ import type {
 } from './assignment-type-rubric.shared';
 
 /**
- * Daily Pages, after the split: a short piece of real thinking, graded
+ * Daily Pages, after the split: a short, crisp, claim-first response, graded
  * formally.
  *
- * Both halves of that matter, and it is the combination that separates it from
- * a Class Starter.
+ * The shape is the thing. A Daily Pages entry is written the way a strong body
+ * paragraph is written — the claim in the first sentence, the support behind
+ * it, a close that lands. It is not an exploration. Writing to find out what
+ * you think, with the discovery arriving at the end, is what a Class Starter
+ * is for now, and grading the two the same way is what made one rubric unable
+ * to serve either.
  *
- * What it is looking for is depth of thought and the development of thought —
- * not that the student has a pulse. A Class Starter credits honest effort. This
- * asks the student to get past a first reaction and take an idea somewhere,
- * and it does not give the top of the scale for showing up.
+ * What it looks for is a claim worth making and reasoning that holds it up —
+ * not that the student has a pulse, and not a journey. A Class Starter credits
+ * honest effort; this asks for a response that would survive being read aloud.
+ * The prompt may be anchored to a text or an excerpt, or it may be general.
  *
  * How it is graded is the way an essay is graded, at a fraction of the length.
  * Structure, voice, grammar and syntax all count, and the writing is marked up.
  * A Class Starter is never marked up; that is the sharpest single line between
  * the two assistants.
+ *
+ * On first person: it is allowed and is never an error. What the rubric pushes
+ * against is the hedge in front of the claim — "I think that", "in my opinion"
+ * — which delays the claim by a sentence and softens it. That belongs in
+ * feedback, as an edit the student makes, not in a deduction: score a phrase
+ * and students write around the rubric instead of thinking.
  *
  * Thinking outweighs craft on purpose: a clean, well-ordered piece with nothing
  * in it is not a good Daily Pages entry. It scores on the essay's own 1-5
@@ -30,7 +40,6 @@ import type {
  * grading both reads the same dimensions and a score means the same thing in
  * either place.
  */
-
 /** The five things a Daily Pages entry is judged on, in rubric order. */
 export const DAILY_PAGES_SHORT_FORM_CATEGORY_KEYS = [
   'depth_of_thought',
@@ -105,52 +114,52 @@ export const DAILY_PAGES_SHORT_FORM_RUBRIC: RubricData = {
       'depth_of_thought',
       'Depth of Thought',
       0.35,
-      'How far past a first reaction the thinking goes. Liking, disliking, agreeing, or restating the prompt is a reaction. Questioning it, complicating it, connecting it to something else, or arriving at a position the student can see the cost of is thought.',
+      'Whether the claim is worth making and the thinking behind it holds up. Restating the prompt is not a claim, and neither is a position nobody would dispute. A claim that is precise, that takes a side, and that survives the objection a reader would raise first is what this reads.',
       [
         'Nothing to read, or nothing that engages the prompt.',
-        'A first reaction and no more: agreement, disagreement, or the prompt restated.',
-        'A genuine response with a reason behind it, held at the level it started on.',
-        'Gets past the first reaction — asks a real question of the material, tests the idea against something, or follows a consequence.',
-        'Arrives somewhere the piece did not begin: an earned complication, a reframing, or a position whose cost the student can see.',
+        'A reaction rather than a claim: agreement, disagreement, or the prompt restated.',
+        'A real claim with a reason behind it, both at the level anyone would reach first.',
+        'A precise claim that takes a side, with reasoning that holds against the obvious objection.',
+        'A claim worth arguing — exact, not obvious, and defended at the point where it is most likely to fail.',
       ]
     ),
     category(
       'development_of_thought',
       'Development of Thought',
       0.25,
-      'Whether the thinking moves across the piece rather than circling. The idea should be taken somewhere and backed — a reason, a specific, an example — so that the end of the entry is further along than the start.',
+      'Whether the claim is actually held up: a reason, a specific, a quotation, a case. At this length one well-chosen specific, fully explained, beats three mentioned in passing — the test is whether a reader finishes the response persuaded rather than merely informed of an opinion.',
       [
-        'No development; a single assertion, or the same point restated.',
-        'Circles the idea without advancing it, or offers support that is never explained.',
-        'Takes one step: at least one specific or reason, explained well enough to do its work.',
-        'Builds — each part advances the idea, and the support is chosen for the point it carries.',
-        'The thinking compounds; the entry ends somewhere the opening could not have stated.',
+        'No support; a single assertion, or the same point restated.',
+        'Support named but never explained, or a response that circles the claim without backing it.',
+        'One specific or reason, explained well enough to do its work.',
+        'Support chosen for the point it carries, explained so the claim is genuinely held up.',
+        'Every sentence earns its place: the support is exact, the explanation tight, the claim established in the space given.',
       ]
     ),
     category(
       'organization_and_structure',
       'Organization/Structure',
       0.15,
-      'Whether the piece moves in an order a reader can follow: an opening that sets the idea, a middle that develops it, an ending that closes it. At this length, sound paragraphing counts as structure.',
+      'Whether the response is shaped like a strong body paragraph: the claim in the first sentence, the support in the middle, a close that lands. Warm-up sentences before the claim — clearing the throat, restating the prompt, announcing what the response will argue — are the most common way this score is lost.',
       [
         'No order a reader can follow.',
-        'Sequenced but not shaped; sentences arrive in the order they were thought of.',
-        'A clear beginning, middle, and end, with the parts in a sensible order.',
-        'Deliberate order, with transitions that carry the reader between parts.',
-        'Structure that serves the thinking — the arrangement is part of the point.',
+        'The claim arrives late or has to be inferred; sentences come in the order they were thought of.',
+        'Claim, support, close, in that order.',
+        'Opens on the claim and builds deliberately, each sentence handing off to the next.',
+        'Shaped so the order itself carries the argument; nothing could be moved without cost.',
       ]
     ),
     category(
       'voice_and_style',
       'Voice/Style',
       0.1,
-      'Whether the sentences sound like a person and read well: word choice that is precise rather than vague, and a tone that suits the assignment.',
+      'Whether the sentences are crisp and direct. First person is allowed and is never an error here. What costs is the hedge in front of the claim — "I think that", "in my opinion", "kind of" — which pushes the claim back a sentence and softens it. The fix is to cut the hedge and state the claim outright.',
       [
         'Flat or garbled; word choice obscures the meaning.',
-        'Understandable but generic, with vague or repetitive word choice.',
+        'Understandable but vague or padded, with hedges standing in for the claim.',
         'Clear, readable prose in a tone that suits the assignment.',
-        'Precise word choice and sentence variety; a voice is audible.',
-        'Controlled, distinctive prose where the style earns its effects.',
+        'Direct and precise: the claim is stated outright, and the words are chosen rather than reached for.',
+        'Crisp throughout — economical sentences with a voice audible in them.',
       ]
     ),
     category(
@@ -172,26 +181,60 @@ export const DAILY_PAGES_SHORT_FORM_RUBRIC: RubricData = {
 
 export const DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG: PromptConfigData = {
   gradingInstructions: [
-    'You are grading a Daily Pages entry: a short piece of real thinking, graded formally. Grade it the way you would grade an essay, scaled to its length.',
+    'You are grading a Daily Pages entry: a short, crisp, claim-first response, graded formally. Grade it the way you would grade a body paragraph of an essay — not a whole essay, and not a journal entry.',
     '',
-    'This is not a Class Starter and it is not graded like one. On a Class Starter, honest effort earns full credit and the writing is never marked up. Here, effort alone earns the middle of the scale. Do not give credit for showing up to the page — the question is not whether the student wrote something, it is how well they thought and how well they wrote it.',
+    'The shape matters. A good entry opens with its claim, supports it, and closes. It is not an exploration: writing to find out what you think, with the point arriving at the end, is what a Class Starter is for, and it is not what this assignment asks for. A response that spends its first two sentences warming up has already lost ground, however well it finishes.',
+    '',
+    'This is not a Class Starter and it is not graded like one. On a Class Starter, honest effort earns full credit and the writing is never marked up. Here, effort alone earns the middle of the scale. Do not give credit for showing up to the page — the question is not whether the student wrote something, it is how good the claim is, how well it is held up, and how well it is written.',
     '',
     'Judge five things, and score each one separately. The first two matter most.',
     '',
-    '1. Depth of Thought — how far past a first reaction does the thinking go? Liking, disliking, agreeing, or restating the prompt is a reaction. Questioning it, complicating it, connecting it to something else, or reaching a position whose cost the student can see is thought.',
+    '1. Depth of Thought — is the claim worth making, and does the thinking behind it hold? Restating the prompt is not a claim; neither is a position nobody would dispute. A first reaction is not a claim either. Look for a claim that is precise, takes a side, and survives the objection a reader raises first.',
     '',
-    '2. Development of Thought — does the thinking move across the piece, or circle? Look for an idea that is taken somewhere and backed with a reason, a specific, or an example, so the end of the entry is further along than the start. One developed specific is enough at this length; a list of unexplained assertions is not.',
+    '2. Development of Thought — is the claim actually held up? Look for a reason, a specific, a quotation, or a case, explained well enough to do its work. One developed specific is enough at this length; a list of unexplained assertions is not. If the prompt names a text or an excerpt, the support should come from it.',
     '',
-    '3. Organization/Structure — can a reader follow the order? Look for an opening that sets the idea, a middle that develops it, and an ending that closes it. At this length, sound paragraphing counts as structure.',
+    "3. Organization/Structure — is the claim in the first sentence? Then the support, then a close that lands. Mark down throat-clearing before the claim: restating the prompt, announcing what the response will argue, or narrating the student's own process.",
     '',
-    '4. Voice/Style — is the word choice precise rather than vague, and does the tone suit the assignment?',
+    '4. Voice/Style — are the sentences crisp and direct, in a tone that suits the assignment?',
     '',
     '5. Grammar/Syntax/Mechanics — grade sentence construction, punctuation, usage, spelling, and formatting, and mark the errors. Grammar and syntax count in this assignment. Point to specific errors rather than describing them in general terms.',
     '',
-    'Weigh thinking above craft. A clean, well-ordered entry with nothing in it is not a good Daily Pages entry, and a piece with a real idea and some rough sentences is not a bad one.',
+    'On first person: it is allowed, and writing "I" is never an error. Never mark a student down for it. What to coach, in Voice/Style feedback rather than in the score, is the hedge in front of the claim — "I think that", "I feel like", "in my opinion", "kind of". Those delay the claim and soften it. When you see one, show the student their own sentence with the hedge cut, so they can see the claim underneath it. The habit being taught is stating the claim outright, not avoiding the first person.',
+    '',
+    'Weigh thinking above craft. A clean, well-ordered entry with nothing in it is not a good Daily Pages entry, and an entry with a real claim and some rough sentences is not a bad one.',
     '',
     'Do not reward or penalize length on its own. A short piece is what was assigned: judge what is on the page, and never mark an entry down for being brief or up for being long.',
     '',
     'Use the bands written on each category to choose a score, then write feedback for that category: name what the student did, and the one change that would move it up a band. Speak to the student, and be specific enough that they could act on it in the next entry.',
   ].join('\n'),
 };
+
+/**
+ * What the Tutor is told when a student is drafting one of these.
+ *
+ * The tutor is the half of this that a student meets before a grade exists, so
+ * it carries the same two rules the rubric does — open on the claim, cut the
+ * hedge — as coaching rather than as scoring. It never writes for the student:
+ * it asks for the claim, and hands back the student's own sentence with the
+ * throat-clearing removed so they can see the difference.
+ *
+ * This is module content, not code: the Daily Pages module row in each
+ * database carries its own `tutorInstructions`, and the row that ships today
+ * still describes the freewrite tutor ("help them think through an idea by
+ * asking probing questions"), which coaches exactly the exploration this
+ * assignment no longer wants. Seeded environments get the text below; changing
+ * it for a customer is a deliberate content change, like the rubric itself.
+ */
+export const DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS = [
+  'You are the Daily Pages tutor. A Daily Pages entry is a short, crisp response that opens with a claim and holds it up — closer to a strong body paragraph than to a journal entry or an essay. You are warm, direct, and brief. You never write content for the student.',
+  '',
+  'Coach three things, in this order:',
+  '',
+  '1. The claim. Ask what they are actually claiming, in one sentence. If their draft has no claim yet, ask for it before anything else. If the claim only appears halfway down, tell them where you found it and ask them to move it to the top.',
+  '',
+  '2. The support. Ask what holds the claim up — a reason, a specific, a line from the text if the prompt names one — and whether a reader would finish persuaded rather than merely told. One specific, explained, is enough.',
+  '',
+  '3. The hedge. Writing "I" is fine and you should never tell a student to avoid it. But when a draft opens "I think that…", "I feel like…", or "In my opinion…", quote their sentence back with the hedge cut and let them see the claim underneath. Offer it as an edit they can make, not as a rule they broke.',
+  '',
+  'Do not encourage the student to explore, freewrite, or work out what they think on the page. That is what a Class Starter is for. Here, the thinking happens before the first sentence, and the first sentence says it.',
+].join('\n');

@@ -22,7 +22,8 @@ and Daily Pages becomes the graded one.
 
 | | Class Starter | Daily Pages |
 |---|---|---|
-| What it is | Open-ended writing to begin class | A short piece of writing, graded formally |
+| What it is | Open-ended writing to begin class | A short, claim-first response, graded formally |
+| Shape | Explore; the point may arrive at the end, or not at all | A body paragraph: claim first, then the case for it |
 | Categories | Engagement | Depth of Thought (0.35), Development of Thought (0.25), Organization/Structure (0.15), Voice/Style (0.10), Grammar/Syntax/Mechanics (0.15) |
 | Scale | 0–3 (Absent → All in) | 1–5 (Beginning → Exemplary), the essay scale, with a written band per score |
 | Feedback | Overall only | Per category |
@@ -190,64 +191,79 @@ curve.
    a type that configured its own rubric is untouched by the default, which is
    what leaves production's 0–30 engagement row alone.
 
-## Open questions: what the rubric does not say
+## Shape and register
 
-These are conventions the rubric never states, which means the assistant is
-already deciding them — differently from entry to entry, and by importing what
-it associates with school essays. The sentence doing the deciding is the first
-line of the grading instructions:
+The rubric first shipped describing depth of thought without ever saying what
+the response should look like, and saying nothing at all about person, sentence
+form or register. Silence there is not neutral: the instructions open with
+"grade it the way you would grade an essay", so every convention the model
+associates with school essays carried over by default, entry by entry, decided
+by the model rather than by us.
 
-> Grade it the way you would grade an essay, scaled to its length.
+**A Daily Pages entry is claim-first.** It is written the way a strong body
+paragraph is written — the claim in the first sentence, the support behind it,
+a close that lands. It is not an exploration. Writing to find out what you
+think, with the point arriving at the end, is what a Class Starter is for now,
+and that division is the whole reason there are two assignment types. The
+prompt may be anchored to a text or an excerpt, or be general; what does not
+vary is the shape.
 
-Nothing qualifies it, and Voice/Style only asks for "a tone that suits the
-assignment" without ever saying what suits this one. So the questions below are
-not hypothetical; they are being answered now, just not by us.
+This changed the rubric's top bands, which had rewarded the opposite. "Arrives
+somewhere the piece did not begin" and "the thinking compounds" describe the
+exploration shape; they are gone, and Depth of Thought now reads whether the
+claim is worth making and survives the objection a reader raises first. A test
+asserts no top band asks for a journey, because that language is easy to
+reintroduce by accident.
 
-**1. Is first person allowed?** Unstated, so it varies — and "grade it like an
-essay" pulls toward the schoolroom rule against it. Worth settling explicitly,
-because the top Depth band asks for "a position whose cost the student can
-see", which is hard to write without *I*.
+**First person is allowed and is never an error.** A student may write "I", and
+nothing marks them down for it. What the assistant coaches — in Voice/Style
+feedback, never in the score — is the hedge in front of the claim: "I think
+that…", "In my opinion…". It hands the sentence back with the hedge cut so the
+student can see the claim underneath. Scoring a phrase would teach students to
+write around the rubric instead of thinking, which is the failure mode the
+whole split exists to avoid.
 
-**2. Do complete sentences matter, and whose sentence rules apply?** Today: yes,
-essay rules. Grammar/Mechanics (15%) grades "sentence construction … and
-formatting", and the markup comes from one Grammar/Usage Checker prompt shared
-by every assignment type — it does not know this is a ten-minute piece. A
-deliberate fragment ("Not always. Only when it costs something.") is marked an
-error today. Options: essay conventions as-is; complete sentences but relaxed
-formatting; or fragments left alone unless they obscure meaning.
+**The Tutor coaches the same two things**, because the tutor is the half of
+this a student meets before any grade exists:
+`DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS` asks for the claim, then the
+support, then offers the hedge as an edit — and tells it not to encourage
+exploring or freewriting.
 
-**3. "I think that…" is two questions.** The thinking half is already handled:
-Depth band 2 is "a first reaction and no more", so an entry that opens that way
-and stops there lands at 2 without anyone adding a rule. The register half is
-not: an entry that opens "I think that" and then does real work is currently
-unaddressed. Decide whether a hedged opener earns a style note, a scored
-penalty, or nothing. A style note is the safer instrument — score a phrase and
-students write around the rubric instead of thinking.
+That last part is content rather than code, and it is worth being plain about
+what ships:
 
-**4. Is hedging a Voice problem or a Depth problem?** "Kind of", "I feel like",
-"in my opinion". Today it can land in either category, which means the same
-sentence costs a different amount depending on where the grader files it.
+- The tutor's instructions live on the **assignment module row**, and the row
+  in production is still the freewrite tutor — "help them think through an idea
+  by asking them probing questions". Its `rubricAlignmentJson` is also unset,
+  so none of the rubric's own language reaches the tutor either.
+- The seed sets both for seeded environments, so a preview shows the real
+  behaviour. Doing the same for a customer is a deliberate content change, like
+  the rubric reset beside it.
 
-**5. How conversational may an entry be?** Contractions, an aside, a joke. A
-Daily Pages entry is closer to a letter than to an essay, but nothing says so.
+## Still open
 
-**6. Does personal experience count as evidence?** The seeded Casey entry backs
-its claim with a story about a grandmother's painting and scores 94%. That
-looks right for a prompt with no assigned text. The open part is what happens
-when a prompt *does* name a text and the student reaches for an anecdote
-instead — Development, Depth, or neither.
-
-**7. Brief versus underdeveloped.** The instructions say never to mark an entry
-down for being brief; the Development bands mark an entry that does not take a
-step. A three-sentence entry against a half-page target is both at once, and
-nothing says which reading wins.
-
-Most of these are answerable in a sentence each, in
-`DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG.gradingInstructions`, with the answer
-repeated for teachers in the about section's "How it is graded". Question 2 is
-the exception: relaxing sentence rules for this assignment type means the
-shared grammar checker has to learn which type it is grading, which is a code
-change rather than a copy change.
+- **Whose sentence rules apply.** Grammar/Mechanics grades "sentence
+  construction … and formatting" at 15%, and the markup comes from one
+  Grammar/Usage Checker prompt shared by every assignment type — it does not
+  know this is a paragraph written in ten minutes. A deliberate fragment ("Not
+  always. Only when it costs something.") is marked an error today. Relaxing
+  that means teaching the shared checker which type it is grading, which is
+  code rather than copy.
+- **Does personal experience count as evidence?** The seeded exemplar backs its
+  claim with a story about a grandmother's painting and scores 94%, which looks
+  right for a prompt with no assigned text. What happens when a prompt *does*
+  name a text and the student reaches for an anecdote instead is unsettled.
+- **Brief versus underdeveloped.** The instructions say never to mark an entry
+  down for being brief; the Development bands mark an entry that does not hold
+  its claim up. A three-sentence entry against a half-page target is both.
+- **`exit-synthesis` may now belong to Class Starter.** One of the six corpus
+  kinds asks what changed today and what changed it — which is exploration by
+  design, and reads oddly against a claim-first rubric. Worth deciding before
+  the corpus grows.
+- **Whether Organization should weigh more than 15%.** Shape is now a named
+  requirement, and a response that buries its claim loses ground in two
+  categories rather than one. That may be enough; if it is not, the weight is
+  the lever.
 
 ## Not in this change
 

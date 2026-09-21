@@ -12,6 +12,7 @@ import {
   DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
   DAILY_PAGES_SHORT_FORM_RUBRIC,
   DAILY_PAGES_SHORT_FORM_SCORING_SCALE,
+  DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS,
 } from '../../../../services/web-app/app/domain/assignment-types/daily-pages-short-form-rubric.ts';
 
 /**
@@ -127,11 +128,49 @@ export async function adoptShortFormRubricForSeededDailyPages(
   });
 }
 
+/**
+ * Point the seeded Daily Pages module's Tutor at the claim-first coaching.
+ *
+ * The tutor's instructions are module content, and the row that ships today is
+ * the freewrite tutor: "help them think through an idea by asking them probing
+ * questions" — which coaches the exploration this assignment type no longer
+ * wants. Its `rubricAlignmentJson` is also unset, so none of the rubric's own
+ * language reaches the tutor either; setting it is what sends the category
+ * descriptions (including the first-person rule) into the tutor prompt.
+ *
+ * Seeded environments only, for the same reason the rubric reset is: changing
+ * it for a customer is a deliberate content change.
+ */
+export async function adoptShortFormTutorForSeededDailyPages(
+  prisma: SeedClient,
+  assignmentTypeId: string
+) {
+  await prisma.assignmentModule.updateMany({
+    where: { assignmentTypeId, deletedAt: null },
+    data: {
+      tutorInstructions: DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS,
+      description:
+        'Respond to the prompt in one short, crisp paragraph: your claim in the first sentence, then the case for it.',
+      rubricAlignmentJson: {
+        depth_of_thought: 'primary',
+        development_of_thought: 'primary',
+        organization_and_structure: 'supporting',
+        voice_and_style: 'supporting',
+        grammar_and_mechanics: 'supporting',
+      } as unknown as Prisma.InputJsonValue,
+    },
+  });
+}
+
 export async function seedDailyPagesSampleEntries(
   prisma: SeedClient,
   options: DailyPagesSampleSeedOptions
 ): Promise<DailyPagesSampleSeedResult> {
   await adoptShortFormRubricForSeededDailyPages(
+    prisma,
+    options.assignmentTypeId
+  );
+  await adoptShortFormTutorForSeededDailyPages(
     prisma,
     options.assignmentTypeId
   );

@@ -12,8 +12,11 @@ import {
  * student's writing. Describing it is not the same as reading four entries on
  * one prompt and seeing where they land.
  *
- * They are written to span the scale rather than to flatter it. The top entry
- * complicates its own claim; the bottom one restates the prompt and stops.
+ * They are written to span the scale rather than to flatter it, and to teach
+ * the shape: the top entry states its claim in the first sentence and defends
+ * it where it is most likely to fail; the next hedges the same claim behind "I
+ * think that"; the third opens well but claims something nobody disputes; the
+ * bottom one announces a claim instead of making one.
  * Because this rubric is band-scored, the weighted percentage follows the
  * category scores exactly — an entry scored Proficient across the board is
  * 60%, and seeing that in a preview is the point of putting it there.
@@ -73,11 +76,11 @@ export const DAILY_PAGES_SAMPLE_ASSIGNMENT = {
 
 export const DAILY_PAGES_SAMPLE_ENTRIES: DailyPagesSampleEntry[] = [
   {
-    key: 'went-further',
+    key: 'claim-first',
     personaKey: 'student-graded',
     studentFirstName: 'Casey',
     title: 'Honest and kind — Casey',
-    text: 'I want to say yes, because the alternative is that every kind person is lying a little, and that seems too cheap. My reason is that honesty is about what you say and kindness is mostly about when and how you say it, so they are not competing for the same space. The case that tests this is my grandmother, who asked me whether her painting was any good, and it was not. I said the colors in the corner were the best part, which was true, and I left out the rest, which was also true. So I was honest in the sense that nothing I said was false, and unkind nowhere. But I notice that I have moved the line: I am counting leaving something out as honest. If a full answer is what honesty means, then I failed it and called the failure kindness. I think the two can hold together, but only if honesty is allowed to be silent sometimes, and I am not sure I get to decide that on my own.',
+    text: 'Honesty and kindness hold together everywhere except where a question forecloses silence. What you say is honesty\u2019s business; when and how you say it is kindness\u2019s, and the two only collide when a full answer is demanded on the spot. My grandmother asked whether her painting was any good, and it was not. I told her the colors in the corner were the best part — true, and the only part I volunteered. The case that tests this is the harder version of the same question: if she had asked whether I would hang it in my house, there is no sentence that is both true and kind, and the silence I used is no longer available. So the claim holds, but it holds on a condition, and the condition is the part worth knowing — kindness is what chooses which true thing to say, and it needs something left unsaid to choose from.',
     scores: {
       depth_of_thought: 5,
       development_of_thought: 5,
@@ -87,33 +90,34 @@ export const DAILY_PAGES_SAMPLE_ENTRIES: DailyPagesSampleEntry[] = [
     },
     comments: {
       depth_of_thought:
-        'You caught yourself redefining honesty mid-argument and said so instead of hiding it — that is the move this category is looking for. The ending earns its uncertainty.',
+        'The claim is exact and it takes a side — not "it depends", but a named condition under which it fails. You then went to the version of the question where your own answer runs out, which is where this category looks.',
       development_of_thought:
-        'The painting example does real work: it tests the claim rather than decorating it, and the paragraph ends somewhere its first sentence could not have stated.',
+        'The painting is one specific, fully explained, and it does the work: it shows the silence you are claiming honesty is allowed. Nothing in the paragraph is decoration.',
       organization_and_structure:
-        'Claim, reason, case, complication, in that order, with nothing wasted. A sentence marking the turn — "but I notice" is doing it alone — would make the shift easier to follow.',
+        'Claim in the first sentence, reason, case, close. The close does two jobs at once — restating the condition and naming why it matters — and would land harder as two sentences.',
       voice_and_style:
-        '"Too cheap" and "unkind nowhere" are precise and yours. The prose sounds like someone thinking, not someone performing.',
+        '"Forecloses silence" and "which true thing to say" are precise and yours. No hedges, nothing warming up.',
       grammar_and_mechanics:
-        'Clean throughout, including the long sentences you attempt. Watch the comma before "and I am not sure" — the clause is independent, so a semicolon or a period would carry it better.',
+        'Clean, including the semicolon, which is doing real work. The long dash aside carries a full point; consider giving it its own sentence.',
     },
     overallComment:
-      'Casey, this is the top of the scale: you took a position, tested it against a case that actually threatens it, and then noticed the move you had made to survive the test. Next time, mark the turn for your reader — one sentence saying "here is where my definition shifted" — and nothing is left to ask for.',
+      'Casey, this is the top of the scale: a claim worth arguing, stated first, and defended at the point where it is most likely to fail. The one change worth making is in the last sentence — it carries two ideas, and splitting it would let each one land.',
     grammarIssues: [
       {
-        excerpt: 'together, but only if honesty is allowed to be silent',
+        excerpt:
+          'the colors in the corner were the best part — true, and the only part I volunteered',
         kind: 'style',
-        rule: 'Use a semicolon to join closely related independent clauses.',
-        ruleNumber: 5,
+        rule: 'Omit needless words.',
+        ruleNumber: 10,
         message:
-          'These are two independent clauses joined by a comma. A semicolon or a full stop would hold them apart more cleanly.',
+          'The aside does the work of a full sentence. Splitting it would let the point land on its own.',
       },
     ],
     released: true,
     submittedDaysAgo: 2,
   },
   {
-    key: 'gets-past-first-reaction',
+    key: 'claim-hedged',
     personaKey: 'student-submitted',
     studentFirstName: 'Riley',
     title: 'Honest and kind — Riley',
@@ -127,18 +131,18 @@ export const DAILY_PAGES_SAMPLE_ENTRIES: DailyPagesSampleEntry[] = [
     },
     comments: {
       depth_of_thought:
-        'You went past the first reaction: the speech example is a real test of your claim, not an easy one, and you did not pretend it was settled.',
+        'You took a side and then went looking for the case that threatens it — the speech that has already been given is a real test, not an easy one.',
       development_of_thought:
-        'Two specifics, each explained. To reach the top band, follow the last thought one step further — what would make deciding for someone else defensible?',
+        'Two specifics, each explained. To reach the top band, answer the case you raised: you leave "I am not sure" as the last word when you were one sentence from a position.',
       organization_and_structure:
-        'Claim, reason, example, counterexample. The order is deliberate and easy to follow.',
+        'Claim, reason, example, counterexample — the order is deliberate and easy to follow.',
       voice_and_style:
-        'Clear and readable. "Takes work" and "cancel each other out" are doing the work of more precise phrases — say what the work is.',
+        'Cut the hedge and you have your opening sentence: "You can be honest and kind at the same time, but it takes work." That is the claim; "I think that" only delays it. Then say what the work is — the phrase is standing in for the thing you mean.',
       grammar_and_mechanics:
         'Few errors, and none that pull a reader out. Watch the long opening sentence; it could be two.',
     },
     overallComment:
-      'Riley, you did the assignment properly: a claim, a reason you can defend, and a counterexample that genuinely threatens it. The thinking is there. The next step is precision — replace the general phrases ("it takes work") with the specific thing you mean, and push the last sentence one step further instead of stopping at "I am not sure."',
+      'Riley, the claim and the case for it are both here, which is most of the work. Two edits: open on the claim itself rather than on "I think that", and finish the counterexample you raised instead of stopping at "I am not sure".',
     grammarIssues: [
       {
         excerpt:
@@ -154,7 +158,7 @@ export const DAILY_PAGES_SAMPLE_ENTRIES: DailyPagesSampleEntry[] = [
     submittedDaysAgo: 2,
   },
   {
-    key: 'held-at-the-level-it-started',
+    key: 'claim-too-loose',
     personaKey: 'student',
     studentFirstName: 'Sam',
     title: 'Honest and kind — Sam',
@@ -168,18 +172,18 @@ export const DAILY_PAGES_SAMPLE_ENTRIES: DailyPagesSampleEntry[] = [
     },
     comments: {
       depth_of_thought:
-        'You have a genuine position and a reason behind it, but the paragraph ends on the level it started: "say it nicely" at the top and "say it nicely" at the bottom. Pick the case where saying it nicely does not help, and write about that one.',
+        'Your claim is one nobody would dispute — "you can be kind about it" is where everyone starts. Take the side that costs something: name a case where saying it nicely does not help, and claim what you would do there.',
       development_of_thought:
-        'The prompt asked for the hardest counterexample and you named the category — "if the truth is really bad" — without giving the case. One concrete example, with what actually happened, would move this up a band.',
+        'The prompt asked for the hardest counterexample and you named the category — "if the truth is really bad" — without ever giving the case. One concrete example, with what actually happened, would move this up a band.',
       organization_and_structure:
-        'A clear beginning, middle, and end, in a sensible order.',
+        'The claim is in the first sentence and the close returns to it, which is the shape. The middle repeats rather than builds.',
       voice_and_style:
-        'Readable, in a tone that fits. "Nice" is carrying too much weight here; it appears three times and means something different each time.',
+        '"Nice" is carrying the whole argument and appears three times, meaning something different each time. Name what you actually do differently when you say a hard thing nicely.',
       grammar_and_mechanics:
         'Generally correct. "A lot of people think you have to pick one but I do not think that is right" needs a comma before "but".',
     },
     overallComment:
-      'Sam, you answered the question and backed it, which is the middle of the scale. What is missing is the counterexample the prompt asked for: you named the shape of one ("if the truth is really bad") without ever writing it down. Next entry, spend most of your paragraph on the case that threatens your claim — that is where the score moves.',
+      'Sam, you opened with your claim, which is the right shape — but the claim itself is the safe one, and the counterexample the prompt asked for never arrives. Next entry, spend most of the paragraph on the case that threatens what you said. That is where the score moves.',
     grammarIssues: [
       {
         excerpt:
@@ -202,7 +206,7 @@ export const DAILY_PAGES_SAMPLE_ENTRIES: DailyPagesSampleEntry[] = [
     submittedDaysAgo: 1,
   },
   {
-    key: 'first-reaction-only',
+    key: 'prompt-restated',
     personaKey: 'student-unreleased',
     studentFirstName: 'Taylor',
     title: 'Honest and kind — Taylor',
@@ -216,25 +220,25 @@ export const DAILY_PAGES_SAMPLE_ENTRIES: DailyPagesSampleEntry[] = [
     },
     comments: {
       depth_of_thought:
-        'This restates the prompt rather than answering it: the claim is "it is possible" and the reason is "I have seen it happen". Tell me about one time you saw it, and what made it work.',
+        'This says the prompt back to me: the claim is "it is possible" and the reason is "I have seen it happen". Tell me about one time you saw it, and claim what made that one work.',
       development_of_thought:
-        'The counterexample names the opposite of your claim instead of testing it. A real one would be a case where being honest and being kind pull against each other — then say which you would choose.',
+        'The counterexample names the opposite of your claim instead of testing it. A real one is a case where being honest and being kind pull against each other — then say which you would choose.',
       organization_and_structure:
-        'The sentences arrive in the order you thought of them. Deciding the order before you write — claim, reason, case — is most of this category.',
+        'The first two sentences are warming up, and the claim when it arrives is an announcement of a claim ("my claim is that…") rather than the claim itself. Start with the sentence you would say if you only had one.',
       voice_and_style:
         'The voice is clear and direct, which is worth keeping while the rest catches up.',
       grammar_and_mechanics:
-        'Several errors that slow a reader down: "Its" for "It\'s", "alot", "everyday" as one word, "there" for "their", and "could of" for "could have". The comma splice after "mean" needs a period.',
+        'Several errors that slow a reader down: "Its" for "It\u2019s", "alot", "everyday" as one word, "there" for "their", and "could of" for "could have". The comma splice after "mean" needs a period.',
     },
     overallComment:
-      'Taylor, right now this says the prompt back to me. The one change that would move it most: pick a single time you watched someone be honest and kind at once, and spend the whole paragraph on that — what they said, what they left out, and why it worked. The errors are worth a proofread too; the list on the mechanics score has the specifics.',
+      'Taylor, right now this announces a claim instead of making one. The one change that would move it most: pick a single time you watched someone be honest and kind at once, open with what that shows, and spend the paragraph on it. The errors are worth a proofread too; the mechanics feedback has the specifics.',
     grammarIssues: [
       {
         excerpt: 'Its possible because people do it everyday',
         kind: 'error',
         rule: 'Use an apostrophe for the contraction "it is"; "everyday" is an adjective, "every day" is the adverb.',
         message:
-          '"Its" should be "It\'s" here, and "everyday" should be two words: "every day".',
+          '"Its" should be "It\u2019s" here, and "everyday" should be two words: "every day".',
       },
       {
         excerpt: 'I have seen it happen alot',

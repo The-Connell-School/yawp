@@ -25,13 +25,15 @@ type CategoryKey = (typeof DAILY_PAGES_SHORT_FORM_CATEGORY_KEYS)[number];
 export const ABOUT_HEADING = 'About Daily Pages';
 
 export const ABOUT_LEDE =
-  'A Daily Pages entry is one sitting of real thinking: ten or fifteen minutes, a paragraph to a page, on something worth thinking about. It is graded the way an essay is graded, scaled down to that length — thinking first, then structure, voice, and mechanics — and the writing is marked up so the student can see the specific errors rather than a note about them.';
+  'A Daily Pages entry is one short, crisp response: ten or fifteen minutes, a paragraph to a page, opening with a claim and holding it up. It is written the way a strong body paragraph is written, and graded the way an essay is graded at a fraction of the length — thinking first, then structure, voice, and mechanics — with the writing marked up so the student can see the specific errors rather than a note about them.';
 
 export const WHAT_IT_IS_HEADING = 'What a Daily Pages entry is';
 
 export const WHAT_IT_IS: string[] = [
+  'Claim-first. The response opens with what the student is arguing, supports it, and closes. The thinking happens before the first sentence; the first sentence says it.',
   'Short enough to assign often. A student can finish one before the bell, and you can read a class set in a free period.',
   'Graded on thought. Depth and development of thought carry most of the score. A student who fills the page honestly has earned the middle of the scale, not the top of it.',
+  'Either anchored or general. The prompt can hang on a text or an excerpt, or ask for a position on something the class has not read at all.',
   'Marked up. Grammar and syntax are scored and the errors are highlighted — unless you turn grammar grading off on a particular assignment.',
   'Cumulative. A term of entries is a record of how one student’s thinking moved, which is what a conference with a parent or a student actually needs.',
 ];
@@ -41,14 +43,14 @@ export const WHAT_IT_IS_NOT_HEADING = 'What it is not';
 /** Each line names the thing teachers reach for instead, so the boundary is usable. */
 export const WHAT_IT_IS_NOT: { claim: string; detail: string }[] = [
   {
-    claim: 'Not a warm-up.',
+    claim: 'Not a warm-up, and not an exploration.',
     detail:
-      'A freewrite graded on effort is a Class Starter: full credit for honest writing, and never marked up. Assign that when you want the page filled. Assign this when you want the idea taken somewhere.',
+      'Writing to find out what you think — the freewrite, the page filled honestly, the point arriving at the end — is a Class Starter: full credit for effort, never marked up. Assign that when you want students thinking on the page. Assign this when you want the claim at the top and the case underneath it.',
   },
   {
     claim: 'Not an essay.',
     detail:
-      'No thesis statement, no introduction-body-conclusion. At this length an opening that sets the idea, a middle that develops it, and a close is the whole shape you are asking for.',
+      'No thesis statement, no introduction-body-conclusion. One strong body paragraph is the whole shape: claim, support, close.',
   },
   {
     claim: 'Not a reading check.',
@@ -80,13 +82,13 @@ export const HOW_ITS_GRADED_INTRO =
  */
 const CATEGORY_GLOSS: Record<CategoryKey, string> = {
   depth_of_thought:
-    'How far past a first reaction the thinking goes. Agreeing, disliking, or restating the prompt is a reaction; questioning it, complicating it, or following it somewhere is thought.',
+    'Whether the claim is worth making and the reasoning holds. Restating the prompt is not a claim, and neither is a position nobody would dispute.',
   development_of_thought:
-    'Whether the thinking moves across the piece instead of circling — one specific or reason, taken far enough to do its work.',
+    'Whether the claim is actually held up — one reason, specific or quotation, explained far enough to persuade rather than just inform.',
   organization_and_structure:
-    'Whether a reader can follow the order. At this length, sound paragraphing counts as structure.',
+    'Whether the claim is in the first sentence, the support in the middle, and the close lands. Throat-clearing before the claim is where this score goes.',
   voice_and_style:
-    'Whether the word choice is precise rather than vague, in a tone that suits the assignment.',
+    'Whether the sentences are crisp and direct. First person is fine; the hedge in front of the claim is what costs.',
   grammar_and_mechanics:
     'Sentence construction, punctuation, usage, spelling. Graded and marked up here, unlike a Class Starter — and switchable per assignment.',
 };
@@ -114,7 +116,15 @@ export const SCORE_SCALE_LABELS: string[] =
   );
 
 export const SCORE_SCALE_NOTE =
-  'Each category scores 1 to 5. Effort alone lands at Proficient; the top two bands are for an entry that gets somewhere its own opening could not have stated.';
+  'Each category scores 1 to 5. Effort alone lands at Proficient; the top two bands are for a claim worth arguing, defended where it is most likely to fail.';
+
+/**
+ * The register rules, kept next to the scale because they are the two
+ * questions teachers ask first and the two the assistant used to answer by
+ * importing whatever it associated with essays.
+ */
+export const REGISTER_NOTE =
+  'First person is allowed and is never marked as an error — a student may write "I". What the assistant coaches, in feedback rather than in the score, is the hedge in front of the claim: "I think that…", "In my opinion…". It hands the sentence back with the hedge cut so the student can see the claim underneath. The Tutor coaches the same two things while they draft: put the claim first, then cut the hedge.';
 
 export const HOW_TO_USE_HEADING = 'Using it with a class';
 
@@ -123,7 +133,8 @@ export const HOW_TO_USE: string[] = [
   'Put the prompt and the target length where students can see them. They cannot aim at a finish line nobody named.',
   'Read for the trend rather than the single score. Depth and Development are where movement shows up first.',
   'Turn grammar grading off on the assignment when the point of the day is the thinking, and leave it on when you want mechanics tracked.',
-  'Use one as a rehearsal for an essay. The paragraph a student writes here is the paragraph they will expand later, and you will both already know what it scored.',
+  'Use one as a rehearsal for an essay. What a student writes here is a body paragraph, so the habit transfers directly — and you will both already know what it scored.',
+  'Say the shape out loud the first few times: claim in the first sentence, then the case for it. Most of the early score movement comes from students who stop warming up before they start.',
 ];
 
 export const WRITE_YOUR_OWN_HEADING = 'Writing your own prompt';
@@ -133,9 +144,9 @@ export const WRITE_YOUR_OWN_INTRO =
 
 export const PROMPT_RECIPE: { move: string; detail: string }[] = [
   {
-    move: 'Give them something to take a position on',
+    move: 'Ask for a claim, not a reflection',
     detail:
-      'A claim to accept or reject, a choice the author made, two things to tell apart, a term to draw a boundary around, or a passage to go back into for specific words.',
+      'Something to take a side on: a claim to accept or reject, a choice the author made, two things to tell apart, a term to draw a boundary around, or a passage to go back into for specific words. A prompt that asks how a student feels, or what they noticed, gets an exploration — which is a Class Starter, and will score badly here.',
   },
   {
     move: 'Ask for the backing',

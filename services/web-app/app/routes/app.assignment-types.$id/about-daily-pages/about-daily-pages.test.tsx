@@ -20,6 +20,7 @@ const {
   HOW_TO_USE,
   HOW_TO_USE_HEADING,
   PROMPT_REWRITES,
+  REGISTER_NOTE,
   PROMPT_WARNINGS,
   WHAT_IT_IS,
   WHAT_IT_IS_HEADING,
@@ -155,6 +156,15 @@ describe('the Daily Pages about section', () => {
       expect(row.textContent).toContain(summary.label);
       expect(row.textContent).toContain(`${summary.weightPercent}%`);
     }
+  });
+
+  it('answers first person where the scale is explained', () => {
+    renderAbout();
+    const body = openSection(HOW_ITS_GRADED_HEADING);
+
+    // The two questions teachers ask first, answered next to the scale rather
+    // than left to whatever the assistant associates with essays.
+    expect(body.textContent).toContain(REGISTER_NOTE);
   });
 
   it('opens how to run it with a class', () => {

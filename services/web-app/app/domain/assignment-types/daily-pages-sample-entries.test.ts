@@ -102,3 +102,54 @@ describe('the seeded Daily Pages entries', () => {
     expect(unreleased).toHaveLength(1);
   });
 });
+
+/**
+ * The set exists to teach the shape, so the shape has to be visible in it:
+ * the exemplar opens on its claim, and one entry hedges on purpose so the
+ * coaching the rubric describes has something to point at.
+ */
+describe('what the set teaches', () => {
+  const HEDGES = ['I think', 'I feel like', 'In my opinion'];
+
+  test('the top-scoring entry opens on its claim, with no hedge', () => {
+    const best = [...DAILY_PAGES_SAMPLE_ENTRIES].sort(
+      (a, b) =>
+        sampleGradeFields(b).numericPercentage -
+        sampleGradeFields(a).numericPercentage
+    )[0];
+    const firstSentence = best.text.split(/(?<=[.?!])\s/)[0];
+
+    for (const hedge of HEDGES) {
+      expect(firstSentence.toLowerCase()).not.toContain(hedge.toLowerCase());
+    }
+    expect(firstSentence.length).toBeLessThan(200);
+  });
+
+  test('one entry hedges its opener, so the feedback has a case to work on', () => {
+    const hedged = DAILY_PAGES_SAMPLE_ENTRIES.filter((entry) =>
+      HEDGES.some((hedge) =>
+        entry.text.toLowerCase().startsWith(hedge.toLowerCase())
+      )
+    );
+    expect(hedged.length).toBeGreaterThanOrEqual(1);
+
+    // And at least one of them is shown the cut, so the register rule has a
+    // worked example and not just a statement.
+    const coached = hedged.some((entry) => {
+      const voice = entry.comments.voice_and_style.toLowerCase();
+      return voice.includes('hedge') || voice.includes('i think that');
+    });
+    expect(coached).toBe(true);
+  });
+
+  test('no feedback tells a student to stop writing in the first person', () => {
+    for (const entry of DAILY_PAGES_SAMPLE_ENTRIES) {
+      const feedback = [...Object.values(entry.comments), entry.overallComment]
+        .join(' ')
+        .toLowerCase();
+      expect(feedback).not.toContain('avoid the first person');
+      expect(feedback).not.toContain('do not use first person');
+      expect(feedback).not.toContain('don\'t use "i"');
+    }
+  });
+});

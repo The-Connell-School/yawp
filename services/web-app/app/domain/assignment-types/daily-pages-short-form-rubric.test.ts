@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   DAILY_PAGES_SHORT_FORM_CATEGORY_KEYS,
+  DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS,
   DAILY_PAGES_SHORT_FORM_GRAMMAR_CATEGORY_KEY,
   DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
   DAILY_PAGES_SHORT_FORM_RUBRIC,
@@ -108,9 +109,9 @@ describe('the Daily Pages short-form rubric shape', () => {
 describe('grammar is graded, which is what Class Starter never does', () => {
   test('marks the writing up for grammar and syntax', () => {
     expect(resolveGrammarHighlightingEnabled(categories)).toBe(true);
-    expect(resolveGrammarHighlightingEnabled(CLASS_STARTER_RUBRIC.categories)).toBe(
-      false
-    );
+    expect(
+      resolveGrammarHighlightingEnabled(CLASS_STARTER_RUBRIC.categories)
+    ).toBe(false);
   });
 
   test('highlighting comes from the grammar category and only that one', () => {
@@ -171,5 +172,101 @@ describe('the Daily Pages short-form grading instructions', () => {
     for (const category of categories) {
       expect(instructions).toContain(category.label.toLowerCase());
     }
+  });
+});
+
+/**
+ * The shape rules, which are what separate this from both of its neighbours:
+ * a Class Starter explores, an essay argues at length, and this states a claim
+ * and holds it up in a paragraph.
+ */
+describe('the claim-first shape', () => {
+  const instructions = (
+    DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG.gradingInstructions ?? ''
+  ).toLowerCase();
+
+  test('tells the grader the claim belongs in the first sentence', () => {
+    expect(instructions).toContain('claim');
+    expect(instructions).toContain('first sentence');
+  });
+
+  test('rules out exploration, and says where it belongs instead', () => {
+    expect(instructions).toContain('not an exploration');
+    expect(instructions).toContain('class starter');
+  });
+
+  test('marks throat-clearing rather than leaving the shape to taste', () => {
+    const organization = categories.find(
+      (category) => category.key === 'organization_and_structure'
+    );
+    expect(organization?.description.toLowerCase()).toContain('first sentence');
+    expect(instructions).toContain('throat-clearing');
+  });
+
+  test('every category band reaches the top without requiring a journey', () => {
+    // The old top bands rewarded arriving somewhere the piece did not begin,
+    // which is the exploration shape this assignment moved away from.
+    const topBands = categories.map(
+      (category) => category.bands?.at(-1)?.description.toLowerCase() ?? ''
+    );
+    for (const band of topBands) {
+      expect(band).not.toContain('did not begin');
+      expect(band).not.toContain('compounds');
+    }
+  });
+});
+
+describe('first person and hedging', () => {
+  const instructions = (
+    DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG.gradingInstructions ?? ''
+  ).toLowerCase();
+
+  test('allows first person outright, so a grader cannot invent the essay rule', () => {
+    expect(instructions).toContain('first person');
+    expect(instructions).toContain('never an error');
+    expect(instructions).toContain('never mark a student down for it');
+  });
+
+  test('coaches the hedge in feedback rather than in the score', () => {
+    expect(instructions).toContain('i think that');
+    expect(instructions).toContain(
+      'in voice/style feedback rather than in the score'
+    );
+  });
+
+  test('names the hedge in the category a teacher reads it under', () => {
+    const voice = categories.find(
+      (category) => category.key === 'voice_and_style'
+    );
+    expect(voice?.description).toContain('I think that');
+    expect(voice?.description.toLowerCase()).toContain('never an error');
+  });
+});
+
+describe('the Daily Pages tutor instructions', () => {
+  const tutor = DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS.toLowerCase();
+
+  test('coaches the claim first, the support next, the hedge last', () => {
+    expect(tutor.indexOf('the claim.')).toBeGreaterThan(-1);
+    expect(tutor.indexOf('the claim.')).toBeLessThan(
+      tutor.indexOf('the support.')
+    );
+    expect(tutor.indexOf('the support.')).toBeLessThan(
+      tutor.indexOf('the hedge.')
+    );
+  });
+
+  test('tells the tutor not to coach exploration, which is the old behaviour', () => {
+    expect(tutor).toContain('do not encourage the student to explore');
+    expect(tutor).toContain('class starter');
+  });
+
+  test('keeps first person allowed in coaching too', () => {
+    expect(tutor).toContain('writing "i" is fine');
+    expect(tutor).toContain('never tell a student to avoid it');
+  });
+
+  test('never writes for the student', () => {
+    expect(tutor).toContain('never write content for the student');
   });
 });

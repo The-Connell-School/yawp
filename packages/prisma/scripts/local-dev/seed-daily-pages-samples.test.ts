@@ -19,6 +19,7 @@ function fakePrisma({
 }: { modules?: number; existingAssignmentId?: string | null } = {}) {
   const calls: Record<string, Call[]> = {
     assignmentTypeUpdate: [],
+    moduleUpdateMany: [],
     assignmentCreate: [],
     classAssignmentCreate: [],
     documentCreate: [],
@@ -36,6 +37,10 @@ function fakePrisma({
       },
     },
     assignmentModule: {
+      updateMany: async (args: unknown) => {
+        calls.moduleUpdateMany.push({ args });
+        return { count: modules };
+      },
       findMany: async () =>
         Array.from({ length: modules }, (_unused, index) => ({
           id: `module-${index + 1}`,
@@ -213,6 +218,22 @@ describe('seedDailyPagesSampleEntries', () => {
     // The rubric reset still runs: the fixture sync restores the old one on
     // every deploy, so skipping it here would undo the split each time.
     expect(calls.assignmentTypeUpdate).toHaveLength(1);
+  });
+
+  test('points the seeded Tutor at claim-first coaching', async () => {
+    const { prisma, calls } = fakePrisma();
+
+    await seedDailyPagesSampleEntries(prisma as never, options);
+
+    expect(calls.moduleUpdateMany).toHaveLength(1);
+    const { data } = calls.moduleUpdateMany[0].args;
+    // The shipped row is the freewrite tutor, which coaches the exploration
+    // this assignment type no longer wants.
+    expect(data.tutorInstructions).toContain('claim');
+    expect(data.tutorInstructions).not.toContain('probing questions');
+    // Without an alignment, no rubric language reaches the tutor at all.
+    expect(data.rubricAlignmentJson.depth_of_thought).toBe('primary');
+    expect(data.rubricAlignmentJson.voice_and_style).toBe('supporting');
   });
 
   test('wraps each paragraph for the editor', () => {
