@@ -623,6 +623,8 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/local-dev/class-insights.ts \
         packages/prisma/scripts/local-dev/dev-personas.ts \
         packages/prisma/scripts/local-dev/seed-synthetic-data.ts \
+        packages/prisma/scripts/local-dev/seed-daily-pages-samples.ts \
+        services/web-app/app/domain/assignment-types/daily-pages-sample-entries.ts \
         scripts/preview/deploy.sh
       do
         if [[ -f "$file" ]]; then

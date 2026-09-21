@@ -664,6 +664,28 @@ describe('PR preview deployment contract', () => {
     );
   });
 
+  /**
+   * The graded Daily Pages class set is what makes the split visible in a
+   * preview. Both of its files are outside the paths the fingerprint already
+   * covered, so without this a preview with an existing database would keep
+   * showing an empty Daily Pages assignment — and keep grading it on the
+   * fixture's old rubric, which the seed is what resets.
+   */
+  test('the Daily Pages sample entries are in the tooling fingerprint', () => {
+    const deployScript = readRepoFile('scripts/preview/deploy.sh');
+    const fingerprintFunction = deployScript.slice(
+      deployScript.indexOf('compute_tooling_fingerprint()'),
+      deployScript.indexOf('run_tooling_if_needed()')
+    );
+
+    expect(fingerprintFunction).toContain(
+      'packages/prisma/scripts/local-dev/seed-daily-pages-samples.ts'
+    );
+    expect(fingerprintFunction).toContain(
+      'services/web-app/app/domain/assignment-types/daily-pages-sample-entries.ts'
+    );
+  });
+
   test('production previews rebuild application code even when database tooling is cached', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const prebuildFunction = deployScript.slice(

@@ -8,6 +8,10 @@ import {
   syncProdFidelityFixtures,
 } from './local-dev/import-prod-fidelity-fixtures';
 import {
+  resolveDailyPagesSampleTargets,
+  seedDailyPagesSampleEntries,
+} from './local-dev/seed-daily-pages-samples';
+import {
   MissingOrganizationError,
   seedClassStarterAssignmentType,
 } from './seed-class-starter-assignment-type';
@@ -39,6 +43,25 @@ try {
     } else {
       throw error;
     }
+  }
+  // The sync above re-imports the Daily Pages row, saved 0-30 engagement
+  // rubric and all, and a saved rubric always wins — so a preview would grade
+  // Daily Pages exactly as it did before the split. This puts the type back on
+  // the short-form assistant and seeds the graded class set if it is missing.
+  // Creating is skipped when the entries are already there, so it is safe on
+  // every deploy.
+  const sampleTargets = await resolveDailyPagesSampleTargets(prisma);
+  if (!sampleTargets) {
+    console.warn(
+      'No seeded Daily Pages world found (dev personas or class missing). Skipping sample entries.'
+    );
+  } else {
+    const samples = await seedDailyPagesSampleEntries(prisma, sampleTargets);
+    console.log(
+      samples.alreadySeeded
+        ? 'Daily Pages sample entries already present.'
+        : `Seeded ${samples.submissionIds.length} graded Daily Pages entries.`
+    );
   }
 } catch (error) {
   console.error(error);

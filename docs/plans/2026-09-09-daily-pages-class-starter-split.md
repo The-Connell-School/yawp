@@ -141,6 +141,39 @@ The ask for the backing is the one that matters most, because a prompt without
 it leaves Development of Thought nothing to read and the entry stalls mid-scale
 no matter how the student writes it.
 
+## Seeing it in a preview
+
+A preview seeded from the production fixtures cannot show the split, for the
+reason the rollout section gives: the Daily Pages row saved its own 0-30
+engagement rubric, and a saved rubric always wins. Deployed as-is, a preview
+grades Daily Pages exactly as production does today, which is the one thing a
+preview of this change must not do.
+
+So the seed does two things, in nonproduction only:
+
+- **Clears the seeded Daily Pages row's saved rubric**, falling the type back
+  to the short-form default for its kind. Production's row is untouched; this
+  runs in `seed-local-dev` and again in `sync-prod-fidelity-fixtures`, because
+  the fixture sync restores the saved rubric on every deploy.
+- **Seeds a graded class set.** Four entries on one prompt
+  (`sf-cd-002`), written to span the scale: one that complicates its own claim,
+  one that answers properly, one that circles, and one that restates the
+  prompt. Three released, one graded and held back. Each carries per-category
+  scores and comments, an overall comment, grammar marks whose excerpts are
+  checked to exist in the entry, and a grading-run snapshot of the rubric they
+  were scored on.
+
+The entries live in
+`services/web-app/app/domain/assignment-types/daily-pages-sample-entries.ts`
+so their percentages can be asserted against `computeWeightedBandPercentage`
+rather than typed in by hand.
+
+What the set shows, which prose about the rubric does not: because this rubric
+is band-scored, an entry scored Proficient in all five categories is 60% — a D.
+That is the honest consequence of a 1-5 rubric read as a percentage, and it is
+worth seeing on the four entries before deciding whether the scale wants a
+curve.
+
 ## Rollout
 
 1. Create the Class Starter assignment type (see above) and move the freewrite

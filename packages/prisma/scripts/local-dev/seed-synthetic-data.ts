@@ -2,6 +2,7 @@
 import type { Prisma, PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
 import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
+import { seedDailyPagesSampleEntries } from './seed-daily-pages-samples';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_PERSONAS,
@@ -293,17 +294,20 @@ export async function seedSyntheticLocalDevData(
   });
 
   if (dailyPagesAssignmentTypeId) {
-    const dailyAssignment = await prisma.assignment.create({
-      data: {
-        assignmentTypeId: dailyPagesAssignmentTypeId,
-        title: 'Daily Pages - week 2',
-        prompt: 'Write freely for ten minutes about something that surprised you this week.',
-      },
-    });
-    await prisma.classAssignment.create({
-      data: {
-        assignmentId: dailyAssignment.id,
-        classId: primaryClass.id,
+    // A graded class set rather than an empty assignment: the split is only
+    // legible once you can open four entries on one prompt and see where the
+    // assistant put them. Also points the seeded type at the short-form
+    // rubric — see seed-daily-pages-samples.ts.
+    await seedDailyPagesSampleEntries(prisma, {
+      assignmentTypeId: dailyPagesAssignmentTypeId,
+      classId: primaryClass.id,
+      teacherMembershipId: primaryTeacher.membershipId,
+      studentMembershipIds: {
+        student: personaRecords.student.membershipId,
+        'student-submitted': personaRecords['student-submitted'].membershipId,
+        'student-graded': personaRecords['student-graded'].membershipId,
+        'student-unreleased':
+          personaRecords['student-unreleased'].membershipId,
       },
     });
   }
