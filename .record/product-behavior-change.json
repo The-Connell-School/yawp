@@ -1,0 +1,15 @@
+{
+  "changeType": "product-behavior-change",
+  "summary": "Replace the assignment creator's long rubric-total disclosure with a compact assignment-level AI grading override.",
+  "approvedDirection": "Point value is the single grading total when customization is enabled; customization is off by default, preserves rubric defaults, and Steps remain the backward-compatible default mode.",
+  "compatibility": [
+    "Existing assignment rubricTotalPoints and gradingMode fields remain unchanged.",
+    "Existing customized assignments load with customization enabled.",
+    "Turning customization off clears the assignment override and restores rubric defaults."
+  ],
+  "verification": [
+    "Focused component and grading resolver tests",
+    "Teacher browser creation proof with persisted override values",
+    "AI grading regression proving overridden rubric output and assignment-total final grade"
+  ]
+}
