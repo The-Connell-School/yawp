@@ -648,6 +648,61 @@ async function seedThreeWarmUpOptions(e2eContext: {
 }
 
 /**
+ * A lesson that opens with a class starter and puts Daily Pages in the middle.
+ *
+ * The two are different exercises with different rubrics, and the planner used
+ * to call both of them "the warm-up". A class starter has to reach the Class
+ * Starter sheet, and a reflection sitting after the reading has to survive the
+ * trip without being turned back into a bell-ringer.
+ */
+async function seedClassStarterAndReflection(e2eContext: {
+  teacherMembershipId: string;
+  organizationId: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Macbeth, Act 3',
+        messages: {
+          create: [
+            {
+              role: 'user',
+              content: 'Plan 50 minutes on Macbeth Act 3.',
+              createdAt: new Date('2026-08-05T10:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content:
+                '## Class starter (4 min)\n\nOn the board as they come in.\n\n' +
+                '```yawp-daily-pages\n' +
+                'kind: class-starter\n' +
+                'Name something you wanted badly and then got. Was it what you expected?\n' +
+                '```\n\n' +
+                '## Read Act 3, scene 2 (15 min)\n\nRead it aloud, two volunteers.\n\n' +
+                '## Daily Pages (12 min)\n\n' +
+                'They have the scene now, so they have something to reflect on.\n\n' +
+                '```yawp-daily-pages\n' +
+                'kind: daily-pages\n' +
+                'Macbeth has the crown by Act 3 and is miserable. What did it cost him?\n' +
+                '```\n\n' +
+                '## Closing (4 min)\n\nTwo entries read aloud.',
+              createdAt: new Date('2026-08-05T10:00:01.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/**
  * A plain lesson plan carrying no artifacts, so the follow-on offers are both
  * still on the table. A reply that already built a handout suppresses that
  * offer on purpose, which is a different case.
@@ -2587,6 +2642,62 @@ test.describe('YAWP! Lesson Planner', () => {
     );
     await expect(page.locator('#assignment-create-prompt')).toHaveValue(
       /something you believed last year/
+    );
+  });
+
+  test('sends a class starter to the Class Starter sheet, not to Daily Pages', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedClassStarterAndReflection(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const cards = page.getByTestId('daily-pages-card');
+    await expect(cards).toHaveCount(2);
+    await expect(page.locator('main')).not.toContainText('yawp-daily-pages');
+    // Neither card leaks its own header lines into the prompt students read.
+    await expect(page.locator('main')).not.toContainText('kind:');
+
+    // The card says which exercise this is, because the two are graded
+    // differently and the teacher is the one who has to know.
+    const starter = cards.nth(0);
+    await expect(starter).toHaveAttribute(
+      'data-exercise-kind',
+      'class-starter'
+    );
+    await expect(starter).toContainText('Class Starter');
+    await expect(starter).toContainText('Name something you wanted badly');
+
+    const reflection = cards.nth(1);
+    await expect(reflection).toHaveAttribute(
+      'data-exercise-kind',
+      'daily-pages'
+    );
+    await expect(reflection).toContainText('Daily Pages');
+    await expect(reflection).toContainText('What did it cost him?');
+
+    // And the starter reaches its own sheet. Filing it as Daily Pages would
+    // mark a four-minute entry for depth of reflection nobody asked for.
+    await starter.getByTestId('daily-pages-create').click();
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`
+      )
+    );
+    await expect(page.locator('#assignment-create-prompt')).toHaveValue(
+      /Name something you wanted badly/
+    );
+
+    // The reflection still goes where it always did.
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    await cards.nth(1).getByTestId('daily-pages-create').click();
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+      )
     );
   });
 

@@ -81,6 +81,7 @@ export type E2EContext = {
   teacherEmail: string;
   assignmentTypeId: string;
   dailyPagesAssignmentTypeId: string;
+  classStarterAssignmentTypeId: string;
   thesisEssayAssignmentTypeId: string;
   apHistoryAssignmentTypeId: string;
   /** Assignment type with allowsImageUploads on (the GBA 300 expansion rollout). */
@@ -459,6 +460,42 @@ export async function seedE2E(): Promise<E2EContext> {
                 {
                   title: 'Write',
                   prompt: 'Write freely for ten minutes.',
+                  position: 1,
+                  showChatButton: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  // The other half of Yawp's short writing, and the reason the lesson planner
+  // has to tell the two apart: a class starter is marked on engagement alone,
+  // a Daily Pages entry on depth and clarity as well.
+  const classStarterAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'Class Starter',
+      description:
+        'Three or four minutes of low-stakes writing at the top of the period.',
+      position: 6,
+      ownerOrgId: org.id,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: [
+          {
+            title: 'Class Starter',
+            position: 1,
+            description: 'A short entry to open the period.',
+            instructions: {
+              create: [
+                {
+                  title: 'Write',
+                  prompt: 'Write for three minutes.',
                   position: 1,
                   showChatButton: true,
                 },
@@ -990,6 +1027,7 @@ export async function seedE2E(): Promise<E2EContext> {
     teacherEmail: seededTeacherEmail,
     assignmentTypeId: assignmentType.id,
     dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
+    classStarterAssignmentTypeId: classStarterAssignmentType.id,
     thesisEssayAssignmentTypeId: thesisEssayAssignmentType.id,
     apHistoryAssignmentTypeId: apHistoryAssignmentType.id,
     imageUploadAssignmentTypeId: imageUploadAssignmentType.id,
