@@ -46,7 +46,7 @@ import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
-import { ExitTicketDirections } from './exit-ticket-directions';
+import { AboutExitTicket } from './about-exit-ticket/about-exit-ticket';
 import {
   EXIT_TICKETS_ENABLED,
   isExitTicketAssignmentType,
@@ -492,7 +492,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     apHistoryLibrary,
     // Teacher-facing guidance, so it follows the same role gate the other
     // assignment types' directions do.
-    showExitTicketDirections:
+    showAboutExitTicket:
       profile.role === 'TEACHER' &&
       EXIT_TICKETS_ENABLED &&
       isExitTicketAssignmentType(assignmentType),
@@ -741,7 +741,7 @@ export default function AppAssignmentTypesIdRoute() {
             </p>
           </div>
         </div>
-        {data.showExitTicketDirections ? <ExitTicketDirections /> : null}
+        {data.showAboutExitTicket ? <AboutExitTicket /> : null}
         {showPromptsLibrary ? <TeacherDirections /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {modulesVisible ? (
