@@ -161,3 +161,109 @@ describe('ViewPanel on work that is not for a grade', () => {
     expect(text()).toContain('4/5');
   });
 });
+
+const { EXIT_TICKET_SCORE_BANDS } = await import(
+  '~/domain/assignment-types/exit-ticket-rubric'
+);
+
+/** An exit ticket as it really arrives: one banded category, no category comment. */
+const bandedExitTicket: ViewPanelSubmission = {
+  numericPercentage: 79,
+  letterGrade: 'C',
+  overallScore: 79,
+  score: '79% (C)',
+  overallComment: 'Riley, that last sentence is a genuinely sharp idea.',
+  rubricScores: { understanding: { score: 79, comment: '' } },
+  rubricConfig: {
+    minScore: 0,
+    maxScore: 100,
+    categories: [
+      {
+        key: 'understanding',
+        label: 'Understanding',
+        bands: EXIT_TICKET_SCORE_BANDS,
+      },
+    ],
+  },
+  document: { assignment: { submitForGrade: true, pointValue: 15 } },
+};
+
+describe('ViewPanel where the rubric scores one banded category', () => {
+  it('names the band the score landed in, beside the grade', () => {
+    // The band is the grader's actual judgement -- it picks the band from its
+    // description and only then a number inside it. Showing the number alone
+    // showed the refinement and threw away the decision.
+    render(<ViewPanel submission={bandedExitTicket} />);
+
+    expect(text()).toContain('12 / 15');
+    expect(text()).toContain('Partly there');
+  });
+
+  it('says what that band means', () => {
+    render(<ViewPanel submission={bandedExitTicket} />);
+
+    expect(text()).toContain('The right idea in their own words');
+  });
+
+  it('drops the rubric section, which could only restate the grade', () => {
+    // One category at weight 1 means the category score IS the overall score,
+    // and with no category comment the row expanded to "No feedback for this
+    // category". A second copy of the grade behind an empty disclosure.
+    render(<ViewPanel submission={bandedExitTicket} />);
+
+    expect(text()).not.toContain('Rubric');
+    expect(text()).not.toContain('No feedback for this category');
+    expect(text()).not.toContain('79/100');
+  });
+
+  it('keeps the rubric section when the category carries its own feedback', () => {
+    render(
+      <ViewPanel
+        submission={{
+          ...bandedExitTicket,
+          rubricScores: {
+            understanding: { score: 79, comment: 'Cite the line next time.' },
+          },
+        }}
+      />
+    );
+
+    // The comment itself sits inside a collapsed row; what matters here is
+    // that the section survives, because it now has something to disclose.
+    expect(text()).toContain('Rubric');
+    expect(text()).toContain('Understanding');
+  });
+
+  it('keeps the rubric section when there is more than one category', () => {
+    render(
+      <ViewPanel
+        submission={{
+          ...bandedExitTicket,
+          rubricScores: {
+            thesis_and_content: { score: 4, comment: '' },
+            organization: { score: 3, comment: '' },
+          },
+          rubricConfig: { minScore: 1, maxScore: 5 },
+        }}
+      />
+    );
+
+    expect(text()).toContain('Rubric');
+    expect(text()).toContain('Thesis And Content');
+  });
+
+  it('shows no band when the rubric declares none', () => {
+    // An essay rubric has no bands. Nothing to name, so nothing is added.
+    render(
+      <ViewPanel
+        submission={{
+          ...bandedExitTicket,
+          rubricConfig: { minScore: 0, maxScore: 100 },
+        }}
+      />
+    );
+
+    expect(text()).not.toContain('Partly there');
+    expect(text()).toContain('12 / 15');
+  });
+});

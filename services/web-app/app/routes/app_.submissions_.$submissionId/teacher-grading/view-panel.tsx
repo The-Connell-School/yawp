@@ -7,6 +7,8 @@ import {
 import { formatAssignmentGrade, formatPointGrade } from '~/domain/grading/gradeMath';
 import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
 import { isScored } from '~/domain/grading/rubric-display';
+import { getCategoryScoreBand } from '~/domain/assignment-types/rubric-category-options';
+import type { RubricScoreBand } from '~/domain/assignment-types/assignment-type-rubric.shared';
 
 export type ViewPanelSubmission = {
   numericPercentage: number | null;
@@ -15,8 +17,20 @@ export type ViewPanelSubmission = {
   score?: string | null;
   overallComment: string | null;
   rubricScores: unknown;
-  /** The scale this rubric was scored on, so rows read against it. */
-  rubricConfig?: { minScore: number; maxScore: number } | null;
+  /**
+   * The scale this rubric was scored on, so rows read against it. `categories`
+   * carries the bands the grader chose from, which the route already passes
+   * through -- the panel only ever narrowed them away.
+   */
+  rubricConfig?: {
+    minScore: number;
+    maxScore: number;
+    categories?: {
+      key: string;
+      label?: string;
+      bands?: RubricScoreBand[];
+    }[];
+  } | null;
   document?: {
     assignment?: {
       submitForGrade: boolean;
@@ -77,6 +91,36 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
         submission.numericPercentage,
         submission.document?.assignment?.pointValue ?? null
       );
+  /**
+   * The band the grader landed in, when the whole rubric is one banded
+   * category. That is the shape of every exit ticket, Daily Pages entry and
+   * Class Starter: the model picks the band from its description first and
+   * only then a score inside it, so the band is the judgement and the number
+   * is the refinement. Showing the number alone published the refinement and
+   * threw the judgement away.
+   */
+  const soleEntry = rubricEntries.length === 1 ? rubricEntries[0] : null;
+  const soleBand =
+    soleEntry && soleEntry.score != null
+      ? getCategoryScoreBand(
+          {
+            bands: submission.rubricConfig?.categories?.find(
+              (category) => category.key === soleEntry.key
+            )?.bands,
+          },
+          soleEntry.score
+        )
+      : null;
+  /**
+   * With one category at weight 1 the category score IS the overall score, so
+   * a row carrying no comment of its own can only restate the grade -- and its
+   * disclosure opened onto "No feedback for this category". Dropped, but only
+   * once the band is standing in for it: a rubric with no bands keeps the row,
+   * because then it is the only sign the work was read at all.
+   */
+  const rubricRestatesTheGrade =
+    soleEntry != null && !soleEntry.comment?.trim() && soleBand != null;
+
   const percentageDisplay =
     submission.numericPercentage != null
       ? `${submission.numericPercentage}%${
@@ -99,6 +143,39 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
                   {percentageDisplay}
                 </p>
               ) : null}
+          {soleBand ? (
+            <div className="mt-2">
+              <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/[0.06] px-2.5 py-0.5 text-xs font-medium text-foreground/80">
+                {soleBand.label}
+              </span>
+              {soleBand.description ? (
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  {soleBand.description}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+            </div>
+          ) : null}
+          {/* Work assessed but not for a grade still reports what it was read
+              as -- the band is the only assessment signal it has. */}
+          {!showsGrade && soleBand ? (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">
+                Assessed
+              </h3>
+          {soleBand ? (
+            <div className="mt-1">
+              <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/[0.06] px-2.5 py-0.5 text-xs font-medium text-foreground/80">
+                {soleBand.label}
+              </span>
+              {soleBand.description ? (
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  {soleBand.description}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
             </div>
           ) : null}
           {submission.overallComment ? (
@@ -111,7 +188,7 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
               </p>
             </div>
           ) : null}
-          {rubricEntries.length > 0 ? (
+          {rubricEntries.length > 0 && !rubricRestatesTheGrade ? (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground">
                 Rubric
