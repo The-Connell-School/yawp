@@ -17,6 +17,14 @@ import type { LocalDevPersonaRole } from './dev-personas.ts';
  * Prompts are not written here. The seed composes each one with the same
  * function the product uses, so the demo cannot drift from what a teacher
  * would really get.
+ *
+ * Every ticket is an English lesson, because Yawp is an English product and a
+ * preview stocked with chemistry and two-step equations shows a teacher the
+ * mechanics without ever showing them their own subject. The lessons are the
+ * ones an English classroom really closes on: a symbol, a claim, a quotation,
+ * a scene, a line of verse, a punctuation mark taught for the fourth time.
+ * Keep it that way when adding to the set — the coverage the matrix asks for
+ * can always be met with an English lesson.
  */
 
 export type DemoExitTicketResponseState =
@@ -59,22 +67,22 @@ function notes(partial: Partial<ExitTicketLessonNotes>): ExitTicketLessonNotes {
 
 export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
   {
-    title: 'Exit ticket: the water cycle',
+    title: 'Exit ticket: why show beats tell',
     demonstrates:
       'Specific, all three notes, graded for points: the fully-specified case.',
     config: {
       schemaVersion: 1,
       mode: 'specific',
       focus: 'explain-concept',
-      topic: 'how energy moves through the water cycle',
+      topic: 'why a concrete detail does more work than a stated feeling',
       answerType: 'objective',
       lessonNotes: notes({
         mainPoints:
-          'Energy enters as sunlight, is carried as latent heat in water vapour, and is released again when the vapour condenses.',
+          'A stated feeling asks the reader to take your word for it. A detail makes the reader arrive at the feeling themselves, which is why it lands harder and lasts longer.',
         mustMention:
-          'That the energy is released when water vapour condenses, not when it evaporates.',
+          'That the reader does the concluding — not that details are “more descriptive” or “more interesting”.',
         watchFor:
-          'Describing where the water goes without ever mentioning energy.',
+          'Saying show-don’t-tell means using the five senses or adding more adjectives.',
       }),
     },
     submitForGrade: true,
@@ -84,40 +92,41 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       {
         personaKey: 'student-graded',
         state: 'graded',
-        text: 'The sun puts energy into the water when it evaporates, and the water carries that energy with it as vapour. The part I did not get until today is that the energy does not disappear up there. It gets let go again when the vapour cools down and condenses into cloud, which is why storms have so much energy in them. So the water cycle is really moving energy around, not just moving water around.',
+        text: 'If I write that she was nervous, you have to believe me, and you will, but you will not feel anything. If I write that she read the same line four times, you work out that she is nervous yourself, and because you worked it out it is yours. That is the difference I did not get before today. It is not that the detail is prettier. It is that telling makes the reader a passenger and showing gives them something to do.',
         score: 92,
         letterGrade: 'A',
         overallComment:
-          'Casey, you have got the thing this was checking for: you explained that the energy is released at condensation, not at evaporation, and you did it in your own words. The line about storms shows you following the idea somewhere of your own. Next step is saying where that energy came from in the first place.',
+          'Casey, you have got the thing this was checking for: the reader does the concluding, and that is why it lands. "Telling makes the reader a passenger" is your own sentence and it is a good one. Next step is finding a place in your draft where you told me something and letting me work it out instead.',
       },
       {
         personaKey: 'student-submitted',
         state: 'graded',
-        text: 'The water cycle is evaporation, condensation, precipitation and collection. The water goes up into the clouds and then comes back down as rain and then it goes into rivers and back to the ocean and starts again.',
+        text: 'Show don’t tell means you should use descriptive language and the five senses so the reader can picture it. You use adjectives and imagery instead of just saying what happened, which makes the writing more interesting to read.',
         score: 38,
         letterGrade: 'F',
         overallComment:
-          'Riley, this is an accurate list of the stages, but it is the list you were given rather than an explanation of it. The question was about energy, and energy is not mentioned anywhere here. Have another go at just one step: what happens to the sun energy when the vapour turns back into water?',
+          'Riley, this is the definition you were given rather than an explanation of it, and it is the version I was hoping nobody would write — more adjectives is not what showing means. Try one thing: write "he was angry" as a detail, without the word angry. Then tell me what changed for the reader.',
       },
     ],
   },
 
   {
-    title: 'Exit ticket: balancing equations',
+    title: 'Exit ticket: where the counterargument goes',
     demonstrates:
       'Ask a question, feedback only: the honest-confusion case the rubric protects.',
     config: {
       schemaVersion: 1,
       mode: 'specific',
       focus: 'ask-question',
-      topic: 'how to balance a chemical equation',
+      topic: 'where a counterargument belongs in an essay',
       answerType: 'subjective',
       lessonNotes: notes({
         mainPoints:
-          'Atoms are conserved, so coefficients change but subscripts never do.',
-        mustMention: 'That you may only change coefficients, not subscripts.',
+          'A counterargument goes where it is strongest, usually after your own case is standing. Raising it and answering it is what makes the argument credible.',
+        mustMention:
+          'That the counterargument has to be answered, not only mentioned.',
         watchFor:
-          'Changing a subscript to make the counts match, which changes the substance.',
+          'Dropping the other side in as a paragraph and never returning to it, which reads as conceding.',
       }),
     },
     submitForGrade: false,
@@ -127,31 +136,32 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       {
         personaKey: 'student',
         state: 'graded',
-        text: 'I understand why we balance them. The number of atoms has to be the same on both sides because atoms do not just appear. What I keep getting stuck on is which number I am allowed to change. I know I am supposed to change the big number in front, but when I am halfway through and the oxygens still do not match, I end up changing the little number instead because it works. I think that is wrong because it makes it a different chemical, but I am not sure why that matters more than getting the counts even.',
+        text: 'I understand why you put one in. If I never mention the other side it looks like I did not think of it, and anyone who has thought of it stops trusting me. What I cannot work out is where it goes. If I put it early it feels like I am arguing against myself before I have said anything, and if I put it at the end it is the last thing the reader reads and that seems worse. I have been sticking it in the middle because it has to go somewhere, which I do not think is a reason.',
         score: 74,
         letterGrade: 'C',
         overallComment:
-          'Sam, this is exactly the kind of answer that helps me teach. You have the principle right, and you have found the precise place you come unstuck rather than saying you do not get it. You are also right about why changing the subscript is a problem: it makes it a different substance. Hold on to that instinct, and tomorrow we will work on what to do when the oxygens will not come out even.',
+          'Sam, this is exactly the kind of answer that helps me teach. You have the principle right, and you have found the precise place you come unstuck rather than saying you do not get it. You are also right that "it has to go somewhere" is not a reason. Hold on to that instinct, and tomorrow we will work on putting it after your case is standing and answering it on the spot.',
       },
     ],
   },
 
   {
-    title: 'Exit ticket: two-step equations',
+    title: 'Exit ticket: which quotation proves it',
     demonstrates:
-      'Specific, graded, whole class: every band on one ticket. The clearest demonstration of what this rubric rewards — the student who gets the wrong answer with sound reasoning outscores the one who gets it right and shows nothing.',
+      'Specific, graded, whole class: every band on one ticket. The clearest demonstration of what this rubric rewards — the student who picks the wrong quotation with sound reasoning outscores the one who picks the right one and shows nothing.',
     config: {
       schemaVersion: 1,
       mode: 'specific',
       focus: 'explain-concept',
-      topic: 'why you undo the +7 before dividing by 3 in 3x + 7 = 22',
+      topic:
+        'which of the three quotations best proves the claim that Curley’s wife is lonely, and why',
       answerType: 'objective',
       lessonNotes: notes({
         mainPoints:
-          'Undo the addition or subtraction first, then undo the multiplication. Whatever you do to one side you do to the other.',
-        mustMention: 'Why the +7 comes off before the 3 is divided out.',
+          'The strongest quotation is the one that shows the loneliness rather than announcing it. B has her counting who she could have talked to; A and C say she is lonely outright.',
+        mustMention: 'Why the chosen quotation proves it better than the others.',
         watchFor:
-          'Dividing by 3 first, which leaves a fraction and usually ends in a wrong answer.',
+          'Picking the quotation with the word “lonely” in it because the word matches the claim.',
       }),
     },
     submitForGrade: true,
@@ -161,29 +171,29 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       {
         personaKey: 'student-graded',
         state: 'graded',
-        text: 'First I take the 7 off both sides, so 3x + 7 = 22 becomes 3x = 15. I do the 7 first because it is the thing furthest from the x, and I am peeling the equation back in the opposite order from how it was built. Then I divide both sides by 3 and get x = 5. I checked it by putting 5 back in: 3 times 5 is 15, plus 7 is 22, so it works.',
+        text: 'B. A and C both have her saying she is lonely, which sounds like it should be the best proof, but a character saying she is lonely is her opinion of herself and I would still have to argue it is true. In B she is counting up the people she could have spoken to that week and the number is basically nobody, and she is not making a point when she does it. So B is evidence and the other two are claims wearing quotation marks.',
         score: 94,
         letterGrade: 'A',
         overallComment:
-          'Casey, you did not just do the steps, you said why they go in that order — peeling it back in the opposite order from how it was built is exactly it. Checking your answer by substituting back is a habit worth keeping.',
+          'Casey, you did not just pick the right one, you said why the obvious one is a trap — "claims wearing quotation marks" is exactly the distinction. Choosing evidence over a matching word is the habit this whole unit is trying to build. Nothing to fix.',
       },
       {
         personaKey: 'student',
         state: 'graded',
-        text: 'You have to get rid of the 7 first because it is added on, and you can only undo the multiplying once the adding is gone. So 3x + 7 = 22 turns into 3x = 15. Then I divide by 3. I got x = 4 but I am not sure, I think I divided wrong at the end.',
+        text: 'I picked C. The reason is that a quote should show the feeling happening rather than just naming it, so I looked for the one where she is doing something rather than saying something about herself. I think C is her at the barn door waiting for someone to come past. If it is actually the one where she says she gets lonely then I picked wrong, but the reason I used is the one I would use again.',
         score: 72,
         letterGrade: 'C',
         overallComment:
-          'Sam, your final answer is wrong, and your understanding is not. You explained why the +7 comes off first, which is the thing this was checking for, and you caught that the last step was where it went astray. Redo just that division: 15 divided by 3.',
+          'Sam, your choice is wrong and your reasoning is not. Looking for the quotation where the feeling happens rather than gets named is precisely the right test — you just misremembered which letter that was. Check the handout and you will see B is the one doing what you described.',
       },
       {
         personaKey: 'student-submitted',
         state: 'graded',
-        text: 'x = 5',
+        text: 'B',
         score: 40,
         letterGrade: 'F',
         overallComment:
-          'Riley, that is the right answer, so something is working. But this ticket was asking for your thinking, and there is none here to read — I cannot tell whether you know why the 7 comes off before you divide, or whether you remembered the pattern. Show me the order next time and say why.',
+          'Riley, that is the right answer, so something is working. But this ticket was asking for your thinking, and there is none here to read — I cannot tell whether you can see why B does more than A, or whether you guessed. Say why next time, in one sentence.',
       },
       {
         personaKey: 'student-unreleased',
@@ -192,7 +202,7 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
         score: 0,
         letterGrade: 'F',
         overallComment:
-          'Taylor, there is nothing here for me to work with. If you are stuck, tell me where — even "I do not know which number to move first" gives me something to teach to. Come find me before Friday.',
+          'Taylor, there is nothing here for me to work with. If you are stuck, tell me where — even "I do not know what makes one quote better than another" gives me something to teach to. Come find me before Friday.',
       },
     ],
   },
@@ -242,7 +252,7 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
   },
 
   {
-    title: 'Exit ticket: the New Deal',
+    title: 'Exit ticket: this narrator and the last one',
     demonstrates:
       'Explain a concept, with no desired response: a real mismatch beats a tidy connection, and the grader is told not to expect one particular comparison.',
     config: {
@@ -250,15 +260,14 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       mode: 'specific',
       focus: 'explain-concept',
       topic:
-        'how the New Deal compares to the Progressive Era reforms we studied',
+        'how this narrator compares to the one in the novel we finished last month',
       answerType: 'subjective',
       lessonNotes: notes({
         mainPoints:
-          'The New Deal expanded federal power in ways the Progressive Era had started, but went much further and faced far less consensus.',
-        mustMention:
-          'A specific link to the Progressive Era reforms we studied.',
+          'Both narrators are inside the story and invested in how they come across, but this one is far more aware of being read, which changes what he hides.',
+        mustMention: 'A specific link to the narrator of the previous novel.',
         watchFor:
-          'Saying it is "just like" the Progressive Era without naming what was different.',
+          'Saying they are “both unreliable” without naming what is different about how.',
       }),
     },
     submitForGrade: false,
@@ -268,20 +277,20 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       {
         personaKey: 'student-submitted',
         state: 'graded',
-        text: 'It picks up where the Progressives left off, with the government stepping in on things it used to leave alone. But the part that does not fit is how people reacted. The Progressive reforms we read about had a lot of agreement behind them, and the New Deal had the Court striking things down and people calling it socialism. So it is the same direction but a completely different temperature, and I am not totally sure why the reaction was so different when the idea was similar.',
+        text: 'They are both telling us a story they are in, and both of them want us on their side. The part that does not fit is how hard they are working at it. The last one did not seem to know we were there — he said things that made him look bad without noticing. This one knows exactly that he is being read and keeps getting ahead of us, telling us he is honest before we have accused him of anything. So the same setup gives a completely different feeling, and I am not sure whether the second one is more honest or much less.',
         score: 90,
         letterGrade: 'A',
         overallComment:
-          'Riley, the connection is good and the mismatch is better. Noticing that the same direction met a completely different reaction is the more interesting observation, and the question you end on is the one historians argue about. Bring it to Monday.',
+          'Riley, the connection is good and the mismatch is better. Noticing that one narrator does not know we are there and the other cannot stop performing for us is the more interesting observation, and the question you end on is the one the whole novel turns on. Bring it to Monday.',
       },
       {
         personaKey: 'student-unreleased',
         state: 'graded',
-        text: 'The New Deal connects to the Progressive Era because they both wanted to help people and make the country better. They are both examples of the government doing more to fix problems in society.',
+        text: 'This narrator connects to the last one because they are both unreliable narrators and they both tell the story from their own point of view. They are both examples of a first person narrator who is biased.',
         score: 42,
         letterGrade: 'F',
         overallComment:
-          'Taylor, this is true but it would be true of almost any two reforms — nothing here is specific to the New Deal or to what we actually read about the Progressives. Name one Progressive reform from our unit and say what the New Deal did that went further.',
+          'Taylor, this is true but it would be true of almost any two first-person novels — nothing here is specific to either book. Name one thing the last narrator did that this one would never do, and you have an answer.',
       },
     ],
   },
@@ -316,10 +325,11 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       mode: 'basic',
       lessonNotes: notes({
         mainPoints:
-          'Fractions can only be added once the denominators match, because the pieces have to be the same size before you can count them together.',
+          'A sentence fragment is a piece of a sentence punctuated as a whole one. It is missing a subject, a verb, or the thing that finishes the thought.',
         mustMention:
-          'That you cannot add fifths to thirds until both are cut into the same size pieces.',
-        watchFor: 'Adding the numerators and the denominators straight across.',
+          'That a fragment can be long and still be a fragment — length is not the test.',
+        watchFor:
+          'Deciding whether something is a fragment by how long it is or whether it “sounds finished”.',
       }),
     },
     submitForGrade: true,
@@ -329,42 +339,43 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       {
         personaKey: 'student-graded',
         state: 'graded',
-        text: 'What I learned is that you cannot just add the tops and the bottoms, which is what I have been doing all year without anyone catching it. The reason is that a third and a fifth are different sized pieces, so counting them together does not mean anything until you cut them both into fifteenths. Then they are the same size and you can count them. It is like you cannot add three apples and five oranges and say you have eight apples.',
+        text: 'What I learned is that a fragment is not a short sentence, which is what I have assumed all year without anyone catching it. You showed one that ran three lines and it was still a fragment because the whole thing was just a description hanging there with nothing happening in it. So the test is not how long it is, it is whether there is somebody doing something and whether the thought gets finished. A fragment is a piece of a sentence wearing a capital letter and a full stop.',
         score: 88,
         letterGrade: 'B',
         overallComment:
-          'Casey, the apples and oranges line is doing real work here — that is the idea, not a slogan about it. You also named the habit you are breaking, which is the honest part. Nothing to fix.',
+          'Casey, "a piece of a sentence wearing a capital letter and a full stop" is doing real work here — that is the idea, not a slogan about it. You also named the habit you are breaking, which is the honest part. Nothing to fix.',
       },
       {
         personaKey: 'student',
         state: 'graded',
-        text: 'What I learned today was more about how I work than about the maths. I finally asked a question in front of everyone instead of waiting until the end, and nobody laughed, which I had genuinely been worried about. I think I will do that again.',
+        text: 'What I learned today was more about how I work than about the grammar. I finally read a piece of my own writing out loud in front of everyone instead of waiting until the end, and nobody laughed, which I had genuinely been worried about. I think I will do that again.',
         score: 52,
         letterGrade: 'F',
         overallComment:
-          'Sam, I am glad you wrote this and I hope you do it again — that took something. The ticket asked openly, so this is a fair answer to the question I asked. It just does not tell me whether the fractions landed, so I will check that with you directly on Monday rather than guess.',
+          'Sam, I am glad you wrote this and I hope you do it again — that took something. The ticket asked openly, so this is a fair answer to the question I asked. It just does not tell me whether the fragments landed, so I will check that with you directly on Monday rather than guess.',
       },
       {
         personaKey: 'student-submitted',
         state: 'graded',
-        text: 'Today we did adding fractions with different denominators.',
+        text: 'Today we did sentence fragments and how to fix them.',
         score: 22,
         letterGrade: 'F',
         overallComment:
-          'Riley, that is the topic, not what you learned about it. One more sentence would do it: what has to be true about two fractions before you are allowed to add them?',
+          'Riley, that is the topic, not what you learned about it. One more sentence would do it: what has to be missing before a group of words counts as a fragment?',
       },
     ],
   },
 
   {
-    title: 'Exit ticket: why the Senate is not proportional',
+    title: 'Exit ticket: why the porter speaks in prose',
     demonstrates:
       'Specific with no notes at all: a named target, but nothing for the grader to read against beyond the question itself.',
     config: {
       schemaVersion: 1,
       mode: 'specific',
       focus: 'explain-concept',
-      topic: 'why every state gets two senators regardless of population',
+      topic:
+        'why Shakespeare writes the nobles in verse and the porter in prose',
       answerType: 'objective',
     },
     submitForGrade: false,
@@ -374,37 +385,37 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       {
         personaKey: 'student-submitted',
         state: 'graded',
-        text: 'It was a compromise, because the small states would not have joined otherwise. The big states wanted seats by population and the small ones wanted every state equal, so they did both — one house each way. The bit I find strange is that the compromise is still running now, when the reason for it was getting thirteen states to sign something in 1787.',
+        text: 'It marks who they are without anybody having to say it. Verse is the high, formal way of speaking and it belongs to the people with rank, and prose is ordinary talk, so the second the porter opens his mouth the audience knows what he is before he has told them anything. The bit I find strange is that the porter gets the funniest and most honest speech in the act while speaking the lower form, which feels like the play disagreeing with its own rule.',
         score: 84,
         letterGrade: 'B',
         overallComment:
-          'Riley, you explained the trade rather than naming it, and the last line is a genuinely good question. Hold it for the unit on representation.',
+          'Riley, you explained the effect rather than naming the convention, and the last line is a genuinely good question. Hold it — that tension is most of what the porter scene is for.',
       },
       {
         personaKey: 'student-unreleased',
         state: 'graded',
-        text: 'Because of the Great Compromise. Every state gets two senators no matter how big it is.',
+        text: 'Because of the difference between verse and prose. The nobles speak in verse and the porter speaks in prose.',
         score: 30,
         letterGrade: 'F',
         overallComment:
-          'Taylor, both sentences are correct, and neither of them is an explanation — the second one restates the question and the first one names it. Why did the small states insist on it?',
+          'Taylor, both sentences are correct, and neither of them is an explanation — the second one restates the question and the first one names it. What does the audience learn from the switch?',
       },
     ],
   },
 
   {
-    title: 'Exit ticket: reading speed off a graph',
+    title: 'Exit ticket: scanning a line',
     demonstrates:
       'Specific with only the main points filled in, and the tutor deliberately left on: a skill check where the teacher wants students to have help while they work.',
     config: {
       schemaVersion: 1,
       mode: 'specific',
       focus: 'explain-concept',
-      topic: 'how to work out speed from a distance-time graph',
+      topic: 'how to scan a line of iambic pentameter',
       answerType: 'objective',
       lessonNotes: notes({
         mainPoints:
-          'Speed is the steepness of the line: distance covered divided by the time it took. A flat section means stopped, not slow.',
+          'Read the line aloud and mark where your voice lifts. Iambic pentameter is five of those lifts, each one on the second beat of a pair. A line that will not sit in the pattern is usually doing something on purpose.',
       }),
     },
     submitForGrade: true,
@@ -414,37 +425,37 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       {
         personaKey: 'student',
         state: 'graded',
-        text: 'You take two points on the line and do the distance between them divided by the time between them, so for the first part it went 40 m in 8 s which is 5 m/s. The flat bit in the middle confused me at first because I thought it meant going slowly, but distance is not changing at all there, so they must have stopped. I am less sure about the last section because the line is curved and I do not think you can do it the same way.',
+        text: 'You say it out loud and listen for where you push, then you mark the pairs, and there should be five of them going da-DUM five times over. I did that with the first line and it came out clean. The line I got stuck on was the one that starts with the stress on the first word instead, because it broke the pattern immediately and I thought I had done it wrong. But every other pair in the line was fine, so I think the first one is flipped on purpose rather than me counting badly.',
         score: 78,
         letterGrade: 'C',
         overallComment:
-          'Sam, the method is right and you talked yourself out of the flat-section mistake, which is the one most people make. You are also right to be unsure about the curve — that is a real limit of the method, not a gap in you. That is next week.',
+          'Sam, the method is right and you talked yourself out of the mistake most people make, which is assuming a broken pattern means they miscounted. You are also right about the flipped opening — that is a substitution, and it is deliberate. That is next week.',
       },
       {
         personaKey: 'student-unreleased',
         state: 'graded',
-        text: 'speed = distance / time',
+        text: 'iambic pentameter = five iambs per line',
         score: 15,
         letterGrade: 'F',
         overallComment:
-          'Taylor, that is the formula, and the ticket was asking you to use it on the graph. Pick any two points on the first straight section and show me the numbers you would put in.',
+          'Taylor, that is the definition, and the ticket was asking you to use it on an actual line. Take the first line on the handout, say it out loud, and mark where your voice lifts. Bring me that.',
       },
     ],
   },
 
   {
-    title: 'Exit ticket: what still does not make sense about photosynthesis',
+    title: 'Exit ticket: what still does not make sense about the sonnet',
     demonstrates:
       'Handed in but not yet read, and one never handed in at all: what the ticket looks like before a grading run, not only after.',
     config: {
       schemaVersion: 1,
       mode: 'specific',
       focus: 'ask-question',
-      topic: 'photosynthesis',
+      topic: 'the sonnet we read today',
       answerType: 'subjective',
       lessonNotes: notes({
         watchFor:
-          'Thinking the plant takes in food through its roots rather than making it.',
+          'Thinking the couplet is a summary of the twelve lines above it rather than a turn against them.',
       }),
     },
     submitForGrade: false,
@@ -454,7 +465,7 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       {
         personaKey: 'student-graded',
         state: 'submitted',
-        text: 'The part I cannot get straight is where the actual stuff of the plant comes from. I understand the light and the water and the carbon dioxide going in, but a tree is heavy, and I do not see how something that heavy comes out of air and water. It feels like it has to be coming out of the soil even though you said it is not.',
+        text: 'The part I cannot get straight is how the last two lines are allowed to do that. He spends twelve lines building up one idea and I was with him the whole way, and then the couplet turns round and says something that does not follow from any of it. If I did that in an essay you would write "unsupported" on it. It feels like it has to be earned somewhere in the twelve lines even though I cannot find where.',
       },
       {
         personaKey: 'student-submitted',
@@ -463,19 +474,6 @@ export const EXIT_TICKET_DEMO_TICKETS: DemoExitTicket[] = [
       },
     ],
   },
-
-  // ---------------------------------------------------------------------
-  // The English classroom set.
-  //
-  // Yawp is an English product, and a preview stocked mostly with chemistry
-  // and two-step equations shows a teacher the mechanics without ever showing
-  // them their own subject. These are the lessons an English teacher actually
-  // closes on: a symbol, a claim, a quotation, a scene, a punctuation mark
-  // they have taught four times, a speech, a seminar, a narrator.
-  //
-  // Every response here is already graded, so the rotation reads as a marked
-  // class set rather than an empty queue.
-  // ---------------------------------------------------------------------
 
   {
     title: 'Exit ticket: the green light',
