@@ -47,6 +47,10 @@ test.describe.serial('Daily Pages about section', () => {
     // Not "Claim and defend" — the kind labels also live in the prompt grid's
     // filters below, so the directions' own opening line is what to check.
     await expect(page.getByText('Browse the prompts below')).toHaveCount(0);
+
+    // The Modules section is gone from this page: its one module is a
+    // freewrite-era blurb the about section contradicts.
+    await expect(page.getByRole('button', { name: 'Modules' })).toHaveCount(0);
   });
 
   test('a section opens when its heading is clicked', async ({

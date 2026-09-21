@@ -667,6 +667,11 @@ export default function AppAssignmentTypesIdRoute() {
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
   const showShortFormLibrary = data.shortFormPromptLibrary != null;
+  // Daily Pages carries one module, whose blurb is freewrite-era copy telling
+  // students to throw ideas around — which the about section directly above it
+  // now contradicts. The module row itself stays: documents are created inside
+  // it, and `hasModules` still gates New → Document.
+  const showModules = hasModules && !showShortFormLibrary;
   const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -787,7 +792,7 @@ export default function AppAssignmentTypesIdRoute() {
         ) : null}
         {showShortFormLibrary ? <AboutDailyPages /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
-        {hasModules ? (
+        {showModules ? (
           <Accordion type="single" collapsible>
             <AccordionItem value="modules">
               <AccordionTrigger className="py-2 text-base">
