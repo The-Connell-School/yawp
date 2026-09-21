@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  isClassStarterTitle,
+  isDailyPagesTitle,
   listWritingLessonCatalog,
   searchDailyPagesPrompts,
   isReadableMaterial,
@@ -267,5 +269,36 @@ describe('isReadableMaterial', () => {
     expect(
       isReadableMaterial({ name: 'deck', contentType: 'application/pdf' })
     ).toBe(false);
+  });
+});
+
+/**
+ * A Class Starter and a Daily Pages entry are graded by different rubrics, so
+ * a class starter the planner offers has to reach the Class Starter sheet
+ * rather than being filed as a reflection and marked for depth it was never
+ * asked for.
+ */
+describe('telling the two short-writing types apart by title', () => {
+  test('recognises the Class Starter type however a school wrote it', () => {
+    for (const title of [
+      'Class Starter',
+      'class starter',
+      '  Class Starters ',
+      'Class-Starter',
+    ]) {
+      expect(isClassStarterTitle(title)).toBe(true);
+    }
+  });
+
+  test('does not confuse the two with each other', () => {
+    expect(isClassStarterTitle('Daily Pages')).toBe(false);
+    expect(isDailyPagesTitle('Class Starter')).toBe(false);
+    expect(isDailyPagesTitle('Daily Pages')).toBe(true);
+  });
+
+  test('does not claim an unrelated type', () => {
+    expect(isClassStarterTitle('Starter Essay')).toBe(false);
+    expect(isClassStarterTitle('Class Discussion')).toBe(false);
+    expect(isClassStarterTitle('')).toBe(false);
   });
 });

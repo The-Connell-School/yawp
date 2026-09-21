@@ -7,6 +7,7 @@
 import { prisma } from '~/utils/db.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
+  isClassStarterTitle,
   isDailyPagesTitle,
   isReadableMaterial,
   summarizeLoungeMaterials,
@@ -272,4 +273,30 @@ export async function findDailyPagesTypeId(
 ): Promise<string | null> {
   const types = await listAssignableTypes(ctx, dependencies);
   return types.find((type) => isDailyPagesTitle(type.title))?.id ?? null;
+}
+
+/** Where each of the planner's two short-writing offers can be assigned. */
+export type WritingExerciseTypeIds = {
+  dailyPages: string | null;
+  classStarter: string | null;
+};
+
+/**
+ * Both short-writing types in one pass over what this teacher can assign.
+ *
+ * The planner offers class starters and Daily Pages entries, and they are
+ * graded by different rubrics, so each has to reach its own sheet rather than
+ * both landing on whichever one the org happens to have. A type the org does
+ * not have comes back null, and that offer simply arrives without a button.
+ */
+export async function findWritingExerciseTypeIds(
+  ctx: CatalogContext,
+  dependencies: YawpCatalogDependencies = productionDependencies
+): Promise<WritingExerciseTypeIds> {
+  const types = await listAssignableTypes(ctx, dependencies);
+  return {
+    dailyPages: types.find((type) => isDailyPagesTitle(type.title))?.id ?? null,
+    classStarter:
+      types.find((type) => isClassStarterTitle(type.title))?.id ?? null,
+  };
 }

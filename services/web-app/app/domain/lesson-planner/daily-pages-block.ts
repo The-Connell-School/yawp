@@ -17,7 +17,35 @@ export const DAILY_PAGES_FENCE = 'yawp-daily-pages';
 /** Long enough to be a prompt, short enough to fit an assignment field. */
 const MAX_PROMPT_CHARS = 600;
 
+/**
+ * Which of Yawp's two short-writing exercises a prompt is offered as.
+ *
+ * They are different lesson moves, not two names for one. A Class Starter is
+ * the three or four minutes that get pens moving at the bell, graded on
+ * engagement alone. Daily Pages is a reflection anchored in a text or topic,
+ * graded on depth as well as effort, and it costs ten to fifteen minutes of
+ * the period — which is why it belongs wherever the thinking belongs, not
+ * automatically at the door.
+ *
+ * They are also graded by different rubrics, so the one a block names decides
+ * which assignment sheet its button opens.
+ */
+export const WRITING_EXERCISE_KINDS = ['class-starter', 'daily-pages'] as const;
+
+export type WritingExerciseKind = (typeof WRITING_EXERCISE_KINDS)[number];
+
+/** What the card calls each of them, in the teacher's words. */
+export const WRITING_EXERCISE_LABELS: Record<WritingExerciseKind, string> = {
+  'class-starter': 'Class Starter',
+  'daily-pages': 'Daily Pages',
+};
+
 export type DailyPagesExercise = {
+  /**
+   * Which exercise this is. Absent from every block written before the two
+   * were told apart, and those all meant Daily Pages.
+   */
+  kind: WritingExerciseKind;
   /** The prompt exactly as students should see it. */
   prompt: string;
   /**
@@ -47,14 +75,61 @@ function unquote(raw: string): string {
   return (quoted?.[1] ?? withoutMarkers).trim();
 }
 
-/** An optional `id: FW-001` first line, naming a real library prompt. */
+/** An optional `id: FW-001` header line, naming a real library prompt. */
 const ID_LINE = /^\s*id:\s*([A-Za-z0-9][\w-]{0,31})\s*$/;
 
-function splitId(raw: string): { promptId: string | null; rest: string } {
+/** An optional `kind: class-starter` header line. */
+const KIND_LINE = /^\s*kind:\s*([A-Za-z][A-Za-z -]{0,31})\s*$/;
+
+/**
+ * Read the kind however the model spelled it — "Class Starter", "class-starter",
+ * "CLASS STARTER" are one answer. A word we do not know is not worth failing a
+ * prompt over: it falls back to Daily Pages, which is what every block meant
+ * before the line existed.
+ */
+function readKind(raw: string): WritingExerciseKind {
+  const normalized = raw.trim().toLowerCase().replace(/\s+/g, '-');
+  return (WRITING_EXERCISE_KINDS as readonly string[]).includes(normalized)
+    ? (normalized as WritingExerciseKind)
+    : 'daily-pages';
+}
+
+/**
+ * Peel the header lines off the front of a block.
+ *
+ * `id:` and `kind:` may appear in either order — the model writes whichever
+ * comes to mind first — and everything from the first line that is neither is
+ * the prompt.
+ */
+function splitHeader(raw: string): {
+  kind: WritingExerciseKind;
+  promptId: string | null;
+  rest: string;
+} {
   const lines = raw.split('\n');
-  const match = lines[0] ? ID_LINE.exec(lines[0]) : null;
-  if (!match) return { promptId: null, rest: raw };
-  return { promptId: match[1]!, rest: lines.slice(1).join('\n') };
+  let kind: WritingExerciseKind = 'daily-pages';
+  let promptId: string | null = null;
+  let cursor = 0;
+
+  while (cursor < lines.length) {
+    const line = lines[cursor]!;
+    const idMatch: RegExpExecArray | null =
+      promptId === null ? ID_LINE.exec(line) : null;
+    if (idMatch) {
+      promptId = idMatch[1]!;
+      cursor += 1;
+      continue;
+    }
+    const kindMatch = KIND_LINE.exec(line);
+    if (kindMatch) {
+      kind = readKind(kindMatch[1]!);
+      cursor += 1;
+      continue;
+    }
+    break;
+  }
+
+  return { kind, promptId, rest: lines.slice(cursor).join('\n') };
 }
 
 /**
@@ -73,11 +148,15 @@ export function readDailyPagesExercises(content: string): {
 
   for (const match of content.matchAll(DAILY_PAGES_BLOCK)) {
     body = body.replace(match[0], '');
-    const { promptId, rest } = splitId(match[1] ?? '');
+    const { kind, promptId, rest } = splitHeader(match[1] ?? '');
     const prompt = unquote(rest);
     // An empty block is the model opening one and thinking better of it.
     if (!prompt) continue;
-    exercises.push({ prompt: prompt.slice(0, MAX_PROMPT_CHARS), promptId });
+    exercises.push({
+      kind,
+      prompt: prompt.slice(0, MAX_PROMPT_CHARS),
+      promptId,
+    });
   }
 
   if (body === content) return { exercises, body: content };
@@ -93,7 +172,7 @@ export function readDailyPagesExercises(content: string): {
  */
 export function inlineDailyPagesExercises(content: string): string {
   return content.replace(DAILY_PAGES_BLOCK, (_match, raw: string) => {
-    const prompt = unquote(splitId(raw ?? '').rest);
+    const prompt = unquote(splitHeader(raw ?? '').rest);
     if (!prompt) return '';
     return prompt
       .split('\n')

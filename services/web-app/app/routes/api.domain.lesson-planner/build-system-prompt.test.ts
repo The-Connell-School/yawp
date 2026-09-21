@@ -230,14 +230,16 @@ describe('buildLessonPlannerSystemPrompt — a warm-up it wrote', () => {
   });
 
   test('says the block is what makes the prompt assignable', () => {
-    expect(prompt.toLowerCase()).toContain('daily pages assignment');
+    expect(prompt.toLowerCase()).toContain(
+      'creates it as a real assignment for one of the teacher'
+    );
   });
 
   test('requires the block for a library prompt too, not only a written one', () => {
     const lower = prompt.toLowerCase();
     // A step reading "Warm-up — Daily Pages (7 min)" with no text left the
     // teacher taking it on faith that a suitable prompt existed.
-    expect(lower).toContain('every daily pages warm-up');
+    expect(lower).toContain('every short-writing prompt');
     expect(lower).toContain(
       'never name, cite, or allude to a prompt whose words you have not shown'
     );
@@ -257,7 +259,7 @@ describe('buildLessonPlannerSystemPrompt — a warm-up it wrote', () => {
     const lower = prompt.toLowerCase();
     expect(lower).toContain('offer three');
     expect(lower).toContain('one block each');
-    expect(lower).toContain('never hand over a single warm-up');
+    expect(lower).toContain('never hand over a single prompt');
   });
 
   test('keeps the three genuinely different from one another', () => {
@@ -420,9 +422,7 @@ describe('buildLessonPlannerSystemPrompt — handing over real material', () => 
 
   test('will not invent a warm-up before it has really searched', () => {
     const lower = prompt.toLowerCase();
-    expect(lower).toContain(
-      'never write your own warm-up prompt without searching'
-    );
+    expect(lower).toContain('never write your own prompt without searching');
     expect(lower).toContain('never search once and give up');
   });
   test('scopes "below" to the reply that carries the block', () => {
@@ -1100,5 +1100,92 @@ describe('buildLessonPlannerSystemPrompt — handing back several pieces at once
   test('talks about the stack, which is what the teacher sees', () => {
     expect(prompt).toContain('stack');
     expect(prompt).not.toContain('packet');
+  });
+});
+
+/**
+ * Yawp has two short-writing exercises, and the planner used to treat them as
+ * one word: "warm-up / bell-ringer → search Daily Pages".
+ *
+ * They are not the same move. A Class Starter is three or four minutes at the
+ * bell, graded on engagement alone, meant to get pens moving. Daily Pages is a
+ * real reflection anchored in a text or topic, graded on depth, and it costs
+ * ten to fifteen minutes of the period — which is why it does not have to
+ * happen at the bell at all, and often works better after the reading than
+ * before it.
+ */
+describe('buildLessonPlannerSystemPrompt — class starter vs Daily Pages', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: 'Ms. Rivera',
+    organizationName: 'Connell School',
+  });
+  const lower = prompt.toLowerCase();
+
+  test('names both exercises as separate things', () => {
+    expect(lower).toContain('class starter');
+    expect(lower).toContain('daily pages');
+  });
+
+  test('says what a class starter is for and how long it runs', () => {
+    expect(lower).toContain('bell');
+    // The cost of each is the whole reason they are not interchangeable.
+    expect(prompt).toMatch(/class starter[\s\S]{0,400}\b3–5 minutes\b/i);
+  });
+
+  test('says Daily Pages costs real class time', () => {
+    expect(prompt).toMatch(/daily pages[\s\S]{0,400}\b10–15 minutes\b/i);
+  });
+
+  test('stops treating Daily Pages as automatically the opener', () => {
+    expect(lower).toContain('does not have to open the period');
+  });
+
+  test('forbids stacking both into one ordinary period', () => {
+    expect(lower).toContain('never run both');
+  });
+
+  test('tells it which block kind to write for each', () => {
+    expect(prompt).toContain('kind: class-starter');
+    expect(prompt).toContain('kind: daily-pages');
+  });
+
+  test('keeps the engagement-only grading of a class starter straight', () => {
+    expect(lower).toContain('effort');
+    expect(lower).toContain('never as a graded quiz');
+  });
+});
+
+/**
+ * A lesson plan that does not fit the period is not a lesson plan. The minutes
+ * slider exists precisely so the planner knows the budget; spending it is the
+ * other half of asking for it.
+ */
+describe('buildLessonPlannerSystemPrompt — the period is a budget', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: 'Ms. Rivera',
+    organizationName: 'Connell School',
+  });
+  const lower = prompt.toLowerCase();
+
+  test('requires the step minutes to add up to the period', () => {
+    expect(lower).toContain('add up');
+    expect(lower).toContain('period');
+  });
+
+  test('makes it leave room for the transitions a real room costs', () => {
+    expect(lower).toContain('transition');
+  });
+
+  test('caps what the opening of class can cost', () => {
+    // An opener that eats a quarter of the period has taught nothing yet.
+    expect(lower).toContain('a fifth of the period');
+  });
+
+  test('tells it to cut rather than compress when the arithmetic fails', () => {
+    expect(lower).toContain('cut a step');
+  });
+
+  test('forbids a plan written before the length is known', () => {
+    expect(lower).toContain('do not write a timed plan');
   });
 });

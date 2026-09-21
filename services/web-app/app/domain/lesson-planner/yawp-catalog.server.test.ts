@@ -8,8 +8,12 @@ const prisma = {
   class: { findMany: mock() },
 };
 
-const { listAssignableTypes, listLoungeMaterials, readLoungeMaterial } =
-  await import('./yawp-catalog.server');
+const {
+  findWritingExerciseTypeIds,
+  listAssignableTypes,
+  listLoungeMaterials,
+  readLoungeMaterial,
+} = await import('./yawp-catalog.server');
 const { readFixture } = await import('~/domain/office/fixtures');
 
 const dependencies = {
@@ -243,5 +247,41 @@ describe('readLoungeMaterial', () => {
 
     expect((result as { error: string }).error).toMatch(/no readable text/);
     expect((result as { error: string }).error).toMatch(/say nothing about/i);
+  });
+});
+
+/**
+ * The planner offers two different short-writing exercises, and each has to
+ * reach its own assignment sheet. Filing a three-minute class starter as Daily
+ * Pages grades it for depth of reflection it was never asked for.
+ */
+describe('findWritingExerciseTypeIds', () => {
+  test('finds each of the two types the teacher can assign', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', title: 'Daily Pages', systemKey: null },
+      { id: 'at-2', title: 'Class Starter', systemKey: null },
+      { id: 'at-3', title: 'Argument Essay', systemKey: null },
+    ]);
+
+    expect(await findWritingExerciseTypeIds(ctx, dependencies)).toEqual({
+      dailyPages: 'at-1',
+      classStarter: 'at-2',
+    });
+  });
+
+  test('reports the ones an org does not have as null rather than guessing', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-3', title: 'Argument Essay', systemKey: null },
+    ]);
+
+    expect(await findWritingExerciseTypeIds(ctx, dependencies)).toEqual({
+      dailyPages: null,
+      classStarter: null,
+    });
+  });
+
+  test('resolves both from one pass over the assignable types', async () => {
+    await findWritingExerciseTypeIds(ctx, dependencies);
+    expect(getAvailableAssignmentTypesForScopes).toHaveBeenCalledTimes(1);
   });
 });

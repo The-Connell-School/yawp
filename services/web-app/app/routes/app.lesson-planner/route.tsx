@@ -52,7 +52,7 @@ import { LessonResourceCard } from '~/components/ai-chat/lesson-resource-card';
 import { DailyPagesCard } from '~/components/ai-chat/daily-pages-card';
 import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
 import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
-import { findDailyPagesTypeId } from '~/domain/lesson-planner/yawp-catalog.server';
+import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import {
   looksLikeLessonPlan,
   mentionsRoomPersonality,
@@ -173,15 +173,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
   }
 
-  // Needed to turn a warm-up the planner wrote into a real assignment. Null
-  // for an org without Daily Pages, which just means no button.
-  const dailyPagesTypeId = await findDailyPagesTypeId({
-    membershipId: access.membership.id,
-    organizationId: access.membership.organization.id,
-  });
+  // Needed to turn a prompt the planner wrote into a real assignment, and to
+  // send a class starter somewhere other than Daily Pages, which grades for
+  // depth a three-minute starter never asked for. Either being null for an org
+  // just means no button on that offer.
+  const { dailyPages: dailyPagesTypeId, classStarter: classStarterTypeId } =
+    await findWritingExerciseTypeIds({
+      membershipId: access.membership.id,
+      organizationId: access.membership.organization.id,
+    });
 
   return {
     dailyPagesTypeId,
+    classStarterTypeId,
     conversations: conversations.map((conversation) => ({
       id: conversation.id,
       title: conversation.packetTitle?.trim() || conversation.title,
@@ -239,6 +243,7 @@ export default function LessonPlannerRoute() {
     recommendedPrompts,
     seed,
     dailyPagesTypeId,
+    classStarterTypeId,
     builtDays,
     unitMapConversation,
   } = useLoaderData<typeof loader>();
@@ -739,6 +744,7 @@ export default function LessonPlannerRoute() {
                   onMaterial={setMaterialAdded}
                   lessonHas={selectedConversation?.lessonHas ?? {}}
                   dailyPagesTypeId={dailyPagesTypeId}
+                  classStarterTypeId={classStarterTypeId}
                   conversationId={conversationId}
                   builtDays={builtDays}
                   onSuggestion={send}
@@ -943,6 +949,7 @@ function MessageBubble({
   onMaterial,
   lessonHas,
   dailyPagesTypeId,
+  classStarterTypeId,
   conversationId,
   builtDays,
   onSuggestion,
@@ -961,6 +968,8 @@ function MessageBubble({
   lessonHas: { deck?: boolean; handout?: boolean };
   /** Where a written warm-up becomes a real assignment; null without the type. */
   dailyPagesTypeId: string | null;
+  /** The same for a class starter, which most orgs do not have as a type. */
+  classStarterTypeId: string | null;
   conversationId: string | null;
   /** Day number → the conversation each already-built day lives in. */
   builtDays: Record<number, string>;
@@ -1058,6 +1067,7 @@ function MessageBubble({
                   key={key}
                   exercise={part.exercise}
                   assignmentTypeId={dailyPagesTypeId}
+                  classStarterTypeId={classStarterTypeId}
                   conversationId={conversationId}
                 />
               );

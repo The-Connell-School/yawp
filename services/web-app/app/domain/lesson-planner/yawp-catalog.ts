@@ -150,6 +150,25 @@ export function isDailyPagesTitle(title: string): boolean {
   return title.trim().toLowerCase() === DAILY_PAGES_TITLE;
 }
 
+/**
+ * The Class Starter type, found the same way.
+ *
+ * A class starter and a Daily Pages entry are graded by different rubrics —
+ * engagement alone against engagement, depth and clarity — so a three-minute
+ * starter filed as Daily Pages is marked for reflection it was never asked to
+ * do. Schools name the type themselves, so match the spellings a person would
+ * actually type rather than one exact string.
+ */
+export const CLASS_STARTER_TITLE = 'class starter';
+
+export function isClassStarterTitle(title: string): boolean {
+  const normalized = title.trim().toLowerCase().replace(/[-_]+/g, ' ');
+  return (
+    normalized === CLASS_STARTER_TITLE ||
+    normalized === `${CLASS_STARTER_TITLE}s`
+  );
+}
+
 export type LoungeMaterialKind = 'slides' | 'document' | 'other';
 
 export type LoungeMaterial = {

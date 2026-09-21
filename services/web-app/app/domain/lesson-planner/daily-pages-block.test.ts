@@ -3,6 +3,7 @@ import {
   dailyPagesCreateHref,
   inlineDailyPagesExercises,
   readDailyPagesExercises,
+  type DailyPagesExercise,
 } from './daily-pages-block';
 
 describe('readDailyPagesExercises', () => {
@@ -18,6 +19,7 @@ describe('readDailyPagesExercises', () => {
 
     expect(exercises).toEqual([
       {
+        kind: 'daily-pages',
         prompt: 'Think of the last time you convinced someone of something.',
         promptId: null,
       },
@@ -120,7 +122,7 @@ describe('a warm-up the planner found in the library', () => {
       '```yawp-daily-pages\nid: FW-001\nWhat made it land?\n```'
     );
     expect(exercises).toEqual([
-      { prompt: 'What made it land?', promptId: 'FW-001' },
+      { kind: 'daily-pages', prompt: 'What made it land?', promptId: 'FW-001' },
     ]);
   });
 
@@ -129,6 +131,7 @@ describe('a warm-up the planner found in the library', () => {
       '```yawp-daily-pages\nIdentify the strongest sentence.\n```'
     );
     expect(exercises[0]).toEqual({
+      kind: 'daily-pages',
       prompt: 'Identify the strongest sentence.',
       promptId: null,
     });
@@ -159,5 +162,107 @@ describe('dailyPagesCreateHref — the way back', () => {
     expect(dailyPagesCreateHref('type-1', 'Write.')).toBe(
       '/app/assignment-types/type-1?newPrompt=Write.'
     );
+  });
+});
+
+/**
+ * Yawp has two short-writing exercises and they are not the same lesson move.
+ *
+ * A Class Starter is the three minutes that get pens moving at the bell; it is
+ * graded on engagement alone. Daily Pages is a real reflection anchored in a
+ * text or topic, it takes ten to fifteen minutes of the period, and it is
+ * graded on depth. Running both in one ordinary class costs a fifth of the
+ * period before anything is taught, so the block has to say which one it is
+ * rather than leaving the teacher to infer it from the card.
+ */
+describe('which exercise a prompt is offered as', () => {
+  test('reads a class starter off the block', () => {
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nkind: class-starter\nWhat is a rule you would change?\n```'
+    );
+    expect(exercises).toEqual([
+      {
+        kind: 'class-starter',
+        prompt: 'What is a rule you would change?',
+        promptId: null,
+      },
+    ]);
+  });
+
+  test('takes the kind alongside a library id, in either order', () => {
+    const idFirst = readDailyPagesExercises(
+      '```yawp-daily-pages\nid: FW-001\nkind: class-starter\nWhat made it land?\n```'
+    ).exercises[0];
+    const kindFirst = readDailyPagesExercises(
+      '```yawp-daily-pages\nkind: class-starter\nid: FW-001\nWhat made it land?\n```'
+    ).exercises[0];
+
+    const expected: DailyPagesExercise = {
+      kind: 'class-starter',
+      prompt: 'What made it land?',
+      promptId: 'FW-001',
+    };
+    expect(idFirst).toEqual(expected);
+    expect(kindFirst).toEqual(expected);
+  });
+
+  test('reads Daily Pages when the block names it', () => {
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nkind: daily-pages\nWhat does Macbeth pay for the crown?\n```'
+    );
+    expect(exercises[0]!.kind).toBe('daily-pages');
+  });
+
+  test('is forgiving about how the kind is written', () => {
+    for (const written of [
+      'class starter',
+      'Class Starter',
+      'CLASS-STARTER',
+      '  class-starter  ',
+    ]) {
+      const { exercises } = readDailyPagesExercises(
+        '```yawp-daily-pages\nkind: ' + written + '\nWrite.\n```'
+      );
+      expect(exercises[0]!.kind).toBe('class-starter');
+    }
+  });
+
+  test('stays Daily Pages when the block says nothing, as every old one does', () => {
+    // Backward compatibility: every prompt already stored in a conversation
+    // was written before this line existed.
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nWhat made it land?\n```'
+    );
+    expect(exercises[0]!.kind).toBe('daily-pages');
+  });
+
+  test('treats a kind it does not know as Daily Pages rather than dropping the prompt', () => {
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nkind: bell-ringer\nWhat made it land?\n```'
+    );
+    expect(exercises[0]).toEqual({
+      kind: 'daily-pages',
+      prompt: 'What made it land?',
+      promptId: null,
+    });
+  });
+
+  test('does not mistake a prompt that merely starts with "kind" for a header', () => {
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nKindness costs nothing. Argue the other side.\n```'
+    );
+    expect(exercises[0]).toEqual({
+      kind: 'daily-pages',
+      prompt: 'Kindness costs nothing. Argue the other side.',
+      promptId: null,
+    });
+  });
+
+  test('keeps the kind line out of the printed packet', () => {
+    expect(
+      inlineDailyPagesExercises(
+        '```yawp-daily-pages\nkind: class-starter\nid: FW-001\nWhat made it land?\n```'
+      )
+    ).toBe('> What made it land?');
   });
 });
