@@ -8,6 +8,11 @@ import {
 } from '~/components/ui/accordion';
 
 import {
+  SHORT_FORM_LIBRARY_HEADING,
+  ShortFormTeacherDirections,
+} from '../short-form-prompts-library/short-form-teacher-directions';
+
+import {
   ABOUT_HEADING,
   ABOUT_LEDE,
   GRADING_SUMMARY,
@@ -76,9 +81,14 @@ function MinorHeading({ children }: { children: ReactNode }) {
  * the blurb is open: it is the one part that answers "what is this" for a
  * teacher who has never seen the type, and everything under it is a question
  * they will come back with later — how it scores, how to run it, how to write
- * a prompt — collapsed until they ask it. The accordion is `type="multiple"`
- * because those questions are compared, not browsed: the grading weights and
- * the prompt recipe want to be open at the same time.
+ * a prompt, how the library works — collapsed until they ask it. The accordion
+ * is `type="multiple"` because those questions are compared, not browsed: the
+ * grading weights and the prompt recipe want to be open at the same time.
+ *
+ * The library directions are the last of those sections rather than a card of
+ * their own. Two stacked explainer boxes above a prompt grid read as one wall
+ * whichever order they are in, and "how to browse the corpus" is the narrowest
+ * question here, not the first one.
  */
 export function AboutDailyPages() {
   return (
@@ -209,6 +219,10 @@ export function AboutDailyPages() {
               <li key={warning}>{warning}</li>
             ))}
           </ul>
+        </AboutSection>
+
+        <AboutSection value="the-library" heading={SHORT_FORM_LIBRARY_HEADING}>
+          <ShortFormTeacherDirections />
         </AboutSection>
       </Accordion>
     </section>

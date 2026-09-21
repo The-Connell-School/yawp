@@ -5,17 +5,19 @@ import {
   TEACHING_NOTES,
 } from './data';
 
+export const SHORT_FORM_LIBRARY_HEADING = 'How the Daily Pages library works';
+
 /**
- * How to use the library, and only that. What Daily Pages is, how it is graded,
- * and how to write a prompt live in `../about-daily-pages/`, rendered directly
- * above this block.
+ * How to use the library, and only that. What Daily Pages is, how it is
+ * graded, and how to write a prompt live in `../about-daily-pages/`, which
+ * renders this as its last section.
+ *
+ * It carries no heading or card of its own: it is a panel inside that
+ * accordion, and the accordion's trigger is its heading.
  */
 export function ShortFormTeacherDirections() {
   return (
-    <section className="mb-6 rounded-lg border bg-muted/40 p-4">
-      <h3 className="mb-2 text-base font-semibold">
-        How the Daily Pages library works
-      </h3>
+    <>
       <p className="mb-3 text-sm text-muted-foreground">
         Browse the prompts below, filter by whether they need a source text, by
         kind, or by length, and click any prompt to open the assignment sheet
@@ -48,6 +50,6 @@ export function ShortFormTeacherDirections() {
           <li key={note}>{note}</li>
         ))}
       </ul>
-    </section>
+    </>
   );
 }

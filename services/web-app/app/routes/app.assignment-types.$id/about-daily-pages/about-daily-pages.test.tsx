@@ -27,6 +27,10 @@ const {
   WHAT_IT_IS_NOT_HEADING,
   WRITE_YOUR_OWN_HEADING,
 } = await import('./content');
+const { SHORT_FORM_LIBRARY_HEADING } =
+  await import('../short-form-prompts-library/short-form-teacher-directions');
+const { KIND_LABEL, KIND_ORDER, TEACHING_NOTES } =
+  await import('../short-form-prompts-library/data');
 
 const SECTION_HEADINGS = [
   WHAT_IT_IS_HEADING,
@@ -34,6 +38,7 @@ const SECTION_HEADINGS = [
   HOW_ITS_GRADED_HEADING,
   HOW_TO_USE_HEADING,
   WRITE_YOUR_OWN_HEADING,
+  SHORT_FORM_LIBRARY_HEADING,
 ];
 
 function render(element: ReactElement) {
@@ -93,7 +98,12 @@ describe('the Daily Pages about section', () => {
       expect(body.textContent).toContain(heading);
       expect(triggerFor(heading).getAttribute('data-state')).toBe('closed');
     }
-    for (const item of [...WHAT_IT_IS, ...HOW_TO_USE, ...PROMPT_WARNINGS]) {
+    for (const item of [
+      ...WHAT_IT_IS,
+      ...HOW_TO_USE,
+      ...PROMPT_WARNINGS,
+      ...TEACHING_NOTES,
+    ]) {
       expect(body.textContent).not.toContain(item);
     }
   });
@@ -168,6 +178,21 @@ describe('the Daily Pages about section', () => {
     for (const warning of PROMPT_WARNINGS) {
       expect(body.textContent).toContain(warning);
     }
+  });
+
+  it('carries the library directions as its last section', () => {
+    renderAbout();
+    const body = openSection(SHORT_FORM_LIBRARY_HEADING);
+
+    // The six kinds and the library's own notes, which used to sit in a
+    // second card below this one.
+    for (const kind of KIND_ORDER) {
+      expect(body.textContent).toContain(KIND_LABEL[kind]);
+    }
+    for (const note of TEACHING_NOTES) {
+      expect(body.textContent).toContain(note);
+    }
+    expect(SECTION_HEADINGS.at(-1)).toBe(SHORT_FORM_LIBRARY_HEADING);
   });
 
   it('keeps sections open independently, so two can be read side by side', () => {

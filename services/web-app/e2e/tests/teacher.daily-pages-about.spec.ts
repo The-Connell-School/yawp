@@ -33,6 +33,7 @@ test.describe.serial('Daily Pages about section', () => {
       'How it is graded',
       'Using it with a class',
       'Writing your own prompt',
+      'How the Daily Pages library works',
     ]) {
       await expect(page.getByRole('button', { name: section })).toHaveAttribute(
         'aria-expanded',
@@ -43,6 +44,9 @@ test.describe.serial('Daily Pages about section', () => {
     // Collapsed means collapsed: the copy inside is not on screen yet.
     await expect(page.getByText('Not a warm-up.')).toHaveCount(0);
     await expect(page.getByText('Ask for the backing')).toHaveCount(0);
+    // Not "Claim and defend" — the kind labels also live in the prompt grid's
+    // filters below, so the directions' own opening line is what to check.
+    await expect(page.getByText('Browse the prompts below')).toHaveCount(0);
   });
 
   test('a section opens when its heading is clicked', async ({
@@ -90,12 +94,24 @@ test.describe.serial('Daily Pages about section', () => {
     await expect(
       page.getByText('Signs a prompt will not grade well')
     ).toBeVisible();
+  });
 
-    // The library directions stay: the about section is added above them, not
-    // swapped in for them.
-    await expect(
-      page.getByRole('heading', { name: 'How the Daily Pages library works' })
-    ).toBeVisible();
+  test('the library directions are the last section, not a second card', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+    );
+
+    await page
+      .getByRole('button', { name: 'How the Daily Pages library works' })
+      .click();
+
+    await expect(page.getByText('Browse the prompts below')).toBeVisible();
+    await expect(page.getByText('The six kinds')).toBeVisible();
   });
 
   test('a student does not see the teacher-facing about section', async ({

@@ -54,7 +54,6 @@ import {
   type OpenEndedPromptLibraryVariant,
 } from './prompts-library/library-variant';
 import { ShortFormPromptsLibrary } from './short-form-prompts-library/short-form-prompts-library';
-import { ShortFormTeacherDirections } from './short-form-prompts-library/short-form-teacher-directions';
 import {
   applyFilters as applyShortFormFilters,
   buildFacets as buildShortFormFacets,
@@ -786,12 +785,7 @@ export default function AppAssignmentTypesIdRoute() {
         {data.promptLibrary ? (
           <TeacherDirections variant={data.promptLibrary.variant} />
         ) : null}
-        {showShortFormLibrary ? (
-          <>
-            <AboutDailyPages />
-            <ShortFormTeacherDirections />
-          </>
-        ) : null}
+        {showShortFormLibrary ? <AboutDailyPages /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {hasModules ? (
           <Accordion type="single" collapsible>

@@ -110,10 +110,15 @@ to write a prompt of your own.
 
 All of that end to end is a page and a half, which nobody reads twice, so only
 the blurb is open. It is the part that answers "what is this" for a teacher
-seeing the type for the first time; the five sections under it are questions
-they come back with later, and each waits behind its own heading. The accordion
-is `type="multiple"` because those questions get compared rather than browsed —
+seeing the type for the first time; the sections under it are questions they
+come back with later, and each waits behind its own heading. The accordion is
+`type="multiple"` because those questions get compared rather than browsed —
 the grading weights and the prompt recipe want to be open at once.
+
+The library directions are the last of those sections rather than a second
+card. Two stacked explainer boxes above a prompt grid read as one wall
+whichever order they are in, and "how to browse the corpus" is the narrowest
+question on the page, not the first one.
 
 Two decisions inside it are load-bearing:
 

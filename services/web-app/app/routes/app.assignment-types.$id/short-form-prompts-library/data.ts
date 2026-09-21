@@ -289,7 +289,7 @@ export const TEACHING_NOTES: string[] = [
   'Filter by “Source required” for the prompts that follow a reading, and by “No source needed” on a day the class has read nothing.',
   'Every prompt names a target length. Keep it when you edit the wording — it is how a student knows when they are done, and length earns nothing on its own.',
   'Editing a prompt before you create the assignment is expected. These are starting points; the class in front of you is the reason to change one.',
-  'The six kinds below are also the six shapes worth copying when you write a prompt of your own.',
+  'The six kinds above are also the six shapes worth copying when you write a prompt of your own.',
 ];
 
 /** URL search-param keys. Prefixed `sf_` so they collide with neither library. */

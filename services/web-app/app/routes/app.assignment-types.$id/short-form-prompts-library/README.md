@@ -15,10 +15,11 @@ something neither of them does.
 
 This folder's directions cover the library and nothing else. What Daily Pages
 is, what it is not, how the assistant grades it, and how a teacher writes a
-prompt of their own live in `../about-daily-pages/`, which renders directly
-above the library on the assignment-type page. Grading claims there are derived
-from the rubric rather than retyped, so add copy about scoring there and not
-here.
+prompt of their own live in `../about-daily-pages/`, the about section on the
+assignment-type page — which renders these directions as its last collapsed
+section, so `short-form-teacher-directions.tsx` carries no heading or card of
+its own. Grading claims there are derived from the rubric rather than retyped,
+so add copy about scoring there and not here.
 
 ## The design constraint
 
