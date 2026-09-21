@@ -295,3 +295,53 @@ describe('the Daily Pages tutor instructions', () => {
     expect(tutor).toContain('never write content for the student');
   });
 });
+
+/**
+ * The weighting decision, pinned. Voice/Style carries 20% because the
+ * refinement ceiling has to cost something: at 10% an entry with top-band
+ * ideas and unedited prose outscored a polished one, which is how the first
+ * seeded exemplar reached 94% writing "I want to say yes, because…".
+ */
+describe('refinement costs something', () => {
+  const weightOf = (key: string) =>
+    categories.find((category) => category.key === key)?.weight ?? 0;
+
+  function percentage(scores: Record<string, number>) {
+    const total = categories.reduce(
+      (sum, category) =>
+        sum + (scores[category.key] / 5) * 100 * category.weight,
+      0
+    );
+    return Math.round(total);
+  }
+
+  test('voice carries enough weight to be a rule rather than a rounding error', () => {
+    expect(weightOf('voice_and_style')).toBeGreaterThanOrEqual(0.2);
+  });
+
+  test('an unedited entry scores below a refined one, however good its ideas', () => {
+    const unedited = percentage({
+      depth_of_thought: 5,
+      development_of_thought: 5,
+      organization_and_structure: 5,
+      // The ceiling: unedited prose cannot pass Proficient here.
+      voice_and_style: 3,
+      grammar_and_mechanics: 5,
+    });
+    const refined = percentage({
+      depth_of_thought: 5,
+      development_of_thought: 5,
+      organization_and_structure: 4,
+      voice_and_style: 5,
+      grammar_and_mechanics: 4,
+    });
+
+    expect(unedited).toBeLessThan(refined);
+  });
+
+  test('thinking still outweighs craft after the reweighting', () => {
+    const thinking =
+      weightOf('depth_of_thought') + weightOf('development_of_thought');
+    expect(thinking).toBeGreaterThan(0.5);
+  });
+});

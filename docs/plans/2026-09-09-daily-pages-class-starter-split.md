@@ -24,7 +24,7 @@ and Daily Pages becomes the graded one.
 |---|---|---|
 | What it is | Open-ended writing to begin class | A short, claim-first response, graded formally |
 | Shape | Explore; the point may arrive at the end, or not at all | A body paragraph: claim first, then the case for it |
-| Categories | Engagement | Depth of Thought (0.35), Development of Thought (0.25), Organization/Structure (0.15), Voice/Style (0.10), Grammar/Syntax/Mechanics (0.15) |
+| Categories | Engagement | Depth of Thought (0.30), Development of Thought (0.25), Organization/Structure (0.12), Voice/Style (0.20), Grammar/Syntax/Mechanics (0.13) |
 | Scale | 0–3 (Absent → All in) | 1–5 (Beginning → Exemplary), the essay scale, with a written band per score |
 | Feedback | Overall only | Per category |
 | **Grammar** | **Never marked** | **Graded and marked up** |
@@ -34,9 +34,17 @@ The two bold rows are the split. Everything else follows from them.
 
 What Daily Pages looks for is depth of thought and the development of thought —
 not that the student has a pulse. That is why the two thinking categories carry
-60% of the weight between them: a clean, well-ordered entry with nothing in it
+55% of the weight between them: a clean, well-ordered entry with nothing in it
 is not a good Daily Pages entry, and a test asserts thinking outweighs craft so
 that stays true if the weights are ever retuned.
+
+Voice/Style carries 20% rather than the 10% it started with, and that number is
+a decision rather than a default. Refinement is part of what the top of this
+scale means, so an unedited entry cannot pass Proficient there however good its
+ideas are — and at 10% that ceiling cost four points, which is not a rule. The
+first seeded exemplar is what exposed it: it scored 94% on prose that opened "I
+want to say yes, because…". Under the current weights an entry scoring
+5/5/5/3/5 lands at 92%, below a refined 5/5/4/5/4 at 95%.
 
 How it is graded is the essay's way, shrunk. Its three craft categories are the
 essay rubric's own keys (`organization_and_structure`, `voice_and_style`,
@@ -216,12 +224,18 @@ asserts no top band asks for a journey, because that language is easy to
 reintroduce by accident.
 
 **First person is allowed and is never an error.** A student may write "I", and
-nothing marks them down for it. What the assistant coaches — in Voice/Style
-feedback, never in the score — is the hedge in front of the claim: "I think
-that…", "In my opinion…". It hands the sentence back with the hedge cut so the
-student can see the claim underneath. Scoring a phrase would teach students to
-write around the rubric instead of thinking, which is the failure mode the
-whole split exists to avoid.
+nothing marks them down for it. First person doing work — the student's own
+experience as the evidence, a judgment that is theirs to own — is named as
+top-entry writing rather than merely tolerated.
+
+**What the top of the scale asks for is an edited piece.** Voice/Style reads
+whether the prose has been worked on: an entry still carrying hedges in front
+of the claim, narration of its own process ("what I thought was", "I'm pretty
+sure that"), or filler scores no higher than Proficient there, however good its
+ideas are. The assistant coaches the cut — handing the student their own
+sentence with the hedge removed — rather than deducting for the phrase, because
+scoring a phrase teaches students to write around the rubric instead of
+thinking. The cost lands on the piece being unedited, not on any one word.
 
 **The Tutor coaches the same two things**, because the tutor is the half of
 this a student meets before any grade exists:

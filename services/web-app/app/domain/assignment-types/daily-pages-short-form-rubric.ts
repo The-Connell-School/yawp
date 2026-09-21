@@ -34,8 +34,11 @@ import type {
  * feedback, as an edit the student makes, not in a deduction: score a phrase
  * and students write around the rubric instead of thinking.
  *
- * Thinking outweighs craft on purpose: a clean, well-ordered piece with nothing
- * in it is not a good Daily Pages entry. It scores on the essay's own 1-5
+ * Thinking outweighs craft on purpose — the two thinking categories carry 55%
+ * between them — but Voice/Style carries 20% rather than a token 10%, because
+ * refinement is part of what the top of this scale means. At 10% a rule capping
+ * unedited prose cost four points, which is not a rule. A clean, well-ordered
+ * piece with nothing in it is still not a good Daily Pages entry. It scores on the essay's own 1-5
  * scale, and its three craft categories are the essay's own keys, so a teacher
  * grading both reads the same dimensions and a score means the same thing in
  * either place.
@@ -113,7 +116,7 @@ export const DAILY_PAGES_SHORT_FORM_RUBRIC: RubricData = {
     category(
       'depth_of_thought',
       'Depth of Thought',
-      0.35,
+      0.3,
       'Whether the claim is worth making and the thinking behind it holds up. Restating the prompt is not a claim, and neither is a position nobody would dispute. A claim that is precise, that takes a side, and that survives the objection a reader would raise first is what this reads.',
       [
         'Nothing to read, or nothing that engages the prompt.',
@@ -139,7 +142,7 @@ export const DAILY_PAGES_SHORT_FORM_RUBRIC: RubricData = {
     category(
       'organization_and_structure',
       'Organization/Structure',
-      0.15,
+      0.12,
       'Whether the response is shaped like a strong body paragraph: the claim in the first sentence, the support in the middle, a close that lands. Warm-up sentences before the claim — clearing the throat, restating the prompt, announcing what the response will argue — are the most common way this score is lost.',
       [
         'No order a reader can follow.',
@@ -152,7 +155,7 @@ export const DAILY_PAGES_SHORT_FORM_RUBRIC: RubricData = {
     category(
       'voice_and_style',
       'Voice/Style',
-      0.1,
+      0.2,
       'Whether the prose has been edited. First person is allowed and is never an error here — first person doing work, where the student’s own experience is the evidence or the judgment is theirs to own, belongs in a top entry. What costs is unrefined writing: the hedge in front of the claim ("I think that", "in my opinion"), narrating one’s own process ("what I thought was", "I’m pretty sure that"), and filler. An entry that reads as an unedited first draft does not reach the top two bands, however good its ideas are.',
       [
         'Flat or garbled; word choice obscures the meaning.',
@@ -165,7 +168,7 @@ export const DAILY_PAGES_SHORT_FORM_RUBRIC: RubricData = {
     category(
       'grammar_and_mechanics',
       'Grammar/Syntax/Mechanics',
-      0.15,
+      0.13,
       'Sentence construction, punctuation, usage, spelling, and formatting. Graded here — unlike a Class Starter, where it never is — and marked up, so the student can see the specific errors rather than a general note about them.',
       [
         'Errors throughout that block the reader.',
