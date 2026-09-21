@@ -852,7 +852,7 @@ export async function seedE2E(): Promise<E2EContext> {
     data: {
       submissionId: unreleasedGradedSubmission.id,
       membershipId: seededTeacherMembership.id,
-      content: 'Secret teacher note before release.',
+      content: 'Your opening sentence gives the reader a clear entry point.',
       excerpt: 'The first sentence matters',
       occurrence: 1,
     },

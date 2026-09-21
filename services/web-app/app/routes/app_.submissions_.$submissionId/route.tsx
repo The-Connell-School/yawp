@@ -1491,6 +1491,7 @@ function SubmissionDetail({
               onCommentCreated={handleCommentCreated}
               onCommentDeleted={handleCommentDeleted}
               onCommentUpdated={handleCommentUpdated}
+              showHeading={false}
             />
           </TeacherPasteReport>
         </div>

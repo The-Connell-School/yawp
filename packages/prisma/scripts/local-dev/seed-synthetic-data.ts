@@ -499,7 +499,7 @@ export async function seedSyntheticLocalDevData(
     data: {
       submissionId: unreleasedSubmission.id,
       membershipId: primaryTeacher.membershipId,
-      content: 'Secret teacher note before release.',
+      content: 'Your opening sentence gives the reader a clear entry point.',
       excerpt: 'The first sentence matters',
       occurrence: 1,
     },
