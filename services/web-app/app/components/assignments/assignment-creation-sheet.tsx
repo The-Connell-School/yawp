@@ -49,11 +49,15 @@ import { toDateInputValue } from '~/utils/date-only';
 /**
  * A selected choice reads as chosen without shouting. The old solid-primary
  * fill made the two pickers the loudest thing on the sheet.
+ *
+ * `accent` rather than `primary/10`: this Tailwind config declares its colors
+ * as `hsl(var(--token))` with no `<alpha-value>`, so an opacity modifier on a
+ * theme color compiles to nothing at all.
  */
 function gradingChoiceClassName(selected: boolean) {
   return `rounded-md border px-3 py-2 text-sm font-medium transition ${
     selected
-      ? 'border-primary bg-primary/10 text-foreground'
+      ? 'border-primary bg-accent text-accent-foreground'
       : 'border-border bg-background text-muted-foreground hover:bg-muted'
   }`;
 }

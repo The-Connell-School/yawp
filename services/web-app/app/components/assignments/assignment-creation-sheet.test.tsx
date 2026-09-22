@@ -373,6 +373,21 @@ describe('AssignmentCreationSheetContent', () => {
     expect(inputByName('gradingMode').value).toBe('bands');
   });
 
+  it('marks the chosen scoring behavior as the selected one', () => {
+    root = renderSheet({ initialGradingMode: 'bands' }).root;
+
+    act(() => {
+      controlById('assignment-create-change-grading').click();
+    });
+
+    const step = controlById('assignment-create-grading-mode-step');
+    const bands = controlById('assignment-create-grading-mode-bands');
+    expect(bands.getAttribute('aria-pressed')).toBe('true');
+    expect(step.getAttribute('aria-pressed')).toBe('false');
+    expect(bands.className).toContain('bg-accent');
+    expect(step.className).not.toContain('bg-accent');
+  });
+
   it('lets a teacher opt into bands grading without a customize gate', () => {
     root = renderSheet().root;
 
