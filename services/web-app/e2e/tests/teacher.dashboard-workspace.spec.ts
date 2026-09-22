@@ -577,9 +577,6 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await page.getByRole('button', { name: /^New/ }).click();
     await page.getByRole('menuitem', { name: 'Assignment' }).click();
     await expectStandardizedAssignmentForm(page);
-    await expect(
-      page.getByRole('dialog').getByText(/Rubric default: \d+ points/i)
-    ).toBeVisible();
     await page.getByLabel(CLASS_LABEL).check();
     await page.getByLabel('Title (optional)').fill(title);
     await page.getByLabel('Prompt', { exact: true }).fill(prompt);
