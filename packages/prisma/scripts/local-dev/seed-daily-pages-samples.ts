@@ -1,4 +1,10 @@
-import { Prisma, type PrismaClient } from '../../generated/prisma';
+// Type-only, like every other module in this folder. A value import here is
+// reachable from a web route — the admin organizations page pulls in
+// `preview-seats.ts`, which pulls in `seed-synthetic-data.ts`, which pulls in
+// this file — and Vite resolves the client to its browser build in that graph,
+// which throws `exports is not defined` and 500s the page. The one runtime
+// value this needs is loaded where it is used instead.
+import type { Prisma, PrismaClient } from '../../generated/prisma';
 import {
   DAILY_PAGES_SAMPLE_ASSIGNMENT,
   DAILY_PAGES_SAMPLE_ENTRIES,
@@ -118,12 +124,16 @@ export async function adoptShortFormRubricForSeededDailyPages(
   prisma: SeedClient,
   assignmentTypeId: string
 ) {
+  // Imported here rather than at the top of the file: see the note on the type
+  // import above. `DbNull` is the only runtime value this module needs, and a
+  // seed only ever runs in Node, where this resolves to the real client.
+  const { Prisma: PrismaRuntime } = await import('../../generated/prisma');
   await prisma.assignmentType.update({
     where: { id: assignmentTypeId },
     data: {
-      rubricJson: Prisma.DbNull,
-      scoringScaleJson: Prisma.DbNull,
-      gradingPromptConfigJson: Prisma.DbNull,
+      rubricJson: PrismaRuntime.DbNull,
+      scoringScaleJson: PrismaRuntime.DbNull,
+      gradingPromptConfigJson: PrismaRuntime.DbNull,
     },
   });
 }
