@@ -144,11 +144,11 @@ describe('normalizeRubricDisplayConfig', () => {
 describe('buildScoreOptions', () => {
   test('keeps the legacy 1-5 labels when no per-category labels are supplied', () => {
     expect(buildScoreOptions(1, 5)).toEqual([
-      { value: '1', label: '1 - Needs Improvement' },
-      { value: '2', label: '2 - Developing' },
-      { value: '3', label: '3 - Proficient' },
-      { value: '4', label: '4 - Strong' },
-      { value: '5', label: '5 - Exemplary' },
+      { value: '1', label: 'Needs Improvement' },
+      { value: '2', label: 'Developing' },
+      { value: '3', label: 'Proficient' },
+      { value: '4', label: 'Strong' },
+      { value: '5', label: 'Exemplary' },
     ]);
   });
 
@@ -168,9 +168,9 @@ describe('buildScoreOptions', () => {
         { value: 3, label: 'Every day' },
       ])
     ).toEqual([
-      { value: '1', label: '1 - Skipped' },
-      { value: '2', label: '2 - Showed up' },
-      { value: '3', label: '3 - Every day' },
+      { value: '1', label: 'Skipped' },
+      { value: '2', label: 'Showed up' },
+      { value: '3', label: 'Every day' },
     ]);
   });
 
@@ -180,11 +180,11 @@ describe('buildScoreOptions', () => {
         (option) => option.label
       )
     ).toEqual([
-      '1 - Needs Improvement',
-      '2 - Getting there',
-      '3 - Proficient',
-      '4 - Strong',
-      '5 - Exemplary',
+      'Needs Improvement',
+      'Getting there',
+      'Proficient',
+      'Strong',
+      'Exemplary',
     ]);
   });
 
@@ -206,6 +206,16 @@ describe('buildScoreOptions', () => {
         { min: 5, max: 5, label: 'Exemplary', description: 'Purposeful.' },
       ]).map((option) => option.value)
     ).toEqual(['0', '1', '2', '3', '4', '5']);
+  });
+
+  test('uses band labels without adding numeric prefixes', () => {
+    expect(
+      buildScoreOptions(0, 5, undefined, 1, [
+        { min: 0, max: 0, label: 'Absent', description: 'Missing.' },
+        { min: 1, max: 2, label: 'Hardly there', description: 'Token effort.' },
+        { min: 3, max: 5, label: 'All in', description: 'Engaged.' },
+      ]).map((option) => option.label)
+    ).toEqual(['Absent', 'Hardly there', 'Hardly there', 'All in', 'All in', 'All in']);
   });
 });
 
@@ -260,10 +270,10 @@ describe('an unscored value on a scale that starts below 1', () => {
     expect(
       buildScoreOptions(0, 3, engagementCategories[0].scoreLabels)
     ).toEqual([
-      { value: '0', label: '0 - Absent' },
+      { value: '0', label: 'Absent' },
       { value: '1', label: '1' },
       { value: '2', label: '2' },
-      { value: '3', label: '3 - All in' },
+      { value: '3', label: 'All in' },
     ]);
   });
 });

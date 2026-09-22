@@ -181,18 +181,20 @@ for (const pointValue of [10, 30, 90, 100]) {
 for (const scenario of [
   {
     pointValue: 10,
-    selectedScore: 6,
-    labelledOptions: ['0 - NOT HANDED IN', '7 - SHOWED UP', '10 - ALL IN'],
-    absentOptions: ['20 - SHOWED UP', '30 - ALL IN'],
+    selectedScore: 7,
+    selectedLabel: 'SHOWED UP',
+    labelledOptions: ['NOT HANDED IN', 'HARDLY THERE', 'SHOWED UP', 'ALL IN'],
+    absentOptions: [],
   },
   {
     pointValue: 90,
-    selectedScore: 55,
-    labelledOptions: ['0 - NOT HANDED IN', '60 - SHOWED UP', '90 - ALL IN'],
-    absentOptions: ['20 - SHOWED UP', '30 - ALL IN'],
+    selectedScore: 60,
+    selectedLabel: 'SHOWED UP',
+    labelledOptions: ['NOT HANDED IN', 'HARDLY THERE', 'SHOWED UP', 'ALL IN'],
+    absentOptions: [],
   },
 ] as const) {
-  test(`fresh pinned Daily Pages uses ${scenario.pointValue}-point bands before any GA snapshot`, async ({ page, e2eContext, signIn }) => {
+  test(`fresh pinned Daily Pages uses ${scenario.pointValue}-point steps before any GA snapshot`, async ({ page, e2eContext, signIn }) => {
     const prisma = createE2EPrismaClient();
     try {
       const { title, submissionId } = await createFreshPinnedDailyPagesSubmission({
@@ -219,10 +221,10 @@ for (const scenario of [
       for (const option of scenario.absentOptions) {
         await expect(page.getByRole('option', { name: option, exact: true })).toHaveCount(0);
       }
-      await page.getByRole('option', { name: String(scenario.selectedScore), exact: true }).click();
+      await page.getByRole('option', { name: scenario.selectedLabel, exact: true }).click();
 
       await expect(
-        page.getByText(`${scenario.selectedScore}/${scenario.pointValue}`, { exact: true })
+        page.getByText(new RegExp(`\\(${scenario.selectedScore}/${scenario.pointValue}\\)`))
       ).toBeVisible();
       await expect(page.getByLabel(`Total points (out of ${scenario.pointValue})`, { exact: true }))
         .toHaveValue(String(scenario.selectedScore));
@@ -281,4 +283,91 @@ test('weighted grade displays and edits exact points without a residual percenta
     expect(saved.numericPercentage).toBe(46);
     await page.screenshot({ path: testInfo.outputPath('weighted-points-edit.png'), fullPage: true });
   } finally { await prisma.$disconnect(); }
+});
+
+test('AI grading uses assignment rubric overrides and the final grade uses the assignment total', async ({
+  page,
+  e2eContext,
+  signIn,
+}, testInfo) => {
+  const prisma = createE2EPrismaClient();
+  const title = `Rubric override GA ${Date.now()}`;
+  const { assignment, classAssignment } = await createDeployedAssignment({
+    prisma,
+    classId: e2eContext.classId,
+    assignmentTypeId: e2eContext.dailyPagesAssignmentTypeId,
+    title,
+    prompt: 'Write freely for ten minutes about something you noticed today.',
+    submitForGrade: true,
+    pointValue: 100,
+    rubricTotalPoints: 50,
+    gradingMode: 'bands',
+  });
+  const document = await prisma.document.create({
+    data: {
+      title,
+      text: `${title}. I kept writing until the thought became more specific.`,
+      html: `<p>${title}. I kept writing until the thought became more specific.</p>`,
+      membershipId: e2eContext.membershipId,
+      assignmentTypeId: e2eContext.dailyPagesAssignmentTypeId,
+      assignmentId: assignment.id,
+      classAssignmentId: classAssignment.id,
+    },
+  });
+  const submission = await prisma.submission.create({
+    data: {
+      documentId: document.id,
+      title,
+      text: `${title}. I kept writing until the thought became more specific.`,
+      html: `<p>${title}. I kept writing until the thought became more specific.</p>`,
+      submittedAt: new Date(),
+    },
+  });
+
+  try {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(`/app/submissions/${submission.id}`);
+
+    const panel = page.getByTestId('submission-lifecycle-panel');
+    await expect(page.getByLabel('Total points (out of 100)', { exact: true })).toHaveValue('');
+
+    const gradingResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/grade-essay-ai') &&
+        response.request().method() === 'POST' &&
+        response.status() === 200,
+      { timeout: 60000 }
+    );
+    await page.getByTestId('grading-assistant-generate').click();
+    await gradingResponse;
+
+    // The deterministic E2E assistant receives the overridden 50-point rubric.
+    await expect(page.getByText(/^All in \(50\/50\)$/i)).toBeVisible({
+      timeout: 30000,
+    });
+    // The assignment remains worth 100 points to students, so the 50/50 rubric
+    // result is projected to the assignment's 100-point final grade.
+    await expect(page.getByLabel('Total points (out of 100)', { exact: true })).toHaveValue('100');
+    await page.screenshot({ path: testInfo.outputPath('ga-rubric-override-final-grade.png'), fullPage: true });
+
+    const saved = await prisma.submission.findUniqueOrThrow({
+      where: { id: submission.id },
+      include: { gradingAssistantRuns: true },
+    });
+    expect(saved.score).toBe('50/50');
+    expect(saved.overallScore).toBe(50);
+    expect(saved.numericPercentage).toBeNull();
+    expect(
+      Object.values(
+        saved.rubricScores as Record<string, { score?: number; isAi?: boolean }>
+      )
+    ).toContainEqual(expect.objectContaining({ score: 50, isAi: true }));
+    expect(saved.gradingAssistantRuns[0]?.assignmentTypeRubricSnapshot).toMatchObject({
+      maxScore: 50,
+      gradingMode: 'bands',
+      rubricTotalPoints: 50,
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
 });

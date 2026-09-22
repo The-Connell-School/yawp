@@ -127,7 +127,12 @@ export function compileGradingAssistantInvocation({
     | 'rubricCategories'
     | 'instructions'
     | 'promptTemplate'
-  > & Partial<Pick<ResolvedAssignmentTypeGradingConfig, 'outputSchemaSnapshot'>>;
+  > & Partial<
+    Pick<
+      ResolvedAssignmentTypeGradingConfig,
+      'outputSchemaSnapshot' | 'gradingMode' | 'rubricTotalPoints'
+    >
+  >;
   studentFirstName: string;
   strictnessLevel: GradingAssistantStrictnessLevel;
   documentText: string;
@@ -140,6 +145,7 @@ export function compileGradingAssistantInvocation({
     maxScore,
     studentFirstName,
     teacherNotesEnabled: teacherNotesEnabled(gradingConfig.outputSchemaSnapshot),
+    gradingMode: gradingConfig.gradingMode,
   });
   const strictnessLabel = getGradingAssistantStrictnessLabel(strictnessLevel);
   const strictnessInstructions =
@@ -161,7 +167,9 @@ export function compileGradingAssistantInvocation({
     gradingConfig.promptTemplate ??
     defaultGradingAssistantPromptTemplate(gradingConfig);
   const variables = {
-    assignment_type: gradingConfig.label,
+    assignment_type: gradingConfig.rubricTotalPoints
+      ? `${gradingConfig.label} (total rubric points: ${gradingConfig.rubricTotalPoints})`
+      : gradingConfig.label,
     assignment_prompt: assignmentPrompt?.trim() || 'No assignment prompt was provided.',
     grading_response_instructions: promptShape.systemPrompt,
     document: documentText,

@@ -1255,7 +1255,8 @@ export function TeacherGradingPanel({
                 activeRubricConfig.maxScore,
                 item.scoreLabels,
                 activeRubricConfig.step,
-                item.bands
+                item.bands,
+                item.allowedScores
               );
 
               return (

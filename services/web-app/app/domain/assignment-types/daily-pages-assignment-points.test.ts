@@ -34,6 +34,13 @@ describe('Daily Pages assignment points', () => {
     expect(scaled.rubricCategories[0].bands?.map(band => [band.min, band.max])).toEqual([[0, 0], [21, 39], [51, 69], [84, 90]]);
   });
 
+  test('scales default step scores with the authored rubric anchors', () => {
+    const original = config();
+    original.rubricCategories[0].allowedScores = [0, 10, 20, 30];
+    const scaled = scaleDailyPagesForAssignment(original, 90);
+    expect(scaled.rubricCategories[0].allowedScores).toEqual([0, 30, 60, 90]);
+  });
+
   test('managed prompts contain effective bands, anchors and the meaning of source-scale examples', () => {
     const original = config();
     original.promptTemplate = { systemMessage: 'Managed system.', userMessage: '{{rubric}}\n{{document}}' };

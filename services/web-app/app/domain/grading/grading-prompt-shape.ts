@@ -112,12 +112,14 @@ export function buildGradingPromptShape({
   maxScore,
   studentFirstName,
   teacherNotesEnabled = false,
+  gradingMode,
 }: {
   categories: GradingPromptCategory[];
   minScore: number;
   maxScore: number;
   studentFirstName: string;
   teacherNotesEnabled?: boolean;
+  gradingMode?: 'step' | 'bands';
 }): GradingPromptShape {
   const categoryFeedbackEnabled = resolveCategoryFeedbackEnabled(categories);
   const bandScored = isBandScoredRubric(categories);
@@ -141,7 +143,9 @@ export function buildGradingPromptShape({
 
   // Picking the band first is what keeps a wide scale consistent: the band is
   // a judgment the rubric defines, and the score is only a position inside it.
-  const scoringRule = bandScored
+  const scoringRule = gradingMode === 'step'
+    ? 'For each category, choose only one of the labeled step scores. Do not choose a score between labels.'
+    : gradingMode === 'bands' || bandScored
     ? `For each category, first decide which band the writing falls in from the band descriptions, then choose an integer inside that band's range. Do not score outside the band you chose.`
     : `Scores must be integers ${minScore}-${maxScore}.`;
 

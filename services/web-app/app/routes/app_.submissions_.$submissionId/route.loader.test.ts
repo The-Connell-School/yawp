@@ -11,6 +11,7 @@ const prisma = {
 const requireUserId = mock();
 const requireMembership = mock();
 const loadGradingQueueNeighbors = mock();
+const loadDocumentNavigationNeighbors = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/db.server.js', () => ({ prisma }));
@@ -31,6 +32,7 @@ mock.module('~/utils/toast.server', () => ({
 }));
 mock.module('~/domain/grading/grading-queue.server', () => ({
   loadGradingQueueNeighbors,
+  loadDocumentNavigationNeighbors,
 }));
 const { loader: routeLoader } = await import('./route');
 const loader = routeLoader as any;
@@ -131,11 +133,13 @@ describe('submission loader — unsubmitted redirect', () => {
     requireMembership.mockReset();
     prisma.assignmentType.findUnique.mockReset();
     loadGradingQueueNeighbors.mockReset();
+    loadDocumentNavigationNeighbors.mockReset();
 
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
     prisma.assignmentType.findUnique.mockResolvedValue(null);
     prisma.submissionActivity.findMany.mockResolvedValue([]);
     loadGradingQueueNeighbors.mockResolvedValue(null);
+    loadDocumentNavigationNeighbors.mockResolvedValue(null);
     requireUserId.mockResolvedValue('user-student');
   });
 
@@ -181,6 +185,33 @@ describe('submission loader — unsubmitted redirect', () => {
       },
     });
     expect(result.gradingQueue).toBeNull();
+  });
+
+  test('loads Documents navigation for a submitted row opened from Documents', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue(
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
+    );
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission());
+
+    const result = await loader({
+      request: new Request(
+        'https://example.test/app/submissions/sub-1?exitTo=%2Fapp%2Fdocuments'
+      ),
+      params: { submissionId: 'sub-1' },
+    });
+
+    expect(loadDocumentNavigationNeighbors).toHaveBeenCalledTimes(1);
+    expect(loadDocumentNavigationNeighbors.mock.calls[0][0]).toMatchObject({
+      membershipId: TEACHER_MEMBERSHIP_ID,
+      organizationId: 'org-1',
+      documentId: 'doc-1',
+      scope: {
+        kind: 'documents',
+        filters: { status: 'all' },
+      },
+    });
+    expect(result.documentNavigation).toBeNull();
   });
 
   test('tells the student they unsubmitted it themselves', async () => {

@@ -59,6 +59,8 @@ export type TeacherDocumentWorkRow = {
   submissions: TeacherDocumentWorkSubmission[];
   latestSubmission: TeacherDocumentWorkSubmission | null;
   submissionCount: number;
+  /** True when the document has recorded external-paste activity. */
+  hasPasteActivity?: boolean;
 };
 
 export type ReleaseGradeRow = {

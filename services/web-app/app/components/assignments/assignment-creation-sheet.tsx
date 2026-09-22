@@ -38,6 +38,10 @@ import {
   gradingAssistantStrictnessOptions,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
+import {
+  DEFAULT_ASSIGNMENT_GRADING_MODE,
+  type AssignmentGradingMode,
+} from '~/domain/assignments/rubric-overrides';
 import { toDateInputValue } from '~/utils/date-only';
 
 export type AssignmentCreationEntryPoint =
@@ -128,6 +132,10 @@ export type AssignmentCreationSheetProps = {
   initialCollaborationGroupMode?: CollaborationGroupMode;
   initialCollaborationGroupSize?: number | null;
   initialGradingAssistantStrictnessLevel?: GradingAssistantStrictnessLevel;
+  initialRubricTotalPoints?: number | null;
+  initialGradingMode?: AssignmentGradingMode;
+  /** The rubric's authored total, shown before an assignment override is used. */
+  initialRubricDefaultTotalPoints?: number | null;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -215,6 +223,9 @@ export function AssignmentCreationSheetContent({
   initialCollaborationGroupMode = DEFAULT_COLLABORATION_GROUP_MODE,
   initialCollaborationGroupSize = null,
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  initialRubricTotalPoints = null,
+  initialGradingMode = DEFAULT_ASSIGNMENT_GRADING_MODE,
+  initialRubricDefaultTotalPoints = null,
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -257,6 +268,15 @@ export function AssignmentCreationSheetContent({
     useState<GradingAssistantStrictnessLevel>(
       initialGradingAssistantStrictnessLevel
     );
+  const [customizeRubricGrading, setCustomizeRubricGrading] = useState(
+    initialRubricTotalPoints !== null || initialGradingMode === 'bands'
+  );
+  const [rubricTotalPoints, setRubricTotalPoints] = useState(
+    pointValueFieldValue(initialRubricTotalPoints)
+  );
+  const [gradingMode, setGradingMode] = useState<AssignmentGradingMode>(
+    initialGradingMode
+  );
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [extractionTruncated, setExtractionTruncated] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -334,6 +354,11 @@ export function AssignmentCreationSheetContent({
     );
     setSaveForReuse(false);
     setGradingAssistantStrictnessLevel(initialGradingAssistantStrictnessLevel);
+    setCustomizeRubricGrading(
+      initialRubricTotalPoints !== null || initialGradingMode === 'bands'
+    );
+    setRubricTotalPoints(pointValueFieldValue(initialRubricTotalPoints));
+    setGradingMode(initialGradingMode);
     setAttachmentFile(null);
     setRemoveAttachment(false);
     setExtractionTruncated(false);
@@ -353,6 +378,9 @@ export function AssignmentCreationSheetContent({
     initialCollaborationGroupMode,
     initialCollaborationGroupSize,
     initialGradingAssistantStrictnessLevel,
+    initialRubricTotalPoints,
+    initialGradingMode,
+    initialRubricDefaultTotalPoints,
     initialPostAt,
     initialDueAt,
     open,
@@ -723,34 +751,164 @@ export function AssignmentCreationSheetContent({
                 <div aria-hidden className="w-px bg-border" />
               </div>
               <div className="min-w-0 flex-1 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="assignment-create-point-value">
-                    Point value
-                  </Label>
-                  <Input
-                    id="assignment-create-point-value"
-                    name="pointValue"
-                    type="number"
-                    min={1}
-                    max={1000}
-                    step={1}
-                    inputMode="numeric"
-                    value={pointValue}
-                    onChange={(event) => setPointValue(event.target.value)}
-                    disabled={isSaving}
-                    required
+                <section className="space-y-3" aria-labelledby="assignment-create-grade-configuration">
+                  <h3
+                    id="assignment-create-grade-configuration"
+                    className="text-sm font-semibold"
+                  >
+                    Grade Configuration
+                  </h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="assignment-create-default-point-value">
+                        Default point value
+                      </Label>
+                      <Input
+                        id="assignment-create-default-point-value"
+                        value={pointValue}
+                        readOnly
+                        aria-readonly="true"
+                        tabIndex={-1}
+                        className="bg-muted/30"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Default grading type</Label>
+                      <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                        By default: Step grading
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Rubric default:{' '}
+                    {initialRubricDefaultTotalPoints
+                      ? `${initialRubricDefaultTotalPoints} points`
+                      : 'built-in rubric total'}
+                  </p>
+                  <div className="rounded-md border bg-muted/20 px-3 py-2">
+                    <div className="flex items-start gap-2.5">
+                      <Checkbox
+                        id="assignment-create-customize-rubric-grading"
+                        checked={customizeRubricGrading}
+                        onCheckedChange={(checked) => {
+                          const enabled = checked === true;
+                          setCustomizeRubricGrading(enabled);
+                          setRubricTotalPoints(enabled ? pointValue : '');
+                        }}
+                        disabled={isSaving}
+                        className="mt-0.5 size-4 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <Label
+                          htmlFor="assignment-create-customize-rubric-grading"
+                          className="cursor-pointer font-medium"
+                        >
+                          Customize Grading
+                        </Label>
+                      </div>
+                    </div>
+
+                    {customizeRubricGrading ? (
+                      <div className="mt-3 space-y-3 border-l pl-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="assignment-create-point-value">
+                            Total Point Values
+                          </Label>
+                          <Input
+                            id="assignment-create-point-value"
+                            name="pointValue"
+                            type="number"
+                            min={1}
+                            max={1000}
+                            step={1}
+                            inputMode="numeric"
+                            value={pointValue}
+                            onChange={(event) => {
+                              const nextPointValue = event.target.value;
+                              setPointValue(nextPointValue);
+                              setRubricTotalPoints(nextPointValue);
+                            }}
+                            disabled={isSaving}
+                            required
+                          />
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Grading Total: <strong>{pointValue || '—'}</strong>{' '}
+                          points.
+                        </p>
+                        <div className="space-y-2">
+                          <Label>Scoring behavior</Label>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <button
+                              id="assignment-create-grading-mode-step"
+                              type="button"
+                              className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                                gradingMode === 'step'
+                                  ? 'border-primary bg-primary text-primary-foreground'
+                                  : 'border-border bg-background hover:bg-muted'
+                              }`}
+                              aria-pressed={gradingMode === 'step'}
+                              onClick={() => setGradingMode('step')}
+                              disabled={isSaving}
+                            >
+                              <span className="block font-medium">Steps</span>
+                              <span className="mt-1 block text-xs opacity-80">
+                                Scores are only on the rubric labels.
+                              </span>
+                            </button>
+                            <button
+                              id="assignment-create-grading-mode-bands"
+                              type="button"
+                              className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                                gradingMode === 'bands'
+                                  ? 'border-primary bg-primary text-primary-foreground'
+                                  : 'border-border bg-background hover:bg-muted'
+                              }`}
+                              aria-pressed={gradingMode === 'bands'}
+                              onClick={() => setGradingMode('bands')}
+                              disabled={isSaving}
+                            >
+                              <span className="block font-medium">Bands</span>
+                              <span className="mt-1 block text-xs opacity-80">
+                                Scores are within the labeled ranges.
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                  {!customizeRubricGrading ? (
+                    <input
+                      type="hidden"
+                      name="pointValue"
+                      value={pointValue}
+                    />
+                  ) : null}
+                  <input
+                    type="hidden"
+                    name="rubricTotalPoints"
+                    value={customizeRubricGrading ? rubricTotalPoints : ''}
                   />
-                </div>
+                  <input
+                    type="hidden"
+                    name="gradingMode"
+                    value={customizeRubricGrading ? gradingMode : 'step'}
+                  />
+                </section>
 
                 <input
                   type="hidden"
                   name="gradingAssistantStrictnessLevel"
                   value={gradingAssistantStrictnessLevel}
                 />
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label>Grading assistant strictness</Label>
-                  </div>
+                <section className="space-y-2" aria-labelledby="assignment-create-grading-assistance">
+                  <h3
+                    id="assignment-create-grading-assistance"
+                    className="text-sm font-semibold"
+                  >
+                    Grading Assistance
+                  </h3>
                   <div className="grid gap-2 sm:grid-cols-3">
                     {gradingAssistantStrictnessOptions.map((option) => {
                       const selected =
@@ -786,7 +944,7 @@ export function AssignmentCreationSheetContent({
                       );
                     })}
                   </div>
-                </div>
+                </section>
               </div>
             </div>
           ) : null}
