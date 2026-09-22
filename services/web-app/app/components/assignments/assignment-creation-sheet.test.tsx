@@ -272,12 +272,14 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Prompt');
       expectText('Extract from PDF');
       expectText('Submit for grade');
-      expectText('Default point value');
+      expectText(
+        'Graded out of 100 points in steps, read at the intermediate level.'
+      );
       expectText('Tutor enabled');
       expectText(
         "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."
       );
-      expectText('Grading Assistance');
+      expectNoText('Customize Grading');
       expectNoText('Tutor Context');
 
       const form = document.querySelector('form');
@@ -321,7 +323,11 @@ describe('AssignmentCreationSheetContent', () => {
   it('shows the grading assistant strictness picker to teachers', () => {
     root = renderSheet().root;
 
-    expectText('Grading Assistance');
+    act(() => {
+      controlById('assignment-create-change-grading').click();
+    });
+
+    expectText('Grading assistance');
     expectText('Beginner');
     expectText('Intermediate');
     expectText('Advanced');
@@ -344,82 +350,114 @@ describe('AssignmentCreationSheetContent', () => {
     );
   });
 
-  it('shows the rubric default and keeps customization off by default', () => {
-    root = renderSheet({ initialRubricDefaultTotalPoints: 6 }).root;
+  it('rests as a plain-language grading summary with nothing to expand past', () => {
+    root = renderSheet().root;
 
-    expectText('Grade Configuration');
-    expectText('Default point value');
-    expectText('Default grading type');
-    expectText('By default: Step grading');
-    expectText('Rubric default: 6 points');
-    expectText('Customize Grading');
-    expectText('Grading Assistance');
+    expectText(
+      'Graded out of 100 points in steps, read at the intermediate level.'
+    );
+    // The old block stated the same facts four times over three nested boxes.
+    expectNoText('Grade Configuration');
+    expectNoText('Default point value');
+    expectNoText('Default grading type');
+    expectNoText('By default: Step grading');
+    expectNoText('Customize Grading');
     expectNoText('Total Point Values');
     expectNoText('Grading Total');
     expectNoText('AI');
-    expect(inputByName('rubricTotalPoints').value).toBe('');
-    expect(inputByName('gradingMode').value).toBe('step');
     expect(inputByName('pointValue').value).toBe('100');
-    expect(controlById('assignment-create-default-point-value')).toHaveProperty(
-      'readOnly',
-      true
-    );
-    expect(
-      isChecked(controlById('assignment-create-customize-rubric-grading'))
-    ).toBe(false);
-  });
-
-  it('reveals compact grading controls when customization is enabled', () => {
-    root = renderSheet({ initialRubricDefaultTotalPoints: 6 }).root;
-
-    act(() => {
-      controlById('assignment-create-customize-rubric-grading').click();
-    });
-
-    expectText('Scoring behavior');
-    expectText('Total Point Values');
-    expectText('Grading Total: 100 points.');
-    expectText('Steps');
-    expectText('Bands');
-    expectText('Scores are only on the rubric labels.');
-    expectText('Scores are within the labeled ranges.');
-    expectNoText('AI');
-    expect(inputByName('rubricTotalPoints').value).toBe('100');
     expect(inputByName('gradingMode').value).toBe('step');
+    expect(inputByName('rubricTotalPoints').value).toBe('');
+    expect(document.getElementById('assignment-create-point-value')).toBeNull();
   });
 
-  it('lets a teacher opt into bands grading from the assignment creator', () => {
+  it('opens every grading control behind one Change affordance', () => {
     root = renderSheet().root;
 
     act(() => {
-      controlById('assignment-create-customize-rubric-grading').click();
+      controlById('assignment-create-change-grading').click();
+    });
+
+    expectText('Point value');
+    expectText('Scoring behavior');
+    expectText('Grading assistance');
+    expectText('Steps');
+    expectText('Bands');
+    expectNoText('Customize Grading');
+    expect(controlById('assignment-create-point-value')).toHaveProperty(
+      'readOnly',
+      false
+    );
+    expect(inputByName('pointValue').value).toBe('100');
+  });
+
+  it('summarizes the settings actually in force, not the defaults', () => {
+    root = renderSheet({
+      initialPointValue: 250,
+      initialGradingMode: 'bands',
+      initialGradingAssistantStrictnessLevel: 'advanced',
+    }).root;
+
+    expectText(
+      'Graded out of 250 points in bands, read at the advanced level.'
+    );
+    expect(inputByName('pointValue').value).toBe('250');
+    expect(inputByName('gradingMode').value).toBe('bands');
+  });
+
+  it('marks the chosen scoring behavior as the selected one', () => {
+    root = renderSheet({ initialGradingMode: 'bands' }).root;
+
+    act(() => {
+      controlById('assignment-create-change-grading').click();
+    });
+
+    const step = controlById('assignment-create-grading-mode-step');
+    const bands = controlById('assignment-create-grading-mode-bands');
+    expect(bands.getAttribute('aria-pressed')).toBe('true');
+    expect(step.getAttribute('aria-pressed')).toBe('false');
+    // The chosen segment is the one lifted out of the recessed track.
+    expect(bands.className).toContain('bg-popover');
+    expect(step.className).not.toContain('bg-popover');
+  });
+
+  it('lets a teacher opt into bands grading without a customize gate', () => {
+    root = renderSheet().root;
+
+    act(() => {
+      controlById('assignment-create-change-grading').click();
     });
     act(() => {
       controlById('assignment-create-grading-mode-bands').click();
     });
 
     expect(inputByName('gradingMode').value).toBe('bands');
-    expectText('Scores are within the labeled ranges.');
+    expectText(
+      'Graded out of 100 points in bands, read at the intermediate level.'
+    );
   });
 
-  it('clears the assignment override when customization is turned back off', () => {
+  // `rubricTotalPoints` rescales the rubric's own scale and the `max_score`
+  // handed to the grading assistant. It is not the gradebook total, and
+  // syncing it to `pointValue` breaks percentage math on 1-5 rubrics. This
+  // sheet therefore carries an existing override through untouched and never
+  // mints a new one.
+  it('preserves an existing rubric scale override without exposing it', () => {
     root = renderSheet({
       initialRubricTotalPoints: 40,
+      initialPointValue: 250,
       initialGradingMode: 'bands',
     }).root;
 
-    expect(
-      isChecked(controlById('assignment-create-customize-rubric-grading'))
-    ).toBe(true);
-    expect(inputByName('rubricTotalPoints').value).toBe('40');
-
     act(() => {
-      controlById('assignment-create-customize-rubric-grading').click();
+      controlById('assignment-create-change-grading').click();
     });
 
-    expect(inputByName('rubricTotalPoints').value).toBe('');
-    expect(inputByName('gradingMode').value).toBe('step');
-    expect(inputByName('pointValue').value).toBe('100');
+    // The gradebook total and the rubric scale stay independent.
+    expect(inputByName('rubricTotalPoints').value).toBe('40');
+    expect(inputByName('pointValue').value).toBe('250');
+    expectNoText('Total Point Values');
+    expectNoText('40');
   });
 
   it('preselects but does not lock assignment type from dashboard quick create', () => {
@@ -1003,13 +1041,12 @@ describe('AssignmentCreationSheetContent', () => {
       expect(
         allInputsByName('submitForGrade').map((input) => input.value)
       ).toEqual(['false']);
-      // No point value to fill in, so the ticket is submittable as it stands.
-      // Boolean, not the node: a failing DOM matcher tries to serialize the
-      // whole happy-dom tree, which takes the test runner down with it.
+      // Nothing to grade means no grading configuration at all, so the ticket
+      // is submittable as it stands. Boolean, not the node: a failing DOM
+      // matcher tries to serialize the whole happy-dom tree, which takes the
+      // test runner down with it.
       expect(
-        Boolean(
-          document.getElementById('assignment-create-default-point-value')
-        )
+        Boolean(document.getElementById('assignment-create-change-grading'))
       ).toBe(false);
 
       act(() => {
@@ -1020,18 +1057,21 @@ describe('AssignmentCreationSheetContent', () => {
         allInputsByName('submitForGrade').map((input) => input.value)
       ).toContain('true');
       // Small by default: one lesson check should not outweigh real work. The
-      // value is shown read-only until a teacher opts into Customize Grading,
-      // so it is the default field that carries it, not the editable input.
-      expect(
-        (
-          controlById(
-            'assignment-create-default-point-value'
-          ) as HTMLInputElement
-        ).value
-      ).toBe('10');
+      // grading config rests as a summary sentence, so that is where the
+      // teacher reads the number — the editable field stays behind Change.
+      expectText('Graded out of');
+      expectText('10 points');
       expect(
         Boolean(document.getElementById('assignment-create-point-value'))
       ).toBe(false);
+
+      // And it is still theirs to change, one disclosure away.
+      act(() => {
+        controlById('assignment-create-change-grading').click();
+      });
+      expect(
+        (controlById('assignment-create-point-value') as HTMLInputElement).value
+      ).toBe('10');
     });
 
     it('keeps the ordinary grade checkbox for every other type', () => {
