@@ -14,13 +14,16 @@ const prisma = {
     findUnique: mock(),
   },
   document: {
+    findFirst: mock(),
     create: mock(),
+    update: mock(),
   },
 };
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { createDocumentForAssignmentType } = await import('./documents.server');
+const { createDocumentForAssignmentType, ensureAssignmentModuleSessionsForDocument } =
+  await import('./documents.server');
 
 describe('createDocumentForAssignmentType', () => {
   beforeEach(() => {
@@ -28,7 +31,9 @@ describe('createDocumentForAssignmentType', () => {
     prisma.assignmentModule.findMany.mockReset();
     prisma.assignment.findUnique.mockReset();
     prisma.classAssignment.findUnique.mockReset();
+    prisma.document.findFirst.mockReset();
     prisma.document.create.mockReset();
+    prisma.document.update.mockReset();
 
     prisma.assignmentType.findFirst.mockResolvedValue({
       id: 'assignment-type-1',
@@ -44,6 +49,7 @@ describe('createDocumentForAssignmentType', () => {
       assignmentId: 'assignment-1',
       assignment: { assignmentTypeId: 'assignment-type-1' },
     });
+    prisma.document.findFirst.mockResolvedValue(null);
     prisma.assignmentModule.findMany.mockResolvedValue([
       {
         id: 'module-1',
@@ -68,7 +74,59 @@ describe('createDocumentForAssignmentType', () => {
     );
   });
 
+  test('reuses existing document when classAssignmentId already has a document', async () => {
+    prisma.classAssignment.findUnique.mockResolvedValue({
+      assignmentId: 'assignment-1',
+      assignment: { assignmentTypeId: 'assignment-type-1' },
+    });
+    prisma.assignmentModule.findMany.mockResolvedValue([
+      {
+        id: 'module-1',
+        instructions: [{ id: 'instruction-1', prompt: 'Prompt 1' }],
+      },
+    ]);
+    prisma.document.findFirst.mockResolvedValue({ id: 'existing-doc-1' });
+
+    const created = await createDocumentForAssignmentType({
+      membershipId: 'membership-1',
+      assignmentTypeId: 'assignment-type-1',
+      assignmentId: 'assignment-1',
+      classAssignmentId: 'class-assignment-1',
+    });
+
+    expect(created.documentId).toBe('existing-doc-1');
+    expect(prisma.document.create).not.toHaveBeenCalled();
+  });
+
+  test('falls back to assignmentId reuse when no classAssignmentId match exists', async () => {
+    prisma.classAssignment.findUnique.mockResolvedValue({
+      assignmentId: 'assignment-1',
+      assignment: { assignmentTypeId: 'assignment-type-1' },
+    });
+    prisma.assignmentModule.findMany.mockResolvedValue([
+      {
+        id: 'module-1',
+        instructions: [{ id: 'instruction-1', prompt: 'Prompt 1' }],
+      },
+    ]);
+    // First search by classAssignmentId returns null; second by assignmentId returns a match.
+    prisma.document.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'existing-by-assignment' });
+
+    const created = await createDocumentForAssignmentType({
+      membershipId: 'membership-1',
+      assignmentTypeId: 'assignment-type-1',
+      assignmentId: 'assignment-1',
+      classAssignmentId: 'class-assignment-1',
+    });
+
+    expect(created.documentId).toBe('existing-by-assignment');
+    expect(prisma.document.create).not.toHaveBeenCalled();
+  });
+
   test('creates one module session for every active assignment module', async () => {
+    prisma.document.findFirst.mockResolvedValue(null);
     prisma.assignmentModule.findMany.mockResolvedValue([
       {
         id: 'module-1',
@@ -122,5 +180,99 @@ describe('createDocumentForAssignmentType', () => {
 
     expect(prisma.assignmentModule.findMany).not.toHaveBeenCalled();
     expect(prisma.document.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('ensureAssignmentModuleSessionsForDocument', () => {
+  beforeEach(() => {
+    prisma.assignmentModule.findMany.mockReset();
+    prisma.document.update.mockReset();
+  });
+
+  test('creates sessions only for modules missing a session, and returns true', async () => {
+    prisma.assignmentModule.findMany.mockResolvedValue([
+      {
+        id: 'module-1',
+        instructions: [{ id: 'instruction-1', prompt: 'Prompt 1' }],
+      },
+      {
+        id: 'module-2',
+        instructions: [{ id: 'instruction-2', prompt: 'Prompt 2' }],
+      },
+    ]);
+
+    const created = await ensureAssignmentModuleSessionsForDocument(
+      'document-1',
+      'assignment-type-1',
+      ['module-1']
+    );
+
+    expect(created).toBe(true);
+    expect(prisma.assignmentModule.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { assignmentTypeId: 'assignment-type-1', deletedAt: null },
+        orderBy: { position: 'asc' },
+      })
+    );
+    expect(prisma.document.update).toHaveBeenCalledWith({
+      where: { id: 'document-1' },
+      data: {
+        assignmentModuleSessions: {
+          create: [expect.objectContaining({ assignmentModuleId: 'module-2' })],
+        },
+      },
+    });
+  });
+
+  test('does nothing and returns false when every module already has a session', async () => {
+    prisma.assignmentModule.findMany.mockResolvedValue([
+      {
+        id: 'module-1',
+        instructions: [{ id: 'instruction-1', prompt: 'Prompt 1' }],
+      },
+    ]);
+
+    const created = await ensureAssignmentModuleSessionsForDocument(
+      'document-1',
+      'assignment-type-1',
+      ['module-1']
+    );
+
+    expect(created).toBe(false);
+    expect(prisma.document.update).not.toHaveBeenCalled();
+  });
+
+  test('backfills every module when a document has no sessions at all', async () => {
+    prisma.assignmentModule.findMany.mockResolvedValue([
+      {
+        id: 'module-1',
+        instructions: [{ id: 'instruction-1', prompt: 'Prompt 1' }],
+      },
+      {
+        id: 'module-2',
+        instructions: [],
+      },
+    ]);
+
+    const created = await ensureAssignmentModuleSessionsForDocument(
+      'document-1',
+      'assignment-type-1',
+      []
+    );
+
+    expect(created).toBe(true);
+    expect(prisma.document.update).toHaveBeenCalledWith({
+      where: { id: 'document-1' },
+      data: {
+        assignmentModuleSessions: {
+          create: [
+            expect.objectContaining({ assignmentModuleId: 'module-1' }),
+            expect.objectContaining({
+              assignmentModuleId: 'module-2',
+            }),
+          ],
+        },
+      },
+    });
   });
 });

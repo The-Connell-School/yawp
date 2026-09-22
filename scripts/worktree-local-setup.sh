@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SLUG="$(basename "$ROOT")"
+WORKTREE_NAME="$(python3 -c 'import hashlib,pathlib,re,sys; p=sys.argv[1]; print(re.sub(r"[^a-z0-9-]", "-", pathlib.Path(p).name.lower())[:40] + "-" + hashlib.sha256(p.encode()).hexdigest()[:12])' "$ROOT")"
+SLUG="$WORKTREE_NAME"
 CONFIG_DIR="$ROOT/.worktree-local"
 CONFIG_FILE="$CONFIG_DIR/config.env"
 
@@ -33,13 +35,29 @@ ensure_config() {
   if [[ -f "$CONFIG_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$CONFIG_FILE"
-    return
   fi
 
-  local slot
-  slot="$(hash_slot "$SLUG" 70)"
-  PG_PORT=$((54320 + slot))
-  DEV_PORT=$((5176 + slot))
+  # Old configs may name the parent directory, sharing a database with siblings.
+  # Allocate new resources in that case; never reset or remove the old database.
+  if [[ ! -f "$CONFIG_FILE" || "$SLUG" != "$WORKTREE_NAME" ]]; then
+    SLUG="$WORKTREE_NAME"
+    local slot
+    slot="$(hash_slot "$ROOT" 70)"
+    PG_PORT="${PG_PORT:-$((54320 + slot))}"
+    DEV_PORT="${DEV_PORT:-$((5176 + slot))}"
+    LTI_MOCK_PORT="${LTI_MOCK_PORT:-$((9473 + slot))}"
+    CONTAINER_NAME="yawp-${SLUG}-postgres"
+    VOLUME_NAME="yawp-${SLUG}-postgres-data"
+    DB_NAME="yawp_${SLUG}"
+    PG_USER=postgres
+    PG_PASSWORD=password
+  fi
+
+  PG_PORT="${RECORD_PORT_DATABASE:-$PG_PORT}"
+  DEV_PORT="${RECORD_PORT_APP:-$DEV_PORT}"
+  LTI_MOCK_PORT="${RECORD_PORT_LTI_MOCK:-${LTI_MOCK_PORT:-$((DEV_PORT + 4297))}}"
+  PG_USER="${PG_USER:-postgres}"
+  PG_PASSWORD="${PG_PASSWORD:-password}"
   CONTAINER_NAME="yawp-${SLUG}-postgres"
   VOLUME_NAME="yawp-${SLUG}-postgres-data"
   DB_NAME="yawp_${SLUG}"
@@ -48,6 +66,7 @@ ensure_config() {
 SLUG=$SLUG
 PG_PORT=$PG_PORT
 DEV_PORT=$DEV_PORT
+LTI_MOCK_PORT=$LTI_MOCK_PORT
 CONTAINER_NAME=$CONTAINER_NAME
 VOLUME_NAME=$VOLUME_NAME
 DB_NAME=$DB_NAME
@@ -67,6 +86,14 @@ ensure_postgres() {
   if ! docker_available; then
     echo "Docker is required for isolated worktree Postgres." >&2
     exit 1
+  fi
+
+  if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+    local mapped_port
+    mapped_port="$(docker port "$CONTAINER_NAME" 5432/tcp 2>/dev/null | head -1 | sed 's/.*://' || true)"
+    if [[ -n "$mapped_port" && "$mapped_port" != "$PG_PORT" ]]; then
+      docker rm -f "$CONTAINER_NAME" >/dev/null
+    fi
   fi
 
   if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
@@ -96,26 +123,7 @@ ensure_postgres() {
   exit 1
 }
 
-copy_optional_env_value() {
-  local key="$1"
-  local file="$2"
-  if [[ -f "$file" ]]; then
-    rg "^${key}=" "$file" --no-line-number 2>/dev/null | head -1 || true
-  fi
-}
-
 write_env_files() {
-  local anthropic_line=""
-  local ai_model_line=""
-  local main_env=""
-
-  if git_common="$(git -C "$ROOT" rev-parse --git-common-dir 2>/dev/null)"; then
-    main_env="$(cd "$(dirname "$git_common")" && pwd)/services/web-app/.env"
-  fi
-
-  anthropic_line="$(copy_optional_env_value ANTHROPIC_API_KEY "${main_env:-}")"
-  ai_model_line="$(copy_optional_env_value AI_MODEL "${main_env:-}")"
-
   cat >"$ROOT/packages/prisma/.env" <<EOF
 DATABASE_URL="${DATABASE_URL}"
 EOF
@@ -130,14 +138,18 @@ HONEYPOT_SECRET="${SLUG}-worktree-honeypot"
 INTERNAL_COMMAND_TOKEN="${SLUG}-worktree-internal-token"
 AWS_S3_BUCKET_FOR_VIDEOS="${SLUG}-local-dev-bucket"
 AWS_S3_REGION_FOR_VIDEOS="us-east-1"
-${ai_model_line:-AI_MODEL="claude-sonnet-4-5"}
-${anthropic_line:-ANTHROPIC_API_KEY=""}
+CLASS_INSIGHT_MOCK_MODE=fixture
+AI_MODEL="claude-sonnet-4-5"
+ANTHROPIC_API_KEY=""
+BLACKBOARD_LTI_MOCK_URL="http://127.0.0.1:${LTI_MOCK_PORT}"
 EOF
+  chmod 600 "$CONFIG_FILE" "$ROOT/packages/prisma/.env" "$ROOT/services/web-app/.env"
 
   if [[ ! -f "$ROOT/.env" ]]; then
     cat >"$ROOT/.env" <<EOF
 AWS_PROFILE=default
 EOF
+    chmod 600 "$ROOT/.env"
   fi
 }
 
@@ -161,11 +173,30 @@ database_seeded() {
 migrate_and_seed() {
   (
     cd "$ROOT"
-    bun install
     bun prisma:generate
     bun run --cwd packages/prisma prisma migrate deploy
     bun run --cwd packages/prisma backfill-class-art-key
     bun db:seed-local-dev
+    bun run --cwd packages/prisma ensure-class-insights-local
+  )
+}
+
+ensure_class_insights_local() {
+  local runtime_env="$ROOT/../.ws/runtime.env"
+  (
+    cd "$ROOT/packages/prisma"
+    if [[ -f "$runtime_env" ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source "$runtime_env"
+      set +a
+    elif [[ -f .env ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source .env
+      set +a
+    fi
+    bun run ensure-class-insights-local
   )
 }
 
@@ -207,7 +238,17 @@ Dev logins (password: yawp-dev):
 Commands:
   bash scripts/worktree-local-setup.sh          # ensure db + env
   bash scripts/worktree-local-setup.sh --fresh  # reset + re-seed
+  bun blackboard-lti-mock                       # Blackboard Learn mock (student/teacher)
   bun dev                                       # start app
+
+Blackboard Learn mock:
+  BLACKBOARD_LTI_MOCK_ENABLED=true BLACKBOARD_LTI_MOCK_PORT=${LTI_MOCK_PORT} bun blackboard-lti-mock
+  Learn:       http://localhost:${LTI_MOCK_PORT}/
+  Same-origin: http://localhost:${DEV_PORT:-5176}/dev/blackboard-lti-mock/
+
+Class insights mock mode (services/web-app/.env):
+  CLASS_INSIGHT_MOCK_MODE=fixture   # fake summaries, no Anthropic calls
+  CLASS_INSIGHT_MOCK_MODE=live      # real Anthropic when API key is set
 EOF
 }
 
@@ -224,6 +265,13 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+# Validate dependencies before changing the environment or resetting its database.
+# Resolve from the worktree root even when invoked from another directory.
+(
+  cd "$ROOT"
+  bun install --frozen-lockfile
+)
+
 ensure_config
 ensure_postgres
 write_env_files
@@ -237,7 +285,9 @@ else
   (
     cd "$ROOT"
     bun prisma:generate >/dev/null
+    bun run --cwd packages/prisma prisma migrate deploy
   )
+  ensure_class_insights_local
 fi
 
 if [[ "$START_DEV" -eq 1 ]]; then

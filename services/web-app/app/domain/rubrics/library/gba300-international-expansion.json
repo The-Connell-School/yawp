@@ -1,0 +1,150 @@
+{
+  "name": "gba300-international-expansion",
+  "title": "GBA 300: International Expansion Plan",
+  "scoringScale": {
+    "type": "weighted_percent",
+    "minScore": 0,
+    "maxScore": 20,
+    "step": 1,
+    "compositeMin": 0,
+    "compositeMax": 100
+  },
+  "rubric": {
+    "categories": [
+      {
+        "key": "executive_summary",
+        "label": "Executive Summary",
+        "weight": 0.1,
+        "description": "A one-page, CEO-ready summary in the Workplace Application format taught in class. It must stand on its own and identify the firm, target country, key findings from every major section, and the recommendation.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          { "min": 1, "max": 6, "label": "Struggling", "description": "Substantially incomplete, unformatted, or so generic it could sit atop any team's report." },
+          { "min": 7, "max": 7, "label": "Developing", "description": "Over one page, drifts from the Workplace Application format, or omits key findings such as a budget signal or real recommendation; reads as an introduction rather than a distillation." },
+          { "min": 8, "max": 8, "label": "Proficient", "description": "One page, correct format, and accurately covers the essentials. Solid but summarizes more than it persuades." },
+          { "min": 9, "max": 10, "label": "Exemplary", "description": "One page in the Workplace Application format. Stands entirely on its own for a CEO, with the firm, target country, key findings from every major section, and recommendation. Confident, concise, and free of filler." }
+        ]
+      },
+      {
+        "key": "company_overview",
+        "label": "Company Overview",
+        "weight": 0.1,
+        "description": "Objectives, Mission, and Statement of Opportunity must all be present and labeled. The invented company must be specific and plausible enough to ground the full expansion plan.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          { "min": 1, "max": 6, "label": "Struggling", "description": "Subsections are missing, or the company is so underdefined that later sections contradict it." },
+          { "min": 7, "max": 7, "label": "Developing", "description": "A subsection is thin or not doing its job, or the company concept is too fuzzy to ground later sections." },
+          { "min": 8, "max": 8, "label": "Proficient", "description": "All three subsections are present and clear; the company concept is adequate, though the mission may lean generic." },
+          { "min": 9, "max": 10, "label": "Exemplary", "description": "All three subsections are present and labeled. The company is specific, plausible, and strong enough to sustain the report; the mission feels authentic; the Statement of Opportunity cleanly frames the project." }
+        ]
+      },
+      {
+        "key": "industry_analysis",
+        "label": "Industry Analysis",
+        "weight": 0.2,
+        "description": "Analyze the global industry, the target country's market, and at least three real competitors with relevant data, citations, paragraph-form analysis, and at least two graphics that communicate.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          { "min": 1, "max": 13, "label": "Struggling", "description": "Multiple required components are missing; claims are uncited; or the section offers generic industry talk with no target-market specificity. Use 11–13 when most components exist but are thin, 7–10 when several do not function, and 1–6 for a token attempt." },
+          { "min": 14, "max": 15, "label": "Developing", "description": "A required component is shorted, data is thin, the target market repeats the global industry, sales history is missing, or bullet lists replace required paragraphs." },
+          { "min": 16, "max": 17, "label": "Proficient", "description": "All components are present with real data and citations; analysis is mostly descriptive but accurate; graphics are present and relevant." },
+          { "min": 18, "max": 20, "label": "Exemplary", "description": "Worldwide description includes yearly revenue and ten-year stability shown in graphics plus at least three explained trends. Target-country market includes ten years of sales data. At least three real competitors receive concise analysis. At least two graphics communicate. Paragraph form and citations appear throughout, and the analysis explains why, not only what." }
+        ]
+      },
+      {
+        "key": "international_location_profile",
+        "label": "International Location Profile",
+        "weight": 0.2,
+        "description": "Describe the target country, region, and city where possible, then analyze all six PESTEL dimensions in direct connection to this company's expansion decision.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          { "min": 1, "max": 13, "label": "Struggling", "description": "Multiple dimensions are missing, or the content is generic, uncited, or disconnected from the expansion decision. Use 11–13 when most dimensions exist but are thin, 7–10 when several do not function, and 1–6 for a token attempt." },
+          { "min": 14, "max": 15, "label": "Developing", "description": "A dimension is missing or perfunctory, or the section reads as an encyclopedia entry about the country with the company forgotten." },
+          { "min": 16, "max": 17, "label": "Proficient", "description": "All six dimensions are accurate and mostly connected to the company, though some read more like country facts than expansion analysis." },
+          { "min": 18, "max": 20, "label": "Exemplary", "description": "The target location is described, all six PESTEL dimensions are analyzed, every dimension connects to this company's expansion, and dimensions interrelate where useful. Paragraph form, sensible visuals, and citations support the analysis." }
+        ]
+      },
+      {
+        "key": "consumer_profile",
+        "label": "Consumer Profile",
+        "weight": 0.05,
+        "description": "Follow the correct B2C or B2B target-consumer path, then connect Unique Success Factors directly to that consumer and explain why this buyer would choose the firm.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          { "min": 1, "max": 2, "label": "Struggling", "description": "A component is missing, the profile contradicts the company or advertising sections, or it reads as a placeholder." },
+          { "min": 3, "max": 3, "label": "Developing", "description": "The target consumer is too broad, lacks the required demographic/psychographic or B2B equivalent detail, uses bullet lists where paragraphs are required, or asserts success factors without tying them to the consumer." },
+          { "min": 4, "max": 4, "label": "Proficient", "description": "The correct path and both components are present and reasonably specific; success factors follow from the consumer but remain somewhat generic." },
+          { "min": 5, "max": 5, "label": "Exemplary", "description": "The correct B2C or B2B path is genuinely specific and written in paragraph form. Unique Success Factors build directly from that consumer into a credible competitive edge. Claims are cited and the profile is consistent with Advertising Strategy." }
+        ]
+      },
+      {
+        "key": "advertising_strategy",
+        "label": "Advertising Strategy",
+        "weight": 0.05,
+        "description": "Brand Positioning, Media Selection, and at least two visual Sample Promotions must align with the company, target consumer, evidence about media use, and target market.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          { "min": 1, "max": 2, "label": "Struggling", "description": "Subsections are missing, data is absent, or visual promotions are absent." },
+          { "min": 3, "max": 3, "label": "Developing", "description": "Media selection lacks data, positioning conflicts with earlier sections, or only one visual is present." },
+          { "min": 4, "max": 4, "label": "Proficient", "description": "All three subsections are present; media choices are reasonable but lightly evidenced; promotions are present and on-brand." },
+          { "min": 5, "max": 5, "label": "Exemplary", "description": "Positioning clearly matches the offering and consumer. Media selection uses data and concrete channels. At least two visual promotions fit both positioning and market. A radio script does not substitute for a visual." }
+        ]
+      },
+      {
+        "key": "budget",
+        "label": "Budget",
+        "weight": 0.1,
+        "description": "Build an itemized, justified budget totaling 7–10% of stated gross profit across research, marketing, operations, and contingency, consistent with company size and the plan.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          { "min": 1, "max": 6, "label": "Struggling", "description": "There is no real breakdown, numbers are arbitrary, or the budget contradicts the company's stated size." },
+          { "min": 7, "max": 7, "label": "Developing", "description": "The total is outside 7–10% or not anchored to gross profit, a focus area is missing, or itemization is too coarse." },
+          { "min": 8, "max": 8, "label": "Proficient", "description": "The total range and all four focus areas are correct with an itemized table, but some allocations are thinly justified." },
+          { "min": 9, "max": 10, "label": "Exemplary", "description": "The total equals 7–10% of stated gross profit and says so. Research is prioritized; all four focus areas are itemized; line items match the rest of the plan; every dollar has a rationale." }
+        ]
+      },
+      {
+        "key": "recommendation",
+        "label": "Recommendation",
+        "weight": 0.1,
+        "description": "Open with the recommendation, then present honest benefits and drawbacks in parallel-form bullets, omit monetary figures, and name a point person.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          { "min": 1, "max": 6, "label": "Struggling", "description": "There is no clear recommendation, or benefits and drawbacks are missing." },
+          { "min": 7, "max": 7, "label": "Developing", "description": "The section runs long, buries the recommendation, breaks parallel form, includes dollar figures, or omits the point person." },
+          { "min": 8, "max": 8, "label": "Proficient", "description": "Structure and content are correct and mostly parallel, though drawbacks are somewhat soft." },
+          { "min": 9, "max": 10, "label": "Exemplary", "description": "Concise and recommendation-first, with honest benefits and drawbacks in parallel bullets, no monetary figures, a named point person, and a conclusion earned by the preceding analysis." }
+        ]
+      },
+      {
+        "key": "references",
+        "label": "References",
+        "weight": 0.1,
+        "description": "Use consistent APA or MLA for every source used, including sources that informed the analysis without being quoted, plus in-text citations wherever claims and data appear. Sources should match the assignment's named databases and reputable sites.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          { "min": 1, "max": 6, "label": "Struggling", "description": "References are sparse or improperly formatted, with large uncited sections." },
+          { "min": 7, "max": 7, "label": "Developing", "description": "Formats are inconsistent, sources and in-text citations do not correspond, or noticeable stretches of data have no citations." },
+          { "min": 8, "max": 8, "label": "Proficient", "description": "The References page is complete and consistent; in-text citations are mostly present with scattered gaps." },
+          { "min": 9, "max": 10, "label": "Exemplary", "description": "The References page is complete and consistently APA or MLA, every source used is included, in-text citations support claims and data throughout, and sources match the caliber named by the assignment." }
+        ]
+      }
+    ]
+  },
+  "promptConfig": {
+    "gradingInstructions": "Course context: GBA 300, University of Alabama (Culverhouse College of Business). This is a team-written international expansion plan worth 100 points and addressed to a time-driven CEO. Never name a specific instructor; say \"your professor\" or \"your instructor.\"\n\nGrade each of the nine categories against its declared raw-point bands and assign an integer inside the earned band. The raw category maxima are 10, 10, 20, 20, 5, 5, 10, 10, and 10. Do not convert a section to a 0–100 score. Lead with what works, hold high explicit standards, never inflate, critique the work rather than its writers, and turn every shortfall into a specific next move. The instructor may adjust every score and comment; nothing is final until instructor review.\n\nEvidence and sources: teams are directed to Business Source Ultimate, Mintel, Statista, IBIS World, Factiva, and reputable sites. You cannot access those sources. Evaluate whether claims are cited, plausible, and internally consistent; never call an unverified statistic false. Quote doubtful passages in Instructor Notes and recommend verification without accusation. In-text citations are required throughout, with one consistently APA or MLA References page.\n\nAudience standard: reward concision, clarity, purposeful organization, and graphics that communicate. Do not reward padding, bullet dumps where paragraph form is required, or detail that serves the writers rather than the CEO. Judge Advertising Strategy against Consumer Profile every time.\n\nOverall feedback must contain: (1) an overall impression in 2–3 sentences, leading with what works; (2) categories 1–9 with band, raw points earned out of that category's maximum, and the single most useful improvement; (3) an Instructor Notes block that explicitly addresses all four areas even when everything is in order: unpointed requirements (cover page with logo, target-country title, and team names at least 24 pt; Table of Contents with page numbers; each main section on a new page; paragraph form where required), citation/source observations, internal consistency across company size/budget/consumer/media/industry/recommendation, and anything else the professor should see; and (4) one highest-leverage next step. Phrase Instructor Notes so students can read them.\n\nNever accuse a team of dishonesty. Never invent a requirement. Never present a score as final."
+  },
+  "outputSchema": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+  },
+  "calibrationNotes": "Student rubric and department point values supplied for GBA 300. Mixed raw-point sections normalize to the assignment percentage only after every section is scored."
+}

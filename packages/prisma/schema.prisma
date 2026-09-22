@@ -12,51 +12,109 @@ enum MembershipRole {
   STUDENT
 }
 
+enum StudentLicenseStatus {
+  PENDING
+  ACTIVE
+  REFUNDED
+  DISPUTED
+  REVOKED
+}
+
+enum StudentLicenseSource {
+  STRIPE_CHECKOUT
+  EXISTING_SUBSCRIPTION
+  MANUAL
+}
+
+/// The durable ownership model for a writing artifact.
+///
+/// Student artifacts belong to one student. Assignment-group artifacts belong
+/// to a teacher-created group inside one ClassAssignment; group membership is
+/// access, not ownership.
+enum DocumentArtifactKind {
+  STUDENT          @map("student")
+  ASSIGNMENT_GROUP @map("assignment-group")
+}
+
 model Class {
-  id               String            @id @default(cuid())
-  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime          @default(now()) @db.Timestamptz(6)
-  code             String
-  schoolYear       String            @default("2024-2025")
-  period           String
-  grade            String
-  title            String?
-  cardGradientKey  String            @default("indigo-purple-pink")
-  classArtIndex    Int?
-  classArtKey      String?
-  isArchived       Boolean           @default(false)
-  students         OrgMembership[]   @relation("ClassStudents")
-  teachers         OrgMembership[]   @relation("ClassTeachers")
-  schoolId         String
-  school           School            @relation(fields: [schoolId], references: [id])
-  classAssignments ClassAssignment[]
+  id                              String                           @id @default(cuid())
+  createdAt                       DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt                       DateTime                         @default(now()) @db.Timestamptz(6)
+  code                            String
+  schoolYear                      String                           @default("2024-2025")
+  period                          String?
+  grade                           String?
+  title                           String?
+  cardGradientKey                 String                           @default("indigo-purple-pink")
+  classArtIndex                   Int?
+  classArtKey                     String?
+  isArchived                      Boolean                          @default(false)
+  students                        OrgMembership[]                  @relation("ClassStudents")
+  teachers                        OrgMembership[]                  @relation("ClassTeachers")
+  schoolId                        String
+  school                          School                           @relation(fields: [schoolId], references: [id])
+  classAssignments                ClassAssignment[]
+  writingPracticeClassAssignments WritingPracticeClassAssignment[]
 
   @@unique([schoolId, code])
   @@index([schoolId, schoolYear, period, grade])
 }
 
+/// A whole grading rubric as one portable object: scale, categories, prompt
+/// configuration, output schema and calibration notes together. Rubrics are
+/// written elsewhere and pasted in, which is what makes them movable between
+/// environments — the JSON is the transfer format.
+model Rubric {
+  id              String           @id @default(cuid())
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
+  /// Stable identifier used to match the same rubric across environments.
+  name            String           @unique
+  /// What an admin sees in the picker.
+  title           String
+  schemaJson      Json
+  assignmentTypes AssignmentType[]
+  currentRevisionId String?
+  currentRevision RubricRevision? @relation("CurrentRubricRevision", fields: [currentRevisionId], references: [id], onDelete: Restrict)
+
+  @@index([title])
+}
+
 model AssignmentType {
-  id                                 String                        @id @default(cuid())
-  createdAt                          DateTime                      @default(now()) @db.Timestamptz(6)
-  updatedAt                          DateTime                      @default(now()) @db.Timestamptz(6)
+  id                                 String                                 @id @default(cuid())
+  createdAt                          DateTime                               @default(now()) @db.Timestamptz(6)
+  updatedAt                          DateTime                               @default(now()) @db.Timestamptz(6)
   title                              String
-  kind                               String?                       @unique
+  kind                               String?                                @unique
   description                        String?
   position                           Int
-  systemKey                          String?                       @unique
-  archivedAt                         DateTime?                     @db.Timestamptz(6)
+  systemKey                          String?                                @unique
+  archivedAt                         DateTime?                              @db.Timestamptz(6)
   ownerOrgId                         String?
-  ownerOrg                           Organization?                 @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
+  ownerOrg                           Organization?                          @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
   ownerMembershipId                  String?
-  ownerMembership                    OrgMembership?                @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
+  ownerMembership                    OrgMembership?                         @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
+  /// The rubric this assignment type grades with, chosen from the shared
+  /// library. Null keeps the older behaviour: its own JSON columns below, or
+  /// the built-in default for its kind.
+  rubricId                           String?
+  rubric                             Rubric?                                @relation(fields: [rubricId], references: [id])
   scoringScaleJson                   Json?
   rubricJson                         Json?
   gradingPromptConfigJson            Json?
   gradingOutputSchemaJson            Json?
   gradingCalibrationNotes            String?
-  gradingAssistantVersion            Int                           @default(1)
+  /// Prototype gate for collaborative drafts. Collaboration is offered only for
+  /// assignment types that opt in, which keeps the pilot to one course rather
+  /// than every kind of writing in the product.
+  collaborationSupported             Boolean                                @default(false)
+  gradingAssistantVersion            Int                                    @default(1)
   gradingAssistantSourceTemplateId   String?
   gradingAssistantSourceTemplateSlug String?
+  /// Opt-in for student-uploaded figures (charts, graphs, logos) in the
+  /// document editor. Defaults off, so every assignment type that exists today
+  /// keeps the toolbar it has today.
+  allowsImageUploads                 Boolean                       @default(false)
   image                              AssignmentTypeImage?
   organizationAssignments            OrganizationAssignmentType[]
   schoolAssignments                  SchoolAssignmentType[]
@@ -65,6 +123,14 @@ model AssignmentType {
   assignments                        Assignment[]
   documents                          Document[]
   apHistoryLibraryEntries            ApHistoryPromptLibraryEntry[]
+  evaluations                        AssignmentTypeEvaluation[]
+  evaluationCases                    AssignmentTypeEvaluationCase[]
+  evaluationRuns                     AssignmentTypeEvaluationRun[]
+  promptVersions                     AssignmentTypePromptVersion[]
+  evaluationSuiteVersions            AssignmentTypeEvaluationSuiteVersion[]
+  savedThesisPrompts                 SavedThesisPrompt[]
+  savedDailyPagesPrompts             SavedDailyPagesPrompt[]
+  savedAssignments                   SavedAssignment[]
 
   @@index([ownerOrgId])
   @@index([ownerMembershipId])
@@ -73,7 +139,129 @@ model AssignmentType {
   @@index([kind])
 }
 
+model AssignmentTypeEvaluation {
+  id               String                         @id @default(cuid())
+  createdAt        DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime                       @default(now()) @updatedAt @db.Timestamptz(6)
+  assignmentTypeId String
+  assignmentType   AssignmentType                 @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  title            String
+  description      String
+  position         Int                            @default(0)
+  archivedAt       DateTime?                      @db.Timestamptz(6)
+  cases            AssignmentTypeEvaluationCase[]
+
+  @@index([assignmentTypeId, archivedAt, position])
+}
+
+model AssignmentTypeEvaluationCase {
+  id                 String                           @id @default(cuid())
+  createdAt          DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime                         @default(now()) @updatedAt @db.Timestamptz(6)
+  assignmentTypeId   String
+  assignmentType     AssignmentType                   @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  evaluationId       String?
+  evaluation         AssignmentTypeEvaluation?        @relation(fields: [evaluationId], references: [id], onDelete: SetNull)
+  rubricCategoryKey  String
+  title              String
+  documentText       String
+  criterion          String
+  expectedOutputJson Json?
+  position           Int                              @default(0)
+  archivedAt         DateTime?                        @db.Timestamptz(6)
+  results            AssignmentTypeEvaluationResult[]
+
+  @@index([assignmentTypeId, archivedAt, rubricCategoryKey, position])
+  @@index([evaluationId, archivedAt, position])
+}
+
+model AssignmentTypePromptVersion {
+  id                    String                        @id @default(cuid())
+  createdAt             DateTime                      @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                      @default(now()) @updatedAt @db.Timestamptz(6)
+  promotedAt            DateTime?                     @db.Timestamptz(6)
+  assignmentTypeId      String
+  assignmentType        AssignmentType                @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  version               Int
+  revision              Int                           @default(1)
+  status                String                        @default("draft")
+  systemMessageTemplate String                        @db.Text
+  userMessageTemplate   String                        @db.Text
+  variableSchemaJson    Json
+  contentHash           String
+  runs                  AssignmentTypeEvaluationRun[]
+
+  @@unique([assignmentTypeId, version])
+  @@index([assignmentTypeId, status, version(sort: Desc)])
+}
+
+model AssignmentTypeEvaluationSuiteVersion {
+  id               String                        @id @default(cuid())
+  createdAt        DateTime                      @default(now()) @db.Timestamptz(6)
+  assignmentTypeId String
+  assignmentType   AssignmentType                @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  version          Int
+  contentHash      String
+  snapshotJson     Json
+  runs             AssignmentTypeEvaluationRun[]
+
+  @@unique([assignmentTypeId, version])
+  @@index([assignmentTypeId, version(sort: Desc)])
+}
+
+model AssignmentTypeEvaluationRun {
+  id                         String                                @id @default(cuid())
+  createdAt                  DateTime                              @default(now()) @db.Timestamptz(6)
+  completedAt                DateTime?                             @db.Timestamptz(6)
+  assignmentTypeId           String
+  assignmentType             AssignmentType                        @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  promptVersion              Int
+  promptVersionId            String?
+  savedPromptVersion         AssignmentTypePromptVersion?          @relation(fields: [promptVersionId], references: [id], onDelete: SetNull)
+  promptRevision             Int?
+  promptSnapshotJson         Json
+  evaluationSuiteVersionId   String?
+  evaluationSuiteVersion     AssignmentTypeEvaluationSuiteVersion? @relation(fields: [evaluationSuiteVersionId], references: [id], onDelete: SetNull)
+  evaluationSuiteContentHash String?
+  evaluationSnapshotJson     Json?
+  status                     String                                @default("running")
+  totalCases                 Int                                   @default(0)
+  passedCases                Int                                   @default(0)
+  failedCases                Int                                   @default(0)
+  needsReviewCases           Int                                   @default(0)
+  results                    AssignmentTypeEvaluationResult[]
+
+  @@index([assignmentTypeId, createdAt(sort: Desc)])
+  @@index([promptVersionId, evaluationSuiteVersionId, createdAt(sort: Desc)])
+  @@index([status])
+}
+
+model AssignmentTypeEvaluationResult {
+  id                   String                        @id @default(cuid())
+  createdAt            DateTime                      @default(now()) @db.Timestamptz(6)
+  runId                String
+  run                  AssignmentTypeEvaluationRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  caseId               String?
+  evaluationCase       AssignmentTypeEvaluationCase? @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  caseTitle            String
+  rubricCategoryKey    String
+  criterion            String
+  status               String
+  evidence             String
+  gradingOutputJson    Json?
+  expectedOutputJson   Json?
+  responseContractJson Json?
+  requestSnapshotJson  Json?
+
+  @@unique([runId, caseId])
+  @@index([runId])
+  @@index([caseId])
+  @@index([status])
+}
+
 model Assignment {
+  rubricRevisionId String?
+  rubricRevision RubricRevision? @relation(fields: [rubricRevisionId], references: [id], onDelete: Restrict)
   id                              String            @id @default(cuid())
   createdAt                       DateTime          @default(now()) @db.Timestamptz(6)
   updatedAt                       DateTime          @default(now()) @db.Timestamptz(6)
@@ -81,9 +269,26 @@ model Assignment {
   assignmentType                  AssignmentType    @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
   title                           String?
   prompt                          String
+  promptAttachmentKey             String?
+  promptAttachmentName            String?
+  promptAttachmentSize            Int?
   submitForGrade                  Boolean           @default(true)
   pointValue                      Int?              @default(100)
+  /// Optional assignment-level override for the rubric's total score.
+  rubricTotalPoints               Int?
+  /// `step` preserves the original discrete label behavior; `bands` allows
+  /// whole-number scores inside each rubric label's declared range.
+  gradingMode                     String            @default("step")
   gradingAssistantStrictnessLevel String            @default("intermediate")
+  tutorEnabled                    Boolean           @default(true)
+  /// The teacher's per-assignment toggle: are students writing one shared
+  /// draft per group. Gated at runtime by Organization.collaborativeDraftsEnabled.
+  collaborationEnabled            Boolean           @default(false)
+  /// How groups are formed for this assignment: teacher | random | whole-class.
+  /// A string rather than an enum, matching gradingAssistantStrictnessLevel.
+  collaborationGroupMode          String            @default("teacher")
+  /// Target students per group. Null for whole-class, where the group is the roster.
+  collaborationGroupSize          Int?
   apHistorySnapshot               Json?
   classAssignments                ClassAssignment[]
   documents                       Document[]
@@ -92,17 +297,333 @@ model Assignment {
 }
 
 model ClassAssignment {
-  id           String     @id @default(cuid())
-  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime   @default(now()) @db.Timestamptz(6)
-  assignmentId String
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  classId      String
-  class        Class      @relation(fields: [classId], references: [id], onDelete: Cascade)
-  documents    Document[]
+  id             String                  @id @default(cuid())
+  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime                @default(now()) @db.Timestamptz(6)
+  assignmentId   String
+  assignment     Assignment              @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  classId        String
+  class          Class                   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  /// When set in the future, students do not see this assignment yet.
+  postAt         DateTime?               @db.Timestamptz(6)
+  /// Optional due date for this class's deployment of the assignment.
+  dueAt          DateTime?               @db.Timestamptz(6)
+  documents      Document[]
+  insight        ClassAssignmentInsight?
+  documentGroups DocumentGroup[]
 
   @@unique([assignmentId, classId])
   @@index([classId, createdAt(sort: Desc)])
+  @@index([postAt])
+  @@index([dueAt])
+}
+
+/// One collaboration group within one ClassAssignment.
+///
+/// Groups live on ClassAssignment rather than Assignment because they are made of
+/// students, and an Assignment fans out to one ClassAssignment per class.
+///
+/// The group exists before any document does. Before `openedAt` it is only a seating
+/// chart, so reshuffling is free; after it, the group owns a draft that already contains
+/// student writing and moving people between groups has a real cost.
+model DocumentGroup {
+  id                String                     @id @default(cuid())
+  createdAt         DateTime                   @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                   @default(now()) @updatedAt @db.Timestamptz(6)
+  /// Assignment groups are teacher-created. The database constrains this field
+  /// to `assignment`; it remains explicit for safe forward migration from the
+  /// abandoned student-sharing prototype.
+  kind              String                     @default("assignment")
+  classAssignmentId String
+  classAssignment   ClassAssignment            @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  label             String
+  ordinal           Int
+  /// Set when the teacher finalizes the group and its artifact becomes reachable.
+  /// Null means the teacher may still edit the arrangement.
+  openedAt          DateTime?                  @db.Timestamptz(6)
+  /// Set once the room has been seeded from the document's existing HTML.
+  /// Durable guard against seeding twice, which would duplicate the content.
+  seededAt          DateTime?                  @db.Timestamptz(6)
+  /// The group's shared draft, provisioned when groups are opened.
+  documentId        String?                    @unique
+  document          Document?                  @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  members           DocumentGroupMember[]
+  memberGrades      DocumentGroupMemberGrade[]
+
+  @@unique([classAssignmentId, ordinal])
+  @@index([kind])
+}
+
+/// A student's membership in one DocumentGroup.
+///
+/// Removal is soft. A student moved to another group keeps their attributed text in the
+/// draft they wrote it in, and the row records that they were once a member — but
+/// `removedAt` being set is what withdraws their write access, so every authorization
+/// predicate must filter on `removedAt: null`.
+/// One Yjs update in a collaborative document's append-only log.
+///
+/// This is the room: rather than paying a hosted provider to hold live document
+/// state, the state lives here and clients exchange updates over ordinary HTTP.
+/// Yjs updates are commutative and idempotent, which is what makes that safe —
+/// late, duplicated or out-of-order delivery cannot corrupt the document, so a
+/// polling transport is correct rather than merely tolerable.
+///
+/// `seq` is a single global autoincrement rather than a per-document counter.
+/// Per-document ordering is still correct because each document's rows are a
+/// subset of one monotonic sequence, and it removes the read-then-write race that
+/// allocating MAX(seq)+1 per document would introduce.
+model DocumentCollabUpdate {
+  seq          Int      @id @default(autoincrement())
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  documentId   String
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  /// Encoded Yjs update bytes.
+  update       Bytes
+  /// Which member's client produced it. Kept for the contribution breakdown.
+  membershipId String?
+  /// True for a compaction row, which merges every update up to its own seq.
+  /// Safe for clients holding an older cursor: they receive the merged row and
+  /// applying it twice is a no-op.
+  isCompaction Boolean  @default(false)
+
+  @@index([documentId, seq])
+}
+
+/// Who a Yjs client id belongs to, and how much that session wrote.
+///
+/// Every item in a collaborative document permanently carries the id of the
+/// client that created it, so authorship of surviving text is a property of the
+/// document itself. What the document cannot say is which *person* a client id
+/// is — only the update row that carried it knows that, and `compactRoom`
+/// deletes those rows once a log passes its threshold. Without this table a
+/// compacted room still knows that client 1788036363 wrote the conclusion and
+/// has no way left to say who that was.
+///
+/// One row is approximately one editing session: Yjs mints a fresh client id per
+/// document instance, so a tab opened Tuesday and one opened Thursday are
+/// separate rows with their own time ranges. That makes the session timeline
+/// fall out of the same table rather than needing the per-update timestamps
+/// compaction also discards.
+model DocumentCollabAuthor {
+  id            String         @id @default(cuid())
+  createdAt     DateTime       @default(now()) @db.Timestamptz(6)
+  documentId    String
+  document      Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  /// Yjs client id. Text, not Int: Yjs generates uint32 values that run past the
+  /// 2147483647 ceiling of a Postgres integer column.
+  clientId      String
+  /// Null only for writes with no member behind them, such as server-side
+  /// seeding of a room from an existing draft.
+  membershipId  String?
+  membership    OrgMembership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  firstSeenAt   DateTime       @default(now()) @db.Timestamptz(6)
+  lastSeenAt    DateTime       @default(now()) @db.Timestamptz(6)
+  updateCount   Int            @default(0)
+  charsInserted Int            @default(0)
+  /// Characters this session removed, whoever originally wrote them. Kept
+  /// separate from charsInserted so a student who tightens a partner's paragraph
+  /// does not read as having contributed nothing.
+  charsDeleted  Int            @default(0)
+
+  @@unique([documentId, clientId])
+  @@index([documentId, membershipId])
+}
+
+/// Where each writer's caret is in a shared draft, right now.
+///
+/// Ephemeral, and the only table here that is. A row is one open editor saying
+/// "I am here, at this position"; it is rewritten every few seconds while that
+/// editor is open, deleted when it closes, and ignored once it goes stale. None
+/// of it is worth keeping — a caret from yesterday means nothing.
+///
+/// It is in Postgres rather than in a process because the transport is HTTP
+/// polling against however many app instances happen to be running. Presence
+/// held in memory would be presence held per instance, so two students in the
+/// same group would see each other only when their requests landed on the same
+/// one — and the symptom would be teammates who intermittently have no caret,
+/// which is worse than having none at all.
+///
+/// `membershipId` is part of the primary key, not merely a column, so one
+/// student cannot write over another's row by claiming their Yjs client id. The
+/// server writes the name and colour into `state` for the same reason: what the
+/// caret is labelled with is never what the browser said it was.
+model DocumentCollabPresence {
+  /// Yjs client id — one per open editor, so a student with two tabs has two.
+  /// Text, not Int, for the same reason DocumentCollabAuthor.clientId is: Yjs
+  /// mints uint32 values that run past a Postgres integer column.
+  clientId     String
+  documentId   String
+  document     Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  membershipId String
+  membership   OrgMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  /// One encoded Yjs awareness update carrying exactly this client's state:
+  /// where its cursor is, and who the server says is holding it.
+  state        Bytes
+  /// Doubles as the liveness clock. A row older than the presence TTL is a
+  /// closed tab that never got to say goodbye, and reads skip it.
+  updatedAt    DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@id([documentId, membershipId, clientId])
+  @@index([documentId, updatedAt])
+}
+
+/// One student's individual grade on a shared draft.
+///
+/// The group's own grade lives on `Submission` — one document, one submission,
+/// one grade for the work. This is the per-student overlay the requirement asks
+/// for: the group gets a grade, and each member also gets one for what they
+/// contributed.
+///
+/// Keyed to the group rather than to a Submission on purpose. Submitting a group
+/// draft is not wired yet, so hanging member grades off a Submission would mean
+/// they could not be entered at all. It also means a teacher can grade
+/// contributions on ungraded group work, which is how the pilot is meant to run.
+///
+/// `score` is free text, matching `Submission.score`, so a teacher can write 18/20
+/// or A- or "meets expectations" rather than being forced into one scheme.
+///
+/// Nothing computes this. Character counts and shares are evidence a teacher
+/// weighs; every automatic contribution metric fails on ordinary group-work
+/// patterns, so the number here is always one a person chose.
+model DocumentGroupMemberGrade {
+  id                   String         @id @default(cuid())
+  createdAt            DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  groupId              String
+  group                DocumentGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  membershipId         String
+  membership           OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  /// True while this student simply takes the group's grade. An individual score
+  /// is an override, so the group grade is never copied onto member rows — it is
+  /// derived at read time, and re-grading the group flows to every follower
+  /// automatically without touching a row a teacher deliberately set.
+  followsGroupGrade    Boolean        @default(true)
+  score                String?
+  feedback             String?
+  /// Who recorded it. Kept so a co-taught class can tell who graded what.
+  gradedByMembershipId String?
+  gradedBy             OrgMembership? @relation("DocumentGroupMemberGradedBy", fields: [gradedByMembershipId], references: [id], onDelete: SetNull)
+  /// Set when the student may see it. Null means the teacher is still working, so
+  /// nothing leaks mid-grading — the same guard Submission.releasedAt provides.
+  releasedAt           DateTime?      @db.Timestamptz(6)
+
+  @@unique([groupId, membershipId])
+  @@index([membershipId])
+}
+
+model DocumentGroupMember {
+  id           String        @id @default(cuid())
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+  groupId      String
+  group        DocumentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  membershipId String
+  membership   OrgMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  removedAt    DateTime?     @db.Timestamptz(6)
+
+  @@unique([groupId, membershipId])
+  @@index([membershipId])
+  @@index([groupId, removedAt])
+}
+
+/// Class-wide, assignment-level feedback for the teacher: an AI summary of how
+/// the whole class did on one assignment (strengths, gaps, teaching next steps).
+/// One cached row per ClassAssignment; regenerated on demand.
+model ClassAssignmentInsight {
+  id                      String          @id @default(cuid())
+  createdAt               DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime        @default(now()) @updatedAt @db.Timestamptz(6)
+  classAssignmentId       String          @unique
+  classAssignment         ClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  status                  String          @default("ready") // ready | failed
+  model                   String?
+  submissionCount         Int             @default(0)
+  summaryJson             Json?
+  generatedByMembershipId String?
+  generatedByMembership   OrgMembership?  @relation(fields: [generatedByMembershipId], references: [id], onDelete: SetNull)
+  generatedAt             DateTime?       @db.Timestamptz(6)
+
+  @@index([generatedByMembershipId])
+}
+
+/// A thesis-driven essay prompt a teacher generated and kept ("My prompts").
+/// Keyed by a hash of the prompt body so saving and then using the same draft
+/// leaves a single row.
+model SavedThesisPrompt {
+  id               String         @id @default(cuid())
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  membershipId     String
+  membership       OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  assignmentTypeId String
+  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  title            String
+  prompt           String
+  promptHash       String
+  source           String         @default("generator")
+  archivedAt       DateTime?      @db.Timestamptz(6)
+
+  @@unique([membershipId, assignmentTypeId, promptHash])
+  @@index([membershipId, assignmentTypeId, archivedAt])
+}
+
+/// A Daily Pages prompt a teacher generated and kept ("My prompts").
+/// Keyed by a hash of the prompt text so saving and then using the same draft
+/// leaves a single row. `facets` holds the generator's library-vocabulary tags
+/// ({ type, seriousness, cognitiveMoves }) so a saved prompt filters and reads
+/// like a corpus row; it is validated on the way out, never trusted raw.
+model SavedDailyPagesPrompt {
+  id               String         @id @default(cuid())
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  membershipId     String
+  membership       OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  assignmentTypeId String
+  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  prompt           String
+  promptHash       String
+  facets           Json?
+  source           String         @default("generator")
+  archivedAt       DateTime?      @db.Timestamptz(6)
+
+  // Named explicitly: the default names would run past Postgres's 63-byte
+  // identifier limit and be silently truncated.
+  @@unique([membershipId, assignmentTypeId, promptHash], map: "SavedDailyPagesPrompt_membership_type_promptHash_key")
+  @@index([membershipId, assignmentTypeId, archivedAt], map: "SavedDailyPagesPrompt_membership_type_archivedAt_idx")
+}
+
+/// An assignment a teacher kept for reuse ("My Saved Assignments"). This is a
+/// configuration, not a deployment: it holds the assignment type, title,
+/// prompt and the grading/tutor settings, and reusing one pre-fills the
+/// creation sheet. Keyed by a hash of the prompt body so saving the same
+/// assignment twice leaves a single row.
+model SavedAssignment {
+  id                              String         @id @default(cuid())
+  createdAt                       DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt                       DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  membershipId                    String
+  membership                      OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  assignmentTypeId                String
+  assignmentType                  AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  title                           String
+  prompt                          String
+  promptHash                      String
+  submitForGrade                  Boolean        @default(true)
+  pointValue                      Int?
+  gradingAssistantStrictnessLevel String         @default("intermediate")
+  tutorEnabled                    Boolean        @default(true)
+  /// Mirrors the three collaboration fields on Assignment so reusing a saved
+  /// assignment preserves the setting instead of silently dropping it.
+  collaborationEnabled            Boolean        @default(false)
+  collaborationGroupMode          String         @default("teacher")
+  collaborationGroupSize          Int?
+  source                          String         @default("creation-sheet")
+  archivedAt                      DateTime?      @db.Timestamptz(6)
+
+  // Named explicitly: the default names would run past Postgres's 63-byte
+  // identifier limit and be silently truncated.
+  @@unique([membershipId, assignmentTypeId, promptHash], map: "SavedAssignment_membership_type_promptHash_key")
+  @@index([membershipId, archivedAt], map: "SavedAssignment_membership_archivedAt_idx")
+  @@index([assignmentTypeId], map: "SavedAssignment_assignmentTypeId_idx")
 }
 
 model ApHistoryPromptLibraryEntry {
@@ -217,7 +738,19 @@ model AssignmentModuleSession {
   assignmentModule      AssignmentModule                 @relation(fields: [assignmentModuleId], references: [id], onDelete: Cascade)
   documentId            String
   document              Document                         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  /// Whose coaching conversation this is.
+  ///
+  /// Null means the document's owner, which is every session that existed before
+  /// shared drafts — a solo document has exactly one student, so the column was
+  /// redundant. On a shared draft it is not: each member gets their own
+  /// transcript and their own progress through the modules, so one student
+  /// asking the tutor a question does not put it in front of their group.
+  membershipId          String?
+  membership            OrgMembership?                   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   messages              AssignmentModuleSessionMessage[]
+
+  @@unique([documentId, membershipId, assignmentModuleId])
+  @@index([documentId, membershipId])
 }
 
 model AssignmentModuleSessionMessage {
@@ -242,8 +775,11 @@ model Document {
   title                    String                    @default("Untitled")
   text                     String?
   html                     String?
-  membership               OrgMembership             @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  membershipId             String
+  artifactKind             DocumentArtifactKind      @default(STUDENT)
+  /// The owner of a solo student artifact. Assignment-group artifacts have no
+  /// student owner; their active DocumentGroupMember rows grant collaboration.
+  membership               OrgMembership?            @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membershipId             String?
   assignmentTypeId         String
   assignmentType           AssignmentType            @relation(fields: [assignmentTypeId], references: [id], onDelete: Restrict)
   assignmentId             String?
@@ -256,11 +792,39 @@ model Document {
   pasteAlerts              PasteAlert[]
   revisions                DocumentRevision[]
   submissions              Submission[]
+  images                   DocumentImage[]
+  /// Set only on a collaborative draft: the group whose shared document this is.
+  group                    DocumentGroup?
+  collabUpdates            DocumentCollabUpdate[]
+  collabAuthors            DocumentCollabAuthor[]
+  collabPresence           DocumentCollabPresence[]
 
   @@index([assignmentId])
   @@index([classAssignmentId])
   @@index([assignmentTypeId])
   @@index([membershipId])
+}
+
+/// Student-uploaded figures (charts, photos, logos) embedded in a document.
+///
+/// Stored as a Postgres blob for the same reason AssignmentTypeImage is: the
+/// only S3 bucket this app has is the videos bucket, and adding a new bucket
+/// plus lifecycle rules is infrastructure work this feature does not need at
+/// its current size cap. Serving goes through /api/image/document/:id so a
+/// document's figures inherit the document's own authorization.
+model DocumentImage {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  deletedAt   DateTime? @db.Timestamptz(6)
+  altText     String
+  contentType String
+  byteSize    Int
+  blob        Bytes
+  documentId  String
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
 }
 
 model DocumentClassForensic {
@@ -285,6 +849,106 @@ model ClassStudentCourseForensic {
   capturedAt      DateTime @default(now()) @db.Timestamptz(6)
 
   @@id([classId, studentCourseId])
+}
+
+// Forensic archives from the 2026-06-12 assignment-template split and the
+// 2026-06-13 OrgMembership cutover (see
+// docs/superpowers/plans/2026-06-13-org-membership-cutover-runbook.md).
+// These tables were created by hand-written migrations and are read by
+// packages/prisma/scripts/org-membership-staging-verify.ts; they were never
+// declared in this schema, which made `prisma migrate dev` propose dropping
+// them. Declaring them here stops that false-positive drift.
+model AssignmentClassIdForensic {
+  assignmentId String   @id
+  classId      String
+  capturedAt   DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model AssignmentDueDateForensic {
+  assignmentId String   @id
+  dueDate      DateTime @db.Timestamptz(6)
+  capturedAt   DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model DocumentStudentProfileIdForensic {
+  documentId       String   @id
+  studentProfileId String
+  capturedAt       DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model FeatureAccessTargetTeacherForensic {
+  id         String?
+  createdAt  DateTime? @db.Timestamptz(6)
+  updatedAt  DateTime? @db.Timestamptz(6)
+  featureKey String?
+  targetKind String?
+  targetId   String?
+  enabled    Boolean?
+  expiresAt  DateTime? @db.Timestamptz(6)
+  note       String?
+  capturedAt DateTime? @db.Timestamptz(6)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model ProfileDuplicateForensic {
+  id             String?
+  createdAt      DateTime?       @db.Timestamptz(6)
+  organizationId String?
+  userId         String?
+  isOrgOwner     Boolean?
+  role           MembershipRole?
+  isActive       Boolean?
+  school         String?
+  schoolTeacher  String?
+  grade          String?
+  period         String?
+  archivedAt     DateTime?       @db.Timestamptz(6)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model ProfileOrphanForensic {
+  id             String?
+  createdAt      DateTime?       @db.Timestamptz(6)
+  organizationId String?
+  userId         String?
+  isOrgOwner     Boolean?
+  role           MembershipRole?
+  isActive       Boolean?
+  school         String?
+  schoolTeacher  String?
+  grade          String?
+  period         String?
+  archivedAt     DateTime?       @db.Timestamptz(6)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model StudentProfileForensic {
+  id            String?
+  createdAt     DateTime? @db.Timestamptz(6)
+  school        String?
+  schoolTeacher String?
+  grade         String?
+  period        String?
+  profileId     String?
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model TeacherProfileForensic {
+  id        String?
+  createdAt DateTime? @db.Timestamptz(6)
+  isActive  Boolean?
+  profileId String?
+
+  @@ignore
 }
 
 model DocumentComment {
@@ -355,18 +1019,41 @@ model DocumentWriteJournal {
 }
 
 model Organization {
-  id                        String                       @id @default(cuid())
-  createdAt                 DateTime                     @default(now()) @db.Timestamptz(6)
-  updatedAt                 DateTime                     @default(now()) @db.Timestamptz(6)
-  name                      String
-  accessExpiresAt           DateTime?                    @db.Timestamptz(6)
-  numOfStudentSeats         Int                          @default(10)
-  numOfTeacherSeats         Int                          @default(10)
-  memberships               OrgMembership[]
-  invitations               Invitation[]
-  schools                   School[]
-  assignmentTypes           AssignmentType[]
-  assignmentTypeAssignments OrganizationAssignmentType[]
+  id                            String                       @id @default(cuid())
+  createdAt                     DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt                     DateTime                     @default(now()) @db.Timestamptz(6)
+  name                          String
+  accessExpiresAt               DateTime?                    @db.Timestamptz(6)
+  numOfStudentSeats             Int                          @default(10)
+  numOfTeacherSeats             Int                          @default(10)
+  reporterEnabled               Boolean                      @default(false)
+  classInsightsEnabled          Boolean                      @default(false)
+  writingPracticeEnabled        Boolean                      @default(false)
+  submissionActivityEnabled     Boolean                      @default(false)
+  /// Rollout gate for the student split-screen revision flow
+  /// (/app/revise/:submissionId). Off keeps the legacy
+  /// "Revise Essay" -> document editor path.
+  revisionFlowEnabled           Boolean                      @default(false)
+  /// Rollout gate for collaborative drafts: may this organization use the
+  /// feature at all. Distinct from Assignment.collaborationEnabled, which is
+  /// the teacher's per-assignment toggle.
+  collaborativeDraftsEnabled    Boolean                      @default(false)
+  /// Second gate, for the other road to a shared document: may students start
+  /// their own shared draft and invite classmates. Separate from the gate above
+  /// on purpose -- a school may want teacher-assigned group work without
+  /// students forming their own groups.
+  studentDocumentSharingEnabled Boolean                      @default(false)
+  previewSeatCode               String?                      @unique
+  memberships                   OrgMembership[]
+  invitations                   Invitation[]
+  schools                       School[]
+  assignmentTypes               AssignmentType[]
+  assignmentTypeAssignments     OrganizationAssignmentType[]
+  reporterConversations         ReporterConversation[]
+  reporterGrowthPlans           ReporterGrowthPlan[]
+  aiRequestReservations         AiRequestReservation[]
+  submissionActivities          SubmissionActivity[]
+  studentLicenses               StudentLicense[]
 }
 
 model OrganizationAssignmentType {
@@ -381,36 +1068,170 @@ model OrganizationAssignmentType {
 }
 
 model OrgMembership {
-  id                            String                         @id @default(cuid())
-  createdAt                     DateTime                       @default(now()) @db.Timestamptz(6)
-  userId                        String
-  user                          User                           @relation(fields: [userId], references: [id])
-  organizationId                String
-  organization                  Organization                   @relation(fields: [organizationId], references: [id])
-  role                          MembershipRole
-  isOrgOwner                    Boolean                        @default(false)
-  isActive                      Boolean                        @default(true)
-  school                        String?
-  schoolTeacher                 String?
-  grade                         String?
-  period                        String?
-  documents                     Document[]
-  documentComments              DocumentComment[]
-  documentCommentResponses      DocumentCommentResponse[]
-  pasteAlerts                   PasteAlert[]
-  submissionsGraded             Submission[]                   @relation("SubmissionGradedBy")
-  submissionComments            SubmissionComment[]            @relation("SubmissionCommentProfile")
-  ownedAssignmentTypes          AssignmentType[]               @relation("AssignmentTypeOwner")
-  classesAsTeacher              Class[]                        @relation("ClassTeachers")
-  classesAsStudent              Class[]                        @relation("ClassStudents")
-  schools                       School[]                       @relation("SchoolTeachers")
-  teacherTrainingModuleSessions TeacherTrainingModuleSession[]
-  assignedTeacherTrainings      TeacherTraining[]              @relation("TeacherTrainingAssignments")
-  assignmentTypesCustomized     Boolean                        @default(false)
-  assignmentTypeAssignments     TeacherAssignmentType[]
+  id                                String                         @id @default(cuid())
+  createdAt                         DateTime                       @default(now()) @db.Timestamptz(6)
+  userId                            String
+  user                              User                           @relation(fields: [userId], references: [id])
+  organizationId                    String
+  organization                      Organization                   @relation(fields: [organizationId], references: [id])
+  role                              MembershipRole
+  isOrgOwner                        Boolean                        @default(false)
+  isActive                          Boolean                        @default(true)
+  school                            String?
+  schoolTeacher                     String?
+  grade                             String?
+  period                            String?
+  documents                         Document[]
+  documentComments                  DocumentComment[]
+  documentCommentResponses          DocumentCommentResponse[]
+  pasteAlerts                       PasteAlert[]
+  submissionsGraded                 Submission[]                   @relation("SubmissionGradedBy")
+  submissionsUnsubmitted            Submission[]                   @relation("SubmissionUnsubmittedBy")
+  submissionActivities              SubmissionActivity[]           @relation("SubmissionActivityActor")
+  submissionComments                SubmissionComment[]            @relation("SubmissionCommentProfile")
+  ownedAssignmentTypes              AssignmentType[]               @relation("AssignmentTypeOwner")
+  classesAsTeacher                  Class[]                        @relation("ClassTeachers")
+  classesAsStudent                  Class[]                        @relation("ClassStudents")
+  schools                           School[]                       @relation("SchoolTeachers")
+  teacherTrainingModuleSessions     TeacherTrainingModuleSession[]
+  assignedTeacherTrainings          TeacherTraining[]              @relation("TeacherTrainingAssignments")
+  assignmentTypesCustomized         Boolean                        @default(false)
+  assignmentTypeAssignments         TeacherAssignmentType[]
+  writingPracticeAssignmentsCreated WritingPracticeAssignment[]    @relation("WritingPracticeAssignmentCreator")
+  reporterConversations             ReporterConversation[]
+  reporterGrowthPlansOwned          ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
+  reporterGrowthPlansAsStudent      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
+  aiRequestReservations             AiRequestReservation[]
+
+  classAssignmentInsightsGenerated ClassAssignmentInsight[]
+  savedThesisPrompts               SavedThesisPrompt[]
+  savedDailyPagesPrompts           SavedDailyPagesPrompt[]
+  savedAssignments                 SavedAssignment[]
+  studentLicenses                  StudentLicense[]
+  documentGroupMemberships         DocumentGroupMember[]
+  documentCollabAuthorships        DocumentCollabAuthor[]
+  documentCollabPresence           DocumentCollabPresence[]
+  documentGroupMemberGrades        DocumentGroupMemberGrade[]
+  assignmentModuleSessions         AssignmentModuleSession[]
+  documentGroupMemberGradesGiven   DocumentGroupMemberGrade[] @relation("DocumentGroupMemberGradedBy")
 
   @@unique([userId, organizationId])
+  @@unique([id, organizationId])
   @@map("OrgMembership")
+}
+
+model StudentLicense {
+  id                      String               @id @default(cuid())
+  createdAt               DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime             @default(now()) @updatedAt @db.Timestamptz(6)
+  membershipId            String
+  organizationId          String
+  cohort                  String
+  status                  StudentLicenseStatus @default(PENDING)
+  source                  StudentLicenseSource @default(STRIPE_CHECKOUT)
+  validUntil              DateTime             @db.Timestamptz(6)
+  checkoutAttempt         Int                  @default(0)
+  amountPaid              Int?
+  currency                String?
+  stripePriceId           String?
+  stripeCustomerId        String?
+  stripeSubscriptionId    String?              @unique
+  stripeCheckoutSessionId String?              @unique
+  stripePaymentIntentId   String?              @unique
+  paidAt                  DateTime?            @db.Timestamptz(6)
+  revokedAt               DateTime?            @db.Timestamptz(6)
+  membership              OrgMembership        @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  organization            Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([membershipId, cohort])
+  @@index([organizationId, status, validUntil])
+}
+
+/// Stripe retries webhook delivery and does not guarantee ordering. Recording the
+/// event id in the same transaction as its state transition makes handling durable
+/// and idempotent without trusting a browser redirect.
+model StripeWebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// Durable admission record created before an AI provider call. Advisory locks
+/// serialize each membership and organization budget so concurrent requests
+/// cannot all pass a count-then-call race.
+model AiRequestReservation {
+  id             String        @id @default(cuid())
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  feature        String
+  membershipId   String
+  membership     OrgMembership @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, feature, createdAt(sort: Desc)])
+  @@index([organizationId, feature, createdAt(sort: Desc)])
+}
+
+/// A Yawp Reporter chat session. Owned by a teacher (OrgMembership) and scoped
+/// to their organization. Holds an ordered transcript of reporter messages.
+model ReporterConversation {
+  id             String            @id @default(cuid())
+  createdAt      DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime          @default(now()) @updatedAt @db.Timestamptz(6)
+  deletedAt      DateTime?         @db.Timestamptz(6)
+  title          String            @default("New report")
+  membershipId   String
+  membership     OrgMembership     @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages       ReporterMessage[]
+
+  @@index([membershipId, updatedAt(sort: Desc)])
+  @@index([organizationId])
+}
+
+/// A single turn in a Yawp Reporter conversation. `role` is 'user' or
+/// 'assistant'. `toolCalls` optionally records the tool invocations the
+/// assistant made to produce its answer (for transparency/auditing).
+model ReporterMessage {
+  id             String               @id @default(cuid())
+  createdAt      DateTime             @default(now()) @db.Timestamptz(6)
+  role           String
+  content        String
+  toolCalls      Json?
+  conversationId String
+  conversation   ReporterConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+/// A saved, forward-looking writing growth plan for one student, produced by
+/// the Yawp Reporter. Owned by a teacher (membership) and scoped to their org.
+/// Stores a baseline snapshot at creation so later reports can measure progress
+/// on the rubric skills the plan targets. `status` is 'active' | 'archived' |
+/// 'completed'; only one plan per student is kept active at a time.
+model ReporterGrowthPlan {
+  id                  String        @id @default(cuid())
+  createdAt           DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  status              String        @default("active")
+  focus               String
+  /// Rubric category keys this plan targets (string[]).
+  targetSkills        Json
+  body                String
+  /// { averagePercentage, rubricLevels: { category: level }, capturedAt } at creation.
+  baseline            Json
+  checkInAt           DateTime?     @db.Timestamptz(6)
+  membershipId        String
+  membership          OrgMembership @relation("ReporterGrowthPlanOwner", fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organizationId      String
+  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentMembershipId String
+  student             OrgMembership @relation("ReporterGrowthPlanStudent", fields: [studentMembershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([membershipId, studentMembershipId, status])
+  @@index([studentMembershipId])
+  @@index([organizationId])
 }
 
 model Password {
@@ -456,6 +1277,57 @@ model TeacherAssignmentType {
   @@index([assignmentTypeId])
 }
 
+// Separate from ordinary Yawp sessions: service-issued access must retain its actor.
+model InternalImpersonationSession {
+  id               String    @id
+  cookieTokenHash  String    @unique
+  actorId          String
+  userId           String
+  organizationId   String
+  membershipId     String
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  expiresAt        DateTime  @db.Timestamptz(6)
+  endedAt          DateTime? @db.Timestamptz(6)
+  remoteEndPending Boolean   @default(false)
+
+  @@index([remoteEndPending, createdAt])
+}
+
+// Immutable attribution snapshots survive membership/user removal.
+model InternalQaFixture {
+  id             String   @id
+  actorId        String
+  organizationId String
+  requestHash    String
+  reason         String
+  users          Json
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  archivedAt     DateTime? @db.Timestamptz(6)
+  archivedBy     String?
+
+  @@index([organizationId, createdAt])
+}
+
+model InternalImpersonationEvent {
+  id             String   @id @default(cuid())
+  sessionId      String
+  actorId        String
+  userId         String
+  organizationId String
+  action         String
+  resourceType   String
+  resourceId     String
+  requestId      String?
+  requestAction  String?
+  jobId          String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([sessionId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([requestId])
+  @@index([jobId])
+}
+
 model Session {
   id             String   @id @default(cuid())
   createdAt      DateTime @default(now()) @db.Timestamptz(6)
@@ -475,6 +1347,39 @@ model Setting {
   description String?
   value       String
   valueType   String   @default("string")
+}
+
+/// A teacher-authored writing-practice assignment. The lesson slugs remain
+/// separate from regular assignment types so this feature can roll out without
+/// changing the existing essay-assignment data model.
+model WritingPracticeAssignment {
+  id                    String                           @id @default(cuid())
+  createdAt             DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                         @default(now()) @updatedAt @db.Timestamptz(6)
+  title                 String
+  lessonSlugs           String[]
+  problemCount          Int                              @default(5)
+  dueAt                 DateTime                         @db.Timestamptz(6)
+  instructions          String?
+  createdByMembershipId String?
+  createdByMembership   OrgMembership?                   @relation("WritingPracticeAssignmentCreator", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  classAssignments      WritingPracticeClassAssignment[]
+
+  @@index([createdByMembershipId])
+}
+
+/// Per-class deployment of a writing-practice assignment.
+model WritingPracticeClassAssignment {
+  id           String                    @id @default(cuid())
+  createdAt    DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
+  assignmentId String
+  assignment   WritingPracticeAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  classId      String
+  class        Class                     @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, classId])
+  @@index([classId, createdAt(sort: Desc)])
 }
 
 // Upload table removed. Videos will be stored in S3 and referenced by key.
@@ -603,38 +1508,79 @@ model PasteAlert {
 }
 
 model Submission {
-  id                   String                          @id @default(cuid())
-  createdAt            DateTime                        @default(now()) @db.Timestamptz(6)
-  updatedAt            DateTime                        @default(now()) @db.Timestamptz(6)
-  title                String
-  text                 String
-  html                 String
-  submittedAt          DateTime                        @db.Timestamptz(6)
-  score                String?
-  feedback             String?
-  rubricScores         Json?
-  overallScore         Int?
-  overallComment       String?
-  numericPercentage    Int?
-  letterGrade          String?
-  grammarIssues        Json?
-  promptConfig         Json?
-  aiMeta               Json?
-  gradedAt             DateTime?                       @db.Timestamptz(6)
-  gradedByMembershipId String?
-  gradedBy             OrgMembership?                  @relation("SubmissionGradedBy", fields: [gradedByMembershipId], references: [id], onDelete: SetNull)
-  releasedAt           DateTime?                       @db.Timestamptz(6)
+  id                        String                          @id @default(cuid())
+  createdAt                 DateTime                        @default(now()) @db.Timestamptz(6)
+  updatedAt                 DateTime                        @default(now()) @db.Timestamptz(6)
+  title                     String
+  text                      String
+  html                      String
+  submittedAt               DateTime                        @db.Timestamptz(6)
+  score                     String?
+  feedback                  String?
+  rubricScores              Json?
+  overallScore              Int?
+  overallComment            String?
+  numericPercentage         Int?
+  letterGrade               String?
+  grammarIssues             Json?
+  promptConfig              Json?
+  aiMeta                    Json?
+  gradedAt                  DateTime?                       @db.Timestamptz(6)
+  gradedByMembershipId      String?
+  gradedBy                  OrgMembership?                  @relation("SubmissionGradedBy", fields: [gradedByMembershipId], references: [id], onDelete: SetNull)
+  releasedAt                DateTime?                       @db.Timestamptz(6)
   /// When set, hidden from the student's active submission list (teachers unaffected).
-  archivedAt           DateTime?                       @db.Timestamptz(6)
-  documentId           String
-  document             Document                        @relation(fields: [documentId], references: [id], onDelete: Restrict)
-  comments             SubmissionComment[]
-  gradingAssistantRuns SubmissionGradingAssistantRun[]
+  archivedAt                DateTime?                       @db.Timestamptz(6)
+  /// Teacher-initiated "unsubmit": hidden from both the student and the teacher's
+  /// active submission views (grading queues, dashboard cards, editor lock state),
+  /// but the row — and any grade/AI feedback already on it — is kept, not deleted.
+  /// The underlying Document and its DocumentRevision history are never touched.
+  unsubmittedAt             DateTime?                       @db.Timestamptz(6)
+  unsubmittedByMembershipId String?
+  unsubmittedBy             OrgMembership?                  @relation("SubmissionUnsubmittedBy", fields: [unsubmittedByMembershipId], references: [id], onDelete: SetNull)
+  documentId                String
+  document                  Document                        @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  comments                  SubmissionComment[]
+  gradingAssistantRuns      SubmissionGradingAssistantRun[]
+  activities                SubmissionActivity[]
 
   @@index([documentId, submittedAt(sort: Desc)])
   @@index([documentId, archivedAt])
+  @@index([documentId, unsubmittedAt])
   @@index([gradedByMembershipId])
+  @@index([unsubmittedByMembershipId])
   @@index([releasedAt])
+}
+
+/// Append-only audit ledger for current and future submission mutations.
+/// Existing submissions are intentionally not backfilled: history begins
+/// when application dual-writes start after this table is deployed.
+model SubmissionActivity {
+  id                   String         @id @default(cuid())
+  createdAt            DateTime       @default(now()) @db.Timestamptz(6)
+  submissionId         String
+  submission           Submission     @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  organizationId       String
+  organization         Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorMembershipId    String?
+  /// Composite tenant key prevents an actor membership from another
+  /// organization being linked to this activity. The hand-written migration
+  /// uses a database trigger to clear actorMembershipId before membership
+  /// deletion while retaining organizationId and the actor snapshot.
+  actorMembership      OrgMembership? @relation("SubmissionActivityActor", fields: [actorMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction, onUpdate: NoAction)
+  actorType            String
+  actorName            String?
+  actorEmail           String?
+  eventType            String
+  source               String
+  occurredAfterRelease Boolean        @default(false)
+  changes              Json
+  metadata             Json?
+
+  @@index([submissionId, createdAt(sort: Desc)])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([actorMembershipId, createdAt(sort: Desc)])
+  @@index([eventType, createdAt(sort: Desc)])
 }
 
 model SubmissionGradingAssistantRun {
@@ -697,4 +1643,43 @@ model LlmLog {
   @@index([createdAt(sort: Desc)])
   @@index([model])
   @@index([provider])
+}
+
+/// Durable receipt and provenance for trusted nonproduction scenario generation.
+model InternalScenarioReceipt {
+  jobId          String   @id
+  actorId        String
+  targetId       String
+  environment    String
+  organizationId String
+  requestHash    String
+  fingerprint    String
+  resources      Json
+  receipt        Json
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  retiredAt      DateTime? @db.Timestamptz(6)
+  retiredByJobId  String?
+
+  @@index([targetId, organizationId, retiredAt])
+}
+
+/// Immutable portable rubric history. Names, rather than environment-local rubric
+/// IDs, preserve provenance across local fixture resets and environment transfers.
+model RubricRevision {
+  id String @id
+  rubricName String
+  version Int
+  schemaJson Json
+  fingerprint String
+  requestId String @unique
+  requestHash String
+  sourceContentId String?
+  sourceVersion Int?
+  sourceFingerprint String?
+  createdBy String
+  reason String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  currentFor Rubric[] @relation("CurrentRubricRevision")
+  assignments Assignment[]
+  @@unique([rubricName, version])
 }

@@ -1,3 +1,23 @@
+## Project agent CLI
+
+Use `./bin/project` as the stable interface for local runtime, database, fixtures,
+dev-server startup, selective tests, and QA preparation. This contract is identical for
+Codex, Claude Code, and Cursor:
+
+```bash
+./bin/project capabilities --json
+./bin/project doctor --json
+./bin/project bootstrap --fresh --json
+./bin/project fixture verify local-dev --json
+./bin/project dev start --json
+./bin/project test --profile changed --json
+./bin/project qa prepare --json
+```
+
+Do not install Playwright or switch Node/Bun versions manually. The CLI selects the pinned
+compatible runtimes and returns structured recovery commands. Record execution capsules
+call this CLI directly and supply collision-free app, database, and E2E ports.
+
 ## Worktree Local Dev Setup
 
 When bootstrapping a new git worktree for local development, run:

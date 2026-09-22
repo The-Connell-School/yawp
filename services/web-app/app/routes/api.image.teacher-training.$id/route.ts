@@ -1,9 +1,15 @@
 import { invariantResponse } from '@epic-web/invariant';
 import { type LoaderFunctionArgs } from 'react-router';
 import { prisma } from '~/utils/db.server';
+import { requireUserId } from '~/utils/auth.server';
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
   invariantResponse(params.id, 'id is required', { status: 400 });
+  // Only the authenticated teacher-training pages and the admin course pages render
+  // these. TeacherTraining has no organization column, so there is nothing narrower
+  // than "logged in" to scope the cover image to.
+  await requireUserId(request);
+
   const image = await prisma.teacherTrainingImage.findUnique({
     where: { id: params.id },
     select: { contentType: true, blob: true },
@@ -16,7 +22,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
       'Content-Type': image.contentType,
       'Content-Length': Buffer.byteLength(image.blob).toString(),
       'Content-Disposition': `inline; filename="${params.id}"`,
-      'Cache-Control': 'public, max-age=31536000, immutable',
+      // private, not public: the response now depends on a session cookie.
+      'Cache-Control': 'private, max-age=31536000, immutable',
     },
   });
 }

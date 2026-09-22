@@ -1,7 +1,11 @@
 # Preview Environments
 
-**Status:** Completed
+**Status:** Superseded
 **Merged:** 2026-03-30 via PR #84
+
+> The App Runner + shared RDS design below was retired on 2026-08-11. Current previews
+> use Docker Compose on one shared EC2 host, with idle PR services sleeping while
+> their local state remains resident.
 
 ## What Was Done
 

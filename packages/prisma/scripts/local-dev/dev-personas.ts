@@ -23,6 +23,8 @@ export type LocalDevPersona = {
 export const LOCAL_DEV_ORG_ID = 'local-dev-org';
 export const LOCAL_DEV_ORG_NAME = 'Yawp Local Dev';
 export const LOCAL_DEV_PASSWORD = 'yawp-dev';
+export const UA_PREVIEW_ORG_ID = 'university-of-alabama-preview';
+export const UA_PREVIEW_ORG_NAME = 'University of Alabama';
 
 export const LOCAL_DEV_PERSONAS: LocalDevPersona[] = [
   {

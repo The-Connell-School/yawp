@@ -1,10 +1,12 @@
 import { Link } from 'react-router';
 import {
-  ClipboardList,
+  BookOpenIcon,
+  NotebookPen,
   CogIcon,
   FileText,
   GaugeIcon,
   LockIcon,
+  Microscope,
   MonitorPlay,
   Users,
 } from 'lucide-react';
@@ -16,7 +18,6 @@ type User = ReturnType<typeof useUser>;
 
 type RequiresFn = (
   user: User,
-  studentPreviewActive?: boolean
 ) => boolean | null | undefined;
 
 export type SidebarNavLink = {
@@ -35,17 +36,27 @@ export type SidebarNavSection = {
   links: SidebarNavLink[];
 };
 
-const teacher = (user: User, studentPreviewActive = false) =>
-  user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
+const teacher = (user: User) =>
+  user.selectedMembership?.role === 'TEACHER';
+const student = (user: User) => user.selectedMembership?.role === 'STUDENT';
 const owner = (user: User) => user.selectedMembership?.isOrgOwner;
 const admin = (user: User) => user.isAdmin;
+const reporterEnabled = (user: User) =>
+  teacher(user) &&
+  Boolean(user.selectedMembership?.organization?.reporterEnabled);
+const writingPracticeEnabled = (user: User) =>
+  (teacher(user) || student(user)) &&
+  Boolean(user.selectedMembership?.organization?.writingPracticeEnabled);
 
 const icons = {
   dashboard: <GaugeIcon size={20} className="shrink-0" />,
   classes: <Users size={20} className="shrink-0" />,
   studentWork: <FileText size={20} className="shrink-0" />,
-  assignments: <ClipboardList size={20} className="shrink-0" />,
+  assignments: <NotebookPen size={20} className="shrink-0" />,
+  myDocuments: <FileText size={20} className="shrink-0" />,
   lounge: <MonitorPlay size={20} className="shrink-0" />,
+  reporter: <Microscope size={20} className="shrink-0" />,
+  writingPractice: <BookOpenIcon size={20} className="shrink-0" />,
   organization: <CogIcon size={20} className="shrink-0" />,
   admin: <LockIcon size={20} className="shrink-0" />,
 };
@@ -63,6 +74,12 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         to: '/app/my-classes',
         label: 'My Classes',
         icon: icons.classes,
+        requires: { OR: [teacher, student] },
+      },
+      {
+        to: '/app/assignments',
+        label: 'My Assignments',
+        icon: icons.assignments,
         requires: teacher,
       },
       {
@@ -72,16 +89,28 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         requires: teacher,
       },
       {
-        to: '/app/assignments',
-        label: 'Assignments',
-        icon: icons.assignments,
-        requires: teacher,
+        to: '/app/my-documents',
+        label: 'My Documents',
+        icon: icons.myDocuments,
+        requires: student,
+      },
+      {
+        to: '/app/writing-lessons',
+        label: 'Writing Practice',
+        icon: icons.writingPractice,
+        requires: writingPracticeEnabled,
       },
       {
         to: '/app/teacher-trainings',
         label: "Teacher's Lounge",
         icon: icons.lounge,
         requires: teacher,
+      },
+      {
+        to: '/app/reporter',
+        label: 'Reporter',
+        icon: icons.reporter,
+        requires: reporterEnabled,
       },
       {
         to: '/app/organization',
@@ -102,31 +131,29 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
 function linkIsVisible(
   link: SidebarNavLink,
   user: User,
-  studentPreviewActive = false
 ) {
   if (!link.requires) return true;
 
   if (typeof link.requires === 'function') {
-    return link.requires(user, studentPreviewActive);
+    return link.requires(user);
   }
 
   if ('OR' in link.requires) {
-    return link.requires.OR.some((rule) => rule(user, studentPreviewActive));
+    return link.requires.OR.some((rule) => rule(user));
   }
 
-  return link.requires.AND.every((rule) => rule(user, studentPreviewActive));
+  return link.requires.AND.every((rule) => rule(user));
 }
 
 export function getVisibleSidebarSections(
   sections: SidebarNavSection[],
   user: User,
-  studentPreviewActive = false
 ) {
   return sections
     .map((section) => ({
       ...section,
       links: section.links.filter((link) =>
-        linkIsVisible(link, user, studentPreviewActive)
+        linkIsVisible(link, user)
       ),
     }))
     .filter((section) => section.links.length > 0);
@@ -139,7 +166,6 @@ type SidebarNavLinksProps = {
   pathname: string;
   isAppNavLinkActive: (linkTo: string, pathname: string) => boolean;
   forceFullNavigation?: boolean;
-  studentPreviewActive?: boolean;
 };
 
 export function SidebarNavLinks({
@@ -149,12 +175,10 @@ export function SidebarNavLinks({
   pathname,
   isAppNavLinkActive,
   forceFullNavigation = false,
-  studentPreviewActive = false,
 }: SidebarNavLinksProps) {
   const visibleSections = getVisibleSidebarSections(
     sections,
-    user,
-    studentPreviewActive
+    user
   );
 
   return (

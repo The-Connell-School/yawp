@@ -98,13 +98,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (intent === 'updateClass') {
     const classId = formData.get('classId')?.toString();
-    const grade = formData.get('grade')?.toString().trim();
-    const period = formData.get('period')?.toString().trim();
+    const grade = formData.get('grade')?.toString().trim() || null;
+    const period = formData.get('period')?.toString().trim() || null;
     const teacherProfileIdRaw = formData.get('teacherProfileId');
     const teacherProfileId = teacherProfileIdRaw
       ? teacherProfileIdRaw.toString().trim()
       : undefined;
-    if (!classId || !grade || !period)
+    if (!classId)
       return dataResponse({ error: 'Missing fields' }, { status: 400 });
     const klass = await prisma.class.findFirst({
       where: {
@@ -286,8 +286,8 @@ export default function SchoolRoute() {
               ) : (
                 school.classes.map((klass) => (
                   <TableRow key={klass.id}>
-                    <TableCell>{klass.grade}</TableCell>
-                    <TableCell>{klass.period}</TableCell>
+                    <TableCell>{klass.grade ?? '—'}</TableCell>
+                    <TableCell>{klass.period ?? '—'}</TableCell>
                     <TableCell className="whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5">
                         <User className="h-4 w-4 text-muted-foreground" />

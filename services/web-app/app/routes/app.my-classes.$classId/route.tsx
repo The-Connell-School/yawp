@@ -9,18 +9,35 @@ import {
   useLoaderData,
   useSearchParams,
   useFetcher,
+  useLocation,
   useNavigate,
+  useOutlet,
   useRevalidator,
 } from 'react-router';
 import { Link } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
-import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
+import {
+  parseAssignmentGradingIntent,
+  parseAssignmentRubricOverrides,
+} from '~/utils/assignment-grading-intent.server';
+import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
+import {
+  formatClassLabel,
+  type ClassDisplayFields,
+} from '~/utils/class-display';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
+  AssignmentHasCollaborativeWorkError,
   createAssignmentDeployedToClasses,
   deleteClassAssignmentDeployment,
 } from '~/utils/assignment-deployment.server';
+import {
+  AssignmentPromptAttachmentError,
+  assignmentPromptAttachmentRequestTooLarge,
+  deleteAssignmentPromptAttachment,
+  uploadAssignmentPromptAttachment,
+} from '~/domain/assignments/assignment-prompt-attachment.server';
 import {
   Sheet,
   SheetContent,
@@ -46,6 +63,7 @@ import {
 import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
+import { UnsubmitSubmissionsSheet } from '~/components/teacher-document-work/unsubmit-submissions-sheet';
 import {
   ArrowDown,
   ArrowUp,
@@ -88,18 +106,26 @@ import {
 } from '~/utils/teacher-document-work-sort';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
+  DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  parseGradingAssistantStrictnessLevel,
+} from '~/domain/grading/grading-assistant-strictness';
+import {
   ClassDetailHeader,
   type ClassHeaderTab,
   resolveClassHeaderTab,
 } from './class-detail-header';
+import { loadStudentClassDetail } from './student-class-detail.server';
+import { StudentClassDetailView } from './student-class-detail-view';
 import {
   TEACHER_DOCUMENT_STATUSES,
   type TeacherDocumentStatus,
 } from '~/utils/teacher-document-status';
 import {
   buildReleaseGradeRows,
+  buildTeacherUnsubmitRows,
   countTeacherDocumentWorkStatuses,
   type ReleaseGradeRow,
+  type TeacherUnsubmitRow,
   type TeacherDocumentWorkRow,
 } from '~/utils/teacher-document-work-utils';
 import { cn } from '~/utils/misc';
@@ -113,7 +139,25 @@ import {
   lookupStudentEmailForClass,
   sendStudentClassInvite,
 } from './class-student-enrollment.server';
+import {
+  lockClassCollaborationDeployments,
+  lockStudentRosters,
+} from '~/domain/collaboration/class-assignment-lock.server';
 import { filterClassStudentsByQuery } from './class-students-search';
+import {
+  StudentGrowthPlansSheet,
+  type StudentGrowthPlan,
+} from './student-growth-plans-sheet';
+import {
+  ClassAssignmentsTab,
+  type ClassAssignmentsTabAssignment,
+} from './class-assignments-tab';
+import type { ClassInsightSummary } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
+import { buildGradedCountByAssignmentId } from './graded-count';
+import {
+  buildPasteAlertsByStudentId,
+  summarizeStudentPasteActivity,
+} from './class-paste-alerts';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -126,6 +170,10 @@ export function getDraftDisplayTitle(document: {
   if (assignmentTitle) return assignmentTitle;
 
   return 'Untitled draft';
+}
+
+export function classAssignmentOptionLabel(klass: ClassDisplayFields) {
+  return formatClassLabel(klass);
 }
 
 async function getClassStudentMemberships(
@@ -199,8 +247,77 @@ export async function action({ request, params }: ActionFunctionArgs) {
       .map((type) => type.id)
   );
 
+  if (assignmentPromptAttachmentRequestTooLarge(request)) {
+    return dataResponse(
+      { success: false, message: 'PDF is too large. Maximum size is 10 MB.' },
+      { status: 413 }
+    );
+  }
+
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
+
+  if (intent === 'delete-assignments') {
+    const assignmentIds = formData.getAll('assignmentIds') as string[];
+
+    if (!assignmentIds.length) {
+      return dataResponse(
+        { success: false, message: 'Select at least one assignment.' },
+        { status: 400 }
+      );
+    }
+
+    const assignments = await prisma.assignment.findMany({
+      where: {
+        id: { in: assignmentIds },
+        classAssignments: { some: { classId } },
+      },
+      select: { id: true },
+    });
+
+    if (assignments.length !== assignmentIds.length) {
+      return dataResponse(
+        { success: false, message: 'Some assignments were not found.' },
+        { status: 400 }
+      );
+    }
+
+    const protectedDeployment = await prisma.documentGroup.findFirst({
+      where: {
+        documentId: { not: null },
+        classAssignment: { classId, assignmentId: { in: assignmentIds } },
+      },
+      select: { id: true },
+    });
+    if (protectedDeployment) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'Assignments with shared group work cannot be deleted.',
+        },
+        { status: 409 }
+      );
+    }
+
+    try {
+      for (const assignmentId of assignmentIds) {
+        await deleteClassAssignmentDeployment({ assignmentId, classId });
+      }
+    } catch (error) {
+      if (error instanceof AssignmentHasCollaborativeWorkError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
+
+    return dataResponse({
+      success: true,
+      message: `Deleted ${assignmentIds.length} assignment(s).`,
+    });
+  }
 
   if (intent === 'delete-assignment') {
     const assignmentId = formData.get('assignmentId')?.toString();
@@ -226,7 +343,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    await deleteClassAssignmentDeployment({ assignmentId, classId });
+    try {
+      await deleteClassAssignmentDeployment({ assignmentId, classId });
+    } catch (error) {
+      if (error instanceof AssignmentHasCollaborativeWorkError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
 
     return dataResponse({
       success: true,
@@ -239,9 +366,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
     const titleRaw = formData.get('title')?.toString() ?? '';
     const promptRaw = formData.get('prompt')?.toString() ?? '';
+    const postAtRaw = formData.get('postAt')?.toString()?.trim() ?? '';
+    const dueAtRaw = formData.get('dueAt')?.toString()?.trim() ?? '';
+    const strictnessRaw = formData.get('gradingAssistantStrictnessLevel');
 
     const title = titleRaw.trim() || null;
     const prompt = promptRaw.trim();
+    const gradingAssistantStrictnessLevel =
+      intent === 'create-assignment'
+        ? strictnessRaw
+          ? parseGradingAssistantStrictnessLevel(strictnessRaw)
+          : DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
+        : null;
 
     if (!assignmentTypeId) {
       return dataResponse(
@@ -252,6 +388,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     let existingAssignment: {
       id: string;
       assignmentTypeId: string;
+      promptAttachmentKey: string | null;
       assignmentType: { systemKey: string | null };
     } | null = null;
     if (intent === 'update-assignment') {
@@ -270,6 +407,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         select: {
           id: true,
           assignmentTypeId: true,
+          promptAttachmentKey: true,
           assignmentType: { select: { systemKey: true } },
         },
       });
@@ -321,6 +459,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
+    if (intent === 'create-assignment' && !gradingAssistantStrictnessLevel) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'Grading assistant strictness level is invalid.',
+        },
+        { status: 400 }
+      );
+    }
 
     const gradingIntent = parseAssignmentGradingIntent(formData);
     if (!gradingIntent.success) {
@@ -329,18 +476,116 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
+    const rubricOverrides = parseAssignmentRubricOverrides(formData);
+    if (!rubricOverrides.success) {
+      return dataResponse(
+        { success: false, message: rubricOverrides.message },
+        { status: 400 }
+      );
+    }
+    const rubricOverrideData = {
+      ...(formData.has('rubricTotalPoints')
+        ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
+        : {}),
+      ...(formData.has('gradingMode')
+        ? { gradingMode: rubricOverrides.data.gradingMode }
+        : {}),
+    };
+
+    const promptAttachment = formData.get('promptAttachment');
+    let promptAttachmentData:
+      | {
+          promptAttachmentKey: string | null;
+          promptAttachmentName: string | null;
+          promptAttachmentSize: number | null;
+        }
+      | undefined =
+      formData.get('removePromptAttachment') === 'true'
+        ? {
+            promptAttachmentKey: null,
+            promptAttachmentName: null,
+            promptAttachmentSize: null,
+          }
+        : undefined;
+    if (promptAttachment instanceof File && promptAttachment.size > 0) {
+      try {
+        promptAttachmentData =
+          await uploadAssignmentPromptAttachment(promptAttachment);
+      } catch (error) {
+        if (error instanceof AssignmentPromptAttachmentError) {
+          return dataResponse(
+            { success: false, message: error.message },
+            { status: 400 }
+          );
+        }
+        throw error;
+      }
+    }
+
+    const tutorEnabledResult = parseAssignmentTutorEnabled(formData);
+    if (!tutorEnabledResult.success) {
+      return dataResponse(
+        { success: false, message: tutorEnabledResult.message },
+        { status: 400 }
+      );
+    }
+
+    // Optional deployment dates (applied/updated for this class deployment)
+    let postAt: Date | null | undefined = undefined;
+    let dueAt: Date | null | undefined = undefined;
+    if (postAtRaw) {
+      const parsed = new Date(postAtRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        return dataResponse(
+          { success: false, message: 'The post date is invalid.' },
+          { status: 400 }
+        );
+      }
+      postAt = parsed;
+    } else if (formData.has('postAt')) {
+      postAt = null;
+    }
+    if (dueAtRaw) {
+      const parsed = new Date(dueAtRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        return dataResponse(
+          { success: false, message: 'The due date is invalid.' },
+          { status: 400 }
+        );
+      }
+      dueAt = parsed;
+    } else if (formData.has('dueAt')) {
+      dueAt = null;
+    }
 
     if (intent === 'create-assignment') {
-      await createAssignmentDeployedToClasses({
-        data: {
-          assignmentTypeId,
-          title,
-          prompt,
-          submitForGrade: gradingIntent.data.submitForGrade,
-          pointValue: gradingIntent.data.pointValue,
-        },
-        classIds: [classId],
-      });
+      try {
+        await createAssignmentDeployedToClasses({
+          data: {
+            assignmentTypeId,
+            title,
+            prompt,
+            submitForGrade: gradingIntent.data.submitForGrade,
+            pointValue: gradingIntent.data.pointValue,
+            ...rubricOverrideData,
+            gradingAssistantStrictnessLevel: gradingAssistantStrictnessLevel!,
+            tutorEnabled: tutorEnabledResult.value,
+            ...promptAttachmentData,
+          },
+          classIds: [classId],
+          deployment: {
+            postAt: postAt ?? null,
+            dueAt: dueAt ?? null,
+          },
+        });
+      } catch (error) {
+        if (promptAttachmentData?.promptAttachmentKey) {
+          await deleteAssignmentPromptAttachment(
+            promptAttachmentData.promptAttachmentKey
+          ).catch(() => {});
+        }
+        throw error;
+      }
 
       return dataResponse({
         success: true,
@@ -348,16 +593,65 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
-    await prisma.assignment.update({
-      where: { id: existingAssignment!.id },
-      data: {
-        assignmentTypeId,
-        title,
-        prompt,
-        submitForGrade: gradingIntent.data.submitForGrade,
-        pointValue: gradingIntent.data.pointValue,
-      },
-    });
+    try {
+      await prisma.assignment.update({
+        where: { id: existingAssignment!.id },
+        data: {
+          assignmentTypeId,
+          title,
+          prompt,
+          submitForGrade: gradingIntent.data.submitForGrade,
+          pointValue: gradingIntent.data.pointValue,
+          ...(formData.has('rubricTotalPoints')
+            ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
+            : {}),
+          ...(formData.has('gradingMode')
+            ? { gradingMode: rubricOverrides.data.gradingMode }
+            : {}),
+          // Both controls now live on the edit form as well as the create
+          // form. Only write them when the form actually sent them, so an
+          // older caller that omits them leaves the stored value alone.
+          ...(gradingAssistantStrictnessLevel
+            ? { gradingAssistantStrictnessLevel }
+            : {}),
+          ...(formData.has('tutorEnabled')
+            ? { tutorEnabled: tutorEnabledResult.value }
+            : {}),
+          ...promptAttachmentData,
+        },
+      });
+      // Update the class deployment dates when present in the form
+      if (postAt !== undefined || dueAt !== undefined) {
+        await prisma.classAssignment.updateMany({
+          where: { assignmentId: existingAssignment!.id, classId },
+          data: {
+            ...(postAt !== undefined ? { postAt } : {}),
+            ...(dueAt !== undefined ? { dueAt } : {}),
+          },
+        });
+      }
+    } catch (error) {
+      if (
+        promptAttachmentData?.promptAttachmentKey &&
+        promptAttachmentData.promptAttachmentKey !==
+          existingAssignment!.promptAttachmentKey
+      ) {
+        await deleteAssignmentPromptAttachment(
+          promptAttachmentData.promptAttachmentKey
+        ).catch(() => {});
+      }
+      throw error;
+    }
+    if (
+      promptAttachmentData &&
+      existingAssignment!.promptAttachmentKey &&
+      existingAssignment!.promptAttachmentKey !==
+        promptAttachmentData.promptAttachmentKey
+    ) {
+      await deleteAssignmentPromptAttachment(
+        existingAssignment!.promptAttachmentKey
+      ).catch(() => {});
+    }
 
     return dataResponse({
       success: true,
@@ -450,12 +744,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    for (const student of students) {
-      await prisma.orgMembership.update({
-        where: { id: student.id },
-        data: { classesAsStudent: { disconnect: { id: classId } } },
+    await prisma.$transaction(async (tx) => {
+      await lockStudentRosters(tx, studentProfileIds);
+      await lockClassCollaborationDeployments(tx, classId);
+      await tx.documentGroupMember.updateMany({
+        where: {
+          membershipId: { in: studentProfileIds },
+          removedAt: null,
+          group: { classAssignment: { classId } },
+        },
+        data: { removedAt: new Date() },
       });
-    }
+      for (const student of students) {
+        await tx.orgMembership.update({
+          where: { id: student.id },
+          data: { classesAsStudent: { disconnect: { id: classId } } },
+        });
+      }
+    });
 
     return dataResponse({ success: true });
   }
@@ -508,17 +814,31 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    for (const student of students) {
-      await prisma.orgMembership.update({
-        where: { id: student.id },
-        data: {
-          classesAsStudent: {
-            disconnect: { id: classId },
-            connect: { id: targetClassId },
-          },
+    await prisma.$transaction(async (tx) => {
+      await lockStudentRosters(tx, studentProfileIds);
+      for (const lockedClassId of [classId, targetClassId].sort()) {
+        await lockClassCollaborationDeployments(tx, lockedClassId);
+      }
+      await tx.documentGroupMember.updateMany({
+        where: {
+          membershipId: { in: studentProfileIds },
+          removedAt: null,
+          group: { classAssignment: { classId } },
         },
+        data: { removedAt: new Date() },
       });
-    }
+      for (const student of students) {
+        await tx.orgMembership.update({
+          where: { id: student.id },
+          data: {
+            classesAsStudent: {
+              disconnect: { id: classId },
+              connect: { id: targetClassId },
+            },
+          },
+        });
+      }
+    });
 
     return dataResponse({ success: true });
   }
@@ -532,14 +852,29 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  const classId = params.classId!;
+
+  // Students get their own read-only view of the same URL. `loadStudentClassDetail`
+  // only resolves classes they are enrolled in, so a student who follows a link
+  // to someone else's class gets a 404 rather than any part of this page.
+  if (profile.role === 'STUDENT') {
+    const studentDetail = await loadStudentClassDetail({
+      membershipId: profile.id,
+      classId,
+    });
+    if (!studentDetail) throw new Response('Class not found', { status: 404 });
+
+    return dataResponse({ role: 'STUDENT' as const, ...studentDetail });
+  }
+
   if (profile.role !== 'TEACHER') {
     return redirect('/app');
   }
-  const classId = params.classId!;
 
-  // Assignment management moved to the teacher-level Assignments surface.
-  if (new URL(request.url).searchParams.get('tab') === 'assignments') {
-    return redirect('/app/assignments');
+  const url = new URL(request.url);
+  if (url.searchParams.get('tab') === 'summary') {
+    url.searchParams.set('tab', 'assignments');
+    return redirect(`${url.pathname}?${url.searchParams.toString()}`);
   }
 
   const [klass, manageSchools] = await Promise.all([
@@ -558,7 +893,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title: true,
         classArtIndex: true,
         classArtKey: true,
-        school: { select: { id: true, name: true, organizationId: true } },
+        school: {
+          select: {
+            id: true,
+            name: true,
+            organizationId: true,
+            organization: {
+              select: { classInsightsEnabled: true, reporterEnabled: true },
+            },
+          },
+        },
         students: {
           select: {
             id: true,
@@ -580,6 +924,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   ]);
   if (!klass) throw new Response('Class not found', { status: 404 });
 
+  const classInsightsEnabled = klass.school.organization.classInsightsEnabled;
+  const reporterEnabled = klass.school.organization.reporterEnabled;
+
   const legacyClassDocumentIds = (
     await prisma.documentClassForensic.findMany({
       where: { oldClassId: classId },
@@ -587,7 +934,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     })
   ).map((row) => row.documentId);
 
-  const url = new URL(request.url);
   const studentProfileIdFilters = parseDocumentWorkFilterIds(
     url.searchParams.get('studentId')
   );
@@ -604,7 +950,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       : { enrolledMembershipIds: klass.students.map((student) => student.id) }
   );
 
-
   // Get all submissions for this class
   const submissions = await prisma.submission.findMany({
     where: {
@@ -614,6 +959,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           deletedAt: null,
         },
       },
+      // A teacher-unsubmitted submission is withdrawn, not just archived —
+      // exclude it from the class's document/grading views entirely.
+      unsubmittedAt: null,
     },
     select: {
       id: true,
@@ -651,6 +999,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 select: {
                   name: true,
                   email: true,
+                },
+              },
+            },
+          },
+          group: {
+            select: {
+              id: true,
+              label: true,
+              members: {
+                where: { removedAt: null },
+                orderBy: { membershipId: 'asc' },
+                select: {
+                  membershipId: true,
+                  membership: {
+                    select: {
+                      id: true,
+                      user: { select: { id: true, name: true, email: true } },
+                    },
+                  },
                 },
               },
             },
@@ -695,6 +1062,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         },
       },
+      group: {
+        select: {
+          id: true,
+          label: true,
+          members: {
+            where: { removedAt: null },
+            orderBy: { membershipId: 'asc' },
+            select: {
+              membershipId: true,
+              membership: {
+                select: {
+                  id: true,
+                  user: { select: { id: true, name: true, email: true } },
+                },
+              },
+            },
+          },
+        },
+      },
       assignmentModuleSessions: studentModuleSessionSingleSelect,
     },
     orderBy: {
@@ -702,46 +1088,115 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  const classAssignments = await prisma.classAssignment.findMany({
-    where: { classId },
-    select: {
-      id: true,
-      assignment: {
-        select: {
-          id: true,
-          title: true,
-          prompt: true,
-          submitForGrade: true,
-          pointValue: true,
-          assignmentTypeId: true,
-          assignmentType: {
-            select: {
-              id: true,
-              title: true,
-              systemKey: true,
+  const [classAssignments, availableAssignmentTypes] = await Promise.all([
+    prisma.classAssignment.findMany({
+      where: { classId },
+      select: {
+        id: true,
+        assignment: {
+          select: {
+            id: true,
+            title: true,
+            prompt: true,
+            promptAttachmentName: true,
+            submitForGrade: true,
+            pointValue: true,
+            assignmentTypeId: true,
+            assignmentType: {
+              select: {
+                id: true,
+                title: true,
+                systemKey: true,
+              },
             },
+            _count: { select: { classAssignments: true } },
           },
         },
-      },
-      _count: {
-        select: {
-          documents: true,
+        _count: {
+          select: {
+            documents: true,
+          },
+        },
+        documentGroups: {
+          where: { documentId: { not: null } },
+          take: 1,
+          select: { id: true },
         },
       },
-    },
-    orderBy: [{ createdAt: 'desc' }],
-  });
+      orderBy: [{ createdAt: 'desc' }],
+    }),
+    getAvailableAssignmentTypesForScopes<{
+      id: string;
+      title: string;
+      systemKey: string | null;
+      collaborationSupported: boolean;
+    }>({
+      scopes: [
+        {
+          organizationId: klass.school.organizationId,
+          schoolId: klass.school.id,
+          teacherProfileId: profile.id,
+        },
+      ],
+      select: {
+        id: true,
+        title: true,
+        systemKey: true,
+        collaborationSupported: true,
+      },
+      orderBy: { position: 'asc' },
+    }),
+  ]);
+
+  // Class-wide, assignment-level performance summaries (see
+  // ClassAssignmentInsight) are generated from the assignment sheet on this
+  // page. Batch-load whatever's already been generated so the sheet can open
+  // straight to the cached summary instead of always starting blank.
+  const classAssignmentIds = classAssignments.map((ca) => ca.id);
+  const insightRows =
+    classInsightsEnabled && classAssignmentIds.length > 0
+      ? await prisma.classAssignmentInsight.findMany({
+          where: { classAssignmentId: { in: classAssignmentIds } },
+          select: {
+            classAssignmentId: true,
+            status: true,
+            submissionCount: true,
+            generatedAt: true,
+            summaryJson: true,
+          },
+        })
+      : [];
+  const insightByClassAssignmentId = new Map(
+    insightRows
+      .filter((row) => row.status === 'ready' && row.summaryJson)
+      .map((row) => [
+        row.classAssignmentId,
+        {
+          status: 'ready' as const,
+          submissionCount: row.submissionCount,
+          generatedAt: row.generatedAt ? row.generatedAt.toISOString() : null,
+          summary: row.summaryJson as unknown as ClassInsightSummary,
+        },
+      ])
+  );
 
   const assignments = classAssignments.map((classAssignment) => ({
     id: classAssignment.assignment.id,
     classAssignmentId: classAssignment.id,
     title: classAssignment.assignment.title,
     prompt: classAssignment.assignment.prompt,
+    promptAttachmentName: classAssignment.assignment.promptAttachmentName,
     submitForGrade: classAssignment.assignment.submitForGrade,
     pointValue: classAssignment.assignment.pointValue,
     assignmentTypeId: classAssignment.assignment.assignmentTypeId,
     assignmentType: classAssignment.assignment.assignmentType,
+    otherClassCount: Math.max(
+      classAssignment.assignment._count.classAssignments - 1,
+      0
+    ),
     _count: classAssignment._count,
+    insight: insightByClassAssignmentId.get(classAssignment.id) ?? null,
+    hasSharedWork: classAssignment.documentGroups.length > 0,
   }));
 
   const teacherClasses = await prisma.class.findMany({
@@ -760,18 +1215,80 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     orderBy: [{ grade: 'asc' }, { period: 'asc' }],
   });
 
+  // Growth plans are only ever created via Reporter, so skip the query
+  // entirely for organizations that don't have it enabled.
+  const growthPlans = reporterEnabled
+    ? await prisma.reporterGrowthPlan.findMany({
+        where: {
+          organizationId: klass.school.organizationId,
+          studentMembershipId: { in: klass.students.map((s) => s.id) },
+        },
+        select: {
+          id: true,
+          focus: true,
+          targetSkills: true,
+          body: true,
+          checkInAt: true,
+          status: true,
+          createdAt: true,
+          studentMembershipId: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    : [];
+
+  const growthPlansByStudentId = growthPlans.reduce<
+    Record<string, typeof growthPlans>
+  >((acc, plan) => {
+    (acc[plan.studentMembershipId] ??= []).push(plan);
+    return acc;
+  }, {});
+
+  // Paste alerts, per student, for the student sheet on this page. One
+  // query for the whole class (scoped to this class's enrolled students, so
+  // it can't leak another teacher's data) rather than one per student.
+  const pasteAlerts = klass.students.length
+    ? await prisma.pasteAlert.findMany({
+        where: { membershipId: { in: klass.students.map((s) => s.id) } },
+        select: {
+          id: true,
+          documentId: true,
+          membershipId: true,
+          textLength: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    : [];
+  const pasteAlertsByStudentId = buildPasteAlertsByStudentId(pasteAlerts);
+
   return dataResponse({
+    role: 'TEACHER' as const,
     klass,
     submissions,
     inProgressDocuments,
     assignments,
+    assignmentTypes: availableAssignmentTypes
+      .filter(
+        (assignmentType) =>
+          assignmentType.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+      )
+      .map(({ id, title, collaborationSupported }) => ({
+        id,
+        title,
+        collaborationSupported,
+      })),
     assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,
+    classInsightsEnabled,
+    reporterEnabled,
+    growthPlansByStudentId,
+    pasteAlertsByStudentId,
   });
 }
 
-type TabValue = 'students' | 'documents';
+type TabValue = 'students' | 'documents' | 'assignments';
 
 type ClassDocumentSubmission = {
   id: string;
@@ -796,6 +1313,7 @@ type ClassDocumentRow = {
     id: string;
     user: { name: string | null; email: string };
   };
+  group: TeacherDocumentWorkRow['group'];
   assignment: {
     id: string;
     title: string | null;
@@ -808,16 +1326,50 @@ type ClassDocumentRow = {
 
 type SortDirection = 'asc' | 'desc';
 
+type TeacherClassDetailData = Extract<
+  ReturnType<typeof useLoaderData<typeof loader>>,
+  { role: 'TEACHER' }
+>;
+
 export default function ClassDetailRoute() {
-  return <ClassDetailPage />;
+  const data = useLoaderData<typeof loader>();
+
+  if (data.role === 'STUDENT') {
+    return <StudentClassDetailView data={data} />;
+  }
+
+  return <ClassDetailPage data={data} />;
 }
 
-function ClassDetailPage() {
-  const data = useLoaderData<typeof loader>();
+function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const revalidator = useRevalidator();
   const studentFetcher = useFetcher();
+  // Non-null when a nested detail route matches — either the assignment
+  // detail route (app.my-classes.$classId.assignment.$assignmentId) or the
+  // class summary route (app.my-classes.$classId.summary.$assignmentId).
+  // Either way the teacher drilled into one assignment, and that region
+  // swaps for the table/search bar in place, sliding in over the same
+  // footprint.
+  const assignmentDetailOutlet = useOutlet();
+  const isAssignmentDetailActive = assignmentDetailOutlet != null;
+  // Only the assignment-detail route forces the header's Assignments tab
+  // active — the summary route is reached from Documents, so the header
+  // should keep reflecting whichever tab got you here.
+  const isSummaryRouteActive = location.pathname.includes('/summary/');
+  // Tracks which way we just transitioned so the incoming panel (table or
+  // detail) slides in from the correct side — right when opening an
+  // assignment, left when returning to the table.
+  const wasAssignmentDetailActive = useRef(isAssignmentDetailActive);
+  const enteringAssignmentDetail =
+    isAssignmentDetailActive && !wasAssignmentDetailActive.current;
+  const leavingAssignmentDetail =
+    !isAssignmentDetailActive && wasAssignmentDetailActive.current;
+  useEffect(() => {
+    wasAssignmentDetailActive.current = isAssignmentDetailActive;
+  }, [isAssignmentDetailActive]);
   const [isClassEditSheetOpen, setIsClassEditSheetOpen] = useState(false);
   const [isAddStudentSheetOpen, setIsAddStudentSheetOpen] = useState(false);
   const [addStudentStep, setAddStudentStep] = useState<'email' | 'confirm'>(
@@ -839,12 +1391,22 @@ function ClassDetailPage() {
   const hasHydratedDocumentSort = useRef(false);
   const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
     useState(false);
+  const [isUnsubmitSheetOpen, setIsUnsubmitSheetOpen] = useState(false);
   const [studentNameSortDirection, setStudentNameSortDirection] =
     useState<SortDirection>('asc');
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     ReleaseGradeRow[]
   >([]);
+  const [unsubmitRowsForSheet, setUnsubmitRowsForSheet] = useState<
+    TeacherUnsubmitRow[]
+  >([]);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [growthPlanStudent, setGrowthPlanStudent] = useState<{
+    id: string;
+    name: string;
+    email: string;
+  } | null>(null);
   const classDetailPath = `/app/my-classes/${data.klass.id}`;
   const classDetailSearch = searchParams.toString();
   const classDetailExitTo = classDetailSearch
@@ -861,7 +1423,11 @@ function ClassDetailPage() {
   };
 
   const assignmentsEnabled = data.assignmentsEnabled === true;
-  const validTabs: TabValue[] = ['students', 'documents'];
+  const classInsightsEnabled = data.classInsightsEnabled === true;
+  const reporterEnabled = data.reporterEnabled === true;
+  const validTabs: TabValue[] = assignmentsEnabled
+    ? ['students', 'documents', 'assignments']
+    : ['students', 'documents'];
   const requestedTab = searchParams.get('tab') as TabValue | null;
   const activeTab =
     requestedTab && validTabs.includes(requestedTab)
@@ -869,6 +1435,15 @@ function ClassDetailPage() {
       : 'students';
   const classAssignmentFilterParam =
     searchParams.get('classAssignmentId') ?? 'all';
+  // When Documents is scoped to one assignment, link to that assignment's
+  // class-wide performance summary.
+  const selectedClassAssignment =
+    classAssignmentFilterParam !== 'all'
+      ? (data.assignments.find(
+          (assignment) =>
+            assignment.classAssignmentId === classAssignmentFilterParam
+        ) ?? null)
+      : null;
   const assignmentIdParam = searchParams.get('assignmentId');
   const studentIdParam = searchParams.get('studentId');
   const students = data.klass.students;
@@ -1037,15 +1612,41 @@ function ClassDetailPage() {
     [sortedStudents, studentSearchQuery]
   );
 
+  // Graded counts per assignment, derived from the same submissions already
+  // loaded for the Documents tab — no second query. Shared with the
+  // assignment detail page so both read the same computation.
+  const gradedCountByAssignmentId = useMemo(
+    () => buildGradedCountByAssignmentId(allSubmissions),
+    [allSubmissions]
+  );
+
+  const managedAssignments = useMemo(
+    (): ClassAssignmentsTabAssignment[] =>
+      data.assignments.map((assignment) => ({
+        ...assignment,
+        gradedCount: gradedCountByAssignmentId.get(assignment.id) ?? 0,
+        documentCount: assignment._count.documents,
+      })),
+    [data.assignments, gradedCountByAssignmentId]
+  );
+
   const classDocuments = useMemo((): ClassDocumentRow[] => {
     const byDocumentId = new Map<string, ClassDocumentRow>();
 
     for (const document of data.inProgressDocuments) {
+      const subject = document.membership ?? {
+        id: `group:${document.group?.id ?? document.id}`,
+        user: {
+          name: document.group?.label ?? 'Collaborative group',
+          email: '',
+        },
+      };
       byDocumentId.set(document.id, {
         id: document.id,
         title: document.title,
         updatedAt: new Date(document.updatedAt),
-        membership: document.membership,
+        membership: subject,
+        group: document.group,
         assignment: document.assignment,
         submissions: [],
         latestSubmission: null,
@@ -1054,11 +1655,19 @@ function ClassDetailPage() {
 
     for (const submission of allSubmissions) {
       const existing = byDocumentId.get(submission.documentId);
+      const subject = submission.document.membership ?? {
+        id: `group:${submission.document.group?.id ?? submission.documentId}`,
+        user: {
+          name: submission.document.group?.label ?? 'Collaborative group',
+          email: '',
+        },
+      };
       const row: ClassDocumentRow = existing ?? {
         id: submission.documentId,
         title: submission.document.title,
         updatedAt: new Date(submission.submittedAt ?? submission.createdAt),
-        membership: submission.document.membership,
+        membership: subject,
+        group: submission.document.group,
         assignment: submission.document.assignment,
         submissions: [],
         latestSubmission: null,
@@ -1102,7 +1711,14 @@ function ClassDetailPage() {
     }));
   }, [classDocuments, data.klass]);
 
-  const unreleasedGrades = useMemo(() => {
+  const selectedDocuments = useMemo(() => {
+    const selected = new Set(selectedDocumentIds);
+    return teacherDocumentWorkRows.filter((document) =>
+      selected.has(document.id)
+    );
+  }, [selectedDocumentIds, teacherDocumentWorkRows]);
+
+  const releaseRowsForLegacyDeepLink = useMemo(() => {
     const rows =
       selectedAssignmentIds.length === 0
         ? teacherDocumentWorkRows
@@ -1115,23 +1731,43 @@ function ClassDetailPage() {
     return buildReleaseGradeRows(rows);
   }, [selectedAssignmentIds, teacherDocumentWorkRows]);
 
+  useEffect(() => {
+    const currentDocumentIds = new Set(
+      teacherDocumentWorkRows.map((document) => document.id)
+    );
+    setSelectedDocumentIds((current) =>
+      current.filter((documentId) => currentDocumentIds.has(documentId))
+    );
+  }, [teacherDocumentWorkRows]);
+
+  const unreleasedGrades = useMemo(
+    () => buildReleaseGradeRows(selectedDocuments),
+    [selectedDocuments]
+  );
+
+  const unsubmitRows = useMemo(
+    () => buildTeacherUnsubmitRows(selectedDocuments),
+    [selectedDocuments]
+  );
+
   // Handle URL param for to-release action (legacy deep link)
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab === 'to-release') {
-      if (unreleasedGrades.length > 0) {
-        setReleaseGradesForSheet(unreleasedGrades);
+      if (releaseRowsForLegacyDeepLink.length > 0) {
+        setReleaseGradesForSheet(releaseRowsForLegacyDeepLink);
         setIsReleaseGradesSheetOpen(true);
         const next = new URLSearchParams(searchParams);
         next.set('tab', 'documents');
         navigate(`?${next.toString()}`, { replace: true });
       }
     }
-  }, [searchParams, navigate, unreleasedGrades]);
+  }, [searchParams, navigate, releaseRowsForLegacyDeepLink]);
 
   // Handle successful release
   const handleGradingSuccess = () => {
     setReleaseGradesForSheet([]);
+    setSelectedDocumentIds([]);
     window.location.reload();
   };
 
@@ -1139,6 +1775,18 @@ function ClassDetailPage() {
     if (unreleasedGrades.length === 0) return;
     setReleaseGradesForSheet(unreleasedGrades);
     setIsReleaseGradesSheetOpen(true);
+  };
+
+  const openUnsubmitSheet = () => {
+    if (unsubmitRows.length === 0) return;
+    setUnsubmitRowsForSheet(unsubmitRows);
+    setIsUnsubmitSheetOpen(true);
+  };
+
+  const handleUnsubmitSuccess = () => {
+    setUnsubmitRowsForSheet([]);
+    setSelectedDocumentIds([]);
+    window.location.reload();
   };
 
   const documentWorkStatusCounts = useMemo(
@@ -1278,7 +1926,7 @@ function ClassDetailPage() {
     const next = new URLSearchParams(searchParams);
     next.set('tab', tab);
 
-    if (tab === 'students') {
+    if (tab === 'students' || tab === 'assignments') {
       next.delete('status');
       navigate(`?${next.toString()}`);
       return;
@@ -1291,6 +1939,14 @@ function ClassDetailPage() {
     const next = new URLSearchParams(searchParams);
     next.set('tab', 'documents');
     next.set('studentId', profileId);
+    navigateWithDocumentPreferences(next);
+  };
+
+  const handleViewAssignmentDocuments = (assignmentId: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'documents');
+    next.set('assignmentId', assignmentId);
+    next.delete('classAssignmentId');
     navigateWithDocumentPreferences(next);
   };
 
@@ -1410,7 +2066,18 @@ function ClassDetailPage() {
               disabled: unreleasedGrades.length === 0,
               onSelect: openReleaseSheet,
             },
+            {
+              id: 'unsubmit',
+              label: 'Unsubmit',
+              count: unsubmitRows.length > 0 ? unsubmitRows.length : undefined,
+              disabled: unsubmitRows.length === 0,
+              onSelect: openUnsubmitSheet,
+            },
           ]}
+          selection={{
+            selectedDocumentIds,
+            onSelectedDocumentIdsChange: setSelectedDocumentIds,
+          }}
           emptyMessageSecondary="Student documents will appear here once work begins"
           testIds={{
             statusChips: 'class-documents-status-chips',
@@ -1421,6 +2088,26 @@ function ClassDetailPage() {
           compactRows
           sort={documentSort}
           onSortChange={handleDocumentSortChange}
+        />
+      );
+    }
+
+    if (activeTab === 'assignments') {
+      return (
+        <ClassAssignmentsTab
+          classOption={{
+            id: data.klass.id,
+            name: classAssignmentOptionLabel(data.klass),
+          }}
+          assignments={managedAssignments}
+          assignmentTypes={data.assignmentTypes}
+          classInsightsEnabled={classInsightsEnabled}
+          onViewDocuments={handleViewAssignmentDocuments}
+          onSelectAssignment={(assignmentId) =>
+            navigate(
+              `/app/assignments/${assignmentId}?classId=${data.klass.id}`
+            )
+          }
         />
       );
     }
@@ -1668,9 +2355,12 @@ function ClassDetailPage() {
                   >
                     {data.teacherClasses.map((klass) => (
                       <option key={klass.id} value={klass.id}>
-                        {klass.school.name} — Grade {klass.grade}, Period{' '}
-                        {klass.period}
-                        {klass.title ? ` — ${klass.title}` : ''}
+                        {klass.school.name} —{' '}
+                        {formatClassLabel({
+                          grade: klass.grade,
+                          period: klass.period,
+                          title: klass.title,
+                        })}
                       </option>
                     ))}
                   </select>
@@ -1759,17 +2449,49 @@ function ClassDetailPage() {
                   {paginatedData.map((s) => {
                     const studentDocumentCount =
                       data.inProgressDocuments.filter(
-                        (doc) => doc.membership.id === s.id
+                        (doc) =>
+                          doc.membership?.id === s.id ||
+                          doc.group?.members.some(
+                            (member) => member.membershipId === s.id
+                          )
                       ).length +
                       new Set(
                         allSubmissions
-                          .filter((sub) => sub.document.membership.id === s.id)
+                          .filter(
+                            (sub) =>
+                              sub.document.membership?.id === s.id ||
+                              sub.document.group?.members.some(
+                                (member) => member.membershipId === s.id
+                              )
+                          )
                           .map((sub) => sub.documentId)
                       ).size;
 
+                    const pasteActivity = summarizeStudentPasteActivity(
+                      data.pasteAlertsByStudentId[s.id]
+                    );
+                    const studentSheetAvailable =
+                      reporterEnabled || pasteActivity !== null;
+
                     return (
-                      <TableRow key={s.id}>
-                        <TableCell className="max-h-[37px] pl-4">
+                      <TableRow
+                        key={s.id}
+                        className={cn(
+                          studentSheetAvailable && 'cursor-pointer'
+                        )}
+                        onClick={() => {
+                          if (!studentSheetAvailable) return;
+                          setGrowthPlanStudent({
+                            id: s.id,
+                            name: s.user.name ?? s.user.email,
+                            email: s.user.email,
+                          });
+                        }}
+                      >
+                        <TableCell
+                          className="max-h-[37px] pl-4"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <Checkbox
                             checked={selectedStudentIds.includes(s.id)}
                             onCheckedChange={() => handleSelectStudent(s.id)}
@@ -1788,7 +2510,10 @@ function ClassDetailPage() {
                               badgeVariants({ variant: 'secondary' }),
                               'cursor-pointer gap-1 py-1 pl-2 pr-1'
                             )}
-                            onClick={() => handleViewStudentDocuments(s.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewStudentDocuments(s.id);
+                            }}
                             aria-label={`View ${s.user.name ?? s.user.email}'s documents`}
                           >
                             {studentDocumentCount}{' '}
@@ -1838,27 +2563,74 @@ function ClassDetailPage() {
           }}
           studentCount={students.length}
           documentCount={classDocuments.length}
-          activeTab={activeHeaderTab}
+          assignmentCount={data.assignments.length}
+          showAssignmentsTab={assignmentsEnabled}
+          activeTab={
+            isAssignmentDetailActive && !isSummaryRouteActive
+              ? 'assignments'
+              : activeHeaderTab
+          }
           onTabChange={handleHeaderTabChange}
           onEdit={() => setIsClassEditSheetOpen(true)}
         />
 
-        <div
-          key={activeHeaderTab}
-          className="animate-in fade-in-0 slide-in-from-right-2 duration-300"
-        >
-          <div>{renderTable()}</div>
-          {activeTab === 'students' && currentTabData.length > 0 ? (
-            <div className="mt-4">
-              <Pagination
-                totalCount={currentTabData.length}
-                skip={pagination.skip}
-                take={pagination.take}
-                onChange={handlePaginationChange}
-              />
-            </div>
-          ) : null}
-        </div>
+        {isAssignmentDetailActive ? (
+          <div
+            key="assignment-detail"
+            data-testid="assignment-detail-panel"
+            className={cn(
+              'motion-reduce:animate-none',
+              'animate-in fade-in-0 duration-300',
+              enteringAssignmentDetail && 'slide-in-from-right-8'
+            )}
+          >
+            {assignmentDetailOutlet}
+          </div>
+        ) : (
+          <div
+            key={activeHeaderTab}
+            data-testid="class-detail-table-panel"
+            className={cn(
+              'motion-reduce:animate-none',
+              'animate-in fade-in-0 duration-300',
+              leavingAssignmentDetail
+                ? 'slide-in-from-left-8'
+                : 'slide-in-from-right-2'
+            )}
+          >
+            {activeTab === 'documents' &&
+            classInsightsEnabled &&
+            selectedClassAssignment ? (
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+                <p className="text-sm text-muted-foreground">
+                  See how the whole class did on{' '}
+                  <span className="font-medium text-foreground">
+                    {selectedClassAssignment.title ?? 'this assignment'}
+                  </span>
+                  .
+                </p>
+                <Button asChild variant="outline" size="sm">
+                  <Link
+                    to={`/app/my-classes/${data.klass.id}/summary/${selectedClassAssignment.id}?${searchParams.toString()}`}
+                  >
+                    Class performance summary
+                  </Link>
+                </Button>
+              </div>
+            ) : null}
+            <div>{renderTable()}</div>
+            {activeTab === 'students' && currentTabData.length > 0 ? (
+              <div className="mt-4">
+                <Pagination
+                  totalCount={currentTabData.length}
+                  skip={pagination.skip}
+                  take={pagination.take}
+                  onChange={handlePaginationChange}
+                />
+              </div>
+            ) : null}
+          </div>
+        )}
       </div>
 
       <ClassManageSheet
@@ -1874,6 +2646,40 @@ function ClassDetailPage() {
         isOpen={isReleaseGradesSheetOpen}
         onClose={() => setIsReleaseGradesSheetOpen(false)}
         onSuccess={handleGradingSuccess}
+      />
+
+      <UnsubmitSubmissionsSheet
+        submissions={unsubmitRowsForSheet}
+        isOpen={isUnsubmitSheetOpen}
+        onClose={() => setIsUnsubmitSheetOpen(false)}
+        onSuccess={handleUnsubmitSuccess}
+      />
+
+      <StudentGrowthPlansSheet
+        open={growthPlanStudent !== null}
+        onOpenChange={(open) => {
+          if (!open) setGrowthPlanStudent(null);
+        }}
+        student={growthPlanStudent}
+        growthPlans={
+          growthPlanStudent
+            ? ((data.growthPlansByStudentId[growthPlanStudent.id] ??
+                []) as unknown as StudentGrowthPlan[])
+            : []
+        }
+        onViewDocuments={() => {
+          if (!growthPlanStudent) return;
+          const studentId = growthPlanStudent.id;
+          setGrowthPlanStudent(null);
+          handleViewStudentDocuments(studentId);
+        }}
+        pasteAlerts={
+          growthPlanStudent
+            ? (data.pasteAlertsByStudentId[growthPlanStudent.id] ?? [])
+            : []
+        }
+        pasteAlertsExitTo={classDetailExitTo}
+        showGrowthPlans={reporterEnabled}
       />
     </section>
   );

@@ -1,19 +1,30 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  $transaction: mock(async (fn: any) => fn(prisma)),
+  $queryRaw: mock(),
   class: { findFirst: mock(), findMany: mock() },
   documentClassForensic: { findMany: mock() },
   assignmentType: { findMany: mock() },
-  orgMembership: { findUnique: mock(), findMany: mock() },
+  orgMembership: {
+    findUnique: mock(),
+    findMany: mock(),
+    update: mock(),
+  },
+  documentGroupMember: { updateMany: mock() },
   pasteAlert: { findMany: mock() },
   submission: { findMany: mock() },
   document: { findMany: mock() },
+  documentGroup: { findFirst: mock() },
   assignment: {
     findFirst: mock(),
     findMany: mock(),
     update: mock(),
+    deleteMany: mock(),
   },
   classAssignment: { findMany: mock() },
+  classAssignmentInsight: { findMany: mock() },
+  reporterGrowthPlan: { findMany: mock() },
 };
 
 const requireUserId = mock();
@@ -21,8 +32,14 @@ const requireMembership = mock();
 const getSubmittedPapersFilter = mock();
 const createAssignmentDeployedToClasses = mock();
 const deleteClassAssignmentDeployment = mock();
+class AssignmentHasCollaborativeWorkError extends Error {}
 const getAvailableAssignmentTypesForScopes = mock();
 const isAssignmentTypeAvailableForEveryScope = mock();
+const uploadAssignmentPromptAttachment = mock();
+const deleteAssignmentPromptAttachment = mock();
+class AssignmentPromptAttachmentError extends Error {}
+const actualAssignmentPromptAttachment =
+  await import('~/domain/assignments/assignment-prompt-attachment.server');
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -37,13 +54,27 @@ mock.module('~/utils/auth.server', () => ({
 mock.module('~/utils/cookies.server', () => ({
   getSubmittedPapersFilter,
 }));
+// bun's module mocks are global to the test run and mock.restore() does not
+// undo mock.module — restore from the pristine copy test-preload.ts captured
+// before any file could mock.module() this path (see comment there).
+const actualAssignmentTypeAccess =
+  globalThis.__realModules['~/utils/assignment-type-access.server'];
 mock.module('~/utils/assignment-type-access.server', () => ({
+  ...actualAssignmentTypeAccess,
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForEveryScope,
 }));
 mock.module('~/utils/assignment-deployment.server', () => ({
+  AssignmentHasCollaborativeWorkError,
   createAssignmentDeployedToClasses,
   deleteClassAssignmentDeployment,
+}));
+mock.module('~/domain/assignments/assignment-prompt-attachment.server', () => ({
+  ...actualAssignmentPromptAttachment,
+  AssignmentPromptAttachmentError,
+  assignmentPromptAttachmentRequestTooLarge: () => false,
+  deleteAssignmentPromptAttachment,
+  uploadAssignmentPromptAttachment,
 }));
 
 const {
@@ -53,6 +84,14 @@ const {
 } = await import('./route');
 const action = routeAction as any;
 const loader = routeLoader as any;
+
+afterAll(() => {
+  mock.restore();
+  mock.module(
+    '~/utils/assignment-type-access.server',
+    () => actualAssignmentTypeAccess
+  );
+});
 
 describe('class detail loader document visibility', () => {
   beforeEach(() => {
@@ -68,6 +107,12 @@ describe('class detail loader document visibility', () => {
     deleteClassAssignmentDeployment.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
     isAssignmentTypeAvailableForEveryScope.mockReset();
+    uploadAssignmentPromptAttachment.mockReset();
+    deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
+    prisma.$transaction
+      .mockReset()
+      .mockImplementation(async (fn: any) => fn(prisma));
+    prisma.$queryRaw.mockReset().mockResolvedValue([]);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -84,10 +129,12 @@ describe('class detail loader document visibility', () => {
         id: 'school-1',
         name: 'Tallassee High School',
         organizationId: 'org-1',
+        organization: { classInsightsEnabled: false, reporterEnabled: false },
       },
       students: [],
     });
     prisma.class.findMany.mockResolvedValue([]);
+    prisma.reporterGrowthPlan.findMany.mockResolvedValue([]);
     prisma.documentClassForensic.findMany.mockResolvedValue([
       { documentId: 'legacy-doc-1' },
       { documentId: 'legacy-doc-2' },
@@ -98,7 +145,9 @@ describe('class detail loader document visibility', () => {
     prisma.pasteAlert.findMany.mockResolvedValue([]);
     prisma.submission.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
+    prisma.documentGroup.findFirst.mockResolvedValue(null);
     prisma.classAssignment.findMany.mockResolvedValue([]);
+    prisma.classAssignmentInsight.findMany.mockResolvedValue([]);
     prisma.assignment.findMany.mockResolvedValue([]);
     prisma.assignment.findFirst.mockResolvedValue(null);
     prisma.assignment.update.mockResolvedValue({});
@@ -106,6 +155,11 @@ describe('class detail loader document visibility', () => {
     deleteClassAssignmentDeployment.mockResolvedValue('ca-1');
     getSubmittedPapersFilter.mockResolvedValue('all');
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
+    uploadAssignmentPromptAttachment.mockResolvedValue({
+      promptAttachmentKey: 'assignment-prompts/file-id/assignment.pdf',
+      promptAttachmentName: 'assignment.pdf',
+      promptAttachmentSize: 4,
+    });
   });
 
   test('includes legacy class documents preserved during assignment migration', async () => {
@@ -132,6 +186,9 @@ describe('class detail loader document visibility', () => {
         deletedAt: null,
       },
     });
+    expect(
+      prisma.submission.findMany.mock.calls[0][0].where.unsubmittedAt
+    ).toBe(null);
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       ...expectedScope,
       deletedAt: null,
@@ -158,7 +215,161 @@ describe('class detail loader document visibility', () => {
     expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
   });
 
-  test('redirects the retired assignments tab to the teacher Assignments page', async () => {
+  test('skips the growth plans query and gates the summary tab when the organization has not enabled it', async () => {
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.classInsightsEnabled).toBe(false);
+    expect(data.reporterEnabled).toBe(false);
+    expect(data.growthPlansByStudentId).toEqual({});
+    expect(prisma.reporterGrowthPlan.findMany).not.toHaveBeenCalled();
+  });
+
+  test('groups growth plans by student when reporter is enabled for the organization', async () => {
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      grade: '9',
+      period: '2',
+      title: 'World History',
+      school: {
+        id: 'school-1',
+        name: 'Tallassee High School',
+        organizationId: 'org-1',
+        organization: { classInsightsEnabled: true, reporterEnabled: true },
+      },
+      students: [
+        {
+          id: 'student-1',
+          user: { name: 'Ada Lovelace', email: 'ada@x.test' },
+        },
+      ],
+    });
+    prisma.reporterGrowthPlan.findMany.mockResolvedValue([
+      {
+        id: 'plan-1',
+        focus: 'Thesis clarity',
+        targetSkills: ['thesis_and_content'],
+        body: 'Body',
+        checkInAt: null,
+        status: 'active',
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
+        studentMembershipId: 'student-1',
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.classInsightsEnabled).toBe(true);
+    expect(prisma.reporterGrowthPlan.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          organizationId: 'org-1',
+          studentMembershipId: { in: ['student-1'] },
+        },
+      })
+    );
+    expect(Object.keys(data.growthPlansByStudentId)).toEqual(['student-1']);
+    expect(data.growthPlansByStudentId['student-1']).toHaveLength(1);
+  });
+
+  test('skips the paste alert query when the class has no students', async () => {
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.pasteAlertsByStudentId).toEqual({});
+    expect(prisma.pasteAlert.findMany).not.toHaveBeenCalled();
+  });
+
+  test('scopes the paste alert query to this class’s enrolled students and groups by student', async () => {
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      grade: '9',
+      period: '2',
+      title: 'World History',
+      school: {
+        id: 'school-1',
+        name: 'Tallassee High School',
+        organizationId: 'org-1',
+        organization: { classInsightsEnabled: false, reporterEnabled: false },
+      },
+      students: [
+        {
+          id: 'student-1',
+          user: { name: 'Ada Lovelace', email: 'ada@x.test' },
+        },
+        {
+          id: 'student-2',
+          user: { name: 'Grace Hopper', email: 'grace@x.test' },
+        },
+      ],
+    });
+    prisma.pasteAlert.findMany.mockResolvedValue([
+      {
+        id: 'alert-1',
+        documentId: 'doc-1',
+        membershipId: 'student-1',
+        textLength: 250,
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(prisma.pasteAlert.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { membershipId: { in: ['student-1', 'student-2'] } },
+      })
+    );
+    expect(Object.keys(data.pasteAlertsByStudentId)).toEqual(['student-1']);
+    expect(data.pasteAlertsByStudentId['student-1']).toHaveLength(1);
+    expect(data.pasteAlertsByStudentId['student-1'][0].documentId).toBe(
+      'doc-1'
+    );
+  });
+
+  test('redirects the legacy summary tab to assignments and preserves other search params', async () => {
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/my-classes/class-1?tab=summary&q=rhetoric'
+      ),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('Location')).toBe(
+      '/app/my-classes/class-1?tab=assignments&q=rhetoric'
+    );
+  });
+
+  test('loads generic assignment types for the current class scope', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'generic-type', title: 'Generic Essay', systemKey: null },
+      {
+        id: 'ap-history-type',
+        title: 'AP History Essay',
+        systemKey: 'ap_history_essay',
+      },
+    ]);
+
     const response = await loader({
       request: new Request(
         'https://example.test/app/my-classes/class-1?tab=assignments'
@@ -166,9 +377,215 @@ describe('class detail loader document visibility', () => {
       params: { classId: 'class-1' },
       context: {} as never,
     });
+    const data = (response as { data: any }).data;
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('Location')).toBe('/app/assignments');
+    expect(getAvailableAssignmentTypesForScopes).toHaveBeenCalledWith({
+      scopes: [
+        {
+          organizationId: 'org-1',
+          schoolId: 'school-1',
+          teacherProfileId: 'teacher-1',
+        },
+      ],
+      select: {
+        id: true,
+        title: true,
+        systemKey: true,
+        collaborationSupported: true,
+      },
+      orderBy: { position: 'asc' },
+    });
+    expect(data.assignmentTypes).toEqual([
+      { id: 'generic-type', title: 'Generic Essay' },
+    ]);
+  });
+
+  test('loads compact cross-class deployment details for assignments', async () => {
+    prisma.classAssignment.findMany.mockResolvedValue([
+      {
+        id: 'class-assignment-1',
+        assignment: {
+          id: 'assignment-1',
+          title: 'Shared DBQ',
+          prompt: 'Prompt',
+          submitForGrade: true,
+          pointValue: 100,
+          assignmentTypeId: 'at-1',
+          assignmentType: {
+            id: 'at-1',
+            title: 'DBQ',
+            systemKey: null,
+          },
+          _count: { classAssignments: 2 },
+        },
+        _count: { documents: 2 },
+        documentGroups: [],
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/my-classes/class-1?tab=assignments'
+      ),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.assignments[0].otherClassCount).toBe(1);
+    expect(prisma.classAssignment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          assignment: {
+            select: expect.objectContaining({
+              _count: { select: { classAssignments: true } },
+            }),
+          },
+        }),
+      })
+    );
+  });
+
+  test('bulk deletes only assignments deployed to the current class', async () => {
+    prisma.assignment.findMany.mockResolvedValue([
+      { id: 'assignment-1' },
+      { id: 'assignment-2' },
+    ]);
+    const form = new FormData();
+    form.append('intent', 'delete-assignments');
+    form.append('assignmentIds', 'assignment-1');
+    form.append('assignmentIds', 'assignment-2');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({
+      success: true,
+      message: 'Deleted 2 assignment(s).',
+    });
+    expect(prisma.assignment.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['assignment-1', 'assignment-2'] },
+        classAssignments: { some: { classId: 'class-1' } },
+      },
+      select: { id: true },
+    });
+    expect(deleteClassAssignmentDeployment).toHaveBeenCalledTimes(2);
+    expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
+      assignmentId: 'assignment-1',
+      classId: 'class-1',
+    });
+    expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
+      assignmentId: 'assignment-2',
+      classId: 'class-1',
+    });
+  });
+
+  test('removing a student withdraws shared-artifact access before enrollment', async () => {
+    prisma.orgMembership.findMany.mockResolvedValue([{ id: 'student-1' }]);
+    prisma.documentGroupMember.updateMany.mockResolvedValue({ count: 2 });
+    prisma.orgMembership.update.mockResolvedValue({});
+    const form = new FormData();
+    form.append('intent', 'remove-students');
+    form.append('studentProfileIds', 'student-1');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toEqual({ success: true });
+    expect(prisma.documentGroupMember.updateMany).toHaveBeenCalledWith({
+      where: {
+        membershipId: { in: ['student-1'] },
+        removedAt: null,
+        group: { classAssignment: { classId: 'class-1' } },
+      },
+      data: { removedAt: expect.any(Date) },
+    });
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith({
+      where: { id: 'student-1' },
+      data: { classesAsStudent: { disconnect: { id: 'class-1' } } },
+    });
+  });
+
+  test('rejects bulk deletion when any assignment is outside the current class', async () => {
+    prisma.assignment.findMany.mockResolvedValue([{ id: 'assignment-1' }]);
+    const form = new FormData();
+    form.append('intent', 'delete-assignments');
+    form.append('assignmentIds', 'assignment-1');
+    form.append('assignmentIds', 'assignment-outside-class');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.init).toMatchObject({ status: 400 });
+    expect(response.data).toMatchObject({
+      success: false,
+      message: 'Some assignments were not found.',
+    });
+    expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
+  });
+
+  test('bulk deletion protects assignments with shared group work', async () => {
+    prisma.assignment.findMany.mockResolvedValue([{ id: 'assignment-1' }]);
+    prisma.documentGroup.findFirst.mockResolvedValue({ id: 'group-1' });
+    const form = new FormData();
+    form.append('intent', 'delete-assignments');
+    form.append('assignmentIds', 'assignment-1');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.init).toMatchObject({ status: 409 });
+    expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
+  });
+
+  test('deletes one class deployment without directly changing student documents', async () => {
+    prisma.assignment.findFirst.mockResolvedValue({ id: 'assignment-1' });
+    const form = new FormData();
+    form.append('intent', 'delete-assignment');
+    form.append('assignmentId', 'assignment-1');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({
+      success: true,
+      message: 'Assignment deleted successfully.',
+    });
+    expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
+      assignmentId: 'assignment-1',
+      classId: 'class-1',
+    });
   });
 
   test('rejects generic class-page AP History assignment creation', async () => {
@@ -300,6 +717,7 @@ describe('class detail loader document visibility', () => {
     form.set('prompt', 'Prompt');
     form.set('submitForGrade', 'true');
     form.set('pointValue', '25');
+    form.set('gradingAssistantStrictnessLevel', 'advanced');
 
     const response = await action({
       request: new Request('https://example.test/app/my-classes/class-1', {
@@ -318,9 +736,125 @@ describe('class detail loader document visibility', () => {
         prompt: 'Prompt',
         submitForGrade: true,
         pointValue: 25,
+        gradingAssistantStrictnessLevel: 'advanced',
+        tutorEnabled: true,
       },
       classIds: ['class-1'],
+      deployment: { postAt: null, dueAt: null },
     });
+  });
+
+  test('disables the tutor on a new class assignment when the toggle is off', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', systemKey: null },
+    ]);
+    prisma.assignmentType.findMany.mockResolvedValue([
+      {
+        id: 'at-1',
+        systemKey: null,
+        organizationAssignments: [{ organizationId: 'org-1' }],
+      },
+    ]);
+
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.set('prompt', 'Prompt');
+    form.set('submitForGrade', 'true');
+    form.set('pointValue', '25');
+    form.set('tutorEnabled', 'false');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({ success: true });
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tutorEnabled: false }),
+      classIds: ['class-1'],
+      deployment: { postAt: null, dueAt: null },
+    });
+  });
+
+  test('stores an attached assignment PDF without extracting it', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', systemKey: null },
+    ]);
+    prisma.assignmentType.findMany.mockResolvedValue([
+      {
+        id: 'at-1',
+        systemKey: null,
+        organizationAssignments: [{ organizationId: 'org-1' }],
+      },
+    ]);
+
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.set('prompt', 'Reference the attached assignment.');
+    form.set('gradingAssistantStrictnessLevel', 'intermediate');
+    form.set(
+      'promptAttachment',
+      new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'assignment.pdf', {
+        type: 'application/pdf',
+      })
+    );
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({ success: true });
+    expect(uploadAssignmentPromptAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'assignment.pdf' })
+    );
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        prompt: 'Reference the attached assignment.',
+        promptAttachmentKey: 'assignment-prompts/file-id/assignment.pdf',
+        promptAttachmentName: 'assignment.pdf',
+        promptAttachmentSize: 4,
+      }),
+      classIds: ['class-1'],
+      deployment: { postAt: null, dueAt: null },
+    });
+  });
+
+  test('rejects invalid class assignment grading strictness', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', systemKey: null },
+    ]);
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.set('prompt', 'Prompt');
+    form.set('gradingAssistantStrictnessLevel', 'punitive');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.init).toMatchObject({ status: 400 });
+    expect(response.data).toMatchObject({
+      success: false,
+      message: 'Grading assistant strictness level is invalid.',
+    });
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects invalid class assignment point values', async () => {
@@ -353,7 +887,8 @@ describe('class detail loader document visibility', () => {
 
     expect(response.data).toMatchObject({
       success: false,
-      message: 'Point value must be a positive whole number no greater than 1000.',
+      message:
+        'Point value must be a positive whole number no greater than 1000.',
     });
     expect(response.init).toMatchObject({ status: 400 });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
@@ -396,5 +931,132 @@ describe('class detail loader document visibility', () => {
         assignment: null,
       })
     ).toBe('Untitled draft');
+  });
+});
+
+describe('class detail loader for students', () => {
+  beforeEach(() => {
+    for (const model of Object.values(prisma)) {
+      for (const fn of Object.values(model)) {
+        fn.mockReset();
+      }
+    }
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    getAvailableAssignmentTypesForScopes.mockReset();
+
+    requireUserId.mockResolvedValue('user-2');
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      grade: '9',
+      period: '2',
+      title: 'World History',
+      classArtIndex: 3,
+      classArtKey: 'art-key',
+      school: {
+        id: 'school-1',
+        name: 'Tallassee High',
+        organizationId: 'org-1',
+      },
+      teachers: [{ id: 'teacher-1', user: { name: 'Ms. Frizzle' } }],
+    });
+    prisma.classAssignment.findMany.mockResolvedValue([
+      {
+        id: 'ca-1',
+        assignment: {
+          id: 'assignment-1',
+          title: 'Thesis practice',
+          prompt: 'Write a thesis.',
+          assignmentType: { id: 'type-1', title: 'Thesis Builder' },
+        },
+      },
+    ]);
+    prisma.document.findMany.mockResolvedValue([]);
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'type-1', title: 'Thesis Builder' },
+    ]);
+  });
+
+  test('serves the class a student is enrolled in', async () => {
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.role).toBe('STUDENT');
+    expect(data.klass.id).toBe('class-1');
+    expect(data.klass.teacherNames).toEqual(['Ms. Frizzle']);
+    expect(data.assignments).toHaveLength(1);
+    expect(data.assignmentTypes).toEqual([
+      { id: 'type-1', title: 'Thesis Builder' },
+    ]);
+    expect(prisma.class.findFirst.mock.calls[0][0].where).toEqual({
+      id: 'class-1',
+      isArchived: false,
+      students: { some: { id: 'student-1' } },
+    });
+  });
+
+  test('refuses a class the student is not enrolled in', async () => {
+    // A student enrolled in a different section: the enrollment predicate in
+    // the query means this class never matches for them.
+    prisma.class.findFirst.mockResolvedValue(null);
+
+    let thrown: unknown;
+    try {
+      await loader({
+        request: new Request('https://example.test/app/my-classes/class-2'),
+        params: { classId: 'class-2' },
+        context: {} as never,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Response);
+    expect((thrown as Response).status).toBe(404);
+  });
+
+  test('never reads the roster, other students work, or paste alerts', async () => {
+    await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.pasteAlert.findMany).not.toHaveBeenCalled();
+    expect(prisma.submission.findMany).not.toHaveBeenCalled();
+    expect(prisma.reporterGrowthPlan.findMany).not.toHaveBeenCalled();
+    expect(
+      prisma.class.findFirst.mock.calls[0][0].select.students
+    ).toBeUndefined();
+    expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
+      deletedAt: null,
+      archivedAt: null,
+      OR: [
+        { classAssignment: { classId: 'class-1' }, membershipId: 'student-1' },
+        {
+          classAssignment: {
+            classId: 'class-1',
+            OR: [{ postAt: null }, { postAt: { lte: expect.any(Date) } }],
+          },
+          group: {
+            is: {
+              members: {
+                some: { membershipId: 'student-1', removedAt: null },
+              },
+            },
+          },
+        },
+        { classAssignmentId: null, membershipId: 'student-1' },
+      ],
+    });
   });
 });

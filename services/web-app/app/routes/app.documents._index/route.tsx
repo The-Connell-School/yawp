@@ -6,6 +6,7 @@ import {
   type TeacherDocumentWorkFilters,
 } from '~/components/teacher-document-work/teacher-document-work-panel';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
+import { UnsubmitSubmissionsSheet } from '~/components/teacher-document-work/unsubmit-submissions-sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { buildTeacherClassWorkDocumentWhere } from '~/utils/class-assignment-scope.server';
@@ -25,9 +26,11 @@ import {
 } from '~/utils/teacher-document-work-filter-options';
 import {
   buildReleaseGradeRows,
+  buildTeacherUnsubmitRows,
   countTeacherDocumentWorkStatuses,
   formatClassLabel,
   type ReleaseGradeRow,
+  type TeacherUnsubmitRow,
   type TeacherDocumentWorkClassSummary,
   type TeacherDocumentWorkRow,
 } from '~/utils/teacher-document-work-utils';
@@ -42,7 +45,12 @@ import {
   readStudentWorkViewPreferences,
   getStoredCollapsedStudentWorkGroups,
   withStoredCollapsedStudentWorkGroups,
+  clearStoredStudentWorkFilters,
+  stripStudentWorkResetParam,
+  STUDENT_WORK_RESET_PARAM,
 } from './student-work-view-preferences';
+import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
+import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 
 export const handle = { breadcrumb: 'Documents' };
 
@@ -53,7 +61,7 @@ function resolveDocumentClass(
     } | null;
     membership: {
       classesAsStudent: TeacherDocumentWorkClassSummary[];
-    };
+    } | null;
   },
   options: {
     teacherClassIds: Set<string>;
@@ -68,14 +76,14 @@ function resolveDocumentClass(
     return options.fallbackClass;
   }
 
-  const enrolledTeacherClass = document.membership.classesAsStudent.find(
+  const enrolledTeacherClass = document.membership?.classesAsStudent.find(
     (klass) => options.teacherClassIds.has(klass.id)
   );
   if (enrolledTeacherClass) {
     return enrolledTeacherClass;
   }
 
-  return document.membership.classesAsStudent[0] ?? null;
+  return document.membership?.classesAsStudent[0] ?? null;
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -104,10 +112,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const group = parseDocumentGroupMode(url.searchParams.get('group'));
   const query = (url.searchParams.get('q') ?? '').trim();
 
+  // Everything on this page hangs off the teacher's classes, so scoping them
+  // to the school year chosen in the sidebar scopes the whole grading queue —
+  // and keeps it agreeing with what My Classes shows.
+  const schoolYearScope = await resolveTeacherSchoolYearScope(
+    request,
+    profile.id
+  );
+
   const classes = await prisma.class.findMany({
     where: {
       teachers: { some: { id: profile.id } },
       isArchived: false,
+      ...(schoolYearScope === ALL_SCHOOL_YEARS
+        ? {}
+        : { schoolYear: schoolYearScope }),
     },
     select: {
       id: true,
@@ -190,7 +209,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
       },
+      group: {
+        select: {
+          id: true,
+          label: true,
+          members: {
+            where: { removedAt: null },
+            orderBy: { membershipId: 'asc' },
+            select: {
+              membershipId: true,
+              membership: {
+                select: {
+                  id: true,
+                  user: { select: { id: true, name: true, email: true } },
+                },
+              },
+            },
+          },
+        },
+      },
       submissions: {
+        where: { unsubmittedAt: null },
         orderBy: { submittedAt: 'desc' },
         select: {
           id: true,
@@ -209,6 +248,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
       _count: { select: { submissions: true } },
+      pasteAlerts: {
+        where: { textLength: { gte: 200 } },
+        orderBy: [{ createdAt: 'desc' }],
+        take: 1,
+        select: { id: true },
+      },
     },
     orderBy: { updatedAt: 'desc' },
     take: 250,
@@ -220,7 +265,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
       id: document.id,
       title: document.title,
       updatedAt: new Date(document.updatedAt),
-      membership: document.membership,
+      // Teacher worklists render a group as a group. The compatibility-shaped
+      // subject below is a view model only; it is never persisted as ownership.
+      membership:
+        document.membership ??
+        ({
+          id: `group:${document.group?.id ?? document.id}`,
+          user: {
+            id: `group:${document.group?.id ?? document.id}`,
+            name: document.group?.label ?? 'Collaborative group',
+            email: '',
+          },
+          classesAsStudent: [],
+        } as const),
+      group: document.group,
       assignment: document.assignment,
       resolvedClass: resolveDocumentClass(document, {
         teacherClassIds,
@@ -231,6 +289,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       submissions,
       latestSubmission: submissions[0] ?? null,
       submissionCount: document._count.submissions,
+      hasPasteActivity: Boolean(document.pasteAlerts?.length),
     };
   });
 
@@ -275,9 +334,14 @@ export default function StudentWorkRoute() {
   );
   const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
     useState(false);
+  const [isUnsubmitSheetOpen, setIsUnsubmitSheetOpen] = useState(false);
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     ReleaseGradeRow[]
   >([]);
+  const [unsubmitRowsForSheet, setUnsubmitRowsForSheet] = useState<
+    TeacherUnsubmitRow[]
+  >([]);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const hasHydratedStudentWorkPreferences = useRef(false);
   const hasHydratedCollapsedStudentWorkGroups = useRef(false);
   const hasHydratedDocumentSort = useRef(false);
@@ -291,6 +355,15 @@ export default function StudentWorkRoute() {
     }
 
     hasHydratedStudentWorkPreferences.current = true;
+
+    if (searchParams.has(STUDENT_WORK_RESET_PARAM)) {
+      clearStoredStudentWorkFilters();
+      setSearchParams(stripStudentWorkResetParam(searchParams), {
+        replace: true,
+      });
+      return;
+    }
+
     const merged = mergeStoredStudentWorkSearchParams({
       searchParams,
       storedPreferences: readStudentWorkViewPreferences(),
@@ -362,9 +435,28 @@ export default function StudentWorkRoute() {
     mergeStudentWorkViewPreferences(searchParams, { documentSort: next });
   };
 
+  const selectedDocuments = useMemo(() => {
+    const selected = new Set(selectedDocumentIds);
+    return data.documents.filter((document) => selected.has(document.id));
+  }, [data.documents, selectedDocumentIds]);
+
+  useEffect(() => {
+    const currentDocumentIds = new Set(
+      data.documents.map((document) => document.id)
+    );
+    setSelectedDocumentIds((current) =>
+      current.filter((documentId) => currentDocumentIds.has(documentId))
+    );
+  }, [data.documents]);
+
   const unreleasedGrades = useMemo(
-    () => buildReleaseGradeRows(data.documents),
-    [data.documents]
+    () => buildReleaseGradeRows(selectedDocuments),
+    [selectedDocuments]
+  );
+
+  const unsubmitRows = useMemo(
+    () => buildTeacherUnsubmitRows(selectedDocuments),
+    [selectedDocuments]
   );
 
   const openReleaseSheet = () => {
@@ -375,6 +467,19 @@ export default function StudentWorkRoute() {
 
   const handleReleaseGradesSuccess = () => {
     setReleaseGradesForSheet([]);
+    setSelectedDocumentIds([]);
+    window.location.reload();
+  };
+
+  const openUnsubmitSheet = () => {
+    if (unsubmitRows.length === 0) return;
+    setUnsubmitRowsForSheet(unsubmitRows);
+    setIsUnsubmitSheetOpen(true);
+  };
+
+  const handleUnsubmitSuccess = () => {
+    setUnsubmitRowsForSheet([]);
+    setSelectedDocumentIds([]);
     window.location.reload();
   };
 
@@ -483,7 +588,18 @@ export default function StudentWorkRoute() {
               disabled: unreleasedGrades.length === 0,
               onSelect: openReleaseSheet,
             },
+            {
+              id: 'unsubmit',
+              label: 'Unsubmit',
+              count: unsubmitRows.length > 0 ? unsubmitRows.length : undefined,
+              disabled: unsubmitRows.length === 0,
+              onSelect: openUnsubmitSheet,
+            },
           ]}
+          selection={{
+            selectedDocumentIds,
+            onSelectedDocumentIdsChange: setSelectedDocumentIds,
+          }}
           testIds={{
             statusChips: 'student-work-status-chips',
             groupSelect: 'student-work-group-select',
@@ -499,6 +615,12 @@ export default function StudentWorkRoute() {
           isOpen={isReleaseGradesSheetOpen}
           onClose={() => setIsReleaseGradesSheetOpen(false)}
           onSuccess={handleReleaseGradesSuccess}
+        />
+        <UnsubmitSubmissionsSheet
+          submissions={unsubmitRowsForSheet}
+          isOpen={isUnsubmitSheetOpen}
+          onClose={() => setIsUnsubmitSheetOpen(false)}
+          onSuccess={handleUnsubmitSuccess}
         />
       </div>
     </section>

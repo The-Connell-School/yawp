@@ -6,12 +6,14 @@ import {
   useLocation,
   useMatches,
   type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+  useLoaderData,
   redirect,
   useFetcher,
   useRevalidator,
   useRouteLoaderData,
 } from 'react-router';
-import { Settings2, Cog, Eye, EyeOff } from 'lucide-react';
+import { Settings2, Cog } from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -58,11 +60,17 @@ import {
   isDocumentRoutePath,
   writeLastNonDocumentRoute,
 } from '~/utils/document-exit';
-import type { Route as RootRoute } from '../../+types/root';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import {
-  FLAT_SIDEBAR_SECTIONS,
-  SidebarNavLinks,
-} from './sidebar-nav';
+  resolveSchoolYearScopeForMembership,
+  schoolYearsForMembership,
+} from '~/utils/school-year-scope.server';
+import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
+import { SchoolYearScopeSwitcher } from './school-year-scope';
+import type { Route as RootRoute } from '../../+types/root';
+import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
+import { prisma } from '~/utils/db.server';
+import { shouldRedirectClasslessStudent } from '~/utils/classless-student-gate';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -70,6 +78,53 @@ export const NavExpandedContext = createContext({
 });
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
+
+  if (profile.role === 'STUDENT' && !profile.isOrgOwner) {
+    const classCount =
+      (
+        await prisma.orgMembership.findUnique({
+          where: { id: profile.id },
+          select: { _count: { select: { classesAsStudent: true } } },
+        })
+      )?._count.classesAsStudent ?? 0;
+
+    if (
+      shouldRedirectClasslessStudent({
+        role: profile.role,
+        isOrgOwner: profile.isOrgOwner,
+        classCount,
+        pathname: new URL(request.url).pathname,
+      })
+    ) {
+      throw redirect('/app');
+    }
+  }
+
+  const [selected, options] = await Promise.all([
+    resolveSchoolYearScopeForMembership(request, profile),
+    schoolYearsForMembership(profile),
+  ]);
+
+  // The selected year always has to be on the list, or the control renders
+  // blank and a student who landed on a year through the shared cookie has no
+  // way to read what they are looking at, let alone change it.
+  const selectableOptions =
+    selected === ALL_SCHOOL_YEARS || options.includes(selected)
+      ? options
+      : [selected, ...options].sort((a, b) => b.localeCompare(a));
+
+  return data({
+    schoolYearScope: {
+      selected,
+      options: selectableOptions,
+      isStudent: profile.role === 'STUDENT',
+    },
+  });
+}
 
 const EditNameSchema = z.object({
   name: NameSchema,
@@ -89,22 +144,16 @@ function isAppNavLinkActive(linkTo: string, pathname: string) {
     return normalized === '/app';
   }
 
-  return (
-    normalized === linkTo ||
-    normalized.startsWith(`${linkTo}/`)
-  );
+  return normalized === linkTo || normalized.startsWith(`${linkTo}/`);
 }
 
 export default function Route() {
   const location = useLocation();
   const user = useUser();
+  const { schoolYearScope } = useLoaderData<typeof loader>();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
-  const isReadOnlyImpersonation =
-    rootData?.impersonation?.isReadOnly ?? false;
-  const studentPreviewActive = rootData?.studentPreview?.active ?? false;
-  const canToggleStudentPreview =
-    user.selectedMembership?.role === 'TEACHER' || user.isAdmin;
+  const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -236,7 +285,6 @@ export default function Route() {
             pathname={location.pathname}
             isAppNavLinkActive={isAppNavLinkActive}
             forceFullNavigation={isClassDetailRoute}
-            studentPreviewActive={studentPreviewActive}
           />
         </div>
         <div className="flex flex-grow flex-col justify-end">
@@ -277,7 +325,11 @@ export default function Route() {
                       ? user.selectedMembership?.id === m.id
                       : user.memberships?.[0]?.id === m.id;
                     return (
-                      <Form method="POST" action="/api/membership-id" key={m.id}>
+                      <Form
+                        method="POST"
+                        action="/api/membership-id"
+                        key={m.id}
+                      >
                         <input
                           type="hidden"
                           name="intent"
@@ -303,38 +355,17 @@ export default function Route() {
                   })}
                 </div>
               ) : null}
-              {canToggleStudentPreview ? (
-                <div className="border-b p-1">
-                  <Form method="POST" action="/api/student-preview">
-                    <input
-                      type="hidden"
-                      name="intent"
-                      value={studentPreviewActive ? 'end' : 'start'}
-                    />
-                    <Button
-                      type="submit"
-                      size="sm"
-                      variant={studentPreviewActive ? 'secondary' : 'ghost'}
-                      className="w-full justify-start gap-2 rounded-lg px-3 py-2"
-                      disabled={isReadOnlyImpersonation}
-                      title={
-                        isReadOnlyImpersonation
-                          ? 'Read-only impersonation active'
-                          : studentPreviewActive
-                            ? 'Exit student preview'
-                            : 'View the app as a student (read-only)'
-                      }
-                    >
-                      {studentPreviewActive ? (
-                        <EyeOff size={16} />
-                      ) : (
-                        <Eye size={16} />
-                      )}
-                      {studentPreviewActive
-                        ? 'Exit student preview'
-                        : 'View as student'}
-                    </Button>
-                  </Form>
+              {schoolYearScope ? (
+                <div className="space-y-1.5 border-b p-3">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    School year
+                  </p>
+                  <SchoolYearScopeSwitcher scope={schoolYearScope} />
+                  <p className="text-xs text-muted-foreground">
+                    {schoolYearScope.isStudent
+                      ? 'Shows the classes and work from this year. Switch back any time — nothing is ever removed.'
+                      : 'Scopes your classes and grading queue. Students always keep their earlier work.'}
+                  </p>
                 </div>
               ) : null}
               <Form action="/auth/logout" method="POST" className="p-1">
@@ -354,7 +385,7 @@ export default function Route() {
       </nav>
       <div
         className={cn(
-          'min-w-full flex-1 transition-all duration-300 ease-in-out sm:min-w-0 sm:translate-x-0',
+          'flex min-w-full flex-1 flex-col transition-all duration-300 ease-in-out sm:min-w-0 sm:translate-x-0',
           {
             'translate-x-0': isMobileNavOpen,
             '-translate-x-[212px]': isNavExpanded,
@@ -372,11 +403,6 @@ export default function Route() {
           <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900">
             Read-only impersonation active. You can navigate the app, but
             creates, edits, and deletes are disabled.
-          </div>
-        ) : null}
-        {studentPreviewActive ? (
-          <div className="border-b border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-900">
-            Student preview active. You are viewing student pages read-only.
           </div>
         ) : null}
         {/* Mobile top menu */}
@@ -415,10 +441,18 @@ export default function Route() {
             <ReloadIcon />
           </Button>
         </div>
+        {/*
+          min-h-0 lets the Outlet shrink to the space actually left after the
+          banners and mobile menu above, instead of the browser giving it
+          height:100% of this whole column (which double-counts that chrome
+          and pushes fixed-height app shells like the Reporter off-screen).
+        */}
         <NavExpandedContext.Provider
           value={{ isMobileNavOpen, setIsMobileNavOpen }}
         >
-          <Outlet key={location.pathname} />
+          <div className="min-h-0 flex-1">
+            <Outlet key={location.pathname} />
+          </div>
         </NavExpandedContext.Provider>
       </div>
       <UserSettingsDialog
@@ -526,7 +560,11 @@ function UserSettingsDialog({
           </div>
         </div>
         <DialogFooter className="mt-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Close
           </Button>
         </DialogFooter>

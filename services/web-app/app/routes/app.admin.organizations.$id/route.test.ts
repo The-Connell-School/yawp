@@ -18,6 +18,9 @@ const prisma = {
     createMany: mock(),
     deleteMany: mock(),
   },
+  submissionActivity: {
+    count: mock(),
+  },
   user: {
     findUnique: mock(),
   },
@@ -61,6 +64,11 @@ function organizationFixture() {
     name: 'Test Org',
     numOfStudentSeats: 30,
     numOfTeacherSeats: 10,
+    reporterEnabled: false,
+    classInsightsEnabled: false,
+    writingPracticeEnabled: false,
+    submissionActivityEnabled: false,
+    revisionFlowEnabled: false,
     accessExpiresAt: null,
     memberships: [],
     assignmentTypeAssignments: [],
@@ -108,9 +116,26 @@ describe('admin organization detail route', () => {
     prisma.$transaction.mockResolvedValue([]);
   });
 
+  test('keeps organization hard deletion compatible with database cascades', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'deleteOrganization');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.delete).toHaveBeenCalledWith({
+      where: { id: 'org-1' },
+    });
+  });
+
   test('does not load writing practice state for the organization edit sheet', async () => {
     const response = await loader({
-      request: new Request('https://example.test/app/admin/organizations/org-1'),
+      request: new Request(
+        'https://example.test/app/admin/organizations/org-1'
+      ),
       params: { id: 'org-1' },
       context: {} as never,
     });
@@ -138,5 +163,145 @@ describe('admin organization detail route', () => {
       { operation: 'update-org' },
       { operation: 'delete-org-assignment-types' },
     ]);
+  });
+
+  test('updates Reporter and Class Summary rollout gates independently', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+    form.set('reporterEnabled', 'true');
+    form.set('classInsightsEnabled', 'true');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      reporterEnabled: true,
+      classInsightsEnabled: true,
+    });
+  });
+
+  test('disables both rollout gates when their toggles are absent', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      reporterEnabled: false,
+      classInsightsEnabled: false,
+    });
+  });
+
+  test('updates the Writing Practice rollout gate for the organization', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+    form.set('writingPracticeEnabled', 'true');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      writingPracticeEnabled: true,
+    });
+  });
+
+  test('disables the Writing Practice rollout gate when its toggle is absent', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      writingPracticeEnabled: false,
+    });
+  });
+
+  test('updates the revision flow rollout gate independently', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+    form.set('revisionFlowEnabled', 'true');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      revisionFlowEnabled: true,
+      submissionActivityEnabled: false,
+      reporterEnabled: false,
+      classInsightsEnabled: false,
+      writingPracticeEnabled: false,
+    });
+  });
+
+  test('leaves the revision flow gate off when the checkbox is absent', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      revisionFlowEnabled: false,
+    });
+  });
+
+  test('updates the released grade activity rollout gate independently', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+    form.set('submissionActivityEnabled', 'true');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      submissionActivityEnabled: true,
+      reporterEnabled: false,
+      classInsightsEnabled: false,
+      writingPracticeEnabled: false,
+    });
   });
 });

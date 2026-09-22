@@ -5,16 +5,29 @@ mock.module('~/utils/auth.server', () => ({
   requireMembership: mock(),
   requireUserId: mock(),
 }));
+mock.module('~/utils/auth.server.js', () => ({
+  requireAdmin: mock(),
+  requireMembership: mock(),
+  requireUserId: mock(),
+}));
 mock.module('~/utils/db.server', () => ({ prisma: {} }));
+mock.module('~/utils/db.server.js', () => ({ prisma: {} }));
 
-const { buildTeacherClassWhere, canManageGrades, isGradingOwnDocument } =
-  await import('./grading-auth.server');
+const {
+  buildTeacherClassWhere,
+  buildTeacherDocumentAccessWhere,
+  buildGradeWriteSubjectWhere,
+  canManageGrades,
+  isGradingOwnDocument,
+} = await import('./grading-auth.server');
 
 describe('grading auth helpers', () => {
   test('builds document class filters for current and legacy submissions', () => {
     expect(
       buildTeacherClassWhere({
+        userId: 'teacher-user-1',
         membershipId: 'teacher-membership-1',
+        organizationId: 'org-1',
         teacherProfileId: 'teacher-1',
         isTeacher: true,
         isAdmin: false,
@@ -24,21 +37,29 @@ describe('grading auth helpers', () => {
         {
           classAssignment: {
             class: {
+              school: { organizationId: 'org-1' },
               teachers: {
                 some: {
                   id: 'teacher-membership-1',
+                  isActive: true,
                 },
               },
             },
           },
         },
         {
+          classAssignment: { is: null },
           membership: {
-            classesAsStudent: {
-              some: {
-                teachers: {
-                  some: {
-                    id: 'teacher-membership-1',
+            is: {
+              organizationId: 'org-1',
+              classesAsStudent: {
+                some: {
+                  school: { organizationId: 'org-1' },
+                  teachers: {
+                    some: {
+                      id: 'teacher-membership-1',
+                      isActive: true,
+                    },
                   },
                 },
               },
@@ -49,10 +70,36 @@ describe('grading auth helpers', () => {
     });
   });
 
+  test('keeps the legacy fallback tenant-scoped and limited to unassigned submissions', () => {
+    const where = buildTeacherDocumentAccessWhere({
+      membershipId: 'teacher-1',
+      organizationId: 'org-1',
+    }) as any;
+
+    expect(where.membership).toBeUndefined();
+    expect(where.OR[1]).toEqual(
+      expect.objectContaining({
+        classAssignment: { is: null },
+        membership: {
+          is: {
+            organizationId: 'org-1',
+            classesAsStudent: {
+              some: expect.objectContaining({
+                school: { organizationId: 'org-1' },
+              }),
+            },
+          },
+        },
+      })
+    );
+  });
+
   test('does not add class filtering for admins', () => {
     expect(
       buildTeacherClassWhere({
+        userId: 'admin-user-1',
         membershipId: 'admin-membership-1',
+        organizationId: 'org-1',
         teacherProfileId: null,
         isTeacher: false,
         isAdmin: true,
@@ -63,7 +110,9 @@ describe('grading auth helpers', () => {
   test('allows teachers and admins to manage grades', () => {
     expect(
       canManageGrades({
+        userId: 'teacher-user-1',
         membershipId: 'teacher-membership-1',
+        organizationId: 'org-1',
         teacherProfileId: 'teacher-1',
         isTeacher: true,
         isAdmin: false,
@@ -71,7 +120,9 @@ describe('grading auth helpers', () => {
     ).toBe(true);
     expect(
       canManageGrades({
+        userId: 'admin-user-1',
         membershipId: 'admin-membership-1',
+        organizationId: 'org-1',
         teacherProfileId: null,
         isTeacher: false,
         isAdmin: true,
@@ -82,5 +133,61 @@ describe('grading auth helpers', () => {
   test('prevents grading own document', () => {
     expect(isGradingOwnDocument('membership-1', 'membership-1')).toBe(true);
     expect(isGradingOwnDocument('membership-1', 'membership-2')).toBe(false);
+    expect(
+      isGradingOwnDocument(
+        'membership-in-org-2',
+        'membership-in-org-1',
+        'same-user',
+        'same-user'
+      )
+    ).toBe(true);
+  });
+
+  test('fences group grade writes against active ownership by the same user across memberships', () => {
+    for (const releasedAt of [null, new Date('2026-09-15')]) {
+      const where = buildGradeWriteSubjectWhere({ actorUserId: 'owner-user', releasedAt }) as any;
+      expect(where.OR.find((branch: any) => branch.artifactKind === 'ASSIGNMENT_GROUP').group).toEqual({ is: { members: { none: { removedAt: null, membership: { is: { userId: 'owner-user' } } } } } });
+    }
+  });
+
+  test('allows ownerless assignment artifacts through the grade write subject guard', () => {
+    const where = buildGradeWriteSubjectWhere({
+      actorUserId: 'teacher-user-1',
+      releasedAt: null,
+    }) as any;
+
+    expect(where.OR).toContainEqual(expect.objectContaining({ artifactKind: 'ASSIGNMENT_GROUP' }));
+    expect(where.OR).toContainEqual(
+      expect.objectContaining({
+        artifactKind: 'STUDENT',
+        membership: {
+          is: expect.objectContaining({
+            userId: { not: 'teacher-user-1' },
+          }),
+        },
+      })
+    );
+  });
+
+  test('rechecks the activity-ledger feature before changing a released shared grade', () => {
+    const where = buildGradeWriteSubjectWhere({
+      actorUserId: 'teacher-user-1',
+      releasedAt: new Date('2026-08-31T12:00:00.000Z'),
+    }) as any;
+
+    expect(where.OR).toContainEqual(expect.objectContaining({
+      artifactKind: 'ASSIGNMENT_GROUP',
+      classAssignment: {
+        is: {
+          class: {
+            school: {
+              organization: {
+                is: { submissionActivityEnabled: true },
+              },
+            },
+          },
+        },
+      },
+    }));
   });
 });

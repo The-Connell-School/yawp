@@ -2,11 +2,30 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   MODULE_RUBRIC_RELATIONSHIPS,
+  classifyAssignmentTypeRubric,
   getThesisDefaultRubricConfig,
   hasAssignmentTypeOwnedRubric,
+  isRubricFullyPopulated,
   normalizeModuleRubricAlignment,
   parseAssignmentTypeRubricConfig,
 } from './assignment-type-rubric-config';
+
+const partiallyFilledRubric = {
+  categories: [
+    {
+      key: 'claim',
+      label: 'Claim',
+      description: 'A clear defensible claim.',
+      weight: 0.5,
+    },
+    {
+      key: 'evidence',
+      label: 'Evidence',
+      description: '',
+      weight: 0.5,
+    },
+  ],
+};
 
 describe('parseAssignmentTypeRubricConfig', () => {
   test('parses assignment-type-owned rubric config with categories intact', () => {
@@ -28,7 +47,10 @@ describe('parseAssignmentTypeRubricConfig', () => {
           },
         ],
       },
-      gradingPromptConfigJson: { gradingInstructions: 'Grade against this rubric.' },
+      gradingPromptConfigJson: {
+        systemInstructions: 'Act as a careful assignment-specific evaluator.',
+        gradingInstructions: 'Grade against this rubric.',
+      },
       gradingOutputSchemaJson: { schemaVersion: 2 },
       gradingCalibrationNotes: 'Pilot notes',
     });
@@ -48,7 +70,12 @@ describe('parseAssignmentTypeRubricConfig', () => {
         weight: 0.6,
       },
     ]);
-    expect(config.promptConfig.gradingInstructions).toBe('Grade against this rubric.');
+    expect(config.promptConfig.gradingInstructions).toBe(
+      'Grade against this rubric.'
+    );
+    expect(config.promptConfig.systemInstructions).toBe(
+      'Act as a careful assignment-specific evaluator.'
+    );
     expect(config.outputSchema).toEqual({ schemaVersion: 2 });
     expect(config.calibrationNotes).toBe('Pilot notes');
   });
@@ -68,7 +95,9 @@ describe('parseAssignmentTypeRubricConfig', () => {
         (category) => category.key === 'grammar_and_mechanics'
       )?.weight
     ).toBe(0.1);
-    expect(config.promptConfig.instructionsPreset).toBe('legacy_thesis_driven_essay');
+    expect(config.promptConfig.instructionsPreset).toBe(
+      'legacy_thesis_driven_essay'
+    );
   });
 });
 
@@ -89,7 +118,7 @@ describe('hasAssignmentTypeOwnedRubric', () => {
     ).toBe(false);
   });
 
-  test('returns true when at least one category is complete', () => {
+  test('returns true when the only category is complete', () => {
     expect(
       hasAssignmentTypeOwnedRubric({
         categories: [
@@ -103,6 +132,114 @@ describe('hasAssignmentTypeOwnedRubric', () => {
       })
     ).toBe(true);
   });
+
+  test('still owns a partially-filled rubric, so reading never moves it to the thesis default', () => {
+    // Reading is permissive on purpose: a rubric an admin already saved keeps
+    // grading against itself. The incompleteness is surfaced loudly elsewhere
+    // (the save-time block and the grading-time banner) rather than silently
+    // swapping the rubric out from under existing scores.
+    expect(hasAssignmentTypeOwnedRubric(partiallyFilledRubric)).toBe(true);
+    expect(isRubricFullyPopulated(partiallyFilledRubric)).toBe(false);
+  });
+
+  test('returns true only when every category is fully populated', () => {
+    expect(
+      hasAssignmentTypeOwnedRubric({
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: 'A clear defensible claim.',
+            weight: 0.5,
+          },
+          {
+            key: 'evidence',
+            label: 'Evidence',
+            description: 'Relevant evidence supports the claim.',
+            weight: 0.5,
+          },
+        ],
+      })
+    ).toBe(true);
+  });
+});
+
+describe('classifyAssignmentTypeRubric', () => {
+  test('reports none when there is nothing an admin filled in', () => {
+    expect(classifyAssignmentTypeRubric({ categories: [] })).toBe('none');
+    expect(
+      classifyAssignmentTypeRubric({
+        categories: [{ key: '', label: '', description: '', weight: 0 }],
+      })
+    ).toBe('none');
+  });
+
+  test('reports partial when some categories are complete and others are not', () => {
+    expect(classifyAssignmentTypeRubric(partiallyFilledRubric)).toBe('partial');
+  });
+
+  test('reports complete when every category is fully populated', () => {
+    expect(
+      classifyAssignmentTypeRubric({
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: 'A clear defensible claim.',
+            weight: 1,
+          },
+        ],
+      })
+    ).toBe('complete');
+  });
+});
+
+describe('a partially-filled rubric', () => {
+  test('does not silently fall back to the thesis default', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      rubricJson: partiallyFilledRubric,
+    });
+
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubric.categories.map((category) => category.key)).toEqual([
+      'claim',
+      'evidence',
+    ]);
+  });
+
+  test('is flagged incomplete so the teacher-facing banner can fire', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      rubricJson: partiallyFilledRubric,
+    });
+
+    expect(config.rubricIncomplete).toBe(true);
+  });
+
+  test('a fully populated rubric is not flagged incomplete', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      rubricJson: {
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: 'A clear defensible claim.',
+            weight: 1,
+          },
+        ],
+      },
+    });
+
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubricIncomplete).toBe(false);
+  });
+
+  test('a default rubric is not flagged incomplete', () => {
+    expect(parseAssignmentTypeRubricConfig({}).rubricIncomplete).toBe(false);
+    expect(
+      parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'daily_pages' })
+        .rubricIncomplete
+    ).toBe(false);
+  });
 });
 
 describe('getThesisDefaultRubricConfig', () => {
@@ -113,6 +250,50 @@ describe('getThesisDefaultRubricConfig', () => {
     expect(config.rubric.categories.map((category) => category.key)).toContain(
       'thesis_and_content'
     );
+  });
+});
+
+describe('the default rubric config for a Daily Pages assignment type', () => {
+  test('falls back to the Daily Pages rubric, not the thesis default', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'daily_pages',
+    });
+
+    expect(config.source).toBe('daily-pages-default');
+    expect(config.rubric.categories.map((category) => category.key)).toEqual([
+      'engagement',
+    ]);
+    expect(config.scoringScale).toMatchObject({ minScore: 0, maxScore: 3 });
+    expect(config.promptConfig.gradingInstructions).toContain('engagement');
+  });
+
+  test('a Daily Pages type with its own saved rubric keeps that rubric', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'daily_pages',
+      rubricJson: {
+        categories: [
+          {
+            key: 'effort',
+            label: 'Effort',
+            description: 'Did they try?',
+            weight: 1,
+          },
+        ],
+      },
+    });
+
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubric.categories.map((category) => category.key)).toEqual([
+      'effort',
+    ]);
+  });
+
+  test('every other kind still falls back to the thesis default', () => {
+    expect(
+      parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'thesis_essay' })
+        .source
+    ).toBe('thesis-default');
+    expect(parseAssignmentTypeRubricConfig({}).source).toBe('thesis-default');
   });
 });
 
@@ -169,5 +350,87 @@ describe('normalizeModuleRubricAlignment', () => {
       claim: 'not-applicable',
       evidence: 'preparatory',
     });
+  });
+});
+
+describe('customizable rubric category options', () => {
+  const customRubric = {
+    categories: [
+      {
+        key: 'daily_habit',
+        label: 'Daily Habit',
+        weight: 0.5,
+        description: 'Did the student write today?',
+        scoreLabels: [
+          { value: 1, label: 'Skipped' },
+          { value: 5, label: 'Every day' },
+        ],
+        feedbackEnabled: false,
+        grammarHighlighting: false,
+      },
+      {
+        key: 'reflection',
+        label: 'Reflection',
+        weight: 0.5,
+        description: 'Depth of reflection.',
+      },
+    ],
+  };
+
+  test('parseAssignmentTypeRubricConfig preserves the new optional category fields', () => {
+    const config = parseAssignmentTypeRubricConfig({ rubricJson: customRubric });
+
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubric.categories[0].scoreLabels).toEqual([
+      { value: 1, label: 'Skipped' },
+      { value: 5, label: 'Every day' },
+    ]);
+    expect(config.rubric.categories[0].feedbackEnabled).toBe(false);
+    expect(config.rubric.categories[0].grammarHighlighting).toBe(false);
+  });
+
+  test('categories that omit the new fields leave them undefined', () => {
+    const config = parseAssignmentTypeRubricConfig({ rubricJson: customRubric });
+
+    expect(config.rubric.categories[1].scoreLabels).toBeUndefined();
+    expect(config.rubric.categories[1].feedbackEnabled).toBeUndefined();
+    expect(config.rubric.categories[1].grammarHighlighting).toBeUndefined();
+  });
+
+  test('the new fields do not affect whether a rubric counts as assignment-type owned', () => {
+    expect(hasAssignmentTypeOwnedRubric(customRubric)).toBe(true);
+  });
+
+  test('the thesis default rubric is unchanged and carries no new fields', () => {
+    const thesis = getThesisDefaultRubricConfig();
+
+    expect(thesis.source).toBe('thesis-default');
+    for (const category of thesis.rubric.categories) {
+      expect(category.scoreLabels).toBeUndefined();
+      expect(category.feedbackEnabled).toBeUndefined();
+      expect(category.grammarHighlighting).toBeUndefined();
+    }
+  });
+
+  test('malformed new-field values are dropped instead of persisted', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      rubricJson: {
+        categories: [
+          {
+            key: 'a',
+            label: 'A',
+            weight: 1,
+            description: 'd',
+            scoreLabels: 'nope',
+            feedbackEnabled: 'yes',
+            grammarHighlighting: 1,
+          },
+        ],
+      },
+    });
+
+    expect(config.rubric.categories[0].scoreLabels).toBeUndefined();
+    expect(config.rubric.categories[0].feedbackEnabled).toBeUndefined();
+    expect(config.rubric.categories[0].grammarHighlighting).toBeUndefined();
   });
 });

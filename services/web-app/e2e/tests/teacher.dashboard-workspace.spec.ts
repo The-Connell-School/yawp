@@ -1,8 +1,15 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { currentSchoolYear } from '../../app/utils/school-year';
 import type { Page } from '@playwright/test';
 
 const CLASS_LABEL = /Grade 9th .* Period 1st/;
+// The creation sheet renders the tutor control as a standard checkbox field: a short
+// <Label htmlFor> is the accessible name and the guidance sits in a sibling paragraph,
+// which is asserted as visible text in expectStandardizedAssignmentForm below.
+const TUTOR_TOGGLE_LABEL = 'Tutor enabled';
+const TUTOR_TOGGLE_HELP =
+  "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance.";
 
 async function expectStandardizedAssignmentForm(page: Page) {
   const dialog = page.getByRole('dialog');
@@ -12,13 +19,33 @@ async function expectStandardizedAssignmentForm(page: Page) {
   ).toBeVisible();
   await expect(dialog.getByText('Assign to', { exact: true })).toBeVisible();
   await expect(
-    dialog.getByText('Prompt Source', { exact: true })
+    dialog.getByText('Attachment (optional)', { exact: true })
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Extract assignment text from PDF' })
   ).toBeVisible();
   await expect(dialog.getByLabel(/tutor context/i)).toHaveCount(0);
   await expect(
     dialog.getByRole('checkbox', { name: /submit for grade/i })
   ).toBeChecked();
-  await expect(dialog.getByLabel(/point value/i)).toHaveValue('100');
+  await expect(
+    dialog.getByText(
+      'Graded out of 100 points in steps, read at the intermediate level.',
+      { exact: true }
+    )
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Change', exact: true })
+  ).toBeVisible();
+  await expect(dialog.getByText(/customize grading/i)).toHaveCount(0);
+  await expect(dialog.getByText('Default grading type')).toHaveCount(0);
+  await expect(dialog.getByText('Rubric total points')).toHaveCount(0);
+  await expect(
+    dialog.getByText(TUTOR_TOGGLE_HELP, { exact: true })
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole('checkbox', { name: TUTOR_TOGGLE_LABEL, exact: true })
+  ).toBeChecked();
 }
 
 async function expectCreatedAssignment(params: {
@@ -27,6 +54,7 @@ async function expectCreatedAssignment(params: {
   prompt: string;
   title: string;
   pointValue: number;
+  tutorEnabled?: boolean;
 }) {
   const prisma = createE2EPrismaClient();
   try {
@@ -46,6 +74,7 @@ async function expectCreatedAssignment(params: {
             title: true,
             submitForGrade: true,
             pointValue: true,
+            tutorEnabled: true,
           },
         },
       },
@@ -53,6 +82,9 @@ async function expectCreatedAssignment(params: {
     expect(created?.assignment.title).toBe(params.title);
     expect(created?.assignment.submitForGrade).toBe(true);
     expect(created?.assignment.pointValue).toBe(params.pointValue);
+    if (params.tutorEnabled !== undefined) {
+      expect(created?.assignment.tutorEnabled).toBe(params.tutorEnabled);
+    }
   } finally {
     await prisma.$disconnect();
   }
@@ -67,7 +99,7 @@ async function createSecondTeacherClass(params: {
     return await prisma.class.create({
       data: {
         code: `E2E-MULTI-${Date.now()}`,
-        schoolYear: '2024-2025',
+        schoolYear: currentSchoolYear(),
         period: '2nd',
         grade: '10th',
         title: 'E2E Multi-Class Proof',
@@ -148,6 +180,112 @@ async function deleteAssignmentsByTitle(title: string) {
 }
 
 test.describe.serial('Teacher dashboard workspace', () => {
+  test('counts each document once when it has multiple submissions to grade', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString(36);
+    const title = `Dashboard resubmission count ${suffix}`;
+    let documentId = '';
+
+    try {
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto('/app');
+      await page.waitForLoadState('networkidle');
+
+      const toGradeStat = page
+        .getByTestId('teacher-grading-grid')
+        .getByText('To grade', { exact: true })
+        .locator('..');
+      const before = Number(
+        (await toGradeStat.locator('p').nth(1).textContent()) ?? '0'
+      );
+
+      const document = await prisma.document.create({
+        data: {
+          title,
+          text: 'A student submitted several revisions of this document.',
+          html: '<p>A student submitted several revisions of this document.</p>',
+          membershipId: e2eContext.membershipId,
+          assignmentTypeId: e2eContext.assignmentTypeId,
+          assignmentId: e2eContext.assignmentId,
+          classAssignmentId: e2eContext.classAssignmentId,
+          submissions: {
+            create: [0, 1, 2].map((index) => ({
+              title,
+              text: `Submitted revision ${index + 1}`,
+              html: `<p>Submitted revision ${index + 1}</p>`,
+              submittedAt: new Date(Date.now() + index * 1_000),
+            })),
+          },
+        },
+        select: { id: true },
+      });
+      documentId = document.id;
+
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+
+      await expect(
+        page
+          .getByTestId('teacher-grading-grid')
+          .getByText('To grade', { exact: true })
+          .locator('..')
+          .locator('p')
+          .nth(1)
+      ).toHaveText(String(before + 1));
+
+      await page
+        .getByTestId('teacher-grading-grid')
+        .getByText('To grade', { exact: true })
+        .locator('..')
+        .click();
+      await page.waitForURL(/\/app\/documents\?status=needs-grading/);
+      await expect(page.getByText(title, { exact: true })).toHaveCount(1);
+    } finally {
+      if (documentId) {
+        await prisma.submission.deleteMany({ where: { documentId } });
+        await prisma.document.delete({ where: { id: documentId } });
+      }
+      await prisma.$disconnect();
+    }
+  });
+
+  test('shows Writing Practice in the teacher sidebar when enabled for the organization', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await prisma.organization.update({
+        where: { id: e2eContext.organizationId },
+        data: { writingPracticeEnabled: true },
+      });
+
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto('/app');
+
+      const writingPracticeLink = page.getByRole('link', {
+        name: 'Writing Practice',
+      });
+      await expect(writingPracticeLink).toBeVisible();
+      await writingPracticeLink.click();
+      await page.waitForURL('**/app/writing-lessons**');
+      await expect(
+        page.getByRole('heading', { name: 'Writing practice' })
+      ).toBeVisible();
+    } finally {
+      await prisma.organization.update({
+        where: { id: e2eContext.organizationId },
+        data: { writingPracticeEnabled: false },
+      });
+      await prisma.$disconnect();
+    }
+  });
+
   test('presents classes first with Assignments and Grading entry points', async ({
     page,
     e2eContext,
@@ -181,7 +319,9 @@ test.describe.serial('Teacher dashboard workspace', () => {
       page.getByTestId('teacher-workspace-cards')
     ).toHaveAttribute(
       'href',
-      '/app/documents?status=needs-grading&group=student'
+      // reset=1 clears any filters the teacher left behind, so the card shows
+      // everything that needs grading rather than a stale slice of it.
+      '/app/documents?status=needs-grading&group=student&reset=1'
     );
     const toGradeBox = await gradingGrid
       .getByText('To grade', { exact: true })
@@ -262,8 +402,15 @@ test.describe.serial('Teacher dashboard workspace', () => {
 
       await page.getByLabel(CLASS_LABEL).check();
       await page.getByLabel('Title (optional)').fill(title);
-      await page.getByLabel('Prompt').fill(prompt);
-      await page.getByLabel(/point value/i).fill('25');
+      await page.getByLabel('Prompt', { exact: true }).fill(prompt);
+      await page.getByRole('button', { name: 'Change', exact: true }).click();
+      await page.getByLabel('Point value', { exact: true }).fill('25');
+      const tutorToggle = page.getByRole('checkbox', {
+        name: TUTOR_TOGGLE_LABEL,
+        exact: true,
+      });
+      await tutorToggle.click();
+      await expect(tutorToggle).not.toBeChecked();
       await page.getByRole('button', { name: 'Create Assignment' }).click();
 
       await expect(page).toHaveURL(
@@ -281,7 +428,67 @@ test.describe.serial('Teacher dashboard workspace', () => {
         prompt,
         title,
         pointValue: 25,
+        tutorEnabled: false,
       });
+    } finally {
+      await deleteAssignmentsByTitle(title);
+    }
+  });
+
+  test('uses one point value for an assignment-level AI grading override', async ({
+    page,
+    e2eContext,
+    signIn,
+  }, testInfo) => {
+    const title = `Dashboard Rubric Override ${Date.now()}`;
+    const prompt = `Dashboard rubric override prompt ${Date.now()}`;
+
+    try {
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto('/app');
+      await page.waitForLoadState('networkidle');
+      await page
+        .getByTestId('teacher-assignments-grid')
+        .getByLabel('New E2E Course assignment')
+        .click();
+
+      const dialog = page.getByRole('dialog');
+      await dialog.getByLabel(CLASS_LABEL).check();
+      await dialog.getByLabel('Title (optional)').fill(title);
+      await dialog.getByLabel('Prompt', { exact: true }).fill(prompt);
+      await dialog.getByRole('button', { name: 'Change', exact: true }).click();
+      await dialog.getByLabel('Point value', { exact: true }).fill('25');
+      await dialog.getByRole('button', { name: 'Bands' }).click();
+      await expect(
+        dialog.getByText(
+          'Graded out of 25 points in bands, read at the intermediate level.',
+          { exact: true }
+        )
+      ).toBeVisible();
+      await expect(
+        dialog.getByRole('button', { name: 'Bands' })
+      ).toHaveAttribute('aria-pressed', 'true');
+      await page.screenshot({
+        path: testInfo.outputPath('assignment-grading-override.png'),
+        fullPage: true,
+      });
+      await dialog.getByRole('button', { name: 'Create Assignment' }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+
+      const prisma = createE2EPrismaClient();
+      try {
+        const created = await prisma.assignment.findFirstOrThrow({
+          where: { title, prompt },
+          select: { pointValue: true, rubricTotalPoints: true, gradingMode: true },
+        });
+        expect(created.pointValue).toBe(25);
+        // The sheet carries an existing rubric scale override through but
+        // never creates one, so a fresh assignment keeps the authored scale.
+        expect(created.rubricTotalPoints).toBeNull();
+        expect(created.gradingMode).toBe('bands');
+      } finally {
+        await prisma.$disconnect();
+      }
     } finally {
       await deleteAssignmentsByTitle(title);
     }
@@ -308,7 +515,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     );
   });
 
-  test('creates one assignment record for each selected class from the Assignments page', async ({
+  test('creates one assignment record for each selected class from the dashboard', async ({
     page,
     e2eContext,
     signIn,
@@ -321,20 +528,21 @@ test.describe.serial('Teacher dashboard workspace', () => {
 
     try {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app/assignments');
+      await page.goto('/app');
       await page.waitForLoadState('networkidle');
 
       const prompt = `Multi-Class E2E prompt ${Date.now()}`;
       await page
+        .getByTestId('teacher-assignments-grid')
         .getByRole('button', { name: /new assignment/i })
-        .first()
         .click();
       await expectStandardizedAssignmentForm(page);
       await page.getByLabel(CLASS_LABEL).check();
       await page.getByLabel(secondClass.title!).check();
       await page.getByLabel('Title (optional)').fill(title);
-      await page.getByLabel('Prompt').fill(prompt);
-      await page.getByLabel(/point value/i).fill('35');
+      await page.getByLabel('Prompt', { exact: true }).fill(prompt);
+      await page.getByRole('button', { name: 'Change', exact: true }).click();
+      await page.getByLabel('Point value', { exact: true }).fill('35');
       await page.getByRole('button', { name: 'Create Assignment' }).click();
       await expect(page.getByRole('dialog')).toHaveCount(0);
 
@@ -371,8 +579,9 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await expectStandardizedAssignmentForm(page);
     await page.getByLabel(CLASS_LABEL).check();
     await page.getByLabel('Title (optional)').fill(title);
-    await page.getByLabel('Prompt').fill(prompt);
-    await page.getByLabel(/point value/i).fill('40');
+    await page.getByLabel('Prompt', { exact: true }).fill(prompt);
+    await page.getByRole('button', { name: 'Change', exact: true }).click();
+    await page.getByLabel('Point value', { exact: true }).fill('40');
     await page.getByRole('button', { name: 'Create Assignment' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
 

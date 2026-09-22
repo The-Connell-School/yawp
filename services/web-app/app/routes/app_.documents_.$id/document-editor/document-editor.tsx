@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
 import { Button } from '~/components/ui/button';
+import { AssignmentPromptAttachment } from '~/components/assignments/assignment-prompt-attachment';
 import { formatDateOnly } from '~/utils/date-only';
 import { documentStore } from '~/utils/document-store';
 import type { SyncStatus } from '~/utils/sync-service';
@@ -10,9 +11,11 @@ import type { EditorBridge } from './use-editor-sync';
 
 const PROMPT_EXPANDED_MAX_HEIGHT = 'calc(50vh - 28px)';
 
-type AssignmentPrompt = {
+export type AssignmentPrompt = {
+  id: string;
   title: string | null;
   prompt: string | null;
+  promptAttachmentName?: string | null;
   dueDate?: string | Date | null;
 };
 
@@ -24,6 +27,7 @@ type Props = {
   serverUpdatedAt: string | Date;
   initialRevision: number;
   isEditable: boolean;
+  canUploadImages?: boolean;
   onBridgeReady: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: SyncStatus) => void;
   onSubmittableContentChange?: (submittable: boolean) => void;
@@ -44,6 +48,7 @@ export function DocumentEditor({
   serverUpdatedAt,
   initialRevision,
   isEditable,
+  canUploadImages = false,
   onBridgeReady,
   onSyncStatusChange,
   onSubmittableContentChange,
@@ -90,6 +95,7 @@ export function DocumentEditor({
             initialHtml={hydrated.html}
             initialRevision={initialRevision}
             isEditable={isEditable}
+            canUploadImages={canUploadImages}
             onBridgeReady={onBridgeReady}
             onSyncStatusChange={onSyncStatusChange}
             onSubmittableContentChange={onSubmittableContentChange}
@@ -126,8 +132,8 @@ function AssignmentPromptBanner({
       >
         <div className="flex h-[32px] w-full min-w-0 items-center gap-1">
           <div className="flex min-w-0 flex-grow items-center gap-2">
-            <span className="inline-flex h-8 shrink-0 items-center rounded-full border border-yellow-300 bg-yellow-100 px-3 text-sm font-bold leading-none text-yellow-900">
-              Assignment Prompt
+            <span className="shrink-0 text-sm text-muted-foreground">
+              Assignment prompt
             </span>
             <span className="min-w-0 truncate text-sm font-bold text-foreground/80">
               {assignment.title?.trim() || 'Untitled Assignment'}
@@ -152,13 +158,23 @@ function AssignmentPromptBanner({
         </Button>
       </div>
       {!isCollapsed ? (
-        <div className="px-6 pb-2">
+        // Same gutter as the header above it, so the assignment title and the
+        // prompt text start on one line.
+        <div className="pb-2 pl-4 pr-4">
           <div
             className="overflow-y-auto whitespace-pre-wrap text-sm text-foreground/90"
             style={{ maxHeight: PROMPT_EXPANDED_MAX_HEIGHT }}
           >
             {assignment.prompt}
           </div>
+          {assignment.promptAttachmentName ? (
+            <div className="mt-2">
+              <AssignmentPromptAttachment
+                assignmentId={assignment.id}
+                fileName={assignment.promptAttachmentName}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

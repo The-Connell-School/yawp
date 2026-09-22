@@ -12,7 +12,10 @@ type Props = {
 export const EssayPanel = forwardRef<HTMLDivElement, Props>(
   function EssayPanel({ html }, ref) {
     return (
-      <div className="no-scrollbar grow overflow-y-scroll p-5">
+      <div
+        className="no-scrollbar grow overflow-y-scroll p-5"
+        data-testid="submission-essay-scroll"
+      >
         <div className="mx-auto w-full max-w-[920px] font-times">
           <div
             ref={ref}

@@ -1,3 +1,5 @@
+import { internalImpersonationMiddleware } from './utils/internal-impersonation-runtime.server';
+import { getImpersonationAttribution } from './utils/internal-impersonation-context.server';
 import {
   type LoaderFunctionArgs,
   type HeadersFunction,
@@ -9,6 +11,7 @@ import {
   Scripts,
   ScrollRestoration,
   Outlet,
+  useRouteLoaderData,
 } from 'react-router';
 import { PostHogProvider } from 'posthog-js/react';
 import { useEffect } from 'react';
@@ -16,6 +19,7 @@ import { GeneralErrorBoundary } from './components/error-boundary.tsx';
 import { GlobalLoading } from './components/global-loading.tsx';
 import { Toaster } from './components/toaster.tsx';
 import { useNonce } from './contexts/nonce.ts';
+import { useInternalCopyMarker } from './hooks/useInternalCopyMarker.ts';
 import { authSessionStorage } from './cookie-session-storages/authentication.server.ts';
 import {
   type NavState,
@@ -38,12 +42,21 @@ import omit from 'lodash/omit';
 import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
 import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
-import { getLocalDevLoginOptions } from './routes/auth.dev-login/route.tsx';
+import { isBlackboardLtiMockUiEnabled } from './utils/blackboard-lti-mock-ui.server.ts';
 import { useContrastPreference } from './routes/api.preferences.contrast/route.tsx';
 import {
   getEnvironmentBannerWarning,
   shouldEnableLocalDevQuickLogin,
 } from './utils/environment-banner.server.ts';
+import {
+  getPreviewAccessSeat,
+  isIsolatedPreviewSeatMode,
+  isPreviewAccessGateEnabled,
+  previewAccessMiddleware,
+} from './utils/preview-access.server.ts';
+import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
+
+export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware];
 
 export const links: LinksFunction = () => {
   return [
@@ -75,18 +88,24 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const timings = makeTimings('root loader');
+  const internal = getImpersonationAttribution();
   const url = new URL(request.url);
-  const publicLandingPage = url.pathname === '/' || url.pathname === '/info';
+  const publicLandingPage =
+    url.pathname === '/' ||
+    url.pathname === '/info' ||
+    url.pathname === '/auth/preview-access' ||
+    url.pathname === '/auth/preview-access.data';
   const cookieHeader = request.headers.get('Cookie');
   const contrastCookie =
     (await contrastPreferenceCookie.parse(cookieHeader)) || {};
   const contrastPreference: ContrastPreference =
     contrastCookie.contrast === 'high' ? 'high' : 'standard';
 
-  if (publicLandingPage) {
+  if (publicLandingPage && !internal) {
     return data(
       {
         user: null,
+        internalImpersonation: null,
         requestInfo: {
           hints: getHints(request),
           origin: getDomainUrl(request),
@@ -98,9 +117,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         ENV: getEnv(),
         bannerWarning: null,
-        localDevQuickLogin: { enabled: false, options: [] },
+        localDevQuickLogin: { enabled: false },
+        previewAccessGateEnabled: isPreviewAccessGateEnabled(),
+        previewAccessSeat: null,
+        blackboardLtiMockEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
-        studentPreview: { active: false, organizationId: null },
         toast: null,
       },
       { headers: { 'Server-Timing': timings.toString() } }
@@ -120,6 +141,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     desc: 'getUserId in root',
   });
   const { prisma } = await import('./utils/db.server.ts');
+  const previewAccessSeat = isPreviewAccessGateEnabled()
+    ? await getPreviewAccessSeat(request)
+    : null;
 
   const user = userId
     ? await time(
@@ -131,12 +155,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
               email: true,
               isAdmin: true,
               memberships: {
+                ...(internal ? { where: { id: internal.membershipId, organizationId: internal.organizationId, isActive: true } } : previewAccessSeat && isIsolatedPreviewSeatMode()
+                  ? {
+                      where: {
+                        organizationId: previewAccessSeat.organizationId,
+                      },
+                    }
+                  : {}),
                 orderBy: { createdAt: 'asc' },
                 select: {
                   id: true,
                   role: true,
                   isOrgOwner: true,
-                  organization: { select: { name: true } },
+                  organization: {
+                    select: {
+                      name: true,
+                      reporterEnabled: true,
+                      classInsightsEnabled: true,
+                      writingPracticeEnabled: true,
+                      submissionActivityEnabled: true,
+                    },
+                  },
                 },
               },
             },
@@ -166,10 +205,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     user?.memberships.find((m) => m.id === membershipId) ??
     user?.memberships[0];
   const impersonation = await getImpersonationState(request);
-  const { getStudentPreviewState } = await import(
-    './utils/student-preview.server.ts'
-  );
-  const studentPreview = await getStudentPreviewState(request);
   const bannerWarning = getEnvironmentBannerWarning(request.url);
   const localDevQuickLoginEnabled = shouldEnableLocalDevQuickLogin({
     bannerWarning,
@@ -178,7 +213,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return data(
     {
-      user: { ...user, selectedMembership: membership },
+      user: {
+        ...user,
+        isAdmin: Boolean(user?.isAdmin),
+        selectedMembership: membership,
+      },
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),
@@ -192,10 +231,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
       bannerWarning,
       localDevQuickLogin: {
         enabled: localDevQuickLoginEnabled,
-        options: localDevQuickLoginEnabled ? getLocalDevLoginOptions() : [],
       },
+      previewAccessGateEnabled: isPreviewAccessGateEnabled(),
+      previewAccessSeat,
+      blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
       impersonation,
-      studentPreview,
+      internalImpersonation: internal ? { ...internal, email: user?.email ?? internal.userId } : null,
       toast,
     },
     {
@@ -226,6 +267,7 @@ function Document({
   env?: Record<string, string | boolean | undefined>;
   contrastPreference?: ContrastPreference;
 }) {
+  const internal = useRouteLoaderData<typeof loader>('root')?.internalImpersonation;
   return (
     <html
       lang="en"
@@ -243,7 +285,15 @@ function Document({
         <meta name="theme-color" content="#ffffff" />
         <Links />
       </head>
-      <body>
+      <body style={internal ? { paddingTop: '4rem' } : undefined}>
+        {internal ? (
+          <section aria-label="Active impersonation" className="fixed inset-x-0 top-0 z-[2147483647] flex min-h-16 items-center justify-between gap-4 bg-amber-200 px-4 py-2 text-sm text-amber-950 shadow">
+            <div><strong>Impersonating {internal.email}</strong><br />Actions are audited as {internal.actorId}. Organization: {internal.organizationId}.</div>
+            <form method="post" action="/auth/internal-impersonation/end">
+              <button type="submit" className="whitespace-nowrap rounded border border-amber-900 px-3 py-2 font-semibold">Exit impersonation</button>
+            </form>
+          </section>
+        ) : null}
         {children}
         <script
           nonce={nonce}
@@ -261,6 +311,14 @@ function Document({
 export default function App({ loaderData: data }: Route.ComponentProps) {
   const nonce = useNonce();
   const contrastPreference = useContrastPreference();
+
+  // Copy/cut provenance for the paste alert. It has to live at the root,
+  // not in the /app layout: the document editor is an `app_.documents_.$id`
+  // route, which opts out of that layout. Mounted here, a copy made on any
+  // page — class detail, an assignment prompt, writing lessons, another
+  // document — is recognized when the student later pastes into an editor,
+  // instead of reading as an external paste and raising a false alarm.
+  useInternalCopyMarker();
 
   useEffect(() => {
     function createSecureLoginMethod() {
@@ -288,7 +346,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
   }, []);
 
   useEffect(() => {
-    if (data.ENV.POSTHOG_API_KEY) {
+    if (data.ENV.POSTHOG_API_KEY && !data.internalImpersonation) {
       posthog.init(data.ENV.POSTHOG_API_KEY, {
         api_host: data.ENV.POSTHOG_HOST,
         person_profiles: 'identified_only',
@@ -325,7 +383,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         });
       }
     }
-  }, [data.ENV.POSTHOG_API_KEY, data.ENV.POSTHOG_HOST, data.user]);
+  }, [data.ENV.POSTHOG_API_KEY, data.ENV.POSTHOG_HOST, data.user, data.internalImpersonation]);
 
   const appChildren = (
     <Document
@@ -333,10 +391,13 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
       env={data.ENV}
       contrastPreference={contrastPreference}
     >
-      {data.bannerWarning ? (
+      {data.bannerWarning && !data.internalImpersonation ? (
         <LocalDevEnvironmentBar
           bannerWarning={data.bannerWarning}
           localDevQuickLogin={data.localDevQuickLogin}
+          previewAccessGateEnabled={data.previewAccessGateEnabled}
+          previewAccessSeatLabel={data.previewAccessSeat?.label ?? null}
+          blackboardLtiMockEnabled={data.blackboardLtiMockEnabled}
         />
       ) : null}
       <GlobalLoading />
@@ -350,7 +411,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
   );
 
   // Only mount PostHogProvider when an API key is configured to avoid warnings
-  if (data.ENV.POSTHOG_API_KEY) {
+  if (data.ENV.POSTHOG_API_KEY && !data.internalImpersonation) {
     return (
       <PostHogProvider
         apiKey={data.ENV.POSTHOG_API_KEY}

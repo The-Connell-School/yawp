@@ -107,13 +107,32 @@ jobs:
 
       - name: 🔑 Prepare production bastion SSH key
         run: |
-          mkdir -p ~/.ssh "$(dirname "${PROD_SSH_KEY_PATH}")"
+          mkdir -p "$(dirname "${PROD_SSH_KEY_PATH}")" "$(dirname "${PROD_SSH_KNOWN_HOSTS_PATH}")"
           printf '%s\n' "${PROD_SSH_PRIVATE_KEY}" > "${PROD_SSH_KEY_PATH}"
           chmod 600 "${PROD_SSH_KEY_PATH}"
-          ssh-keyscan -H "${PROD_SSH_HOST}" >> ~/.ssh/known_hosts
+
+          scanned_key="$(ssh-keyscan -t ed25519 "${PROD_SSH_HOST}" 2>/dev/null \
+            | awk '$2 == "ssh-ed25519" { print; exit }')"
+          test -n "${scanned_key}"
+          observed_fingerprint="$(printf '%s\n' "${scanned_key}" \
+            | ssh-keygen -lf - -E sha256 \
+            | awk '{ print $2 }')"
+          if [[ -z "${PROD_SSH_HOST_FINGERPRINT}" ]]; then
+            echo "::error::PROD_SSH_HOST_FINGERPRINT is not configured. Observed ${observed_fingerprint}."
+            exit 1
+          fi
+          if [[ "${observed_fingerprint}" != "${PROD_SSH_HOST_FINGERPRINT}" ]]; then
+            echo "::error::Production bastion host key mismatch. Observed ${observed_fingerprint}."
+            exit 1
+          fi
+          printf '%s\n' "${scanned_key}" > "${PROD_SSH_KNOWN_HOSTS_PATH}"
+          ssh-keygen -H -f "${PROD_SSH_KNOWN_HOSTS_PATH}"
+          rm -f "${PROD_SSH_KNOWN_HOSTS_PATH}.old"
         env:
           PROD_SSH_KEY_PATH: ${{ runner.temp }}/yawp-production-bastion
           PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_HOST_FINGERPRINT: ${{ secrets.PROD_SSH_HOST_FINGERPRINT }}
+          PROD_SSH_KNOWN_HOSTS_PATH: ${{ runner.temp }}/yawp-production-known-hosts
           PROD_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
 
       - name: 🧬 Generate Prisma client
@@ -128,6 +147,7 @@ jobs:
           PROD_DB_USER: ${{ secrets.PROD_DB_USER }}
           PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
           PROD_SSH_KEY_PATH: ${{ runner.temp }}/yawp-production-bastion
+          PROD_SSH_KNOWN_HOSTS_PATH: ${{ runner.temp }}/yawp-production-known-hosts
 
       - name: 📦 Build Docker image
         run: bun web-app:docker:build

@@ -29,6 +29,12 @@ type Props = {
   isSessionLocked?: boolean;
   onCmsUpdate?: (cms: any) => void;
   cmsIdx?: number;
+  /**
+   * Route the module arrows navigate within. Defaults to the solo editor, which
+   * is where this component has always lived; a shared draft passes its own so
+   * stepping to the next module does not walk the student out of the group.
+   */
+  basePath?: string;
   cms: {
     assignmentModuleId?: string;
     assignmentModule: {
@@ -64,6 +70,7 @@ export const Tutor = ({
   isSessionLocked = false,
   onCmsUpdate,
   cmsIdx: resolvedCmsIdx,
+  basePath = '/app/documents',
 }: Props) => {
   const [messagesExpanded, setMessagesExpanded] = useLocalStorage(
     `doc-${docId}-tutor-messages-expanded`,
@@ -106,11 +113,11 @@ export const Tutor = ({
         params.set('cmsIdx', String(Math.max(0, nextIdx)));
       }
       const query = params.toString();
-      navigate(`/app/documents/${docId}${query ? `?${query}` : ''}`, {
+      navigate(`${basePath}/${docId}${query ? `?${query}` : ''}`, {
         replace: true,
       });
     },
-    [docId, navigate, searchParams]
+    [basePath, docId, navigate, searchParams]
   );
 
   const activateCmsIdx = useCallback(
@@ -179,7 +186,7 @@ export const Tutor = ({
           await postTutorResponseWithFallbackRetry({
             formData,
             onRetry: () => setIsTutorRetrying(true),
-        });
+          });
         if (!res.ok || json.error) {
           setTutorError(json.error ?? 'An error occurred.');
           setOptimisticMessage(null);
@@ -338,7 +345,11 @@ export const Tutor = ({
                 variant="ghost"
                 size="icon-sm"
                 className="min-w-8"
-                aria-label={messagesExpanded ? 'Hide tutor messages' : 'Show tutor messages'}
+                aria-label={
+                  messagesExpanded
+                    ? 'Hide tutor messages'
+                    : 'Show tutor messages'
+                }
                 disabled={isSessionLocked}
                 onClick={() => setMessagesExpanded(!messagesExpanded)}
               >

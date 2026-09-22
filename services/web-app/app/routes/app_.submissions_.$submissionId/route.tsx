@@ -1,5 +1,10 @@
+import { readTeacherNote } from '~/domain/grading/teacher-notes';
+import { TeacherNotes } from './teacher-grading/teacher-notes';
 import { invariant } from '@epic-web/invariant';
-import { type LoaderFunctionArgs } from 'react-router';
+import {
+  type LoaderFunctionArgs,
+  type ShouldRevalidateFunctionArgs,
+} from 'react-router';
 import {
   useLoaderData,
   Link,
@@ -8,6 +13,8 @@ import {
   useFetcher,
   useLocation,
   useRevalidator,
+  useBlocker,
+  useBeforeUnload,
   redirect,
 } from 'react-router';
 import {
@@ -19,40 +26,73 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
 import { Input } from '~/components/ui/input';
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '~/components/ui/accordion';
-import { ConfirmationDialog } from '~/components/confirmation-dialog';
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '~/components/ui/alert-dialog';
 import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import {
-  formatAssignmentGrade,
-  formatGrade,
-  formatPointGrade,
-  letterFromPercent,
-} from '~/domain/grading/gradeMath';
+import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
+import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
 import { type RubricDisplayConfig } from '~/domain/grading/rubric-display';
 import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
+import { parseAssistantSuggestion } from '~/domain/grading/assistant-suggestion';
+import { resolveGrammarHighlightingEnabled } from '~/domain/assignment-types/rubric-category-options';
+import { resolveRevisionEntryPath } from '~/domain/revisions/revision-flow';
 import { findExcerptRange } from '~/utils/excerpt-position';
 import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
 } from '~/utils/document-exit';
+import {
+  GRADING_QUEUE_SORT_PARAM,
+  buildDocumentNavigationHref,
+  buildGradingQueueHref,
+  parseGradingQueueScope,
+  parseGradingQueueSort,
+  type DocumentNavigationNeighbors,
+  type GradingQueueNeighbors,
+} from '~/domain/grading/grading-queue';
+import {
+  loadDocumentNavigationNeighbors,
+  loadGradingQueueNeighbors,
+} from '~/domain/grading/grading-queue.server';
+import { TeacherDocumentNavigation } from '~/components/teacher-document-navigation';
+import { GradingQueueNav } from './teacher-grading/grading-queue-nav';
 import { EssayPanel } from './essay-panel';
-import { TeacherGradingPanel } from './teacher-grading/teacher-grading-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
+import { TeacherPasteReport } from '~/components/teacher-paste-report';
 import { SelectionToolbar } from './teacher-grading/selection-toolbar';
 import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
+import { SubmissionLifecyclePanel } from './teacher-grading/submission-lifecycle-panel';
+import { GradeSummaryReleasedLabel } from './teacher-grading/grade-summary-released-label';
+import { SubmissionActivitySheet } from './teacher-grading/submission-activity-sheet';
+import { ViewPanel } from './teacher-grading/view-panel';
 import { resolveSubmissionGradeMode } from './submission-grade-mode';
-import { resolveRubricConfigForSubmission } from './submission-rubric-config.server';
+import { resolveSubmissionLifecycleState } from './submission-lifecycle-state';
+import {
+  resolveGrammarHighlightingForAssignmentType,
+  resolveRubricConfigForSubmission,
+} from './submission-rubric-config.server';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -60,8 +100,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 // ── Revalidation ─────────────────────────────────────────────────────
 
-export function shouldRevalidate() {
-  return false;
+export function shouldRevalidate({
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  return defaultShouldRevalidate;
 }
 
 // ── Loader ───────────────────────────────────────────────────────────
@@ -77,6 +119,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: { id: userId },
     select: { isAdmin: true },
   });
+  const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
 
   const submission = await prisma.submission.findFirst({
     where: {
@@ -84,25 +127,41 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       document: {
         is: {
           OR: [
-            { membershipId: profile.id },
             {
-              membership: {
-                classesAsStudent: {
-                  some: {
-                    teachers: {
-                      some: { id: profile.id },
-                    },
+              membershipId: profile.id,
+              membership: { organizationId: profile.organization.id },
+            },
+            {
+              group: {
+                is: {
+                  members: {
+                    some: { membershipId: profile.id, removedAt: null },
+                  },
+                },
+              },
+              classAssignment: {
+                is: {
+                  class: {
+                    school: { organizationId: profile.organization.id },
+                    students: { some: { id: profile.id } },
                   },
                 },
               },
             },
-            ...(user?.isAdmin ? [{}] : []),
+            {
+              ...buildTeacherDocumentAccessWhere({
+                membershipId: profile.id,
+                organizationId: profile.organization.id,
+              }),
+            },
+            ...(isAdmin ? [{}] : []),
           ],
         },
       },
     },
     select: {
       id: true,
+      updatedAt: true,
       title: true,
       text: true,
       html: true,
@@ -121,6 +180,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       gradedAt: true,
       gradedByMembershipId: true,
       archivedAt: true,
+      unsubmittedAt: true,
       documentId: true,
       document: {
         select: {
@@ -129,6 +189,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           assignmentTypeId: true,
           assignment: {
             select: {
+              id: true,
               submitForGrade: true,
               pointValue: true,
               gradingAssistantStrictnessLevel: true,
@@ -140,7 +201,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 select: {
                   id: true,
                   schoolId: true,
-                  school: { select: { organizationId: true } },
+                  school: {
+                    select: {
+                      organizationId: true,
+                      organization: {
+                        select: { submissionActivityEnabled: true },
+                      },
+                    },
+                  },
                   teachers: { select: { id: true } },
                 },
               },
@@ -149,6 +217,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           membership: {
             select: {
               id: true,
+              organizationId: true,
+              organization: {
+                select: { submissionActivityEnabled: true },
+              },
               userId: true,
               user: { select: { name: true } },
               classesAsStudent: {
@@ -157,6 +229,32 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   schoolId: true,
                   school: { select: { organizationId: true } },
                   teachers: { select: { id: true } },
+                },
+              },
+            },
+          },
+          submissions: {
+            where: { archivedAt: null, unsubmittedAt: null },
+            orderBy: { submittedAt: 'desc' },
+            select: {
+              id: true,
+              title: true,
+              submittedAt: true,
+              releasedAt: true,
+              numericPercentage: true,
+              letterGrade: true,
+              score: true,
+            },
+          },
+          group: {
+            select: {
+              id: true,
+              label: true,
+              members: {
+                where: { removedAt: null },
+                select: {
+                  membershipId: true,
+                  membership: { select: { userId: true } },
                 },
               },
             },
@@ -176,6 +274,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         take: 1,
         select: {
           assignmentTypeRubricSnapshot: true,
+          source: true,
+          status: true,
+          metadata: true,
         },
       },
     },
@@ -189,19 +290,59 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   // Determine if viewer is the owner (student) or a teacher
-  const isOwner = submission.document.membership.id === profile.id;
+  const isOwner =
+    submission.document.membership?.userId === userId ||
+    Boolean(
+      submission.document.group?.members.some(
+        (member) =>
+          member.membershipId === profile.id ||
+          member.membership?.userId === userId
+      )
+    );
 
+  const isCurrentClassTeacher =
+    submission.document.classAssignment?.class?.school.organizationId ===
+      profile.organization.id &&
+    submission.document.classAssignment.class.teachers.some(
+      (teacher) => teacher.id === profile.id
+    );
+  const isLegacyClassTeacher =
+    submission.document.classAssignment == null &&
+    Boolean(
+      submission.document.membership?.classesAsStudent.some(
+        (klass) =>
+          klass.school.organizationId === profile.organization.id &&
+          klass.teachers.some((teacher) => teacher.id === profile.id)
+      )
+    );
   const isTeacher =
     !isOwner &&
     profile.role === 'TEACHER' &&
-    (submission.document.classAssignment?.class?.teachers.some(
-      (teacher) => teacher.id === profile.id
-    ) ||
-      submission.document.membership.classesAsStudent.some((klass) =>
-        klass.teachers.some((teacher) => teacher.id === profile.id)
-      ));
+    (submission.document.classAssignment?.class?.school?.organizationId ??
+      submission.document.membership?.organizationId) ===
+      profile.organization.id &&
+    (isCurrentClassTeacher || isLegacyClassTeacher);
 
-  const isAdmin = user?.isAdmin ?? false;
+  const submissionActivityEnabled =
+    (submission.document.classAssignment?.class?.school?.organization
+      ?.submissionActivityEnabled ??
+      submission.document.membership?.organization
+        ?.submissionActivityEnabled) === true;
+
+  // Unsubmitting is student-initiated: the solo owner or any active member of
+  // the assigned group may withdraw, while teachers and admins are refused.
+  // Once withdrawn it stops counting as turned in, so send the student back to
+  // the untouched solo or shared artifact for revision and resubmission.
+  if (isOwner && submission.unsubmittedAt) {
+    const documentPath = submission.document.group
+      ? `/app/collab-documents/${submission.documentId}`
+      : `/app/documents/${submission.documentId}`;
+    return redirectWithToast(documentPath, {
+      description:
+        'You unsubmitted this document. You can revise and resubmit it.',
+      type: 'message',
+    });
+  }
 
   if (isOwner && editParam) {
     const next = new URL(request.url);
@@ -209,17 +350,53 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw redirect(`${next.pathname}${next.search}${next.hash}`);
   }
 
-  // Grade mode: teacher/admin grading someone else's work; not yet released OR ?edit=1
-  const isGradeMode =
-    !isOwner &&
-    (isTeacher || isAdmin) &&
-    (!submission.releasedAt || editParam);
+  const [rubricConfig, grammarHighlightingEnabled] = await Promise.all([
+    resolveRubricConfigForSubmission({
+      assignmentTypeId: submission.document.assignmentTypeId,
+      pointValue: submission.document.assignment?.pointValue,
+      assignmentId: submission.document.assignment?.id,
+      latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
+      rubricScores: submission.rubricScores,
+    }),
+    resolveGrammarHighlightingForAssignmentType(
+      submission.document.assignmentTypeId
+    ),
+  ]);
 
-  const rubricConfig = await resolveRubricConfigForSubmission({
-    assignmentTypeId: submission.document.assignmentTypeId,
-    latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
-    rubricScores: submission.rubricScores,
-  });
+  const activityPage =
+    !isOwner && (isTeacher || isAdmin)
+      ? await prisma.submissionActivity.findMany({
+          where: {
+            submissionId: submission.id,
+            organizationId:
+              submission.document.classAssignment?.class?.school
+                ?.organizationId ??
+              submission.document.membership?.organizationId ??
+              profile.organization.id,
+          },
+          select: {
+            id: true,
+            eventType: true,
+            source: true,
+            occurredAfterRelease: true,
+            changes: true,
+            metadata: true,
+            createdAt: true,
+            actorType: true,
+            actorName: true,
+            actorEmail: true,
+            actorMembership: {
+              select: {
+                user: { select: { name: true, email: true } },
+              },
+            },
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 101,
+        })
+      : null;
+  const activities = activityPage?.slice(0, 100) ?? null;
+  const activityHasMore = (activityPage?.length ?? 0) > 100;
 
   // Sort comments by document location
   const sortedComments = [...submission.comments].sort((a, b) => {
@@ -242,48 +419,154 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 
+  const { gradingAssistantRuns, ...publicSubmission } = submission;
+  // Rebuild the ungraded queue from the originating work list and its sort.
+  // Direct links fall back to this submission's class. Student owners never
+  // receive the queue, and every row is checked against teacher access.
+  const gradingQueueScope =
+    (isTeacher || isAdmin) && !isOwner
+      ? (parseGradingQueueScope(
+          sanitizeExitTarget(url.searchParams.get('exitTo'))
+        ) ??
+        parseGradingQueueScope(
+          submission.document.classAssignment?.class?.id
+            ? `/app/my-classes/${submission.document.classAssignment.class.id}?tab=documents&status=needs-grading`
+            : '/app/documents?status=needs-grading'
+        ))
+      : null;
+  const gradingQueue = gradingQueueScope
+    ? await loadGradingQueueNeighbors({
+        request,
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        userId,
+        submissionId: submission.id,
+        scope: gradingQueueScope,
+        sort: parseGradingQueueSort(
+          url.searchParams.get(GRADING_QUEUE_SORT_PARAM)
+        ),
+      })
+    : null;
+  const documentNavigationScope =
+    gradingQueueScope?.kind === 'documents' ? gradingQueueScope : null;
+  const documentNavigation = documentNavigationScope
+    ? await loadDocumentNavigationNeighbors({
+        request,
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        userId,
+        documentId: submission.documentId,
+        scope: documentNavigationScope,
+        sort: parseGradingQueueSort(
+          url.searchParams.get(GRADING_QUEUE_SORT_PARAM)
+        ),
+      })
+    : null;
+
   return {
+    revisionFlowEnabled: profile.organization.revisionFlowEnabled === true,
+    gradingQueue,
+    documentNavigation,
     submission: {
-      ...submission,
+      ...publicSubmission,
       comments: sortedComments,
       rubricConfig,
+      grammarHighlightingEnabled,
+      // What the Grading Assistant last suggested, so a teacher who has since
+      // edited the grade can put the suggestions back.
+      assistantSuggestion: parseAssistantSuggestion(
+        submission.gradingAssistantRuns[0] ?? null
+      ),
     },
+    ...(!isOwner && (isTeacher || isAdmin)
+      ? { teacherNote: readTeacherNote(gradingAssistantRuns[0] ?? null) }
+      : {}),
     isOwner,
     isTeacher: isTeacher || isAdmin,
-    isGradeMode,
+    submissionActivityEnabled,
+    ...(activities == null ? {} : { activities, activityHasMore }),
   };
 }
 
 // ── Component ────────────────────────────────────────────────────────
 
 export default function SubmissionRoute() {
+  const loaderData = useLoaderData<typeof loader>();
+  // A different paper gets a fresh grading/editor state. Same-paper loader
+  // revalidation keeps the current draft until its normal save/reload handling.
+  return (
+    <SubmissionDetail key={loaderData.submission.id} loaderData={loaderData} />
+  );
+}
+
+function SubmissionDetail({
+  loaderData,
+}: {
+  loaderData: ReturnType<typeof useLoaderData<typeof loader>>;
+}) {
   const {
     submission,
     isOwner,
     isTeacher,
-    isGradeMode: loaderGradeMode,
-  } = useLoaderData<typeof loader>();
-  const [searchParams, setSearchParams] = useSearchParams();
+    submissionActivityEnabled,
+    revisionFlowEnabled,
+  } = loaderData;
+  const gradingQueue: GradingQueueNeighbors | null =
+    'gradingQueue' in loaderData ? (loaderData.gradingQueue ?? null) : null;
+  const documentNavigation: DocumentNavigationNeighbors | null =
+    'documentNavigation' in loaderData
+      ? (loaderData.documentNavigation ?? null)
+      : null;
+  const activities = 'activities' in loaderData ? loaderData.activities : [];
+  const activityHasMore =
+    'activityHasMore' in loaderData ? loaderData.activityHasMore : false;
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
   const revalidator = useRevalidator();
   const titleFetcher = useFetcher();
-  // Grade mode driven by ?edit=1 query param so refreshes keep the same tab
-  // URL param is the explicit override: ?edit=1 → grade, ?edit=0 → view.
-  // When no param, fall back to loader default (ungraded = grade mode).
-  const editParam = searchParams.get('edit');
   const isGradingOther = isTeacher && !isOwner;
-  const isGradeMode = resolveSubmissionGradeMode({
-    isGradingOther,
-    editParam,
-    loaderGradeMode,
+  const [gradingNavigationState, setGradingNavigationState] = useState({
+    hasUnsavedChanges: false,
+    isBusy: false,
   });
+  const protectGrading =
+    isGradingOther &&
+    gradingQueue !== null &&
+    (gradingNavigationState.hasUnsavedChanges || gradingNavigationState.isBusy);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      protectGrading && currentLocation.pathname !== nextLocation.pathname
+  );
+  useBeforeUnload(
+    useCallback(
+      (event) => {
+        if (!protectGrading) return;
+        event.preventDefault();
+        event.returnValue = '';
+      },
+      [protectGrading]
+    )
+  );
 
   const [localGradedAt, setLocalGradedAt] = useState<string | null>(null);
   const [localReleasedAt, setLocalReleasedAt] = useState<string | null>(null);
+  const [isEditingGrade, setIsEditingGrade] = useState(
+    () =>
+      !submission.releasedAt &&
+      !(
+        submission.gradedAt &&
+        hasRecordedGrade({
+          numericPercentage: submission.numericPercentage,
+          overallScore: submission.overallScore,
+          score: submission.score,
+        })
+      )
+  );
   const [teacherGradeUi, setTeacherGradeUi] = useState<{
     numericPercentage: number | null;
     letterGrade: string | null;
+    overallScore: number | null;
     score: string | null;
     overallComment: string | null;
     rubricScores: unknown;
@@ -292,7 +575,28 @@ export default function SubmissionRoute() {
 
   useEffect(() => {
     setTeacherGradeUi(null);
+    setIsEditingGrade(
+      !submission.releasedAt &&
+        !(
+          submission.gradedAt &&
+          hasRecordedGrade({
+            numericPercentage: submission.numericPercentage,
+            overallScore: submission.overallScore,
+            score: submission.score,
+          })
+        )
+    );
   }, [submission.id]);
+
+  // Optimistic grade display values are tied to the loader revision that was
+  // current when they were saved. Once any same-route revalidation advances
+  // the submission revision, discard that snapshot and use the authoritative
+  // loader values. Otherwise a later edit could combine stale displayed grade
+  // values with the newer concurrency token and silently overwrite another
+  // teacher's update.
+  useEffect(() => {
+    setTeacherGradeUi(null);
+  }, [submission.updatedAt]);
 
   useEffect(() => {
     if (titleFetcher.state !== 'idle') return;
@@ -302,18 +606,62 @@ export default function SubmissionRoute() {
 
   const effectiveGradedAt = localGradedAt ?? submission.gradedAt;
   const effectiveReleasedAt = localReleasedAt ?? submission.releasedAt;
+  const isWithdrawn = submission.unsubmittedAt != null;
+  const isGraded = !!effectiveGradedAt;
+  const isReleased = !!effectiveReleasedAt;
+  const effectiveNumericPct =
+    teacherGradeUi?.numericPercentage ?? submission.numericPercentage ?? null;
+  const effectiveOverallScore =
+    teacherGradeUi?.overallScore ?? submission.overallScore ?? null;
+  const effectiveScore = teacherGradeUi?.score ?? submission.score ?? null;
+  const lifecycleState = resolveSubmissionLifecycleState({
+    isGraded: isWithdrawn ? false : isGraded,
+    isReleased: isWithdrawn ? false : isReleased,
+    hasGrade: hasRecordedGrade({
+      numericPercentage: effectiveNumericPct,
+      overallScore: effectiveOverallScore,
+      score: effectiveScore,
+    }),
+  });
+  const isGradeMode = resolveSubmissionGradeMode({
+    isGradingOther,
+    lifecycleState,
+    isEditingGrade,
+    submissionActivityEnabled,
+  });
   // Students viewing a submission whose grade hasn't been released yet
   const isPending = isOwner && !effectiveReleasedAt;
 
   const canEditTitle = isOwner || isTeacher;
   const submissionTitleDisplay =
     submission.title.trim() || submission.document.title || '';
+  const submissionVersions = submission.document.submissions ?? [];
 
   // Exit target — same pattern as documents route
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const [exitTarget] = useState<string>(
     () => explicitExitTarget ?? readLastNonDocumentRoute() ?? '/app'
   );
+  const gradingStudentName =
+    submission.document.group?.label ??
+    submission.document.membership?.user.name ??
+    null;
+  const queueSortParam = searchParams.get(GRADING_QUEUE_SORT_PARAM);
+  const gradingQueueHref = useCallback(
+    (nextSubmissionId: string) =>
+      buildGradingQueueHref({
+        submissionId: nextSubmissionId,
+        exitTo: explicitExitTarget,
+        sort: parseGradingQueueSort(queueSortParam),
+      }),
+    [explicitExitTarget, queueSortParam]
+  );
+  const versionHref = (submissionId: string) => {
+    const params = new URLSearchParams();
+    if (explicitExitTarget) params.set('exitTo', explicitExitTarget);
+    const query = params.toString();
+    return `/app/submissions/${submissionId}${query ? `?${query}` : ''}`;
+  };
   const essayRef = useRef<HTMLDivElement>(null);
   const [essayElement, setEssayElement] = useState<HTMLDivElement | null>(null);
   const setEssayRef = useCallback((el: HTMLDivElement | null) => {
@@ -322,8 +670,6 @@ export default function SubmissionRoute() {
   }, []);
 
   // ── Grade display ──────────────────────────────────────────────────
-  const effectiveNumericPct =
-    teacherGradeUi?.numericPercentage ?? submission.numericPercentage ?? null;
   const effectiveLetterGrade =
     teacherGradeUi?.letterGrade ?? submission.letterGrade ?? null;
   const assignmentIsSubmittedForGrade =
@@ -334,51 +680,70 @@ export default function SubmissionRoute() {
       numericPercentage: effectiveNumericPct,
       letterGrade: effectiveLetterGrade,
       pointValue: submission.document.assignment?.pointValue ?? null,
-      score: teacherGradeUi?.score ?? submission.score,
+      score: effectiveScore,
     }) ||
-    (assignmentIsSubmittedForGrade && submission.overallScore
-      ? `${submission.overallScore}/5`
+    (assignmentIsSubmittedForGrade && effectiveOverallScore != null
+      ? `${effectiveOverallScore}/${submission.rubricConfig?.maxScore ?? 5}`
       : null);
 
   // ── Status badge (reflects optimistic save / release) ─────────────
-  const statusLabel = isOwner
-    ? effectiveReleasedAt
-      ? 'Graded'
-      : submission.submittedAt
-        ? 'Submitted'
-        : 'Draft'
-    : effectiveGradedAt
-      ? 'Graded'
-      : submission.submittedAt
-        ? 'Submitted'
-        : 'Draft';
+  const statusLabel = isWithdrawn
+    ? 'Withdrawn'
+    : isOwner
+      ? effectiveReleasedAt
+        ? 'Graded'
+        : submission.submittedAt
+          ? 'Submitted'
+          : 'Draft'
+      : effectiveReleasedAt
+        ? 'Released'
+        : lifecycleState === 'graded'
+          ? 'Graded'
+          : submission.submittedAt
+            ? 'Submitted'
+            : 'Draft';
   const statusVariant = isOwner
-    ? effectiveReleasedAt
-      ? ('success' as const)
-      : submission.submittedAt
-        ? ('info-outlined' as const)
-        : ('secondary' as const)
-    : effectiveGradedAt
-      ? ('success' as const)
-      : submission.submittedAt
-        ? ('info-outlined' as const)
-        : ('secondary' as const);
+    ? isWithdrawn
+      ? ('secondary' as const)
+      : effectiveReleasedAt
+        ? ('success' as const)
+        : submission.submittedAt
+          ? ('info-outlined' as const)
+          : ('secondary' as const)
+    : isWithdrawn
+      ? ('secondary' as const)
+      : effectiveReleasedAt
+        ? ('success' as const)
+        : lifecycleState === 'graded'
+          ? ('success' as const)
+          : submission.submittedAt
+            ? ('info-outlined' as const)
+            : ('secondary' as const);
 
   // ── Local comments state (optimistic, no revalidation) ─────────────
   const [comments, setComments] = useState(submission.comments);
-  const handleCommentCreated = useCallback((comment: any) => {
-    setComments((prev) => [...prev, comment]);
-  }, []);
-  const handleCommentDeleted = useCallback((commentId: string) => {
-    setComments((prev) => prev.filter((c) => c.id !== commentId));
-  }, []);
+  const handleCommentCreated = useCallback(
+    (comment: any) => {
+      setComments((prev) => [...prev, comment]);
+      revalidator.revalidate();
+    },
+    [revalidator]
+  );
+  const handleCommentDeleted = useCallback(
+    (commentId: string) => {
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      revalidator.revalidate();
+    },
+    [revalidator]
+  );
   const handleCommentUpdated = useCallback(
     (commentId: string, content: string) => {
       setComments((prev) =>
         prev.map((c) => (c.id === commentId ? { ...c, content } : c))
       );
+      revalidator.revalidate();
     },
-    []
+    [revalidator]
   );
 
   // ── Grade mode state ───────────────────────────────────────────────
@@ -411,16 +776,49 @@ export default function SubmissionRoute() {
     null
   );
 
+  /**
+   * Grammar marks stored on the submission are only shown while the rubric
+   * still asks for them. Turning the category's grammar highlighting off used
+   * to leave every mark from an earlier grading run on the page, so the
+   * setting looked ignored.
+   */
+  const grammarHighlightingEnabled = useMemo(() => {
+    // The assignment type's own setting wins: switching highlighting off is
+    // expected to clear marks a previous grading run left behind.
+    if (typeof submission.grammarHighlightingEnabled === 'boolean') {
+      return submission.grammarHighlightingEnabled;
+    }
+    return resolveGrammarHighlightingEnabled(
+      (teacherGradeUi?.rubricConfig ?? submission.rubricConfig)?.categories ??
+        []
+    );
+  }, [
+    submission.grammarHighlightingEnabled,
+    teacherGradeUi?.rubricConfig,
+    submission.rubricConfig,
+  ]);
+
   const persistedGrammarIssues = useMemo(
     () =>
-      parseGrammarIssuesPayload(submission.grammarIssues, {
-        sourceText: submission.text ?? '',
-      }),
-    [submission.text, submission.id, submission.grammarIssues]
+      grammarHighlightingEnabled
+        ? parseGrammarIssuesPayload(submission.grammarIssues, {
+            sourceText: submission.text ?? '',
+          })
+        : [],
+    [
+      grammarHighlightingEnabled,
+      submission.text,
+      submission.id,
+      submission.grammarIssues,
+    ]
   );
   const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>(
     persistedGrammarIssues
   );
+  const grammarIssuesRef = useRef(grammarIssues);
+  grammarIssuesRef.current = grammarIssues;
+  const grammarIssueSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const grammarIssueSaveVersionRef = useRef(0);
   const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
     []
   );
@@ -432,6 +830,7 @@ export default function SubmissionRoute() {
   const lastPersistedRef = useRef(persistedGrammarIssues);
   if (lastPersistedRef.current !== persistedGrammarIssues) {
     lastPersistedRef.current = persistedGrammarIssues;
+    grammarIssuesRef.current = persistedGrammarIssues;
     setGrammarIssues(persistedGrammarIssues);
     setHiddenGrammarIssueIds([]);
   }
@@ -550,22 +949,45 @@ export default function SubmissionRoute() {
     (payload: {
       numericPercentage: number | null;
       letterGrade: string | null;
+      overallScore?: number | null;
       score: string | null;
       overallComment: string | null;
       rubricScores: unknown;
       rubricConfig?: RubricDisplayConfig | null;
     }) => {
-      setTeacherGradeUi(payload);
-      if (!submission.gradedAt) {
-        setLocalGradedAt(new Date().toISOString());
-      }
+      setTeacherGradeUi({ overallScore: null, ...payload });
+      revalidator.revalidate();
     },
-    [submission.gradedAt]
+    [revalidator]
+  );
+
+  const handleGradeSaved = useCallback(
+    (snapshot: {
+      numericPercentage: number | null;
+      letterGrade: string | null;
+      overallScore: number | null;
+      score: string | null;
+      overallComment: string | null;
+      rubricScores: unknown;
+    }) => {
+      setTeacherGradeUi((prev) => ({
+        numericPercentage: snapshot.numericPercentage,
+        letterGrade: snapshot.letterGrade,
+        overallScore: snapshot.overallScore,
+        score: snapshot.score,
+        overallComment: snapshot.overallComment,
+        rubricScores: snapshot.rubricScores,
+        rubricConfig: prev?.rubricConfig ?? null,
+      }));
+      revalidator.revalidate();
+    },
+    [revalidator]
   );
 
   const teacherExistingGrade = useMemo(
     () => ({
       id: submission.id,
+      updatedAt: submission.updatedAt,
       score: teacherGradeUi?.score ?? submission.score,
       feedback: submission.feedback,
       rubricScores: teacherGradeUi?.rubricScores ?? submission.rubricScores,
@@ -578,6 +1000,7 @@ export default function SubmissionRoute() {
     }),
     [
       submission.id,
+      submission.updatedAt,
       submission.feedback,
       submission.releasedAt,
       submission.score,
@@ -595,7 +1018,9 @@ export default function SubmissionRoute() {
       numericPercentage:
         teacherGradeUi?.numericPercentage ?? submission.numericPercentage,
       letterGrade: teacherGradeUi?.letterGrade ?? submission.letterGrade,
+      overallScore: teacherGradeUi?.overallScore ?? submission.overallScore,
       score: teacherGradeUi?.score ?? submission.score,
+      rubricConfig: teacherGradeUi?.rubricConfig ?? submission.rubricConfig,
       overallComment:
         teacherGradeUi?.overallComment ?? submission.overallComment,
       rubricScores: teacherGradeUi?.rubricScores ?? submission.rubricScores,
@@ -605,7 +1030,7 @@ export default function SubmissionRoute() {
 
   const persistGrammarIssues = useCallback(
     async (issues: GrammarIssue[]) => {
-      if (!isGradingOther || !isGradeMode) return;
+      if (!isGradingOther || !isGradeMode || isReleased) return;
       const res = await fetch('/api/domain/update-submission', {
         method: 'POST',
         keepalive: true,
@@ -618,49 +1043,67 @@ export default function SubmissionRoute() {
       if (!res.ok) {
         throw new Error('Failed to save grammar issue removal.');
       }
+      revalidator.revalidate();
     },
-    [isGradeMode, isGradingOther, submission.id]
+    [isGradeMode, isGradingOther, isReleased, revalidator, submission.id]
   );
 
   const handleRemoveGrammarIssue = useCallback(
     async (id: string) => {
-      const nextIssues = grammarIssues.filter((issue) => issue.id !== id);
-      try {
-        await persistGrammarIssues(nextIssues);
-      } catch {
-        revalidator.revalidate();
-        return;
-      }
+      const nextIssues = grammarIssuesRef.current.filter(
+        (issue) => issue.id !== id
+      );
+      if (nextIssues.length === grammarIssuesRef.current.length) return;
+
+      grammarIssuesRef.current = nextIssues;
       setGrammarIssues(nextIssues);
       setHiddenGrammarIssueIds((prev) =>
         prev.filter((currentId) => currentId !== id)
       );
+
+      const saveVersion = ++grammarIssueSaveVersionRef.current;
+      const saveRequest = grammarIssueSaveQueueRef.current
+        .catch(() => undefined)
+        .then(() => persistGrammarIssues(nextIssues));
+      grammarIssueSaveQueueRef.current = saveRequest;
+
+      try {
+        await saveRequest;
+      } catch {
+        if (saveVersion === grammarIssueSaveVersionRef.current) {
+          revalidator.revalidate();
+        }
+      }
     },
-    [grammarIssues, persistGrammarIssues, revalidator]
+    [persistGrammarIssues, revalidator]
   );
 
-  // ── Save / Release grade ────────────────────────────────────────────
-  const releaseFetcher = useFetcher<{ success?: boolean }>();
-  const [isSavingGrade, setIsSavingGrade] = useState(false);
-  const isReleased = !!effectiveReleasedAt;
-  const isGraded = !!effectiveGradedAt;
-  const canSaveGrade = isGradingOther && isGradeMode && !isGraded;
-  const canRelease = isGradingOther && isGraded && !isReleased;
-  const isReleasing = releaseFetcher.state !== 'idle';
+  // ── Lifecycle panel: edit mode, Save, Release ───────────────────────
+  const [isReleasing, setIsReleasing] = useState(false);
 
-  const lastHandledReleaseRef = useRef<unknown>(null);
-  useEffect(() => {
-    if (
-      releaseFetcher.data?.success &&
-      releaseFetcher.state === 'idle' &&
-      releaseFetcher.data !== lastHandledReleaseRef.current
-    ) {
-      lastHandledReleaseRef.current = releaseFetcher.data;
-      setLocalReleasedAt(new Date().toISOString());
+  const handleReleaseGrade = useCallback(async () => {
+    setIsReleasing(true);
+    try {
+      const formData = new FormData();
+      formData.append('submissionIds', submission.id);
+      const res = await fetch('/api/domain/release-grades', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) return;
+      const body = (await res.json()) as { success?: boolean };
+      if (body.success) {
+        setLocalReleasedAt(new Date().toISOString());
+        revalidator.revalidate();
+      }
+    } finally {
+      setIsReleasing(false);
     }
-  }, [releaseFetcher.data, releaseFetcher.state]);
+  }, [revalidator, submission.id]);
 
-  const handleSaveGrade = useCallback(async () => {
+  const [isSavingGrade, setIsSavingGrade] = useState(false);
+
+  const handleMarkGraded = useCallback(async () => {
     setIsSavingGrade(true);
     try {
       const res = await fetch('/api/domain/update-submission', {
@@ -671,40 +1114,48 @@ export default function SubmissionRoute() {
           markAsGraded: true,
         }),
       });
-      if (res.ok) {
-        setLocalGradedAt(new Date().toISOString());
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(
+          (body as { message?: string } | null)?.message ??
+            'Failed to mark as graded.'
+        );
       }
+      setLocalGradedAt(new Date().toISOString());
     } finally {
       setIsSavingGrade(false);
     }
   }, [submission.id]);
 
-  const handleReleaseGrade = useCallback(() => {
-    const formData = new FormData();
-    formData.append('submissionIds', submission.id);
-    releaseFetcher.submit(formData, {
-      method: 'POST',
-      action: '/api/domain/release-grades',
-    });
-  }, [submission.id, releaseFetcher]);
-
   // ── Paths ──────────────────────────────────────────────────────────
-  const revisePath = `/app/documents/${submission.documentId}?revise=1`;
-  const editGradePath = `/app/submissions/${submission.id}?edit=1`;
+  const revisePath = submission.document.group
+    ? `/app/collab-documents/${submission.documentId}`
+    : resolveRevisionEntryPath({
+        revisionFlowEnabled,
+        submissionId: submission.id,
+        documentId: submission.documentId,
+        isReleased: isReleased,
+        isWithdrawn,
+      });
+  const opensRevisionFlow = revisePath.startsWith('/app/revise/');
   const viewDocumentHref = useMemo(() => {
     const returnUrl = `${location.pathname}${location.search}${location.hash}`;
-    return `/app/documents/${submission.documentId}?exitTo=${encodeURIComponent(returnUrl)}`;
+    const documentPath = submission.document.group
+      ? `/app/collab-documents/${submission.documentId}`
+      : `/app/documents/${submission.documentId}`;
+    return `${documentPath}?exitTo=${encodeURIComponent(returnUrl)}`;
   }, [
     location.pathname,
     location.search,
     location.hash,
     submission.documentId,
+    submission.document.group,
   ]);
 
   return (
     <main className="flex h-screen flex-col bg-background">
       {/* ── Nav ─────────────────────────────────────────────────────── */}
-      <nav className="flex w-full items-center gap-3 border-b bg-white px-3 py-2">
+      <nav className="flex w-full flex-wrap items-center gap-3 border-b bg-white px-3 py-2">
         <Button
           variant="ghost"
           size="sm"
@@ -718,12 +1169,41 @@ export default function SubmissionRoute() {
         <div className="h-4 w-px bg-border shrink-0" />
 
         <div className="flex min-w-0 items-center gap-2">
-          {isGradingOther && submission.document.membership.user.name ? (
-            <span className="shrink-0 text-sm text-muted-foreground">
-              {submission.document.membership.user.name}
+          {isGradingOther && documentNavigation ? (
+            <TeacherDocumentNavigation
+              queue={documentNavigation}
+              documentId={submission.documentId}
+              disabled={gradingNavigationState.isBusy}
+              hrefFor={(entry) =>
+                buildDocumentNavigationHref({
+                  entry,
+                  exitTo:
+                    sanitizeExitTarget(searchParams.get('exitTo')) ??
+                    '/app/documents',
+                  sort: parseGradingQueueSort(
+                    searchParams.get(GRADING_QUEUE_SORT_PARAM)
+                  ),
+                })
+              }
+            />
+          ) : isGradingOther && gradingQueue && gradingStudentName ? (
+            // The name sits between the arrows: this is a stack of papers, and
+            // the control that moves through it belongs on the name it names.
+            <GradingQueueNav
+              queue={gradingQueue}
+              submissionId={submission.id}
+              hrefFor={gradingQueueHref}
+              disabled={gradingNavigationState.isBusy}
+            />
+          ) : isGradingOther && gradingStudentName ? (
+            <span
+              className="shrink-0 text-sm text-muted-foreground"
+              data-testid="grading-student-name"
+            >
+              {gradingStudentName}
             </span>
           ) : null}
-          {isGradingOther && submission.document.membership.user.name ? (
+          {isGradingOther && gradingStudentName ? (
             <span className="text-muted-foreground/40 shrink-0">·</span>
           ) : null}
           {canEditTitle ? (
@@ -756,20 +1236,74 @@ export default function SubmissionRoute() {
           )}
         </div>
 
-        <Badge variant={statusVariant} className="shrink-0">
-          {statusLabel}
-        </Badge>
-
-        {gradeDisplay && !isPending ? (
-          <Badge
-            variant="secondary"
-            className="shrink-0 border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200"
-          >
-            {gradeDisplay}
+        {isOwner ? (
+          <Badge variant={statusVariant} className="shrink-0">
+            {statusLabel}
           </Badge>
         ) : null}
 
-        <div className="ml-auto flex items-center gap-2">
+        {isOwner && submissionVersions.length > 1 ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                data-testid="submission-version-menu"
+              >
+                Versions ({submissionVersions.length})
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-64">
+              {submissionVersions.map((version, index) => {
+                const versionNumber = submissionVersions.length - index;
+                const isCurrent = version.id === submission.id;
+                const gradeLabel =
+                  version.numericPercentage != null
+                    ? `${version.numericPercentage}%${
+                        version.letterGrade ? ` (${version.letterGrade})` : ''
+                      }`
+                    : version.score?.trim() || null;
+                const lifecycleLabel = version.releasedAt
+                  ? gradeLabel
+                    ? `Graded · ${gradeLabel}`
+                    : 'Graded'
+                  : 'Submitted';
+
+                return (
+                  <DropdownMenuItem
+                    key={version.id}
+                    asChild
+                    className={isCurrent ? 'bg-muted' : undefined}
+                  >
+                    <Link
+                      to={versionHref(version.id)}
+                      aria-current={isCurrent ? 'page' : undefined}
+                      data-testid={`submission-version-${version.id}`}
+                      className="flex w-full items-center justify-between gap-4"
+                    >
+                      <span className="font-medium">
+                        Version {versionNumber}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {lifecycleLabel}
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {isGradingOther ? (
+            <SubmissionActivitySheet
+              activities={activities as any}
+              hasMore={activityHasMore}
+            />
+          ) : null}
           {isGradingOther ? (
             <Button size="sm" variant="outline" asChild>
               <Link
@@ -781,35 +1315,6 @@ export default function SubmissionRoute() {
                 View document
               </Link>
             </Button>
-          ) : null}
-          {/* Teacher: Save Grade → Release Grade flow */}
-          {canSaveGrade ? (
-            <Button
-              size="sm"
-              variant="default"
-              disabled={isSavingGrade}
-              onClick={handleSaveGrade}
-            >
-              {isSavingGrade ? 'Saving...' : 'Save Grade'}
-            </Button>
-          ) : null}
-          {canRelease ? (
-            <ConfirmationDialog
-              title="Release Grade?"
-              description="This will make the grade and all feedback visible to the student. This action cannot be undone."
-              confirmText="Release"
-              cancelText="Cancel"
-              onConfirm={handleReleaseGrade}
-            >
-              <Button size="sm" variant="default" disabled={isReleasing}>
-                {isReleasing ? 'Releasing...' : 'Release Grade'}
-              </Button>
-            </ConfirmationDialog>
-          ) : null}
-          {isGradingOther && isReleased ? (
-            <Badge variant="success" className="shrink-0">
-              Released
-            </Badge>
           ) : null}
           {isOwner && !isPending && persistedGrammarIssues.length > 0 ? (
             <Button
@@ -825,10 +1330,17 @@ export default function SubmissionRoute() {
                 : 'Show grammar highlights'}
             </Button>
           ) : null}
-          {/* Student: Revise Essay link */}
+          {/* Shared artifacts stay on their collaborative editor; the solo
+              revision flow assumes one student owner and must not be reused. */}
           {isOwner ? (
             <Button size="sm" variant="outline" asChild>
-              <Link to={revisePath}>Revise Essay</Link>
+              <Link to={revisePath} data-testid="submission-revise-essay">
+                {submission.document.group
+                  ? 'Open shared draft'
+                  : opensRevisionFlow
+                    ? 'Revise with feedback'
+                    : 'Open document editor'}
+              </Link>
             </Button>
           ) : null}
         </div>
@@ -846,73 +1358,82 @@ export default function SubmissionRoute() {
         </div>
       ) : null}
 
+      <AlertDialog
+        open={blocker.state === 'blocked'}
+        onOpenChange={(open) => {
+          if (!open && blocker.state === 'blocked') blocker.reset();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved grading changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              {gradingNavigationState.isBusy
+                ? 'Wait for grading to finish before opening another submission.'
+                : 'Your grading changes have not been saved. Stay to save them, or discard them and continue.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => blocker.state === 'blocked' && blocker.reset()}
+            >
+              Stay
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={gradingNavigationState.isBusy}
+              onClick={() => blocker.state === 'blocked' && blocker.proceed()}
+            >
+              Discard and continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* ── Body ────────────────────────────────────────────────────── */}
-      <div className="flex grow overflow-hidden">
+      <div className="flex min-h-0 grow flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* Left panel: grading (edit/view toggle for teachers) or view-only summary */}
-        <div
-          className="no-scrollbar flex shrink-0 flex-col overflow-hidden border-r bg-white"
-          style={{ width: 380 }}
-        >
+        <div className="no-scrollbar flex h-[70vh] w-full shrink-0 flex-col overflow-hidden border-b bg-white md:h-auto md:w-[380px] md:border-r md:border-b-0">
           {isGradingOther ? (
-            <>
-              <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
-                <span className="text-sm font-semibold">Grade Summary</span>
-                <div className="flex items-center gap-0.5 rounded-full border bg-muted/50 p-0.5">
-                  <Button
-                      size="sm"
-                      variant={isGradeMode ? 'secondary' : 'ghost'}
-                      className="h-7 rounded-full px-3 text-xs"
-                      onClick={() => {
-                        const params = new URLSearchParams(searchParams);
-                        params.set('edit', '1');
-                        setSearchParams(params, { replace: true });
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={!isGradeMode ? 'secondary' : 'ghost'}
-                      className="h-7 rounded-full px-3 text-xs"
-                      onClick={() => {
-                        const params = new URLSearchParams(searchParams);
-                        params.set('edit', '0');
-                        setSearchParams(params, { replace: true });
-                      }}
-                    >
-                      View
-                    </Button>
-                  </div>
-              </div>
-              <div className="no-scrollbar grow overflow-y-auto">
-                {isGradeMode ? (
-                  <TeacherGradingPanel
-                    documentId={submission.documentId}
-                    submissionId={submission.id}
-                    existingGrade={teacherExistingGrade}
-                    grammarIssues={grammarIssues}
-                    hiddenGrammarIssueIds={hiddenGrammarIssueIds}
-                    onToggleGrammarIssue={toggleGrammarIssueVisibility}
-                  onRemoveGrammarIssue={handleRemoveGrammarIssue}
-                  onGrammarIssuesChange={handleGrammarIssuesChange}
-                  onAiGradingComplete={handleAiGradingComplete}
-                  rubricConfig={
-                    teacherGradeUi?.rubricConfig ?? submission.rubricConfig
-                  }
-                  initialGradingAssistantStrictnessLevel={
-                    submission.document.assignment
-                      ?.gradingAssistantStrictnessLevel
-                  }
-                />
-                ) : (
-                  <ViewPanel submission={submissionForView} />
-                )}
-              </div>
-            </>
+            <SubmissionLifecyclePanel
+              onNavigationStateChange={setGradingNavigationState}
+              lifecycleState={lifecycleState}
+              submissionActivityEnabled={submissionActivityEnabled}
+              isEditingGrade={isEditingGrade}
+              onEditingGradeChange={setIsEditingGrade}
+              onMarkGraded={handleMarkGraded}
+              onGradeSaved={handleGradeSaved}
+              isSavingGrade={isSavingGrade}
+              onRelease={handleReleaseGrade}
+              isReleasing={isReleasing}
+              submissionForView={submissionForView}
+              documentId={submission.documentId}
+              submissionId={submission.id}
+              teacherNote={
+                'teacherNote' in loaderData
+                  ? (loaderData.teacherNote ?? null)
+                  : null
+              }
+              existingGrade={teacherExistingGrade}
+              pointValue={submission.document.assignment?.pointValue}
+              grammarIssues={grammarIssues}
+              hiddenGrammarIssueIds={hiddenGrammarIssueIds}
+              onToggleGrammarIssue={toggleGrammarIssueVisibility}
+              onRemoveGrammarIssue={handleRemoveGrammarIssue}
+              onGrammarIssuesChange={handleGrammarIssuesChange}
+              onAiGradingComplete={handleAiGradingComplete}
+              rubricConfig={
+                teacherGradeUi?.rubricConfig ?? submission.rubricConfig
+              }
+              assistantSuggestion={submission.assistantSuggestion}
+              initialGradingAssistantStrictnessLevel={
+                submission.document.assignment?.gradingAssistantStrictnessLevel
+              }
+            />
           ) : (
             <>
-              <div className="flex shrink-0 items-center border-b px-4 py-2.5">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5">
                 <span className="text-sm font-semibold">Grade Summary</span>
+                {isReleased ? <GradeSummaryReleasedLabel /> : null}
               </div>
               <div className="no-scrollbar grow overflow-y-auto">
                 {isPending ? (
@@ -923,10 +1444,19 @@ export default function SubmissionRoute() {
               </div>
             </>
           )}
+          {!isGradingOther ? (
+            <TeacherNotes
+              note={
+                'teacherNote' in loaderData
+                  ? (loaderData.teacherNote ?? null)
+                  : null
+              }
+            />
+          ) : null}
         </div>
 
         {/* Center: Essay */}
-        <div className="flex min-w-0 grow flex-col overflow-hidden bg-white md:h-full">
+        <div className="flex min-h-[60vh] min-w-0 grow flex-col overflow-hidden bg-white md:h-full md:min-h-0">
           <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
           {isGradingOther && essayElement ? (
             <SelectionToolbar contentRoot={essayElement} />
@@ -943,22 +1473,27 @@ export default function SubmissionRoute() {
         </div>
 
         {/* Right: Feedback comments */}
-        <div
-          className="no-scrollbar shrink-0 overflow-y-auto border-l bg-white"
-          style={{ width: 320 }}
-        >
-          <GradingCommentsSidebar
-            submissionComments={isPending ? [] : (comments as any)}
+        <div className="no-scrollbar max-h-[60vh] w-full shrink-0 overflow-y-auto border-t bg-white md:max-h-none md:w-[320px] md:border-t-0 md:border-l">
+          <TeacherPasteReport
+            key={submission.id}
+            enabled={isGradingOther}
             submissionId={submission.id}
-            sourceText={submission.text ?? ''}
-            readOnly={!isGradingOther}
-            activeGradeCommentId={activeGradeCommentId}
-            onSelectGradeComment={setActiveGradeCommentId}
-            onDraftHighlightChange={setDraftHighlight}
-            onCommentCreated={handleCommentCreated}
-            onCommentDeleted={handleCommentDeleted}
-            onCommentUpdated={handleCommentUpdated}
-          />
+            contentRoot={essayElement}
+          >
+            <GradingCommentsSidebar
+              submissionComments={isPending ? [] : (comments as any)}
+              submissionId={submission.id}
+              sourceText={submission.text ?? ''}
+              readOnly={!isGradingOther}
+              activeGradeCommentId={activeGradeCommentId}
+              onSelectGradeComment={setActiveGradeCommentId}
+              onDraftHighlightChange={setDraftHighlight}
+              onCommentCreated={handleCommentCreated}
+              onCommentDeleted={handleCommentDeleted}
+              onCommentUpdated={handleCommentUpdated}
+              showHeading={false}
+            />
+          </TeacherPasteReport>
         </div>
       </div>
 
@@ -1078,135 +1613,6 @@ function PendingViewPanel() {
           Pending feedback
         </p>
       </div>
-    </div>
-  );
-}
-
-// ── View Panel (read-only grade fields for student / view mode) ───────
-
-function ViewPanel({
-  submission,
-}: {
-  submission: {
-    numericPercentage: number | null;
-    letterGrade: string | null;
-    overallComment: string | null;
-    rubricScores: unknown;
-    document?: {
-      assignment?: {
-        submitForGrade: boolean;
-        pointValue: number | null;
-      } | null;
-    };
-  };
-}) {
-  const rawRubric = (submission.rubricScores ?? {}) as Record<
-    string,
-    number | { score: number; comment?: string }
-  >;
-  const rubricEntries = Object.entries(rawRubric).map(([key, val]) => {
-    const score =
-      typeof val === 'object' && val !== null
-        ? (val as { score: number }).score
-        : (val as number);
-    const comment =
-      typeof val === 'object' && val !== null
-        ? (val as { comment?: string }).comment
-        : undefined;
-    return { key, score, comment };
-  });
-  const hasGrade =
-    submission.document?.assignment?.submitForGrade !== false &&
-    submission.numericPercentage != null;
-  const pointGrade =
-    submission.document?.assignment?.submitForGrade === false
-      ? null
-      : formatPointGrade(
-          submission.numericPercentage,
-          submission.document?.assignment?.pointValue ?? null
-        );
-
-  return (
-    <div className="p-4 space-y-4">
-      {hasGrade ? (
-        <>
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Overall Grade
-            </h3>
-            <p className="text-2xl font-semibold">
-              {pointGrade ??
-                `${submission.numericPercentage}%${
-                  submission.letterGrade ? ` (${submission.letterGrade})` : ''
-                }`}
-            </p>
-            {pointGrade ? (
-              <p className="text-sm text-muted-foreground">
-                {submission.numericPercentage}%
-                {submission.letterGrade ? ` (${submission.letterGrade})` : ''}
-              </p>
-            ) : null}
-          </div>
-          {submission.overallComment ? (
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">
-                Overall Feedback
-              </h3>
-              <p className="mt-1 text-sm whitespace-pre-wrap">
-                {submission.overallComment}
-              </p>
-            </div>
-          ) : null}
-          {rubricEntries.length > 0 ? (
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">
-                Rubric
-              </h3>
-              <Accordion type="multiple" className="mt-2">
-                {rubricEntries.map(({ key, score, comment }) => (
-                  <AccordionItem
-                    key={key}
-                    value={key}
-                    className="border-b last:border-0"
-                  >
-                    <AccordionTrigger className="py-2 text-sm hover:no-underline">
-                      <div className="flex w-full items-center justify-between pr-2">
-                        <span className="font-medium">
-                          {key
-                            .replace(/_/g, ' ')
-                            .replace(/\b\w/g, (c) => c.toUpperCase())}
-                        </span>
-                        <span className="text-muted-foreground">{score}/5</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      {comment ? (
-                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">
-                          {comment}
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground italic">
-                          No feedback for this category
-                        </p>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </div>
-          ) : null}
-        </>
-      ) : (
-        <div className="flex flex-col items-center gap-2 py-10 text-center">
-          <p className="text-sm font-medium text-muted-foreground">
-            Not yet graded
-          </p>
-          <p className="text-xs text-muted-foreground leading-relaxed max-w-[200px]">
-            Your grade will appear here once the teacher has reviewed your
-            submission.
-          </p>
-        </div>
-      )}
     </div>
   );
 }

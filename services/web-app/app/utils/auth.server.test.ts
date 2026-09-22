@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { matchesOwnerWhere } from './testing/where-eval.ts';
 
 const prisma = {
   user: {
@@ -18,6 +19,7 @@ const prisma = {
 const getMembershipId = mock();
 const setMembershipId = mock();
 const getSession = mock();
+const getUaStudentLicenseAccess = mock();
 
 mock.module('./db.server.ts', () => ({ prisma }));
 mock.module('~/cookies/membership-id.server', () => ({
@@ -30,12 +32,16 @@ mock.module('../cookie-session-storages/authentication.server.ts', () => ({
     destroySession: mock(),
   },
 }));
+mock.module('~/domain/student-license/student-license.server', () => ({
+  getUaStudentLicenseAccess,
+}));
 
 const {
   getPasswordHash,
   resetUserPassword,
   verifyUserPassword,
   requireMembership,
+  requireAdmin,
   requireOwner,
   isTeacherMembership,
   isStudentMembership,
@@ -45,7 +51,16 @@ const membershipFixture = {
   id: 'membership-1',
   role: 'TEACHER' as const,
   isOrgOwner: false,
-  organization: { id: 'org-1', name: 'Yawp Org' },
+  isActive: true,
+  organization: {
+    id: 'org-1',
+    name: 'Yawp Org',
+    reporterEnabled: false,
+    classInsightsEnabled: false,
+    writingPracticeEnabled: false,
+    submissionActivityEnabled: false,
+    revisionFlowEnabled: false,
+  },
 };
 
 describe('membership auth helpers', () => {
@@ -53,6 +68,9 @@ describe('membership auth helpers', () => {
     getMembershipId.mockReset();
     setMembershipId.mockReset();
     getSession.mockReset();
+    getSession.mockResolvedValue({ get: () => undefined });
+    getUaStudentLicenseAccess.mockReset();
+    getUaStudentLicenseAccess.mockResolvedValue('BYPASS');
     prisma.orgMembership.findUnique.mockReset();
     prisma.orgMembership.findFirst.mockReset();
     prisma.user.findFirst.mockReset();
@@ -77,12 +95,23 @@ describe('membership auth helpers', () => {
     );
 
     expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith({
-      where: { id: 'membership-1', userId: 'user-1' },
+      where: { id: 'membership-1', userId: 'user-1', isActive: true },
       select: {
         id: true,
         role: true,
         isOrgOwner: true,
-        organization: { select: { id: true, name: true } },
+        isActive: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            reporterEnabled: true,
+            classInsightsEnabled: true,
+            writingPracticeEnabled: true,
+            submissionActivityEnabled: true,
+            revisionFlowEnabled: true,
+          },
+        },
       },
     });
     expect(membership).toEqual(membershipFixture);
@@ -98,24 +127,115 @@ describe('membership auth helpers', () => {
     );
 
     expect(prisma.orgMembership.findFirst).toHaveBeenCalledWith({
-      where: { userId: 'user-1' },
+      where: { userId: 'user-1', isActive: true },
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,
         role: true,
         isOrgOwner: true,
-        organization: { select: { id: true, name: true } },
+        isActive: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            reporterEnabled: true,
+            classInsightsEnabled: true,
+            writingPracticeEnabled: true,
+            submissionActivityEnabled: true,
+            revisionFlowEnabled: true,
+          },
+        },
       },
     });
     expect(membership).toEqual(membershipFixture);
   });
 
-  test('requireOwner checks memberships with isOrgOwner', async () => {
+  test('requireMembership redirects an unpaid UA student to billing', async () => {
+    getMembershipId.mockResolvedValue('membership-1');
+    prisma.orgMembership.findUnique.mockResolvedValue({
+      ...membershipFixture,
+      role: 'STUDENT',
+      organization: { ...membershipFixture.organization, id: 'org-ua' },
+    });
+    getUaStudentLicenseAccess.mockResolvedValue('PAYMENT_REQUIRED');
+
+    await expect(
+      requireMembership(new Request('https://example.com/app'), 'user-1')
+    ).rejects.toMatchObject({ status: 302 });
+
+    expect(getUaStudentLicenseAccess).toHaveBeenCalledWith({
+      id: 'membership-1',
+      role: 'STUDENT',
+      organizationId: 'org-ua',
+    });
+  });
+
+  test('billing routes can resolve the same unpaid membership without a redirect loop', async () => {
+    getMembershipId.mockResolvedValue('membership-1');
+    prisma.orgMembership.findUnique.mockResolvedValue({
+      ...membershipFixture,
+      role: 'STUDENT',
+      organization: { ...membershipFixture.organization, id: 'org-ua' },
+    });
+    getUaStudentLicenseAccess.mockResolvedValue('PAYMENT_REQUIRED');
+
+    const membership = await requireMembership(
+      new Request('https://example.com/billing/ua'),
+      'user-1',
+      { allowPaymentRequired: true }
+    );
+
+    expect(membership.id).toBe('membership-1');
+    expect(getUaStudentLicenseAccess).not.toHaveBeenCalled();
+  });
+
+  test('requireMembership rejects a cookie-selected inactive membership and clears the scope cookie', async () => {
+    getMembershipId.mockResolvedValue('inactive-membership');
+    prisma.orgMembership.findUnique.mockResolvedValue(null);
+
+    await expect(
+      requireMembership(new Request('https://example.com/app'), 'user-1')
+    ).rejects.toMatchObject({
+      status: 302,
+      headers: expect.any(Headers),
+    });
+
+    expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'inactive-membership',
+          userId: 'user-1',
+          isActive: true,
+        },
+      })
+    );
+    expect(setMembershipId).toHaveBeenCalledWith('');
+  });
+
+  test('requireMembership never falls back to an inactive membership', async () => {
+    getMembershipId.mockResolvedValue('');
+    prisma.orgMembership.findFirst.mockResolvedValue(null);
+
+    await expect(
+      requireMembership(new Request('https://example.com/app'), 'user-1')
+    ).rejects.toMatchObject({ status: 302 });
+
+    expect(prisma.orgMembership.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', isActive: true } })
+    );
+  });
+
+  test('requireOwner checks isOrgOwner on the active membership', async () => {
     getSession.mockResolvedValue({
       get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
     });
     prisma.session.findUnique.mockResolvedValue({
       user: { id: 'user-1' },
+    });
+    getMembershipId.mockResolvedValue('membership-1');
+    prisma.orgMembership.findUnique.mockResolvedValue({
+      ...membershipFixture,
+      isOrgOwner: true,
     });
     prisma.user.findFirst.mockResolvedValue({
       id: 'user-1',
@@ -136,13 +256,99 @@ describe('membership auth helpers', () => {
       },
       where: {
         id: 'user-1',
-        memberships: { some: { isOrgOwner: true } },
+        memberships: { some: { id: 'membership-1', isOrgOwner: true } },
       },
     });
     expect(user).toEqual({
       id: 'user-1',
       memberships: [{ id: 'membership-1', isOrgOwner: true }],
     });
+  });
+
+  // N5 -- requireOwner asked whether the user owned *an* organization, while the request
+  // was scoped to the organization of the cookie-selected membership. These two tests run
+  // the clause requireOwner builds against a fixture user through matchesOwnerWhere, so a
+  // clause that only proves ownership somewhere really does admit the caller.
+  const twoOrgUser = {
+    id: 'user-1',
+    memberships: [
+      { id: 'membership-a', organizationId: 'org-a', isOrgOwner: true },
+      { id: 'membership-b', organizationId: 'org-b', isOrgOwner: false },
+    ],
+  };
+
+  const arrangeTwoOrgUser = (activeMembershipId: string) => {
+    getSession.mockResolvedValue({
+      get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
+    });
+    prisma.session.findUnique.mockResolvedValue({ user: { id: 'user-1' } });
+    getMembershipId.mockResolvedValue(activeMembershipId);
+
+    const active = twoOrgUser.memberships.find(
+      (membership) => membership.id === activeMembershipId
+    )!;
+    prisma.orgMembership.findUnique.mockResolvedValue({
+      id: active.id,
+      role: 'TEACHER' as const,
+      isOrgOwner: active.isOrgOwner,
+      organization: {
+        id: active.organizationId,
+        name: active.organizationId,
+        reporterEnabled: false,
+        classInsightsEnabled: false,
+        writingPracticeEnabled: false,
+      },
+    });
+
+    prisma.user.findFirst.mockImplementation(async ({ where }: any) =>
+      matchesOwnerWhere(where, twoOrgUser) ? twoOrgUser : null
+    );
+  };
+
+  const ownerRequest = () =>
+    new Request('https://example.com/app/organization/students', {
+      method: 'GET',
+      headers: { cookie: 'en_session=signed-cookie' },
+    });
+
+  test('requireOwner admits an owner whose active membership is the owned organization', async () => {
+    arrangeTwoOrgUser('membership-a');
+
+    await expect(requireOwner(ownerRequest())).resolves.toMatchObject({
+      id: 'user-1',
+    });
+  });
+
+  test('requireOwner refuses an owner of another organization whose active membership is not an owner membership', async () => {
+    arrangeTwoOrgUser('membership-b');
+
+    await expect(requireOwner(ownerRequest())).rejects.toMatchObject({
+      init: { status: 403 },
+    });
+  });
+
+  // Preview seats keep platform admin. Suppressing it removed the Admin surfaces from
+  // preview altogether, so they could not be tested there at all -- see
+  // hasEffectivePlatformAdmin in preview-access.server.ts.
+  test('platform-admin privilege still resolves inside isolated preview seats', async () => {
+    process.env.PREVIEW_ACCESS_GATE = 'on';
+    process.env.PREVIEW_DATA_MODE = 'seed';
+    getSession.mockResolvedValue({
+      get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
+    });
+    prisma.session.findUnique.mockResolvedValue({ user: { id: 'user-1' } });
+    prisma.user.findFirst.mockResolvedValue({ id: 'user-1' });
+
+    try {
+      await expect(
+        requireAdmin(new Request('https://example.com/app/admin'))
+      ).resolves.toBeDefined();
+    } finally {
+      delete process.env.PREVIEW_ACCESS_GATE;
+      delete process.env.PREVIEW_DATA_MODE;
+    }
+
+    expect(prisma.user.findFirst).toHaveBeenCalled();
   });
 });
 

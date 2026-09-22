@@ -3,7 +3,18 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
+import {
+  buildTeacherClassWhere,
+  canManageGrades,
+  getGradingActor,
+} from '~/utils/grading-auth.server';
+import {
+  buildSubmissionActivityChanges,
+  recordSubmissionActivities,
+  resolveSubmissionActivityActorMembershipId,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
+import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
 
 const POST = z.object({
   submissionIds: z.preprocess(
@@ -12,7 +23,10 @@ const POST = z.object({
       if (typeof value === 'string') return [value];
       return value;
     },
-    z.array(z.string()).min(1, 'At least one submission is required')
+    z
+      .array(z.string())
+      .min(1, 'At least one submission is required')
+      .max(500, 'No more than 500 submissions can be released at once')
   ),
 });
 
@@ -31,6 +45,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const requestedSubmissionIds = Array.from(new Set(data.submissionIds));
+  const teacherClassWhere = buildTeacherClassWhere(actor);
 
   let result:
     | { kind: 'not-found'; message: string }
@@ -46,12 +61,36 @@ export async function action({ request }: ActionFunctionArgs) {
       const submissions = await tx.submission.findMany({
         where: {
           id: { in: requestedSubmissionIds },
-          document: { is: { membershipId: { not: actor.membershipId } } },
-          ...(actor.isAdmin ? {} : { gradedByMembershipId: actor.membershipId }),
+          document: {
+            is: {
+              AND: [
+                teacherClassWhere,
+                {
+                  OR: [
+                    { artifactKind: 'ASSIGNMENT_GROUP' },
+                    {
+                      membershipId: { not: actor.membershipId },
+                      membership: { is: { userId: { not: actor.userId } } },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          ...(actor.isAdmin
+            ? {}
+            : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
+          // A student can unsubmit after a teacher's grade is saved but
+          // before it's released. Exclude it from eligibility so it fails
+          // the same way any other no-longer-eligible submission does.
+          unsubmittedAt: null,
         },
         select: {
           id: true,
+          updatedAt: true,
+          releasedAt: true,
+          numericPercentage: true,
           document: {
             select: {
               classAssignment: {
@@ -68,6 +107,8 @@ export async function action({ request }: ActionFunctionArgs) {
               },
               membership: {
                 select: {
+                  userId: true,
+                  organizationId: true,
                   classesAsStudent: {
                     select: {
                       id: true,
@@ -105,7 +146,31 @@ export async function action({ request }: ActionFunctionArgs) {
       const updateResult = await tx.submission.updateMany({
         where: {
           id: { in: submissions.map((s) => s.id) },
+          OR: submissions.map((submission) => ({
+            id: submission.id,
+            updatedAt: submission.updatedAt,
+          })),
+          document: {
+            is: {
+              AND: [
+                teacherClassWhere,
+                {
+                  OR: [
+                    { artifactKind: 'ASSIGNMENT_GROUP' },
+                    {
+                      membershipId: { not: actor.membershipId },
+                      membership: { is: { userId: { not: actor.userId } } },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          ...(actor.isAdmin
+            ? {}
+            : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
+          unsubmittedAt: null,
         },
         data: {
           releasedAt: now,
@@ -116,6 +181,35 @@ export async function action({ request }: ActionFunctionArgs) {
       if (updateResult.count !== submissions.length) {
         throw new ReleaseGradesConflictError();
       }
+
+      await recordSubmissionActivities(
+        tx,
+        submissions.map((submission) => {
+          const organizationId =
+            submission.document.classAssignment?.class?.school
+              ?.organizationId ??
+            submission.document.membership?.organizationId ??
+            actor.organizationId;
+          return {
+            submissionId: submission.id,
+            organizationId,
+            actorMembershipId: resolveSubmissionActivityActorMembershipId({
+              actorMembershipId: actor.membershipId,
+              actorOrganizationId: actor.organizationId,
+              submissionOrganizationId: organizationId,
+            }),
+            actorUserId: actor.userId,
+            eventType: submissionActivityEventTypes.gradeReleased,
+            source: 'release-grades',
+            occurredAfterRelease: false,
+            changes: buildSubmissionActivityChanges({
+              before: { releasedAt: submission.releasedAt },
+              after: { releasedAt: now },
+              fields: ['releasedAt'],
+            }),
+          };
+        })
+      );
 
       return { kind: 'success' as const, releasedCount: submissions.length };
     });
@@ -144,6 +238,24 @@ export async function action({ request }: ActionFunctionArgs) {
     result.releasedCount === 1
       ? 'Grade released to student.'
       : `${result.releasedCount} grades released to students.`;
+
+  // Fire-and-forget AGS passback for each released submission (dev/preview only)
+  // Run outside the transaction; failures should not block release UX.
+  try {
+    const releasedSubs = await prisma.submission.findMany({
+      where: { id: { in: requestedSubmissionIds } },
+      select: { id: true, numericPercentage: true },
+    });
+    for (const s of releasedSubs) {
+      if (typeof s.numericPercentage === 'number') {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        maybePostGradeToBlackboard({ numericPercentage: s.numericPercentage });
+      }
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('Blackboard AGS passback (mock) on release failed', { err });
+  }
 
   return dataResponse({
     success: true,

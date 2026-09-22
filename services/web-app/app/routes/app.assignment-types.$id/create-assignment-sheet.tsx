@@ -25,21 +25,25 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { FileTextIcon } from 'lucide-react';
+import { formatClassCardTitle } from '~/utils/class-display';
 
 type TeacherClass = {
   id: string;
-  grade: string;
-  period: string;
+  grade: string | null;
+  period: string | null;
   title: string | null;
 };
 
 type Props = {
   assignmentTypeId: string;
   assignmentTypeTitle: string;
+  /** Whether this kind of writing is in the collaborative-drafts pilot. */
+  assignmentTypeCollaborationSupported?: boolean;
   teacherClasses: TeacherClass[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialPrompt?: string;
+  titleRequired?: boolean;
   apHistoryEntry?: {
     externalKey: string;
     title: string;
@@ -56,16 +60,18 @@ type Props = {
 };
 
 function classLabel(klass: TeacherClass) {
-  return klass.title || `Grade ${klass.grade} • Period ${klass.period}`;
+  return formatClassCardTitle(klass);
 }
 
 export function CreateAssignmentSheet({
   assignmentTypeId,
   assignmentTypeTitle,
+  assignmentTypeCollaborationSupported = false,
   teacherClasses,
   open,
   onOpenChange,
   initialPrompt = '',
+  titleRequired = false,
   apHistoryEntry = null,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
@@ -95,9 +101,16 @@ export function CreateAssignmentSheet({
         onOpenChange={onOpenChange}
         entryPoint="assignment-type"
         fixedAssignmentTypeId={assignmentTypeId}
-        assignmentTypes={[{ id: assignmentTypeId, title: assignmentTypeTitle }]}
+        assignmentTypes={[
+          {
+            id: assignmentTypeId,
+            title: assignmentTypeTitle,
+            collaborationSupported: assignmentTypeCollaborationSupported,
+          },
+        ]}
         teacherClasses={teacherClasses}
         initialPrompt={initialPrompt}
+        titleRequired={titleRequired}
       />
     );
   }

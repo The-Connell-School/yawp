@@ -1,4 +1,5 @@
 /* eslint-disable no-console */
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { PrismaClient } from '../../generated/prisma';
@@ -8,10 +9,26 @@ import {
   type ProdFidelityManifest,
 } from './prod-fidelity-types';
 
-const FIXTURE_DIR = path.resolve(
-  import.meta.dir,
-  '../../fixtures/prod-fidelity'
-);
+// `import.meta.dir` is Bun-only. This module is now reachable from the web app, which
+// Vite loads under Node, where it is undefined -- and `path.resolve(undefined, ...)`
+// throws at import time, taking the whole route down before any candidate is tried.
+// Resolve the module-relative candidate defensively and keep it last.
+function moduleRelativeFixtureDir() {
+  const moduleDir = import.meta.dirname ?? (import.meta as { dir?: string }).dir;
+  return moduleDir
+    ? path.resolve(moduleDir, '../../fixtures/prod-fidelity')
+    : null;
+}
+
+const FIXTURE_DIR_CANDIDATES = [
+  path.resolve(process.cwd(), 'packages/prisma/fixtures/prod-fidelity'),
+  path.resolve(process.cwd(), '../../packages/prisma/fixtures/prod-fidelity'),
+  moduleRelativeFixtureDir(),
+].filter((candidate): candidate is string => candidate !== null);
+
+const FIXTURE_DIR =
+  FIXTURE_DIR_CANDIDATES.find((candidate) => existsSync(candidate)) ??
+  FIXTURE_DIR_CANDIDATES.at(-1)!;
 
 function serializeRow<T extends Record<string, unknown>>(row: T): T {
   const next = { ...row } as Record<string, unknown>;
@@ -24,10 +41,10 @@ function serializeRow<T extends Record<string, unknown>>(row: T): T {
 }
 
 export async function exportProdFidelityFixtures(
-  prisma: PrismaClient,
-  sourceDatabaseUrl: string
+  prisma: PrismaClient
 ): Promise<ProdFidelityBundle> {
   const [
+    rubrics,
     assignmentTypes,
     assignmentTypeImagesRaw,
     assignmentModules,
@@ -41,9 +58,12 @@ export async function exportProdFidelityFixtures(
     apHistoryPromptLibraryEntries,
     apHistoryPromptLibrarySources,
   ] = await Promise.all([
+    prisma.rubric.findMany({ orderBy: { name: 'asc' } }),
     prisma.assignmentType.findMany({ orderBy: { position: 'asc' } }),
     prisma.assignmentTypeImage.findMany(),
-    prisma.assignmentModule.findMany({ orderBy: [{ assignmentTypeId: 'asc' }, { position: 'asc' }] }),
+    prisma.assignmentModule.findMany({
+      orderBy: [{ assignmentTypeId: 'asc' }, { position: 'asc' }],
+    }),
     prisma.assignmentModuleInstruction.findMany({
       orderBy: [{ assignmentModuleId: 'asc' }, { position: 'asc' }],
     }),
@@ -87,15 +107,17 @@ export async function exportProdFidelityFixtures(
   );
 
   const manifest: ProdFidelityManifest = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
-    sourceDatabaseUrl,
+    sourceDatabaseUrl: 'production-config-export',
     counts: {
+      rubrics: rubrics.length,
       assignmentTypes: assignmentTypes.length,
       assignmentTypeImages: assignmentTypeImages.length,
       assignmentModules: assignmentModules.length,
       assignmentModuleInstructions: assignmentModuleInstructions.length,
-      assignmentModuleInstructionButtons: assignmentModuleInstructionButtons.length,
+      assignmentModuleInstructionButtons:
+        assignmentModuleInstructionButtons.length,
       teacherTrainings: teacherTrainings.length,
       teacherTrainingImages: teacherTrainingImages.length,
       teacherTrainingModules: teacherTrainingModules.length,
@@ -108,6 +130,9 @@ export async function exportProdFidelityFixtures(
 
   return {
     manifest,
+    rubrics: rubrics.map((row) =>
+      serializeRow(row as unknown as Record<string, unknown>)
+    ),
     assignmentTypes: assignmentTypes.map((row) =>
       serializeRow(row as unknown as Record<string, unknown>)
     ),
@@ -145,10 +170,14 @@ export async function writeProdFidelityBundle(bundle: ProdFidelityBundle) {
   await mkdir(FIXTURE_DIR, { recursive: true });
   const files: Array<[string, unknown]> = [
     ['manifest.json', bundle.manifest],
+    ['rubrics.json', bundle.rubrics],
     ['assignment-types.json', bundle.assignmentTypes],
     ['assignment-type-images.json', bundle.assignmentTypeImages],
     ['assignment-modules.json', bundle.assignmentModules],
-    ['assignment-module-instructions.json', bundle.assignmentModuleInstructions],
+    [
+      'assignment-module-instructions.json',
+      bundle.assignmentModuleInstructions,
+    ],
     [
       'assignment-module-instruction-buttons.json',
       bundle.assignmentModuleInstructionButtons,
@@ -161,8 +190,14 @@ export async function writeProdFidelityBundle(bundle: ProdFidelityBundle) {
       bundle.teacherTrainingModuleResources,
     ],
     ['teacher-training-resources.json', bundle.teacherTrainingResources],
-    ['ap-history-prompt-library-entries.json', bundle.apHistoryPromptLibraryEntries],
-    ['ap-history-prompt-library-sources.json', bundle.apHistoryPromptLibrarySources],
+    [
+      'ap-history-prompt-library-entries.json',
+      bundle.apHistoryPromptLibraryEntries,
+    ],
+    [
+      'ap-history-prompt-library-sources.json',
+      bundle.apHistoryPromptLibrarySources,
+    ],
   ];
 
   for (const [filename, payload] of files) {

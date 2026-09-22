@@ -5,20 +5,27 @@ import TextAlign from '@tiptap/extension-text-align';
 import TextStyle from '@tiptap/extension-text-style';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useCommentsSelection } from '../comments/selection-context';
 import { Bar } from './editor-bar';
 import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
+import {
+  DocumentImage,
+  type DocumentImageStatus,
+} from './extensions/document-image';
+import { EmDash } from './extensions/em-dash';
 import { LineHeight } from './extensions/line-height';
 import { TabIndent } from './extensions/tab-indent';
 import { SourceTracker } from './extensions/source-tracker';
+import { PastedSource } from './extensions/pasted-source';
+import { uploadDocumentImage } from './upload-document-image';
 import { usePmTripwire } from './use-pm-tripwire';
 import { useEditorSync, type EditorBridge } from './use-editor-sync';
 import { usePasteAlert } from './use-paste-alert';
 import type { SyncStatus } from '~/utils/sync-service';
 
-const extensions = [
+const baseExtensions = [
   TabIndent,
   LineHeight,
   TextAlign.configure({ types: ['heading', 'paragraph'] }),
@@ -40,6 +47,8 @@ const extensions = [
   Comment,
   CommentExtension,
   SourceTracker,
+  PastedSource,
+  EmDash,
 ];
 
 type Props = {
@@ -47,6 +56,7 @@ type Props = {
   initialHtml: string;
   initialRevision: number;
   isEditable: boolean;
+  canUploadImages?: boolean;
   onBridgeReady: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: SyncStatus) => void;
   onSubmittableContentChange?: (submittable: boolean) => void;
@@ -59,12 +69,44 @@ export function Editor({
   initialHtml,
   initialRevision,
   isEditable,
+  canUploadImages = false,
   onBridgeReady,
   onSyncStatusChange,
   onSubmittableContentChange,
   onEditorDomReady,
   onCommentCreated,
 }: Props) {
+  const [imageStatus, setImageStatus] = useState<DocumentImageStatus>({ state: 'idle' });
+
+  // Paste and drop upload straight into this document, so the extension has to
+  // be built per document rather than shared at module scope. Both deps are
+  // stable for the life of the mounted editor, so this never rebuilds it.
+  const extensions = useMemo(
+    () => [
+      ...baseExtensions,
+      DocumentImage.configure({
+        uploader: canUploadImages
+          ? async (file: File) => {
+              const result = await uploadDocumentImage({
+                documentId: docId,
+                file,
+                // Pasted and dropped figures start with an empty caption for
+                // the student to fill in inline, but the stored record still
+                // wants something human-readable.
+                altText: file.name.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ') ||
+                  'Uploaded image',
+              });
+              return result.ok
+                ? ({ ok: true, src: result.image.src } as const)
+                : ({ ok: false, message: result.message } as const);
+            }
+          : null,
+        onStatus: setImageStatus,
+      }),
+    ],
+    [docId, canUploadImages]
+  );
+
   const editor = useEditor({
     extensions,
     content: initialHtml,
@@ -191,8 +233,25 @@ export function Editor({
             editor={editor}
             documentId={docId}
             isEditable={isEditable}
+            canUploadImages={canUploadImages}
             onCommentCreated={onCommentCreated}
           />
+        ) : null}
+        {imageStatus.state !== 'idle' ? (
+          <div
+            role="status"
+            aria-live="polite"
+            data-testid="editor-image-status"
+            className={
+              imageStatus.state === 'error'
+                ? 'border-b bg-destructive/10 text-destructive px-4 py-2 text-sm'
+                : 'border-b bg-muted px-4 py-2 text-muted-foreground text-sm'
+            }
+          >
+            {imageStatus.state === 'uploading'
+              ? `Uploading ${imageStatus.count} image${imageStatus.count === 1 ? '' : 's'}…`
+              : imageStatus.message}
+          </div>
         ) : null}
         <div
           className="no-scrollbar grow overflow-y-scroll p-5"

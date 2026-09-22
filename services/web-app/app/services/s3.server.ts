@@ -6,6 +6,7 @@ import {
   AbortMultipartUploadCommand,
   PutObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -41,6 +42,15 @@ export async function putSmallObject(
 export async function getSignedGetUrl(key: string, expiresInSeconds = 3600) {
   const command = new GetObjectCommand({ Bucket: videoBucket, Key: key });
   return getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
+}
+
+export async function deleteSmallObject(key: string) {
+  await s3.send(
+    new DeleteObjectCommand({
+      Bucket: videoBucket,
+      Key: key,
+    })
+  );
 }
 
 export async function startMultipartUpload(key: string, contentType: string) {

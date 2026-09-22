@@ -63,6 +63,28 @@
   --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
 }
 
+.auth-page-shell {
+  min-height: 100dvh;
+  padding: 2rem 1rem;
+}
+
+.auth-page-frame {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+}
+
+.auth-page-content {
+  width: 100%;
+  min-width: 0;
+}
+
+.auth-page-logo img {
+  width: 13rem;
+}
+
 :root[data-contrast='high'] {
   --primary: 14.8837 58.9041% 40%;
   --muted-foreground: 50 2.4% 36%;
@@ -134,6 +156,15 @@
   .no-scrollbar {
     -ms-overflow-style: none; /* IE and Edge */
     scrollbar-width: none; /* Firefox */
+  }
+  /* Opt back in where the overflow has to be discoverable (scrolling tables) */
+  .show-scrollbar::-webkit-scrollbar {
+    display: block;
+    height: 8px;
+  }
+  .show-scrollbar {
+    -ms-overflow-style: auto;
+    scrollbar-width: thin;
   }
 }
 /* Typography */
@@ -212,6 +243,40 @@ code {
   box-shadow: 0 2px 6px -1px rgba(202, 138, 4, 0.35);
 }
 
+/* Student-uploaded figures (charts, graphs, logos) in report-style documents.
+   Styled on `figure.document-image` rather than `.tiptap figure` so the same
+   rules cover the editor, the read-only submission view, and print. */
+figure.document-image {
+  @apply my-4 flex flex-col items-center gap-2;
+}
+figure.document-image img {
+  @apply max-w-full rounded-md border object-contain;
+}
+figure.document-image[data-size='half'] {
+  @apply mx-auto w-1/2;
+}
+/* w-full matters: the figure is a centering flex column, so a caption sized to
+   its content is zero-width while empty -- invisible, and impossible to click
+   into. Full width plus a min height keeps the empty caption a real target. */
+figure.document-image figcaption {
+  @apply text-muted-foreground min-h-[1.5rem] w-full text-center text-sm italic;
+}
+/* A pasted or dropped figure lands with no caption. Prompt for one rather than
+   leaving an unexplained blank line under the image -- the caption is also the
+   alt text, so an empty one is an accessibility gap, not just a cosmetic one.
+   ProseMirror parks a trailing <br> inside an empty block, so :empty alone
+   never matches inside the editor. */
+.tiptap figure.document-image figcaption:empty::before,
+.tiptap
+  figure.document-image
+  figcaption:has(> br.ProseMirror-trailingBreak:only-child)::before {
+  content: 'Describe this image…';
+  @apply text-muted-foreground/50;
+}
+figure.document-image.ProseMirror-selectednode img {
+  @apply ring-primary ring-2 ring-offset-2;
+}
+
 /* Graded artifact highlights */
 .draft-comments-hidden .comment-mark {
   background-color: transparent;
@@ -284,13 +349,82 @@ code {
   background-color: #93c5fd44;
   border-bottom: 2px dotted #3b82f6;
 }
+/*
+ * Text that arrived in the document from outside the app. The mark stays in
+ * the saved HTML so the paste record survives, but it never paints: neither
+ * the student nor the teacher sees which passages were pasted.
+ */
+.pasted-source-mark {
+  background-color: transparent;
+}
+
 .grammar-issue-mark {
   background-color: #d8b4fe50;
-  border-bottom: 2px wavy #a855f7;
+  border-bottom: 2px dotted #a855f7;
   cursor: help;
 }
 .grammar-issue-mark:hover {
   background-color: #d8b4fe80;
+}
+
+/* Collaborator carets in a shared draft.
+
+   Drawn as widget decorations by y-prosemirror, so they sit between characters
+   and take no width in the text flow: the sentence a student is typing does not
+   reflow because a teammate's cursor is near it.
+
+   The caret itself is always there — that is the feature, and its colour is the
+   one its owner's initials carry in the header, so colour alone answers "who".
+   The name stays visible, matching the orientation Google Docs gives a writer:
+   colour answers quickly and the label removes ambiguity without requiring a
+   precision hover over a two-pixel target. */
+.collaboration-cursor__caret {
+  border-left: 1px solid;
+  border-right: 1px solid;
+  cursor: text;
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: auto;
+  position: relative;
+  word-break: normal;
+}
+/* A hover target you can actually hit. The caret is two pixels wide, which is
+   the right width to draw and the wrong width to aim at, so an invisible pad
+   widens it to roughly a fingertip without widening what is drawn. It sits over
+   the text either side; a click there still lands where it looks like it lands,
+   because ProseMirror resolves a click on a widget to the position under the
+   pointer. */
+.collaboration-cursor__caret::before {
+  content: '';
+  position: absolute;
+  inset: -2px -6px;
+}
+.collaboration-cursor__label {
+  border-radius: 3px 3px 3px 0;
+  color: #fff;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  left: -1px;
+  line-height: normal;
+  opacity: 0.94;
+  padding: 1px 5px;
+  pointer-events: none;
+  position: absolute;
+  top: -1.35em;
+  transition: opacity 120ms ease;
+  user-select: none;
+  white-space: nowrap;
+}
+.collaboration-cursor__caret:hover .collaboration-cursor__label {
+  opacity: 1;
+}
+/* The tint over a teammate's selection. Alpha comes from the colour itself so
+   the text underneath keeps its contrast — a solid fill would make the words a
+   student is reading unreadable. */
+.collaboration-cursor__selection {
+  border-radius: 2px;
 }
 
 @keyframes highlight-mark-active {
@@ -829,6 +963,34 @@ body:has(.yawp-public) > [data-state='closed'].fixed.bottom-4.right-4 {
   white-space: pre-wrap;
 }
 
+.yawp-footer .yawp-footer-item {
+  align-items: center;
+  color: #6f6a63;
+  display: flex;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+  font-size: 12px;
+  gap: 10px;
+  justify-content: center;
+  letter-spacing: 0;
+  margin: 24px auto 0;
+}
+
+.yawp-footer .yawp-footer-meta-link,
+.yawp-entry .yawp-footer-meta-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.yawp-footer-divider {
+  background: rgba(111, 106, 99, 0.45);
+  display: inline-block;
+  height: 12px;
+  width: 1px;
+}
+
 .yawp-entry {
   align-items: center;
   background:
@@ -989,6 +1151,22 @@ body:has(.yawp-public) > [data-state='closed'].fixed.bottom-4.right-4 {
   color: #b75f44;
   margin-top: 20px;
   min-width: 160px;
+}
+
+.yawp-entry-footer {
+  align-items: center;
+  border-top: 1px solid rgba(27, 27, 27, 0.1);
+  color: #6f6a63;
+  display: flex;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+  font-size: 12px;
+  gap: 10px;
+  justify-content: center;
+  letter-spacing: 0;
+  margin-top: 28px;
+  padding-top: 18px;
+  width: min(100%, 420px);
 }
 
 body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
@@ -1203,6 +1381,11 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
   .yawp-footer p {
     flex-direction: column;
     gap: 12px;
+  }
+
+  .yawp-footer .yawp-footer-meta {
+    flex-direction: row;
+    gap: 10px;
   }
 
   .yawp-entry {

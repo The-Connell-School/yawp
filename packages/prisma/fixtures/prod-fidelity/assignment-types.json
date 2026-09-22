@@ -1,21 +1,30 @@
 [
   {
     "id": "cfreewrite0000000000000000",
-    "createdAt": "2026-05-08T22:19:15.610Z",
-    "updatedAt": "2026-05-08T22:19:15.610Z",
+    "createdAt": "2026-05-09T03:19:15.610Z",
+    "updatedAt": "2026-05-09T03:19:15.610Z",
     "title": "Free Write",
     "kind": "free_write",
     "description": "An open-ended writing space. No prompt, no structure — just write.",
     "position": 0,
     "systemKey": null,
-    "archivedAt": "2026-05-18T22:19:29.692Z",
+    "archivedAt": "2026-05-19T03:19:29.692Z",
     "ownerOrgId": null,
-    "ownerTeacherId": null
+    "ownerMembershipId": null,
+    "rubricId": null,
+    "scoringScaleJson": null,
+    "rubricJson": null,
+    "gradingPromptConfigJson": null,
+    "gradingOutputSchemaJson": null,
+    "gradingCalibrationNotes": null,
+    "gradingAssistantVersion": 1,
+    "gradingAssistantSourceTemplateId": null,
+    "gradingAssistantSourceTemplateSlug": null
   },
   {
     "id": "clxiepcvs0004h87lutw2n5lt",
-    "createdAt": "2024-06-16T22:19:11.992Z",
-    "updatedAt": "2025-05-20T13:07:33.856Z",
+    "createdAt": "2024-06-17T03:19:11.992Z",
+    "updatedAt": "2025-05-20T18:07:33.856Z",
     "title": "The Thesis-Driven Essay",
     "kind": null,
     "description": "This course will show you how to write a thesis-driven critical essay. Learn how to find your focus, develop a thesis statement, organize body paragraphs, and write a compelling conclusion. Write an essay that amazes your readers!",
@@ -23,7 +32,393 @@
     "systemKey": null,
     "archivedAt": null,
     "ownerOrgId": null,
-    "ownerTeacherId": null,
+    "ownerMembershipId": null,
+    "rubricId": null,
+    "scoringScaleJson": null,
+    "rubricJson": null,
+    "gradingPromptConfigJson": null,
+    "gradingOutputSchemaJson": null,
+    "gradingCalibrationNotes": null,
+    "gradingAssistantVersion": 1,
+    "gradingAssistantSourceTemplateId": null,
+    "gradingAssistantSourceTemplateSlug": null
+  },
+  {
+    "id": "cmamr5eai08sl82y6dsr4ymxo",
+    "createdAt": "2025-05-13T16:54:50.779Z",
+    "updatedAt": "2025-06-03T09:51:14.781Z",
+    "title": "The 5-Paragraph Essay",
+    "kind": null,
+    "description": "In this course, students learn the basic, fundamental form for academic writing. ",
+    "position": 1,
+    "systemKey": null,
+    "archivedAt": null,
+    "ownerOrgId": null,
+    "ownerMembershipId": null,
+    "rubricId": null,
+    "scoringScaleJson": null,
+    "rubricJson": null,
+    "gradingPromptConfigJson": null,
+    "gradingOutputSchemaJson": null,
+    "gradingCalibrationNotes": null,
+    "gradingAssistantVersion": 1,
+    "gradingAssistantSourceTemplateId": null,
+    "gradingAssistantSourceTemplateSlug": null
+  },
+  {
+    "id": "cmlar2iy600000qjs5f6va3cz",
+    "createdAt": "2026-02-06T10:36:08.430Z",
+    "updatedAt": "2026-02-06T10:36:08.430Z",
+    "title": "Welcome to YAWP! ",
+    "kind": null,
+    "description": "Get familiar with the YAWP! platform and Tutor. ",
+    "position": 2,
+    "systemKey": null,
+    "archivedAt": null,
+    "ownerOrgId": null,
+    "ownerMembershipId": null,
+    "rubricId": null,
+    "scoringScaleJson": null,
+    "rubricJson": null,
+    "gradingPromptConfigJson": null,
+    "gradingOutputSchemaJson": null,
+    "gradingCalibrationNotes": null,
+    "gradingAssistantVersion": 1,
+    "gradingAssistantSourceTemplateId": null,
+    "gradingAssistantSourceTemplateSlug": null
+  },
+  {
+    "id": "cmlgtyo8j01em0qjs6knw7cni",
+    "createdAt": "2026-02-10T16:43:44.563Z",
+    "updatedAt": "2026-02-10T16:43:44.563Z",
+    "title": "Daily Pages",
+    "kind": "daily_pages",
+    "description": "Create entries for daily writing assignments or reflections, or use it to develop your next big idea. ",
+    "position": 3,
+    "systemKey": null,
+    "archivedAt": null,
+    "ownerOrgId": null,
+    "ownerMembershipId": null,
+    "rubricId": null,
+    "scoringScaleJson": {
+      "step": 10,
+      "type": "rubric_points",
+      "maxScore": 30,
+      "minScore": 0,
+      "compositeMax": 30,
+      "compositeMin": 0
+    },
+    "rubricJson": {
+      "categories": [
+        {
+          "key": "engagement_with_prompt",
+          "label": "Engagement with Prompt",
+          "weight": 1,
+          "description": "Measures the student's genuine engagement with the day's prompt — real thoughts, specific details, a mind visibly at work. Does not measure grammar, spelling, syntax, organization, or correctness of content. Judge whether the student took up the prompt, wrestled with it, and responded to what it asked. If no prompt is available, judge engagement with the act of writing itself.",
+          "scoreLabels": [
+            {
+              "label": "NOT HANDED IN",
+              "value": 0
+            },
+            {
+              "label": "HARDLY THERE",
+              "value": 10
+            },
+            {
+              "label": "SHOWED UP",
+              "value": 20
+            },
+            {
+              "label": "ALL IN",
+              "value": 30
+            }
+          ],
+          "feedbackEnabled": false,
+          "grammarHighlighting": false
+        }
+      ]
+    },
+    "gradingPromptConfigJson": {
+      "gradingInstructions": "Daily Pages are an opportunity for students to workout their writing muscles. Correct grammar and syntax are a bonus, but not a requirement. The goal is for students to engage with an idea or prompt through writing. Daily Pages assingments might include start-of-class reflections, journal-type writing, or \"exit tickets\" designed to capture proof of a lesson learned. Students who demonstrate high engagement and the ability to reflect on/discuss ideas in a complex way earn the highest score. Students who write minimally or with little apparent interest or personal stake earn the lowest score."
+    },
+    "gradingOutputSchemaJson": {
+      "responseShape": "categories_overall_comment",
+      "schemaVersion": 1
+    },
+    "gradingCalibrationNotes": null,
+    "gradingAssistantVersion": 5,
+    "gradingAssistantSourceTemplateId": null,
+    "gradingAssistantSourceTemplateSlug": null
+  },
+  {
+    "id": "cmnt1bliz0l610qk0r09ug5u6",
+    "createdAt": "2026-04-10T15:02:23.675Z",
+    "updatedAt": "2026-04-10T15:02:23.675Z",
+    "title": "GBA 300: Int'l Expansion Plan",
+    "kind": null,
+    "description": "International Expansion Plan — create a firm and prepare a report to present to CEO-level executives that offers a recommendation for expanding into a new international market.\r\n",
+    "position": 4,
+    "systemKey": null,
+    "archivedAt": null,
+    "ownerOrgId": null,
+    "ownerMembershipId": null,
+    "rubricId": null,
+    "scoringScaleJson": {
+      "step": 1,
+      "type": "rubric_points",
+      "maxScore": 100,
+      "minScore": 0,
+      "compositeMax": 100,
+      "compositeMin": 0
+    },
+    "rubricJson": {
+      "categories": [
+        {
+          "key": "executive_summary",
+          "label": "Executive Summary",
+          "weight": 0.1,
+          "description": "One page in Workplace Application format. Stands alone: CEO reading nothing else knows the firm, target country, key findings from each major section, and the recommendation. Exemplary 9-10, Proficient 8, Developing 7, Struggling 1-6, Absent 0."
+        },
+        {
+          "key": "company_overview",
+          "label": "Company Overview",
+          "weight": 0.1,
+          "description": "All three subsections present and labeled: Objectives, Mission, Statement of Opportunity. Company is specific and plausible; mission feels authentic; Statement of Opportunity cleanly frames the project. Exemplary 9-10, Proficient 8, Developing 7, Struggling 1-6, Absent 0."
+        },
+        {
+          "key": "industry_analysis",
+          "label": "Industry Analysis",
+          "weight": 0.2,
+          "description": "Global industry with yearly revenue and 10-year stability in graphics plus 3+ trends in paragraph form. Market Profile with 10 years of target-country sales data. 3+ named competitors with one paragraph each. At least 2 meaningful graphics. Paragraph form, cited throughout, explains why not just what. Exemplary 18-20, Proficient 16-17, Developing 14-15, Struggling 1-13, Absent 0."
+        },
+        {
+          "key": "international_location_profile",
+          "label": "International Location Profile",
+          "weight": 0.2,
+          "description": "Target location described then all six PESTEL dimensions analyzed with explicit connection to this company's expansion. Dimensions interrelate where relevant. Paragraph form, visuals where sensible, cited. Exemplary 18-20, Proficient 16-17, Developing 14-15, Struggling 1-13, Absent 0."
+        },
+        {
+          "key": "consumer_profile",
+          "label": "Consumer Profile",
+          "weight": 0.05,
+          "description": "Correct path followed: B2C includes demographics and psychographics specific enough to picture the buyer; B2B includes organization type, size, competitive advantage, and brand elevation. Unique Success Factors tied directly to that consumer. Cited where market claims appear and consistent with Advertising Strategy. Exemplary 5, Proficient 4, Developing 3, Struggling 1-2, Absent 0."
+        },
+        {
+          "key": "advertising_strategy",
+          "label": "Advertising Strategy",
+          "weight": 0.05,
+          "description": "Brand Positioning consistent with Company Overview and Consumer Profile. Media Selection backed by data on what the target population actually consumes with concrete channels. At least 2 mock-ad visuals fitting the positioning and market. All three subsections present. Exemplary 5, Proficient 4, Developing 3, Struggling 1-2, Absent 0."
+        },
+        {
+          "key": "budget",
+          "label": "Budget",
+          "weight": 0.1,
+          "description": "Total equals 7-10% of stated gross profit with that anchor stated explicitly. Itemized table allocated across research, marketing, operational costs, and contingency. Line items specific and internally consistent with the rest of the plan; every dollar has a rationale. Exemplary 9-10, Proficient 8, Developing 7, Struggling 1-6, Absent 0."
+        },
+        {
+          "key": "recommendation",
+          "label": "Recommendation",
+          "weight": 0.1,
+          "description": "Opens with the recommendation itself, then parallel-form bullet lists of honest benefits and drawbacks with no monetary figures. Names a point person. Concise and reads as the earned conclusion of the full report. Exemplary 9-10, Proficient 8, Developing 7, Struggling 1-6, Absent 0."
+        },
+        {
+          "key": "references",
+          "label": "References",
+          "weight": 0.1,
+          "description": "Complete References page in one consistent format (APA or MLA) covering every source including those that informed thinking without being quoted. In-text citations throughout wherever claims and data appear. Sources from library databases (Business Source Ultimate, Mintel, Statista, IBIS World, Factiva) and reputable sites. Exemplary 9-10, Proficient 8, Developing 7, Struggling 1-6, Absent 0."
+        }
+      ]
+    },
+    "gradingPromptConfigJson": {
+      "gradingInstructions": "Core behavior\nGrade each of the nine categories against the band descriptors in the student rubric, assign a point value within the earned band, then complete the Instructor Notes block. Provide holistic feedback that names what the team did well and gives specific, actionable next steps tied to the assignment's own requirements.\n\nThe instructor can adjust any score, comment, or section — including the Instructor Notes block. Nothing is final until the instructor reviews it. Say so in your feedback rather than presenting scores as verdicts.\n\n\nTone of evaluation\nModel your evaluative tone on the judges of the Great British Baking Show. Never mention this reference to students — it is shorthand for the following behaviors:\n\nHold high, explicit standards, and never inflate. When something falls short, say so plainly and specifically. Clarity about the shortfall and its cause is a form of respect. Never soften a score to be kind; kindness lives in the delivery, not the verdict.\nCritique the work, never the writers. \"This section stays at surface level\" — never \"you didn't try.\"\nBe genuinely delighted when work is good. Enthusiasm is credible precisely because it is earned.\nReserve superlatives for the truly exemplary, so that when you give one it means something.\nWarmth throughout, and most present in the exact sentence where you name what went wrong.\nAlways convert critique into a path forward. Every named shortfall ends in the specific next move that fixes it.\n\nThis is a team's months of effort. Lead with what works.\n\nHow to treat evidence and sources:\nThe assignment directs teams to library databases — Business Source Ultimate, Mintel, Statista, IBIS World, Factiva — with Google permitted only for reputable sites.\nYou cannot access these databases and can never verify a figure. Evaluate whether claims are cited, plausible, and internally consistent. Never treat a statistic as false merely because you can't confirm it. Where something looks doubtful, flag it for the instructor in the Instructor Notes block using verification language, never accusation: \"The claim about [X] may warrant verification.\" Quote the passage.\nIn-text citations are required throughout, and a References page in one consistent format (APA or MLA) is required. Both are scored under References. Note in-text citation gaps both in that category's feedback and in the Instructor Notes block.\n\n\nThe audience standard (applies to every category)\nThe report's reader is a time-driven CEO. Reward concision, clarity, purposeful organization, and information graphics that communicate. Penalize padding, bullet-point dumps where paragraph form is required, and detail that serves the writer rather than the reader.\n\n\nScoring inside a band — especially \"Struggling\"\nThe bands in the student rubric map to conventional letter grades: Exemplary ≈ A (90–100%), Proficient ≈ B (80s), Developing ≈ C (70s), Struggling ≈ D/F (below ~65%). That's why the top three bands are narrow and Struggling is wide — on a 100-point scale, everything below a C is one large undifferentiated region.\n\nThat width is a problem for consistency. A 3 and an 11 out of 20 describe very different reports, and the student on the receiving end deserves a score that reflects which one they turned in. Use these internal anchors when placing a score inside Struggling. They are for your calibration only — do not quote these tiers to students; explain the score in the language of the band descriptors instead.\n\n20-point categories (Struggling 1–13):\n\n11–13 — most required components are present but thin, largely uncited, or descriptive where analysis was required.\n7–10 — several required components missing or so underdeveloped they don't function; what's there is generic.\n1–6 — token attempt: a fraction of the requirements, no data, no citations, or content disconnected from the assignment.\n\n10-point categories (Struggling 1–6):\n\n5–6 — components present but weak; the section does its job poorly rather than not at all.\n3–4 — significant components missing; what remains is generic or inconsistent with the rest of the report.\n1–2 — token attempt.\n\n5-point categories (Struggling 1–2):\n\n2 — one subsection present and weak.\n1 — token attempt.\n\nA note on the 5-point scale. Because it's coarse, Developing (3/5 = 60%) lands lower against a letter scale than Developing does in the 10- and 20-point categories (70%). This is an accepted artifact — each of those categories is 5% of the grade, and whole numbers keep the instructor's math clean. Do not use half points. Just be sure the descriptor you name matches the work, since the number carries less nuance here.\nGrading the two 5-point categories\nConsumer Profile and Advertising Strategy are worth 5 points each, but both have multiple required subsections. A small point value does not mean small expectations — judge them against the same standard as everything else, then place them on the 5-point band.\n\nBecause the margin is narrow, be precise about which subsection caused the drop, or the feedback isn't actionable. \"4/5 — the media selection isn't backed by consumption data\" is useful; \"4/5 — good work\" is not.\n\nGrade Advertising Strategy against the Consumer Profile that precedes it. An advertising strategy that would work for any buyer is not a strategy. This is the most common structural failure in the assignment: teams write the two sections independently and the media choices end up aimed at nobody in particular. Check the link every time.\n\nNote on ordering: the rubric places Consumer Profile before Advertising Strategy, which reverses the department's printed list. The sequence follows the logic of the work — you cannot position a brand for a consumer you haven't defined. Point values are unchanged.\n\n\nInstructor Notes — instructor-controlled block (unbanded, no deductions)\nYou never apply deductions. The assignment sheet defines none. This block carries observations for the professor's discretion. Address all four areas every time, including when everything is in order, and write in wording appropriate for a student to read — the instructor may choose to share it.\n\n1. Unpointed requirements check. Cover page (logo; title \"Target Location: [Country]\"; team names ≥24 pt); Table of Contents with page numbers; each main section starting at the top of a new page; paragraph form wherever required.\n\n2. Citation and sourcing observations. In-text citation gaps beyond what the References score already reflects; any content that appears unlikely to have come from the named databases or reputable sources. Quote the passage, recommend verification, never accuse.\n\n3. Internal consistency. Contradictions across sections — company size versus budget, consumer versus media choices, industry data versus recommendation. Name them specifically. Consistency is the difference between a report and a stapled stack of subsections.\n\n4. Anything else the professor should see. For example: a section whose polish differs sharply from the rest (worth a look given team authorship), or exceptional work worth celebrating to the class.\n\n\nFeedback structure\nOverall impression — 2–3 sentences, leading with what works.\nCategories 1–9 — band and points for each, with the single most useful improvement.\nInstructor Notes block — all four areas addressed explicitly.\nOne next step — the highest-leverage revision if the team does only one thing.\n\n\nBoundaries\nNever name a specific professor. Multiple faculty teach this course.\nNever accuse a team of dishonesty. Flag for verification; the instructor decides.\nNever invent a requirement that isn't in the assignment or the student rubric.\nNever present a score as final. The instructor reviews and may change anything."
+    },
+    "gradingOutputSchemaJson": {
+      "responseShape": "categories_overall_comment",
+      "schemaVersion": 1
+    },
+    "gradingCalibrationNotes": null,
+    "gradingAssistantVersion": 5,
+    "gradingAssistantSourceTemplateId": null,
+    "gradingAssistantSourceTemplateSlug": null,
+    "collaborationSupported": true,
+    "allowsImageUploads": true
+  },
+  {
+    "id": "cmpphw7w303lh01l15z0pr6nd",
+    "createdAt": "2026-05-28T12:54:39.603Z",
+    "updatedAt": "2026-05-28T12:54:39.603Z",
+    "title": "ACT Writing Section ",
+    "kind": null,
+    "description": "Practice the ACT Writing Section and get real feedback on how to improve. ",
+    "position": 7,
+    "systemKey": null,
+    "archivedAt": null,
+    "ownerOrgId": null,
+    "ownerMembershipId": null,
+    "rubricId": null,
+    "scoringScaleJson": {
+      "type": "weighted_1_5",
+      "maxScore": 6,
+      "minScore": 1
+    },
+    "rubricJson": {
+      "categories": []
+    },
+    "gradingPromptConfigJson": {},
+    "gradingOutputSchemaJson": {
+      "responseShape": "categories_overall_comment",
+      "schemaVersion": 1
+    },
+    "gradingCalibrationNotes": null,
+    "gradingAssistantVersion": 2,
+    "gradingAssistantSourceTemplateId": null,
+    "gradingAssistantSourceTemplateSlug": null
+  },
+  {
+    "id": "cms93piub000101lbiyhn43lh",
+    "createdAt": "2026-07-31T15:32:20.771Z",
+    "updatedAt": "2026-07-31T15:32:20.771Z",
+    "title": "GBA 300: Int'l Etiquette",
+    "kind": null,
+    "description": "Identify two countries with which you are not familiar and write a comparative analysis regarding\r\ncultural expectations for business communication and etiquette. Two different topics per country\r\nare required. These topics must focus on expectations for interpersonal communication such as\r\neye contact/body language, hierarchies in the workplace, negotiation styles, or entertaining clients\r\nand/or partners. This paper should NOT focus on hours of operations, economy, the history of the\r\ncountry, or anything not pertaining to communication within the business etiquette and\r\ncommunication of the identified culture.",
+    "position": 10,
+    "systemKey": null,
+    "archivedAt": null,
+    "ownerOrgId": null,
+    "ownerMembershipId": null,
+    "rubricId": null,
+    "scoringScaleJson": {
+      "type": "weighted_1_5",
+      "maxScore": 100,
+      "minScore": 0,
+      "compositeMax": 50,
+      "compositeMin": 0
+    },
+    "rubricJson": {
+      "categories": [
+        {
+          "key": "introduction",
+          "label": "Introduction",
+          "weight": 0.1,
+          "description": "≤4 sentences. Names both countries with a genuine, specific reason for the pairing. Reads as a purposeful setup for a comparison. Exemplary (5): specific contrast motivating the pairing; Proficient (4): plausible reason, clear and professional; Developing (3): generic reason, overlong, or missing real rationale; Struggling (1–2): missing a country, seriously overlong, or fails to establish purpose; Absent (0): no introduction."
+        },
+        {
+          "key": "country_1_its_two_topics",
+          "label": "Country 1 & Its Two Topics",
+          "weight": 0.4,
+          "description": "Both topics must focus on interpersonal business communication (e.g., greetings, hierarchy, negotiation, meeting etiquette, gift-giving). Each section ≤6 sentences. Exemplary (18–20): both topics on-task, specific, goes beyond listing customs to their significance, descriptive sub-headings, professional voice, non-judgmental framing; Proficient (16–17): both on-task and factual, within sentence cap, clear sub-headings, solid description with minor lapses; Developing (14–15): one topic drifts off-task, sections exceed cap, surface-level content, or vague sub-headings; Struggling (1–13): a topic is off-task (economy/history/geography/politics/tourism), missing topic or sub-heading, inaccurate or judgmental content; Absent (0): country section missing."
+        },
+        {
+          "key": "country_2_its_two_topics",
+          "label": "Country 2 & Its Two Topics",
+          "weight": 0.4,
+          "description": "Same descriptors as Country 1. At Exemplary level, topic choices for Country 2 additionally set up a genuine comparison with Country 1 — parallel or contrasting topics that give the conclusion something to work with. Exemplary (18–20); Proficient (16–17); Developing (14–15); Struggling (1–13); Absent (0)."
+        },
+        {
+          "key": "conclusion",
+          "label": "Conclusion",
+          "weight": 0.1,
+          "description": "≤4 sentences. Draws a real comparative insight about what the differences between the two cultures reveal and why it matters for global business. Exemplary (5): genuine comparative insight, 'so what?' answered; Proficient (4): accurate comparison, insight modest or partially restates sections; Developing (3): mostly restates four topics without synthesis, or overlong; Struggling (1–2): no comparison, treats countries separately, or trails off without takeaway; Absent (0): no conclusion."
+        },
+        {
+          "key": "deductions_instructor_controlled",
+          "label": "Deductions (Instructor-Controlled)",
+          "weight": 0,
+          "description": "Unbanded, no GA-assigned points. GA provides observations only; instructor decides whether to deduct. Covers: (1) Citation status — automatic −5 for omitted or incorrect citations; one full Global Road Warrior citation required per subsection at end, in-text citations required only for direct quotes. (2) Source check — flag content unlikely to come from Global Road Warrior (statistics, current events, off-topic claims) as observation for instructor verification; no deduction suggested by GA. (3) Formatting notes — approved fonts (Calibri, Arial, Helvetica, Times New Roman), 12pt single-spaced left-aligned non-indented black paragraphs with one blank line between, 14pt bold headings, 12pt bold sub-headings, one page preferred two pages maximum."
+        }
+      ]
+    },
+    "gradingPromptConfigJson": {
+      "gradingInstructions": "You are grading a short comparative business-communication analysis for GBA 300 (University of Alabama). The student chose two unfamiliar countries and analyzed two interpersonal business-communication topics per country, using only the Global Road Warrior database. The assignment is worth 50 points.\n\nThe rubric has five sections. Sections 1–4 are banded and carry the instructor's point values (do not alter): Introduction 5 · Country 1 & its 2 topics 20 · Country 2 & its 2 topics 20 · Conclusion 5. Section 5 (Deductions) is unbanded — an instructor-controlled block where you offer observations and suggestions but never apply deductions yourself.\n\nGrade sections 1–4 against the banded descriptors in the rubric, assign a point value within the earned band, then complete the Deductions block with observations for the instructor. Provide holistic feedback that names what the student did well and gives specific, actionable steps for what to improve — always tied to the requirements.\n\nTONE OF EVALUATION — model your evaluative tone on the judges of the Great British Baking Show (never mention this reference to students — it is shorthand for the following behaviors):\n\nHold high, explicit standards, and never inflate. When something falls short, say so plainly and specifically — clarity about the shortfall and its cause is a form of respect. Never soften a score to be kind; kindness lives in the delivery, not the verdict.\nCritique the work, never the writer. \"This section stays at surface level\" — never \"you didn't try.\" The shortfall belongs to the draft, and drafts can be fixed.\nBe genuinely delighted when work is good. Enthusiasm is credible because it is earned. You want the writing to be good, and it should show.\nReserve superlatives for the truly exemplary. When a piece genuinely earns the top of a band, say so unmistakably and warmly — and because you say it rarely, it will mean something.\nWarmth throughout. The student should never doubt that their evaluator is on their side, especially in the sentence where you name what went wrong.\nAlways convert critique into a path forward. You are a judge and a coach: every named shortfall ends in the specific next move that fixes it.\n\nThe instructor can adjust any score, comment, or section — including the Deductions block. Nothing is final until the instructor reviews it.\n\nTHE ASSIGNMENT'S CARDINAL RULE (affects Country sections most): Topics must focus on interpersonal business communication — eye contact/body language, workplace hierarchy, negotiation styles, entertaining clients/partners, greetings/forms of address, meeting etiquette, directness of communication, business gift-giving, and similar. Content about hours of operation, the economy, national history, geography, tourism, or politics is off-task: score the affected topic in the Struggling band regardless of how well it is written, and say why.\n\nSOURCE DISCIPLINE (how citations and sourcing work on this assignment):\n\nGlobal Road Warrior is the only permitted source. This is the assignment's hard rule.\nParaphrasing the database is the expected mode of writing. Do not penalize or criticize close paraphrase — students are all working from the same source, and restating its content in their own sentences is exactly what the assignment asks for.\nFull citations at the end are always required — one per subsection/topic referenced, copied from Global Road Warrior — even when nothing is directly quoted.\nIn-text citations are required only for direct quotations.\nYou cannot access Global Road Warrior and can never confirm that text is verbatim or that content came from elsewhere. All sourcing concerns are observations for the instructor, never penalties.\n\nSECTION 5 — DEDUCTIONS BLOCK. You never apply a deduction. Write observations here; the instructor decides. Address each of the following explicitly, every time (including when everything is in order):\n\nCitation status (the assignment's automatic −5 for omitted or incorrect citations). If citations are complete and correct — one full Global Road Warrior citation per subsection at the end, in-text citations on any direct quotes — say so plainly: \"Citations appear complete and correct; no deduction indicated.\" If end citations are missing, short of one-per-subsection, or clearly malformed, recommend the deduction and name exactly what is missing or wrong, and how to fix it. If a passage appears to be word-for-word source text without quotation marks or an in-text citation, quote the passage in this block and note it in student-appropriate terms, e.g.: \"The sentence in the Japan section beginning 'Punctuality is regarded as…' reads as though it may be word-for-word from Global Road Warrior. If those are the source's exact words, the assignment requires quotation marks and an in-text citation, and the citation deduction would apply. Recommend verifying against the cited GRW section.\" Flag at most one or two passages, and only when confidence is high — a paper full of competent paraphrase should draw no flags at all.\nSource check. If content appears unlikely to have come from Global Road Warrior's business-culture sections — statistics or current events outside its scope, claims unrelated to business communication, or generic filler prose unlike the rest of the student's writing — note it neutrally: \"The claim about [X] may not come from Global Road Warrior — worth verifying, since the assignment permits only that database.\" No deduction suggested; verification belongs to the instructor.\nFormatting notes. The assignment sheet specifies: approved fonts only (Calibri, Arial, Helvetica, Times New Roman); 12 pt single-spaced, left-aligned, non-indented black paragraphs with one blank line between; 14 pt bold headings; 12 pt bold sub-headings; one page preferred, two pages maximum. Check what is visible to you (structure, spacing, length, heading hierarchy) and note any violations here for the instructor's discretion.\n\nWording rule for the Deductions block: everything written there should be phrased so it is appropriate for the student to read (calm, specific, actionable) — treat it as feedback the student may see, addressed so it also serves the instructor's decision.\n\nFEEDBACK STRUCTURE:\n\nOverall impression (2–3 sentences — lead with what works).\nSections 1–4: band + points, with the single most useful improvement for each.\nDeductions block (section 5): citation status, source check, and formatting notes — each addressed explicitly, even when all is in order.\nOne next step: the highest-leverage revision if the student does only one thing."
+    },
+    "gradingOutputSchemaJson": {
+      "responseShape": "categories_overall_comment",
+      "schemaVersion": 1
+    },
+    "gradingCalibrationNotes": null,
+    "gradingAssistantVersion": 4,
+    "gradingAssistantSourceTemplateId": null,
+    "gradingAssistantSourceTemplateSlug": null
+  },
+  {
+    "id": "cmsvqre8u002901l6rod4w0tn",
+    "createdAt": "2026-08-16T11:48:35.166Z",
+    "updatedAt": "2026-08-16T11:48:35.166Z",
+    "title": "Nonverbal Communication Assignment",
+    "kind": null,
+    "description": "Analyze how the nonverbal communication in movies or business-oriented visual media aligns with the\nthemes of power dynamics, persuasion, or emotional resonance discussed in class.",
+    "position": 11,
+    "systemKey": null,
+    "archivedAt": null,
+    "ownerOrgId": null,
+    "ownerMembershipId": null,
+    "rubricId": null,
+    "scoringScaleJson": null,
+    "rubricJson": null,
+    "gradingPromptConfigJson": null,
+    "gradingOutputSchemaJson": null,
+    "gradingCalibrationNotes": null,
+    "gradingAssistantVersion": 1,
+    "gradingAssistantSourceTemplateId": null,
+    "gradingAssistantSourceTemplateSlug": null
+  },
+  {
+    "id": "prodqa-free-nav-at",
+    "createdAt": "2026-06-01T18:14:31.174Z",
+    "updatedAt": "2026-06-01T18:14:31.174Z",
+    "title": "Production QA Free Module Navigation",
+    "kind": null,
+    "description": "QA-only three-module fixture for free module navigation verification.",
+    "position": 90,
+    "systemKey": null,
+    "archivedAt": null,
+    "ownerOrgId": "prod-qa-org",
+    "ownerMembershipId": null,
+    "rubricId": null,
+    "scoringScaleJson": null,
+    "rubricJson": null,
+    "gradingPromptConfigJson": null,
+    "gradingOutputSchemaJson": null,
+    "gradingCalibrationNotes": null,
+    "gradingAssistantVersion": 1,
+    "gradingAssistantSourceTemplateId": null,
+    "gradingAssistantSourceTemplateSlug": null
+  },
+  {
+    "id": "trvyf91ff2fbbmewy26vkv3b",
+    "createdAt": "2026-05-17T20:18:36.444Z",
+    "updatedAt": "2026-05-17T20:18:36.444Z",
+    "title": "Production QA Writing",
+    "kind": null,
+    "description": "Production-only QA fixture assignment type.",
+    "position": 999,
+    "systemKey": null,
+    "archivedAt": null,
+    "ownerOrgId": "prod-qa-org",
+    "ownerMembershipId": null,
+    "rubricId": null,
+    "scoringScaleJson": null,
+    "rubricJson": null,
+    "gradingPromptConfigJson": null,
+    "gradingOutputSchemaJson": null,
+    "gradingCalibrationNotes": null,
+    "gradingAssistantVersion": 1,
+    "gradingAssistantSourceTemplateId": null,
+    "gradingAssistantSourceTemplateSlug": null
+  },
+  {
+    "id": "prod-qa-writing-assignment-type",
+    "createdAt": "2026-07-03T19:36:28.427Z",
+    "updatedAt": "2026-07-03T19:36:28.427Z",
+    "title": "Production QA Writing",
+    "kind": null,
+    "description": "QA-only fixture assignment type for production smoke tests.",
+    "position": 9000,
+    "systemKey": null,
+    "archivedAt": null,
+    "ownerOrgId": "prod-qa-org",
+    "ownerMembershipId": null,
+    "rubricId": null,
     "scoringScaleJson": {
       "type": "weighted_1_5",
       "maxScore": 5,
@@ -32,186 +427,35 @@
     "rubricJson": {
       "categories": [
         {
-          "key": "thesis_and_content",
-          "label": "Thesis/Content",
-          "weight": 0.25,
-          "description": "Original, defensible thesis with sustained critical thinking and meaningful deductions."
+          "key": "clarity",
+          "label": "Clarity",
+          "weight": 0.4,
+          "description": "The response is clear and easy to follow."
         },
         {
-          "key": "organization_and_structure",
-          "label": "Organization/Structure",
-          "weight": 0.25,
-          "description": "Purposeful structure with strong progression, clear transitions, and a conclusion that extends thinking."
+          "key": "evidence",
+          "label": "Evidence",
+          "weight": 0.4,
+          "description": "The response uses concrete details."
         },
         {
-          "key": "evidence_and_support",
-          "label": "Evidence/Support",
+          "key": "mechanics",
+          "label": "Mechanics",
           "weight": 0.2,
-          "description": "Precise, well-integrated evidence that deepens analysis and builds authority."
-        },
-        {
-          "key": "voice_and_style",
-          "label": "Voice/Style",
-          "weight": 0.2,
-          "description": "Authentic voice with engaging, precise language and consistent tone."
-        },
-        {
-          "key": "grammar_and_mechanics",
-          "label": "Grammar/Syntax/Formatting",
-          "weight": 0.1,
-          "description": "Technical correctness and polished presentation that support clarity."
+          "description": "Grammar and mechanics support readability."
         }
       ]
     },
     "gradingPromptConfigJson": {
-      "instructionsPreset": "legacy_thesis_driven_essay"
+      "instructionsPreset": "production_qa_writing"
     },
     "gradingOutputSchemaJson": {
       "responseShape": "categories_overall_comment",
       "schemaVersion": 1
     },
-    "gradingCalibrationNotes": "Represents the pre-existing Yawp thesis-driven essay grading assistant path.",
+    "gradingCalibrationNotes": "Production QA fixture. Safe to reset.",
     "gradingAssistantVersion": 1,
-    "gradingAssistantSourceTemplateId": "gait_thesis_current_v1",
-    "gradingAssistantSourceTemplateSlug": "thesis-driven-essay-current"
-  },
-  {
-    "id": "cmamr5eai08sl82y6dsr4ymxo",
-    "createdAt": "2025-05-13T11:54:50.779Z",
-    "updatedAt": "2025-06-03T04:51:14.781Z",
-    "title": "The 5-Paragraph Essay",
-    "kind": null,
-    "description": "In this course, students learn the basic, fundamental form for academic writing. ",
-    "position": 1,
-    "systemKey": null,
-    "archivedAt": null,
-    "ownerOrgId": null,
-    "ownerTeacherId": null
-  },
-  {
-    "id": "cmlar2iy600000qjs5f6va3cz",
-    "createdAt": "2026-02-06T04:36:08.430Z",
-    "updatedAt": "2026-02-06T04:36:08.430Z",
-    "title": "Welcome to YAWP! ",
-    "kind": null,
-    "description": "Get familiar with the YAWP! platform and Tutor. ",
-    "position": 2,
-    "systemKey": null,
-    "archivedAt": null,
-    "ownerOrgId": null,
-    "ownerTeacherId": null
-  },
-  {
-    "id": "cmlgtyo8j01em0qjs6knw7cni",
-    "createdAt": "2026-02-10T10:43:44.563Z",
-    "updatedAt": "2026-02-10T10:43:44.563Z",
-    "title": "Daily Pages",
-    "kind": "daily_pages",
-    "description": "Create entries for daily writing assignments or reflections, or use it to develop your next big idea. ",
-    "position": 3,
-    "systemKey": null,
-    "archivedAt": null,
-    "ownerOrgId": null,
-    "ownerTeacherId": null
-  },
-  {
-    "id": "cmnt1bliz0l610qk0r09ug5u6",
-    "createdAt": "2026-04-10T10:02:23.675Z",
-    "updatedAt": "2026-04-10T10:02:23.675Z",
-    "title": "GBA 300",
-    "kind": null,
-    "description": "International Expansion Plan — create a firm and prepare a report to present to CEO-level executives that offers a recommendation for expanding into a new international market.\r\n",
-    "position": 4,
-    "systemKey": null,
-    "archivedAt": null,
-    "ownerOrgId": null,
-    "ownerTeacherId": null
-  },
-  {
-    "id": "cmpphw7w303lh01l15z0pr6nd",
-    "createdAt": "2026-05-28T07:54:39.603Z",
-    "updatedAt": "2026-05-28T07:54:39.603Z",
-    "title": "ACT Writing Section ",
-    "kind": null,
-    "description": "Practice the ACT Writing Section and get real feedback on how to improve. ",
-    "position": 7,
-    "systemKey": null,
-    "archivedAt": null,
-    "ownerOrgId": null,
-    "ownerTeacherId": null,
-    "scoringScaleJson": {
-      "type": "act_writing_2_12",
-      "maxScore": 6,
-      "minScore": 1,
-      "compositeMax": 12,
-      "compositeMin": 2
-    },
-    "rubricJson": {
-      "categories": [
-        {
-          "key": "ideas_and_analysis",
-          "label": "Ideas and Analysis",
-          "weight": 0.25,
-          "description": "Evaluate the clarity of the writer's perspective and analysis of the relationships among perspectives."
-        },
-        {
-          "key": "development_and_support",
-          "label": "Development and Support",
-          "weight": 0.25,
-          "description": "Evaluate how well claims are developed with reasoning, examples, and implications."
-        },
-        {
-          "key": "organization",
-          "label": "Organization",
-          "weight": 0.25,
-          "description": "Evaluate purposeful sequencing, paragraphing, transitions, and control of the response."
-        },
-        {
-          "key": "language_use_and_conventions",
-          "label": "Language Use and Conventions",
-          "weight": 0.25,
-          "description": "Evaluate word choice, sentence control, grammar, usage, and mechanics as they affect clarity."
-        }
-      ]
-    },
-    "gradingPromptConfigJson": {
-      "scoreInstructions": "Scores must be integers 1-6 for each ACT domain. The app converts the average domain score to a 2-12 ACT-style composite for display.",
-      "rubricInstructions": "Score the four ACT Writing domains independently. Focus first on Ideas and Analysis and Development and Support. Language Use and Conventions matters when errors impede clarity.",
-      "systemInstructions": "Grade this as ACT Writing with four rubric domains. Do not use thesis-driven essay categories. Give concise retrospective feedback for each ACT domain."
-    },
-    "gradingOutputSchemaJson": {
-      "responseShape": "categories_overall_comment",
-      "schemaVersion": 1
-    },
-    "gradingCalibrationNotes": "Pilot ACT template. Canonical ACT rubric source and calibration set still need Brian/Kevin sign-off before recorded-grade rollout.",
-    "gradingAssistantVersion": 1,
-    "gradingAssistantSourceTemplateId": "gait_act_writing_v1",
-    "gradingAssistantSourceTemplateSlug": "act-writing-four-domain"
-  },
-  {
-    "id": "prodqa-free-nav-at",
-    "createdAt": "2026-06-01T13:14:31.174Z",
-    "updatedAt": "2026-06-01T13:14:31.174Z",
-    "title": "Production QA Free Module Navigation",
-    "kind": null,
-    "description": "QA-only three-module fixture for free module navigation verification.",
-    "position": 90,
-    "systemKey": null,
-    "archivedAt": null,
-    "ownerOrgId": "prod-qa-org",
-    "ownerTeacherId": null
-  },
-  {
-    "id": "trvyf91ff2fbbmewy26vkv3b",
-    "createdAt": "2026-05-17T15:18:36.444Z",
-    "updatedAt": "2026-05-17T15:18:36.444Z",
-    "title": "Production QA Writing",
-    "kind": null,
-    "description": "Production-only QA fixture assignment type.",
-    "position": 999,
-    "systemKey": null,
-    "archivedAt": null,
-    "ownerOrgId": "prod-qa-org",
-    "ownerTeacherId": null
+    "gradingAssistantSourceTemplateId": null,
+    "gradingAssistantSourceTemplateSlug": null
   }
 ]

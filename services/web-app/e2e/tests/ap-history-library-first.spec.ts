@@ -138,8 +138,8 @@ test.describe.serial('AP History library-first assignment flow', () => {
 
       await page.context().clearCookies();
       await signIn(e2eContext.userEmail, 'johndoe');
-      await page.goto('/app?tab=assignments');
-      await expect(page.getByTestId('app._index')).toBeVisible();
+      await page.goto(`/app/my-classes/${e2eContext.classId}`);
+      await expect(page.getByTestId('student-class-detail')).toBeVisible();
 
       await page.getByRole('button', { name: new RegExp(title) }).click();
       await page.waitForURL('**/app/documents/**', { timeout: 15000 });

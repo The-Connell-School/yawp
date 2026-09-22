@@ -1,3 +1,4 @@
+import { getImpersonationAttribution } from './internal-impersonation-context.server';
 import {
   type MembershipRole,
   Prisma,
@@ -20,7 +21,18 @@ const membershipSelect = {
   id: true,
   role: true,
   isOrgOwner: true,
-  organization: { select: { id: true, name: true } },
+  isActive: true,
+  organization: {
+    select: {
+      id: true,
+      name: true,
+      reporterEnabled: true,
+      classInsightsEnabled: true,
+      writingPracticeEnabled: true,
+      submissionActivityEnabled: true,
+      revisionFlowEnabled: true,
+    },
+  },
 } as const;
 
 export type RequiredMembership = Prisma.OrgMembershipGetPayload<{
@@ -51,7 +63,6 @@ const readOnlySessionAllowedMutationPaths = new Set([
   '/api/preferences/contrast',
   '/api/preferences/submitted-papers-filter',
   '/api/membership-id',
-  '/api/student-preview',
 ]);
 
 function isMutationRequest(request: Request) {
@@ -59,9 +70,7 @@ function isMutationRequest(request: Request) {
 }
 
 function isAllowedReadOnlySessionMutation(request: Request) {
-  return readOnlySessionAllowedMutationPaths.has(
-    new URL(request.url).pathname
-  );
+  return readOnlySessionAllowedMutationPaths.has(new URL(request.url).pathname);
 }
 
 export async function getImpersonationState(request: Request) {
@@ -92,22 +101,11 @@ export async function requireMutableRequest(request: Request) {
       { status: 403 }
     );
   }
-
-  const { getStudentPreviewState } = await import('./student-preview.server.ts');
-  const preview = await getStudentPreviewState(request);
-  if (preview.active) {
-    throw Response.json(
-      {
-        error: 'Student preview active',
-        message:
-          'This session can view student pages but cannot make changes.',
-      },
-      { status: 403 }
-    );
-  }
 }
 
 export async function getUserId(request: Request) {
+  const internal = getImpersonationAttribution();
+  if (internal) return internal.userId;
   const authSession = await authSessionStorage.getSession(
     request.headers.get('cookie')
   );
@@ -150,13 +148,14 @@ export async function requireUserId(
 
 export async function requireMembership(
   request: Request,
-  userId: string
+  userId: string,
+  { allowPaymentRequired = false }: { allowPaymentRequired?: boolean } = {}
 ): Promise<RequiredMembership> {
   const membershipId = await getMembershipId(request);
 
   if (membershipId) {
     const membership = await prisma.orgMembership.findUnique({
-      where: { id: membershipId, userId },
+      where: { id: membershipId, userId, isActive: true },
       select: membershipSelect,
     });
 
@@ -166,11 +165,11 @@ export async function requireMembership(
       });
     }
 
-    return membership;
+    return requireLicensedMembership(request, membership, allowPaymentRequired);
   }
 
   const membership = await prisma.orgMembership.findFirst({
-    where: { userId },
+    where: { userId, isActive: true },
     orderBy: { createdAt: 'asc' },
     select: membershipSelect,
   });
@@ -179,6 +178,30 @@ export async function requireMembership(
     throw redirect('/no-membership');
   }
 
+  return requireLicensedMembership(request, membership, allowPaymentRequired);
+}
+
+async function requireLicensedMembership(
+  request: Request,
+  membership: RequiredMembership,
+  allowPaymentRequired: boolean
+) {
+  if (allowPaymentRequired) return membership;
+
+  // Support/admin read-only impersonation must remain able to inspect a broken
+  // or unpaid account without mutating its billing state.
+  const impersonation = await getImpersonationState(request);
+  if (impersonation.isReadOnly) return membership;
+
+  const { getUaStudentLicenseAccess } =
+    await import('~/domain/student-license/student-license.server');
+  const access = await getUaStudentLicenseAccess({
+    id: membership.id,
+    role: membership.role,
+    organizationId: membership.organization.id,
+  });
+
+  if (access === 'PAYMENT_REQUIRED') throw redirect('/billing/ua');
   return membership;
 }
 
@@ -194,7 +217,7 @@ export async function requireAdmin(request: Request) {
       {
         error: 'Unauthorized',
         requiredRole: 'isAdmin',
-        message: `Unauthorized: required role: ${name}`,
+        message: 'Unauthorized: required role: isAdmin',
       },
       { status: 403 }
     );
@@ -203,14 +226,28 @@ export async function requireAdmin(request: Request) {
   return user;
 }
 
+/**
+ * Ownership of the organization the request is actually scoped to.
+ *
+ * The organization every caller of this helper goes on to query comes from
+ * `requireMembership`, which resolves the user-switchable `membership-id` cookie. So the
+ * ownership predicate is pinned to that same resolved membership: being an owner of some
+ * other organization does not admit you here. Resolving the membership inside this helper
+ * rather than leaving each route to pair the two calls itself is what keeps them from
+ * drifting apart again.
+ */
 export async function requireOwner(request: Request) {
   const userId = await requireUserId(request);
+  const activeMembership = await requireMembership(request, userId);
   const user = await prisma.user.findFirst({
     select: {
       id: true,
       memberships: { select: { id: true, isOrgOwner: true } },
     },
-    where: { id: userId, memberships: { some: { isOrgOwner: true } } },
+    where: {
+      id: userId,
+      memberships: { some: { id: activeMembership.id, isOrgOwner: true } },
+    },
   });
 
   if (!user) {

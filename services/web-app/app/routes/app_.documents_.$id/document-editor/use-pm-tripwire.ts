@@ -3,7 +3,16 @@ import type { Editor } from '@tiptap/core';
 import { USER_SOURCE_META } from './extensions/source-tracker';
 
 export const RECOVERY_SOURCE = 'recovery-on-mount';
-const ALLOWED_SOURCES = new Set(['user', RECOVERY_SOURCE]);
+/**
+ * A toolbar control that edits the document from outside the editor's own DOM.
+ * SourceTracker can only tag transactions that come from a DOM event on the
+ * editor surface, so a control living in a React dialog -- inserting an
+ * uploaded figure, for one -- has to say so itself. It is still a user edit;
+ * tagging it keeps the tripwire meaningful instead of teaching the team to
+ * ignore it.
+ */
+export const TOOLBAR_SOURCE = 'toolbar';
+const ALLOWED_SOURCES = new Set(['user', RECOVERY_SOURCE, TOOLBAR_SOURCE]);
 
 declare global {
   interface Window {

@@ -1,0 +1,636 @@
+import { test, expect } from '../test-setup';
+import { EDITOR_SELECTOR } from '../test-helpers';
+import { createE2EPrismaClient } from '../prisma-client';
+
+/**
+ * Student revision flow, V1 (behind Organization.revisionFlowEnabled, on for
+ * the E2E organization).
+ *
+ * The graded submission and its feedback stay on the left; the live draft the
+ * student rewrites is on the right. No tutor — that is V2.
+ */
+test.describe.serial('Student revises a released essay', () => {
+  test('Revise Essay opens the split screen', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/submissions/${e2eContext.gradeId}`);
+
+    const revisionEntry = page.getByTestId('submission-revise-essay');
+    await expect(revisionEntry).toHaveText('Revise with feedback');
+    await revisionEntry.click();
+
+    await expect(page).toHaveURL(
+      new RegExp(`/app/revise/${e2eContext.gradeId}`),
+      { timeout: 15000 }
+    );
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByTestId('revision-draft-pane')).toBeVisible();
+    await expect(page.locator('nav').getByText('Revising')).toBeVisible();
+  });
+
+  test('the graded pane carries the feedback and the draft pane carries none', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+
+    const gradedPane = page.getByTestId('revision-graded-pane');
+    const draftPane = page.getByTestId('revision-draft-pane');
+
+    // The teacher's marks live only on the released snapshot.
+    await expect(gradedPane.locator('.grade-comment-mark').first()).toBeVisible(
+      { timeout: 15000 }
+    );
+    await expect(draftPane.locator('.grade-comment-mark')).toHaveCount(0);
+    await expect(draftPane.locator('.grammar-issue-mark')).toHaveCount(0);
+
+    // The essay marks explain themselves through interaction; the old color
+    // guide above the graded text is intentionally absent.
+    await expect(page.getByTestId('revision-mark-legend')).toHaveCount(0);
+
+    // Grade tab is the default view of the feedback panel. Scoped to the panel
+    // because the pane header also carries the grade, so a student who has
+    // collapsed the panel can still see what the essay scored.
+    const feedbackPanel = page.getByTestId('revision-feedback-panel');
+    await expect(page.getByTestId('revision-feedback-tab-grade')).toHaveClass(
+      /shadow-sm/
+    );
+    await expect(page.getByTestId('revision-feedback-tab-grade')).toHaveClass(
+      /ring-black\/10/
+    );
+    await expect(feedbackPanel.getByText('77% (C+)')).toBeVisible();
+    await expect(
+      feedbackPanel.getByText('Good effort with room for improvement.')
+    ).toBeVisible();
+
+    const commentsTab = page.getByTestId('revision-feedback-tab-comments');
+    await expect(commentsTab).toContainText('Comments');
+    const commentCountBadge = commentsTab.locator('span');
+    const commentCount = Number(await commentCountBadge.textContent());
+    expect(commentCount).toBeGreaterThan(0);
+    await expect(commentCountBadge).toHaveClass(/rounded-full/);
+    await commentsTab.click();
+    await expect(commentsTab).toHaveClass(/shadow-sm/);
+    await expect(
+      page.getByTestId('revision-feedback-tab-grade')
+    ).not.toHaveClass(/shadow-sm/);
+    await expect(
+      gradedPane.getByText('Strong thesis statement in the opening sentence.')
+    ).toBeVisible();
+    await expect(gradedPane.getByText('Teacher comments')).toBeVisible();
+    expect(await gradedPane.locator('[data-grade-comment-card]').count()).toBe(
+      commentCount
+    );
+
+    await page.getByTestId('revision-feedback-tab-grammar').click();
+    await expect(
+      gradedPane.getByText('E2E grammar highlight for student toggle.')
+    ).toBeVisible();
+  });
+
+  test('the feedback panel collapses and reopens', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+
+    await expect(page.getByTestId('revision-feedback-panel')).toBeVisible();
+
+    const hideFeedback = page.getByRole('button', { name: 'Hide feedback' });
+    await expect(hideFeedback.locator('svg')).toHaveAttribute(
+      'stroke-width',
+      '1.5'
+    );
+    const backgroundColor = () =>
+      hideFeedback.evaluate(
+        (button) => getComputedStyle(button).backgroundColor
+      );
+
+    await expect.poll(backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    await hideFeedback.hover();
+    await expect.poll(backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+
+    await hideFeedback.click();
+    await expect(page.getByTestId('revision-feedback-panel')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Show feedback' }).click();
+    await expect(page.getByTestId('revision-feedback-panel')).toBeVisible();
+  });
+
+  // Clicking a mark is how a student asks "what did they say about this?".
+  // The panel has to come back out if they collapsed it, land on the right
+  // tab, and put that note in front of them.
+  test('clicking a teacher mark reopens the panel on that comment', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Collapse it first: reopening is the part that matters.
+    await page.getByRole('button', { name: 'Hide feedback' }).click();
+    await expect(page.getByTestId('revision-feedback-panel')).toHaveCount(0);
+
+    await page.locator('.grade-comment-mark').first().click();
+
+    await expect(page.getByTestId('revision-feedback-panel')).toBeVisible();
+    await expect(
+      page.getByTestId('revision-feedback-tab-comments')
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      page
+        .getByTestId('revision-feedback-panel')
+        .getByText('Strong thesis statement in the opening sentence.')
+    ).toBeInViewport();
+  });
+
+  test('clicking a grammar mark reopens the panel on that note', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+
+    await page.getByRole('button', { name: 'Hide feedback' }).click();
+    await expect(page.getByTestId('revision-feedback-panel')).toHaveCount(0);
+
+    await page.locator('.grammar-issue-mark').first().click();
+
+    await expect(page.getByTestId('revision-feedback-panel')).toBeVisible();
+    await expect(
+      page.getByTestId('revision-feedback-tab-grammar')
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      page
+        .getByTestId('revision-feedback-panel')
+        .getByText('E2E grammar highlight for student toggle.')
+    ).toBeInViewport();
+  });
+
+  test('hides grammar feedback when the rubric disables highlighting', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const assignmentType = await prisma.assignmentType.findUniqueOrThrow({
+      where: { id: e2eContext.assignmentTypeId },
+      select: { rubricJson: true },
+    });
+    const rubric = assignmentType.rubricJson as {
+      categories: Array<Record<string, unknown>>;
+    };
+    const disabledRubric = {
+      ...rubric,
+      categories: rubric.categories.map((category) => ({
+        ...category,
+        grammarHighlighting: false,
+      })),
+    };
+
+    try {
+      await prisma.assignmentType.update({
+        where: { id: e2eContext.assignmentTypeId },
+        data: { rubricJson: disabledRubric as never },
+      });
+
+      await signIn(e2eContext.userEmail, 'johndoe');
+      await page.goto(`/app/revise/${e2eContext.gradeId}`);
+      await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+        timeout: 15000,
+      });
+
+      await expect(
+        page.getByTestId('revision-feedback-tab-grammar')
+      ).toHaveCount(0);
+      await expect(page.locator('.grammar-issue-mark')).toHaveCount(0);
+      await expect(
+        page.getByTestId('revision-feedback-tab-comments')
+      ).toBeVisible();
+    } finally {
+      await prisma.assignmentType.update({
+        where: { id: e2eContext.assignmentTypeId },
+        data: { rubricJson: assignmentType.rubricJson as never },
+      });
+      await prisma.$disconnect();
+    }
+  });
+
+  test('the draft pane is editable and the graded pane is not', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+    await helpers.waitForEditorReady();
+
+    // Exactly one editing surface on the page: the revision draft.
+    await expect(page.locator(EDITOR_SELECTOR)).toHaveCount(1);
+    await expect(
+      page.getByTestId('revision-draft-pane').locator(EDITOR_SELECTOR)
+    ).toBeVisible();
+
+    const editor = page.locator(EDITOR_SELECTOR).first();
+    await editor.click();
+    await editor.pressSequentially(' Revised in the split screen.', {
+      delay: 20,
+    });
+    await helpers.waitForSaved();
+
+    // The released snapshot is frozen: the revision never rewrites it.
+    await expect(page.getByTestId('revision-graded-pane')).not.toContainText(
+      'Revised in the split screen.'
+    );
+  });
+
+  test('the revision title defaults to the current document title', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const currentTitle = `Current draft title ${Date.now()}`;
+    const submission = await prisma.submission.findUniqueOrThrow({
+      where: { id: e2eContext.gradeId },
+      select: { documentId: true, document: { select: { title: true } } },
+    });
+
+    try {
+      await prisma.document.update({
+        where: { id: submission.documentId },
+        data: { title: currentTitle },
+      });
+      await signIn(e2eContext.userEmail, 'johndoe');
+      await page.goto(`/app/revise/${e2eContext.gradeId}`);
+      await page.getByTestId('revision-draft-pane').waitFor({
+        state: 'visible',
+        timeout: 15000,
+      });
+      await page.getByTestId('revision-submit').click();
+      await expect(page.getByTestId('revision-title-input')).toHaveValue(
+        currentTitle
+      );
+    } finally {
+      await prisma.document.update({
+        where: { id: submission.documentId },
+        data: { title: submission.document.title },
+      });
+      await prisma.$disconnect();
+    }
+  });
+
+  test('submitting a revision preserves the released snapshot and creates exactly one new snapshot', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const marker = `Revision snapshot proof ${Date.now()}`;
+
+    try {
+      const original = await prisma.submission.findUniqueOrThrow({
+        where: { id: e2eContext.gradeId },
+        include: {
+          comments: { orderBy: { id: 'asc' } },
+          gradingAssistantRuns: { orderBy: { id: 'asc' } },
+          activities: { orderBy: { id: 'asc' } },
+        },
+      });
+      expect(original.releasedAt).toBeInstanceOf(Date);
+
+      const submissionsBefore = await prisma.submission.findMany({
+        where: { documentId: original.documentId },
+        select: { id: true },
+      });
+      const submissionIdsBefore = submissionsBefore.map(({ id }) => id);
+
+      await signIn(e2eContext.userEmail, 'johndoe');
+      await page.goto(`/app/revise/${original.id}`);
+      await expect(page.getByTestId('revision-draft-pane')).toBeVisible({
+        timeout: 15000,
+      });
+      await helpers.waitForEditorReady();
+
+      const editor = page.locator(EDITOR_SELECTOR).first();
+      await editor.click();
+      await page.keyboard.press('End');
+      await page.keyboard.type(` ${marker}`);
+
+      await expect
+        .poll(
+          () =>
+            prisma.document.findUniqueOrThrow({
+              where: { id: original.documentId },
+              select: { text: true },
+            }),
+          { timeout: 15000 }
+        )
+        .toMatchObject({ text: expect.stringContaining(marker) });
+
+      await page.getByTestId('revision-submit').click();
+      await page.getByTestId('revision-title-input').fill('Revision proof');
+      await page.getByTestId('revision-submit-confirm').click();
+      await expect(page).toHaveURL(/\/app\/submissions\/[^/]+$/, {
+        timeout: 15000,
+      });
+      await expect(page.getByTestId('submission-revise-essay')).toHaveText(
+        'Open document editor'
+      );
+
+      await expect
+        .poll(
+          () =>
+            prisma.submission.count({
+              where: { documentId: original.documentId },
+            }),
+          { timeout: 15000 }
+        )
+        .toBe(submissionsBefore.length + 1);
+
+      const unchangedOriginal = await prisma.submission.findUniqueOrThrow({
+        where: { id: original.id },
+        include: {
+          comments: { orderBy: { id: 'asc' } },
+          gradingAssistantRuns: { orderBy: { id: 'asc' } },
+          activities: { orderBy: { id: 'asc' } },
+        },
+      });
+      expect(unchangedOriginal).toEqual(original);
+
+      const newSubmissions = await prisma.submission.findMany({
+        where: {
+          documentId: original.documentId,
+          id: { notIn: submissionIdsBefore },
+        },
+        select: { id: true, title: true, text: true, html: true },
+      });
+      expect(newSubmissions).toHaveLength(1);
+      expect(newSubmissions[0]).toMatchObject({
+        title: 'Revision proof',
+        text: expect.stringContaining(marker),
+        html: expect.stringContaining(marker),
+      });
+
+      // The document's current status follows the newest submission, while
+      // the released original remains reachable through version history.
+      await page.goto('/app/my-documents');
+      const revisedDocumentCard = page.locator(
+        `a[href^="/app/submissions/${newSubmissions[0].id}?"]`
+      );
+      await expect(revisedDocumentCard).toBeVisible({ timeout: 15000 });
+      await expect(revisedDocumentCard).toContainText('Revision submitted');
+      await expect(revisedDocumentCard).toContainText('1 previous grade');
+      await expect(revisedDocumentCard).toHaveAttribute(
+        'href',
+        new RegExp(`/app/submissions/${newSubmissions[0].id}`)
+      );
+      await revisedDocumentCard.click();
+      await expect(page).toHaveURL(
+        new RegExp(`/app/submissions/${newSubmissions[0].id}`)
+      );
+
+      const versionMenu = page.getByTestId('submission-version-menu');
+      await expect(versionMenu).toContainText(
+        `Versions (${submissionsBefore.length + 1})`
+      );
+      await versionMenu.click();
+      await expect(
+        page.getByRole('menuitem', { name: /Version 2 Submitted/ })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('menuitem', { name: /Version 1 Graded/ })
+      ).toBeVisible();
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  // With the color guide removed, the graded essay should use that space
+  // instead of leaving an empty toolbar-height row above the text.
+  test('the graded essay begins directly below its header with no guide row', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-graded-pane')).toBeVisible({
+      timeout: 15000,
+    });
+    const gradedPane = page.getByTestId('revision-graded-pane');
+    await expect(gradedPane.getByTestId('revision-mark-legend')).toHaveCount(0);
+
+    const headerBottom = await gradedPane
+      .getByText('Graded version', { exact: true })
+      .evaluate((el) => el.parentElement!.getBoundingClientRect().bottom);
+    const textTop = await gradedPane
+      .locator('.submission-essay p')
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().top);
+
+    expect(textTop - headerBottom).toBeLessThanOrEqual(32);
+  });
+
+  test('feedback, graded version, and revision headers have exactly matching heights', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    await expect(page.getByTestId('revision-feedback-panel')).toBeVisible({
+      timeout: 15000,
+    });
+
+    const heights = await Promise.all(
+      [
+        'revision-feedback-header',
+        'revision-graded-header',
+        'revision-draft-header',
+      ].map((testId) =>
+        page
+          .getByTestId(testId)
+          .evaluate((element) => element.getBoundingClientRect().height)
+      )
+    );
+
+    expect(new Set(heights).size, `header heights: ${heights.join(', ')}`).toBe(
+      1
+    );
+  });
+
+  // The prompt describes the assignment both drafts answer, so it spans the
+  // screen once rather than sitting inside the editor above one of them.
+  test('the assignment prompt spans both panes', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+    const prompt = page.getByTestId('revision-assignment-prompt');
+    await expect(prompt).toBeVisible({ timeout: 15000 });
+
+    const promptWidth = await prompt.evaluate(
+      (el) => el.getBoundingClientRect().width
+    );
+    const draftWidth = await page
+      .getByTestId('revision-draft-pane')
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    expect(promptWidth).toBeGreaterThan(draftWidth * 1.5);
+    await expect(
+      page
+        .getByTestId('revision-draft-pane')
+        .getByTestId('assignment-prompt-panel')
+    ).toHaveCount(0);
+  });
+
+  test('mobile keeps feedback, the graded essay, and the editor readable and usable', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+
+    const feedback = page.getByTestId('revision-feedback-panel');
+    const gradedEssay = page
+      .getByTestId('revision-graded-pane')
+      .locator('.submission-essay')
+      .first();
+    const gradedEssayScroll = page
+      .getByTestId('revision-graded-pane')
+      .getByTestId('submission-essay-scroll');
+    const editor = page
+      .getByTestId('revision-draft-pane')
+      .locator(EDITOR_SELECTOR)
+      .first();
+    const editorScroll = page
+      .getByTestId('revision-draft-pane')
+      .getByTestId('document-editor-scroll');
+    const feedbackScroll = page.getByTestId('revision-feedback-scroll');
+
+    await expect(feedback).toBeVisible({ timeout: 15000 });
+    await expect(gradedEssay).toBeVisible();
+    await expect(editor).toBeVisible();
+
+    const widths = await Promise.all(
+      [feedback, gradedEssay, editor].map((locator) =>
+        locator.evaluate((element) => element.getBoundingClientRect().width)
+      )
+    );
+    for (const width of widths) expect(width).toBeGreaterThanOrEqual(300);
+
+    const visibleSurfaces = [
+      ['feedback panel', feedback],
+      ['graded essay', gradedEssayScroll],
+      ['draft editor', editorScroll],
+    ] as const;
+    for (const [name, surface] of visibleSurfaces) {
+      const height = await surface.evaluate(
+        (element) => element.getBoundingClientRect().height
+      );
+      expect(height, `${name} visible height`).toBeGreaterThanOrEqual(240);
+    }
+
+    await expect
+      .poll(() =>
+        feedbackScroll.evaluate(
+          (element) => getComputedStyle(element).overflowY
+        )
+      )
+      .toBe('auto');
+    await expect
+      .poll(() =>
+        gradedEssayScroll.evaluate(
+          (element) => getComputedStyle(element).overflowY
+        )
+      )
+      .toBe('scroll');
+
+    const horizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth
+    );
+    expect(horizontalOverflow).toBeLessThanOrEqual(1);
+
+    await page.getByTestId('revision-feedback-tab-comments').click();
+    await expect(
+      feedback.getByText('Strong thesis statement in the opening sentence.')
+    ).toBeVisible();
+    await expect(editor).toHaveAttribute('contenteditable', 'true');
+    await editor.click();
+    await expect(editor).toBeFocused();
+
+    // At tablet widths the overall view has already split into two panes. The
+    // feedback panel must stay above the graded essay until a half-screen pane
+    // is wide enough to hold both side by side.
+    await page.setViewportSize({ width: 1024, height: 768 });
+    const tabletWidths = await Promise.all(
+      [feedback, gradedEssay, editor].map((locator) =>
+        locator.evaluate((element) => element.getBoundingClientRect().width)
+      )
+    );
+    for (const width of tabletWidths) expect(width).toBeGreaterThanOrEqual(300);
+  });
+
+  test('an unreleased submission cannot be revised yet', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/revise/${e2eContext.unreleasedGradedSubmissionId}`);
+
+    await expect(page).toHaveURL(
+      new RegExp(`/app/submissions/${e2eContext.unreleasedGradedSubmissionId}`),
+      { timeout: 15000 }
+    );
+    await expect(page.getByTestId('revision-draft-pane')).toHaveCount(0);
+  });
+
+  test('a teacher is refused the student revision screen', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(`/app/revise/${e2eContext.gradeId}`);
+
+    await expect(page).toHaveURL(
+      new RegExp(`/app/submissions/${e2eContext.gradeId}`),
+      { timeout: 15000 }
+    );
+    await expect(page.getByTestId('revision-draft-pane')).toHaveCount(0);
+  });
+});

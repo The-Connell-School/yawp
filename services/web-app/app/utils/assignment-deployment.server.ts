@@ -1,5 +1,9 @@
 import type { Prisma } from '@app/prisma';
+import { deleteAssignmentPromptAttachment } from '~/domain/assignments/assignment-prompt-attachment.server';
+import { lockClassAssignmentCollaboration } from '~/domain/collaboration/class-assignment-lock.server';
 import { prisma } from '~/utils/db.server';
+
+export class AssignmentHasCollaborativeWorkError extends Error {}
 
 export async function createAssignmentDeployedToClasses(params: {
   data: Omit<
@@ -7,6 +11,14 @@ export async function createAssignmentDeployedToClasses(params: {
     'id' | 'createdAt' | 'updatedAt'
   >;
   classIds: string[];
+  /**
+   * Optional deployment fields applied to every created ClassAssignment row.
+   * When provided, these values are set identically for each target class.
+   */
+  deployment?: {
+    postAt?: Date | null;
+    dueAt?: Date | null;
+  };
 }) {
   const uniqueClassIds = [...new Set(params.classIds)];
   const assignment = await prisma.assignment.create({
@@ -18,6 +30,8 @@ export async function createAssignmentDeployedToClasses(params: {
       data: uniqueClassIds.map((classId) => ({
         assignmentId: assignment.id,
         classId,
+        postAt: params.deployment?.postAt ?? null,
+        dueAt: params.deployment?.dueAt ?? null,
       })),
     });
   }
@@ -29,27 +43,51 @@ export async function deleteClassAssignmentDeployment(params: {
   assignmentId: string;
   classId: string;
 }) {
-  const deployment = await prisma.classAssignment.findFirst({
-    where: {
-      assignmentId: params.assignmentId,
-      classId: params.classId,
-    },
-    select: { id: true },
+  const result = await prisma.$transaction(async (tx) => {
+    const deployment = await tx.classAssignment.findFirst({
+      where: {
+        assignmentId: params.assignmentId,
+        classId: params.classId,
+      },
+      select: {
+        id: true,
+        assignment: { select: { promptAttachmentKey: true } },
+      },
+    });
+
+    if (!deployment) return null;
+
+    await lockClassAssignmentCollaboration(tx, deployment.id);
+    const sharedWork = await tx.documentGroup.findFirst({
+      where: { classAssignmentId: deployment.id, documentId: { not: null } },
+      select: { id: true },
+    });
+    if (sharedWork) {
+      throw new AssignmentHasCollaborativeWorkError(
+        'This assignment has shared group work and cannot be deleted.'
+      );
+    }
+
+    await tx.classAssignment.delete({ where: { id: deployment.id } });
+    const remaining = await tx.classAssignment.count({
+      where: { assignmentId: params.assignmentId },
+    });
+    if (remaining === 0) {
+      await tx.assignment.delete({ where: { id: params.assignmentId } });
+    }
+
+    return {
+      id: deployment.id,
+      attachmentKey:
+        remaining === 0 ? deployment.assignment.promptAttachmentKey : null,
+    };
   });
 
-  if (!deployment) {
-    return null;
+  if (result?.attachmentKey) {
+    await deleteAssignmentPromptAttachment(result.attachmentKey).catch(
+      () => {}
+    );
   }
 
-  await prisma.classAssignment.delete({ where: { id: deployment.id } });
-
-  const remaining = await prisma.classAssignment.count({
-    where: { assignmentId: params.assignmentId },
-  });
-
-  if (remaining === 0) {
-    await prisma.assignment.delete({ where: { id: params.assignmentId } });
-  }
-
-  return deployment.id;
+  return result?.id ?? null;
 }

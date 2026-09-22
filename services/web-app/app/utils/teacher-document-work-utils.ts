@@ -9,8 +9,8 @@ import {
 
 export type TeacherDocumentWorkClassSummary = {
   id: string;
-  grade: string;
-  period: string;
+  grade: string | null;
+  period: string | null;
   title: string | null;
 };
 
@@ -38,6 +38,17 @@ export type TeacherDocumentWorkRow = {
     id: string;
     user: { id?: string; name: string | null; email: string };
   };
+  group?: {
+    id: string;
+    label: string;
+    members: Array<{
+      membershipId: string;
+      membership: {
+        id: string;
+        user: { id?: string; name: string | null; email: string };
+      };
+    }>;
+  } | null;
   assignment: {
     id: string;
     title: string | null;
@@ -48,6 +59,8 @@ export type TeacherDocumentWorkRow = {
   submissions: TeacherDocumentWorkSubmission[];
   latestSubmission: TeacherDocumentWorkSubmission | null;
   submissionCount: number;
+  /** True when the document has recorded external-paste activity. */
+  hasPasteActivity?: boolean;
 };
 
 export type ReleaseGradeRow = {
@@ -67,10 +80,23 @@ export type ReleaseGradeRow = {
   };
 };
 
-export function formatClassLabel(klass: TeacherDocumentWorkClassSummary) {
-  const base = `Grade ${klass.grade} • Period ${klass.period}`;
-  return klass.title ? `${base} — ${klass.title}` : base;
-}
+export type TeacherUnsubmitRow = {
+  id: string;
+  score: string | null;
+  submittedAt: Date | string | null;
+  document: {
+    id: string;
+    title: string;
+    membership: {
+      user: {
+        name: string | null;
+        email: string;
+      };
+    };
+  };
+};
+
+export { formatClassLabel } from '~/utils/class-display';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -88,11 +114,25 @@ export function getDraftDisplayTitle(document: {
 export function getTeacherDocumentWorkDetailLink(params: {
   document: TeacherDocumentWorkRow;
   exitTo: string;
+  /**
+   * The list's current column sort, serialized as `field:direction`. The
+   * grading view replays it so its prev/next student arrows walk the stack in
+   * the same order the teacher is looking at here. Filters already travel in
+   * `exitTo`; the sort lives in component state, so it has to be passed along.
+   */
+  queueSort?: string | null;
 }) {
   const encodedExitTo = encodeURIComponent(params.exitTo);
 
   if (params.document.latestSubmission?.id) {
-    return `/app/submissions/${params.document.latestSubmission.id}?edit=1&exitTo=${encodedExitTo}`;
+    const queueSort = params.queueSort
+      ? `&queueSort=${encodeURIComponent(params.queueSort)}`
+      : '';
+    return `/app/submissions/${params.document.latestSubmission.id}?edit=1&exitTo=${encodedExitTo}${queueSort}`;
+  }
+
+  if (params.document.group) {
+    return `/app/group-drafts/${params.document.id}?exitTo=${encodedExitTo}`;
   }
 
   return `/app/documents/${params.document.id}?left=tutor&exitTo=${encodedExitTo}`;
@@ -118,6 +158,7 @@ export function getTeacherDocumentWorkStatusDisplay(
         numericPercentage: submission.numericPercentage ?? null,
         letterGrade: submission.letterGrade ?? null,
         pointValue: document.assignment?.pointValue ?? null,
+        score: submission.score,
       })
     : null;
 
@@ -188,4 +229,45 @@ export function buildReleaseGradeRows(
         };
       })
   );
+}
+
+export function buildTeacherUnsubmitRows(
+  documents: TeacherDocumentWorkRow[]
+): TeacherUnsubmitRow[] {
+  return documents.flatMap((document) => {
+    const submission = document.latestSubmission;
+    if (!submission) return [];
+
+    const score =
+      formatAssignmentGrade({
+        submitForGrade: document.assignment?.submitForGrade,
+        numericPercentage: submission.numericPercentage ?? null,
+        letterGrade: submission.letterGrade ?? null,
+        pointValue: document.assignment?.pointValue ?? null,
+        score: submission.score,
+      }) ??
+      submission.score ??
+      null;
+
+    return [
+      {
+        id: submission.id,
+        score,
+        submittedAt: submission.submittedAt ?? submission.createdAt ?? null,
+        document: {
+          id: document.id,
+          title:
+            submission.title?.trim() ||
+            document.title?.trim() ||
+            getDraftDisplayTitle(document),
+          membership: {
+            user: {
+              name: document.membership.user.name,
+              email: document.membership.user.email,
+            },
+          },
+        },
+      },
+    ];
+  });
 }

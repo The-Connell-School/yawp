@@ -14,16 +14,46 @@ import { Button } from '~/components/ui/button';
 import { FormInput } from '~/components/rvf-forms/form-input';
 import { FormSelect } from '~/components/rvf-forms/form-select';
 import { redirectWithToast } from '~/utils/toast.server';
-import { getStudentPreviewState } from '~/utils/student-preview.server';
-import { EnterCodeEscapeActions } from './escape-actions';
+import { formatClassGradePeriod } from '~/utils/class-display';
 
 const CodeSchema = z.object({
   code: z.string().min(1, 'Code is required'),
 });
 
+// The second step carries the code that was validated in the first one. Picking a class
+// is a disambiguation, not an authorization: the code still has to be re-checked, or
+// `assign-class` becomes a way to enroll in any class without ever knowing a code.
 const ClassSelectionSchema = z.object({
   classId: z.string().min(1, 'Class is required'),
+  code: z.string().min(1, 'Code is required'),
 });
+
+/**
+ * Every class lookup on this route runs through here.
+ *
+ * `Class.code` is unique per school (`@@unique([schoolId, code])`), not globally, so a
+ * bare code match spans organizations and a collision would enroll a student into
+ * another tenant's class. A student only reaches this page from `/app`, already holding
+ * a membership, so the organization that membership belongs to is the right scope: it
+ * still allows the legitimate ambiguity of two schools inside one organization sharing a
+ * code, which is what the selection step exists for.
+ */
+function classCodeWhere(organizationId: string, code: string) {
+  return {
+    isArchived: false,
+    code: { equals: code, mode: 'insensitive' as const },
+    school: { organizationId },
+  };
+}
+
+function requireStudentMembership(membership: { role: string }) {
+  if (membership.role !== 'STUDENT') {
+    throw Response.json(
+      { error: 'Forbidden', message: 'A student membership is required.' },
+      { status: 403 }
+    );
+  }
+}
 
 async function connectMembershipToClass(membershipId: string, classId: string) {
   await prisma.orgMembership.update({
@@ -35,7 +65,7 @@ async function connectMembershipToClass(membershipId: string, classId: string) {
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
-  const preview = await getStudentPreviewState(request);
+  requireStudentMembership(membership);
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
 
@@ -44,15 +74,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       membership,
       classes: [],
       code: null,
-      studentPreviewActive: preview.active,
     });
   }
 
   const classes = await prisma.class.findMany({
-    where: {
-      isArchived: false,
-      code: { equals: code, mode: 'insensitive' },
-    },
+    where: classCodeWhere(membership.organization.id, code),
     select: {
       id: true,
       code: true,
@@ -66,38 +92,39 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
     },
-    orderBy: [
-      { schoolYear: 'desc' },
-      { grade: 'asc' },
-      { period: 'asc' },
-    ],
+    orderBy: [{ schoolYear: 'desc' }, { grade: 'asc' }, { period: 'asc' }],
   });
 
   return data({
     membership,
     classes,
     code,
-    studentPreviewActive: preview.active,
   });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
+  requireStudentMembership(membership);
   const formData = await request.formData();
   const intent = formData.get('intent');
+  const isModal = new URL(request.url).searchParams.get('modal') === '1';
 
   if (intent === 'validate-code') {
     const { error, data: codeData } = await parseFormData(formData, CodeSchema);
     if (error) return validationError(error);
 
     const classes = await prisma.class.findMany({
-      where: {
-        isArchived: false,
-        code: { equals: codeData.code, mode: 'insensitive' },
+      where: classCodeWhere(membership.organization.id, codeData.code),
+      select: {
+        id: true,
+        schoolYear: true,
+        period: true,
+        grade: true,
+        school: { select: { name: true } },
+        teachers: { select: { user: { select: { name: true } } } },
       },
-      select: { id: true },
-      take: 20,
+      orderBy: [{ schoolYear: 'desc' }, { grade: 'asc' }, { period: 'asc' }],
     });
 
     if (classes.length === 0) {
@@ -107,9 +134,31 @@ export async function action({ request }: ActionFunctionArgs) {
     if (classes.length === 1) {
       await connectMembershipToClass(membership.id, classes[0]!.id);
 
+      if (isModal) return data({ status: 'enrolled' as const });
+
       return redirectWithToast('/app', {
         title: 'Success',
         description: 'You have been added to the class!',
+      });
+    }
+
+    if (isModal) {
+      return data({
+        status: 'select' as const,
+        code: codeData.code.trim(),
+        classes: classes.map((klass) => ({
+          id: klass.id,
+          label: `${klass.school.name} • ${klass.schoolYear}${
+            formatClassGradePeriod(klass)
+              ? ` • ${formatClassGradePeriod(klass)}`
+              : ''
+          } • ${
+            klass.teachers
+              .map((teacher) => teacher.user.name)
+              .filter(Boolean)
+              .join(', ') || 'Teacher'
+          }`,
+        })),
       });
     }
 
@@ -128,7 +177,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const klass = await prisma.class.findFirst({
       where: {
         id: selectionData.classId,
-        isArchived: false,
+        ...classCodeWhere(membership.organization.id, selectionData.code),
       },
       select: { id: true },
     });
@@ -138,6 +187,8 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     await connectMembershipToClass(membership.id, klass.id);
+
+    if (isModal) return data({ status: 'enrolled' as const });
 
     return redirectWithToast('/app', {
       title: 'Success',
@@ -153,15 +204,25 @@ export default function Route() {
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
   const [searchParams] = useSearchParams();
-  const hasCode = !!searchParams.get('code');
+  const validatedCode = searchParams.get('code') ?? '';
+  const hasCode = !!validatedCode;
+
+  // Both forms are built on every render. Step one navigates to step two on the client,
+  // so calling either hook conditionally changes the hook order between renders of the
+  // same component instance and the selection screen renders as the error boundary.
+  const codeForm = useForm({
+    schema: CodeSchema,
+    method: 'POST',
+    defaultValues: { code: '' },
+  });
+
+  const classForm = useForm({
+    schema: ClassSelectionSchema,
+    method: 'POST',
+    defaultValues: { classId: '', code: validatedCode },
+  });
 
   if (!hasCode) {
-    const codeForm = useForm({
-      schema: CodeSchema,
-      method: 'POST',
-      defaultValues: { code: '' },
-    });
-
     return (
       <div className="flex flex-col items-center justify-center min-h-screen px-4">
         <div className="w-full max-w-md">
@@ -187,19 +248,15 @@ export default function Route() {
               Continue
             </Button>
           </Form>
-          <EnterCodeEscapeActions
-            studentPreviewActive={data.studentPreviewActive}
-          />
+          <Form method="POST" action="/auth/logout" className="mt-3">
+            <Button variant="outline" className="w-full" type="submit">
+              Log out
+            </Button>
+          </Form>
         </div>
       </div>
     );
   }
-
-  const classForm = useForm({
-    schema: ClassSelectionSchema,
-    method: 'POST',
-    defaultValues: { classId: '' },
-  });
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-4">
@@ -216,14 +273,23 @@ export default function Route() {
           {...classForm.getFormProps()}
         >
           <input type="hidden" name="intent" value="assign-class" />
+          {/* The code validated in step one; the action re-checks it against the
+              chosen class rather than trusting the class id on its own. */}
+          <input type="hidden" name="code" value={validatedCode} />
           <FormSelect
             scope={classForm.scope('classId')}
             label="Class"
+            // Radix rejects a Select.Item whose value is the empty string, so the
+            // "Select a class" row is a placeholder, not an option.
+            placeholder="Select a class"
             options={[
-              { value: '', label: 'Select a class' },
               ...data.classes.map((klass) => ({
                 value: klass.id,
-                label: `${klass.school.name} • ${klass.schoolYear} • Grade ${klass.grade} • Period ${klass.period} • ${
+                label: `${klass.school.name} • ${klass.schoolYear}${
+                  formatClassGradePeriod(klass)
+                    ? ` • ${formatClassGradePeriod(klass)}`
+                    : ''
+                } • ${
                   klass.teachers
                     .map((t) => t.user.name)
                     .filter(Boolean)
@@ -236,7 +302,11 @@ export default function Route() {
             Join Class
           </Button>
         </Form>
-        <EnterCodeEscapeActions studentPreviewActive={data.studentPreviewActive} />
+        <Form method="POST" action="/auth/logout" className="mt-3">
+          <Button variant="outline" className="w-full" type="submit">
+            Log out
+          </Button>
+        </Form>
       </div>
     </div>
   );

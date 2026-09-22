@@ -31,8 +31,8 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
 
       try {
         await signIn(e2eContext.userEmail, 'johndoe');
-        await page.goto('/app?tab=assignments');
-        await expect(page.getByTestId('app._index')).toBeVisible();
+        await page.goto(`/app/my-classes/${e2eContext.classId}`);
+        await expect(page.getByTestId('student-class-detail')).toBeVisible();
 
         const assignmentCard = page
           .getByRole('button', { name: /E2E Rhetorical Analysis/i })

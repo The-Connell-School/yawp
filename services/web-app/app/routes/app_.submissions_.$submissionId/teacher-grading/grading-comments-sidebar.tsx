@@ -39,6 +39,8 @@ type Props = {
   onCommentCreated?: (comment: SubmissionComment) => void;
   onCommentDeleted?: (commentId: string) => void;
   onCommentUpdated?: (commentId: string, content: string) => void;
+  heading?: string;
+  showHeading?: boolean;
 };
 
 function sortByDocumentLocation<T extends { createdAt: Date | string }>(
@@ -81,6 +83,8 @@ export function GradingCommentsSidebar({
   onCommentCreated,
   onCommentDeleted,
   onCommentUpdated,
+  heading = 'Grade comments',
+  showHeading = true,
 }: Props) {
   const [draftComment, setDraftComment] = useState<DraftComment | null>(null);
   const [draftContent, setDraftContent] = useState('');
@@ -252,9 +256,11 @@ export function GradingCommentsSidebar({
   return (
     <div className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="border-b p-2">
-          <h2 className="text-sm font-semibold">Grade comments</h2>
-        </div>
+        {showHeading ? (
+          <div className="border-b p-2">
+            <h2 className="text-sm font-semibold">{heading}</h2>
+          </div>
+        ) : null}
         <div className="flex-1 overflow-y-auto p-2">
           {combinedItems.length === 0 ? (
             <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 px-4 py-8 text-center">

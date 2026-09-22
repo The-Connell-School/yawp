@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   class: {
     findMany: mock(),
+    findFirst: mock(),
   },
   assignmentType: {
     findFirst: mock(),
@@ -19,12 +20,27 @@ const prisma = {
   apHistoryPromptLibraryEntry: {
     findFirst: mock(),
   },
+  classAssignment: {
+    findMany: mock(),
+  },
 };
 
 const requireUserId = mock();
 const requireMembership = mock();
 const createAssignmentDeployedToClasses = mock();
 const isAssignmentTypeAvailableForEveryScope = mock();
+const uploadAssignmentPromptAttachment = mock();
+const deleteAssignmentPromptAttachment = mock();
+const saveAssignmentForReuse = mock();
+const autoArrangeNewAssignment = mock();
+class AssignmentPromptAttachmentError extends Error {}
+const actualAssignmentPromptAttachment =
+  await import('~/domain/assignments/assignment-prompt-attachment.server');
+// bun's module mocks are global to the test run and mock.restore() does not
+// undo mock.module — restore from the pristine copy test-preload.ts captured
+// before any file could mock.module() this path (see comment there).
+const actualAssignmentTypeAccess =
+  globalThis.__realModules['~/utils/assignment-type-access.server'];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -34,11 +50,35 @@ mock.module('~/utils/auth.server', () => ({
 mock.module('~/utils/assignment-deployment.server', () => ({
   createAssignmentDeployedToClasses,
 }));
+mock.module('~/domain/collaboration/auto-arrange.server', () => ({
+  autoArrangeNewAssignment,
+}));
 mock.module('~/utils/assignment-type-access.server', () => ({
+  ...actualAssignmentTypeAccess,
   isAssignmentTypeAvailableForEveryScope,
+}));
+mock.module('~/domain/assignments/assignment-prompt-attachment.server', () => ({
+  ...actualAssignmentPromptAttachment,
+  AssignmentPromptAttachmentError,
+  assignmentPromptAttachmentRequestTooLarge: () => false,
+  deleteAssignmentPromptAttachment,
+  uploadAssignmentPromptAttachment,
+}));
+
+mock.module('~/domain/assignments/saved-assignments.server', () => ({
+  SAVED_ASSIGNMENTS_ENABLED: true,
+  saveAssignmentForReuse,
 }));
 
 const { action } = await import('./route');
+
+afterAll(() => {
+  mock.restore();
+  mock.module(
+    '~/utils/assignment-type-access.server',
+    () => actualAssignmentTypeAccess
+  );
+});
 
 function requestFor(body: Record<string, string | string[]>) {
   const form = new FormData();
@@ -66,13 +106,19 @@ function responseStatus(response: any) {
 function mockAssignmentTypeAvailable({
   id = 'at-1',
   systemKey = 'generic_essay',
+  collaborationSupported = false,
 } = {}) {
-  prisma.assignmentType.findFirst.mockResolvedValue({ id, systemKey });
+  prisma.assignmentType.findFirst.mockResolvedValue({
+    id,
+    systemKey,
+    collaborationSupported,
+  });
 }
 
 describe('api.assignments.create', () => {
   beforeEach(() => {
     prisma.class.findMany.mockReset();
+    prisma.class.findFirst.mockReset().mockResolvedValue(null);
     prisma.assignmentType.findFirst.mockReset();
     prisma.organizationAssignmentType.findMany.mockReset();
     prisma.school.findMany.mockReset();
@@ -80,6 +126,15 @@ describe('api.assignments.create', () => {
     prisma.apHistoryPromptLibraryEntry.findFirst.mockReset();
     createAssignmentDeployedToClasses.mockReset();
     isAssignmentTypeAvailableForEveryScope.mockReset();
+    uploadAssignmentPromptAttachment.mockReset();
+    deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
+    saveAssignmentForReuse.mockReset().mockResolvedValue({ id: 'saved-1' });
+    autoArrangeNewAssignment
+      .mockReset()
+      .mockResolvedValue({ arranged: 1, failed: 0 });
+    prisma.classAssignment.findMany
+      .mockReset()
+      .mockResolvedValue([{ id: 'ca-1', classId: 'class-1' }]);
     requireUserId.mockReset();
     requireMembership.mockReset();
 
@@ -103,6 +158,11 @@ describe('api.assignments.create', () => {
     isAssignmentTypeAvailableForEveryScope.mockResolvedValue(true);
     prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(null);
     createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
+    uploadAssignmentPromptAttachment.mockResolvedValue({
+      promptAttachmentKey: 'assignment-prompts/file-id/assignment.pdf',
+      promptAttachmentName: 'assignment.pdf',
+      promptAttachmentSize: 4,
+    });
   });
 
   test('creates one standardized assignment per selected teacher-owned class', async () => {
@@ -145,6 +205,44 @@ describe('api.assignments.create', () => {
         gradingAssistantStrictnessLevel: 'intermediate',
       }),
       classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
+    });
+  });
+
+  test('stores a PDF attachment for assignments created across classes', async () => {
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.append('classIds', 'class-1');
+    form.append('classIds', 'class-2');
+    form.set('prompt', 'Reference the attached assignment.');
+    form.set(
+      'promptAttachment',
+      new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'assignment.pdf', {
+        type: 'application/pdf',
+      })
+    );
+
+    const response = await action({
+      request: new Request('https://example.com/api/assignments/create', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+    } as any);
+
+    expect((await readBody(response)).success).toBe(true);
+    expect(uploadAssignmentPromptAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'assignment.pdf' })
+    );
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        promptAttachmentKey: 'assignment-prompts/file-id/assignment.pdf',
+        promptAttachmentName: 'assignment.pdf',
+        promptAttachmentSize: 4,
+      }),
+      classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -168,6 +266,7 @@ describe('api.assignments.create', () => {
         gradingAssistantStrictnessLevel: 'advanced',
       }),
       classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -190,6 +289,7 @@ describe('api.assignments.create', () => {
         gradingAssistantStrictnessLevel: 'intermediate',
       }),
       classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -210,6 +310,70 @@ describe('api.assignments.create', () => {
     expect(body).toMatchObject({
       success: false,
       message: 'Grading assistant strictness level is invalid.',
+    });
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+  });
+
+  test('defaults the tutor to enabled when not specified (preserves current behavior)', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tutorEnabled: true }),
+      classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
+    });
+  });
+
+  test('disables the tutor when the toggle is turned off', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        tutorEnabled: 'false',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tutorEnabled: false }),
+      classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
+    });
+  });
+
+  test('rejects an invalid tutor toggle value', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1'],
+        prompt: 'Write the essay.',
+        tutorEnabled: 'maybe',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(responseStatus(response)).toBe(400);
+    expect(body).toMatchObject({
+      success: false,
+      message: 'Tutor enabled value is invalid.',
     });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
@@ -239,6 +403,7 @@ describe('api.assignments.create', () => {
         pointValue: null,
       }),
       classIds: ['class-1'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -392,6 +557,51 @@ describe('api.assignments.create', () => {
         gradingAssistantStrictnessLevel: 'intermediate',
       }),
       classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
+    });
+  });
+
+  test('carries the tutor toggle through the AP History creation path', async () => {
+    const libraryEntry = {
+      externalKey: 'apush-dbq-new-deal-federal-power',
+      course: 'apush',
+      essayType: 'dbq',
+      title: 'New Deal and Federal Power DBQ',
+      prompt:
+        'Evaluate the extent to which the New Deal changed the role of the federal government.',
+      period: '1932-1980',
+      periodNumber: 7,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [],
+    };
+    mockAssignmentTypeAvailable({
+      id: 'ap-type-1',
+      systemKey: 'ap_history_essay',
+    });
+    prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(
+      libraryEntry
+    );
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'ap-type-1',
+        classIds: ['class-1', 'class-2'],
+        title: 'Unit 7 DBQ',
+        apHistoryLibraryEntryId: 'apush-dbq-new-deal-federal-power',
+        tutorEnabled: 'false',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tutorEnabled: false }),
+      classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
     });
   });
 
@@ -447,5 +657,327 @@ describe('api.assignments.create', () => {
     expect(responseStatus(response)).toBe(400);
     expect(body.message).toBe('AP History library entry is unavailable.');
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+  });
+  test('keeps the assignment for reuse when the teacher asked it to be saved', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        submitForGrade: 'true',
+        pointValue: '50',
+        tutorEnabled: 'false',
+        saveForReuse: 'true',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(saveAssignmentForReuse).toHaveBeenCalledWith({
+      membershipId: 'teacher-1',
+      assignmentTypeId: 'at-1',
+      title: 'Essay',
+      prompt: 'Write the essay.',
+      submitForGrade: true,
+      pointValue: 50,
+      gradingAssistantStrictnessLevel: 'intermediate',
+      tutorEnabled: false,
+      // Saved alongside the rest of the configuration so reusing this assignment
+      // preserves the setting. Solo here because the fixture organization is not
+      // in the collaborative-drafts rollout.
+      collaborationEnabled: false,
+      collaborationGroupMode: 'teacher',
+      collaborationGroupSize: null,
+    });
+  });
+
+  test('does not keep the assignment when the teacher did not ask', async () => {
+    await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+      }),
+      params: {},
+    } as any);
+
+    expect(saveAssignmentForReuse).not.toHaveBeenCalled();
+  });
+
+  test('still reports the assignment created when keeping it fails', async () => {
+    // The classes already have the assignment by then; a failed save must not
+    // read as a failed creation.
+    saveAssignmentForReuse.mockRejectedValue(new Error('nope'));
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        saveForReuse: 'true',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(body.message).toBe(
+      'Assignment created and applied to classes, but it could not be saved for reuse.'
+    );
+  });
+  describe('collaborative drafts', () => {
+    // One class only, so it matches the single classIds entry the helper posts.
+    const singleClass = () => {
+      prisma.class.findMany.mockResolvedValue([
+        { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
+      ]);
+    };
+    // Legacy flag values prove creation no longer depends on assignment type.
+    const enablePilot = () => {
+      singleClass();
+      mockAssignmentTypeAvailable({ collaborationSupported: true });
+    };
+    const disablePilot = () => {
+      singleClass();
+      mockAssignmentTypeAvailable({ collaborationSupported: false });
+    };
+
+    const createWithCollaboration = (
+      extra: Record<string, string | string[]> = {}
+    ) =>
+      action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Write the essay.',
+          title: 'Essay',
+          collaborationEnabled: 'true',
+          collaborationGroupMode: 'teacher',
+          collaborationGroupSize: '3',
+          ...extra,
+        }),
+        params: {},
+      } as any);
+
+    test('stores the settings when the assignment type is in the pilot', async () => {
+      enablePilot();
+
+      const body = await readBody(await createWithCollaboration());
+
+      expect(body.success).toBe(true);
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            collaborationEnabled: true,
+            collaborationGroupMode: 'teacher',
+            collaborationGroupSize: 3,
+          }),
+        })
+      );
+    });
+
+    test('rejects collaborative creation when a selected class has no students', async () => {
+      enablePilot();
+      prisma.class.findFirst.mockResolvedValue({ id: 'class-1' });
+
+      const response = await createWithCollaboration();
+      const body = await readBody(response);
+
+      expect(responseStatus(response)).toBe(400);
+      expect(body.message).toMatch(/add students/i);
+      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
+
+    test('stores collaboration for an assignment type outside the former pilot', async () => {
+      disablePilot();
+
+      const body = await readBody(await createWithCollaboration());
+
+      expect(body.success).toBe(true);
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            collaborationEnabled: true,
+            collaborationGroupMode: 'teacher',
+            collaborationGroupSize: 3,
+          }),
+        })
+      );
+    });
+
+    test('creates a solo assignment when the form omits the toggle entirely', async () => {
+      // Backward compatibility: an older deployed client posts no collaboration
+      // fields at all and must keep producing single-author assignments.
+      enablePilot();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Write the essay.',
+          title: 'Essay',
+        }),
+        params: {},
+      } as any);
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ collaborationEnabled: false }),
+        })
+      );
+    });
+
+    test('passes the chosen mode through to the assignment', async () => {
+      // The sheet posts a mode now; before, every collaborative assignment
+      // silently took the parser's default because nothing rendered a picker.
+      enablePilot();
+
+      await createWithCollaboration({ collaborationGroupMode: 'random' });
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ collaborationGroupMode: 'random' }),
+        })
+      );
+    });
+
+    test('arranges groups at creation for the modes that describe one', async () => {
+      enablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
+
+      await createWithCollaboration({ collaborationGroupMode: 'random' });
+
+      expect(autoArrangeNewAssignment).toHaveBeenCalledWith({
+        assignmentId: 'assignment-1',
+        mode: 'random',
+        groupSize: 3,
+      });
+    });
+
+    test('whole class drops the posted size', async () => {
+      // The group is the roster, so a size would be meaningless -- and the
+      // stepper is hidden for this mode, so a posted one is stale.
+      enablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
+
+      await createWithCollaboration({ collaborationGroupMode: 'whole-class' });
+
+      expect(autoArrangeNewAssignment).toHaveBeenCalledWith(
+        expect.objectContaining({ mode: 'whole-class', groupSize: null })
+      );
+    });
+
+    test('does not arrange a solo assignment', async () => {
+      enablePilot();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Write the essay.',
+          title: 'Essay',
+        }),
+        params: {},
+      } as any);
+
+      expect(autoArrangeNewAssignment).not.toHaveBeenCalled();
+    });
+
+    test('arranges groups for an assignment type outside the former pilot', async () => {
+      disablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
+
+      await createWithCollaboration({ collaborationGroupMode: 'random' });
+
+      expect(autoArrangeNewAssignment).toHaveBeenCalledWith({
+        assignmentId: 'assignment-1',
+        mode: 'random',
+        groupSize: 3,
+      });
+    });
+
+    test('sends the teacher on to group setup, because creating is not the end', async () => {
+      // The sheet used to just close, leaving a collaborative assignment looking
+      // finished while its groups did not exist and no student could see it.
+      enablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { id: 'ca-1', classId: 'class-1' },
+      ]);
+
+      const body = await readBody(await createWithCollaboration());
+
+      expect(body.nextStep).toEqual({
+        url: '/app/class-assignments/ca-1/groups',
+        classCount: 1,
+      });
+    });
+
+    test('says plainly that students cannot see it yet', async () => {
+      enablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({
+        id: 'assignment-1',
+      });
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { id: 'ca-1', classId: 'class-1' },
+      ]);
+
+      const body = await readBody(await createWithCollaboration());
+
+      expect(body.message).toMatch(/cannot see it until you finalize groups/i);
+    });
+
+    test('a solo assignment has no next step and keeps its old message', async () => {
+      enablePilot();
+
+      const body = await readBody(
+        await action({
+          request: requestFor({
+            intent: 'create-assignment',
+            assignmentTypeId: 'at-1',
+            classIds: ['class-1'],
+            prompt: 'Write the essay.',
+            title: 'Essay',
+          }),
+          params: {},
+        } as any)
+      );
+
+      expect(body.nextStep).toBeNull();
+      expect(body.message).toBe('Assignment created and applied to classes.');
+    });
+
+    test('rejects an invalid group size before touching the database', async () => {
+      enablePilot();
+      createAssignmentDeployedToClasses.mockClear();
+
+      const response = await createWithCollaboration({
+        collaborationGroupSize: '99',
+      });
+      const body = await readBody(response);
+
+      expect(responseStatus(response)).toBe(400);
+      expect(body.success).toBe(false);
+      expect(body.message).toBe('Group size must be between 2 and 8 students.');
+      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
   });
 });

@@ -2,13 +2,53 @@
 set -euo pipefail
 
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
+export PREVIEW_ROOT="$ROOT"
 OPEN_PR_NUMBERS="${OPEN_PR_NUMBERS:-}"
 PREVIEW_TTL_HOURS="${PREVIEW_TTL_HOURS:-72}"
+TARGET_PR="${TARGET_PR:-}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
+INFLIGHT_TTL_SECONDS="${PREVIEW_INFLIGHT_TTL_SECONDS:-3600}"
 now_epoch="$(date +%s)"
+cleanup_failed=0
+
+if ! declare -F preview_remove_path >/dev/null 2>&1; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # shellcheck source=remove-preview-path.sh
+  source "$SCRIPT_DIR/remove-preview-path.sh"
+fi
 
 is_positive_integer() {
   [[ "$1" =~ ^[1-9][0-9]*$ ]]
+}
+
+if [[ ! "$INFLIGHT_TTL_SECONDS" =~ ^[0-9]+$ ]]; then
+  echo "PREVIEW_INFLIGHT_TTL_SECONDS must be a nonnegative integer" >&2
+  exit 1
+fi
+
+is_inflight() {
+  local pr_number="$1"
+  local marker leaf modified
+  for marker in "$ROOT/inflight/pr-${pr_number}"/*; do
+    [[ -f "$marker" ]] || continue
+    leaf="$(basename "$marker")"
+    [[ "$leaf" =~ ^[0-9]+-[0-9]+$ ]] || continue
+    modified="$(stat -c %Y "$marker" 2>/dev/null || stat -f %m "$marker")" || continue
+    [[ "$modified" =~ ^[0-9]+$ ]] || continue
+    if (( modified > now_epoch || now_epoch - modified < INFLIGHT_TTL_SECONDS )); then
+      return 0
+    fi
+  done
+  return 1
+}
+
+if [[ -n "$TARGET_PR" ]] && ! is_positive_integer "$TARGET_PR"; then
+  echo "TARGET_PR must be a positive integer" >&2
+  exit 1
+fi
+
+matches_target() {
+  [[ -z "$TARGET_PR" || "$1" == "$TARGET_PR" ]]
 }
 
 is_open_pr() {
@@ -31,14 +71,17 @@ drop_preview_database() {
   local database_name="yawp_pr_${pr_number}"
 
   if docker inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
-    docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "$database_name" || true
+    docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "$database_name"
+    docker exec "$POSTGRES_CONTAINER" dropuser -U postgres --if-exists "${database_name}_app"
   fi
 }
 
 remove_legacy_postgres_volume() {
   local project="$1"
 
-  docker volume rm "${project}_${project}-postgres-data" >/dev/null 2>&1 || true
+  if docker volume inspect "${project}_${project}-postgres-data" >/dev/null 2>&1; then
+    docker volume rm "${project}_${project}-postgres-data" >/dev/null
+  fi
 }
 
 destroy_preview_path() {
@@ -48,14 +91,23 @@ destroy_preview_path() {
   local compose_file="$preview_path/docker-compose.yml"
 
   if [[ -f "$compose_file" ]]; then
-    docker compose -p "$project" -f "$compose_file" down -v --remove-orphans || true
+    docker compose -p "$project" -f "$compose_file" down -v --remove-orphans || return 1
   else
-    docker compose -p "$project" down -v --remove-orphans || true
+    docker compose -p "$project" down -v --remove-orphans || return 1
   fi
 
-  drop_preview_database "$pr_number"
-  remove_legacy_postgres_volume "$project"
-  rm -rf "$preview_path" "$ROOT/sources/pr-${pr_number}"
+  drop_preview_database "$pr_number" || return 1
+  remove_legacy_postgres_volume "$project" || return 1
+  local remove_failed=0
+  if ! preview_remove_path "$preview_path"; then
+    remove_failed=1
+  fi
+  if ! preview_remove_path "$ROOT/sources/pr-${pr_number}"; then
+    remove_failed=1
+  fi
+  if [[ "$remove_failed" -ne 0 ]]; then
+    return 1
+  fi
   echo "Cleaned preview pr-${pr_number}"
 }
 
@@ -73,14 +125,23 @@ cleanup_previews() {
     if ! is_positive_integer "$pr_number"; then
       continue
     fi
+    if ! matches_target "$pr_number"; then
+      continue
+    fi
+    if is_inflight "$pr_number"; then
+      echo "Skipping preview pr-${pr_number}: deployment is in flight"
+      continue
+    fi
     if is_open_pr "$pr_number"; then
       continue
     fi
-    if ! is_expired_path "$preview_path"; then
+    if [[ -z "$TARGET_PR" ]] && ! is_expired_path "$preview_path"; then
       continue
     fi
 
-    destroy_preview_path "$preview_path" "$pr_number"
+    if ! destroy_preview_path "$preview_path" "$pr_number"; then
+      cleanup_failed=1
+    fi
   done
 }
 
@@ -98,17 +159,32 @@ cleanup_sources() {
     if ! is_positive_integer "$pr_number"; then
       continue
     fi
+    if ! matches_target "$pr_number"; then
+      continue
+    fi
+    if is_inflight "$pr_number"; then
+      echo "Skipping source pr-${pr_number}: deployment is in flight"
+      continue
+    fi
     if is_open_pr "$pr_number"; then
       continue
     fi
-    if ! is_expired_path "$source_path"; then
+    if [[ -d "$ROOT/previews/pr-${pr_number}" ]]; then
+      echo "Skipping source pr-${pr_number}: preview teardown is incomplete"
+      continue
+    fi
+    if [[ -z "$TARGET_PR" ]] && ! is_expired_path "$source_path"; then
       continue
     fi
 
-    rm -rf "$source_path"
-    echo "Cleaned source pr-${pr_number}"
+    if preview_remove_path "$source_path"; then
+      echo "Cleaned source pr-${pr_number}"
+    else
+      cleanup_failed=1
+    fi
   done
 }
 
 cleanup_previews
 cleanup_sources
+exit "$cleanup_failed"

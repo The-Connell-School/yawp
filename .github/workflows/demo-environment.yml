@@ -1,0 +1,396 @@
+name: Demo environment
+
+# The demo box at demo.yawp.school. Brian demos from this, so it is the one environment
+# that must not surprise anyone:
+#
+#   - It ships ONLY when someone asks. No push trigger, no schedule. A merge to main does
+#     not change what a client sees mid-demo.
+#   - It runs the PRODUCTION build path, not the fast dev-server path previews use. Slower
+#     to deploy, but what Brian shows is what production does.
+#   - It lives on its own host, so a preview host wedging cannot take the demo down with it.
+#   - Its data persists between deploys. Redeploying ships code, not a fresh database.
+#
+# Rolling back is the same operation as shipping: dispatch again with an older ref.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or SHA to put on the demo box'
+        required: true
+        default: 'main'
+      reset_data:
+        description: 'Reseed the demo database from scratch (destroys demo content)'
+        type: boolean
+        required: false
+        default: false
+      reset_confirmation:
+        description: 'Required with reset_data: type RESET yawp_demo'
+        type: string
+        required: false
+        default: ''
+      backup_retention:
+        description: 'Number of daily demo database backups to retain (1-365)'
+        type: string
+        required: false
+        default: '14'
+
+concurrency:
+  group: demo-environment
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  demo-deploy:
+    runs-on: ubuntu-22.04
+    environment: demo
+    env:
+      PREVIEW_SLUG: demo
+      PREVIEW_DOMAIN: ${{ vars.DEMO_DOMAIN || 'yawp.school' }}
+      PREVIEW_HOST: ${{ vars.DEMO_HOST }}
+      PREVIEW_ROOT: ${{ vars.DEMO_ROOT || '/srv/yawp-demo' }}
+      PREVIEW_SSH_USER: ${{ vars.DEMO_SSH_USER || 'ec2-user' }}
+      PREVIEW_TLS: 'true'
+      PREVIEW_RUNTIME: production
+      PREVIEW_DATA_MODE: ${{ vars.DEMO_DATA_MODE || 'seed' }}
+      PREVIEW_SEAT_COUNT: ${{ vars.DEMO_SEAT_COUNT || '1' }}
+      PREVIEW_ACCESS_MASTER_ORGANIZATION_ID: ${{ (vars.DEMO_DATA_MODE || 'seed') == 'sanitized-production' && 'default-org' || 'local-dev-org' }}
+      PREVIEW_MASTER_ACCESS_CODE: ${{ secrets.PREVIEW_MASTER_ACCESS_CODE }}
+      PREVIEW_AI_MODEL: ${{ vars.DEMO_AI_MODEL || 'claude-sonnet-4-6' }}
+      PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
+      PREVIEW_UA_STUDENT_BILLING_ENABLED: ${{ vars.DEMO_UA_STUDENT_BILLING_ENABLED || 'false' }}
+      PREVIEW_UA_ORGANIZATION_ID: ${{ vars.DEMO_UA_ORGANIZATION_ID }}
+      PREVIEW_UA_PARTNER_CODE: ${{ vars.DEMO_UA_PARTNER_CODE }}
+      PREVIEW_STRIPE_SECRET_KEY: ${{ secrets.DEMO_STRIPE_SECRET_KEY }}
+      PREVIEW_STRIPE_WEBHOOK_SECRET: ${{ secrets.DEMO_STRIPE_WEBHOOK_SECRET }}
+      PREVIEW_STRIPE_UA_2026_PRICE_ID: ${{ vars.DEMO_STRIPE_UA_2026_PRICE_ID }}
+      PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS: ${{ vars.DEMO_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS }}
+      PREVIEW_RESEND_FROM_EMAIL: ${{ vars.DEMO_RESEND_FROM_EMAIL || 'info@yawp.school' }}
+      PREVIEW_RESEND_API_KEY: ${{ secrets.DEMO_RESEND_API_KEY }}
+      PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
+      PREVIEW_LOGIN_EMAIL: ${{ secrets.DEMO_LOGIN_EMAIL || secrets.PREVIEW_LOGIN_EMAIL }}
+      PREVIEW_LOGIN_PASSWORD: ${{ secrets.DEMO_LOGIN_PASSWORD || secrets.PREVIEW_LOGIN_PASSWORD }}
+      DEMO_RESET_DATA: ${{ inputs.reset_data }}
+      DEMO_RESET_CONFIRMATION: ${{ inputs.reset_confirmation }}
+      DEMO_BACKUP_RETENTION: ${{ inputs.backup_retention }}
+      DEMO_BACKUP_S3_URI: ${{ vars.DEMO_BACKUP_S3_URI || 's3://yawp-preview-videos/demo-backups' }}
+      DEMO_REQUESTED_REF: ${{ inputs.ref }}
+      DEMO_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: Check demo configuration
+        env:
+          DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$PREVIEW_HOST" || { echo "Missing repository variable DEMO_HOST"; exit 1; }
+          test -n "$DEMO_SSH_PRIVATE_KEY" || { echo "Missing repository secret DEMO_SSH_PRIVATE_KEY"; exit 1; }
+          test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing an Anthropic API key secret"; exit 1; }
+          test -n "$PREVIEW_POSTGRES_ADMIN_PASSWORD" || { echo "Missing demo secret PREVIEW_DB_PASSWORD"; exit 1; }
+          test -n "$PREVIEW_MASTER_ACCESS_CODE" || { echo "Missing repository secret PREVIEW_MASTER_ACCESS_CODE"; exit 1; }
+          if [[ "$PREVIEW_UA_STUDENT_BILLING_ENABLED" == "true" ]]; then
+            test -n "$PREVIEW_UA_ORGANIZATION_ID" || { echo "Missing demo variable DEMO_UA_ORGANIZATION_ID"; exit 1; }
+            test -n "$PREVIEW_UA_PARTNER_CODE" || { echo "Missing demo variable DEMO_UA_PARTNER_CODE"; exit 1; }
+            test -n "$PREVIEW_STRIPE_SECRET_KEY" || { echo "Missing demo secret DEMO_STRIPE_SECRET_KEY"; exit 1; }
+            test -n "$PREVIEW_STRIPE_WEBHOOK_SECRET" || { echo "Missing demo secret DEMO_STRIPE_WEBHOOK_SECRET"; exit 1; }
+            test -n "$PREVIEW_STRIPE_UA_2026_PRICE_ID" || { echo "Missing demo variable DEMO_STRIPE_UA_2026_PRICE_ID"; exit 1; }
+            test -n "$PREVIEW_RESEND_API_KEY" || { echo "Missing demo secret DEMO_RESEND_API_KEY"; exit 1; }
+          fi
+          if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[1-9][0-9]{0,2}$ ]] \
+            || (( DEMO_BACKUP_RETENTION < 1 || DEMO_BACKUP_RETENTION > 365 )); then
+            echo "backup_retention must be between 1 and 365" >&2
+            exit 1
+          fi
+          [[ "$DEMO_BACKUP_S3_URI" =~ ^s3://[a-z0-9.-]+/[A-Za-z0-9._/-]+$ ]] || {
+            echo "Invalid DEMO_BACKUP_S3_URI" >&2
+            exit 1
+          }
+          if [[ "$DEMO_RESET_DATA" == "true" ]]; then
+            test "$DEMO_RESET_CONFIRMATION" = "RESET yawp_demo" || {
+              echo "reset_data requires reset_confirmation=RESET yawp_demo" >&2
+              exit 1
+            }
+            test "$DEMO_REQUESTED_REF" = "$DEMO_DEFAULT_BRANCH" || {
+              echo "reset_data may only deploy the reviewed default branch" >&2
+              exit 1
+            }
+          fi
+
+      - name: Checkout reviewed demo control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: demo-control
+          persist-credentials: false
+
+      - name: Checkout the requested application ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          path: demo-source
+          persist-credentials: false
+
+      - name: Record what is being shipped
+        id: shipping
+        working-directory: demo-source
+        run: |
+          set -euo pipefail
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "subject=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare SSH
+        env:
+          DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+        run: bash demo-control/scripts/preview/prepare-demo-ssh.sh
+
+      - name: Capture the currently deployed version
+        id: previous
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          prev="$(ssh -i ~/.ssh/demo_key "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" \
+            "cat ${PREVIEW_ROOT}/DEPLOYED_SHA 2>/dev/null || true")"
+          echo "sha=${prev:-none}" >> "$GITHUB_OUTPUT"
+          echo "Demo currently runs: ${prev:-nothing recorded}"
+
+      - name: Sync source to demo host
+        run: |
+          set -euo pipefail
+          remote_source="${PREVIEW_ROOT}/sources/demo"
+          remote_control="${PREVIEW_ROOT}/control/demo"
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          ssh -i ~/.ssh/demo_key "$ssh_target" "mkdir -p '$remote_source' '$remote_control'"
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'services/web-app/node_modules' \
+            --exclude 'services/web-app/.react-router' \
+            --exclude 'services/web-app/.vite' \
+            --exclude 'packages/prisma/generated' \
+            --exclude '.worktrees' \
+            -e "ssh -i ~/.ssh/demo_key" \
+            demo-control/ "$ssh_target:$remote_control/"
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'services/web-app/node_modules' \
+            --exclude 'services/web-app/.react-router' \
+            --exclude 'services/web-app/.vite' \
+            --exclude 'packages/prisma/generated' \
+            --exclude '.worktrees' \
+            -e "ssh -i ~/.ssh/demo_key" \
+            demo-source/ "$ssh_target:$remote_source/"
+
+      - name: Capture demo data before deploy
+        id: before_data
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_script="${PREVIEW_ROOT}/control/demo/scripts/preview/demo-data-signature.sh"
+          signature="$(ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "DATABASE_NAME=yawp_demo PREVIEW_POSTGRES_CONTAINER=preview-postgres bash $(shell_quote "$remote_script")")"
+          jq -e 'all(.[]; type == "number" and . >= 0)' <<<"$signature" >/dev/null
+          echo "signature=$signature" >> "$GITHUB_OUTPUT"
+          echo "Demo aggregate data before deploy: $signature"
+
+      - name: Prepare demo host capacity
+        run: |
+          set -euo pipefail
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_control="${PREVIEW_ROOT}/control/demo"
+          remote_metrics="${remote_control}/scripts/preview/publish-host-metrics.sh"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "PREVIEW_ROOT=$(printf '%q' "$PREVIEW_ROOT") bash $(printf '%q' "${remote_control}/scripts/preview/ensure-host-swap.sh")"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "PREVIEW_ROOT=$(printf '%q' "$PREVIEW_ROOT") \
+             HOST_METRICS_SCRIPT=$(printf '%q' "$remote_metrics") \
+             HOST_METRICS_SERVICE=yawp-demo-metrics \
+             bash $(printf '%q' "${remote_control}/scripts/preview/install-host-metrics.sh")"
+
+      - name: Deploy demo
+        id: deploy
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_source="${PREVIEW_ROOT}/sources/demo"
+          remote_control="${PREVIEW_ROOT}/control/demo"
+          remote_env=(
+            "PREVIEW_SLUG=$(shell_quote "$PREVIEW_SLUG")"
+            "PREVIEW_DOMAIN=$(shell_quote "$PREVIEW_DOMAIN")"
+            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
+            "PREVIEW_TLS=true"
+            "PREVIEW_RUNTIME=production"
+            "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
+            "PREVIEW_SEAT_COUNT=$(shell_quote "$PREVIEW_SEAT_COUNT")"
+            "PREVIEW_ACCESS_MASTER_ORGANIZATION_ID=$(shell_quote "$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID")"
+            "PREVIEW_MASTER_ACCESS_CODE=$(shell_quote "$PREVIEW_MASTER_ACCESS_CODE")"
+            "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
+            "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
+            "PREVIEW_UA_STUDENT_BILLING_ENABLED=$(shell_quote "$PREVIEW_UA_STUDENT_BILLING_ENABLED")"
+            "PREVIEW_UA_ORGANIZATION_ID=$(shell_quote "$PREVIEW_UA_ORGANIZATION_ID")"
+            "PREVIEW_UA_PARTNER_CODE=$(shell_quote "$PREVIEW_UA_PARTNER_CODE")"
+            "PREVIEW_STRIPE_SECRET_KEY=$(shell_quote "$PREVIEW_STRIPE_SECRET_KEY")"
+            "PREVIEW_STRIPE_WEBHOOK_SECRET=$(shell_quote "$PREVIEW_STRIPE_WEBHOOK_SECRET")"
+            "PREVIEW_STRIPE_UA_2026_PRICE_ID=$(shell_quote "$PREVIEW_STRIPE_UA_2026_PRICE_ID")"
+            "PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS=$(shell_quote "$PREVIEW_STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS")"
+            "PREVIEW_RESEND_FROM_EMAIL=$(shell_quote "$PREVIEW_RESEND_FROM_EMAIL")"
+            "PREVIEW_RESEND_API_KEY=$(shell_quote "$PREVIEW_RESEND_API_KEY")"
+            "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
+            "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
+            "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
+            "DEMO_RESET_DATA=$(shell_quote "$DEMO_RESET_DATA")"
+            "DEMO_RESET_CONFIRMATION=$(shell_quote "$DEMO_RESET_CONFIRMATION")"
+            "DEMO_BACKUP_RETENTION=$(shell_quote "$DEMO_BACKUP_RETENTION")"
+            "DEMO_BACKUP_S3_URI=$(shell_quote "$DEMO_BACKUP_S3_URI")"
+            "SOURCE_DIR=$(shell_quote "$remote_source")"
+          )
+          lock_file="${PREVIEW_ROOT}/preview-host.lock"
+          deploy_log="${PREVIEW_ROOT}/logs/demo-deploy-${GITHUB_RUN_ID}.log"
+          deploy_command="cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/deploy.sh"
+          SSH_IDENTITY="$HOME/.ssh/demo_key" \
+          SSH_TARGET="$ssh_target" \
+          LOCK_FILE="$lock_file" \
+          DEPLOY_LOG="$deploy_log" \
+          REMOTE_COMMAND="$deploy_command" \
+          bash demo-control/scripts/preview/run-host-deploy-detached.sh \
+            | tee /tmp/demo-deploy.log
+          url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
+          ua_url="$(awk -F= '/^UA_PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
+          access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/demo-deploy.log | tail -1)"
+          master_org_gate_enabled="$(awk -F= '/^PREVIEW_MASTER_ORG_GATE_ENABLED=/{print $2}' /tmp/demo-deploy.log | tail -1)"
+          test -n "$url" || { echo "Deploy did not print PREVIEW_URL"; exit 1; }
+          test -n "$access_code" || { echo "Deploy did not print PREVIEW_ACCESS_CODE"; exit 1; }
+          {
+            echo "url=$url"
+            echo "ua_url=$ua_url"
+            echo "access_code=$access_code"
+            echo "master_org_gate_enabled=${master_org_gate_enabled:-false}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify the demo actually serves
+        run: |
+          set -euo pipefail
+          url="${{ steps.deploy.outputs.url }}"
+          access_code="${{ steps.deploy.outputs.access_code }}"
+          health="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url/api/healthcheck")"
+          test "$health" = "200" || { echo "Demo healthcheck returned HTTP $health"; exit 1; }
+
+          gated_page="$(curl -skL -m 15 "$url")"
+          grep -q 'data-preview-access-screen' <<<"$gated_page" || {
+            echo "Demo request without a preview access cookie did not render the access screen" >&2
+            exit 1
+          }
+
+          blocked="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+            -X POST --data-urlencode 'email=dev.admin@yawp.local' \
+            "$url/auth/dev-login")"
+          test "$blocked" = "401" || {
+            echo "POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401" >&2
+            exit 1
+          }
+
+          cookie_jar="$(mktemp)"
+          entered="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$cookie_jar" \
+            --data-urlencode "code=$access_code" "$url/auth/preview-access")"
+          case "$entered" in
+            302|303) ;;
+            *) echo "Demo access code returned HTTP $entered" >&2; exit 1 ;;
+          esac
+
+          if [[ "${{ steps.deploy.outputs.master_org_gate_enabled }}" == "true" ]]; then
+            master_jar="$(mktemp)"
+            master_entered="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$master_jar" \
+              --data-urlencode "code=$PREVIEW_MASTER_ACCESS_CODE" "$url/auth/preview-access")"
+            case "$master_entered" in
+              302|303) ;;
+              *) echo "Demo master access code returned HTTP $master_entered" >&2; exit 1 ;;
+            esac
+            master_gate="$(curl -skL -m 15 -b "$master_jar" "$url/auth/preview-access")"
+            grep -q 'data-preview-organization-selector' <<<"$master_gate" || {
+              echo "Demo master access did not require organization selection" >&2
+              exit 1
+            }
+            master_selected="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -b "$master_jar" -c "$master_jar" \
+              --data-urlencode 'intent=select-organization' \
+              --data-urlencode "organizationId=$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID" \
+              "$url/auth/preview-access")"
+            case "$master_selected" in
+              302|303) ;;
+              *) echo "Demo master organization selection returned HTTP $master_selected" >&2; exit 1 ;;
+            esac
+          fi
+
+          if [[ "$PREVIEW_UA_STUDENT_BILLING_ENABLED" == "true" ]]; then
+            ua_url="${{ steps.deploy.outputs.ua_url }}"
+            test -n "$ua_url" || { echo "Deploy script did not print UA_PREVIEW_URL"; exit 1; }
+            ua_jar="$(mktemp)"
+            ua_entry="$(curl -skL -m 30 -c "$ua_jar" -b "$ua_jar" \
+              "$ua_url/?code=$access_code&organizationCode=$PREVIEW_UA_PARTNER_CODE")"
+            grep -q 'University of Alabama' <<<"$ua_entry" || {
+              echo "UA demo host did not render the partner landing" >&2
+              exit 1
+            }
+          fi
+
+          for attempt in $(seq 1 30); do
+            code="$(curl -skL -o /dev/null -m 15 -w '%{http_code}' \
+              -b "$cookie_jar" "$url" || true)"
+            if [ "$code" = "200" ] || [ "$code" = "302" ] || [ "$code" = "303" ]; then
+              echo "Demo healthy at $url (HTTP $code, access code accepted)"
+              exit 0
+            fi
+            echo "attempt $attempt: HTTP ${code:-none}"
+            sleep 10
+          done
+          echo "::error::Demo did not become healthy at $url. Previous version was ${{ steps.previous.outputs.sha }} — redeploy that ref to roll back."
+          exit 1
+
+      - name: Capture demo data after deploy
+        id: after_data
+        env:
+          BEFORE_SIGNATURE: ${{ steps.before_data.outputs.signature }}
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_script="${PREVIEW_ROOT}/control/demo/scripts/preview/demo-data-signature.sh"
+          signature="$(ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "DATABASE_NAME=yawp_demo PREVIEW_POSTGRES_CONTAINER=preview-postgres bash $(shell_quote "$remote_script")")"
+          jq -e 'all(.[]; type == "number" and . >= 0)' <<<"$signature" >/dev/null
+          echo "signature=$signature" >> "$GITHUB_OUTPUT"
+          echo "Demo aggregate data after deploy: $signature"
+          if [[ "$DEMO_RESET_DATA" == "false" ]]; then
+            for key in organizations users classes assignments documents submissions moduleSessions; do
+              before_count="$(jq -er --arg key "$key" '.[$key]' <<<"$BEFORE_SIGNATURE")"
+              after_count="$(jq -er --arg key "$key" '.[$key]' <<<"$signature")"
+              (( after_count >= before_count )) || {
+                echo "Demo aggregate data decreased during no-reset deploy: $key $before_count -> $after_count" >&2
+                exit 1
+              }
+            done
+          fi
+
+      - name: Record the deployed version
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/demo_key "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" \
+            "printf '%s\n' '${{ steps.shipping.outputs.sha }}' > ${PREVIEW_ROOT}/DEPLOYED_SHA"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Demo environment updated"
+            echo
+            echo "- **URL:** ${{ steps.deploy.outputs.url }}"
+            echo "- **UA URL:** ${{ steps.deploy.outputs.ua_url }}"
+            echo "- **Now running:** \`${{ steps.shipping.outputs.sha }}\` — ${{ steps.shipping.outputs.subject }}"
+            echo "- **Was running:** \`${{ steps.previous.outputs.sha }}\`"
+            echo "- **Build:** production"
+            echo "- **Data before:** ${{ steps.before_data.outputs.signature }}"
+            echo "- **Data after:** ${{ steps.after_data.outputs.signature }}"
+            echo
+            echo "To roll back, dispatch this workflow again with ref \`${{ steps.previous.outputs.sha }}\`."
+          } >> "$GITHUB_STEP_SUMMARY"

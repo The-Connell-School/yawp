@@ -3,6 +3,10 @@ import { invariant } from '@epic-web/invariant';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import {
+  documentReadWhere,
+  getIsPlatformAdmin,
+} from '~/utils/document-access.server';
 
 function hashContent(html: string, text: string): string {
   return crypto.createHash('md5').update(`${html}|${text}`).digest('hex');
@@ -12,7 +16,25 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   invariant(params.id, 'No document id provided');
 
   const userId = await requireUserId(request);
-  await requireMembership(request, userId);
+  const profile = await requireMembership(request, userId);
+
+  // Revisions and journals carry the full essay body at every checkpoint. Resolve the
+  // document under the caller's read scope first -- being logged in is not permission to
+  // read whichever document id happens to be in the URL.
+  const document = await prisma.document.findFirst({
+    where: {
+      id: params.id,
+      ...documentReadWhere({
+        profileId: profile.id,
+        isAdmin: await getIsPlatformAdmin(userId),
+      }),
+    },
+    select: { id: true },
+  });
+
+  if (!document) {
+    return dataResponse({ error: 'Document not found.' }, { status: 404 });
+  }
 
   const url = new URL(request.url);
   const before = url.searchParams.get('before'); // ISO timestamp cursor
