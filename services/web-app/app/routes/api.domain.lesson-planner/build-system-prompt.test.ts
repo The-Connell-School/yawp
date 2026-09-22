@@ -953,10 +953,23 @@ describe('buildLessonPlannerSystemPrompt — writing toward a self-chosen thesis
     );
   });
 
-  test('teaches the recurring-open-daily-pages route by theme, not by plot', () => {
-    expect(lower).toContain('recurring open daily pages across the unit');
+  test('teaches the recurring open-writing route by theme, not by plot', () => {
+    expect(lower).toContain('recurring open class starter arc across the unit');
     expect(lower).toContain("the unit's big themes, not its plot");
     expect(lower).toContain('how do people gain and lose power');
+  });
+
+  /**
+   * The arc is mined for an essay months later, which only works if the
+   * student wrote honestly in it. Grading those entries for depth is what
+   * would stop them — so the recurring days are class starters, and the
+   * prompts come from the library written to be ungraded.
+   */
+  test('keeps the recurring arc ungraded, and marks the days as such', () => {
+    expect(lower).toContain('that is class starter writing');
+    expect(prompt).toMatch(
+      /recurring open class starter arc[\s\S]{0,1200}kind: class-starter/i
+    );
   });
 
   test('requires variety across the cluster rather than the same question five times', () => {
@@ -972,7 +985,7 @@ describe('buildLessonPlannerSystemPrompt — writing toward a self-chosen thesis
 
   test('tells the essay day to have students choose from their own writing, not a fresh topic', () => {
     expect(lower).toContain(
-      'reread their own daily pages entries and choose the one that snagged them'
+      'reread their own entries and choose the one that snagged them'
     );
     expect(lower).toContain('which entry are you building on and why');
     expect(lower).toContain('not a fresh topic assigned that morning');
@@ -1147,6 +1160,27 @@ describe('buildLessonPlannerSystemPrompt — class starter vs Daily Pages', () =
 
   test('forbids stacking both into one ordinary period', () => {
     expect(lower).toContain('never run both');
+  });
+
+  /**
+   * The two exercises now read two different corpora, and this is the seam
+   * where a mix-up costs a student marks: the freewrite library invites
+   * writing without asking for the backing Daily Pages is scored on, so a
+   * prompt lifted from it and filed as Daily Pages lands an honest answer
+   * mid-scale for depth it was never asked to show.
+   */
+  test('sends each exercise to the library written for it', () => {
+    expect(prompt).toContain('search_short_form_prompts');
+    expect(prompt).toMatch(
+      /class starter[\s\S]{0,600}search_daily_pages_prompts/i
+    );
+    expect(prompt).toMatch(
+      /daily pages[\s\S]{0,600}search_short_form_prompts/i
+    );
+  });
+
+  test('forbids filing a freewrite prompt as a graded Daily Pages entry', () => {
+    expect(lower).toContain('never offer a prompt from one library as the other');
   });
 
   test('tells it which block kind to write for each', () => {

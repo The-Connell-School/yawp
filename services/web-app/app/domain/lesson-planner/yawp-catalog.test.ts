@@ -4,6 +4,7 @@ import {
   isDailyPagesTitle,
   listWritingLessonCatalog,
   searchDailyPagesPrompts,
+  searchShortFormPrompts,
   isReadableMaterial,
   summarizeLoungeMaterials,
   WRITING_LESSON_SKILL_HINTS,
@@ -300,5 +301,77 @@ describe('telling the two short-writing types apart by title', () => {
     expect(isClassStarterTitle('Starter Essay')).toBe(false);
     expect(isClassStarterTitle('Class Discussion')).toBe(false);
     expect(isClassStarterTitle('')).toBe(false);
+  });
+});
+
+/**
+ * The two corpora are not interchangeable, and this is the seam where mixing
+ * them up costs a student marks.
+ *
+ * The freewrite corpus `searchDailyPagesPrompts` reads is Class Starter
+ * material: its prompts invite writing without asking for the backing a graded
+ * entry is scored on. Daily Pages now grades Depth and Development of Thought,
+ * so a prompt that only invites gives the grader nothing to score — and the
+ * student who answered it honestly lands mid-scale.
+ */
+describe('searchShortFormPrompts', () => {
+  test('returns graded short-form prompts with an id the planner can cite', () => {
+    const results = searchShortFormPrompts({});
+    expect(results.length).toBeGreaterThan(0);
+    const first = results[0]!;
+    expect(first.id).toBeTruthy();
+    expect(first.prompt).toBeTruthy();
+    expect(first.kind).toBeTruthy();
+  });
+
+  test('reads a different corpus from the class starter search', () => {
+    const starterIds = new Set(
+      searchDailyPagesPrompts({ limit: 12 }).map((prompt) => prompt.id)
+    );
+    for (const prompt of searchShortFormPrompts({ limit: 12 })) {
+      expect(starterIds.has(prompt.id)).toBe(false);
+    }
+  });
+
+  test('filters by the text the class is reading', () => {
+    const results = searchShortFormPrompts({ text: 'macbeth' });
+    for (const prompt of results) {
+      expect(
+        prompt.textsOrUnits.some((unit) =>
+          unit.toLowerCase().includes('macbeth')
+        )
+      ).toBe(true);
+    }
+  });
+
+  test('filters by whether the prompt needs a text at all', () => {
+    // The filter a teacher reaches for on a day the class has read nothing.
+    const results = searchShortFormPrompts({ sourceNeed: 'none' });
+    expect(results.length).toBeGreaterThan(0);
+    for (const prompt of results) {
+      expect(prompt.sourceNeed).toBe('none');
+    }
+  });
+
+  test('filters by the shape of thinking the prompt sets up', () => {
+    const results = searchShortFormPrompts({ kind: 'claim-and-defend' });
+    expect(results.length).toBeGreaterThan(0);
+    for (const prompt of results) {
+      expect(prompt.kind).toBe('claim-and-defend');
+    }
+  });
+
+  test('keeps a result small enough to leave room for the lesson', () => {
+    expect(searchShortFormPrompts({ limit: 500 }).length).toBeLessThanOrEqual(
+      12
+    );
+  });
+
+  test('comes back empty rather than falling back to the starter corpus', () => {
+    // Silently widening to the freewrite prompts is the failure this whole
+    // split exists to prevent: the planner would file one as Daily Pages.
+    expect(
+      searchShortFormPrompts({ text: 'a text nobody has ever assigned' })
+    ).toEqual([]);
   });
 });

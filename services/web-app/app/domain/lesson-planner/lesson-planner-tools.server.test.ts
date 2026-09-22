@@ -72,6 +72,7 @@ describe('LESSON_PLANNER_TOOLS', () => {
     for (const name of [
       'list_classes',
       'search_daily_pages_prompts',
+      'search_short_form_prompts',
       'list_writing_lessons',
       'get_writing_lesson',
       'list_lounge_materials',
@@ -157,6 +158,54 @@ describe('handleLessonPlannerToolCall', () => {
     expect(result.prompts).toHaveLength(2);
     expect(result.prompts[0].id).toBeTruthy();
     expect(handleReporterToolCall).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The two corpora are graded by two different assistants. A class starter
+   * prompt filed as Daily Pages is marked for depth it never asked for, so
+   * the planner gets a search per corpus rather than one search and a guess.
+   */
+  test('serves the graded short-form corpus from its own tool', async () => {
+    const result = JSON.parse(
+      await callTool('search_short_form_prompts', { limit: 2 }, { ...ctx })
+    );
+
+    expect(result.prompts).toHaveLength(2);
+    expect(result.prompts[0].id).toBeTruthy();
+    expect(result.prompts[0].kind).toBeTruthy();
+    expect(handleReporterToolCall).not.toHaveBeenCalled();
+  });
+
+  test('keeps the two corpora apart', async () => {
+    const starters = JSON.parse(
+      await callTool('search_daily_pages_prompts', { limit: 12 }, { ...ctx })
+    );
+    const shortForm = JSON.parse(
+      await callTool('search_short_form_prompts', { limit: 12 }, { ...ctx })
+    );
+
+    const starterIds = new Set(
+      (starters.prompts as Array<{ id: string }>).map((prompt) => prompt.id)
+    );
+    for (const prompt of shortForm.prompts as Array<{ id: string }>) {
+      expect(starterIds.has(prompt.id)).toBe(false);
+    }
+  });
+
+  test('sends an empty short-form search back for a graded prompt, not a starter', async () => {
+    // Falling back to the freewrite corpus is the one thing this must never
+    // do: the planner would offer it in a block filed as Daily Pages.
+    const result = JSON.parse(
+      await callTool(
+        'search_short_form_prompts',
+        { text: 'a-book-yawp-does-not-have' },
+        { ...ctx }
+      )
+    );
+
+    expect(result.prompts).toEqual([]);
+    expect(result.note).toMatch(/loosen/i);
+    expect(result.note).not.toMatch(/class starter/i);
   });
 
   test('tells the model to loosen its filters instead of inventing a prompt', async () => {

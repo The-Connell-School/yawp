@@ -21,6 +21,7 @@ import {
 import {
   listWritingLessonCatalog,
   searchDailyPagesPrompts,
+  searchShortFormPrompts,
 } from './yawp-catalog';
 import {
   listAssignableTypes,
@@ -66,7 +67,7 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
   {
     name: 'search_daily_pages_prompts',
     description:
-      "Search Yawp's Daily Pages prompt library — 200 short writing prompts teachers use as warm-ups. Filter by the text or unit the class is reading (e.g. Macbeth), theme, grade band, prompt type, cognitive move, or seriousness. Use this whenever a lesson needs a bell-ringer, a warm-up, or a low-stakes entry point, and cite the prompt id you chose.",
+      "Search Yawp's open freewrite prompt library — 200 short, open-ended prompts. This is CLASS STARTER material: the prompts invite writing without asking for the backing a graded entry is scored on, and a class starter is marked on engagement alone. Filter by the text or unit the class is reading (e.g. Macbeth), theme, grade band, prompt type, cognitive move, or seriousness. Use this for a bell-ringer, a warm-up, or a low-stakes entry point, and cite the prompt id you chose. For a graded Daily Pages reflection, call search_short_form_prompts instead.",
     input_schema: {
       type: 'object',
       properties: {
@@ -107,6 +108,59 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
         seriousness: {
           type: 'string',
           enum: ['playful', 'light', 'moderate', 'serious', 'heavy'],
+        },
+        limit: { type: 'integer', minimum: 1, maximum: 12 },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'search_short_form_prompts',
+    description:
+      "Search Yawp's Daily Pages prompt library — short prompts written to be GRADED. Every one asks for the backing as well as the opinion (a reason, a case, a quotation, a counterexample) and says what a finished answer looks like, because Daily Pages is scored on Depth and Development of Thought. Filter by the text or unit the class is reading, theme, grade band, the shape of thinking the prompt sets up, cognitive move, or whether it needs a source text at all. Use this whenever the lesson calls for a written response a student will be graded on — usually after the reading or before a discussion, not at the bell. Cite the prompt id you chose. For an ungraded warm-up, call search_daily_pages_prompts instead.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description:
+            'Free text matched against the prompt, its title and its themes.',
+        },
+        text: {
+          type: 'string',
+          description:
+            'A text or unit the class is reading, e.g. "Macbeth" or "Of Mice and Men".',
+        },
+        theme: { type: 'string' },
+        gradeBand: { type: 'string', enum: ['9', '10', '11', '12'] },
+        kind: {
+          type: 'string',
+          enum: [
+            'close-read',
+            'claim-and-defend',
+            'one-difference',
+            'evaluate-a-choice',
+            'define-precisely',
+            'exit-synthesis',
+          ],
+        },
+        cognitiveMove: {
+          type: 'string',
+          enum: [
+            'analyze',
+            'argue-a-position',
+            'compare',
+            'define-a-term',
+            'evaluate',
+            'interpret',
+            'synthesize',
+          ],
+        },
+        sourceNeed: {
+          type: 'string',
+          enum: ['none', 'optional', 'required'],
+          description:
+            'Whether the prompt leans on a source text. Use "none" on a day the class has read nothing.',
         },
         limit: { type: 'integer', minimum: 1, maximum: 12 },
       },
@@ -217,6 +271,18 @@ async function handleCatalogToolCall(
         note: prompts.length
           ? 'Cite the prompt id and quote the prompt exactly.'
           : 'No prompt in the library matches those filters. Loosen them and search again, or write a warm-up yourself and put it in a yawp-daily-pages block so the teacher can assign it. Do not tell the teacher the library came up empty.',
+      };
+    }
+    case 'search_short_form_prompts': {
+      const prompts = searchShortFormPrompts(input);
+      return {
+        prompts,
+        // A Daily Pages assignment is created from this library, so the
+        // teacher needs the route as much as the prompt text.
+        libraryHref: '/app/assignment-types',
+        note: prompts.length
+          ? 'Cite the prompt id and quote the prompt exactly.'
+          : 'No graded short-form prompt matches those filters. Loosen them and search again, or write one yourself and put it in a yawp-daily-pages block with kind: daily-pages. Never substitute a freewrite prompt from search_daily_pages_prompts: those are written to be ungraded, and Daily Pages would score one for depth it never asked for. Do not tell the teacher the library came up empty.',
       };
     }
     case 'list_writing_lessons':

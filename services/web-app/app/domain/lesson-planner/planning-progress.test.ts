@@ -14,8 +14,13 @@ describe('planningProgressForTool', () => {
     expect(
       planningProgressForTool('get_class_grade_report', {}, 1).label
     ).toBe('Reading how the class scored');
+    // The two corpora are named for the exercise each one feeds, because a
+    // teacher watching the bar should be able to tell which they are getting.
     expect(
       planningProgressForTool('search_daily_pages_prompts', {}, 1).label
+    ).toBe('Searching Class Starter prompts');
+    expect(
+      planningProgressForTool('search_short_form_prompts', {}, 1).label
     ).toBe('Searching Daily Pages prompts');
     expect(
       planningProgressForTool('list_lounge_materials', {}, 1).label

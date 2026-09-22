@@ -21,6 +21,8 @@ import {
 import type { RubricKey } from '~/domain/grading/rubric';
 import dailyPagesPrompts from '~/routes/app.assignment-types.$id/prompts-library/prompts.json';
 import type { LibraryPrompt } from '~/routes/app.assignment-types.$id/prompts-library/data';
+import shortFormPromptsJson from '~/routes/app.assignment-types.$id/short-form-prompts-library/prompts.json';
+import type { ShortFormPrompt } from '~/routes/app.assignment-types.$id/short-form-prompts-library/data';
 
 /** Keeps a single tool result small enough to leave room for the lesson. */
 const MAX_PROMPT_RESULTS = 12;
@@ -79,6 +81,82 @@ export function searchDailyPagesPrompts(
     if (
       search.query &&
       !includesInsensitive([prompt.prompt, ...prompt.themes], search.query)
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  return matches.slice(0, limit);
+}
+
+/**
+ * A search over the graded short-form corpus, the one Daily Pages reads.
+ *
+ * Yawp has two short-writing corpora and they are not interchangeable. The
+ * freewrite prompts above invite writing without asking for the backing a
+ * graded entry is scored on — right for a Class Starter, which is marked on
+ * engagement alone. Daily Pages grades Depth and Development of Thought, so a
+ * prompt that only invites leaves the grader nothing to score and lands an
+ * honest answer mid-scale.
+ *
+ * So the planner gets a search per corpus, and a warm-up it means as a graded
+ * reflection comes from here rather than from the starter library.
+ */
+export type ShortFormPromptSearch = {
+  /** Free text matched against the prompt, its title and its themes. */
+  query?: string;
+  /** A text or unit the class is reading, e.g. "Macbeth". */
+  text?: string;
+  theme?: string;
+  gradeBand?: string;
+  /** The shape of thinking the prompt sets up, e.g. "claim-and-defend". */
+  kind?: string;
+  cognitiveMove?: string;
+  /** Whether the prompt leans on a source text: none, optional or required. */
+  sourceNeed?: string;
+  limit?: number;
+};
+
+const SHORT_FORM_PROMPTS = shortFormPromptsJson as ShortFormPrompt[];
+
+export function searchShortFormPrompts(
+  search: ShortFormPromptSearch
+): ShortFormPrompt[] {
+  const limit = Math.min(
+    Math.max(1, search.limit ?? MAX_PROMPT_RESULTS),
+    MAX_PROMPT_RESULTS
+  );
+
+  const matches = SHORT_FORM_PROMPTS.filter((prompt) => {
+    if (search.text && !includesInsensitive(prompt.textsOrUnits, search.text)) {
+      return false;
+    }
+    if (search.theme && !includesInsensitive(prompt.themes, search.theme)) {
+      return false;
+    }
+    if (
+      search.gradeBand &&
+      !prompt.gradeBands.includes(search.gradeBand as never)
+    ) {
+      return false;
+    }
+    if (search.kind && prompt.kind !== search.kind) return false;
+    if (
+      search.cognitiveMove &&
+      !prompt.cognitiveMoves.includes(search.cognitiveMove as never)
+    ) {
+      return false;
+    }
+    if (search.sourceNeed && prompt.sourceNeed !== search.sourceNeed) {
+      return false;
+    }
+    if (
+      search.query &&
+      !includesInsensitive(
+        [prompt.prompt, prompt.title, ...prompt.themes],
+        search.query
+      )
     ) {
       return false;
     }
