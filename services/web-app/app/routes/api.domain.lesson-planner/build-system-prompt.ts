@@ -1,5 +1,10 @@
 import { rubricCategories } from '~/domain/grading/rubric';
 import type { UnitContext } from '~/domain/lesson-planner/unit-plan';
+import { EXIT_TICKET_FENCE } from '~/domain/lesson-planner/exit-ticket-block';
+import {
+  EXIT_TICKET_FOCUS_OPTIONS,
+  EXIT_TICKET_LESSON_NOTE_FIELDS,
+} from '~/domain/assignment-types/exit-ticket';
 
 /**
  * System prompt for the YAWP! Lesson Planner.
@@ -67,16 +72,73 @@ function buildUnitContextSection(context: UnitContext | null): string[] {
   ].filter((line): line is string => line !== null);
 }
 
+/**
+ * How to hand over the lesson's check for understanding as a real assignment.
+ *
+ * Only when the teacher's organization actually has the Exit Ticket type:
+ * without it there is no button under the block, and offering an assignment a
+ * teacher cannot create is worse than not offering one. Their lesson still
+ * ends on a check — the printable `exit-ticket` material, as it always did.
+ *
+ * The focuses, the answer-type question and the note fields are read from the
+ * form's own module rather than restated here, so a focus the planner names
+ * is always a focus the form has.
+ */
+function buildExitTicketSection(available: boolean): string[] {
+  if (!available) return [];
+  const focuses = EXIT_TICKET_FOCUS_OPTIONS.map(
+    (option) => `  - \`${option.value}\` — ${option.label}. ${option.helperText}`
+  );
+  const notes = EXIT_TICKET_LESSON_NOTE_FIELDS.map(
+    (field) => `  - \`${field.key}\` — ${field.label}. ${field.helperText}`
+  );
+  return [
+    '',
+    `Handing over the check for understanding (\`${EXIT_TICKET_FENCE}\`) — this teacher's school has the Exit Ticket assignment type:`,
+    'An exit ticket in Yawp is not a page to photocopy. It is an assignment students write into, and every response comes back read and scored for understanding against what you say the lesson was checking. So when the lesson closes on a written check, hand the whole thing over in a fenced block tagged `' +
+      EXIT_TICKET_FENCE +
+      '` and Yawp puts a button under it that creates the assignment with every answer already filled in.',
+    '  ```' + EXIT_TICKET_FENCE,
+    '  mode: specific',
+    '  focus: explain-concept',
+    '  topic: the difference between weathering and erosion',
+    '  answer: objective',
+    '  mainPoints: Weathering breaks rock down in place; erosion carries the pieces away.',
+    '  mustMention: Whether the material moves.',
+    '  watchFor: Using the two words interchangeably.',
+    '  ```',
+    '- `mode` is `basic` or `specific`. `basic` asks every class the same question — what did you learn today, in your own words — and takes no other fields; it is the right choice when the lesson covered ground you want to hear about openly. `specific` names what you want evidence of, and is the right choice when the objective was one thing.',
+    '- `focus` (required on a specific ticket) is exactly one of:',
+    ...focuses,
+    '- `topic` (required on a specific ticket) is the phrase that completes the sentence, in the words the class would recognise: "the difference between weathering and erosion", not "Unit 3 Lesson 2". Keep it short — it is dropped into a sentence a student reads.',
+    '- `answer` (required on a specific ticket) is `objective` when there is a right answer a response can contradict, and `subjective` when more than one answer can be defensible. Decide it from the lesson, and when in doubt choose `subjective`: the cost of guessing wrong falls on a student told they are incorrect about something that was arguable all along.',
+    '- The three lesson notes are how the responses get read. Fill in every one you can — you wrote the objective a minute ago, so leaving them for the teacher to retype at 3pm is the whole waste this is meant to remove:',
+    ...notes,
+    '- Students never see the notes. They are the answer key and the misconception you are watching for, not part of the prompt — so never write the answer into `topic`.',
+    '- The check still has to check the WHOLE objective. A `specific` ticket examines one thing well; when the objective genuinely has three parts, either use `basic` and say in the plan what to look for, or close on the ticket plus one more piece of evidence, and say which part each one tells you about.',
+    '- Put nothing else in the block: no heading, no minutes, no teacher notes, no quotation marks. Where it sits in the lesson and how long it gets belong in the plan above it.',
+    '- Do not also write the student-facing wording yourself. Yawp composes the prompt from these answers and shows it to the teacher before anything is created, so a sentence you wrote would be a second, different ticket.',
+    '- One `' + EXIT_TICKET_FENCE + '` block per check. When a lesson genuinely needs a paper ticket as well — something to hold, annotate, or hand back — that stays a `yawp-material` `exit-ticket` block, and you say what each one is for.',
+  ];
+}
+
 export function buildLessonPlannerSystemPrompt({
   teacherName,
   organizationName,
   lessonInventory = [],
   unitContext = null,
+  exitTicketsAvailable = false,
 }: {
   teacherName: string | null;
   organizationName: string;
   lessonInventory?: LessonInventoryEntry[];
   unitContext?: UnitContext | null;
+  /**
+   * Whether this teacher can actually assign an Exit Ticket. False keeps the
+   * planner on the printable ticket rather than offering a door that is not
+   * there for them.
+   */
+  exitTicketsAvailable?: boolean;
 }): string {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   // The actual grading rubric, verbatim, so a lesson targets Yawp's own skill
@@ -206,7 +268,9 @@ export function buildLessonPlannerSystemPrompt({
     '- One skill per page. Directions are numbered, short, and complete enough that a student who missed the first two minutes can still start.',
     '- Do not write your own name line, header, or footer. Yawp already prints "Name / Section / Date" across the top of every student page, and yours would be a second one on the same sheet. Never ask a student to write their name, section, period, or the date anywhere in your material — the space is already there.',
     '',
-    'Exit tickets specifically:',
+    exitTicketsAvailable
+      ? `A printed exit ticket specifically — when students will write it in Yawp, hand it over as a \`${EXIT_TICKET_FENCE}\` block instead (see below); this is for the ticket that has to be on paper:`
+      : 'Exit tickets specifically:',
     '- Size it to the minutes it gets. Three minutes is two or three items, not an essay. If the closing in your plan says 4 minutes, the ticket has to be answerable in 4 minutes by your slowest student, not your fastest.',
     '- Every part of the objective gets an item, and every item produces something a teacher can READ — a sentence, a circled choice with a reason, a corrected line. Not a number on a scale, not a smiley face, not "how confident do you feel."',
     '- Ship it with what to look for. Include a short `answer-key` block: what a student who has it writes, what the common wrong answer looks like, and what the teacher should do tomorrow with each pile. A teacher sorts thirty tickets in the five minutes between classes or they never sort them at all.',
@@ -325,6 +389,8 @@ export function buildLessonPlannerSystemPrompt({
     '- Put nothing else in the block — no heading, no timing, no teacher notes, no quotation marks around it. What to do with the prompt (how many minutes to write, what to ask when they share) belongs in the plan above it.',
     '- Do not also quote the prompt in the plan itself. The block shows it; writing it twice makes the teacher read it twice.',
     '- The `id:` line is only for a prompt a tool actually returned. Never invent one — a made-up id is worse than no id, because it looks checkable.',
+    '',
+    ...buildExitTicketSection(exitTicketsAvailable),
     '',
     'Asking with controls instead of sentences (use these — they save the teacher typing):',
     "Two questions come up on almost every lesson, and both are worse as prose than as a control. Ask for the control by ending your message with a fenced block tagged exactly `yawp-ask`, one control per line. Yawp renders it and sends you the teacher's answer as an ordinary message.",

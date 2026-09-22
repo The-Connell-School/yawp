@@ -13,6 +13,9 @@ import {
   summarizeLoungeMaterials,
   type LoungeTrainingSummary,
 } from './yawp-catalog';
+import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
+import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/daily-pages-rubric';
+import { CLASS_STARTER_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/class-starter-rubric';
 import { readDocxText } from '~/domain/office/docx';
 import {
   hasSlideText,
@@ -25,7 +28,16 @@ export type CatalogContext = {
   organizationId: string;
 };
 
-export type AssignableType = { id: string; title: string };
+export type AssignableType = {
+  id: string;
+  title: string;
+  /**
+   * `AssignmentType.kind`. What the type IS, where the title is only what this
+   * org happens to call it — an exit ticket named "Ticket Out The Door" is
+   * still an exit ticket, and a course essay titled "Exit Ticket" is not one.
+   */
+  kind: string | null;
+};
 
 export type YawpCatalogDependencies = {
   prismaClient: Pick<
@@ -251,13 +263,18 @@ export async function listAssignableTypes(
     id: string;
     title: string;
     systemKey: string | null;
+    kind: string | null;
   }>({
     scopes,
-    select: { id: true, title: true, systemKey: true },
+    select: { id: true, title: true, systemKey: true, kind: true },
     orderBy: { position: 'asc' },
   });
 
-  return types.map((type) => ({ id: type.id, title: type.title }));
+  return types.map((type) => ({
+    id: type.id,
+    title: type.title,
+    kind: type.kind ?? null,
+  }));
 }
 
 /**
@@ -275,28 +292,55 @@ export async function findDailyPagesTypeId(
   return types.find((type) => isDailyPagesTitle(type.title))?.id ?? null;
 }
 
-/** Where each of the planner's two short-writing offers can be assigned. */
+/** Where each assignment the planner can offer off a lesson gets created. */
 export type WritingExerciseTypeIds = {
   dailyPages: string | null;
   classStarter: string | null;
+  exitTicket: string | null;
 };
 
 /**
- * Both short-writing types in one pass over what this teacher can assign.
+ * Every type the planner can hand a lesson to, in one pass over what this
+ * teacher can assign.
  *
- * The planner offers class starters and Daily Pages entries, and they are
- * graded by different rubrics, so each has to reach its own sheet rather than
- * both landing on whichever one the org happens to have. A type the org does
- * not have comes back null, and that offer simply arrives without a button.
+ * Three offers come out of a planned lesson — a class starter or a Daily Pages
+ * entry at the front of the period, an exit ticket at the end — and they are
+ * graded by three different assistants. Each has to reach its own sheet rather
+ * than all landing on whichever type the org happens to have: a three-minute
+ * starter filed as Daily Pages is marked for depth nobody asked for, and a
+ * check for understanding filed as either is marked for writing when it was
+ * meant to report what a student knows.
+ *
+ * `kind` is the key, because `kind` is what actually selects the grading
+ * assistant. A school that calls its starter "Bell Ringer" gets the right
+ * button; a type merely titled "Exit Ticket" does not, because its sheet has
+ * no exit ticket form to open and its responses would grade as an essay.
+ *
+ * The two short-writing types keep their title fallback. They predate `kind`
+ * being set on every row, and a customer's Daily Pages type may still carry
+ * none — those rows resolved by title before this and still do. An exit ticket
+ * has no such history: the type has never existed without its kind.
+ *
+ * A type the org does not have comes back null, and that offer simply arrives
+ * without a button.
  */
 export async function findWritingExerciseTypeIds(
   ctx: CatalogContext,
   dependencies: YawpCatalogDependencies = productionDependencies
 ): Promise<WritingExerciseTypeIds> {
   const types = await listAssignableTypes(ctx, dependencies);
+  const byKind = (kind: string) =>
+    types.find((type) => type.kind === kind)?.id ?? null;
+
   return {
-    dailyPages: types.find((type) => isDailyPagesTitle(type.title))?.id ?? null,
+    dailyPages:
+      byKind(DAILY_PAGES_ASSIGNMENT_TYPE_KIND) ??
+      types.find((type) => isDailyPagesTitle(type.title))?.id ??
+      null,
     classStarter:
-      types.find((type) => isClassStarterTitle(type.title))?.id ?? null,
+      byKind(CLASS_STARTER_ASSIGNMENT_TYPE_KIND) ??
+      types.find((type) => isClassStarterTitle(type.title))?.id ??
+      null,
+    exitTicket: types.find((type) => isExitTicketAssignmentType(type))?.id ?? null,
   };
 }

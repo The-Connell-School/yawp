@@ -1,0 +1,96 @@
+/**
+ * The lesson's check for understanding, with a way to actually assign it.
+ *
+ * An exit ticket written into a plan is a page a teacher has to make. An exit
+ * ticket in Yawp is an assignment students answer and a set of responses that
+ * come back read — so the prompt is shown exactly as students will get it, and
+ * the button underneath opens the creation sheet on the answers the lesson
+ * already decided: what is being checked, what today covered, and the mix-up
+ * to watch for.
+ */
+import { Link } from 'react-router';
+import { ClipboardCheck, Sparkles } from 'lucide-react';
+import {
+  exitTicketCreateHref,
+  type PlannedExitTicket,
+} from '~/domain/lesson-planner/exit-ticket-block';
+import {
+  EXIT_TICKET_LESSON_NOTE_FIELDS,
+  exitTicketFocusOption,
+} from '~/domain/assignment-types/exit-ticket';
+
+export function ExitTicketCard({
+  ticket,
+  assignmentTypeId,
+  conversationId,
+}: {
+  ticket: PlannedExitTicket;
+  /**
+   * Null when this org has no Exit Ticket type — then it is still the ticket,
+   * just without a button into a page the teacher cannot open.
+   */
+  assignmentTypeId: string | null;
+  /** Travels with the teacher so they can get back to this lesson. */
+  conversationId?: string | null;
+}) {
+  const { config } = ticket;
+  const focus =
+    config.mode === 'specific' ? exitTicketFocusOption(config.focus) : null;
+  const notes = config.lessonNotes;
+  const filledNotes = notes
+    ? EXIT_TICKET_LESSON_NOTE_FIELDS.filter(
+        (field) => notes[field.key].trim().length > 0
+      )
+    : [];
+
+  return (
+    <div
+      data-testid="exit-ticket-card"
+      className="mt-3 overflow-hidden rounded-xl border border-primary/25 bg-primary/[0.03]"
+    >
+      <div className="flex items-center gap-2 border-b border-primary/15 px-4 py-2.5">
+        <ClipboardCheck size={15} className="shrink-0 text-primary" />
+        <span className="text-sm font-medium">Exit ticket</span>
+        {focus ? (
+          <span className="text-sm text-muted-foreground">{focus.label}</span>
+        ) : null}
+      </div>
+
+      <blockquote className="whitespace-pre-wrap border-l-2 border-primary/40 px-4 py-3.5 text-sm leading-relaxed text-foreground/90">
+        {ticket.prompt}
+      </blockquote>
+
+      {/* What the teacher told the planner about the lesson, shown because it
+          is what the responses get read against — and because a teacher should
+          see what is about to be filled in on their behalf. Students never see
+          any of it. */}
+      {filledNotes.length > 0 ? (
+        <dl className="space-y-1.5 border-t border-primary/15 px-4 py-3 text-xs">
+          {filledNotes.map((field) => (
+            <div key={field.key} className="flex gap-2">
+              <dt className="shrink-0 font-medium text-muted-foreground">
+                {field.label}:
+              </dt>
+              <dd className="min-w-0 text-foreground/80">
+                {notes![field.key]}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
+      {assignmentTypeId ? (
+        <div className="border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
+          <Link
+            to={exitTicketCreateHref(assignmentTypeId, ticket, conversationId)}
+            data-testid="exit-ticket-create"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+          >
+            <Sparkles size={13} />
+            Create this exit ticket for your class
+          </Link>
+        </div>
+      ) : null}
+    </div>
+  );
+}

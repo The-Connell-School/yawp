@@ -27,6 +27,7 @@ import {
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { shouldRenameLesson } from '~/domain/lesson-planner/lesson-name';
+import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { buildLessonPlannerSystemPrompt } from './build-system-prompt';
 import {
   describeProviderError,
@@ -316,11 +317,19 @@ export async function action({ request }: ActionFunctionArgs) {
     unitContext = map ? buildUnitContext(map, activeDay) : null;
   }
 
+  // Whether this teacher can actually assign an exit ticket. Without the type
+  // there is no button under the block, so the planner is told to stay on the
+  // printable ticket rather than offer a door that is not there.
+  const exitTicketsAvailable = Boolean(
+    (await findWritingExerciseTypeIds(ctx)).exitTicket
+  );
+
   const system = buildLessonPlannerSystemPrompt({
     teacherName: null,
     organizationName: access.membership.organization.name,
     lessonInventory: conversation?.materials ?? [],
     unitContext,
+    exitTicketsAvailable,
   });
 
   const messages: { role: AgentType; content: string; name?: string }[] = [

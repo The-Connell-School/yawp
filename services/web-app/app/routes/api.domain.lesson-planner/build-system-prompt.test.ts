@@ -3,6 +3,11 @@ import { rubricCategories } from '~/domain/grading/rubric';
 import { SLIDE_LAYOUTS } from '~/domain/lesson-planner/slide-deck';
 import { MATERIAL_KINDS } from '~/domain/lesson-planner/lesson-material';
 import { UNIT_PLAN_FENCE } from '~/domain/lesson-planner/unit-plan';
+import { EXIT_TICKET_FENCE } from '~/domain/lesson-planner/exit-ticket-block';
+import {
+  EXIT_TICKET_FOCUS_OPTIONS,
+  EXIT_TICKET_LESSON_NOTE_FIELDS,
+} from '~/domain/assignment-types/exit-ticket';
 import {
   buildLessonPlannerSystemPrompt,
   RECOMMENDED_LESSON_PLANNER_PROMPTS,
@@ -1187,5 +1192,56 @@ describe('buildLessonPlannerSystemPrompt — the period is a budget', () => {
 
   test('forbids a plan written before the length is known', () => {
     expect(lower).toContain('do not write a timed plan');
+  });
+});
+
+describe('the Yawp exit ticket', () => {
+  const withExitTickets = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+    exitTicketsAvailable: true,
+  });
+
+  test('teaches the block and every focus the form actually offers', () => {
+    // The planner is filling in a real form. An invented focus composes into
+    // nothing, so the options have to come from the form's own module.
+    expect(withExitTickets).toContain(EXIT_TICKET_FENCE);
+    for (const option of EXIT_TICKET_FOCUS_OPTIONS) {
+      expect(withExitTickets).toContain(option.value);
+      expect(withExitTickets).toContain(option.label);
+    }
+  });
+
+  test('makes the lesson notes the planner’s job, not the teacher’s', () => {
+    // The planner wrote the objective and the misconception a minute ago.
+    // Leaving those boxes for the teacher to retype is the whole waste this
+    // is meant to remove.
+    for (const field of EXIT_TICKET_LESSON_NOTE_FIELDS) {
+      expect(withExitTickets).toContain(field.key);
+    }
+    expect(withExitTickets.toLowerCase()).toContain('students never see');
+  });
+
+  test('makes it decide whether there is a right answer', () => {
+    expect(withExitTickets).toContain('objective');
+    expect(withExitTickets).toContain('subjective');
+  });
+
+  test('holds the ticket to the whole objective, as the paper one was', () => {
+    expect(withExitTickets.toLowerCase()).toContain('whole objective');
+  });
+
+  test('says nothing about the assignment when the org has no exit ticket type', () => {
+    // No button exists for that teacher, so offering the assignment would be
+    // offering a door that is not there. The lesson still gets its check —
+    // on paper, the way it worked before.
+    const without = buildLessonPlannerSystemPrompt({
+      teacherName: null,
+      organizationName: 'Connell School',
+    });
+
+    expect(without).not.toContain(EXIT_TICKET_FENCE);
+    // The printable exit ticket is still on offer.
+    expect(without).toContain('exit-ticket');
   });
 });

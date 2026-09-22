@@ -19,6 +19,7 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { formatClassCardTitle } from '~/utils/class-display';
+import type { ExitTicketPrefill } from '~/domain/lesson-planner/exit-ticket-block';
 
 type TeacherClass = {
   id: string;
@@ -41,6 +42,12 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialPrompt?: string;
+  /**
+   * The exit ticket a lesson plan ended on, when the teacher followed the
+   * planner's button here. The sheet opens on these answers and still shows
+   * them the composed prompt before anything is created.
+   */
+  plannedExitTicket?: ExitTicketPrefill | null;
   titleRequired?: boolean;
   apHistoryEntry?: {
     externalKey: string;
@@ -65,6 +72,7 @@ export function CreateAssignmentSheet({
   open,
   onOpenChange,
   initialPrompt = '',
+  plannedExitTicket = null,
   titleRequired = false,
   apHistoryEntry = null,
   rubricDefaultTotalPoints = null,
@@ -107,6 +115,11 @@ export function CreateAssignmentSheet({
         ]}
         teacherClasses={teacherClasses}
         initialPrompt={initialPrompt}
+        initialExitTicketMode={plannedExitTicket?.mode}
+        initialExitTicketFocus={plannedExitTicket?.focus ?? undefined}
+        initialExitTicketTopic={plannedExitTicket?.topic}
+        initialExitTicketAnswerType={plannedExitTicket?.answerType ?? null}
+        initialExitTicketLessonNotes={plannedExitTicket?.lessonNotes ?? null}
         titleRequired={titleRequired}
         initialRubricDefaultTotalPoints={rubricDefaultTotalPoints}
       />

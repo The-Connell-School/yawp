@@ -592,6 +592,50 @@ async function seedWrittenWarmUp(e2eContext: {
   }
 }
 
+/** A reply whose closing check the planner handed over as an exit ticket. */
+async function seedPlannedExitTicket(e2eContext: {
+  teacherMembershipId: string;
+  organizationId: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Weathering lesson',
+        messages: {
+          create: [
+            {
+              role: 'user',
+              content: 'Plan a lesson on weathering and erosion.',
+              createdAt: new Date('2026-08-05T10:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content:
+                '## Closing (4 min)\n\nGive them the last four minutes for this.\n\n' +
+                '```yawp-exit-ticket\n' +
+                'mode: specific\n' +
+                'focus: explain-concept\n' +
+                'topic: the difference between weathering and erosion\n' +
+                'answer: objective\n' +
+                'mainPoints: Weathering breaks rock down in place; erosion carries the pieces away.\n' +
+                'mustMention: Whether the material moves.\n' +
+                '```',
+              createdAt: new Date('2026-08-05T10:00:01.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 /**
  * The default shape of a warm-up offer: three prompts, one block each.
  *
@@ -2698,6 +2742,55 @@ test.describe('YAWP! Lesson Planner', () => {
       new RegExp(
         `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
       )
+    );
+  });
+
+  test('turns the check it planned into a real exit ticket', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedPlannedExitTicket(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    // The ticket arrives as the words students read, never as a fence.
+    await expect(page.locator('main')).not.toContainText('yawp-exit-ticket');
+    const card = page.getByTestId('exit-ticket-card');
+    await expect(card).toContainText(
+      'the difference between weathering and erosion'
+    );
+    // What the responses will be read against, shown because it is about to
+    // be filled in on the teacher's behalf.
+    await expect(card).toContainText('Whether the material moves');
+
+    // One click from being an assignment, with the form already answered —
+    // including the notes the teacher would otherwise retype at 3pm.
+    await card.getByTestId('exit-ticket-create').click();
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/app/assignment-types/${e2eContext.exitTicketAssignmentTypeId}`
+      )
+    );
+    await expect(
+      page.locator('#assignment-create-exit-ticket-topic')
+    ).toHaveValue('the difference between weathering and erosion');
+    await expect(
+      page.locator('#assignment-create-exit-ticket-lesson-mustMention')
+    ).toHaveValue('Whether the material moves.');
+    // And the teacher reads the composed prompt before anything is created.
+    await expect(
+      page.locator('#assignment-create-exit-ticket-preview')
+    ).toContainText('the difference between weathering and erosion');
+
+    // The way back to the half-finished lesson is still there afterwards.
+    await page.keyboard.press('Escape');
+    const back = page.getByTestId('back-to-lesson');
+    await expect(back).toBeVisible();
+    await back.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/app/lesson-planner\\?c=${conversationId}`)
     );
   });
 

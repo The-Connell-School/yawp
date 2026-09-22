@@ -50,6 +50,7 @@ import {
 import { linkMaterialTitles } from '~/domain/lesson-planner/lesson-material';
 import { LessonResourceCard } from '~/components/ai-chat/lesson-resource-card';
 import { DailyPagesCard } from '~/components/ai-chat/daily-pages-card';
+import { ExitTicketCard } from '~/components/ai-chat/exit-ticket-card';
 import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
 import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
@@ -173,19 +174,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
   }
 
-  // Needed to turn a prompt the planner wrote into a real assignment, and to
-  // send a class starter somewhere other than Daily Pages, which grades for
-  // depth a three-minute starter never asked for. Either being null for an org
-  // just means no button on that offer.
-  const { dailyPages: dailyPagesTypeId, classStarter: classStarterTypeId } =
-    await findWritingExerciseTypeIds({
-      membershipId: access.membership.id,
-      organizationId: access.membership.organization.id,
-    });
+  // Needed to turn what the planner wrote into real assignments: the warm-up at
+  // one end of the lesson and the check for understanding at the other. A class
+  // starter has to reach its own sheet rather than Daily Pages, which grades
+  // for depth a three-minute starter never asked for. Any of the three being
+  // null for an org just means no button on that offer.
+  const {
+    dailyPages: dailyPagesTypeId,
+    classStarter: classStarterTypeId,
+    exitTicket: exitTicketTypeId,
+  } = await findWritingExerciseTypeIds({
+    membershipId: access.membership.id,
+    organizationId: access.membership.organization.id,
+  });
 
   return {
     dailyPagesTypeId,
     classStarterTypeId,
+    exitTicketTypeId,
     conversations: conversations.map((conversation) => ({
       id: conversation.id,
       title: conversation.packetTitle?.trim() || conversation.title,
@@ -244,6 +250,7 @@ export default function LessonPlannerRoute() {
     seed,
     dailyPagesTypeId,
     classStarterTypeId,
+    exitTicketTypeId,
     builtDays,
     unitMapConversation,
   } = useLoaderData<typeof loader>();
@@ -745,6 +752,7 @@ export default function LessonPlannerRoute() {
                   lessonHas={selectedConversation?.lessonHas ?? {}}
                   dailyPagesTypeId={dailyPagesTypeId}
                   classStarterTypeId={classStarterTypeId}
+                  exitTicketTypeId={exitTicketTypeId}
                   conversationId={conversationId}
                   builtDays={builtDays}
                   onSuggestion={send}
@@ -950,6 +958,7 @@ function MessageBubble({
   lessonHas,
   dailyPagesTypeId,
   classStarterTypeId,
+  exitTicketTypeId,
   conversationId,
   builtDays,
   onSuggestion,
@@ -970,6 +979,8 @@ function MessageBubble({
   dailyPagesTypeId: string | null;
   /** The same for a class starter, which most orgs do not have as a type. */
   classStarterTypeId: string | null;
+  /** Where the lesson's check becomes a real assignment; null without the type. */
+  exitTicketTypeId: string | null;
   conversationId: string | null;
   /** Day number → the conversation each already-built day lives in. */
   builtDays: Record<number, string>;
@@ -1068,6 +1079,16 @@ function MessageBubble({
                   exercise={part.exercise}
                   assignmentTypeId={dailyPagesTypeId}
                   classStarterTypeId={classStarterTypeId}
+                  conversationId={conversationId}
+                />
+              );
+            }
+            if (part.kind === 'exit-ticket') {
+              return (
+                <ExitTicketCard
+                  key={key}
+                  ticket={part.ticket}
+                  assignmentTypeId={exitTicketTypeId}
                   conversationId={conversationId}
                 />
               );

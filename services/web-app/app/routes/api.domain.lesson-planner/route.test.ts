@@ -27,6 +27,12 @@ const prisma = {
   classAssignment: {
     findFirst: mock(),
   },
+  // Read on every turn to find out whether this teacher can assign an exit
+  // ticket. No classes is the honest default for a mocked teacher: it resolves
+  // to no exit ticket type without reaching any further.
+  class: {
+    findMany: mock(),
+  },
   $transaction: mock(),
 };
 
@@ -99,6 +105,7 @@ beforeEach(() => {
   requireLessonPlannerAccess.mockReset().mockResolvedValue(access);
   handleLessonPlannerToolCall.mockReset();
   reserveAiRequest.mockReset().mockResolvedValue(undefined);
+  prisma.class.findMany.mockReset().mockResolvedValue([]);
   prisma.lessonPlanConversation.findFirst.mockReset();
   prisma.lessonPlanConversation.create.mockReset();
   prisma.lessonPlanConversation.update.mockReset();

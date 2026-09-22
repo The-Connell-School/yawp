@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
@@ -92,6 +92,11 @@ import {
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
 import { FROM_LESSON_PARAM } from '~/domain/lesson-planner/daily-pages-block';
+import {
+  EXIT_TICKET_PARAMS,
+  readExitTicketPrefill,
+  type ExitTicketPrefill,
+} from '~/domain/lesson-planner/exit-ticket-block';
 import { ThesisPromptsLibrary } from './thesis-prompts-library/thesis-prompts-library';
 import { ThesisPromptGenerator } from './thesis-prompts-library/thesis-prompt-generator';
 import { ThesisTeacherDirections } from './thesis-prompts-library/thesis-teacher-directions';
@@ -710,6 +715,8 @@ export default function AppAssignmentTypesIdRoute() {
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
   const [isPromptGeneratorOpen, setIsPromptGeneratorOpen] = useState(false);
   const [libraryPrompt, setLibraryPrompt] = useState('');
+  const [plannedExitTicket, setPlannedExitTicket] =
+    useState<ExitTicketPrefill | null>(null);
   const [apHistoryEntry, setApHistoryEntry] = useState<{
     externalKey: string;
     title: string;
@@ -748,6 +755,32 @@ export default function AppAssignmentTypesIdRoute() {
   // now contradicts. The module row itself stays: documents are created inside
   // it, and `hasModules` still gates New → Document.
   const showModules = modulesVisible && !showShortFormLibrary;
+  // The same door, for the other end of the lesson: the planner sends a
+  // teacher here with the exit ticket its plan ended on, already answered.
+  // They still read the composed prompt in the sheet before a class sees it.
+  const incomingExitTicketMode = searchParams.get(EXIT_TICKET_PARAMS.mode);
+  const incomingExitTicket = useMemo(
+    () => (incomingExitTicketMode ? readExitTicketPrefill(searchParams) : null),
+    [incomingExitTicketMode, searchParams]
+  );
+  useEffect(() => {
+    if (!incomingExitTicketMode) return;
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        for (const key of Object.values(EXIT_TICKET_PARAMS)) next.delete(key);
+        return next;
+      },
+      { replace: true, preventScrollReset: true }
+    );
+    // A hand-edited link that describes no ticket we can build opens nothing,
+    // rather than a sheet answered with something nobody chose.
+    if (!incomingExitTicket) return;
+    setPlannedExitTicket(incomingExitTicket);
+    setApHistoryEntry(null);
+    setIsAssignmentSheetOpen(true);
+  }, [incomingExitTicketMode, incomingExitTicket, setSearchParams]);
+
   const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -832,6 +865,7 @@ export default function AppAssignmentTypesIdRoute() {
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
+                plannedExitTicket={plannedExitTicket}
                 titleRequired={showThesisLibrary}
                 apHistoryEntry={apHistoryEntry}
               />
