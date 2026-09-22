@@ -1,3 +1,4 @@
+import { Prisma } from '@app/prisma';
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -50,6 +51,8 @@ import {
   parseAssignmentRubricOverrides,
 } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
+import { resolveAssignmentPrompt } from '~/utils/assignment-exit-ticket.server';
+import { parseStoredExitTicketConfig } from '~/domain/assignment-types/exit-ticket';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
 import {
@@ -136,6 +139,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           collaborationGroupMode: true,
           collaborationGroupSize: true,
           gradingAssistantStrictnessLevel: true,
+          exitTicketConfigJson: true,
           assignmentTypeId: true,
           assignmentType: {
             select: { id: true, title: true, systemKey: true, kind: true },
@@ -182,6 +186,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: string;
       title: string;
       systemKey: string | null;
+      kind: string | null;
       collaborationSupported: boolean;
     }>({
       scopes: [
@@ -195,6 +200,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         id: true,
         title: true,
         systemKey: true,
+        kind: true,
         collaborationSupported: true,
       },
       orderBy: { position: 'asc' },
@@ -267,6 +273,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         .gradingAssistantStrictnessLevel as GradingAssistantStrictnessLevel,
       assignmentTypeId: active.assignment.assignmentTypeId,
       assignmentTypeLocked: active.assignment.collaborationEnabled,
+      // Null for everything that is not an exit ticket, and for an exit ticket
+      // created before this column existed. The sheet falls back to the
+      // default answers in both cases.
+      exitTicket: parseStoredExitTicketConfig(
+        active.assignment.exitTicketConfigJson
+      ),
       assignmentType: active.assignment.assignmentType,
       rubricDefaultTotalPoints: defaultGradingConfig.maxScore,
       documentCount: active._count.documents,
@@ -351,6 +363,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const allowedAssignmentTypes = await getAvailableAssignmentTypesForScopes<{
       id: string;
       systemKey: string | null;
+      kind: string | null;
     }>({
       scopes: [
         {
@@ -359,7 +372,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           teacherProfileId: profile.id,
         },
       ],
-      select: { id: true, systemKey: true },
+      select: { id: true, systemKey: true, kind: true },
     });
     const selectedAssignmentType = allowedAssignmentTypes.find(
       (type) => type.id === assignmentTypeId
@@ -374,7 +387,25 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    if (!prompt) {
+    // An exit ticket's prompt is composed from the form answers, here as well
+    // as on the create API, so editing one cannot replace a composed prompt
+    // with whatever the browser happened to post.
+    const resolvedPrompt = resolveAssignmentPrompt({
+      assignmentTypeKind: selectedAssignmentType?.kind,
+      postedPrompt: prompt,
+      formData,
+    });
+    if (!resolvedPrompt.success) {
+      return dataResponse(
+        { success: false, message: resolvedPrompt.message },
+        { status: 400 }
+      );
+    }
+    const assignmentPrompt = resolvedPrompt.prompt;
+    const exitTicketConfigJson =
+      resolvedPrompt.exitTicketConfigJson as Prisma.InputJsonValue | null;
+
+    if (!assignmentPrompt) {
       return dataResponse(
         { success: false, message: 'Prompt is required.' },
         { status: 400 }
@@ -477,7 +508,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
           data: {
             assignmentTypeId,
             title,
-            prompt,
+            prompt: assignmentPrompt,
+            ...(exitTicketConfigJson ? { exitTicketConfigJson } : {}),
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
             rubricTotalPoints: rubricOverrides.data.rubricTotalPoints,
@@ -569,7 +601,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           assignmentTypeId,
           title,
-          prompt,
+          prompt: assignmentPrompt,
+          // Cleared rather than left alone: a type changed away from Exit
+          // Ticket must not keep a config describing a prompt it no longer
+          // has. Prisma.DbNull is how a nullable Json column is set to null.
+          exitTicketConfigJson: exitTicketConfigJson ?? Prisma.DbNull,
           submitForGrade: gradingIntent.data.submitForGrade,
           pointValue: gradingIntent.data.pointValue,
           ...(formData.has('rubricTotalPoints')
@@ -863,6 +899,25 @@ export default function AssignmentDetailRoute() {
           initialGradingAssistantStrictnessLevel={
             assignment.gradingAssistantStrictnessLevel
           }
+          initialExitTicketMode={assignment.exitTicket?.mode}
+          initialExitTicketFocus={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.focus
+              : undefined
+          }
+          initialExitTicketTopic={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.topic
+              : undefined
+          }
+          initialExitTicketAnswerType={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.answerType
+              : undefined
+          }
+          initialExitTicketLessonNotes={
+            assignment.exitTicket?.lessonNotes ?? null
+          }
         />
 
         {/* Same sheet, same props as the class page's "Add assignment", so
@@ -881,6 +936,25 @@ export default function AssignmentDetailRoute() {
           initialRubricTotalPoints={assignment.rubricTotalPoints}
           initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
           initialRubricDefaultTotalPoints={assignment.rubricDefaultTotalPoints}
+          initialExitTicketMode={assignment.exitTicket?.mode}
+          initialExitTicketFocus={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.focus
+              : undefined
+          }
+          initialExitTicketTopic={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.topic
+              : undefined
+          }
+          initialExitTicketAnswerType={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.answerType
+              : undefined
+          }
+          initialExitTicketLessonNotes={
+            assignment.exitTicket?.lessonNotes ?? null
+          }
         />
       </div>
     </PageShell>

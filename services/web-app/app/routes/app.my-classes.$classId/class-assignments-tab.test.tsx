@@ -102,6 +102,7 @@ function renderTab(overrides: Record<string, unknown> = {}) {
           title: 'DBQ',
           collaborationSupported: false,
           gradesGrammar: false,
+          kind: null,
         },
       ]}
       classInsightsEnabled

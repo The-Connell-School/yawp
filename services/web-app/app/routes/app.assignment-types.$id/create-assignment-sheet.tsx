@@ -34,6 +34,9 @@ type Props = {
   assignmentTypeCollaborationSupported?: boolean;
   /** Whether this type's rubric grades grammar, so the toggle is worth showing. */
   assignmentTypeGradesGrammar?: boolean;
+  /** `AssignmentType.kind`, which decides whether the sheet shows a prompt
+   * box or the exit ticket form. */
+  assignmentTypeKind?: string | null;
   teacherClasses: TeacherClass[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -57,6 +60,7 @@ export function CreateAssignmentSheet({
   assignmentTypeTitle,
   assignmentTypeCollaborationSupported = false,
   assignmentTypeGradesGrammar = false,
+  assignmentTypeKind = null,
   teacherClasses,
   open,
   onOpenChange,
@@ -98,6 +102,7 @@ export function CreateAssignmentSheet({
             title: assignmentTypeTitle,
             collaborationSupported: assignmentTypeCollaborationSupported,
             gradesGrammar: assignmentTypeGradesGrammar,
+            kind: assignmentTypeKind,
           },
         ]}
         teacherClasses={teacherClasses}

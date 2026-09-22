@@ -34,7 +34,8 @@ export type RubricDisplaySource =
   | 'thesis-default'
   | 'daily-pages-default'
   | 'daily-pages-short-form-default'
-  | 'class-starter-default';
+  | 'class-starter-default'
+  | 'exit-ticket-default';
 
 export type RubricDisplayConfig = {
   categories: RubricDisplayCategory[];
@@ -64,6 +65,7 @@ const rubricDisplaySources = new Set<string>([
   'daily-pages-default',
   'daily-pages-short-form-default',
   'class-starter-default',
+  'exit-ticket-default',
 ]);
 
 /**

@@ -162,6 +162,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           id: string;
           title: string;
           systemKey: string | null;
+          kind: string | null;
           collaborationSupported: boolean;
         }>({
           scopes: teacherClasses.map((klass) => ({
@@ -173,6 +174,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             id: true,
             title: true,
             systemKey: true,
+            kind: true,
             collaborationSupported: true,
           },
           orderBy: { position: 'asc' },
@@ -205,6 +207,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       title: type.title,
       collaborationSupported: type.collaborationSupported,
       gradesGrammar: gradesGrammarIds.has(type.id),
+      kind: type.kind,
     })),
   };
 }

@@ -614,6 +614,8 @@ compute_tooling_fingerprint() {
         packages/prisma/prisma.config.ts \
         packages/prisma/scripts/assignment-type-release-gate.ts \
         packages/prisma/scripts/backfill-class-art-key.ts \
+        packages/prisma/scripts/exit-ticket-assignment-type-data.ts \
+        packages/prisma/scripts/seed-exit-ticket-assignment-type.ts \
         packages/prisma/scripts/seed-local-dev.ts \
         packages/prisma/scripts/seed-class-starter-assignment-type.ts \
         packages/prisma/scripts/assets/class-starter.jpg \
@@ -700,10 +702,17 @@ run_tooling_if_needed() {
   fi
   # After whichever data path above created an organization, and before the gate
   # that validates assignment type data. `kind` is not settable through the admin
-  # UI, so without this a preview has no Class Starter to click on. The seed is
-  # idempotent, so it runs on every data mode and on every deploy.
+  # UI, so without these a preview has no Class Starter and no Exit Ticket to
+  # click on. Both seeds are idempotent, so they run on every data mode and on
+  # every deploy.
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-class-starter-assignment-type.ts" ]]; then
     tooling_command+=' && bun run seed-class-starter-assignment-type'
+  fi
+  # A preview database is a throwaway per-PR copy, so the exit ticket seed takes
+  # --all-orgs: there is nothing to roll out to slowly, and without it the type
+  # never appears in the assignment picker.
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-exit-ticket-assignment-type.ts" ]]; then
+    tooling_command+=' && bun run scripts/seed-exit-ticket-assignment-type.ts --all-orgs'
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'

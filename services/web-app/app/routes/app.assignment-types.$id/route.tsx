@@ -53,6 +53,11 @@ import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
+import { AboutExitTicket } from './about-exit-ticket/about-exit-ticket';
+import {
+  EXIT_TICKETS_ENABLED,
+  isExitTicketAssignmentType,
+} from '~/domain/assignment-types/exit-ticket';
 import {
   resolvePromptLibraryVariant,
   usesOpenEndedLibrary,
@@ -127,6 +132,7 @@ type AssignmentTypeDetailRow = {
   title: string;
   description: string | null;
   systemKey: string | null;
+  kind: string | null;
   collaborationSupported: boolean;
   image: { id: string } | null;
   assignmentModules: Array<{
@@ -409,6 +415,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title: true,
         description: true,
         systemKey: true,
+        kind: true,
         collaborationSupported: true,
         image: { select: { id: true } },
         assignmentModules: {
@@ -516,21 +523,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // "My prompts": prompts this teacher generated and kept, shown in the same
   // library alongside the fixed corpus and filterable on their own.
   const savedThesisPrompts =
-    profile.role === "TEACHER" && isThesisEssay
+    profile.role === 'TEACHER' && isThesisEssay
       ? await listSavedThesisPrompts({
           membershipId: profile.id,
           assignmentTypeId: assignmentType.id,
         })
       : [];
   const thesisLibraryEntries =
-    profile.role === "TEACHER" && isThesisEssay
+    profile.role === 'TEACHER' && isThesisEssay
       ? [
           ...savedThesisPrompts.map(savedThesisPromptToLibraryEntry),
           ...ALL_THESIS_PROMPTS,
         ]
       : [];
   const thesisPromptLibrary =
-    profile.role === "TEACHER" && isThesisEssay
+    profile.role === 'TEACHER' && isThesisEssay
       ? {
           prompts: applyThesisFilters(
             thesisLibraryEntries,
@@ -574,6 +581,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     shortFormPromptLibrary,
     thesisPromptLibrary,
     apHistoryLibrary,
+    // Teacher-facing guidance, so it follows the same role gate the other
+    // assignment types' directions do.
+    showAboutExitTicket:
+      profile.role === 'TEACHER' &&
+      EXIT_TICKETS_ENABLED &&
+      isExitTicketAssignmentType(assignmentType),
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -665,11 +678,32 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
 }
 
+/**
+ * Whether the modules accordion earns its place on this page.
+ *
+ * Every assignment type carries at least one module — it is what a direct
+ * document is created from — but an exit ticket's is a single row whose
+ * description restates the prompt, sitting directly under directions that
+ * already explain the whole thing. Hidden there rather than deleted, because
+ * the module itself is still what New -> Document builds from.
+ */
+export function showModulesAccordion(
+  assignmentType: { kind?: string | null },
+  moduleCount: number
+): boolean {
+  if (moduleCount === 0) return false;
+  return !isExitTicketAssignmentType(assignmentType);
+}
+
 export default function AppAssignmentTypesIdRoute() {
   const user = useUser();
   const data = useLoaderData<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const hasModules = data.assignmentType.assignmentModules.length > 0;
+  const modulesVisible = showModulesAccordion(
+    data.assignmentType,
+    data.assignmentType.assignmentModules.length
+  );
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
@@ -713,7 +747,7 @@ export default function AppAssignmentTypesIdRoute() {
   // students to throw ideas around — which the about section directly above it
   // now contradicts. The module row itself stays: documents are created inside
   // it, and `hasModules` still gates New → Document.
-  const showModules = hasModules && !showShortFormLibrary;
+  const showModules = modulesVisible && !showShortFormLibrary;
   const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -793,6 +827,7 @@ export default function AppAssignmentTypesIdRoute() {
                 }
                 assignmentTypeGradesGrammar={data.assignmentTypeGradesGrammar}
                 rubricDefaultTotalPoints={data.rubricDefaultTotalPoints}
+                assignmentTypeKind={data.assignmentType.kind}
                 teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
@@ -843,6 +878,7 @@ export default function AppAssignmentTypesIdRoute() {
             </p>
           </div>
         </div>
+        {data.showAboutExitTicket ? <AboutExitTicket /> : null}
         {data.promptLibrary ? (
           <TeacherDirections variant={data.promptLibrary.variant} />
         ) : null}

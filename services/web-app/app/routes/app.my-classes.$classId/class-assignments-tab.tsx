@@ -41,6 +41,7 @@ type ClassAssignmentsTabProps = {
     title: string;
     collaborationSupported: boolean;
     gradesGrammar: boolean;
+    kind: string | null;
   }[];
   /** Gated on the organization's classInsightsEnabled flag. */
   classInsightsEnabled: boolean;

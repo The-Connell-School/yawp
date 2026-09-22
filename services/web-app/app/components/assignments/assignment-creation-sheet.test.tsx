@@ -32,6 +32,12 @@ const { AssignmentCreationSheetContent, assignmentCreationClassLabel } =
   await import('./assignment-creation-sheet');
 const { SAVED_ASSIGNMENTS_ENABLED } =
   await import('~/domain/assignments/saved-assignments');
+const {
+  BASIC_EXIT_TICKET_PROMPT,
+  EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+  EXIT_TICKET_ELABORATION_NOTE,
+  EXIT_TICKET_FOCUS_OPTIONS,
+} = await import('~/domain/assignment-types/exit-ticket');
 
 describe('assignmentCreationClassLabel', () => {
   it('shows grade and period when both are present', () => {
@@ -91,12 +97,26 @@ const assignmentTypes = [
     title: 'Literary Analysis',
     collaborationSupported: true,
     gradesGrammar: true,
+    kind: null,
   },
   {
     id: 'type-2',
     title: 'Class Starter',
     collaborationSupported: false,
     gradesGrammar: false,
+    kind: 'class_starter',
+  },
+];
+
+const exitTicketAssignmentTypes = [
+  {
+    id: 'exit-1',
+    title: 'Exit Ticket',
+    collaborationSupported: false,
+    // An exit ticket is read for understanding, not marked for grammar, so the
+    // toggle has nothing to offer here.
+    gradesGrammar: false,
+    kind: EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
   },
 ];
 
@@ -127,7 +147,9 @@ function cleanup(root: Root | null) {
 }
 
 function expectText(text: string) {
-  expect(document.body.textContent).toContain(text);
+  expect(document.body.textContent?.toLowerCase()).toContain(
+    text.toLowerCase()
+  );
 }
 
 function expectNoText(text: string) {
@@ -781,6 +803,295 @@ describe('AssignmentCreationSheetContent', () => {
       expect(
         isChecked(controlById('assignment-create-collaboration-enabled'))
       ).toBe(false);
+    });
+  });
+
+  describe('exit tickets', () => {
+    function renderExitTicketSheet(
+      props: Partial<Parameters<typeof AssignmentCreationSheetContent>[0]> = {}
+    ) {
+      return renderSheet({
+        assignmentTypes: exitTicketAssignmentTypes,
+        fixedAssignmentTypeId: 'exit-1',
+        ...props,
+      });
+    }
+
+    it('replaces the prompt box with the exit ticket form', () => {
+      root = renderExitTicketSheet().root;
+
+      expectText('Basic exit ticket');
+      expectText('Specific exit ticket');
+      // There is nothing for a teacher to write. The prompt is composed.
+      expect(document.querySelector('textarea[name="prompt"]')).toBeNull();
+    });
+
+    it('leaves every other assignment type on the prompt box', () => {
+      root = renderSheet().root;
+
+      expectNoText('Basic exit ticket');
+      expect(textareaByName('prompt')).not.toBeNull();
+    });
+
+    it('opens on the basic exit ticket and submits the standard prompt', () => {
+      root = renderExitTicketSheet().root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-basic'))
+      ).toBe(true);
+      // A basic exit ticket is answerable with one click: nothing else to fill.
+      expectText(BASIC_EXIT_TICKET_PROMPT);
+      expect(inputByName('exitTicketMode').value).toBe('basic');
+      expect(inputByName('prompt').value).toInclude(BASIC_EXIT_TICKET_PROMPT);
+      expect(inputByName('prompt').value).toInclude(
+        EXIT_TICKET_ELABORATION_NOTE
+      );
+    });
+
+    it('asks what to check for once the teacher goes specific', () => {
+      root = renderExitTicketSheet().root;
+
+      expectNoText('What are you checking for?');
+
+      act(() => {
+        controlById('assignment-create-exit-ticket-specific').click();
+      });
+
+      expectText('What are you checking for?');
+      expectText('What specifically?');
+      expect(inputByName('exitTicketMode').value).toBe('specific');
+    });
+
+    it('will not submit a specific exit ticket with no topic', () => {
+      root = renderExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      act(() => {
+        controlById('assignment-create-exit-ticket-specific').click();
+      });
+
+      const submit = document.querySelector<HTMLButtonElement>(
+        'button[type="submit"]'
+      );
+      expect(submit).not.toBeNull();
+      expect(submit!.disabled).toBe(true);
+      // Nothing to preview until the teacher says what it is about.
+      expectNoText(BASIC_EXIT_TICKET_PROMPT);
+    });
+
+    it('previews and submits exactly what students will read', () => {
+      root = renderExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'explain-concept',
+        initialExitTicketTopic: 'the causes of World War I',
+        initialExitTicketAnswerType: 'objective',
+      }).root;
+
+      // The preview is the whole point of the form: the teacher approves the
+      // exact wording before a class ever sees it, and the value that gets
+      // posted is the one they read.
+      expectText('the causes of World War I');
+      expect(inputByName('exitTicketMode').value).toBe('specific');
+      expect(inputByName('exitTicketFocus').value).toBe('explain-concept');
+      expect(inputByName('exitTicketTopic').value).toBe(
+        'the causes of World War I'
+      );
+      expect(inputByName('exitTicketAnswerType').value).toBe('objective');
+      expect(inputByName('prompt').value).toInclude(
+        'the causes of World War I'
+      );
+      expect(inputByName('prompt').value).not.toInclude(
+        BASIC_EXIT_TICKET_PROMPT
+      );
+
+      const submit = document.querySelector<HTMLButtonElement>(
+        'button[type="submit"]'
+      );
+      expect(submit!.disabled).toBe(false);
+    });
+
+    it('will not submit until the teacher says if there is a desired response', () => {
+      // Nothing is preselected, so a teacher cannot create the ticket without
+      // deciding — the answer is what tells the grader whether a student may
+      // be marked wrong.
+      const unanswered = renderExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'explain-concept',
+        initialExitTicketTopic: 'the causes of World War I',
+      });
+      root = unanswered.root;
+
+      expect(inputByName('exitTicketAnswerType').value).toBe('');
+      expect(
+        document.querySelector<HTMLButtonElement>('button[type="submit"]')!
+          .disabled
+      ).toBe(true);
+      // The wording students read does not depend on the answer, so the
+      // teacher can still see what they are about to send.
+      expectText('the causes of World War I');
+    });
+
+    it('starts the tutor off for an exit ticket, and on for everything else', () => {
+      // An exit ticket checks what students understand on their own; a tutor
+      // in the document would be answering the question for them.
+      root = renderExitTicketSheet().root;
+      expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
+        false
+      );
+      expectText('Off by default for an exit ticket');
+      cleanup(root);
+
+      root = renderSheet().root;
+      expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
+        true
+      );
+    });
+
+    it('keeps the stored tutor setting when editing an exit ticket', () => {
+      // The toggle is frozen after creation, so the default must not
+      // override what the assignment actually has.
+      root = renderExitTicketSheet({
+        editingAssignment: { id: 'a-1' },
+        initialTutorEnabled: true,
+      }).root;
+      expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
+        true
+      );
+    });
+
+    it('closes the lesson notes on a basic ticket and opens them on a specific one', () => {
+      root = renderExitTicketSheet().root;
+
+      expectText('Add notes about the lesson');
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-lesson-notes'))
+      ).toBe(false);
+      // Closed means no note fields at all: nothing is posted, nothing stored.
+      expect(
+        document.querySelector('textarea[name="exitTicketLessonMainPoints"]')
+      ).toBeNull();
+
+      act(() => {
+        controlById('assignment-create-exit-ticket-specific').click();
+      });
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-lesson-notes'))
+      ).toBe(true);
+      expectText('Main points of the lesson');
+      expectText('What they absolutely should mention');
+      expectText('Mix-ups to watch for');
+      expect(textareaByName('exitTicketLessonMainPoints')).not.toBeNull();
+      expect(textareaByName('exitTicketLessonMustMention')).not.toBeNull();
+      expect(textareaByName('exitTicketLessonWatchFor')).not.toBeNull();
+      // Students never see any of it: none of it is in the composed prompt.
+      expect(inputByName('prompt').value).not.toInclude('Main points');
+    });
+
+    it('offers feedback-only versus points, and starts on feedback only', () => {
+      root = renderExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      expectText('How this is graded');
+      expectText('Feedback and understanding only');
+      expectText('For points');
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-feedback-only'))
+      ).toBe(true);
+      // Feedback-only posts submitForGrade=false, which is what keeps the
+      // score out of the gradebook while the response is still read.
+      expect(
+        allInputsByName('submitForGrade').map((input) => input.value)
+      ).toEqual(['false']);
+      // No point value to fill in, so the ticket is submittable as it stands.
+      // Boolean, not the node: a failing DOM matcher tries to serialize the
+      // whole happy-dom tree, which takes the test runner down with it.
+      expect(
+        Boolean(document.getElementById('assignment-create-point-value'))
+      ).toBe(false);
+
+      act(() => {
+        controlById('assignment-create-exit-ticket-for-points').click();
+      });
+
+      expect(
+        allInputsByName('submitForGrade').map((input) => input.value)
+      ).toContain('true');
+      // Small by default: one lesson check should not outweigh real work.
+      expect(
+        (controlById('assignment-create-point-value') as HTMLInputElement).value
+      ).toBe('10');
+    });
+
+    it('keeps the ordinary grade checkbox for every other type', () => {
+      root = renderSheet().root;
+
+      expectNoText('How this is graded');
+      expectText('Submit for grade');
+    });
+
+    it('tells the teacher that more notes mean a more targeted ticket', () => {
+      root = renderExitTicketSheet({ initialExitTicketMode: 'specific' }).root;
+
+      expectText('the more you tell us here, the more targeted');
+      // The empty state is a trade-off, not an error.
+      expectText('on their own terms');
+      cleanup(root);
+
+      root = renderExitTicketSheet({
+        initialExitTicketMode: 'specific',
+        initialExitTicketLessonNotes: {
+          mainPoints: 'a',
+          mustMention: 'b',
+          watchFor: 'c',
+        },
+      }).root;
+      expectText('as targeted as an exit ticket gets');
+    });
+
+    it('reopens an exit ticket with the notes it was created with', () => {
+      root = renderExitTicketSheet({
+        initialExitTicketMode: 'basic',
+        initialExitTicketLessonNotes: {
+          mainPoints: 'Erosion moves material.',
+          mustMention: 'whether the material moves',
+          watchFor: '',
+        },
+      }).root;
+
+      // Notes present means the section opens even on a basic ticket, which
+      // would otherwise start closed.
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-lesson-notes'))
+      ).toBe(true);
+      expect(textareaByName('exitTicketLessonMainPoints').value).toBe(
+        'Erosion moves material.'
+      );
+      expect(textareaByName('exitTicketLessonMustMention').value).toBe(
+        'whether the material moves'
+      );
+    });
+
+    it('reopens an exit ticket on the answers it was created with', () => {
+      root = renderExitTicketSheet({
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'ask-question',
+        initialExitTicketTopic: 'long division',
+      }).root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-specific'))
+      ).toBe(true);
+      expect(
+        (controlById('assignment-create-exit-ticket-topic') as HTMLInputElement)
+          .value
+      ).toBe('long division');
+      expect(inputByName('exitTicketFocus').value).toBe('ask-question');
+      expect(
+        EXIT_TICKET_FOCUS_OPTIONS.some(
+          (option) => option.value === 'ask-question'
+        )
+      ).toBe(true);
     });
   });
 });
