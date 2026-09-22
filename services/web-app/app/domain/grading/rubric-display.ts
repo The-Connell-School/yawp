@@ -30,7 +30,11 @@ export type RubricDisplayCategory = {
 };
 
 export type RubricDisplaySource =
-  'assignment-type' | 'thesis-default' | 'daily-pages-default';
+  | 'assignment-type'
+  | 'thesis-default'
+  | 'daily-pages-default'
+  | 'daily-pages-short-form-default'
+  | 'class-starter-default';
 
 export type RubricDisplayConfig = {
   categories: RubricDisplayCategory[];
@@ -58,9 +62,18 @@ const rubricDisplaySources = new Set<string>([
   'assignment-type',
   'thesis-default',
   'daily-pages-default',
+  'daily-pages-short-form-default',
+  'class-starter-default',
 ]);
 
-function parseRubricDisplaySource(
+/**
+ * The single reader of a persisted rubric source string. Snapshots on old
+ * grading runs carry whatever source was current when they ran, and a source
+ * this build does not know is dropped rather than trusted — but every source a
+ * resolved grading config can report must be listed above, or a submission
+ * graded by that assistant loses the label saying which rubric produced it.
+ */
+export function parseRubricDisplaySource(
   value: unknown
 ): RubricDisplaySource | undefined {
   return typeof value === 'string' && rubricDisplaySources.has(value)

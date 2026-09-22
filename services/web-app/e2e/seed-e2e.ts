@@ -472,15 +472,15 @@ export async function seedE2E(): Promise<E2EContext> {
     select: { id: true },
   });
 
-  // The other half of Yawp's short writing, and the reason the lesson planner
-  // has to tell the two apart: a class starter is marked on engagement alone,
-  // a Daily Pages entry on depth and clarity as well.
   const classStarterAssignmentType = await prisma.assignmentType.create({
     data: {
       title: 'Class Starter',
+      // The soft, effort-based half of the Daily Pages split. Selects the
+      // Class Starter engagement rubric for a type that saved none of its own.
+      kind: 'class_starter',
       description:
-        'Three or four minutes of low-stakes writing at the top of the period.',
-      position: 6,
+        'Open-ended writing to begin class. Graded on engagement: did the student write, and did they reflect.',
+      position: 3,
       ownerOrgId: org.id,
       organizationAssignments: {
         create: { organizationId: org.id },
@@ -490,12 +490,12 @@ export async function seedE2E(): Promise<E2EContext> {
           {
             title: 'Class Starter',
             position: 1,
-            description: 'A short entry to open the period.',
+            description: 'Short writing to start the period.',
             instructions: {
               create: [
                 {
                   title: 'Write',
-                  prompt: 'Write for three minutes.',
+                  prompt: 'Write freely for ten minutes.',
                   position: 1,
                   showChatButton: true,
                 },

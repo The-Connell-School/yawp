@@ -158,6 +158,7 @@ import {
   buildPasteAlertsByStudentId,
   summarizeStudentPasteActivity,
 } from './class-paste-alerts';
+import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -1262,22 +1263,30 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     : [];
   const pasteAlertsByStudentId = buildPasteAlertsByStudentId(pasteAlerts);
 
+  const creationTypeRows = availableAssignmentTypes.filter(
+    (assignmentType) =>
+      assignmentType.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+  );
+  // One query for the list, so the creation sheet knows which types can offer
+  // the teacher's grammar-grading toggle.
+  const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
+    creationTypeRows.map((assignmentType) => assignmentType.id)
+  );
+
   return dataResponse({
     role: 'TEACHER' as const,
     klass,
     submissions,
     inProgressDocuments,
     assignments,
-    assignmentTypes: availableAssignmentTypes
-      .filter(
-        (assignmentType) =>
-          assignmentType.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
-      )
-      .map(({ id, title, collaborationSupported }) => ({
+    assignmentTypes: creationTypeRows.map(
+      ({ id, title, collaborationSupported }) => ({
         id,
         title,
         collaborationSupported,
-      })),
+        gradesGrammar: gradesGrammarIds.has(id),
+      })
+    ),
     assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,

@@ -52,7 +52,10 @@ import {
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
-import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import {
+  getGrammarGradingAssignmentTypeIds,
+  resolveAssignmentTypeGradingConfig,
+} from '~/domain/assignment-types/assignment-type-grading-config.server';
 
 /**
  * Page chrome the class route used to provide while this page was nested
@@ -203,6 +206,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }),
   ]);
 
+  // One query for the list, so the creation sheet knows which types can offer
+  // the teacher's grammar-grading toggle.
+  const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
+    assignmentTypes.map((assignmentType) => assignmentType.id)
+  );
+  const assignmentTypeOptions = assignmentTypes.map((assignmentType) => ({
+    ...assignmentType,
+    gradesGrammar: gradesGrammarIds.has(assignmentType.id),
+  }));
+
   const insight =
     insightRow && insightRow.status === 'ready' && insightRow.summaryJson
       ? {
@@ -218,7 +231,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return {
     found: true as const,
     classInsightsEnabled,
-    assignmentTypes,
+    assignmentTypes: assignmentTypeOptions,
     activeClassId: active.classId,
     // Group setup is per class, because the roster is: one assignment pushed to
     // three sections needs three seating charts. `groupsOpened` decides whether

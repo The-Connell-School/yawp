@@ -86,8 +86,18 @@ function idleFetcher(data: Record<string, unknown> | null = null) {
 
 const assignmentTypes = [
   // type-1 is in the collaborative-drafts pilot; type-2 is not.
-  { id: 'type-1', title: 'Literary Analysis', collaborationSupported: true },
-  { id: 'type-2', title: 'Daily Pages', collaborationSupported: false },
+  {
+    id: 'type-1',
+    title: 'Literary Analysis',
+    collaborationSupported: true,
+    gradesGrammar: true,
+  },
+  {
+    id: 'type-2',
+    title: 'Class Starter',
+    collaborationSupported: false,
+    gradesGrammar: false,
+  },
 ];
 
 const teacherClasses = [

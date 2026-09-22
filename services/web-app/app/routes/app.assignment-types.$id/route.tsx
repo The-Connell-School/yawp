@@ -47,11 +47,30 @@ import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/as
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { AboutDailyPages } from './about-daily-pages/about-daily-pages';
 import { ApHistoryLibrary } from './ap-history-library';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
+import {
+  resolvePromptLibraryVariant,
+  usesOpenEndedLibrary,
+  usesShortFormLibrary,
+  type OpenEndedPromptLibraryVariant,
+} from './prompts-library/library-variant';
+import { ShortFormPromptsLibrary } from './short-form-prompts-library/short-form-prompts-library';
+import {
+  applyFilters as applyShortFormFilters,
+  buildFacets as buildShortFormFacets,
+  buildOptionCounts as buildShortFormOptionCounts,
+  deriveTitleFromPrompt,
+  readFilters as readShortFormFilters,
+  savedPromptToLibraryEntry as savedShortFormPromptToLibraryEntry,
+  toLibraryEntries as toShortFormLibraryEntries,
+  type ShortFormPrompt,
+} from './short-form-prompts-library/data';
+import shortFormPromptsRaw from './short-form-prompts-library/prompts.json';
 import {
   type CognitiveMove,
   COLLECTION_ORDER,
@@ -67,7 +86,6 @@ import {
   toLibraryEntries,
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
-import { isDailyPagesTitle } from '~/domain/lesson-planner/yawp-catalog';
 import { FROM_LESSON_PARAM } from '~/domain/lesson-planner/daily-pages-block';
 import { ThesisPromptsLibrary } from './thesis-prompts-library/thesis-prompts-library';
 import { ThesisPromptGenerator } from './thesis-prompts-library/thesis-prompt-generator';
@@ -82,13 +100,18 @@ import {
   type ThesisPrompt,
 } from './thesis-prompts-library/data';
 import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
+import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 
 /** How the Lesson Planner hands a written warm-up to this page. */
 const NEW_PROMPT_PARAM = 'newPrompt';
+
 const THESIS_ESSAY_TITLE = 'the thesis-driven essay';
 const ALL_PROMPTS = toLibraryEntries(promptsRaw as LibraryPrompt[]);
 const ALL_THESIS_PROMPTS = toThesisLibraryEntries(
   thesisPromptsRaw as ThesisPrompt[]
+);
+const ALL_SHORT_FORM_PROMPTS = toShortFormLibraryEntries(
+  shortFormPromptsRaw as ShortFormPrompt[]
 );
 const SERIOUSNESS_ORDER: PromptSeriousness[] = [
   'playful',
@@ -416,25 +439,34 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   const normalizedTitle = assignmentType.title.trim().toLowerCase();
-  const isDailyPages = isDailyPagesTitle(assignmentType.title);
+  // Class Starter and Daily Pages share the open-ended prompt library; which
+  // of the two this is decides the directions shown above it.
+  const promptLibraryVariant = resolvePromptLibraryVariant({
+    title: assignmentType.title,
+  });
+  const isTeacher = profile.role === "TEACHER";
+  // Class Starter reads the freewrite corpus; Daily Pages reads the short-form
+  // one, whose prompts always ask for the backing its rubric grades.
+  const showsOpenEndedLibrary =
+    isTeacher && usesOpenEndedLibrary(promptLibraryVariant);
+  const showsShortFormLibrary =
+    isTeacher && usesShortFormLibrary(promptLibraryVariant);
   const isThesisEssay = normalizedTitle === THESIS_ESSAY_TITLE;
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   // "My prompts": prompts this teacher generated and kept, shown in the same
   // library alongside the fixed corpus and filterable on their own.
-  const savedPrompts =
-    profile.role === "TEACHER" && isDailyPages
-      ? await listSavedDailyPagesPrompts({
-          membershipId: profile.id,
-          assignmentTypeId: assignmentType.id,
-        })
-      : [];
-  const libraryEntries =
-    profile.role === "TEACHER" && isDailyPages
-      ? [...savedPrompts.map(savedPromptToLibraryEntry), ...ALL_PROMPTS]
-      : [];
+  const savedPrompts = showsOpenEndedLibrary
+    ? await listSavedDailyPagesPrompts({
+        membershipId: profile.id,
+        assignmentTypeId: assignmentType.id,
+      })
+    : [];
+  const libraryEntries = showsOpenEndedLibrary
+    ? [...savedPrompts.map(savedPromptToLibraryEntry), ...ALL_PROMPTS]
+    : [];
   const promptLibrary =
-    profile.role === 'TEACHER' && isDailyPages
+    showsOpenEndedLibrary && promptLibraryVariant !== null
       ? {
           prompts: applyFilters(
             libraryEntries,
@@ -443,8 +475,44 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           facets: buildFacets(libraryEntries),
           optionCounts: buildOptionCounts(libraryEntries),
           totalCount: libraryEntries.length,
+          variant: promptLibraryVariant as OpenEndedPromptLibraryVariant,
         }
       : null;
+
+  // "My prompts" comes from the same saved-prompt store either way: they are
+  // this teacher's prompts for this assignment type, and which corpus is on
+  // screen does not change whose they are. The store records no title, so one
+  // is derived for the short-form library's row heading.
+  const savedShortFormPrompts = showsShortFormLibrary
+    ? await listSavedDailyPagesPrompts({
+        membershipId: profile.id,
+        assignmentTypeId: assignmentType.id,
+      })
+    : [];
+  const shortFormEntries = showsShortFormLibrary
+    ? [
+        ...savedShortFormPrompts.map((saved) =>
+          savedShortFormPromptToLibraryEntry({
+            id: saved.id,
+            title: deriveTitleFromPrompt(saved.prompt),
+            prompt: saved.prompt,
+            savedAt: saved.savedAt,
+          })
+        ),
+        ...ALL_SHORT_FORM_PROMPTS,
+      ]
+    : [];
+  const shortFormPromptLibrary = showsShortFormLibrary
+    ? {
+        prompts: applyShortFormFilters(
+          shortFormEntries,
+          readShortFormFilters(new URL(request.url))
+        ),
+        facets: buildShortFormFacets(shortFormEntries),
+        optionCounts: buildShortFormOptionCounts(shortFormEntries),
+        totalCount: shortFormEntries.length,
+      }
+    : null;
   // "My prompts": prompts this teacher generated and kept, shown in the same
   // library alongside the fixed corpus and filterable on their own.
   const savedThesisPrompts =
@@ -489,13 +557,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   }
 
+  // Whether this type's rubric grades grammar, so the creation sheet knows
+  // whether the teacher's grammar-grading toggle is worth offering.
+  const assignmentTypeGradesGrammar = (
+    await getGrammarGradingAssignmentTypeIds([assignmentType.id])
+  ).has(assignmentType.id);
+
   return dataResponse({
     assignmentType,
+    assignmentTypeGradesGrammar,
     rubricDefaultTotalPoints: defaultGradingConfig.maxScore,
     documents,
     archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
+    shortFormPromptLibrary,
     thesisPromptLibrary,
     apHistoryLibrary,
   });
@@ -632,6 +708,12 @@ export default function AppAssignmentTypesIdRoute() {
     );
   }, [incomingPrompt, setSearchParams]);
 
+  const showShortFormLibrary = data.shortFormPromptLibrary != null;
+  // Daily Pages carries one module, whose blurb is freewrite-era copy telling
+  // students to throw ideas around — which the about section directly above it
+  // now contradicts. The module row itself stays: documents are created inside
+  // it, and `hasModules` still gates New → Document.
+  const showModules = hasModules && !showShortFormLibrary;
   const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -709,6 +791,7 @@ export default function AppAssignmentTypesIdRoute() {
                 assignmentTypeCollaborationSupported={
                   data.assignmentType.collaborationSupported
                 }
+                assignmentTypeGradesGrammar={data.assignmentTypeGradesGrammar}
                 rubricDefaultTotalPoints={data.rubricDefaultTotalPoints}
                 teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}
@@ -760,9 +843,12 @@ export default function AppAssignmentTypesIdRoute() {
             </p>
           </div>
         </div>
-        {showPromptsLibrary ? <TeacherDirections /> : null}
+        {data.promptLibrary ? (
+          <TeacherDirections variant={data.promptLibrary.variant} />
+        ) : null}
+        {showShortFormLibrary ? <AboutDailyPages /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
-        {hasModules ? (
+        {showModules ? (
           <Accordion type="single" collapsible>
             <AccordionItem value="modules">
               <AccordionTrigger className="py-2 text-base">
@@ -804,6 +890,21 @@ export default function AppAssignmentTypesIdRoute() {
               facets={data.promptLibrary.facets}
               optionCounts={data.promptLibrary.optionCounts}
               totalCount={data.promptLibrary.totalCount}
+              onSelectPrompt={(prompt) => {
+                setApHistoryEntry(null);
+                setLibraryPrompt(prompt);
+                setIsAssignmentSheetOpen(true);
+              }}
+            />
+          </div>
+        ) : null}
+        {data.shortFormPromptLibrary ? (
+          <div className="pb-6">
+            <ShortFormPromptsLibrary
+              prompts={data.shortFormPromptLibrary.prompts}
+              facets={data.shortFormPromptLibrary.facets}
+              optionCounts={data.shortFormPromptLibrary.optionCounts}
+              totalCount={data.shortFormPromptLibrary.totalCount}
               onSelectPrompt={(prompt) => {
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);

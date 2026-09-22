@@ -9,12 +9,18 @@ import {
   type RubricData,
   type ScoringScaleData,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from './daily-pages-rubric';
 import {
-  DAILY_PAGES_ASSIGNMENT_TYPE_KIND,
-  DAILY_PAGES_PROMPT_CONFIG,
-  DAILY_PAGES_RUBRIC,
-  DAILY_PAGES_SCORING_SCALE,
-} from './daily-pages-rubric';
+  DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
+  DAILY_PAGES_SHORT_FORM_RUBRIC,
+  DAILY_PAGES_SHORT_FORM_SCORING_SCALE,
+} from './daily-pages-short-form-rubric';
+import {
+  CLASS_STARTER_ASSIGNMENT_TYPE_KIND,
+  CLASS_STARTER_PROMPT_CONFIG,
+  CLASS_STARTER_RUBRIC,
+  CLASS_STARTER_SCORING_SCALE,
+} from './class-starter-rubric';
 
 export const MODULE_RUBRIC_RELATIONSHIPS = [
   'primary',
@@ -29,7 +35,8 @@ export type ModuleRubricRelationship =
 export type AssignmentTypeRubricConfigSource =
   | 'assignment-type'
   | 'thesis-default'
-  | 'daily-pages-default';
+  | 'daily-pages-short-form-default'
+  | 'class-starter-default';
 
 export type AssignmentTypeRubricConfigInput = {
   /**
@@ -103,18 +110,47 @@ const thesisDefaultConfig: AssignmentTypeRubricConfig = {
  * A kind listed here needs no data migration: an existing row picks its default
  * up on the next grading run, and a row that saved its own rubric still wins.
  */
+/**
+ * The soft assistant, under the name it is keeping. Class Starter is what
+ * Daily Pages was: one engagement judgment, overall feedback, no markup.
+ */
+const classStarterConfig: AssignmentTypeRubricConfig = {
+  source: 'class-starter-default',
+  scoringScale: CLASS_STARTER_SCORING_SCALE,
+  rubric: CLASS_STARTER_RUBRIC,
+  promptConfig: CLASS_STARTER_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'Class Starter judges engagement only — that the student wrote and reflected — with overall feedback and no grammar highlighting.',
+  rubricIncomplete: false,
+  defaultLabel: 'Class Starter engagement',
+};
+
+/**
+ * The formal assistant: a short piece graded the way an essay is, on the
+ * essay's own 1-5 scale, with per-category feedback and grammar marked.
+ *
+ * This is what `daily_pages` grades with now — there is no flag and no legacy
+ * fallback. A Daily Pages type that saved no rubric of its own moves from
+ * judging engagement alone to this, which is a real change in how its work is
+ * scored. A type that configured its own rubric keeps it, which is what leaves
+ * production's 0-30 engagement row untouched.
+ */
+const dailyPagesShortFormConfig: AssignmentTypeRubricConfig = {
+  source: 'daily-pages-short-form-default',
+  scoringScale: DAILY_PAGES_SHORT_FORM_SCORING_SCALE,
+  rubric: DAILY_PAGES_SHORT_FORM_RUBRIC,
+  promptConfig: DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'Daily Pages grades a short, formal piece on the same five dimensions as an essay — idea, support, structure, voice and grammar — with per-category feedback and grammar highlighting on. Effort alone earns the middle of the scale, and length is never rewarded or penalized on its own.',
+  rubricIncomplete: false,
+  defaultLabel: 'Daily Pages short-form writing',
+};
+
 const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
-  [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: {
-    source: 'daily-pages-default',
-    scoringScale: DAILY_PAGES_SCORING_SCALE,
-    rubric: DAILY_PAGES_RUBRIC,
-    promptConfig: DAILY_PAGES_PROMPT_CONFIG,
-    outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
-    calibrationNotes:
-      'Daily Pages judges engagement only, with overall feedback and no grammar highlighting.',
-    rubricIncomplete: false,
-    defaultLabel: 'Daily Pages engagement',
-  },
+  [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: dailyPagesShortFormConfig,
+  [CLASS_STARTER_ASSIGNMENT_TYPE_KIND]: classStarterConfig,
 };
 
 function getDefaultRubricConfig(

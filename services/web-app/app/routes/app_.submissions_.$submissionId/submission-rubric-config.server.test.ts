@@ -320,19 +320,25 @@ describe('a Daily Pages submission graded before Daily Pages had its own rubric'
   };
 
   test('keeps rendering against the rubric it was actually graded on', async () => {
-    // Live config is now the Daily Pages engagement rubric.
+    // Live config is now the Daily Pages short-form rubric.
     resolveAssignmentTypeGradingConfig.mockResolvedValue(
       resolvedGradingConfig({
-        source: 'daily-pages-default',
-        minScore: 0,
-        maxScore: 3,
-        scoringType: 'points_scale',
+        source: 'daily-pages-short-form-default',
+        minScore: 1,
+        maxScore: 5,
+        scoringType: 'weighted_1_5',
         rubricCategories: [
           {
-            key: 'engagement',
-            label: 'Engagement',
-            description: 'How fully the student showed up.',
-            weight: 1,
+            key: 'depth_of_thought',
+            label: 'Depth of Thought',
+            description: 'How far past a first reaction the thinking goes.',
+            weight: 0.35,
+          },
+          {
+            key: 'grammar_and_mechanics',
+            label: 'Grammar/Syntax/Mechanics',
+            description: 'Sentence construction, punctuation, usage.',
+            weight: 0.15,
           },
         ],
       })
@@ -367,16 +373,22 @@ describe('a Daily Pages submission graded before Daily Pages had its own rubric'
   test('falls back to the legacy rubric when there is no snapshot at all', async () => {
     resolveAssignmentTypeGradingConfig.mockResolvedValue(
       resolvedGradingConfig({
-        source: 'daily-pages-default',
-        minScore: 0,
-        maxScore: 3,
-        scoringType: 'points_scale',
+        source: 'daily-pages-short-form-default',
+        minScore: 1,
+        maxScore: 5,
+        scoringType: 'weighted_1_5',
         rubricCategories: [
           {
-            key: 'engagement',
-            label: 'Engagement',
-            description: 'How fully the student showed up.',
-            weight: 1,
+            key: 'depth_of_thought',
+            label: 'Depth of Thought',
+            description: 'How far past a first reaction the thinking goes.',
+            weight: 0.35,
+          },
+          {
+            key: 'grammar_and_mechanics',
+            label: 'Grammar/Syntax/Mechanics',
+            description: 'Sentence construction, punctuation, usage.',
+            weight: 0.15,
           },
         ],
       })
@@ -388,7 +400,7 @@ describe('a Daily Pages submission graded before Daily Pages had its own rubric'
       rubricScores: legacyThesisScores,
     });
 
-    // The stored keys are the legacy thesis ones, which the engagement rubric
+    // The stored keys are the legacy thesis ones, which the short-form rubric
     // cannot display, so the old scores stay readable on the old rubric.
     expect(config.categories.map((category) => category.key)).toEqual([
       'thesis_and_content',
@@ -400,19 +412,25 @@ describe('a Daily Pages submission graded before Daily Pages had its own rubric'
     expect(config.maxScore).toBe(5);
   });
 
-  test('an ungraded Daily Pages submission picks up the engagement rubric', async () => {
+  test('an ungraded Daily Pages submission picks up the short-form rubric', async () => {
     resolveAssignmentTypeGradingConfig.mockResolvedValue(
       resolvedGradingConfig({
-        source: 'daily-pages-default',
-        minScore: 0,
-        maxScore: 3,
-        scoringType: 'points_scale',
+        source: 'daily-pages-short-form-default',
+        minScore: 1,
+        maxScore: 5,
+        scoringType: 'weighted_1_5',
         rubricCategories: [
           {
-            key: 'engagement',
-            label: 'Engagement',
-            description: 'How fully the student showed up.',
-            weight: 1,
+            key: 'depth_of_thought',
+            label: 'Depth of Thought',
+            description: 'How far past a first reaction the thinking goes.',
+            weight: 0.35,
+          },
+          {
+            key: 'grammar_and_mechanics',
+            label: 'Grammar/Syntax/Mechanics',
+            description: 'Sentence construction, punctuation, usage.',
+            weight: 0.15,
           },
         ],
       })
@@ -424,12 +442,13 @@ describe('a Daily Pages submission graded before Daily Pages had its own rubric'
       rubricScores: {},
     });
 
-    expect(config.source).toBe('daily-pages-default');
+    expect(config.source).toBe('daily-pages-short-form-default');
     expect(config.categories.map((category) => category.key)).toEqual([
-      'engagement',
+      'depth_of_thought',
+      'grammar_and_mechanics',
     ]);
-    expect(config.minScore).toBe(0);
-    expect(config.maxScore).toBe(3);
+    expect(config.minScore).toBe(1);
+    expect(config.maxScore).toBe(5);
   });
 });
 
