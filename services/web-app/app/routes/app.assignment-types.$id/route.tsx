@@ -402,11 +402,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  const defaultGradingConfig = await resolveAssignmentTypeGradingConfig({
-    assignmentTypeId: assignmentType.id,
-    assignmentTypeTitle: assignmentType.title,
-  });
-
   const normalizedTitle = assignmentType.title.trim().toLowerCase();
   const isDailyPages = normalizedTitle === DAILY_PAGES_TITLE;
   const isThesisEssay = normalizedTitle === THESIS_ESSAY_TITLE;
@@ -483,7 +478,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     assignmentType,
-    rubricDefaultTotalPoints: defaultGradingConfig.maxScore,
     documents,
     archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
@@ -662,7 +656,6 @@ export default function AppAssignmentTypesIdRoute() {
                 assignmentTypeCollaborationSupported={
                   data.assignmentType.collaborationSupported
                 }
-                rubricDefaultTotalPoints={data.rubricDefaultTotalPoints}
                 teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}

@@ -4,6 +4,23 @@ export type AssignmentGradingMode = (typeof ASSIGNMENT_GRADING_MODES)[number];
 
 export const DEFAULT_ASSIGNMENT_GRADING_MODE: AssignmentGradingMode = 'step';
 
+export const gradingModeOptions: Array<{
+  value: AssignmentGradingMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: 'step',
+    label: 'Steps',
+    description: 'Scores are only on the rubric labels.',
+  },
+  {
+    value: 'bands',
+    label: 'Bands',
+    description: 'Scores are within the labeled ranges.',
+  },
+];
+
 export const MAX_RUBRIC_TOTAL_POINTS = 1000;
 
 export function parseAssignmentGradingMode(value: unknown): AssignmentGradingMode | null {

@@ -160,16 +160,6 @@ function buttonByLabel(label: string) {
   return button!;
 }
 
-// React keeps its own copy of the value on the node, so a plain assignment is
-// swallowed. Going through the prototype setter is what makes onChange fire.
-function setInputValue(input: HTMLInputElement, value: string) {
-  Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    'value'
-  )?.set?.call(input, value);
-  input.dispatchEvent(new Event('input', { bubbles: true }));
-}
-
 function isChecked(control: HTMLElement) {
   return (
     control.getAttribute('data-state') === 'checked' ||
@@ -329,7 +319,7 @@ describe('AssignmentCreationSheetContent', () => {
   });
 
   it('rests as a plain-language grading summary with nothing to expand past', () => {
-    root = renderSheet({ initialRubricDefaultTotalPoints: 6 }).root;
+    root = renderSheet().root;
 
     expectText(
       'Graded out of 100 points in steps, read at the intermediate level.'
@@ -369,24 +359,18 @@ describe('AssignmentCreationSheetContent', () => {
     expect(inputByName('pointValue').value).toBe('100');
   });
 
-  it('keeps the summary in step with an edited point value', () => {
-    const { root: rendered } = renderSheet();
-    root = rendered;
+  it('summarizes the settings actually in force, not the defaults', () => {
+    root = renderSheet({
+      initialPointValue: 250,
+      initialGradingMode: 'bands',
+      initialGradingAssistantStrictnessLevel: 'advanced',
+    }).root;
 
-    act(() => {
-      controlById('assignment-create-change-grading').click();
-    });
-    const pointValue = controlById(
-      'assignment-create-point-value'
-    ) as HTMLInputElement;
-    act(() => {
-      setInputValue(pointValue, '250');
-    });
-
-    expect(inputByName('pointValue').value).toBe('250');
     expectText(
-      'Graded out of 250 points in steps, read at the intermediate level.'
+      'Graded out of 250 points in bands, read at the advanced level.'
     );
+    expect(inputByName('pointValue').value).toBe('250');
+    expect(inputByName('gradingMode').value).toBe('bands');
   });
 
   it('lets a teacher opt into bands grading without a customize gate', () => {
@@ -413,24 +397,19 @@ describe('AssignmentCreationSheetContent', () => {
   it('preserves an existing rubric scale override without exposing it', () => {
     root = renderSheet({
       initialRubricTotalPoints: 40,
+      initialPointValue: 250,
       initialGradingMode: 'bands',
     }).root;
-
-    expect(inputByName('rubricTotalPoints').value).toBe('40');
 
     act(() => {
       controlById('assignment-create-change-grading').click();
     });
-    act(() => {
-      setInputValue(
-        controlById('assignment-create-point-value') as HTMLInputElement,
-        '250'
-      );
-    });
 
+    // The gradebook total and the rubric scale stay independent.
     expect(inputByName('rubricTotalPoints').value).toBe('40');
     expect(inputByName('pointValue').value).toBe('250');
     expectNoText('Total Point Values');
+    expectNoText('40');
   });
 
   it('preselects but does not lock assignment type from dashboard quick create', () => {

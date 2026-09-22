@@ -29,17 +29,16 @@ async function expectStandardizedAssignmentForm(page: Page) {
     dialog.getByRole('checkbox', { name: /submit for grade/i })
   ).toBeChecked();
   await expect(
-    dialog.getByLabel('Default point value', { exact: true })
-  ).toHaveValue('100');
+    dialog.getByText(
+      'Graded out of 100 points in steps, read at the intermediate level.',
+      { exact: true }
+    )
+  ).toBeVisible();
   await expect(
-    dialog.getByLabel('Default point value', { exact: true })
-  ).toHaveAttribute('readonly', '');
-  await expect(
-    dialog.getByRole('checkbox', { name: /customize grading/i })
-  ).not.toBeChecked();
-  await expect(dialog.getByText('Default grading type', { exact: true })).toBeVisible();
-  await expect(dialog.getByText('By default: Step grading', { exact: true })).toBeVisible();
-  await expect(dialog.getByText(/rubric default:/i)).toBeVisible();
+    dialog.getByRole('button', { name: 'Change', exact: true })
+  ).toBeVisible();
+  await expect(dialog.getByText(/customize grading/i)).toHaveCount(0);
+  await expect(dialog.getByText('Default grading type')).toHaveCount(0);
   await expect(dialog.getByText('Rubric total points')).toHaveCount(0);
   await expect(
     dialog.getByText(TUTOR_TOGGLE_HELP, { exact: true })
@@ -404,8 +403,8 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.getByLabel(CLASS_LABEL).check();
       await page.getByLabel('Title (optional)').fill(title);
       await page.getByLabel('Prompt', { exact: true }).fill(prompt);
-      await page.getByRole('checkbox', { name: /customize grading/i }).check();
-      await page.getByLabel('Total Point Values', { exact: true }).fill('25');
+      await page.getByRole('button', { name: 'Change', exact: true }).click();
+      await page.getByLabel('Point value', { exact: true }).fill('25');
       const tutorToggle = page.getByRole('checkbox', {
         name: TUTOR_TOGGLE_LABEL,
         exact: true,
@@ -457,12 +456,15 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await dialog.getByLabel(CLASS_LABEL).check();
       await dialog.getByLabel('Title (optional)').fill(title);
       await dialog.getByLabel('Prompt', { exact: true }).fill(prompt);
-      await dialog
-        .getByRole('checkbox', { name: /customize grading/i })
-        .check();
-      await dialog.getByLabel('Total Point Values', { exact: true }).fill('25');
-      await expect(dialog.getByText('Grading Total: 25 points.', { exact: true })).toBeVisible();
+      await dialog.getByRole('button', { name: 'Change', exact: true }).click();
+      await dialog.getByLabel('Point value', { exact: true }).fill('25');
       await dialog.getByRole('button', { name: 'Bands' }).click();
+      await expect(
+        dialog.getByText(
+          'Graded out of 25 points in bands, read at the intermediate level.',
+          { exact: true }
+        )
+      ).toBeVisible();
       await expect(
         dialog.getByRole('button', { name: 'Bands' })
       ).toHaveAttribute('aria-pressed', 'true');
@@ -480,7 +482,9 @@ test.describe.serial('Teacher dashboard workspace', () => {
           select: { pointValue: true, rubricTotalPoints: true, gradingMode: true },
         });
         expect(created.pointValue).toBe(25);
-        expect(created.rubricTotalPoints).toBe(25);
+        // The sheet carries an existing rubric scale override through but
+        // never creates one, so a fresh assignment keeps the authored scale.
+        expect(created.rubricTotalPoints).toBeNull();
         expect(created.gradingMode).toBe('bands');
       } finally {
         await prisma.$disconnect();
@@ -537,8 +541,8 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.getByLabel(secondClass.title!).check();
       await page.getByLabel('Title (optional)').fill(title);
       await page.getByLabel('Prompt', { exact: true }).fill(prompt);
-      await page.getByRole('checkbox', { name: /customize grading/i }).check();
-      await page.getByLabel('Total Point Values', { exact: true }).fill('35');
+      await page.getByRole('button', { name: 'Change', exact: true }).click();
+      await page.getByLabel('Point value', { exact: true }).fill('35');
       await page.getByRole('button', { name: 'Create Assignment' }).click();
       await expect(page.getByRole('dialog')).toHaveCount(0);
 
@@ -579,8 +583,8 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await page.getByLabel(CLASS_LABEL).check();
     await page.getByLabel('Title (optional)').fill(title);
     await page.getByLabel('Prompt', { exact: true }).fill(prompt);
-    await page.getByRole('checkbox', { name: /customize grading/i }).check();
-    await page.getByLabel('Total Point Values', { exact: true }).fill('40');
+    await page.getByRole('button', { name: 'Change', exact: true }).click();
+    await page.getByLabel('Point value', { exact: true }).fill('40');
     await page.getByRole('button', { name: 'Create Assignment' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
