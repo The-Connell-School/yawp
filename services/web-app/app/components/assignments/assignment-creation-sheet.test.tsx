@@ -1007,7 +1007,9 @@ describe('AssignmentCreationSheetContent', () => {
       // Boolean, not the node: a failing DOM matcher tries to serialize the
       // whole happy-dom tree, which takes the test runner down with it.
       expect(
-        Boolean(document.getElementById('assignment-create-point-value'))
+        Boolean(
+          document.getElementById('assignment-create-default-point-value')
+        )
       ).toBe(false);
 
       act(() => {
@@ -1017,10 +1019,19 @@ describe('AssignmentCreationSheetContent', () => {
       expect(
         allInputsByName('submitForGrade').map((input) => input.value)
       ).toContain('true');
-      // Small by default: one lesson check should not outweigh real work.
+      // Small by default: one lesson check should not outweigh real work. The
+      // value is shown read-only until a teacher opts into Customize Grading,
+      // so it is the default field that carries it, not the editable input.
       expect(
-        (controlById('assignment-create-point-value') as HTMLInputElement).value
+        (
+          controlById(
+            'assignment-create-default-point-value'
+          ) as HTMLInputElement
+        ).value
       ).toBe('10');
+      expect(
+        Boolean(document.getElementById('assignment-create-point-value'))
+      ).toBe(false);
     });
 
     it('keeps the ordinary grade checkbox for every other type', () => {
