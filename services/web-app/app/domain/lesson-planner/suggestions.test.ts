@@ -3,6 +3,7 @@ import {
   FOLLOW_ON_SUGGESTIONS,
   looksLikeLessonPlan,
   mentionsRoomPersonality,
+  openingAsksAboutATaughtLesson,
   STANDARD_OPENING_SUGGESTION,
   withStandardSuggestions,
 } from './suggestions';
@@ -317,5 +318,70 @@ describe('withStandardSuggestions — a plan on the very first reply', () => {
         deliveredPlan: false,
       })[0]
     ).toBe(STANDARD_OPENING_SUGGESTION);
+  });
+});
+
+describe('withStandardSuggestions — an exit ticket checks a lesson already taught', () => {
+  // The exit ticket opener asks "what did the lesson teach?". Pinning "look at
+  // my classes and tell me what they need work on" under that question offers
+  // an answer to a different one: the data says where the class is weak, not
+  // what happened in the room today, and the ticket ended up checking the
+  // weakest rubric skill instead of the lesson.
+  test('does not pin the data route when told not to offer it', () => {
+    expect(
+      withStandardSuggestions(['Commas after introductory clauses'], {
+        isOpeningReply: true,
+        offerDataRoute: false,
+      })
+    ).toEqual(['Commas after introductory clauses']);
+  });
+
+  test("drops the model's own version of the data route too", () => {
+    expect(
+      withStandardSuggestions(
+        [
+          'Pull the data and pick the weakest skill',
+          'Integrating quotes, 11th grade',
+        ],
+        { isOpeningReply: true, offerDataRoute: false }
+      )
+    ).toEqual(['Integrating quotes, 11th grade']);
+  });
+
+  test('still offers the data route everywhere else by default', () => {
+    expect(withStandardSuggestions([], { isOpeningReply: true })[0]).toBe(
+      STANDARD_OPENING_SUGGESTION
+    );
+  });
+});
+
+describe('openingAsksAboutATaughtLesson', () => {
+  test('is true for the exit ticket starter', () => {
+    expect(
+      openingAsksAboutATaughtLesson(
+        'Make me an exit ticket that shows whether my students actually got it — every part of it, not just the easy part. Ask me what the lesson taught first.'
+      )
+    ).toBe(true);
+  });
+
+  test('is true for an exit ticket asked for in the teacher’s own words', () => {
+    expect(openingAsksAboutATaughtLesson('I need an exit slip for today')).toBe(
+      true
+    );
+    expect(openingAsksAboutATaughtLesson('write me an Exit Ticket')).toBe(true);
+  });
+
+  test('is false for a lesson that merely ends on an exit ticket', () => {
+    // Planning a lesson is still open ground, and the data can pick it.
+    expect(
+      openingAsksAboutATaughtLesson(
+        'Plan a lesson on thesis statements that ends with an exit ticket'
+      )
+    ).toBe(false);
+  });
+
+  test('is false for everything else', () => {
+    expect(openingAsksAboutATaughtLesson('Help me plan a lesson.')).toBe(false);
+    expect(openingAsksAboutATaughtLesson('')).toBe(false);
   });
 });

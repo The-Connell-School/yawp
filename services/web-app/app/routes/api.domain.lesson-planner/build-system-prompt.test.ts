@@ -739,6 +739,30 @@ describe('buildLessonPlannerSystemPrompt — exit tickets and extra practice', (
     expect(lower).toContain('what the common wrong answer looks like');
   });
 
+  test('takes the ticket from the lesson taught, never from the weakest skill', () => {
+    // Offered the data, the planner used to check whatever rubric skill the
+    // class scored lowest on, and the ticket stopped being about the lesson.
+    expect(lower).toContain('an exit ticket checks the lesson that was taught');
+    expect(lower).toContain(
+      'never take what a ticket checks from the weakest rubric skill'
+    );
+    expect(lower).toContain(
+      'use it to predict which part of that lesson will trip them'
+    );
+  });
+
+  test('checks the plan in this conversation without asking again', () => {
+    expect(lower).toContain(
+      'when this conversation already holds the lesson, the ticket checks that lesson'
+    );
+  });
+
+  test('does not offer the data route on an exit ticket opening', () => {
+    expect(lower).toContain(
+      'the app does not pin it when the teacher opened by asking for an exit ticket'
+    );
+  });
+
   test('keeps practice on the skill the lesson taught, hardest last', () => {
     expect(lower).toContain(
       'practices the skill the lesson actually taught, not the general subject'

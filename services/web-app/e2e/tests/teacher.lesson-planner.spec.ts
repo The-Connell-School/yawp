@@ -2873,6 +2873,63 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page.locator('main')).not.toContainText('talkative');
   });
 
+  test('does not offer the class data as the answer to what a lesson taught', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    // Asked "what did the lesson teach?", a teacher offered "look at my
+    // classes and tell me what they need work on" got a ticket on the class's
+    // weakest skill instead of the lesson they had just taught.
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const prisma = createE2EPrismaClient();
+    let conversationId: string;
+    try {
+      const conversation = await prisma.lessonPlanConversation.create({
+        data: {
+          membershipId: e2eContext.teacherMembershipId,
+          organizationId: e2eContext.organizationId,
+          title: 'Exit ticket opening',
+          messages: {
+            create: [
+              {
+                role: 'user',
+                content:
+                  'Make me an exit ticket that shows whether my students actually got it — every part of it, not just the easy part. Ask me what the lesson taught first.',
+                createdAt: new Date('2026-08-04T10:00:00.000Z'),
+              },
+              {
+                role: 'assistant',
+                content:
+                  'What did the lesson teach?\n\n```suggestions\nPull the data and pick the weakest skill\nIntegrating quotes into a sentence\n```',
+                createdAt: new Date('2026-08-04T10:00:01.000Z'),
+              },
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      conversationId = conversation.id;
+    } finally {
+      await prisma.$disconnect();
+    }
+
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    await expect(
+      page.getByRole('button', { name: /integrating quotes into a sentence/i })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', {
+        name: /look at my classes and tell me what they need work on/i,
+      })
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: /pull the data/i })
+    ).toHaveCount(0);
+  });
+
   test('keeps the room in the options once the teacher raises it', async ({
     page,
     signIn,

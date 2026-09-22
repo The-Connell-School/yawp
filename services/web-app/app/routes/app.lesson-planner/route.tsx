@@ -57,6 +57,7 @@ import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog
 import {
   looksLikeLessonPlan,
   mentionsRoomPersonality,
+  openingAsksAboutATaughtLesson,
   withStandardSuggestions,
 } from '~/domain/lesson-planner/suggestions';
 import { loadLessonSeed } from '~/domain/lesson-planner/lesson-seed.server';
@@ -615,6 +616,11 @@ export default function LessonPlannerRoute() {
   const firstAssistantIndex = messages.findIndex(
     (message) => message.role === 'assistant'
   );
+  // "Look at my classes" picks a topic. When the teacher opened by asking to
+  // check a lesson they already taught, the topic is theirs, not the data's.
+  const offerDataRoute = !openingAsksAboutATaughtLesson(
+    messages.find((message) => message.role === 'user')?.content ?? ''
+  );
 
   return (
     <section className="flex h-full w-full">
@@ -746,6 +752,7 @@ export default function LessonPlannerRoute() {
                   message={message}
                   isLast={index === messages.length - 1}
                   isOpeningReply={index === firstAssistantIndex}
+                  offerDataRoute={offerDataRoute}
                   teacherRaisedRoomPersonality={teacherRaisedRoomPersonality}
                   addedMaterials={addedMaterials}
                   onMaterial={setMaterialAdded}
@@ -952,6 +959,7 @@ function MessageBubble({
   message,
   isLast,
   isOpeningReply,
+  offerDataRoute,
   teacherRaisedRoomPersonality,
   addedMaterials,
   onMaterial,
@@ -969,6 +977,8 @@ function MessageBubble({
   isLast: boolean;
   /** The planner's first reply in this lesson. */
   isOpeningReply: boolean;
+  /** Whether "look at my classes" answers this lesson's opening question. */
+  offerDataRoute: boolean;
   teacherRaisedRoomPersonality: boolean;
   /** "<messageId>:<blockKey>" for every material already in the packet. */
   addedMaterials: Set<string>;
@@ -1048,6 +1058,7 @@ function MessageBubble({
     },
     inPacket: lessonHas,
     asksForMinutes: asks.some((ask) => ask.kind === 'minutes'),
+    offerDataRoute,
   });
 
   return (

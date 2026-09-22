@@ -64,6 +64,25 @@ function meansTheSameThing(suggestion: string): boolean {
   return SAME_INTENT.some((phrase) => normalized.includes(normalize(phrase)));
 }
 
+const EXIT_TICKET = /\bexit[\s-]+(?:tickets?|slips?)\b/i;
+const PLANS_A_LESSON = /\bplan(?:ning)?\b[^.?!]*\b(?:lesson|unit|day)\b/i;
+
+/**
+ * Did the teacher open by asking for a check on a lesson they already taught?
+ *
+ * An exit ticket checks what happened in the room today, and only the teacher
+ * knows what that was. "Look at my classes and tell me what they need work on"
+ * answers a different question — where the class is weak — and pinned under
+ * "what did the lesson teach?" it sent the planner off to write a ticket on the
+ * weakest rubric skill instead of the lesson. A lesson that merely ends on an
+ * exit ticket is still open ground, and the data can choose it.
+ */
+export function openingAsksAboutATaughtLesson(openingMessage: string): boolean {
+  return (
+    EXIT_TICKET.test(openingMessage) && !PLANS_A_LESSON.test(openingMessage)
+  );
+}
+
 /**
  * How chatty the room is, as a topic.
  *
@@ -217,6 +236,12 @@ export function withStandardSuggestions(
     inPacket = {},
     /** This reply drew the minutes slider, so it owns the question of length. */
     asksForMinutes = false,
+    /**
+     * Whether "look at my classes" answers the opening question at all. False
+     * when the teacher is asking about a lesson already taught — see
+     * `openingAsksAboutATaughtLesson`.
+     */
+    offerDataRoute = true,
   }: {
     isOpeningReply: boolean;
     teacherRaisedRoomPersonality?: boolean;
@@ -224,6 +249,7 @@ export function withStandardSuggestions(
     produced?: ArtifactFlags;
     inPacket?: ArtifactFlags;
     asksForMinutes?: boolean;
+    offerDataRoute?: boolean;
   }
 ): string[] {
   const withoutRoom = teacherRaisedRoomPersonality
@@ -246,6 +272,13 @@ export function withStandardSuggestions(
   // reply. Pinning "look at my classes and tell me what they need work on"
   // after a finished plan reads as though nothing was just handed over — what
   // they want next is the deck and the handout.
+  if (isOpeningReply && !deliveredPlan && !offerDataRoute) {
+    // The model's own version of it would send the lesson the same wrong way.
+    return deduped
+      .filter((suggestion) => !meansTheSameThing(suggestion))
+      .slice(0, MAX_SUGGESTIONS);
+  }
+
   if (isOpeningReply && !deliveredPlan) {
     return [
       STANDARD_OPENING_SUGGESTION,
