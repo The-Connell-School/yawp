@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { Prisma } from '../../generated/prisma';
+// From the same wrapper the seed uses, so `toBe` compares the identical
+// sentinel rather than a second copy loaded through a different entry point.
+import { Prisma } from '../../index';
 import {
   DAILY_PAGES_SAMPLE_ASSIGNMENT,
   DAILY_PAGES_SAMPLE_ENTRIES,
