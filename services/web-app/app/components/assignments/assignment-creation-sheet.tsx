@@ -44,22 +44,66 @@ import {
   type AssignmentGradingMode,
 } from '~/domain/assignments/rubric-overrides';
 import { Tooltip } from '~/components/ui/tooltip';
+import { cn } from '~/utils/misc';
 import { toDateInputValue } from '~/utils/date-only';
 
 /**
- * A selected choice reads as chosen without shouting. The old solid-primary
- * fill made the two pickers the loudest thing on the sheet.
+ * A segmented control in the shape of the app's pill buttons: a recessed track
+ * with the chosen option lifted back out of it. Selection reads from fill and
+ * elevation rather than a solid brand block, and the font weight never changes
+ * between states so the row cannot reflow as a teacher clicks across it.
  *
- * `accent` rather than `primary/10`: this Tailwind config declares its colors
- * as `hsl(var(--token))` with no `<alpha-value>`, so an opacity modifier on a
- * theme color compiles to nothing at all.
+ * Each option carries its explanation on hover; the chosen one is spelled out
+ * underneath the control.
  */
-function gradingChoiceClassName(selected: boolean) {
-  return `rounded-md border px-3 py-2 text-sm font-medium transition ${
-    selected
-      ? 'border-primary bg-accent text-accent-foreground'
-      : 'border-border bg-background text-muted-foreground hover:bg-muted'
-  }`;
+function GradingChoiceGroup<Value extends string>({
+  labelId,
+  value,
+  options,
+  onChange,
+  disabled,
+  idPrefix,
+}: {
+  labelId: string;
+  value: Value;
+  options: ReadonlyArray<{ value: Value; label: string; description: string }>;
+  onChange: (next: Value) => void;
+  disabled: boolean;
+  idPrefix?: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-labelledby={labelId}
+      className={cn(
+        'grid gap-1 rounded-full bg-secondary p-1',
+        options.length === 2 ? 'grid-cols-2' : 'grid-cols-3'
+      )}
+    >
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <Tooltip key={option.value} text={option.description}>
+            <button
+              id={idPrefix ? `${idPrefix}-${option.value}` : undefined}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onChange(option.value)}
+              disabled={disabled}
+              className={cn(
+                'h-8 rounded-full px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:pointer-events-none disabled:opacity-50',
+                selected
+                  ? 'bg-popover text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {option.label}
+            </button>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
 }
 
 export type AssignmentCreationEntryPoint =
@@ -334,16 +378,19 @@ export function AssignmentCreationSheetContent({
     return extractFetcher.data.message || 'Unable to extract PDF content.';
   }, [extractFetcher.data]);
 
-  const strictnessLabel =
-    gradingAssistantStrictnessOptions.find(
-      (option) => option.value === gradingAssistantStrictnessLevel
-    )?.label ?? '';
-
-  // The resting state of the grading block. It has to stay true as the
-  // controls change, because it is the only thing most teachers ever read.
-  const gradingSummary = `Graded out of ${pointValue || '—'} points in ${
-    gradingMode === 'bands' ? 'bands' : 'steps'
-  }, read at the ${strictnessLabel.toLowerCase()} level.`;
+  // The resting summary is the only part of the grading block most teachers
+  // ever read, so it names the settings actually in force rather than the
+  // defaults, and the panel spells out whichever option is currently chosen.
+  const selectedStrictness = gradingAssistantStrictnessOptions.find(
+    (option) => option.value === gradingAssistantStrictnessLevel
+  );
+  const strictnessLabel = selectedStrictness?.label ?? '';
+  const strictnessDescription = selectedStrictness?.description ?? '';
+  const selectedGradingMode = gradingModeOptions.find(
+    (option) => option.value === gradingMode
+  );
+  const gradingModeLabel = selectedGradingMode?.label ?? '';
+  const gradingModeDescription = selectedGradingMode?.description ?? '';
 
   useEffect(() => {
     if (!open) {
@@ -763,10 +810,22 @@ export function AssignmentCreationSheetContent({
           </p>
 
           {submitForGrade ? (
-            <div className="mt-3 space-y-2">
-              <div className="flex items-start justify-between gap-3 rounded-md border px-3 py-2.5">
-                <p className="pt-1 text-sm text-muted-foreground">
-                  {gradingSummary}
+            <div className="mt-3 overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-black/5">
+              <div className="flex items-start justify-between gap-3 px-4 py-3">
+                <p className="text-sm text-muted-foreground">
+                  Graded out of{' '}
+                  <span className="font-medium text-foreground">
+                    {pointValue || '—'} points
+                  </span>{' '}
+                  in{' '}
+                  <span className="font-medium text-foreground">
+                    {gradingMode === 'bands' ? 'bands' : 'steps'}
+                  </span>
+                  , read at the{' '}
+                  <span className="font-medium text-foreground">
+                    {strictnessLabel.toLowerCase()}
+                  </span>{' '}
+                  level.
                 </p>
                 <Button
                   id="assignment-create-change-grading"
@@ -786,77 +845,85 @@ export function AssignmentCreationSheetContent({
               {gradingPanelOpen ? (
                 <div
                   id="assignment-create-grading-panel"
-                  className="space-y-4 rounded-md border px-3 py-3"
+                  className="space-y-5 border-t border-border px-4 py-4"
                 >
                   <div className="space-y-2">
                     <Label htmlFor="assignment-create-point-value">
                       Point value
                     </Label>
-                    <Input
-                      id="assignment-create-point-value"
-                      name="pointValue"
-                      type="number"
-                      min={1}
-                      max={1000}
-                      step={1}
-                      inputMode="numeric"
-                      value={pointValue}
-                      onChange={(event) => setPointValue(event.target.value)}
-                      disabled={isSaving}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Scoring behavior</Label>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {gradingModeOptions.map((option) => (
-                        <Tooltip key={option.value} text={option.description}>
-                          <button
-                            id={`assignment-create-grading-mode-${option.value}`}
-                            type="button"
-                            className={gradingChoiceClassName(
-                              gradingMode === option.value
-                            )}
-                            aria-pressed={gradingMode === option.value}
-                            onClick={() => setGradingMode(option.value)}
-                            disabled={isSaving}
-                          >
-                            {option.label}
-                          </button>
-                        </Tooltip>
-                      ))}
+                    <div className="flex items-center gap-2">
+                      {/* `Input` is `w-full`, so the width lives on a wrapper. */}
+                      <div className="w-24">
+                        <Input
+                          id="assignment-create-point-value"
+                          name="pointValue"
+                          type="number"
+                          min={1}
+                          max={1000}
+                          step={1}
+                          inputMode="numeric"
+                          value={pointValue}
+                          onChange={(event) =>
+                            setPointValue(event.target.value)
+                          }
+                          disabled={isSaving}
+                          required
+                          className="tabular-nums"
+                        />
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        points
+                      </span>
                     </div>
+                    <p className="text-sm text-muted-foreground">
+                      What the assignment is worth in the gradebook. The rubric
+                      keeps its own scale either way.
+                    </p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label id="assignment-create-grading-assistance">
-                      Grading Assistance
-                    </Label>
-                    <div
-                      className="grid gap-2 sm:grid-cols-3"
-                      aria-labelledby="assignment-create-grading-assistance"
+                    <p
+                      id="assignment-create-scoring-behavior"
+                      className="text-sm font-medium"
                     >
-                      {gradingAssistantStrictnessOptions.map((option) => (
-                        <Tooltip key={option.value} text={option.description}>
-                          <button
-                            type="button"
-                            className={gradingChoiceClassName(
-                              gradingAssistantStrictnessLevel === option.value
-                            )}
-                            aria-pressed={
-                              gradingAssistantStrictnessLevel === option.value
-                            }
-                            onClick={() =>
-                              setGradingAssistantStrictnessLevel(option.value)
-                            }
-                            disabled={isSaving}
-                          >
-                            {option.label}
-                          </button>
-                        </Tooltip>
-                      ))}
-                    </div>
+                      Scoring behavior
+                    </p>
+                    <GradingChoiceGroup
+                      labelId="assignment-create-scoring-behavior"
+                      idPrefix="assignment-create-grading-mode"
+                      value={gradingMode}
+                      options={gradingModeOptions}
+                      onChange={setGradingMode}
+                      disabled={isSaving}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {gradingModeLabel}
+                      </span>{' '}
+                      — {gradingModeDescription}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p
+                      id="assignment-create-grading-assistance"
+                      className="text-sm font-medium"
+                    >
+                      Grading assistance
+                    </p>
+                    <GradingChoiceGroup
+                      labelId="assignment-create-grading-assistance"
+                      value={gradingAssistantStrictnessLevel}
+                      options={gradingAssistantStrictnessOptions}
+                      onChange={setGradingAssistantStrictnessLevel}
+                      disabled={isSaving}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {strictnessLabel}
+                      </span>{' '}
+                      — {strictnessDescription}
+                    </p>
                   </div>
                 </div>
               ) : (

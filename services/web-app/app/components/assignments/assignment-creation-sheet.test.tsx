@@ -295,7 +295,7 @@ describe('AssignmentCreationSheetContent', () => {
       controlById('assignment-create-change-grading').click();
     });
 
-    expectText('Grading Assistance');
+    expectText('Grading assistance');
     expectText('Beginner');
     expectText('Intermediate');
     expectText('Advanced');
@@ -348,7 +348,7 @@ describe('AssignmentCreationSheetContent', () => {
 
     expectText('Point value');
     expectText('Scoring behavior');
-    expectText('Grading Assistance');
+    expectText('Grading assistance');
     expectText('Steps');
     expectText('Bands');
     expectNoText('Customize Grading');
@@ -384,8 +384,9 @@ describe('AssignmentCreationSheetContent', () => {
     const bands = controlById('assignment-create-grading-mode-bands');
     expect(bands.getAttribute('aria-pressed')).toBe('true');
     expect(step.getAttribute('aria-pressed')).toBe('false');
-    expect(bands.className).toContain('bg-accent');
-    expect(step.className).not.toContain('bg-accent');
+    // The chosen segment is the one lifted out of the recessed track.
+    expect(bands.className).toContain('bg-popover');
+    expect(step.className).not.toContain('bg-popover');
   });
 
   it('lets a teacher opt into bands grading without a customize gate', () => {

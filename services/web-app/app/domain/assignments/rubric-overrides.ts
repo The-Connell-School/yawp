@@ -12,12 +12,14 @@ export const gradingModeOptions: Array<{
   {
     value: 'step',
     label: 'Steps',
-    description: 'Scores are only on the rubric labels.',
+    description:
+      'A score lands on one of the rubric labels and never between two of them.',
   },
   {
     value: 'bands',
     label: 'Bands',
-    description: 'Scores are within the labeled ranges.',
+    description:
+      "A score can land anywhere inside the range a rubric label covers.",
   },
 ];
 
