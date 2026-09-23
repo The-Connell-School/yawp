@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import { AP_HISTORY_LIBRARY_ENTRIES } from './ap-history-library-data';
+import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { readFileSync } from 'node:fs';
 
 describe('AP History library seed data', () => {
@@ -71,6 +72,50 @@ describe('AP History library seed data', () => {
 });
 
 describe('AP History assignment type seed behavior', () => {
+  test('seeds the selected preview organization and its curated prompt library', async () => {
+    const assignmentTypeUpsert = mock(async () => ({ id: 'ap-type' }));
+    const organizationAssignmentUpsert = mock(async () => ({}));
+    const entryUpsert = mock(async ({ where }: { where: { externalKey: string } }) => ({
+      id: where.externalKey,
+    }));
+    const sourceUpsert = mock(async () => ({}));
+    const prisma = {
+      organization: {
+        findUnique: mock(async () => ({ id: 'preview-org' })),
+      },
+      assignmentType: { upsert: assignmentTypeUpsert },
+      organizationAssignmentType: { upsert: organizationAssignmentUpsert },
+      assignmentModule: {
+        findFirst: mock(async () => ({ id: 'ap-module' })),
+        update: mock(async () => ({ id: 'ap-module' })),
+      },
+      assignmentModuleInstruction: {
+        findFirst: mock(async () => ({ id: 'ap-instruction' })),
+        update: mock(async () => ({})),
+      },
+      apHistoryPromptLibraryEntry: { upsert: entryUpsert },
+      apHistoryPromptLibrarySource: { upsert: sourceUpsert },
+    };
+
+    await seedApHistoryLibrary(prisma as never, 'preview-org');
+
+    expect(assignmentTypeUpsert.mock.calls[0]?.[0]).toMatchObject({
+      create: { ownerOrgId: 'preview-org' },
+    });
+    expect(organizationAssignmentUpsert.mock.calls[0]?.[0]).toMatchObject({
+      where: {
+        organizationId_assignmentTypeId: {
+          organizationId: 'preview-org',
+          assignmentTypeId: 'ap-type',
+        },
+      },
+    });
+    expect(entryUpsert).toHaveBeenCalledTimes(AP_HISTORY_LIBRARY_ENTRIES.length);
+    expect(sourceUpsert).toHaveBeenCalledTimes(
+      AP_HISTORY_LIBRARY_ENTRIES.flatMap((entry) => entry.sources).length
+    );
+  });
+
   test('assignment type update path preserves existing ownerOrgId', () => {
     const seedScript = readFileSync(
       new URL('./seed-ap-history-library.ts', import.meta.url),

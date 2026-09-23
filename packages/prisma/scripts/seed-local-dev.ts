@@ -10,6 +10,7 @@ import {
 import { seedCollaborationDemoData } from './local-dev/seed-collaboration';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
 import { seedStarterGradingEvaluations } from './local-dev/starter-grading-evaluations';
+import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { truncateAllPublicTables } from './local-dev/truncate-all';
 import { enableClassInsightsForOrganizations } from './local-dev/class-insights';
 import {
@@ -62,6 +63,10 @@ try {
   console.time('synthetic');
   const context = await seedSyntheticLocalDevData(prisma);
   console.timeEnd('synthetic');
+
+  console.time('ap-history');
+  await seedApHistoryLibrary(prisma, LOCAL_DEV_ORG_ID);
+  console.timeEnd('ap-history');
 
   console.time('grading-evaluations');
   const evaluationSummary = await seedStarterGradingEvaluations(prisma, {

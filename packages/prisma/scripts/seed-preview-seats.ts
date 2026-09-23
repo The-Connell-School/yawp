@@ -9,6 +9,7 @@ import {
   buildPreviewSeatDefinitions,
   ensurePreviewSeats,
 } from './preview-seats';
+import { seedApHistoryLibrary } from './seed-ap-history-library';
 
 assertLocalSeedTarget();
 
@@ -20,6 +21,9 @@ const prisma = createPrismaClient();
 
 try {
   const results = await ensurePreviewSeats(prisma, seats);
+  // PR previews retain their database across deploys. Reconcile this branch's
+  // idempotent AP catalog on every seed-mode deploy, including existing seats.
+  await seedApHistoryLibrary(prisma, seats[0].organizationId);
   for (const seat of seats) {
     const result = results.find(
       ({ organizationId }) => organizationId === seat.organizationId
