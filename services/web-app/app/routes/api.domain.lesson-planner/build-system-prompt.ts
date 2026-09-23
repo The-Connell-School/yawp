@@ -5,6 +5,12 @@ import {
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_LESSON_NOTE_FIELDS,
 } from '~/domain/assignment-types/exit-ticket';
+import {
+  pinsDataOpening,
+  singlePieceOf,
+  type SinglePiece,
+} from '~/domain/lesson-planner/starting-point';
+import type { RecentLesson } from '~/domain/lesson-planner/recent-lessons.server';
 
 /**
  * System prompt for the YAWP! Lesson Planner.
@@ -122,12 +128,79 @@ function buildExitTicketSection(available: boolean): string[] {
   ];
 }
 
+const PIECE_NAMES: Record<SinglePiece, string> = {
+  'exit-ticket': 'an exit ticket',
+  handout: 'a student handout',
+  'extra-practice': 'a set of extra practice',
+  'slide-deck': 'a slide deck',
+};
+
+/**
+ * A teacher who tapped "Make me an exit ticket" (or a handout, practice, a
+ * deck) came for one piece to go with a lesson — usually a lesson that has not
+ * happened yet, and often one they already built here.
+ *
+ * The opening used to ask "What did today's lesson teach?" and offer four
+ * topics the model guessed at. Neither meets a teacher where they are: most
+ * are planning ahead, and the guesses were about someone else's classroom.
+ */
+function buildSinglePieceSection({
+  piece,
+  recentLessons,
+  exitTicketsAvailable,
+}: {
+  piece: SinglePiece | null;
+  recentLessons: RecentLesson[];
+  exitTicketsAvailable: boolean;
+}): string[] {
+  if (!piece) return [];
+  const lines = [
+    '',
+    `What the teacher came for: ${PIECE_NAMES[piece]} to go with a lesson — one piece, not a whole lesson plan. This section overrides the opening-turn guidance on options further down.`,
+    '- Do not assume the lesson has happened. Most teachers make this ahead of the class — for tomorrow, for next week — and some make it afterwards. Ask what the lesson is meant to teach, and from then on follow the teacher\'s tense: if they say it already ran, talk about it as done; if they say tomorrow, it is tomorrow. Never write "today\'s lesson" or "what did the lesson teach" unless they have told you class is over.',
+    '- Take the lesson in whatever form they have it: a pasted plan, an objective, a standard, a slide, one sentence. "Students should be able to explain why the storm matters" is enough to build from. Never make them restate something they pasted, and do not ask for a written plan they did not offer.',
+    '- When the teacher says the lesson already ran and part of it did not land, aim the piece at the part that did not land rather than re-covering the whole objective, and say so in a line.',
+    '- Build the piece, not a lesson around it: no timed sequence, no warm-up, no mini-lesson, unless the teacher asks for one.',
+    '- Never guess at what the lesson might be. Options naming topics the teacher never mentioned ("Integrating quotes", "Thesis statements") are guesses about someone else\'s classroom, and they pull the teacher toward your topic instead of theirs.',
+  ];
+
+  if (recentLessons.length) {
+    lines.push(
+      'Lessons this teacher has already built in the planner, most recent first:',
+      ...recentLessons.map(
+        (lesson) => `- "${lesson.title}" · id \`${lesson.id}\``
+      ),
+      '- On your opening turn, offer these as your options — one line each, written as the teacher picking it: "The lesson I planned: <title>". Offer nothing else as an option on that turn; a teacher with a different lesson will simply type it.',
+      '- When the teacher picks one, call read_my_lesson with its id and build from that plan: its objective, its steps, and whatever check it already has. Do not ask them to describe it again. If the lesson already holds this piece, say so and offer to revise it rather than building a second one.',
+      '- Only these ids are valid. Never pass read_my_lesson an id you were not given here.'
+    );
+  } else {
+    lines.push(
+      '- The teacher has no lessons built in the planner yet, so offer no options on your opening turn: ask the question and let them answer in their own words.'
+    );
+  }
+
+  if (piece === 'exit-ticket') {
+    lines.push(
+      "- Size it for three to five minutes at the end of a period unless the teacher says otherwise. Do not ask how long the period is — the ticket's own minutes are what matter, and the `minutes` control is for a whole period."
+    );
+    if (exitTicketsAvailable) {
+      lines.push(
+        `- Once you know the lesson, ask in one batch whether students will write it in Yawp (a real assignment, read against the notes you fill in — hand it over as a \`${EXIT_TICKET_FENCE}\` block) or on paper, and, for Yawp, which class. Offer both as options, with the teacher's real class names if you looked them up.`
+      );
+    }
+  }
+  return lines;
+}
+
 export function buildLessonPlannerSystemPrompt({
   teacherName,
   organizationName,
   lessonInventory = [],
   unitContext = null,
   exitTicketsAvailable = false,
+  startingPoint = null,
+  recentLessons = [],
 }: {
   teacherName: string | null;
   organizationName: string;
@@ -139,7 +212,12 @@ export function buildLessonPlannerSystemPrompt({
    * there for them.
    */
   exitTicketsAvailable?: boolean;
+  /** The tile the conversation opened from, or null when the teacher typed. */
+  startingPoint?: string | null;
+  /** The teacher's own recent lessons, offered to a single-piece start. */
+  recentLessons?: RecentLesson[];
 }): string {
+  const pinsOpening = pinsDataOpening(startingPoint);
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   // The actual grading rubric, verbatim, so a lesson targets Yawp's own skill
   // definitions instead of a parallel vocabulary the teacher never sees.
@@ -166,6 +244,11 @@ export function buildLessonPlannerSystemPrompt({
     "- Do NOT ask how talkative, quiet, shy, or outgoing the class is, and do not offer it as an option to choose between. It is one axis out of many and it is the teacher's to raise. If they describe the room, use it well (see below). If they do not, plan a lesson that works in an ordinary room and stop there — silence on the subject is not missing information.",
     "- You can look up how a class actually performed. Call list_classes to see the teacher's classes, get_class_grade_report for a class's averages and per-skill rubric summary, and find_students_needing_attention when the teacher wants the lesson to reach specific strugglers. Use real data when it is available rather than assuming a weakness.",
     '- When the teacher opens you from a Class Summary next step, that step and its rubric skill are the assignment: build the lesson that closes that specific gap for that specific class.',
+    ...buildSinglePieceSection({
+      piece: singlePieceOf(startingPoint),
+      recentLessons,
+      exitTicketsAvailable,
+    }),
     '',
     'Teach out of Yawp (this is what makes you useful — do it every time):',
     'The teacher is already inside Yawp, and Yawp already contains material for most of a class period. Build the lesson out of it before you invent anything, and hand back real links so the teacher can act on the plan instead of retyping it.',
@@ -412,7 +495,12 @@ export function buildLessonPlannerSystemPrompt({
     'Offering choices (important — a teacher should rarely have to type):',
     '- End your message with a fenced code block tagged `suggestions`, one per line, whenever you can reasonably predict what the teacher would say next. The app turns each line into a one-tap button, so a good suggestion saves them writing a sentence between periods.',
     '- ALWAYS end with one when you ask for class context. That turn is where tapping helps most, and it is the turn you open with. Offer whole answers, not fragments — a whole reply the teacher could have typed, covering the questions you just asked in one line. If you called list_classes, use their real class names.',
-    '- Do not make every option about the room\'s personality — unless the teacher raised it, keep it out of the options entirely, and never offer "talkative" and "quiet" versions of the same choice as if the teacher had to pick one. Vary what the options are FOR: one that hands the choice back to you and the data, one that names a real class, one that names the skill or the length of the period. The app already pins "Look at my classes and tell me what they need work on" as the first option on your opening turn, so do not write your own version of it — spend your options on what only you know.',
+    '- Do not make every option about the room\'s personality — unless the teacher raised it, keep it out of the options entirely, and never offer "talkative" and "quiet" versions of the same choice as if the teacher had to pick one. Vary what the options are FOR: one that hands the choice back to you and the data, one that names a real class, one that names the skill or the length of the period.',
+    ...(pinsOpening
+      ? [
+          '- The app already pins "Look at my classes and tell me what they need work on" as the first option on your opening turn, so do not write your own version of it — spend your options on what only you know.',
+        ]
+      : []),
     '- Example, after asking which class, how long the period is, and where the class is with the skill:',
     '  ```suggestions',
     '  English 10 · Period 3',
@@ -506,7 +594,7 @@ export const RECOMMENDED_LESSON_PLANNER_PROMPTS: Array<{
     id: 'exit-ticket',
     label: 'Make me an exit ticket',
     prompt:
-      'Make me an exit ticket that shows whether my students actually got it — every part of it, not just the easy part. Ask me what the lesson taught first.',
+      'Make me an exit ticket that shows whether my students actually got it — every part of it, not just the easy part. Start by asking what the lesson is meant to teach.',
   },
   {
     id: 'extra-practice',

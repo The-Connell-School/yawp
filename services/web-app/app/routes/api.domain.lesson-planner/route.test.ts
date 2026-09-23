@@ -14,6 +14,7 @@ class AiRateLimitError extends Error {
 const prisma = {
   lessonPlanConversation: {
     findFirst: mock(),
+    findMany: mock(),
     create: mock(),
     update: mock(),
   },
@@ -61,6 +62,8 @@ mock.module('~/utils/ai-admission.server', () => ({
 }));
 
 const { action } = await import('./route');
+const { RECOMMENDED_LESSON_PLANNER_PROMPTS } =
+  await import('./build-system-prompt');
 
 afterAll(() => {
   mock.restore();
@@ -107,6 +110,7 @@ beforeEach(() => {
   reserveAiRequest.mockReset().mockResolvedValue(undefined);
   prisma.class.findMany.mockReset().mockResolvedValue([]);
   prisma.lessonPlanConversation.findFirst.mockReset();
+  prisma.lessonPlanConversation.findMany.mockReset().mockResolvedValue([]);
   prisma.lessonPlanConversation.create.mockReset();
   prisma.lessonPlanConversation.update.mockReset();
   prisma.lessonPlanMessage.create
@@ -930,5 +934,99 @@ describe('api.domain.lesson-planner action — the progress stream', () => {
     // Still one JSON body, not a stream.
     expect(response instanceof Response).toBe(false);
     expect(jsonResult(response).data.reply).toContain('Do the thing.');
+  });
+});
+
+describe('api.domain.lesson-planner action — where the teacher started', () => {
+  const exitTicketTile = RECOMMENDED_LESSON_PLANNER_PROMPTS.find(
+    (prompt) => prompt.id === 'exit-ticket'
+  )!.prompt;
+  const plan = '## Objective\n\nChoose the quote.\n\n## Closing\n\nTicket.';
+
+  test('an exit ticket tile opens on the teacher’s own lessons, not a guess', async () => {
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-new' });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+    prisma.lessonPlanConversation.findMany.mockResolvedValue([
+      {
+        id: 'plan-1',
+        title: 'Evidence that earns its place',
+        packetTitle: null,
+        messages: [{ content: plan }],
+      },
+    ]);
+    getLLMCompletion.mockResolvedValue('What is the lesson meant to teach?');
+
+    await action({ request: formRequest({ message: exitTicketTile }) } as any);
+
+    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    expect(system.toLowerCase()).toContain(
+      'do not assume the lesson has happened'
+    );
+    expect(system).toContain('Evidence that earns its place');
+    expect(
+      prisma.lessonPlanConversation.findMany.mock.calls[0][0].where.membershipId
+    ).toBe('teacher-1');
+  });
+
+  test('remembers the start on later turns, from the first thing the teacher sent', async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
+      id: 'plan-9',
+      unitId: null,
+      unitDay: null,
+      messages: [],
+      materials: [],
+    });
+    prisma.lessonPlanMessage.findFirst.mockResolvedValue({
+      content: exitTicketTile,
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+    getLLMCompletion.mockResolvedValue('ok');
+
+    await action({
+      request: formRequest({
+        message: 'It is for tomorrow — claim vs. evidence.',
+        conversationId: 'plan-9',
+      }),
+    } as any);
+
+    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    expect(system.toLowerCase()).toContain(
+      'do not assume the lesson has happened'
+    );
+    // The first teacher message is looked up in this conversation only.
+    expect(
+      prisma.lessonPlanMessage.findFirst.mock.calls[0][0].where
+    ).toMatchObject({ conversationId: 'plan-9', role: 'user' });
+  });
+
+  test('a lesson the teacher typed themselves reads no lesson list', async () => {
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-new' });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+    getLLMCompletion.mockResolvedValue('ok');
+
+    await action({
+      request: formRequest({ message: 'Lesson on conclusion paragraphs' }),
+    } as any);
+
+    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    expect(system.toLowerCase()).not.toContain(
+      'do not assume the lesson has happened'
+    );
+    expect(prisma.lessonPlanConversation.findMany).not.toHaveBeenCalled();
+  });
+
+  test('a failed lesson lookup never costs the teacher the turn', async () => {
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-new' });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+    prisma.lessonPlanConversation.findMany.mockRejectedValue(new Error('db'));
+    getLLMCompletion.mockResolvedValue('What is the lesson meant to teach?');
+
+    const response = await action({
+      request: formRequest({ message: exitTicketTile }),
+    } as any);
+
+    expect(jsonResult(response).data.reply).toBe(
+      'What is the lesson meant to teach?'
+    );
   });
 });

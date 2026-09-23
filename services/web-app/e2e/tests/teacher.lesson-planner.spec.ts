@@ -2918,4 +2918,66 @@ test.describe('YAWP! Lesson Planner', () => {
       page.getByRole('button', { name: /10th grade, 50 min, talkative/ })
     ).toBeVisible();
   });
+
+  test('opens an exit ticket on the teacher’s lesson, not on a guess', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const prisma = createE2EPrismaClient();
+    let conversationId: string;
+    try {
+      const conversation = await prisma.lessonPlanConversation.create({
+        data: {
+          membershipId: e2eContext.teacherMembershipId,
+          organizationId: e2eContext.organizationId,
+          title: 'Exit ticket',
+          messages: {
+            create: [
+              {
+                // Exactly the tile's words, which is how the app knows where
+                // the teacher started.
+                role: 'user',
+                content:
+                  'Make me an exit ticket that shows whether my students actually got it — every part of it, not just the easy part. Start by asking what the lesson is meant to teach.',
+                createdAt: new Date('2026-08-04T10:00:00.000Z'),
+              },
+              {
+                role: 'assistant',
+                content:
+                  'What is the lesson meant to teach? Paste your plan or tell me what students should walk out able to do.\n\n```suggestions\nThe lesson I planned: Evidence that earns its place\n```',
+                createdAt: new Date('2026-08-04T10:00:01.000Z'),
+              },
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      conversationId = conversation.id;
+    } finally {
+      await prisma.$disconnect();
+    }
+
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    await expect(
+      page.getByRole('button', {
+        name: /the lesson i planned: evidence that earns its place/i,
+      })
+    ).toBeVisible();
+    // The teacher asked for an exit ticket, not for what their class needs.
+    await expect(
+      page.getByRole('button', { name: /look at my classes/i })
+    ).toHaveCount(0);
+    // A question is nothing to file, least of all as a page students hold.
+    const reply = page.locator('[data-role="assistant"]').first();
+    await expect(
+      reply.getByRole('button', { name: /add all of this/i })
+    ).toHaveCount(0);
+    await expect(
+      reply.getByRole('button', { name: /add all as a handout/i })
+    ).toHaveCount(0);
+  });
 });

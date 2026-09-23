@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { splitReplyParts } from './reply-parts';
+import { splitReplyParts, worthKeeping } from './reply-parts';
 
 describe('splitReplyParts', () => {
   test('keeps a lesson in the order it was written', () => {
@@ -52,5 +52,70 @@ describe('splitReplyParts', () => {
     expect(parts[0]!.kind).toBe('material');
     if (parts[0]!.kind !== 'material') throw new Error('wrong part');
     expect(parts[0]!.material.key).toBe('0');
+  });
+});
+
+describe('worthKeeping', () => {
+  test('a question back to the teacher is nothing to put in a stack', () => {
+    // "Add all as a handout" under "What is the lesson meant to teach?" files
+    // a question as a page students hold.
+    const body =
+      'What is the lesson meant to teach? Paste your plan if you have one.';
+    expect(
+      worthKeeping({
+        parts: splitReplyParts(body),
+        hasDeck: false,
+        hasUnitMap: false,
+      })
+    ).toBe(false);
+  });
+
+  test('a plan with sections is worth keeping', () => {
+    const body = '## Warm-up (5 min)\n\nWrite.\n\n## Closing (5 min)\n\nShare.';
+    expect(
+      worthKeeping({
+        parts: splitReplyParts(body),
+        hasDeck: false,
+        hasUnitMap: false,
+      })
+    ).toBe(true);
+  });
+
+  test('a reply that hands over a piece is worth keeping, however short the prose', () => {
+    const body =
+      'Here it is.\n\n```yawp-material\nkind: exit-ticket\ntitle: Quote check\n---\nIntegrate this quote.\n```';
+    expect(
+      worthKeeping({
+        parts: splitReplyParts(body),
+        hasDeck: false,
+        hasUnitMap: false,
+      })
+    ).toBe(true);
+  });
+
+  test('a deck or a unit map is worth keeping', () => {
+    const parts = splitReplyParts('Here is the deck.');
+    expect(worthKeeping({ parts, hasDeck: true, hasUnitMap: false })).toBe(
+      true
+    );
+    expect(worthKeeping({ parts, hasDeck: false, hasUnitMap: true })).toBe(
+      true
+    );
+  });
+
+  test('a long answer in prose is still worth keeping', () => {
+    // A discussion protocol written as paragraphs is material, headings or not.
+    const body = Array.from(
+      { length: 8 },
+      () =>
+        'Pairs talk for two minutes, then each partner reports what the other said.'
+    ).join('\n\n');
+    expect(
+      worthKeeping({
+        parts: splitReplyParts(body),
+        hasDeck: false,
+        hasUnitMap: false,
+      })
+    ).toBe(true);
   });
 });

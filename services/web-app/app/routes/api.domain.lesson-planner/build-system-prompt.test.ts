@@ -1279,3 +1279,88 @@ describe('the Yawp exit ticket', () => {
     expect(without).toContain('exit-ticket');
   });
 });
+
+describe('RECOMMENDED_LESSON_PLANNER_PROMPTS — meeting teachers where they are', () => {
+  const byId = new Map(
+    RECOMMENDED_LESSON_PLANNER_PROMPTS.map((prompt) => [prompt.id, prompt])
+  );
+
+  test('the exit ticket tile does not assume the lesson has happened', () => {
+    // Most tickets are written before the class. "What did the lesson teach?"
+    // is a question a teacher planning for tomorrow cannot answer as asked.
+    const prompt = byId.get('exit-ticket')!.prompt.toLowerCase();
+    expect(prompt).toContain('meant to teach');
+    expect(prompt).not.toContain('taught');
+  });
+
+  test('no starter prompt puts the lesson in the past', () => {
+    for (const { prompt } of RECOMMENDED_LESSON_PLANNER_PROMPTS) {
+      expect(prompt.toLowerCase()).not.toMatch(
+        /\b(taught|what did|today's lesson|today’s lesson)\b/
+      );
+    }
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — a single piece, not a lesson', () => {
+  const recentLessons = [
+    { id: 'plan-1', title: 'Evidence that earns its place' },
+    { id: 'plan-2', title: 'Comma splices' },
+  ];
+
+  test('asks what the lesson is meant to teach, in no particular tense', () => {
+    const prompt = buildLessonPlannerSystemPrompt({
+      teacherName: null,
+      organizationName: 'Connell School',
+      startingPoint: 'exit-ticket',
+    });
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('meant to teach');
+    expect(lower).toContain('do not assume the lesson has happened');
+    // The teacher's own tense wins; the planner never sets it.
+    expect(lower).toContain("follow the teacher's tense");
+  });
+
+  test('offers the teacher’s own lessons by name, and reads the one they pick', () => {
+    const prompt = buildLessonPlannerSystemPrompt({
+      teacherName: null,
+      organizationName: 'Connell School',
+      startingPoint: 'exit-ticket',
+      recentLessons,
+    });
+    expect(prompt).toContain('Evidence that earns its place');
+    expect(prompt).toContain('`plan-1`');
+    expect(prompt).toContain('read_my_lesson');
+  });
+
+  test('never guesses at topics the teacher might be teaching', () => {
+    const prompt = buildLessonPlannerSystemPrompt({
+      teacherName: null,
+      organizationName: 'Connell School',
+      startingPoint: 'exit-ticket',
+    });
+    expect(prompt.toLowerCase()).toContain(
+      'never guess at what the lesson might be'
+    );
+  });
+
+  test('does not tell the model the data-driven option is pinned when it is not', () => {
+    const prompt = buildLessonPlannerSystemPrompt({
+      teacherName: null,
+      organizationName: 'Connell School',
+      startingPoint: 'exit-ticket',
+    });
+    expect(prompt).not.toContain('already pins "Look at my classes');
+  });
+
+  test('an ordinary lesson is unchanged', () => {
+    const prompt = buildLessonPlannerSystemPrompt({
+      teacherName: null,
+      organizationName: 'Connell School',
+      recentLessons,
+    });
+    expect(prompt.toLowerCase()).not.toContain('meant to teach');
+    expect(prompt).not.toContain('read_my_lesson');
+    expect(prompt).toContain('already pins "Look at my classes');
+  });
+});

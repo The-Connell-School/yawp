@@ -100,3 +100,33 @@ export function partsSummary(parts: ReplyPart[]): {
     hasHandout: materials.some((material) => material.audience === 'student'),
   };
 }
+
+/** Prose this long is material in its own right, headings or not. */
+const SUBSTANTIAL_PROSE_CHARS = 500;
+
+/**
+ * Whether a reply holds anything worth filing in the lesson's stack.
+ *
+ * "Add all of this" and "Add all as a handout" used to sit under every reply,
+ * including the planner's own questions — so the first thing a teacher saw
+ * under "What is the lesson meant to teach?" was an offer to print it for
+ * students.
+ */
+export function worthKeeping({
+  parts,
+  hasDeck,
+  hasUnitMap,
+}: {
+  parts: ReplyPart[];
+  hasDeck: boolean;
+  hasUnitMap: boolean;
+}): boolean {
+  if (hasDeck || hasUnitMap) return true;
+  if (parts.some((part) => part.kind !== 'markdown')) return true;
+  const prose = parts
+    .map((part) => (part.kind === 'markdown' ? part.text : ''))
+    .join('\n\n');
+  // Sections or a table: the shape of a plan, a handout, or notes.
+  if (/(^|\n)#{1,3}\s/.test(prose) || /\n\|.*\|/.test(prose)) return true;
+  return prose.length >= SUBSTANTIAL_PROSE_CHARS;
+}

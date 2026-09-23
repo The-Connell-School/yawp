@@ -28,7 +28,18 @@ import {
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { shouldRenameLesson } from '~/domain/lesson-planner/lesson-name';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
-import { buildLessonPlannerSystemPrompt } from './build-system-prompt';
+import {
+  buildLessonPlannerSystemPrompt,
+  RECOMMENDED_LESSON_PLANNER_PROMPTS,
+} from './build-system-prompt';
+import {
+  singlePieceOf,
+  startingPointOf,
+} from '~/domain/lesson-planner/starting-point';
+import {
+  loadRecentLessons,
+  type RecentLesson,
+} from '~/domain/lesson-planner/recent-lessons.server';
 import {
   describeProviderError,
   isProviderConfigurationError,
@@ -324,12 +335,49 @@ export async function action({ request }: ActionFunctionArgs) {
     (await findWritingExerciseTypeIds(ctx)).exitTicket
   );
 
+  // Which tile the lesson opened from, read off the first thing the teacher
+  // sent. History is bounded, so on a long conversation that message is looked
+  // up rather than assumed to still be in the window.
+  const firstTeacherMessage = activeConversation
+    ? ((
+        await prisma.lessonPlanMessage.findFirst({
+          where: { conversationId: activeConversation.id, role: 'user' },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { content: true },
+        })
+      )?.content ?? null)
+    : dayTarget
+      ? null
+      : turn.message;
+  const startingPoint = startingPointOf(
+    firstTeacherMessage,
+    RECOMMENDED_LESSON_PLANNER_PROMPTS
+  );
+
+  // A teacher asking for one piece usually has the lesson already, often one
+  // they built here. Offered by name so they can pick it rather than retype it.
+  // Only a nicety: a failed lookup plans without it.
+  let recentLessons: RecentLesson[] = [];
+  if (singlePieceOf(startingPoint)) {
+    try {
+      recentLessons = await loadRecentLessons({
+        db: prisma,
+        membershipId: ctx.membershipId,
+        excludeConversationId: activeConversation?.id ?? null,
+      });
+    } catch {
+      recentLessons = [];
+    }
+  }
+
   const system = buildLessonPlannerSystemPrompt({
     teacherName: null,
     organizationName: access.membership.organization.name,
     lessonInventory: conversation?.materials ?? [],
     unitContext,
     exitTicketsAvailable,
+    startingPoint,
+    recentLessons,
   });
 
   const messages: { role: AgentType; content: string; name?: string }[] = [

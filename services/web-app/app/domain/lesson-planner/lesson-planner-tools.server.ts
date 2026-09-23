@@ -29,6 +29,8 @@ import {
   readLoungeMaterial,
 } from './yawp-catalog.server';
 import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
+import { prisma } from '~/utils/db.server';
+import { readMyLesson, type MyLesson } from './recent-lessons.server';
 
 export type LessonPlannerToolContext = {
   /** The calling teacher's OrgMembership id. */
@@ -42,6 +44,10 @@ export type LessonPlannerToolDependencies = {
   listLounge: typeof listLoungeMaterials;
   listAssignmentTypes: typeof listAssignableTypes;
   readLounge: typeof readLoungeMaterial;
+  readMyLesson: (
+    ctx: LessonPlannerToolContext,
+    lessonId: string
+  ) => Promise<MyLesson>;
 };
 
 const productionDependencies: LessonPlannerToolDependencies = {
@@ -49,6 +55,8 @@ const productionDependencies: LessonPlannerToolDependencies = {
   listLounge: listLoungeMaterials,
   listAssignmentTypes: listAssignableTypes,
   readLounge: readLoungeMaterial,
+  readMyLesson: (ctx, lessonId) =>
+    readMyLesson({ db: prisma, membershipId: ctx.membershipId, lessonId }),
 };
 
 /**
@@ -226,6 +234,22 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
     },
   },
   {
+    name: 'read_my_lesson',
+    description:
+      "Read one of this teacher's own lessons from the planner: its latest plan (objective, steps, checks) and the pieces they filed with it. Use it when the teacher picks a lesson they already built, so the exit ticket, handout, practice, or deck is built from that plan instead of asking them to describe it again. Only lesson ids you were given in this conversation are valid.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        lessonId: {
+          type: 'string',
+          description: 'The id of the lesson, exactly as it was listed.',
+        },
+      },
+      required: ['lessonId'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'list_assignment_types',
     description:
       'List the assignment types this teacher can actually assign to a class (Daily Pages, the course essays their school has enabled). Use it to end a lesson on the real Yawp assignment the students will write.',
@@ -321,6 +345,10 @@ async function handleCatalogToolCall(
     }
     case 'list_assignment_types':
       return { assignmentTypes: await dependencies.listAssignmentTypes(ctx) };
+    case 'read_my_lesson': {
+      const lessonId = typeof input.lessonId === 'string' ? input.lessonId : '';
+      return dependencies.readMyLesson(ctx, lessonId);
+    }
     default:
       return undefined;
   }

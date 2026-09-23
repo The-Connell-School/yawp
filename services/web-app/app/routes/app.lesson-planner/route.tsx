@@ -46,6 +46,7 @@ import {
 import {
   partsSummary,
   splitReplyParts,
+  worthKeeping,
 } from '~/domain/lesson-planner/reply-parts';
 import { linkMaterialTitles } from '~/domain/lesson-planner/lesson-material';
 import { LessonResourceCard } from '~/components/ai-chat/lesson-resource-card';
@@ -60,6 +61,10 @@ import {
   withStandardSuggestions,
 } from '~/domain/lesson-planner/suggestions';
 import { loadLessonSeed } from '~/domain/lesson-planner/lesson-seed.server';
+import {
+  pinsDataOpening,
+  startingPointOf,
+} from '~/domain/lesson-planner/starting-point';
 import { LessonRail } from './lesson-rail';
 import { PromptTiles } from './prompt-tiles';
 import { useRotatingPlaceholder } from './rotating-placeholder';
@@ -615,6 +620,15 @@ export default function LessonPlannerRoute() {
   const firstAssistantIndex = messages.findIndex(
     (message) => message.role === 'assistant'
   );
+  // "Look at my classes and tell me what they need work on" is the first option
+  // only where the subject is still open. A teacher who tapped "Make me an exit
+  // ticket" came for something else.
+  const pinOpening = pinsDataOpening(
+    startingPointOf(
+      messages.find((message) => message.role === 'user')?.content,
+      recommendedPrompts
+    )
+  );
 
   return (
     <section className="flex h-full w-full">
@@ -746,6 +760,7 @@ export default function LessonPlannerRoute() {
                   message={message}
                   isLast={index === messages.length - 1}
                   isOpeningReply={index === firstAssistantIndex}
+                  pinOpening={pinOpening}
                   teacherRaisedRoomPersonality={teacherRaisedRoomPersonality}
                   addedMaterials={addedMaterials}
                   onMaterial={setMaterialAdded}
@@ -952,6 +967,7 @@ function MessageBubble({
   message,
   isLast,
   isOpeningReply,
+  pinOpening,
   teacherRaisedRoomPersonality,
   addedMaterials,
   onMaterial,
@@ -969,6 +985,8 @@ function MessageBubble({
   isLast: boolean;
   /** The planner's first reply in this lesson. */
   isOpeningReply: boolean;
+  /** Whether the opening reply pins the data-driven option. */
+  pinOpening: boolean;
   teacherRaisedRoomPersonality: boolean;
   /** "<messageId>:<blockKey>" for every material already in the packet. */
   addedMaterials: Set<string>;
@@ -1048,6 +1066,13 @@ function MessageBubble({
     },
     inPacket: lessonHas,
     asksForMinutes: asks.some((ask) => ask.kind === 'minutes'),
+    pinOpening,
+  });
+  // A question back to the teacher is nothing to file in the stack.
+  const keepable = worthKeeping({
+    parts,
+    hasDeck: deckOutcome.kind !== 'none',
+    hasUnitMap: unitOutcome.kind !== 'none',
   });
 
   return (
@@ -1172,7 +1197,7 @@ function MessageBubble({
           ) : null}
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          {message.id ? (
+          {message.id && (keepable || message.keptAudience) ? (
             message.keptAudience ? (
               <>
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">

@@ -217,6 +217,12 @@ export function withStandardSuggestions(
     inPacket = {},
     /** This reply drew the minutes slider, so it owns the question of length. */
     asksForMinutes = false,
+    /**
+     * Whether the opening turn pins the data-driven option. False when the
+     * teacher started from a tile that asked for something else — see
+     * `pinsDataOpening`.
+     */
+    pinOpening = true,
   }: {
     isOpeningReply: boolean;
     teacherRaisedRoomPersonality?: boolean;
@@ -224,6 +230,7 @@ export function withStandardSuggestions(
     produced?: ArtifactFlags;
     inPacket?: ArtifactFlags;
     asksForMinutes?: boolean;
+    pinOpening?: boolean;
   }
 ): string[] {
   const withoutRoom = teacherRaisedRoomPersonality
@@ -246,7 +253,7 @@ export function withStandardSuggestions(
   // reply. Pinning "look at my classes and tell me what they need work on"
   // after a finished plan reads as though nothing was just handed over — what
   // they want next is the deck and the handout.
-  if (isOpeningReply && !deliveredPlan) {
+  if (isOpeningReply && !deliveredPlan && pinOpening) {
     return [
       STANDARD_OPENING_SUGGESTION,
       ...deduped.filter(

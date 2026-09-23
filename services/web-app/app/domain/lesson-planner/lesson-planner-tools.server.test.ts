@@ -7,6 +7,7 @@ const handleReporterToolCall = mock();
 const listLoungeMaterials = mock();
 const listAssignableTypes = mock();
 const readLoungeMaterial = mock();
+const readMyLesson = mock();
 
 const {
   LESSON_PLANNER_TOOLS,
@@ -21,6 +22,7 @@ const dependencies = {
   listLounge: listLoungeMaterials,
   listAssignmentTypes: listAssignableTypes,
   readLounge: readLoungeMaterial,
+  readMyLesson,
 } as never;
 
 function callTool(
@@ -36,6 +38,7 @@ beforeEach(() => {
   listLoungeMaterials.mockReset().mockResolvedValue([]);
   listAssignableTypes.mockReset().mockResolvedValue([]);
   readLoungeMaterial.mockReset().mockResolvedValue({ error: 'not stubbed' });
+  readMyLesson.mockReset().mockResolvedValue({ error: 'not stubbed' });
 });
 
 /** One course, one module, one deck — enough to exercise the listing's note. */
@@ -320,5 +323,38 @@ describe('every tool the planner can call has something to say about it', () => 
     for (const name of LESSON_PLANNER_TOOL_NAMES) {
       expect(PLANNING_PROGRESS_LABELS[name]).toBeTruthy();
     }
+  });
+});
+
+describe('read_my_lesson', () => {
+  test('is offered, and reads nothing but the teacher’s own lessons', () => {
+    expect(LESSON_PLANNER_TOOL_NAMES).toContain('read_my_lesson');
+  });
+
+  test('opens the lesson the model asked for, under the teacher scope', async () => {
+    readMyLesson.mockResolvedValue({
+      id: 'plan-1',
+      title: 'Evidence that earns its place',
+      plan: '## Objective',
+      materials: [],
+    });
+
+    const result = JSON.parse(
+      await callTool('read_my_lesson', { lessonId: 'plan-1' })
+    );
+
+    expect(readMyLesson).toHaveBeenCalledWith(ctx, 'plan-1');
+    expect(result.title).toBe('Evidence that earns its place');
+    expect(result.plan).toBe('## Objective');
+  });
+
+  test('passes an unknown lesson back as an error to plan around', async () => {
+    readMyLesson.mockResolvedValue({
+      error: 'No lesson of yours with id "x".',
+    });
+    const result = JSON.parse(
+      await callTool('read_my_lesson', { lessonId: 'x' })
+    );
+    expect(result.error).toMatch(/no lesson/i);
   });
 });

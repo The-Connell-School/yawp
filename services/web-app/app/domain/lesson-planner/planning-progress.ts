@@ -62,6 +62,7 @@ export const PLANNING_PROGRESS_LABELS: Record<string, string> = {
   list_lounge_materials: "Looking through the Teacher's Lounge",
   read_lounge_material: 'Reading a Lounge deck',
   list_assignment_types: 'Checking what you can assign',
+  read_my_lesson: 'Reading the lesson you planned',
 };
 
 /**

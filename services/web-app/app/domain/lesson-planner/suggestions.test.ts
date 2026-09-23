@@ -319,3 +319,23 @@ describe('withStandardSuggestions — a plan on the very first reply', () => {
     ).toBe(STANDARD_OPENING_SUGGESTION);
   });
 });
+
+describe('withStandardSuggestions — a tile that asked for something else', () => {
+  test('leaves the data-driven option off when the start does not want it', () => {
+    // "Make me an exit ticket" is not a teacher asking what their class needs
+    // work on. Pinning it first answers a question nobody asked.
+    const suggestions = withStandardSuggestions(
+      ['The lesson I planned: Evidence that earns its place'],
+      { isOpeningReply: true, pinOpening: false }
+    );
+    expect(suggestions).toEqual([
+      'The lesson I planned: Evidence that earns its place',
+    ]);
+  });
+
+  test('still pins it by default, so existing callers are unchanged', () => {
+    expect(withStandardSuggestions([], { isOpeningReply: true })[0]).toBe(
+      STANDARD_OPENING_SUGGESTION
+    );
+  });
+});
