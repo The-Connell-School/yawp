@@ -5,7 +5,7 @@ import {
   type ActionFunctionArgs,
   Form,
 } from 'react-router';
-import { Link, useLoaderData, useNavigation } from 'react-router';
+import { Link, useLoaderData, useNavigation, useSearchParams } from 'react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -576,6 +576,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function AppAssignmentTypesIdRoute() {
   const user = useUser();
+  const [searchParams] = useSearchParams();
   const data = useLoaderData<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const hasModules = data.assignmentType.assignmentModules.length > 0;
@@ -606,6 +607,12 @@ export default function AppAssignmentTypesIdRoute() {
   const assignmentSheetClasses = isApHistoryAssignmentType
     ? (data.apHistoryLibrary?.teacherClasses ?? [])
     : data.teacherClasses;
+  const requestedClassId = searchParams.get('classId');
+  const initialApHistoryClassId = requestedClassId && assignmentSheetClasses.some(
+    (klass) => klass.id === requestedClassId
+  )
+    ? requestedClassId
+    : undefined;
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -664,6 +671,7 @@ export default function AppAssignmentTypesIdRoute() {
                   data.assignmentType.collaborationSupported
                 }
                 teacherClasses={assignmentSheetClasses}
+                initialClassId={initialApHistoryClassId}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}

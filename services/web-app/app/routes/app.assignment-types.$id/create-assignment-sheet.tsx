@@ -40,6 +40,7 @@ type Props = {
   /** Whether this kind of writing is in the collaborative-drafts pilot. */
   assignmentTypeCollaborationSupported?: boolean;
   teacherClasses: TeacherClass[];
+  initialClassId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialPrompt?: string;
@@ -68,6 +69,7 @@ export function CreateAssignmentSheet({
   assignmentTypeTitle,
   assignmentTypeCollaborationSupported = false,
   teacherClasses,
+  initialClassId,
   open,
   onOpenChange,
   initialPrompt = '',
@@ -76,7 +78,7 @@ export function CreateAssignmentSheet({
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   const [selectedClassId, setSelectedClassId] = useState(
-    teacherClasses[0]?.id ?? ''
+    initialClassId ?? teacherClasses[0]?.id ?? ''
   );
   const [title, setTitle] = useState('');
 
@@ -84,9 +86,9 @@ export function CreateAssignmentSheet({
 
   useEffect(() => {
     if (!open || !apHistoryEntry) return;
-    setSelectedClassId(teacherClasses[0]?.id ?? '');
+    setSelectedClassId(initialClassId ?? teacherClasses[0]?.id ?? '');
     setTitle('');
-  }, [open, teacherClasses, apHistoryEntry]);
+  }, [open, teacherClasses, apHistoryEntry, initialClassId]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {

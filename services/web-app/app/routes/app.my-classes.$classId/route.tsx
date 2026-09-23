@@ -1278,6 +1278,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title,
         collaborationSupported,
       })),
+    apHistoryAssignmentTypeId:
+      availableAssignmentTypes.find(
+        (assignmentType) =>
+          assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
+      )?.id ?? null,
     assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,
@@ -2101,6 +2106,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           }}
           assignments={managedAssignments}
           assignmentTypes={data.assignmentTypes}
+          apHistoryAssignmentTypeId={data.apHistoryAssignmentTypeId}
           classInsightsEnabled={classInsightsEnabled}
           onViewDocuments={handleViewAssignmentDocuments}
           onSelectAssignment={(assignmentId) =>

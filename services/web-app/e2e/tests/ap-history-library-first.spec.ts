@@ -31,8 +31,24 @@ test.describe.serial('AP History library-first assignment flow', () => {
       expect(e2eContext.apHistoryDbqEntryKey).toBe(dbqEntry.externalKey);
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto('/app');
+      await expect(
+        page.getByRole('link', { name: 'AP History Essay' })
+      ).toBeVisible();
+      await page
+        .getByRole('button', { name: 'New AP History Essay assignment' })
+        .click();
+      await expect(page).toHaveURL(
+        new RegExp(`/app/assignment-types/${e2eContext.apHistoryAssignmentTypeId}$`)
+      );
       await page.goto(
-        `/app/assignment-types/${e2eContext.apHistoryAssignmentTypeId}`
+        `/app/my-classes/${e2eContext.classId}?tab=assignments`
+      );
+      await page.getByRole('link', { name: 'AP History Essay' }).click();
+      await expect(page).toHaveURL(
+        new RegExp(
+          `/app/assignment-types/${e2eContext.apHistoryAssignmentTypeId}\\?classId=${e2eContext.classId}$`
+        )
       );
 
       await expect(

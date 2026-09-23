@@ -398,6 +398,7 @@ describe('class detail loader document visibility', () => {
     expect(data.assignmentTypes).toEqual([
       { id: 'generic-type', title: 'Generic Essay' },
     ]);
+    expect(data.apHistoryAssignmentTypeId).toBe('ap-history-type');
   });
 
   test('loads compact cross-class deployment details for assignments', async () => {

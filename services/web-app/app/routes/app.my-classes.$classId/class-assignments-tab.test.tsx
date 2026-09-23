@@ -126,6 +126,13 @@ afterEach(() => {
 });
 
 describe('ClassAssignmentsTab', () => {
+  it('offers the AP History prompt library when the class can use that assignment type', () => {
+    const el = renderTab({ apHistoryAssignmentTypeId: 'type-apush' });
+    const link = el.querySelector('a[href="/app/assignment-types/type-apush?classId=class-1"]');
+
+    expect(link?.textContent).toContain('AP History Essay');
+  });
+
   it('opens class-scoped creation and keeps the class-detail columns', () => {
     const el = renderTab();
 
