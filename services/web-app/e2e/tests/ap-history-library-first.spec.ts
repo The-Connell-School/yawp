@@ -221,12 +221,12 @@ test.describe.serial('AP History library-first assignment flow', () => {
       await expect(
         rightRail.getByRole('heading', { name: firstSource!.title })
       ).toBeVisible();
-      await rightRail.getByRole('button', { name: 'Comments' }).click();
+      await rightRail.getByRole('button', { name: 'Comments', exact: true }).click();
       await expect(
-        rightRail.getByRole('button', { name: 'Comments' })
+        rightRail.getByRole('button', { name: 'Comments', exact: true })
       ).toHaveAttribute('aria-pressed', 'true');
       await expect(
-        rightRail.getByRole('button', { name: 'Comments' })
+        rightRail.getByRole('button', { name: 'Comments', exact: true })
       ).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       await expect(rightRail.getByText('No comments yet.')).toBeVisible();
       await rightRail.getByRole('button', { name: 'Documents' }).click();
