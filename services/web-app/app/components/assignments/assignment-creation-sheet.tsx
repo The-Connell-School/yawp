@@ -1105,22 +1105,24 @@ export function AssignmentCreationSheetContent({
             Time students have to write
           </Label>
           <div className="mt-2 flex items-center gap-2">
-            <Input
-              id="assignment-create-writing-time"
-              name="writingTimeMinutes"
-              type="number"
-              inputMode="numeric"
-              min={MIN_WRITING_TIME_MINUTES}
-              max={MAX_WRITING_TIME_MINUTES}
-              step={1}
-              value={writingTime}
-              onChange={(event) => {
-                writingTimeTouchedRef.current = true;
-                setWritingTime(event.target.value);
-              }}
-              disabled={isSaving}
-              className="w-24"
-            />
+            {/* Input fills its container, so the container sets the width. */}
+            <div className="w-24 shrink-0">
+              <Input
+                id="assignment-create-writing-time"
+                name="writingTimeMinutes"
+                type="number"
+                inputMode="numeric"
+                min={MIN_WRITING_TIME_MINUTES}
+                max={MAX_WRITING_TIME_MINUTES}
+                step={1}
+                value={writingTime}
+                onChange={(event) => {
+                  writingTimeTouchedRef.current = true;
+                  setWritingTime(event.target.value);
+                }}
+                disabled={isSaving}
+              />
+            </div>
             <span className="text-sm text-muted-foreground">minutes</span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
