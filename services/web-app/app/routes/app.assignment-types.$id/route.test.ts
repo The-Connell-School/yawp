@@ -22,6 +22,7 @@ const prisma = {
   },
   apHistoryPromptLibraryEntry: {
     findMany: mock(),
+    findFirst: mock(),
   },
   savedThesisPrompt: {
     findMany: mock(),
@@ -100,9 +101,7 @@ function mockActionAssignmentTypeAvailable({
   systemKey = null as string | null,
 } = {}) {
   prisma.assignmentType.findFirst.mockImplementation(async (args: any) =>
-    args.select?.systemKey !== undefined
-      ? { id, systemKey }
-      : { id }
+    args.select?.systemKey !== undefined ? { id, systemKey } : { id }
   );
 }
 

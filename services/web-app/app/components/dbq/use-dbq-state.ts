@@ -3,13 +3,19 @@ import {
   type ChatMessage,
   type DbqPrompt,
   type DraftingPhase,
+  type MarkKind,
   type PlanningState,
   type SourceAnnotation,
+  type TextMark,
   type TimeMode,
   type View,
   emptyPlanning,
 } from './types';
-import { cannedTutorReply, detectFailureFlags, phaseTutorIntro } from './coaching';
+import {
+  cannedTutorReply,
+  detectFailureFlags,
+  phaseTutorIntro,
+} from './coaching';
 
 export type DbqState = {
   prompt: DbqPrompt;
@@ -26,6 +32,17 @@ export type DbqState = {
   annotations: SourceAnnotation[];
   addAnnotation: (sourceId: string, text: string) => void;
   removeAnnotation: (id: string) => void;
+  // Text-anchored marks (highlight / underline / comment).
+  marks: TextMark[];
+  addMark: (
+    sourceId: string,
+    kind: MarkKind,
+    start: number,
+    end: number,
+    quote: string
+  ) => string;
+  setMarkNote: (id: string, note: string) => void;
+  removeMark: (id: string) => void;
   // Timer.
   durationMinutes: number;
   msRemaining: number;
@@ -55,11 +72,14 @@ export function useDbqState(
   const submitOnTimerEnd = options.submitOnTimerEnd ?? true;
   const totalMs = durationMinutes * 60 * 1000;
   const [view, setView] = useState<View>('drafting');
-  const [timeMode, setTimeMode] = useState<TimeMode>(initialTimeMode ?? 'untimed');
+  const [timeMode, setTimeMode] = useState<TimeMode>(
+    initialTimeMode ?? 'untimed'
+  );
   const [phase, setPhase] = useState<DraftingPhase>('source-analysis');
   const [essay, setEssay] = useState('');
   const [planning, setPlanning] = useState<PlanningState>(emptyPlanning);
   const [annotations, setAnnotations] = useState<SourceAnnotation[]>([]);
+  const [marks, setMarks] = useState<TextMark[]>([]);
   const [msRemaining, setMsRemaining] = useState(totalMs);
   const [timerRunning, setTimerRunning] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
@@ -70,8 +90,7 @@ export function useDbqState(
       role: 'tutor',
       origin: 'seed',
       createdAt: Date.now(),
-      body:
-        "Hi! Take a few minutes to read each document on the left. The prompt asks you to evaluate the *extent* to which Reconstruction's goals were achieved by 1900 — watch for which sources point to legal wins and which point to social or political reversal. I'll check in as you draft. Ask me anything.",
+      body: "Hi! Take a few minutes to read each document on the left. The prompt asks you to evaluate the *extent* to which Reconstruction's goals were achieved by 1900 — watch for which sources point to legal wins and which point to social or political reversal. I'll check in as you draft. Ask me anything.",
     },
   ]);
   const firedDetectors = useRef<Set<string>>(new Set());
@@ -150,6 +169,41 @@ export function useDbqState(
     setAnnotations((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
+  const addMark = useCallback(
+    (
+      sourceId: string,
+      kind: MarkKind,
+      start: number,
+      end: number,
+      quote: string
+    ) => {
+      const id = makeId('mark');
+      setMarks((prev) => [
+        ...prev,
+        {
+          id,
+          sourceId,
+          kind,
+          start,
+          end,
+          quote,
+          note: '',
+          createdAt: Date.now(),
+        },
+      ]);
+      return id;
+    },
+    []
+  );
+
+  const setMarkNote = useCallback((id: string, note: string) => {
+    setMarks((prev) => prev.map((m) => (m.id === id ? { ...m, note } : m)));
+  }, []);
+
+  const removeMark = useCallback((id: string) => {
+    setMarks((prev) => prev.filter((m) => m.id !== id));
+  }, []);
+
   const startTimer = useCallback(() => setTimerRunning(true), []);
   const pauseTimer = useCallback(() => setTimerRunning(false), []);
   const resetTimer = useCallback(() => {
@@ -219,6 +273,10 @@ export function useDbqState(
       annotations,
       addAnnotation,
       removeAnnotation,
+      marks,
+      addMark,
+      setMarkNote,
+      removeMark,
       durationMinutes,
       msRemaining,
       timerRunning,
@@ -241,6 +299,10 @@ export function useDbqState(
       annotations,
       addAnnotation,
       removeAnnotation,
+      marks,
+      addMark,
+      setMarkNote,
+      removeMark,
       durationMinutes,
       msRemaining,
       timerRunning,

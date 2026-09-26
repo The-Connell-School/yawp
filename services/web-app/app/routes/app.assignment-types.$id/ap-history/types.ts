@@ -8,11 +8,13 @@ export type ApPromptSource = {
   mediaType?: string;
   imageUrl?: string | null;
   imageAlt?: string | null;
+  provenanceUrl?: string | null;
 };
 
 export type ApPrompt = {
   externalKey: string;
   title: string;
+  course: string;
   essayType: string;
   period: string;
   periodNumber: number;
@@ -24,6 +26,7 @@ export type ApPrompt = {
 
 export const AP_FACET_KEYS = {
   search: 'q',
+  course: 'course',
   essayType: 'essayType',
   reasoningSkill: 'reasoningSkill',
   difficulty: 'difficulty',
@@ -34,24 +37,34 @@ export const ESSAY_TYPE_LABEL: Record<string, string> = {
   leq: 'LEQ',
 };
 
-export const PERIOD_LABEL: Record<string, string> = {
-  ush: 'AP U.S. History',
-  eur: 'AP European History',
-  wld: 'AP World History',
+// Canonical AP history courses. The library only carries US History prompts
+// today, but the course facet always offers all three so teachers can filter
+// (and see what is coming) before Euro and World prompts are added.
+export const COURSE_LABEL: Record<string, string> = {
+  apush: 'AP US History',
+  euro: 'AP Euro',
+  world: 'AP World',
 };
+
+export const COURSE_ORDER = ['apush', 'euro', 'world'] as const;
 
 export const REASONING_SKILL_LABEL: Record<string, string> = {
   causation: 'Causation',
   comparison: 'Comparison',
+  'continuity-and-change': 'Continuity & Change',
   ccot: 'Continuity & Change',
   periodization: 'Periodization',
 };
 
+// Difficulty describes where in the school year a prompt fits. All three
+// buckets are always offered as filter options, in this order.
 export const DIFFICULTY_LABEL: Record<string, string> = {
-  intro: 'Intro',
-  'mid-year': 'Mid-Year',
-  'exam-ready': 'Exam-Ready',
+  intro: 'Beginning of year',
+  'mid-year': 'Mid-year',
+  'exam-ready': 'Exam-ready',
 };
+
+export const DIFFICULTY_ORDER = ['intro', 'mid-year', 'exam-ready'] as const;
 
 export const APUSH_PERIOD_LABEL: Record<number, string> = {
   2: 'Period 2: 1607–1754',

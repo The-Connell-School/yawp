@@ -4,6 +4,8 @@ import { createE2EPrismaClient, type E2EPrismaClient } from './prisma-client';
 import { currentSchoolYear } from '../app/utils/school-year';
 import { createDeployedAssignment } from './db-helpers';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
+import { AP_HISTORY_SEED_MODULES } from '../../../packages/prisma/scripts/ap-history-module-data';
+import { UNIVERSAL_TUTOR_BLOCK } from '../../../packages/prisma/scripts/universal-tutor-block';
 import bcrypt from 'bcryptjs';
 import { E2E_UA_ORGANIZATION_ID } from './constants';
 
@@ -88,7 +90,6 @@ export type E2EContext = {
   /** Student-owned document on that assignment type. */
   imageUploadDocumentId: string;
   apHistoryDbqEntryKey: string;
-  apHistoryLeqEntryKey: string;
   assignmentId: string;
   classAssignmentId: string;
   teacherTrainingId: string;
@@ -507,12 +508,9 @@ export async function seedE2E(): Promise<E2EContext> {
   const apHistoryDbqEntry = AP_HISTORY_LIBRARY_ENTRIES.find(
     (entry) => entry.essayType === 'dbq'
   );
-  const apHistoryLeqEntry = AP_HISTORY_LIBRARY_ENTRIES.find(
-    (entry) => entry.essayType === 'leq'
-  );
 
-  if (!apHistoryDbqEntry || !apHistoryLeqEntry) {
-    throw new Error('E2E AP History seed requires both DBQ and LEQ entries.');
+  if (!apHistoryDbqEntry) {
+    throw new Error('E2E AP History seed requires a DBQ entry.');
   }
 
   const apHistoryAssignmentType = await prisma.assignmentType.create({
@@ -521,29 +519,23 @@ export async function seedE2E(): Promise<E2EContext> {
       systemKey: 'ap_history_essay',
       description: 'Curated APUSH DBQ and LEQ practice.',
       position: 3,
+      tutorInstructions: UNIVERSAL_TUTOR_BLOCK,
       ownerOrgId: org.id,
       organizationAssignments: {
         create: { organizationId: org.id },
       },
       assignmentModules: {
-        create: [
-          {
-            title: 'AP History Essay',
-            position: 1,
-            description: 'Write an APUSH DBQ or LEQ with AP-specific coaching.',
-            instructions: {
-              create: [
-                {
-                  title: 'Write',
-                  prompt:
-                    'Use the selected APUSH prompt and source panel to draft your response.',
-                  position: 1,
-                  showChatButton: true,
-                },
-              ],
-            },
+        create: AP_HISTORY_SEED_MODULES.map((moduleData) => ({
+          title: moduleData.title,
+          position: moduleData.position,
+          description: moduleData.description,
+          tutorInstructions: moduleData.tutorInstructions,
+          tutorInstructionsVariantsJson:
+            moduleData.tutorInstructionsVariantsJson,
+          instructions: {
+            create: moduleData.instructions,
           },
-        ],
+        })),
       },
       apHistoryLibraryEntries: {
         create: AP_HISTORY_LIBRARY_ENTRIES.map((entry) => ({
@@ -995,7 +987,6 @@ export async function seedE2E(): Promise<E2EContext> {
     imageUploadAssignmentTypeId: imageUploadAssignmentType.id,
     imageUploadDocumentId: imageUploadDoc.id,
     apHistoryDbqEntryKey: apHistoryDbqEntry.externalKey,
-    apHistoryLeqEntryKey: apHistoryLeqEntry.externalKey,
     assignmentId: seededAssignment.id,
     classAssignmentId: seededClassAssignment.id,
     teacherTrainingId: teacherTraining.id,

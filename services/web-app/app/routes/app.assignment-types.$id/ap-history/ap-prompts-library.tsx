@@ -20,8 +20,11 @@ import {
   type ApPrompt,
   AP_FACET_KEYS,
   ESSAY_TYPE_LABEL,
+  COURSE_LABEL,
+  COURSE_ORDER,
   REASONING_SKILL_LABEL,
   DIFFICULTY_LABEL,
+  DIFFICULTY_ORDER,
   APUSH_PERIOD_LABEL,
 } from './types';
 
@@ -39,15 +42,22 @@ type FacetSpec = {
 function buildFacetSpecs(prompts: ApPrompt[]): FacetSpec[] {
   const essayTypes = new Set<string>();
   const reasoningSkills = new Set<string>();
-  const difficulties = new Set<string>();
 
   for (const p of prompts) {
     essayTypes.add(p.essayType);
     reasoningSkills.add(p.reasoningSkill);
-    if (p.difficulty) difficulties.add(p.difficulty);
   }
 
   const specs: FacetSpec[] = [];
+
+  // Course is a fixed taxonomy: always offer all three AP history courses so
+  // teachers can filter for US History, Euro, and World even before the
+  // Euro/World prompts are added.
+  specs.push({
+    paramKey: AP_FACET_KEYS.course,
+    title: 'Course',
+    options: COURSE_ORDER.map((v) => ({ value: v, label: COURSE_LABEL[v] ?? v })),
+  });
 
   if (essayTypes.size > 1) {
     specs.push({
@@ -71,16 +81,15 @@ function buildFacetSpecs(prompts: ApPrompt[]): FacetSpec[] {
     });
   }
 
-  if (difficulties.size > 0) {
-    const order = ['intro', 'mid-year', 'exam-ready'];
-    specs.push({
-      paramKey: AP_FACET_KEYS.difficulty,
-      title: 'Difficulty',
-      options: order
-        .filter((d) => difficulties.has(d))
-        .map((v) => ({ value: v, label: DIFFICULTY_LABEL[v] ?? v })),
-    });
-  }
+  // Difficulty is a fixed taxonomy: always offer all three buckets in order.
+  specs.push({
+    paramKey: AP_FACET_KEYS.difficulty,
+    title: 'Difficulty',
+    options: DIFFICULTY_ORDER.map((v) => ({
+      value: v,
+      label: DIFFICULTY_LABEL[v] ?? v,
+    })),
+  });
 
   return specs;
 }
@@ -93,11 +102,13 @@ function applyFilters(
     new Set(params.get(key)?.split(',').filter(Boolean) ?? []);
 
   const q = (params.get(AP_FACET_KEYS.search) ?? '').trim().toLowerCase();
+  const course = readSet(AP_FACET_KEYS.course);
   const essayType = readSet(AP_FACET_KEYS.essayType);
   const reasoningSkill = readSet(AP_FACET_KEYS.reasoningSkill);
   const difficulty = readSet(AP_FACET_KEYS.difficulty);
 
   return prompts.filter((p) => {
+    if (course.size && !course.has(p.course)) return false;
     if (essayType.size && !essayType.has(p.essayType)) return false;
     if (reasoningSkill.size && !reasoningSkill.has(p.reasoningSkill))
       return false;
@@ -386,12 +397,14 @@ function ApPromptRow({
           <span className="rounded bg-foreground/[0.06] px-1.5 py-0.5 font-medium">
             {ESSAY_TYPE_LABEL[prompt.essayType] ?? prompt.essayType}
           </span>
-          {prompt.periodNumber ? (
+          {prompt.period || prompt.periodNumber ? (
             <>
               <span aria-hidden>·</span>
               <span>
-                {APUSH_PERIOD_LABEL[prompt.periodNumber] ??
-                  `Period ${prompt.periodNumber}`}
+                {prompt.course === 'apush'
+                  ? (APUSH_PERIOD_LABEL[prompt.periodNumber] ??
+                    `Period ${prompt.periodNumber}`)
+                  : prompt.period}
               </span>
             </>
           ) : null}

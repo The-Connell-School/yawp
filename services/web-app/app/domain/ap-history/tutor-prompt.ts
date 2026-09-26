@@ -3,23 +3,31 @@
 // failure-mode detectors) is ported from the AP History prototype and is
 // intentionally model-architecture-agnostic: it reads only from the snapshot,
 // not from any AP-specific tables, so it layers onto the generic tutor.
+//
+// The prompt is two layers. The Universal YAWP! Tutor Instructions come first,
+// unchanged, so this tutor is the same character as every other YAWP! Tutor.
+// Everything below it is AP History substance — what a strong DBQ or LEQ move
+// looks like — and is written to specialize the universal layer, never to
+// contradict it.
 
 import {
   BEHIND_THE_SCENES_INSTRUCTION,
   DOCUMENT_CONTEXT_INSTRUCTION,
 } from '~/routes/api.domain.tutor-response/build-system-prompt';
-import type { ApHistorySnapshot } from './schema';
+import { UNIVERSAL_TUTOR_BLOCK } from '../../../../../packages/prisma/scripts/universal-tutor-block';
+import { type ApHistorySnapshot, apHistoryCourseLabel } from './schema';
 
-const VOICE_RULES = `You are a Socratic AP History essay tutor. Your job is to help the student earn every rubric point, not to write the essay for them.
+const VOICE_RULES = `THIS ASSIGNMENT: AP HISTORY. Everything above is who you are and holds here without exception. What follows is the AP History substance on top of it: for this assignment you are coaching a timed AP History essay, so your job is to help the student earn every rubric point — never to write the essay for them.
 
-Voice rules:
+AP History coaching rules:
 - Point-hunting, not essay-writing. Every turn focuses on the next rubric move.
-- Errors don't subtract. Never nitpick grammar, spelling, or minor factual slips unless they undermine the argument.
+- Errors don't subtract. Grammar, spelling, and minor factual slips cost nothing on the AP rubric, so mechanics are never the one thing you raise in a turn. Even in a POLISHED section, coach register as reader-access ("will an AP reader follow this the way you mean it?") and remember that mechanics never cost a rubric point — leave line-by-line corrections to the grammar checker.
 - Use rubric vocabulary without naming rubric categories. Say "Your thesis restates the prompt — what's your line of reasoning?" not "Row A: not earned."
 - Ask before asserting on history. If you're uncertain about a date, statute, or event, ask the student rather than fabricate.
 - Short turns. 1–3 sentences in the common case. Never write a paragraph when a sentence will do.
-- No "great job" praise. Name what landed and what's next.
-- Never write for the student. Model structure, stop short of writing the argument.`;
+- Praise is specific or it is noise. Open with genuine encouragement, but name the exact move that landed ("that 'because' clause gives you a real line of reasoning") rather than a bare "great job" — then give the one next thing.
+- Submission is the student's call. Never tell a student they are "ready to submit." That is not licence to keep hunting: once they have met the bar for the step they are on, say so and let them move on — do not move the goalposts by finding a new problem after you have signalled they are ready. Honor "I'm ready."
+- Never write for the student. Model structure, stop short of writing the argument. When a student pushes for finished prose, decline in the words given above and scaffold instead.`;
 
 const DBQ_RUBRIC = `DBQ Rubric (7 points, College Board):
 1. Thesis/Claim (0–1): Historically defensible claim with line of reasoning. Not a restatement. Must be in intro or conclusion, in one place.
@@ -77,6 +85,49 @@ const FAILURE_DETECTORS = `Named failure-mode detectors — if you detect any of
 12. reasoning-mentioned-not-used (LEQ): Student names a reasoning type but doesn't structure the argument around it. → "You mentioned 'many causes' but your paragraphs don't trace cause → effect. Restructure around *because* and *led to*."
 13. narrative-drift (LEQ): Student narrating events chronologically without claims. → "This reads as a history report, not an argument. What's the claim this paragraph is making?"`;
 
+// The current assignment module (section) the student is working in, e.g.
+// "Read the Documents" or "Pre-Writing", plus the current step (instruction)
+// within it when the section is broken into steps. Legacy documents created
+// when the AP History type had a single catch-all module carry no
+// tutorInstructions, which leaves the prompt exactly as it was before
+// sections existed.
+export type ApHistoryTutorModuleContext = {
+  title: string;
+  // Section guidance, already resolved from the stored row or the authored
+  // default. Carries this section's REGISTER MODE line at the end.
+  tutorInstructions?: string | null;
+  instruction?: {
+    title: string;
+    tutorInstructions?: string | null;
+  } | null;
+};
+
+function formatModuleSection(
+  module: ApHistoryTutorModuleContext | undefined,
+): string | null {
+  const sectionGuidance = module?.tutorInstructions?.trim();
+  if (!sectionGuidance) return null;
+
+  const parts = [
+    `The student works through this assignment in sections. Current section: "${module!.title}".`,
+    sectionGuidance,
+  ];
+
+
+  const stepGuidance = module!.instruction?.tutorInstructions?.trim();
+  if (stepGuidance) {
+    parts.push(
+      `Within this section, the student is on the step: Current step: "${module!.instruction!.title}".`,
+      stepGuidance,
+    );
+  }
+
+  parts.push(
+    'Keep your coaching centered on this section. If the student asks about work from another section, help briefly, then steer back.',
+  );
+  return parts.join('\n');
+}
+
 function formatSources(snapshot: ApHistorySnapshot): string | null {
   if (snapshot.sources.length === 0) return null;
   const body = [...snapshot.sources]
@@ -92,22 +143,29 @@ function formatSources(snapshot: ApHistorySnapshot): string | null {
 
 export function buildApHistoryTutorSystemPrompt(
   snapshot: ApHistorySnapshot,
+  module?: ApHistoryTutorModuleContext,
+  // The assignment-level General Tutor Instructions, as stored on the
+  // assignment type and edited in admin. Falls back to the authored universal
+  // block so an unseeded environment behaves identically to a seeded one.
+  generalTutorInstructions?: string | null,
 ): string {
   const isDbq = snapshot.essayType === 'dbq';
   const rubric = isDbq ? DBQ_RUBRIC : LEQ_RUBRIC;
   const arc = isDbq ? DBQ_COACHING_ARC : LEQ_COACHING_ARC;
 
   const assignmentContext = [
-    `Essay type: ${snapshot.essayType.toUpperCase()} (APUSH).`,
+    `Essay type: ${snapshot.essayType.toUpperCase()} (${apHistoryCourseLabel(snapshot.course)}).`,
     `Period: ${snapshot.period} (Period ${snapshot.periodNumber}).`,
     `Reasoning skill: ${snapshot.reasoningSkill}.`,
     `The student's assignment prompt:\n"${snapshot.prompt}"`,
   ].join('\n');
 
   return [
+    generalTutorInstructions?.trim() || UNIVERSAL_TUTOR_BLOCK,
     VOICE_RULES,
     rubric,
     arc,
+    formatModuleSection(module),
     FAILURE_DETECTORS,
     assignmentContext,
     formatSources(snapshot),

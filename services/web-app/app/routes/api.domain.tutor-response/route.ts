@@ -19,6 +19,14 @@ import {
 } from './build-system-prompt';
 import { isApHistorySnapshot } from '~/domain/ap-history/schema';
 import { buildApHistoryTutorSystemPrompt } from '~/domain/ap-history/tutor-prompt';
+import {
+  resolveApHistorySectionTutorInstructions,
+  resolveApHistoryStepTutorInstructions,
+} from '../../../../../packages/prisma/scripts/ap-history-module-data';
+import {
+  readTutorInstructionVariant,
+  resolveTutorInstructions,
+} from '~/domain/tutor/tutor-instructions-source';
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { normalizeModuleRubricAlignment } from '~/domain/assignment-types/assignment-type-rubric-config';
 import {
@@ -125,6 +133,10 @@ export async function action({ request }: ActionFunctionArgs) {
                 id: true,
                 gradingAssistantVersion: true,
                 rubricJson: true,
+                // The assignment-level General Tutor Instructions, edited in
+                // admin. Empty on assignment types that have not been seeded
+                // or configured, which falls back to the authored default.
+                tutorInstructions: true,
               },
             },
           },
@@ -134,6 +146,7 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             text: true,
+            apHistorySnapshot: true,
             assignment: {
               select: {
                 id: true,
@@ -182,10 +195,56 @@ export async function action({ request }: ActionFunctionArgs) {
     // AP History assignments carry an immutable snapshot; when present, the
     // tutor coaches against the AP rubric/sources instead of the generic
     // assignment-type tutor instructions.
-    const apHistorySnapshot = cms.document.assignment?.apHistorySnapshot;
+    const apHistorySnapshot =
+      cms.document.apHistorySnapshot ??
+      cms.document.assignment?.apHistorySnapshot;
+    // DBQ and LEQ get separately authored coaching. The shared DB module stores
+    // one representative variant; select the variant matching this document's
+    // essay type, falling back to the stored value for legacy/uncanonical
+    // modules that have no essay-type-specific guidance.
+    // Every tutor prompt layer prefers what admin has stored over the
+    // code-authored default, so an admin edit takes effect without a deploy.
+    // Seeds write the authored defaults into those rows, so this reads the
+    // same text either way until somebody actually changes something.
     const system = isApHistorySnapshot(apHistorySnapshot)
-      ? buildApHistoryTutorSystemPrompt(apHistorySnapshot)
+      ? buildApHistoryTutorSystemPrompt(
+          apHistorySnapshot,
+          {
+            title: cms.assignmentModule.title,
+            tutorInstructions: resolveTutorInstructions(
+              readTutorInstructionVariant(
+                cms.assignmentModule.tutorInstructionsVariantsJson,
+                apHistorySnapshot.essayType
+              ),
+              resolveApHistorySectionTutorInstructions(
+                apHistorySnapshot.essayType,
+                cms.assignmentModule.title
+              ),
+              // Legacy single-module documents have no canonical guidance and
+              // no variants; their stored single string is all there is.
+              cms.assignmentModule.tutorInstructions
+            ),
+            instruction: {
+              title: instruction.title,
+              tutorInstructions: resolveTutorInstructions(
+                readTutorInstructionVariant(
+                  instruction.tutorInstructionsVariantsJson,
+                  apHistorySnapshot.essayType
+                ),
+                resolveApHistoryStepTutorInstructions(
+                  apHistorySnapshot.essayType,
+                  cms.assignmentModule.title,
+                  instruction.title
+                ),
+                instruction.tutorInstructions
+              ),
+            },
+          },
+          cms.assignmentModule.assignmentType?.tutorInstructions
+        )
       : buildTutorSystemPromptBlocks({
+          generalTutorInstructions:
+            cms.assignmentModule.assignmentType?.tutorInstructions,
           tutorInstructions: cms.assignmentModule.tutorInstructions,
           instructionTutorInstructions: instruction.tutorInstructions,
           moduleRubricGuidance,
@@ -210,7 +269,9 @@ export async function action({ request }: ActionFunctionArgs) {
         moduleRubric.categories.length > 0 ? 'assignment-type' : 'missing',
       assignmentTypeGradingVersion:
         cms.assignmentModule.assignmentType?.gradingAssistantVersion ?? null,
-      rubricCategoryKeys: moduleRubric.categories.map((category) => category.key),
+      rubricCategoryKeys: moduleRubric.categories.map(
+        (category) => category.key
+      ),
     });
 
     const currentMessages = cms.messages.map((m) => ({

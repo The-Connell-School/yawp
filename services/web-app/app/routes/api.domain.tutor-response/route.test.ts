@@ -37,6 +37,7 @@ mock.module('~/utils/getLLMCompletion', () => ({
 const { LlmFallbackRetrySignal } = await import(
   '~/utils/getLLMCompletion/llm-provider-errors.server'
 );
+const { buildApHistorySnapshot } = await import('~/domain/ap-history/schema');
 const { action } = await import('./route');
 
 describe('api.domain.tutor-response read-only impersonation', () => {
@@ -281,6 +282,274 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         }),
       })
     );
+  });
+
+  test('AP History sessions coach against the current section (module)', async () => {
+    getLLMCompletion.mockResolvedValue('Which documents group together?');
+    const apHistorySnapshot = buildApHistorySnapshot({
+      externalKey: 'apush-dbq-new-deal-federal-power',
+      course: 'apush',
+      essayType: 'dbq',
+      prompt:
+        'Evaluate the extent to which the New Deal changed federal power.',
+      period: '1932-1980',
+      periodNumber: 7,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [
+        {
+          externalKey: 'apush-dbq-new-deal-federal-power-doc-1',
+          position: 1,
+          title: 'Document 1',
+          attribution: 'Franklin D. Roosevelt, first inaugural address, 1933',
+          body: 'This Nation asks for action, and action now.',
+          caption: null,
+          mediaType: 'text',
+          imageUrl: null,
+          imageAlt: null,
+          provenanceUrl: null,
+        },
+      ],
+    });
+    prisma.assignmentModuleSession.findFirst.mockResolvedValueOnce({
+      id: 'cms-1',
+      instructionsCompleted: 0,
+      assignmentModule: {
+        title: 'Read the Documents',
+        tutorInstructions:
+          'Coach source analysis and document groupings; hold off on drafting.',
+        rubricAlignmentJson: null,
+        assignmentType: {
+          id: 'assignment-type-1',
+          gradingAssistantVersion: 1,
+          rubricJson: null,
+        },
+        instructions: [
+          {
+            id: 'instruction-1',
+            title: 'Analyze the sources',
+            tutorInstructions:
+              'Build a working sense of each document before drafting.',
+          },
+        ],
+      },
+      messages: [],
+      document: {
+        id: 'doc-1',
+        text: 'Original draft',
+        apHistorySnapshot,
+      },
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Where do I start?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    expect(completionArgs.system).toContain('DBQ Rubric (7 points');
+    expect(completionArgs.system).toContain(
+      'Current section: "Read the Documents"'
+    );
+    // The shared DB module stores a representative variant, but the route
+    // selects the DBQ-specific section guidance for this DBQ document.
+    expect(completionArgs.system).toContain('HIPP angle');
+    expect(completionArgs.system).not.toContain('no documents on an LEQ');
+    expect(completionArgs.system).toContain(
+      'Current step: "Analyze the sources"'
+    );
+    // This step has no canonical step-level guidance, so the stored value is
+    // used as a fallback.
+    expect(completionArgs.system).toContain(
+      'Build a working sense of each document before drafting.'
+    );
+    // The universal YAWP! Tutor character rides at the top of every AP History
+    // prompt, and the section's register mode resolves from its title.
+    expect(completionArgs.system).toContain('You are the YAWP! Tutor');
+    expect(completionArgs.system).toContain(
+      'REGISTER MODE FOR THIS MODULE: DRAFTING'
+    );
+    expect(completionArgs.system).not.toContain(
+      'REGISTER MODE FOR THIS MODULE: POLISHED'
+    );
+  });
+
+  test('AP History prompts prefer what an admin stored over the code defaults', async () => {
+    getLLMCompletion.mockResolvedValue('Which documents group together?');
+    const apHistorySnapshot = buildApHistorySnapshot({
+      externalKey: 'apush-dbq-new-deal-federal-power',
+      course: 'apush',
+      essayType: 'dbq',
+      prompt:
+        'Evaluate the extent to which the New Deal changed federal power.',
+      period: '1932-1980',
+      periodNumber: 7,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [],
+    });
+    prisma.assignmentModuleSession.findFirst.mockResolvedValueOnce({
+      id: 'cms-1',
+      instructionsCompleted: 0,
+      assignmentModule: {
+        title: 'Read the Documents',
+        tutorInstructions: 'Legacy single-string guidance.',
+        // Edited in admin: both essay types, stored per variant.
+        tutorInstructionsVariantsJson: {
+          dbq: 'ADMIN DBQ SECTION GUIDANCE.',
+          leq: 'ADMIN LEQ SECTION GUIDANCE.',
+        },
+        rubricAlignmentJson: null,
+        assignmentType: {
+          id: 'assignment-type-1',
+          gradingAssistantVersion: 1,
+          rubricJson: null,
+          tutorInstructions: 'ADMIN GENERAL TUTOR INSTRUCTIONS.',
+        },
+        instructions: [
+          {
+            id: 'instruction-1',
+            title: 'Analyze the sources',
+            tutorInstructions: null,
+            tutorInstructionsVariantsJson: {
+              dbq: 'ADMIN DBQ STEP GUIDANCE.',
+              leq: 'ADMIN LEQ STEP GUIDANCE.',
+            },
+          },
+        ],
+      },
+      messages: [],
+      document: { id: 'doc-1', text: 'Original draft', apHistorySnapshot },
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Where do I start?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    // All three layers come from the database.
+    expect(completionArgs.system.startsWith('ADMIN GENERAL TUTOR INSTRUCTIONS.')).toBe(
+      true
+    );
+    expect(completionArgs.system).toContain('ADMIN DBQ SECTION GUIDANCE.');
+    expect(completionArgs.system).toContain('ADMIN DBQ STEP GUIDANCE.');
+    // The stored LEQ variants are not leaked into a DBQ document, and the code
+    // defaults and legacy string are both superseded.
+    expect(completionArgs.system).not.toContain('ADMIN LEQ');
+    expect(completionArgs.system).not.toContain('Legacy single-string guidance.');
+    expect(completionArgs.system).not.toContain('You are the YAWP! Tutor');
+    expect(completionArgs.system).not.toContain('HIPP angle');
+    // AP History substance still comes from code.
+    expect(completionArgs.system).toContain('DBQ Rubric (7 points');
+  });
+
+  test('AP History LEQ sessions get LEQ-specific section coaching, not the DBQ playbook', async () => {
+    getLLMCompletion.mockResolvedValue('What evidence supports that claim?');
+    const apHistorySnapshot = buildApHistorySnapshot({
+      externalKey: 'apush-leq-market-revolution',
+      course: 'apush',
+      essayType: 'leq',
+      prompt:
+        'Evaluate the extent to which the Market Revolution transformed society.',
+      period: '1815-1848',
+      periodNumber: 4,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 40,
+      sources: [],
+    });
+    prisma.assignmentModuleSession.findFirst.mockResolvedValueOnce({
+      id: 'cms-1',
+      instructionsCompleted: 0,
+      assignmentModule: {
+        // The shared DB module stores the default (DBQ) variant; the route must
+        // still coach this LEQ document with LEQ-specific guidance.
+        title: 'Read the Documents',
+        tutorInstructions:
+          'Coach source analysis and document groupings; hold off on drafting.',
+        rubricAlignmentJson: null,
+        assignmentType: {
+          id: 'assignment-type-1',
+          gradingAssistantVersion: 1,
+          rubricJson: null,
+        },
+        instructions: [
+          {
+            id: 'instruction-1',
+            title: 'Analyze the sources',
+            tutorInstructions: null,
+          },
+        ],
+      },
+      messages: [],
+      document: {
+        id: 'doc-1',
+        text: 'Original draft',
+        apHistorySnapshot,
+      },
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Where do I start?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    expect(completionArgs.system).toContain('LEQ Rubric (6 points');
+    expect(completionArgs.system).toContain(
+      'Current section: "Read the Documents"'
+    );
+    // LEQ-specific guidance, not the DBQ document/HIPP playbook.
+    expect(completionArgs.system).toContain('no documents on an LEQ');
+    expect(completionArgs.system).not.toContain('HIPP angle');
   });
 
   test('returns a retry signal without writing messages when fallback retry is requested', async () => {

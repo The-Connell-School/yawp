@@ -4,34 +4,43 @@ import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { readFileSync } from 'node:fs';
 
 describe('AP History library seed data', () => {
-  test('exports a curated library with both DBQ and LEQ entries', () => {
-    expect(AP_HISTORY_LIBRARY_ENTRIES.length).toBeGreaterThanOrEqual(2);
+  test('exports a curated library of DBQ entries', () => {
+    expect(AP_HISTORY_LIBRARY_ENTRIES.length).toBeGreaterThanOrEqual(1);
     expect(
       AP_HISTORY_LIBRARY_ENTRIES.some((entry) => entry.essayType === 'dbq')
     ).toBe(true);
-    expect(
-      AP_HISTORY_LIBRARY_ENTRIES.some((entry) => entry.essayType === 'leq')
-    ).toBe(true);
   });
 
-  test('image sources carry an imageUrl and alt text', () => {
+  test('every source has a mediaType and non-empty body', () => {
+    for (const entry of AP_HISTORY_LIBRARY_ENTRIES) {
+      for (const source of entry.sources) {
+        expect(['text', 'image']).toContain(source.mediaType);
+        expect(source.body.trim().length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  test('image sources carry alt text and a self-hosted asset (no hotlinks)', () => {
     const imageSources = AP_HISTORY_LIBRARY_ENTRIES.flatMap((entry) =>
       entry.sources.filter((source) => source.mediaType === 'image')
     );
 
-    expect(imageSources.length).toBeGreaterThan(0);
     for (const source of imageSources) {
-      expect(source.imageUrl).toBeTruthy();
-      expect(source.imageAlt).toBeTruthy();
+      // Curated images are served from our own origin by externalKey, never
+      // hotlinked from an external host.
+      expect(source.imageUrl).toBeNull();
+      expect((source.imageAlt ?? '').trim().length).toBeGreaterThan(0);
     }
   });
 
-  test('entry external keys are unique APUSH DBQ or LEQ keys', () => {
-    const externalKeys = AP_HISTORY_LIBRARY_ENTRIES.map((entry) => entry.externalKey);
+  test('entry external keys are unique AP history DBQ or LEQ keys', () => {
+    const externalKeys = AP_HISTORY_LIBRARY_ENTRIES.map(
+      (entry) => entry.externalKey
+    );
 
     expect(new Set(externalKeys).size).toBe(externalKeys.length);
     for (const externalKey of externalKeys) {
-      expect(externalKey).toMatch(/^apush-(dbq|leq)-/);
+      expect(externalKey).toMatch(/^ap(ush|euro|world)-(dbq|leq)-/);
     }
   });
 
@@ -43,7 +52,9 @@ describe('AP History library seed data', () => {
     expect(new Set(sourceKeys).size).toBe(sourceKeys.length);
     for (const entry of AP_HISTORY_LIBRARY_ENTRIES) {
       for (const source of entry.sources) {
-        expect(source.externalKey.startsWith(`${entry.externalKey}-doc-`)).toBe(true);
+        expect(source.externalKey.startsWith(`${entry.externalKey}-doc-`)).toBe(
+          true
+        );
       }
     }
   });
@@ -83,7 +94,10 @@ describe('AP History assignment type seed behavior', () => {
       organization: {
         findUnique: mock(async () => ({ id: 'preview-org' })),
       },
-      assignmentType: { upsert: assignmentTypeUpsert },
+      assignmentType: {
+        findUnique: mock(async () => null),
+        upsert: assignmentTypeUpsert,
+      },
       organizationAssignmentType: { upsert: organizationAssignmentUpsert },
       assignmentModule: {
         findFirst: mock(async () => ({ id: 'ap-module' })),

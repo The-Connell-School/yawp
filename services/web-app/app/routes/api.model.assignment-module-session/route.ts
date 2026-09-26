@@ -11,6 +11,8 @@ import {
 } from '~/utils/document-access.server';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { memberSessionWhere } from '~/domain/collaboration/tutor.server';
+import { isApHistorySnapshot } from '~/domain/ap-history/schema';
+import { resolveApHistoryInstructionPrompt } from '../../../../../packages/prisma/scripts/ap-history-module-data';
 
 const POST = z.object({
   assignmentModuleId: z.string(),
@@ -64,6 +66,8 @@ export async function action({ request }: ActionFunctionArgs) {
         // document that predates shared drafts has no group, so it skips the
         // extra query entirely.
         group: { select: { id: true } },
+        apHistorySnapshot: true,
+        assignment: { select: { apHistorySnapshot: true } },
       },
     }),
     prisma.assignmentModule.findUnique({
@@ -157,6 +161,19 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const firstInstruction = assignmentModule.instructions[0];
+  // DBQ and LEQ open with separately authored messages. When the document
+  // carries an AP History snapshot, pick the bubble matching its essay type;
+  // otherwise fall back to the shared stored prompt.
+  const apHistorySnapshot =
+    document.apHistorySnapshot ?? document.assignment?.apHistorySnapshot;
+  const firstInstructionContent =
+    firstInstruction && isApHistorySnapshot(apHistorySnapshot)
+      ? (resolveApHistoryInstructionPrompt(
+          apHistorySnapshot.essayType,
+          assignmentModule.title,
+          firstInstruction.title
+        ) ?? firstInstruction.prompt)
+      : firstInstruction?.prompt;
   const createdAt = new Date();
   const updatedAt = new Date(createdAt.getTime() + 1);
   const created = await prisma.assignmentModuleSession.create({
@@ -173,7 +190,7 @@ export async function action({ request }: ActionFunctionArgs) {
         messages: {
           create: [
             {
-              content: firstInstruction.prompt,
+              content: firstInstructionContent ?? firstInstruction.prompt,
               agent: 'assistant',
               instructionId: firstInstruction.id,
             },

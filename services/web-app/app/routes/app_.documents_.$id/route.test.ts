@@ -692,15 +692,16 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
     expect(html).toContain('1 source');
   });
 
-  test('renders AP History source content inside a bounded scroll area', () => {
+  test('renders AP History sources in a click-through carousel', () => {
     const html = renderToStaticMarkup(
       createElement(ApHistoryAssignmentPanel, { snapshot: apHistorySnapshot })
     );
 
     expect(html).toContain('Evaluate the extent');
     expect(html).toContain('Source 1');
-    expect(html).toContain('max-h-');
-    expect(html).toContain('overflow-y-auto');
+    expect(html).toContain('aria-label="Previous source"');
+    expect(html).toContain('aria-label="Next source"');
+    expect(html).toContain('Source 1 of 1');
   });
 });
 

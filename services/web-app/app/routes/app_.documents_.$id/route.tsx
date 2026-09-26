@@ -283,6 +283,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       html: true,
       text: true,
       group: { select: { id: true } },
+      apHistorySnapshot: true,
       assignmentType: {
         select: {
           id: true,
@@ -698,7 +699,12 @@ export default function Route() {
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
   const assignment = data.doc.assignment;
-  const apHistorySnapshot = getRenderableApHistorySnapshot(assignment);
+  // A student practice document carries its own snapshot; a teacher-assigned
+  // document inherits it from the assignment.
+  const apHistorySnapshot = getRenderableApHistorySnapshot({
+    apHistorySnapshot:
+      data.doc.apHistorySnapshot ?? assignment?.apHistorySnapshot,
+  });
   const showDbqWorkspace = shouldRenderDbqWorkspace(apHistorySnapshot);
   const editorAssignmentPrompt = getGenericAssignmentPromptForEditor(
     assignment,
@@ -815,7 +821,8 @@ export default function Route() {
   const apHistoryContextLabel = apHistorySnapshot
     ? `${apHistorySnapshot.essayType.toUpperCase()} · ${apHistorySnapshot.course.toUpperCase()}`
     : null;
-  const studentName = data.doc.membership.user.name?.trim() || 'Unknown student';
+  const studentName =
+    data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
   const isSubmitting = submit.isSubmitting;
   const submitActionDisabled = isSubmitting || cannotSubmitEmpty;

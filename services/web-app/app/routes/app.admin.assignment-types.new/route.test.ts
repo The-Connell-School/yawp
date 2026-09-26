@@ -38,7 +38,7 @@ describe('admin assignment type new action', () => {
     await action({ request: new Request('https://example.test/new', { method: 'POST', body: form }), params: {}, context: {} } as never);
     expect(prisma.rubric.findUnique).toHaveBeenCalledWith({ where: { id: 'daily-pages' }, select: { id: true } });
     expect(prisma.assignmentType.create).toHaveBeenCalledWith({ data: {
-      title: 'Daily journal', kind: null, description: null, position: 4,
+      title: 'Daily journal', kind: null, description: null, tutorInstructions: null, position: 4,
       rubricId: 'daily-pages', gradingPromptConfigJson: { gradingInstructionsOverride: 'Focus on reflection.' },
     } });
   });
@@ -96,6 +96,7 @@ describe('admin assignment type new action', () => {
         title: 'ACT Writing',
         kind: null,
         description: 'ACT writing assignment type',
+        tutorInstructions: null,
         position: 4,
         scoringScaleJson: {
           type: 'act_writing_2_12',
@@ -149,6 +150,7 @@ describe('admin assignment type new action', () => {
         title: 'New assignment type',
         kind: null,
         description: 'Choose its database rubric after saving.',
+        tutorInstructions: null,
         position: 4,
       },
     });
@@ -177,6 +179,7 @@ describe('admin assignment type new action', () => {
         title: 'Daily reflection',
         kind: null,
         description: null,
+        tutorInstructions: null,
         position: 4,
         rubricId: 'rubric-daily-pages',
       },

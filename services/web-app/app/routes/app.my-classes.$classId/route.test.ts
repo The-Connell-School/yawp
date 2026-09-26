@@ -621,7 +621,7 @@ describe('class detail loader document visibility', () => {
 
     expect(response.data).toMatchObject({
       success: false,
-      message: 'Choose an APUSH prompt from the library first.',
+      message: 'Choose an AP History prompt from the library first.',
     });
     expect(response.init).toMatchObject({ status: 400 });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
@@ -659,7 +659,7 @@ describe('class detail loader document visibility', () => {
 
     expect(response.data).toMatchObject({
       success: false,
-      message: 'Choose an APUSH prompt from the library first.',
+      message: 'Choose an AP History prompt from the library first.',
     });
     expect(response.init).toMatchObject({ status: 400 });
     expect(prisma.assignment.update).not.toHaveBeenCalled();
