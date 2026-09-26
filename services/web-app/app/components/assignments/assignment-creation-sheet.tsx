@@ -40,9 +40,71 @@ import {
 } from '~/domain/grading/grading-assistant-strictness';
 import {
   DEFAULT_ASSIGNMENT_GRADING_MODE,
+  gradingModeOptions,
   type AssignmentGradingMode,
 } from '~/domain/assignments/rubric-overrides';
+import { Tooltip } from '~/components/ui/tooltip';
+import { cn } from '~/utils/misc';
 import { toDateInputValue } from '~/utils/date-only';
+
+/**
+ * A segmented control in the shape of the app's pill buttons: a recessed track
+ * with the chosen option lifted back out of it. Selection reads from fill and
+ * elevation rather than a solid brand block, and the font weight never changes
+ * between states so the row cannot reflow as a teacher clicks across it.
+ *
+ * Each option carries its explanation on hover; the chosen one is spelled out
+ * underneath the control.
+ */
+function GradingChoiceGroup<Value extends string>({
+  labelId,
+  value,
+  options,
+  onChange,
+  disabled,
+  idPrefix,
+}: {
+  labelId: string;
+  value: Value;
+  options: ReadonlyArray<{ value: Value; label: string; description: string }>;
+  onChange: (next: Value) => void;
+  disabled: boolean;
+  idPrefix?: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-labelledby={labelId}
+      className={cn(
+        'grid gap-1 rounded-full bg-secondary p-1',
+        options.length === 2 ? 'grid-cols-2' : 'grid-cols-3'
+      )}
+    >
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <Tooltip key={option.value} text={option.description}>
+            <button
+              id={idPrefix ? `${idPrefix}-${option.value}` : undefined}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onChange(option.value)}
+              disabled={disabled}
+              className={cn(
+                'h-8 rounded-full px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:pointer-events-none disabled:opacity-50',
+                selected
+                  ? 'bg-popover text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {option.label}
+            </button>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+}
 
 export type AssignmentCreationEntryPoint =
   'dashboard' | 'assignment-type' | 'class';
@@ -135,7 +197,6 @@ export type AssignmentCreationSheetProps = {
   initialRubricTotalPoints?: number | null;
   initialGradingMode?: AssignmentGradingMode;
   /** The rubric's authored total, shown before an assignment override is used. */
-  initialRubricDefaultTotalPoints?: number | null;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -225,7 +286,6 @@ export function AssignmentCreationSheetContent({
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   initialRubricTotalPoints = null,
   initialGradingMode = DEFAULT_ASSIGNMENT_GRADING_MODE,
-  initialRubricDefaultTotalPoints = null,
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -268,12 +328,7 @@ export function AssignmentCreationSheetContent({
     useState<GradingAssistantStrictnessLevel>(
       initialGradingAssistantStrictnessLevel
     );
-  const [customizeRubricGrading, setCustomizeRubricGrading] = useState(
-    initialRubricTotalPoints !== null || initialGradingMode === 'bands'
-  );
-  const [rubricTotalPoints, setRubricTotalPoints] = useState(
-    pointValueFieldValue(initialRubricTotalPoints)
-  );
+  const [gradingPanelOpen, setGradingPanelOpen] = useState(false);
   const [gradingMode, setGradingMode] = useState<AssignmentGradingMode>(
     initialGradingMode
   );
@@ -323,6 +378,20 @@ export function AssignmentCreationSheetContent({
     return extractFetcher.data.message || 'Unable to extract PDF content.';
   }, [extractFetcher.data]);
 
+  // The resting summary is the only part of the grading block most teachers
+  // ever read, so it names the settings actually in force rather than the
+  // defaults, and the panel spells out whichever option is currently chosen.
+  const selectedStrictness = gradingAssistantStrictnessOptions.find(
+    (option) => option.value === gradingAssistantStrictnessLevel
+  );
+  const strictnessLabel = selectedStrictness?.label ?? '';
+  const strictnessDescription = selectedStrictness?.description ?? '';
+  const selectedGradingMode = gradingModeOptions.find(
+    (option) => option.value === gradingMode
+  );
+  const gradingModeLabel = selectedGradingMode?.label ?? '';
+  const gradingModeDescription = selectedGradingMode?.description ?? '';
+
   useEffect(() => {
     if (!open) {
       wasOpenRef.current = false;
@@ -354,10 +423,7 @@ export function AssignmentCreationSheetContent({
     );
     setSaveForReuse(false);
     setGradingAssistantStrictnessLevel(initialGradingAssistantStrictnessLevel);
-    setCustomizeRubricGrading(
-      initialRubricTotalPoints !== null || initialGradingMode === 'bands'
-    );
-    setRubricTotalPoints(pointValueFieldValue(initialRubricTotalPoints));
+    setGradingPanelOpen(false);
     setGradingMode(initialGradingMode);
     setAttachmentFile(null);
     setRemoveAttachment(false);
@@ -378,9 +444,7 @@ export function AssignmentCreationSheetContent({
     initialCollaborationGroupMode,
     initialCollaborationGroupSize,
     initialGradingAssistantStrictnessLevel,
-    initialRubricTotalPoints,
     initialGradingMode,
-    initialRubricDefaultTotalPoints,
     initialPostAt,
     initialDueAt,
     open,
@@ -746,206 +810,142 @@ export function AssignmentCreationSheetContent({
           </p>
 
           {submitForGrade ? (
-            <div className="mt-3 flex gap-2.5">
-              <div className="flex w-4 shrink-0 justify-center">
-                <div aria-hidden className="w-px bg-border" />
+            <div className="mt-3 overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-black/5">
+              <div className="flex items-start justify-between gap-3 px-4 py-3">
+                <p className="text-sm text-muted-foreground">
+                  Graded out of{' '}
+                  <span className="font-medium text-foreground">
+                    {pointValue || '—'} points
+                  </span>{' '}
+                  in{' '}
+                  <span className="font-medium text-foreground">
+                    {gradingMode === 'bands' ? 'bands' : 'steps'}
+                  </span>
+                  , read at the{' '}
+                  <span className="font-medium text-foreground">
+                    {strictnessLabel.toLowerCase()}
+                  </span>{' '}
+                  level.
+                </p>
+                <Button
+                  id="assignment-create-change-grading"
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  aria-expanded={gradingPanelOpen}
+                  aria-controls="assignment-create-grading-panel"
+                  onClick={() => setGradingPanelOpen((open) => !open)}
+                  disabled={isSaving}
+                >
+                  {gradingPanelOpen ? 'Done' : 'Change'}
+                </Button>
               </div>
-              <div className="min-w-0 flex-1 space-y-4">
-                <section className="space-y-3" aria-labelledby="assignment-create-grade-configuration">
-                  <h3
-                    id="assignment-create-grade-configuration"
-                    className="text-sm font-semibold"
-                  >
-                    Grade Configuration
-                  </h3>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="assignment-create-default-point-value">
-                        Default point value
-                      </Label>
-                      <Input
-                        id="assignment-create-default-point-value"
-                        value={pointValue}
-                        readOnly
-                        aria-readonly="true"
-                        tabIndex={-1}
-                        className="bg-muted/30"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Default grading type</Label>
-                      <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
-                        By default: Step grading
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Rubric default:{' '}
-                    {initialRubricDefaultTotalPoints
-                      ? `${initialRubricDefaultTotalPoints} points`
-                      : 'built-in rubric total'}
-                  </p>
-                  <div className="rounded-md border bg-muted/20 px-3 py-2">
-                    <div className="flex items-start gap-2.5">
-                      <Checkbox
-                        id="assignment-create-customize-rubric-grading"
-                        checked={customizeRubricGrading}
-                        onCheckedChange={(checked) => {
-                          const enabled = checked === true;
-                          setCustomizeRubricGrading(enabled);
-                          setRubricTotalPoints(enabled ? pointValue : '');
-                        }}
-                        disabled={isSaving}
-                        className="mt-0.5 size-4 shrink-0"
-                      />
-                      <div className="min-w-0">
-                        <Label
-                          htmlFor="assignment-create-customize-rubric-grading"
-                          className="cursor-pointer font-medium"
-                        >
-                          Customize Grading
-                        </Label>
-                      </div>
-                    </div>
 
-                    {customizeRubricGrading ? (
-                      <div className="mt-3 space-y-3 border-l pl-6">
-                        <div className="space-y-2">
-                          <Label htmlFor="assignment-create-point-value">
-                            Total Point Values
-                          </Label>
-                          <Input
-                            id="assignment-create-point-value"
-                            name="pointValue"
-                            type="number"
-                            min={1}
-                            max={1000}
-                            step={1}
-                            inputMode="numeric"
-                            value={pointValue}
-                            onChange={(event) => {
-                              const nextPointValue = event.target.value;
-                              setPointValue(nextPointValue);
-                              setRubricTotalPoints(nextPointValue);
-                            }}
-                            disabled={isSaving}
-                            required
-                          />
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Grading Total: <strong>{pointValue || '—'}</strong>{' '}
-                          points.
-                        </p>
-                        <div className="space-y-2">
-                          <Label>Scoring behavior</Label>
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            <button
-                              id="assignment-create-grading-mode-step"
-                              type="button"
-                              className={`rounded-md border px-3 py-2 text-left text-sm transition ${
-                                gradingMode === 'step'
-                                  ? 'border-primary bg-primary text-primary-foreground'
-                                  : 'border-border bg-background hover:bg-muted'
-                              }`}
-                              aria-pressed={gradingMode === 'step'}
-                              onClick={() => setGradingMode('step')}
-                              disabled={isSaving}
-                            >
-                              <span className="block font-medium">Steps</span>
-                              <span className="mt-1 block text-xs opacity-80">
-                                Scores are only on the rubric labels.
-                              </span>
-                            </button>
-                            <button
-                              id="assignment-create-grading-mode-bands"
-                              type="button"
-                              className={`rounded-md border px-3 py-2 text-left text-sm transition ${
-                                gradingMode === 'bands'
-                                  ? 'border-primary bg-primary text-primary-foreground'
-                                  : 'border-border bg-background hover:bg-muted'
-                              }`}
-                              aria-pressed={gradingMode === 'bands'}
-                              onClick={() => setGradingMode('bands')}
-                              disabled={isSaving}
-                            >
-                              <span className="block font-medium">Bands</span>
-                              <span className="mt-1 block text-xs opacity-80">
-                                Scores are within the labeled ranges.
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                  {!customizeRubricGrading ? (
-                    <input
-                      type="hidden"
-                      name="pointValue"
-                      value={pointValue}
-                    />
-                  ) : null}
-                  <input
-                    type="hidden"
-                    name="rubricTotalPoints"
-                    value={customizeRubricGrading ? rubricTotalPoints : ''}
-                  />
-                  <input
-                    type="hidden"
-                    name="gradingMode"
-                    value={customizeRubricGrading ? gradingMode : 'step'}
-                  />
-                </section>
-
-                <input
-                  type="hidden"
-                  name="gradingAssistantStrictnessLevel"
-                  value={gradingAssistantStrictnessLevel}
-                />
-                <section className="space-y-2" aria-labelledby="assignment-create-grading-assistance">
-                  <h3
-                    id="assignment-create-grading-assistance"
-                    className="text-sm font-semibold"
-                  >
-                    Grading Assistance
-                  </h3>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {gradingAssistantStrictnessOptions.map((option) => {
-                      const selected =
-                        gradingAssistantStrictnessLevel === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
-                            selected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background hover:bg-muted'
-                          }`}
-                          aria-pressed={selected}
-                          onClick={() =>
-                            setGradingAssistantStrictnessLevel(option.value)
+              {gradingPanelOpen ? (
+                <div
+                  id="assignment-create-grading-panel"
+                  className="space-y-5 border-t border-border px-4 py-4"
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="assignment-create-point-value">
+                      Point value
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      {/* `Input` is `w-full`, so the width lives on a wrapper. */}
+                      <div className="w-24">
+                        <Input
+                          id="assignment-create-point-value"
+                          name="pointValue"
+                          type="number"
+                          min={1}
+                          max={1000}
+                          step={1}
+                          inputMode="numeric"
+                          value={pointValue}
+                          onChange={(event) =>
+                            setPointValue(event.target.value)
                           }
                           disabled={isSaving}
-                        >
-                          <span className="block font-medium">
-                            {option.label}
-                          </span>
-                          <span
-                            className={`mt-1 block text-xs ${
-                              selected
-                                ? 'text-primary-foreground/80'
-                                : 'text-muted-foreground'
-                            }`}
-                          >
-                            {option.description}
-                          </span>
-                        </button>
-                      );
-                    })}
+                          required
+                          className="tabular-nums"
+                        />
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        points
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      What the assignment is worth in the gradebook. The rubric
+                      keeps its own scale either way.
+                    </p>
                   </div>
-                </section>
-              </div>
+
+                  <div className="space-y-2">
+                    <p
+                      id="assignment-create-scoring-behavior"
+                      className="text-sm font-medium"
+                    >
+                      Scoring behavior
+                    </p>
+                    <GradingChoiceGroup
+                      labelId="assignment-create-scoring-behavior"
+                      idPrefix="assignment-create-grading-mode"
+                      value={gradingMode}
+                      options={gradingModeOptions}
+                      onChange={setGradingMode}
+                      disabled={isSaving}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {gradingModeLabel}
+                      </span>{' '}
+                      — {gradingModeDescription}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p
+                      id="assignment-create-grading-assistance"
+                      className="text-sm font-medium"
+                    >
+                      Grading assistance
+                    </p>
+                    <GradingChoiceGroup
+                      labelId="assignment-create-grading-assistance"
+                      value={gradingAssistantStrictnessLevel}
+                      options={gradingAssistantStrictnessOptions}
+                      onChange={setGradingAssistantStrictnessLevel}
+                      disabled={isSaving}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {strictnessLabel}
+                      </span>{' '}
+                      — {strictnessDescription}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <input type="hidden" name="pointValue" value={pointValue} />
+              )}
+
+              {/* `rubricTotalPoints` rescales the rubric itself and the
+                  `max_score` handed to the grading assistant, which is a
+                  different thing from the gradebook total above. Nothing in
+                  this sheet sets one; an assignment that already has an
+                  override keeps it. */}
+              <input
+                type="hidden"
+                name="rubricTotalPoints"
+                value={pointValueFieldValue(initialRubricTotalPoints)}
+              />
+              <input type="hidden" name="gradingMode" value={gradingMode} />
+              <input
+                type="hidden"
+                name="gradingAssistantStrictnessLevel"
+                value={gradingAssistantStrictnessLevel}
+              />
             </div>
           ) : null}
         </div>
