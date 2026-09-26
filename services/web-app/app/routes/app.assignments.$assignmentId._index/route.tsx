@@ -159,7 +159,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const classInsightsEnabled =
     active.class.school.organization.classInsightsEnabled === true;
 
-  const [insightRow, gradedCount, assignmentTypes, defaultGradingConfig] = await Promise.all([
+  const [insightRow, gradedCount, assignmentTypes] = await Promise.all([
     classInsightsEnabled
       ? prisma.classAssignmentInsight.findUnique({
           where: { classAssignmentId: active.id },
@@ -198,11 +198,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         collaborationSupported: true,
       },
       orderBy: { position: 'asc' },
-    }),
-    resolveAssignmentTypeGradingConfig({
-      assignmentTypeId: active.assignment.assignmentTypeId,
-      assignmentTypeKind: active.assignment.assignmentType?.kind ?? null,
-      assignmentTypeTitle: active.assignment.assignmentType?.title ?? null,
     }),
   ]);
 
@@ -268,7 +263,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       assignmentTypeId: active.assignment.assignmentTypeId,
       assignmentTypeLocked: active.assignment.collaborationEnabled,
       assignmentType: active.assignment.assignmentType,
-      rubricDefaultTotalPoints: defaultGradingConfig.maxScore,
       documentCount: active._count.documents,
       gradedCount,
       insight,
@@ -853,7 +847,6 @@ export default function AssignmentDetailRoute() {
           initialPointValue={assignment.pointValue}
           initialRubricTotalPoints={assignment.rubricTotalPoints}
           initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
-          initialRubricDefaultTotalPoints={assignment.rubricDefaultTotalPoints}
           initialTutorEnabled={assignment.tutorEnabled}
           initialCollaborationEnabled={Boolean(data.collaboration)}
           initialCollaborationGroupMode={toCollaborationGroupMode(
@@ -880,7 +873,6 @@ export default function AssignmentDetailRoute() {
           initialPrompt={assignment.prompt}
           initialRubricTotalPoints={assignment.rubricTotalPoints}
           initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
-          initialRubricDefaultTotalPoints={assignment.rubricDefaultTotalPoints}
         />
       </div>
     </PageShell>

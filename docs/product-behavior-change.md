@@ -1,54 +1,72 @@
-# Authorized behavior recovery: assignment rubric selection
+# Product behavior change — assignment sheet grading configuration
 
-Bryant explicitly requested on September 9, 2026: bring back the rubric selector and fix assignment-type creation. He rejected the inline-editor workflow accepted by PR357 and requested a postmortem. This declaration records that requirement; it does not infer authorization from passing tests.
+Work: `yawp-grading-config-summary-disclosure`
 
-## Intended behavior
+## Intended workflow change
 
-- Create and edit show the shared library rubric selector. Creation can choose a rubric before the first save.
-- Saving persists the rubric relationship and assignment-specific grading instructions. Reopening shows the saved selection. Grading, prompt previews, and evaluation runs resolve that same rubric.
-- Title-only creation retains the built-in default option. Selecting a library rubric never requires manually entering inline categories.
-- Validation stays in the form and preserves inputs. Cancel restores saved selection/instructions; clearing the selection restores the underlying assignment configuration/default.
-- Basics-only saves preserve exact raw grading JSON, calibration, and grading version. Promoted prompt templates remain effective with library rubrics. AP History snapshot semantics remain unchanged.
+The grading block on the assignment creation and edit sheet no longer gates its
+settings behind a **Customize Grading** checkbox.
 
-## Why existing browser expectations change
+Before: the block opened with a read-only **Default point value** field, a
+read-only **Default grading type** box reading "By default: Step grading", a
+**Rubric default: N points** hint, and a **Customize Grading** checkbox. Only
+after checking that box did **Total Point Values**, **Grading Total**, and
+**Scoring behavior** appear, nested two containers deep.
 
-PR353 removed the selector. PR357 commit939813f7 replaced selector/persistence assertions with inline-category editing and accepted an unwanted version increment. Those assertions described the regression, not an approved product change.
+After: the block rests as one sentence describing the settings actually in
+force — "Graded out of 100 points in steps, read at the intermediate level." — 
+next to a **Change** button. Change opens a single flat panel holding **Point
+value**, **Scoring behavior**, and **Grading Assistance**. Opening the panel is
+the deliberate act that the checkbox used to be.
 
-This recovery removes manual inline-category setup from creation tests and restores visible selector and persisted rubricId assertions. It restores exact legacy JSON equality and unchanged version7, rather than subset equality and version8. Existing create-page rendering, successful creation, and edit success cases remain covered; the diff relocates some lines when inserting a new first test.
+## Assertions that were removed and why
 
-Additional tests cover selecting during creation, validation preservation, save/reload, cancel, clear/reload, prompt tools, effective compiled grading configuration, selected-rubric evaluation inputs, and promoted templates. This is a workflow restoration with stronger preservation proof, not permission to weaken unrelated tests.
+The removed specs asserted the gate itself, so they cannot survive its removal.
 
-## Review and release gates
+| Removed assertion | Replaced by |
+| --- | --- |
+| `Default point value` is present and `readonly` | The summary sentence states the point value; the panel exposes one editable **Point value** field |
+| `Customize Grading` checkbox exists and is unchecked | `customize grading` asserted absent; the **Change** button is asserted present |
+| `Default grading type` / `By default: Step grading` visible | The summary sentence states the scoring mode |
+| `Rubric default: N points` visible | Removed with no replacement — see below |
+| `Grading Total: N points.` visible | Removed; the summary sentence carries the total |
+| Checking Customize Grading reveals `Total Point Values` | Clicking **Change** reveals **Point value** |
+| Turning Customize Grading off clears `rubricTotalPoints` | An existing `rubricTotalPoints` is asserted to survive untouched |
 
-Two independent reviews checked requirements and persistence. The second caught prompt/evaluation paths that still read inline configuration; those are included in recovery. Release requires the Record assignment-rubric proof profile and required repository CI, followed by production/demo verification. The incident postmortem is docs/postmortems/2026-09-09-rubric-selector-regression.md.
+## Deliberate capability removal
 
-The broader assignment-type integration test now selects a dedicated shared rubric with the same Thesis/Grammar categories, preserving all prompt-version, evaluation, and tutor-module mapping assertions. Category-options coverage similarly verifies library selection preserves custom labels, feedback settings, and grammar highlighting. The focused browser gate includes these integration and library suites so obsolete inline-editor setup cannot escape local proof again.
+`rubricTotalPoints` rescales the rubric's own scale and the `max_score` handed
+to the grading assistant. It is a different quantity from `pointValue`, which is
+the gradebook denominator. The old UI set both to the same number whenever
+Customize Grading was on.
 
-Integration with PR359/361 preserves the added static Class Starter and Daily Pages reflection schemas and automatic seeding. The combined editor keeps shared selection and read-only schema display, plus assignment instruction overrides and default creation without inline setup. Separate reflection creation/reload coverage is retained alongside default and engagement creation tests. Bryant explicitly authorized resolving both tasks together on September 9.
+This sheet no longer creates a `rubricTotalPoints` override at all. An
+assignment that already has one keeps it; a newly created assignment gets
+`null`, meaning the rubric keeps its authored scale.
 
-## September 14 meeting delivery: authorized scoring and paste changes
+That is intentional on two grounds. The override was never separately
+controllable, so pairing it to the gradebook total was an accident of the gate
+rather than a teacher decision. And syncing it is unsafe: `scoreToPercent` in
+`app/domain/grading/gradeMath.ts` maps only the values 1 through 5, so
+rescaling a `weighted_1_5` rubric to 100 makes the assistant return scores the
+percentage calculation cannot read, yielding a null percentage and no letter
+grade.
 
-Bryant authorized confirmed meeting implementation and release and resumed it September15. Source: https://fathom.video/calls/822769436. Acceptance: F01–F08 and F10–F11 in Record imports/sources/yawp/2026-09-15-handoff/reports/REQUIREMENTS-REVIEW.md.
+The e2e assertion `expect(created.rubricTotalPoints).toBe(25)` therefore becomes
+`toBeNull()`. No path in the product sets a new override today; existing
+overrides are unaffected.
 
-- Daily Pages retains its registered identity, but Brian's authored engagement bands now accept whole-number points, so18 remains18/30. Rubric-schema and admin prompt tests intentionally change step10 to step1. Only explicitly opted-in fresh assignment configurations scale to configured10/90 totals; historical snapshots/old pins remain unchanged. Config, resolver, GA and scoring tests enforce those boundaries.
-- Teachers see earned/possible points, including zero. The view-panel test intentionally replaces the old percentage assertion with equivalent points out of100 when no configured denominator exists. Browser coverage checks configured10/30/90/100/200 totals, exact manual points, save/reload/release and historical category snapshots. This does not remove paste percentages.
-- New clipboard clients attach stable eventId while preserving the existing documentId/content/textLength fields; request assertions permit that extra field. The consolidated paste-alert tests add idempotency and cross-document rebinding protection and still cover method rejection, required fields, optional content, nonowner denial and membership-scoped ownership. Old clients without eventId continue writing ordinary alerts. Consolidation does not authorize weakening those guarantees.
-- Teacher paste reports measure surviving marked characters against actual current/frozen visible text, count each character once, and explain incomplete historical tracking. They do not infer misconduct. Comments remain available. Private teacher notes remain excluded from student payloads and owner access across memberships.
+## Superseded decisions
 
-September17 follow-up: Bryant explicitly approved removing the grading queue navigation organization gate and making the queue globally available to teachers. The org admin toggle and `Organization.gradingQueueNavEnabled` column are removed, and the browser proof intentionally changes from "rollout can disable it" to "students still cannot see the queue, while teachers always can from scoped work lists." Rollback is now an application/image rollback, not an organization setting.
+This replaces two durable Record decisions:
 
-This declaration does not grant production-QA tenant attestation, Internal proof exception, live rubric activation, customer-data access or permission to send invitations. All unrelated unresolved approval gates remain binding.
+- "Keep the default assignment point value visible but read-only; only Customize
+  Grading exposes the editable Total Point Values field."
+- "Default point value and Step grading remain visible but read-only until
+  Customize Grading is enabled."
 
-Released-grade activity browser checks likewise assert exact earned/possible totals for teacher and student displays on the seeded 100-point assignment. Raw numericPercentage database/audit assertions, comment confidentiality, and stale-revision protection remain unchanged.
+## Verification
 
-## Assignment rubric grading modes
-
-The approved default for assignment-level rubric grading is `step`, preserving
-backward-compatible behavior. A step-mode rubric exposes only its authored
-anchor scores, even when the assignment total is scaled (for example, 7/10 or
-60/90 for the revised Daily Pages rubric). `bands` is an explicit assignment
-override that permits scores within each rubric band.
-
-The end-to-end grading proof also covers the existing “submit for grade” flow:
-an assignment worth 100 points can use a 50-point AI rubric override, persist
-the AI result as `50/50`, and display the projected assignment grade as `100`.
+- `./bin/project test --profile unit` — 2789 pass
+- `./bin/project test --profile typecheck` — pass
+- `./bin/project test --profile qa-smoke` — 117 pass
