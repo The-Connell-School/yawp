@@ -4,6 +4,9 @@ const prisma = {
   classAssignment: { findMany: mock() },
   class: { findMany: mock(), findFirst: mock() },
   documentGroup: { findFirst: mock() },
+  // The loader reads the creation types' rubrics and kinds, to know which
+  // offer the grammar toggle and which suggest a writing time.
+  assignmentType: { findMany: mock(async () => []) },
 };
 const requireUserId = mock();
 const requireMembership = mock();
@@ -311,7 +314,15 @@ describe('My Assignments loader', () => {
         { id: 'class-1', name: 'Grade 9th • Period 1st' },
       ]);
       expect(result.assignmentCreationTypes).toEqual([
-        { id: 'at-1', title: 'Essay' },
+        {
+          id: 'at-1',
+          title: 'Essay',
+          collaborationSupported: undefined,
+          // No rubric and no kind on the mocked type: no grammar toggle and
+          // no suggested writing time.
+          gradesGrammar: false,
+          defaultWritingTimeMinutes: null,
+        },
       ]);
     }
   );

@@ -46,6 +46,14 @@ import {
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import { toDateInputValue } from '~/utils/date-only';
+import {
+  MAX_WRITING_TIME_MINUTES,
+  MIN_WRITING_TIME_MINUTES,
+} from '~/domain/grading/writing-time';
+
+function writingTimeFieldValue(minutes: number | null | undefined): string {
+  return typeof minutes === 'number' && minutes > 0 ? String(minutes) : '';
+}
 
 /**
  * A segmented control in the shape of the app's pill buttons: a recessed track
@@ -125,6 +133,12 @@ export type AssignmentCreationAssignmentType = {
    * teacher would silently lose the toggle.
    */
   gradesGrammar: boolean;
+  /**
+   * The writing time the form suggests for a new assignment of this type, in
+   * minutes. Only a starting value for the field: absent or null leaves it
+   * blank, which is what every type without a suggestion should do.
+   */
+  defaultWritingTimeMinutes?: number | null;
 };
 
 export type AssignmentCreationEditingAssignment = {
@@ -203,6 +217,12 @@ export type AssignmentCreationSheetProps = {
   initialGradingAssistantStrictnessLevel?: GradingAssistantStrictnessLevel;
   initialRubricTotalPoints?: number | null;
   initialGradingMode?: AssignmentGradingMode;
+  /**
+   * The assignment's saved writing time. Undefined means the caller has none
+   * to give — a new assignment — and the type's suggestion is used; null means
+   * the assignment has no writing time, and the field stays blank.
+   */
+  initialWritingTimeMinutes?: number | null;
   /** The rubric's authored total, shown before an assignment override is used. */
 };
 
@@ -293,6 +313,7 @@ export function AssignmentCreationSheetContent({
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   initialRubricTotalPoints = null,
   initialGradingMode = DEFAULT_ASSIGNMENT_GRADING_MODE,
+  initialWritingTimeMinutes,
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -323,6 +344,23 @@ export function AssignmentCreationSheetContent({
   const [dueAt, setDueAt] = useState<string>('');
   const [tutorEnabled, setTutorEnabled] = useState(initialTutorEnabled);
   const [grammarGradingEnabled, setGrammarGradingEnabled] = useState(true);
+  const initialWritingTimeValue = () =>
+    writingTimeFieldValue(
+      editingAssignment || initialWritingTimeMinutes !== undefined
+        ? initialWritingTimeMinutes
+        : assignmentTypes.find(
+            (type) =>
+              type.id ===
+              initialAssignmentTypeSelection(
+                assignmentTypes,
+                fixedAssignmentTypeId,
+                initialAssignmentTypeId
+              )
+          )?.defaultWritingTimeMinutes
+    );
+  const [writingTime, setWritingTime] = useState(initialWritingTimeValue);
+  // Once the teacher types a time, switching assignment type stops replacing it.
+  const writingTimeTouchedRef = useRef(false);
   const [collaborationEnabled, setCollaborationEnabled] = useState(
     initialCollaborationEnabled
   );
@@ -429,6 +467,8 @@ export function AssignmentCreationSheetContent({
     setPostAt(toDateInputValue(initialPostAt));
     setDueAt(toDateInputValue(initialDueAt));
     setTutorEnabled(initialTutorEnabled);
+    setWritingTime(initialWritingTimeValue());
+    writingTimeTouchedRef.current = false;
     setCollaborationEnabled(initialCollaborationEnabled);
     setCollaborationGroupMode(initialCollaborationGroupMode);
     setCollaborationGroupSize(
@@ -458,11 +498,22 @@ export function AssignmentCreationSheetContent({
     initialCollaborationGroupSize,
     initialGradingAssistantStrictnessLevel,
     initialGradingMode,
+    initialWritingTimeMinutes,
     initialPostAt,
     initialDueAt,
     open,
     teacherClasses,
   ]);
+
+  // A new assignment follows its type's suggestion until the teacher types one.
+  // An edit never does: its saved time, or its lack of one, is the teacher's.
+  const selectedTypeDefaultWritingTime = assignmentTypes.find(
+    (type) => type.id === assignmentTypeId
+  )?.defaultWritingTimeMinutes;
+  useEffect(() => {
+    if (isEditing || writingTimeTouchedRef.current) return;
+    setWritingTime(writingTimeFieldValue(selectedTypeDefaultWritingTime));
+  }, [isEditing, selectedTypeDefaultWritingTime]);
 
   useEffect(() => {
     if (createFetcher.state !== 'idle' || !createFetcher.data?.success) return;
@@ -1044,6 +1095,41 @@ export function AssignmentCreationSheetContent({
             </p>
           </div>
         ) : null}
+
+        {/* How long students have to write. Read by the grading assistant and
+            the grammar checker, so a ten-minute paragraph is not graded as a
+            revised essay. Unlike the toggles around it this stays editable:
+            it changes how future grading reads the work, not a grade given. */}
+        <div className="pt-6">
+          <Label htmlFor="assignment-create-writing-time" className="font-normal">
+            Time students have to write
+          </Label>
+          <div className="mt-2 flex items-center gap-2">
+            <Input
+              id="assignment-create-writing-time"
+              name="writingTimeMinutes"
+              type="number"
+              inputMode="numeric"
+              min={MIN_WRITING_TIME_MINUTES}
+              max={MAX_WRITING_TIME_MINUTES}
+              step={1}
+              value={writingTime}
+              onChange={(event) => {
+                writingTimeTouchedRef.current = true;
+                setWritingTime(event.target.value);
+              }}
+              disabled={isSaving}
+              className="w-24"
+            />
+            <span className="text-sm text-muted-foreground">minutes</span>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Optional. The grading assistant and grammar checker judge the writing
+            as work done in this time, so a ten-minute paragraph is not held to
+            the polish of a revised essay. Leave it blank for work students take
+            home or revise.
+          </p>
+        </div>
 
         {/* Collaborative drafts. Available for every assignment type, and frozen
             after creation for the same reason the tutor toggle is: students may

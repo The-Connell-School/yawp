@@ -599,6 +599,8 @@ describe('app index loader assignments', () => {
         // grammar-grading toggle, and the mocked type has no rubric to grade
         // grammar with.
         gradesGrammar: false,
+        // The mocked type has no kind, so no writing time is suggested.
+        defaultWritingTimeMinutes: null,
       },
     ]);
   });

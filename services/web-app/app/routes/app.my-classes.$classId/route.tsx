@@ -1,3 +1,5 @@
+import { getDefaultWritingTimeMinutesByTypeId } from '~/domain/grading/writing-time.server';
+import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -484,6 +486,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
+    const writingTimeResult = parseWritingTimeMinutes(formData);
+    if (!writingTimeResult.success) {
+      return dataResponse(
+        { success: false, message: writingTimeResult.message },
+        { status: 400 }
+      );
+    }
+    // Only written when the form sent it, so an older caller that omits the
+    // field leaves the stored value alone. Blank clears it.
+    const writingTimeData = writingTimeResult.sent
+      ? { writingTimeMinutes: writingTimeResult.value }
+      : {};
     const rubricOverrideData = {
       ...(formData.has('rubricTotalPoints')
         ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
@@ -618,6 +632,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           ...(formData.has('tutorEnabled')
             ? { tutorEnabled: tutorEnabledResult.value }
             : {}),
+          ...writingTimeData,
           ...promptAttachmentData,
         },
       });
@@ -1273,6 +1288,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     creationTypeRows.map((assignmentType) => assignmentType.id)
   );
 
+  const writingTimeDefaults = await getDefaultWritingTimeMinutesByTypeId(
+    creationTypeRows.map((assignmentType) => assignmentType.id)
+  );
+
   return dataResponse({
     role: 'TEACHER' as const,
     klass,
@@ -1285,6 +1304,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title,
         collaborationSupported,
         gradesGrammar: gradesGrammarIds.has(id),
+        defaultWritingTimeMinutes: writingTimeDefaults.get(id) ?? null,
       })
     ),
     assignmentsEnabled: true,

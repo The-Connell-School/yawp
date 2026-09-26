@@ -182,3 +182,61 @@ describe('compileGradingAssistantInvocation', () => {
   });
 
 });
+
+describe('compileGradingAssistantInvocation writing time', () => {
+  const base = {
+    gradingConfig: gradingConfig(),
+    studentFirstName: 'Jordan',
+    strictnessLevel: 'intermediate' as const,
+    documentText: 'School uniforms should be optional.',
+  };
+
+  test('leaves the prompt exactly as it was when no writing time is set', () => {
+    const without = compileGradingAssistantInvocation(base);
+    expect(compileGradingAssistantInvocation({ ...base, writingTimeMinutes: null }))
+      .toEqual(without);
+    expect(without.userMessage).not.toContain('Writing time');
+  });
+
+  test('tells the assistant how long the student had', () => {
+    const invocation = compileGradingAssistantInvocation({
+      ...base,
+      writingTimeMinutes: 10,
+    });
+    expect(invocation.userMessage).toContain('Writing time:');
+    expect(invocation.userMessage).toContain('10 minutes');
+    // Placed before the essay, beside the other things the teacher decided.
+    expect(invocation.userMessage.indexOf('Writing time:')).toBeLessThan(
+      invocation.userMessage.indexOf('Essay:')
+    );
+  });
+
+  test('a managed template can place it with {{writing_time}}', () => {
+    const invocation = compileGradingAssistantInvocation({
+      ...base,
+      gradingConfig: gradingConfig({
+        promptTemplate: {
+          systemMessage: 'Grade it.',
+          userMessage: '{{writing_time}}\n---\n{{document}}',
+        },
+      }),
+      writingTimeMinutes: 20,
+    });
+    expect(invocation.userMessage.startsWith('Writing time:')).toBe(true);
+    expect(invocation.userMessage.match(/Writing time:/g)).toHaveLength(1);
+  });
+
+  test('an older managed template without the variable still receives it', () => {
+    const invocation = compileGradingAssistantInvocation({
+      ...base,
+      gradingConfig: gradingConfig({
+        promptTemplate: {
+          systemMessage: 'Grade it.',
+          userMessage: 'Essay:\n{{document}}',
+        },
+      }),
+      writingTimeMinutes: 20,
+    });
+    expect(invocation.userMessage).toContain('20 minutes');
+  });
+});

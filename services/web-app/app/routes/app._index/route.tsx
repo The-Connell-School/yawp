@@ -1,3 +1,4 @@
+import { getDefaultWritingTimeMinutesByTypeId } from '~/domain/grading/writing-time.server';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
   Form,
@@ -253,6 +254,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)
   );
+  const writingTimeDefaults = await getDefaultWritingTimeMinutesByTypeId(
+    creationTypeRows.map((type) => type.id)
+  );
   const assignmentCreationTypes = creationTypeRows.map((type) => ({
     id: type.id,
     title: type.title,
@@ -260,6 +264,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // for this column, so it is optional there and defaulted here.
     collaborationSupported: type.collaborationSupported ?? false,
     gradesGrammar: gradesGrammarIds.has(type.id),
+    defaultWritingTimeMinutes: writingTimeDefaults.get(type.id) ?? null,
   }));
 
   return dataResponse({

@@ -822,3 +822,72 @@ describe('AssignmentCreationSheetContent', () => {
     });
   });
 });
+
+describe('AssignmentCreationSheetContent writing time', () => {
+  let root: Root | null = null;
+
+  afterEach(() => {
+    cleanup(root);
+    root = null;
+  });
+
+  const timedTypes = [
+    {
+      id: 'daily-pages',
+      title: 'Daily Pages',
+      collaborationSupported: true,
+      gradesGrammar: true,
+      defaultWritingTimeMinutes: 15,
+    },
+    {
+      id: 'essay',
+      title: 'Thesis Essay',
+      collaborationSupported: true,
+      gradesGrammar: true,
+      defaultWritingTimeMinutes: null,
+    },
+  ];
+
+  it("prefills the assignment type's suggested writing time", () => {
+    ({ root } = renderSheet({
+      assignmentTypes: timedTypes,
+      fixedAssignmentTypeId: 'daily-pages',
+    }));
+
+    expect(inputByName('writingTimeMinutes').value).toBe('15');
+    expectText('Time students have to write');
+  });
+
+  it('is blank for a type with no suggested time', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: timedTypes,
+      fixedAssignmentTypeId: 'essay',
+    }));
+
+    expect(inputByName('writingTimeMinutes').value).toBe('');
+  });
+
+  it('shows the saved time when editing, and stays editable', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: timedTypes,
+      fixedAssignmentTypeId: 'daily-pages',
+      editingAssignment: { id: 'assignment-1' },
+      initialWritingTimeMinutes: 20,
+    }));
+
+    const input = inputByName('writingTimeMinutes');
+    expect(input.value).toBe('20');
+    expect(input.disabled).toBe(false);
+  });
+
+  it('never invents a time for an existing assignment that had none', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: timedTypes,
+      fixedAssignmentTypeId: 'daily-pages',
+      editingAssignment: { id: 'assignment-1' },
+      initialWritingTimeMinutes: null,
+    }));
+
+    expect(inputByName('writingTimeMinutes').value).toBe('');
+  });
+});

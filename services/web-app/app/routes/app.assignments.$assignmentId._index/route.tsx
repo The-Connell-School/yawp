@@ -1,3 +1,5 @@
+import { getDefaultWritingTimeMinutesByTypeId } from '~/domain/grading/writing-time.server';
+import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -132,6 +134,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           rubricTotalPoints: true,
           gradingMode: true,
           tutorEnabled: true,
+          writingTimeMinutes: true,
           collaborationEnabled: true,
           collaborationGroupMode: true,
           collaborationGroupSize: true,
@@ -206,9 +209,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     assignmentTypes.map((assignmentType) => assignmentType.id)
   );
+  const writingTimeDefaults = await getDefaultWritingTimeMinutesByTypeId(
+    assignmentTypes.map((assignmentType) => assignmentType.id)
+  );
   const assignmentTypeOptions = assignmentTypes.map((assignmentType) => ({
     ...assignmentType,
     gradesGrammar: gradesGrammarIds.has(assignmentType.id),
+    defaultWritingTimeMinutes:
+      writingTimeDefaults.get(assignmentType.id) ?? null,
   }));
 
   const insight =
@@ -256,6 +264,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       rubricTotalPoints: active.assignment.rubricTotalPoints,
       gradingMode: active.assignment.gradingMode,
       tutorEnabled: active.assignment.tutorEnabled,
+      writingTimeMinutes: active.assignment.writingTimeMinutes,
       collaborationGroupMode: active.assignment.collaborationGroupMode,
       collaborationGroupSize: active.assignment.collaborationGroupSize,
       gradingAssistantStrictnessLevel: active.assignment
@@ -398,6 +407,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
+    const writingTimeResult = parseWritingTimeMinutes(formData);
+    if (!writingTimeResult.success) {
+      return dataResponse(
+        { success: false, message: writingTimeResult.message },
+        { status: 400 }
+      );
+    }
+    // Only written when the form sent it, so an older caller that omits the
+    // field leaves the stored value alone. Blank clears it.
+    const writingTimeData = writingTimeResult.sent
+      ? { writingTimeMinutes: writingTimeResult.value }
+      : {};
 
     const promptAttachment = formData.get('promptAttachment');
     let promptAttachmentData:
@@ -578,6 +599,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           ...(formData.has('tutorEnabled')
             ? { tutorEnabled: tutorEnabledResult.value }
             : {}),
+          ...writingTimeData,
           ...promptAttachmentData,
         },
       });
@@ -848,6 +870,7 @@ export default function AssignmentDetailRoute() {
           initialRubricTotalPoints={assignment.rubricTotalPoints}
           initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
           initialTutorEnabled={assignment.tutorEnabled}
+          initialWritingTimeMinutes={assignment.writingTimeMinutes ?? null}
           initialCollaborationEnabled={Boolean(data.collaboration)}
           initialCollaborationGroupMode={toCollaborationGroupMode(
             assignment.collaborationGroupMode

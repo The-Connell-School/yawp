@@ -1,3 +1,4 @@
+import { getDefaultWritingTimeMinutesByTypeId } from '~/domain/grading/writing-time.server';
 import { useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -548,10 +549,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentTypeGradesGrammar = (
     await getGrammarGradingAssignmentTypeIds([assignmentType.id])
   ).has(assignmentType.id);
+  const assignmentTypeDefaultWritingTimeMinutes =
+    (
+      await getDefaultWritingTimeMinutesByTypeId([assignmentType.id])
+    ).get(assignmentType.id) ?? null;
 
   return dataResponse({
     assignmentType,
     assignmentTypeGradesGrammar,
+    assignmentTypeDefaultWritingTimeMinutes,
     documents,
     archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
@@ -738,6 +744,9 @@ export default function AppAssignmentTypesIdRoute() {
                   data.assignmentType.collaborationSupported
                 }
                 assignmentTypeGradesGrammar={data.assignmentTypeGradesGrammar}
+                assignmentTypeDefaultWritingTimeMinutes={
+                  data.assignmentTypeDefaultWritingTimeMinutes
+                }
                 teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}

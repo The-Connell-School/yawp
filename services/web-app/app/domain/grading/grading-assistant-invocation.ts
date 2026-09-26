@@ -1,6 +1,7 @@
 import { teacherNotesEnabled } from './teacher-notes';
 import { buildGradingPromptShape } from './grading-prompt-shape';
 import type { ResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { buildWritingTimeGradingBlock } from './writing-time';
 import {
   getGradingAssistantStrictnessInstructions,
   getGradingAssistantStrictnessLabel,
@@ -118,6 +119,7 @@ export function compileGradingAssistantInvocation({
   strictnessLevel,
   documentText,
   assignmentPrompt,
+  writingTimeMinutes,
 }: {
   gradingConfig: Pick<
     ResolvedAssignmentTypeGradingConfig,
@@ -137,6 +139,8 @@ export function compileGradingAssistantInvocation({
   strictnessLevel: GradingAssistantStrictnessLevel;
   documentText: string;
   assignmentPrompt?: string | null;
+  /** How long the student had to write; null or absent leaves the prompt as it was. */
+  writingTimeMinutes?: number | null;
 }): CompiledGradingAssistantInvocation {
   const { minScore, maxScore } = gradingConfig;
   const promptShape = buildGradingPromptShape({
@@ -166,6 +170,7 @@ export function compileGradingAssistantInvocation({
   const template =
     gradingConfig.promptTemplate ??
     defaultGradingAssistantPromptTemplate(gradingConfig);
+  const writingTimeBlock = buildWritingTimeGradingBlock(writingTimeMinutes);
   const variables = {
     assignment_type: gradingConfig.rubricTotalPoints
       ? `${gradingConfig.label} (total rubric points: ${gradingConfig.rubricTotalPoints})`
@@ -183,6 +188,7 @@ export function compileGradingAssistantInvocation({
     strictness_label: strictnessLabel,
     student_first_name: studentFirstName,
     system_instructions: assignmentTypeSystemInstructions ?? '',
+    writing_time: writingTimeBlock,
   };
   const renderedSystem = renderPromptTemplate(template.systemMessage, variables);
   // Older managed templates do not carry the response-contract variable. The
@@ -193,9 +199,16 @@ export function compileGradingAssistantInvocation({
   const renderedUserMessage = renderPromptTemplate(template.userMessage, variables);
   // Existing managed templates predate assignment_prompt. Preserve their text
   // while ensuring a real prompt still reaches the grading assistant.
-  const userMessage = assignmentPrompt?.trim() && !/{{\s*assignment_prompt\s*}}/i.test(template.userMessage)
+  const userMessageWithPrompt = assignmentPrompt?.trim() && !/{{\s*assignment_prompt\s*}}/i.test(template.userMessage)
     ? `${renderedUserMessage}\n\nAssignment prompt: ${assignmentPrompt.trim()}`
     : renderedUserMessage;
+  // No template carries writing_time yet, and none needs to: with no writing
+  // time the block is empty and the message is untouched. With one, it goes in
+  // just ahead of the essay, beside the other things the teacher decided.
+  const userMessage =
+    writingTimeBlock && !/{{\s*writing_time\s*}}/i.test(template.userMessage)
+      ? insertBeforeEssay(userMessageWithPrompt, writingTimeBlock)
+      : userMessageWithPrompt;
 
   return {
     system,
@@ -203,4 +216,13 @@ export function compileGradingAssistantInvocation({
     messages: [{ role: 'user', content: userMessage }],
     maxTokens: 900,
   };
+}
+
+function insertBeforeEssay(message: string, block: string): string {
+  const essayHeading = '\n\nEssay:\n';
+  // The first heading, never one inside the student's own text below it.
+  const at = message.indexOf(essayHeading);
+  return at === -1
+    ? `${message}\n\n${block}`
+    : `${message.slice(0, at)}\n\n${block}${message.slice(at)}`;
 }

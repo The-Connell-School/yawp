@@ -105,6 +105,36 @@ alongside the tutor and collaboration toggles.
   it afterwards would silently restate those grades. Making it editable is a
   reasonable future change, but it needs a re-grade story first.
 
+## How long students have to write
+
+The grammar checker is one prompt shared by every assignment type, and it read
+every submission as a revised essay: a deliberate fragment in a ten-minute
+paragraph was marked an error, and "omit needless words" applied to work no one
+had time to cut. The grading assistant had the same blind spot.
+
+`Assignment.writingTimeMinutes` fixes both. The teacher sets it on the
+assignment, and it reaches:
+
+- **The grading assistant**, as a block just ahead of the essay: grade it as
+  that many minutes of writing, not as a revised piece. Calibrating is not going
+  easy — a thin claim is still thin, and errors that get in the reader's way
+  still count.
+- **The grammar checker**, which then stops marking deliberate fragments and
+  informal-but-correct phrasing, and at thirty minutes or less returns errors
+  only, no style notes. Its schema-repair retry, which used to demand eight to
+  twelve issues, asks only for the real ones.
+
+**Null changes nothing.** With no writing time, both prompts are byte-for-byte
+what ran before (asserted in tests), which is every assignment written before
+the column existed — production's Daily Pages included.
+
+The creation form suggests a time by kind: 15 minutes for Daily Pages (what its
+about section promises), 10 for Class Starter, blank for everything else. The
+suggestion is only a starting value; nothing reads it at grading time, so an
+existing assignment is never given a time behind the teacher's back. Unlike the
+grammar toggle, it stays editable after creation — it changes how future grading
+reads the work, not a grade already given.
+
 ## Telling teachers what it is
 
 The rubric change is invisible until a teacher assigns something. The page they
@@ -256,13 +286,9 @@ what ships:
 
 ## Still open
 
-- **Whose sentence rules apply.** Grammar/Mechanics grades "sentence
-  construction … and formatting" at 15%, and the markup comes from one
-  Grammar/Usage Checker prompt shared by every assignment type — it does not
-  know this is a paragraph written in ten minutes. A deliberate fragment ("Not
-  always. Only when it costs something.") is marked an error today. Relaxing
-  that means teaching the shared checker which type it is grading, which is
-  code rather than copy.
+- ~~**Whose sentence rules apply.**~~ Resolved by the writing time above: the
+  shared checker is told how long the student had rather than which type it is
+  grading, so a deliberate fragment in a timed piece is left alone.
 - **Does personal experience count as evidence?** The seeded exemplar backs its
   claim with a story about a grandmother's painting and scores 94%, which looks
   right for a prompt with no assigned text. What happens when a prompt *does*

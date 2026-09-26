@@ -32,6 +32,7 @@ import {
 import { parseAssignmentCollaboration } from '~/utils/assignment-collaboration.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 import { parseAssignmentGrammarGrading } from '~/utils/assignment-grammar-grading.server';
+import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -117,6 +118,15 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
   const grammarGradingEnabled = grammarGradingResult.value;
+
+  const writingTimeResult = parseWritingTimeMinutes(formData);
+  if (!writingTimeResult.success) {
+    return dataResponse(
+      { success: false, message: writingTimeResult.message },
+      { status: 400 }
+    );
+  }
+  const writingTimeMinutes = writingTimeResult.value;
 
   const collaborationResult = parseAssignmentCollaboration(formData);
   if (!collaborationResult.success) {
@@ -276,6 +286,7 @@ export async function action({ request }: ActionFunctionArgs) {
         }),
         tutorEnabled,
         grammarGradingEnabled,
+        writingTimeMinutes,
         ...rubricOverrideData,
         ...collaboration,
       },
@@ -350,6 +361,7 @@ export async function action({ request }: ActionFunctionArgs) {
         ...rubricOverrideData,
         tutorEnabled,
         grammarGradingEnabled,
+        writingTimeMinutes,
         ...collaboration,
         ...promptAttachmentData,
         ...(gradingIntent?.success

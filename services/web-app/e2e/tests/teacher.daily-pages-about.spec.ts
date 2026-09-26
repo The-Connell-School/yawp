@@ -24,7 +24,7 @@ test.describe.serial('Daily Pages about section', () => {
       page.getByRole('heading', { name: 'About Daily Pages' })
     ).toBeVisible();
     await expect(
-      page.getByText('A Daily Pages entry is one sitting of real thinking')
+      page.getByText('A Daily Pages entry is one short, crisp response')
     ).toBeVisible();
 
     for (const section of [
@@ -42,7 +42,9 @@ test.describe.serial('Daily Pages about section', () => {
     }
 
     // Collapsed means collapsed: the copy inside is not on screen yet.
-    await expect(page.getByText('Not a warm-up.')).toHaveCount(0);
+    await expect(
+      page.getByText('Not a warm-up, and not an exploration.')
+    ).toHaveCount(0);
     await expect(page.getByText('Ask for the backing')).toHaveCount(0);
     // Not "Claim and defend" — the kind labels also live in the prompt grid's
     // filters below, so the directions' own opening line is what to check.
@@ -66,17 +68,21 @@ test.describe.serial('Daily Pages about section', () => {
     // The line that separates it from a Class Starter, which is the single
     // thing teachers get wrong.
     await page.getByRole('button', { name: 'What it is not' }).click();
-    await expect(page.getByText('Not a warm-up.')).toBeVisible();
+    await expect(
+      page.getByText('Not a warm-up, and not an exploration.')
+    ).toBeVisible();
 
     // The weights come from the rubric itself, so a teacher reading this is
     // reading what the assistant actually does.
     await page.getByRole('button', { name: 'How it is graded' }).click();
     const grading = page.getByRole('row', { name: /Depth of Thought/ });
     await expect(grading).toBeVisible();
-    await expect(grading).toContainText('35%');
+    await expect(grading).toContainText('30%');
 
     // Sections open independently — the first one stays open.
-    await expect(page.getByText('Not a warm-up.')).toBeVisible();
+    await expect(
+      page.getByText('Not a warm-up, and not an exploration.')
+    ).toBeVisible();
   });
 
   test('the prompt-writing section carries the recipe and a rewrite', async ({
@@ -115,7 +121,9 @@ test.describe.serial('Daily Pages about section', () => {
       .click();
 
     await expect(page.getByText('Browse the prompts below')).toBeVisible();
-    await expect(page.getByText('The six kinds')).toBeVisible();
+    await expect(
+      page.getByText('The six kinds', { exact: true })
+    ).toBeVisible();
   });
 
   test('a student does not see the teacher-facing about section', async ({

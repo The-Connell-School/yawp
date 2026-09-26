@@ -1,3 +1,4 @@
+import { getDefaultWritingTimeMinutesByTypeId } from '~/domain/grading/writing-time.server';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -191,6 +192,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)
   );
+  const writingTimeDefaults = await getDefaultWritingTimeMinutesByTypeId(
+    creationTypeRows.map((type) => type.id)
+  );
 
   return {
     assignments,
@@ -205,6 +209,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       title: type.title,
       collaborationSupported: type.collaborationSupported,
       gradesGrammar: gradesGrammarIds.has(type.id),
+      defaultWritingTimeMinutes: writingTimeDefaults.get(type.id) ?? null,
     })),
   };
 }

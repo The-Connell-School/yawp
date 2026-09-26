@@ -2090,6 +2090,77 @@ describe('api.domain.grade-essay-ai', () => {
       } as any);
     }
 
+    async function gradeTimed(id: string, writingTimeMinutes: number | null) {
+      prisma.assignmentType.findUnique.mockResolvedValue(
+        mockAssignmentType({
+          gradingPromptConfigJson: { gradingInstructions: 'Grade against this rubric.' },
+          rubricJson: { categories: [customRubricCategory()] },
+        })
+      );
+      const base = mockCustomRubricSubmission(id);
+      const submission = {
+        ...base,
+        document: {
+          ...base.document,
+          assignment: {
+            id: `assignment-${id}`,
+            prompt: 'Is it possible to be honest and kind at once?',
+            writingTimeMinutes,
+          },
+        },
+      };
+      prisma.submission.findFirst.mockResolvedValue(submission);
+      prisma.assignment.findUnique.mockResolvedValue({
+        assignmentTypeId: 'assignment-type-legacy',
+        rubricRevision: null,
+      });
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: [{ key: 'daily_habit', score: 5, comment: 'Clear.' }],
+            overallComment: 'Jordan, this lands.',
+          })
+        )
+        .mockResolvedValue(JSON.stringify({ issues: [] }));
+      const form = new FormData();
+      form.append('submissionId', id);
+      await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      const byKind = (kind: string) =>
+        getLLMCompletion.mock.calls.find(
+          (call: any[]) => call[0]?.metadata?.kind === kind
+        )?.[0];
+      return { grading: byKind('rubric-evaluation'), grammar: byKind('grammar-issues') };
+    }
+
+    test('tells both the grading assistant and the grammar checker how long the student had', async () => {
+      const { grading, grammar } = await gradeTimed('sub-timed', 10);
+
+      expect(grading.messages[0].content).toContain('Writing time:');
+      expect(grading.messages[0].content).toContain('10 minutes');
+      expect(grammar.system).toContain('written in 10 minutes');
+      expect(grammar.system).toMatch(/fragment used on purpose/);
+      expect(grammar.messages[0].content).toContain('Written in 10 minutes');
+    });
+
+    test('without a writing time, both prompts are what they were before the setting', async () => {
+      const { buildGrammarCheckerSystemPrompt } = await import(
+        '~/domain/grading/writing-time'
+      );
+      const { grading, grammar } = await gradeTimed('sub-untimed', null);
+
+      expect(grading.messages[0].content).not.toContain('Writing time');
+      expect(grammar.system).toBe(buildGrammarCheckerSystemPrompt(null));
+      expect(grammar.messages[0].content).toMatch(
+        /^Essay:\n[\s\S]*\n\nReturn up to 15 issues\.$/
+      );
+    });
+
     function grammarCallCount() {
       return getLLMCompletion.mock.calls.filter(
         (call: any[]) => call[0]?.metadata?.kind === 'grammar-issues'
