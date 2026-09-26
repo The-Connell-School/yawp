@@ -2607,7 +2607,7 @@ test.describe('YAWP! Lesson Planner', () => {
     expect(request.postData()).toContain('45+minutes.');
   });
 
-  test('turns a warm-up it wrote into a Daily Pages exercise', async ({
+  test('turns a warm-up it wrote into a Class Starter', async ({
     page,
     signIn,
     e2eContext,
@@ -2625,10 +2625,14 @@ test.describe('YAWP! Lesson Planner', () => {
     );
 
     // And it is one click from being a real assignment, prompt already in it.
+    // Four minutes at the top of the period is a Class Starter, and the block
+    // not saying so must not turn it into Daily Pages, which is graded on
+    // depth the prompt never asked for.
+    await expect(card).toHaveAttribute('data-exercise-kind', 'class-starter');
     await card.getByTestId('daily-pages-create').click();
     await expect(page).toHaveURL(
       new RegExp(
-        `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+        `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`
       )
     );
     await expect(page.locator('#assignment-create-prompt')).toHaveValue(
@@ -2677,11 +2681,20 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page.locator('main')).toContainText('Pick one:');
     await expect(page.locator('main')).not.toContainText('yawp-daily-pages');
 
+    // All three are bell-ringers. The first is a freewrite library prompt, and
+    // its id alone files it as a Class Starter even with no kind line.
+    for (const index of [0, 1, 2]) {
+      await expect(cards.nth(index)).toHaveAttribute(
+        'data-exercise-kind',
+        'class-starter'
+      );
+    }
+
     // The one they pick is the one that reaches the assignment sheet.
     await cards.nth(2).getByTestId('daily-pages-create').click();
     await expect(page).toHaveURL(
       new RegExp(
-        `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+        `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`
       )
     );
     await expect(page.locator('#assignment-create-prompt')).toHaveValue(
@@ -2721,6 +2734,10 @@ test.describe('YAWP! Lesson Planner', () => {
       'daily-pages'
     );
     await expect(reflection).toContainText('Daily Pages');
+    // A reflection after the reading is not a warm-up, and the card must not
+    // call it one: that is the very line the two exercises are split along.
+    await expect(reflection).not.toContainText(/warm-up/i);
+    await expect(reflection).toContainText('graded reflection');
     await expect(reflection).toContainText('What did it cost him?');
 
     // And the starter reaches its own sheet. Filing it as Daily Pages would

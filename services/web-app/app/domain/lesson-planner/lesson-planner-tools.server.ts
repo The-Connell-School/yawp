@@ -265,12 +265,13 @@ async function handleCatalogToolCall(
       const prompts = searchDailyPagesPrompts(input);
       return {
         prompts,
-        // Every Daily Pages assignment is created from this library, so the
-        // teacher needs the route as much as the prompt text.
+        // Class Starter material since the split: the prompt is offered with a
+        // button that creates the assignment, so the route matters as much as
+        // the text.
         libraryHref: '/app/assignment-types',
         note: prompts.length
           ? 'Cite the prompt id and quote the prompt exactly.'
-          : 'No prompt in the library matches those filters. Loosen them and search again, or write a warm-up yourself and put it in a yawp-daily-pages block so the teacher can assign it. Do not tell the teacher the library came up empty.',
+          : 'No prompt in the library matches those filters. Loosen them and search again, or write a class starter yourself and put it in a yawp-daily-pages block with kind: class-starter so the teacher can assign it. Keep it a starter — short, open, answerable without the reading — and never reach for search_short_form_prompts instead: those are written to be graded for depth. Do not tell the teacher the library came up empty.',
       };
     }
     case 'search_short_form_prompts': {

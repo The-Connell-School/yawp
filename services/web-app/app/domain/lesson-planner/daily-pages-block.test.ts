@@ -2,9 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import {
   dailyPagesCreateHref,
   inlineDailyPagesExercises,
+  kindForPromptId,
   readDailyPagesExercises,
   type DailyPagesExercise,
 } from './daily-pages-block';
+import freewritePrompts from '~/routes/app.assignment-types.$id/prompts-library/prompts.json';
+import shortFormPrompts from '~/routes/app.assignment-types.$id/short-form-prompts-library/prompts.json';
 
 describe('readDailyPagesExercises', () => {
   test('lifts a written warm-up out of the plan', () => {
@@ -19,7 +22,7 @@ describe('readDailyPagesExercises', () => {
 
     expect(exercises).toEqual([
       {
-        kind: 'daily-pages',
+        kind: 'class-starter',
         prompt: 'Think of the last time you convinced someone of something.',
         promptId: null,
       },
@@ -122,7 +125,7 @@ describe('a warm-up the planner found in the library', () => {
       '```yawp-daily-pages\nid: FW-001\nWhat made it land?\n```'
     );
     expect(exercises).toEqual([
-      { kind: 'daily-pages', prompt: 'What made it land?', promptId: 'FW-001' },
+      { kind: 'class-starter', prompt: 'What made it land?', promptId: 'FW-001' },
     ]);
   });
 
@@ -131,7 +134,7 @@ describe('a warm-up the planner found in the library', () => {
       '```yawp-daily-pages\nIdentify the strongest sentence.\n```'
     );
     expect(exercises[0]).toEqual({
-      kind: 'daily-pages',
+      kind: 'class-starter',
       prompt: 'Identify the strongest sentence.',
       promptId: null,
     });
@@ -227,21 +230,25 @@ describe('which exercise a prompt is offered as', () => {
     }
   });
 
-  test('stays Daily Pages when the block says nothing, as every old one does', () => {
-    // Backward compatibility: every prompt already stored in a conversation
-    // was written before this line existed.
+  test('files a block that says nothing as a Class Starter', () => {
+    // The two exercises fail in opposite directions. A reflection filed as a
+    // Class Starter is graded leniently; a starter filed as Daily Pages marks
+    // a student down for depth nobody asked for. So when the planner forgets
+    // to say which, the card takes the one that cannot cost a student marks.
+    // Blocks written before the kind line existed were freewrite prompts, the
+    // library that is Class Starter material since the split.
     const { exercises } = readDailyPagesExercises(
       '```yawp-daily-pages\nWhat made it land?\n```'
     );
-    expect(exercises[0]!.kind).toBe('daily-pages');
+    expect(exercises[0]!.kind).toBe('class-starter');
   });
 
-  test('treats a kind it does not know as Daily Pages rather than dropping the prompt', () => {
+  test('treats a kind it does not know as a Class Starter rather than dropping the prompt', () => {
     const { exercises } = readDailyPagesExercises(
-      '```yawp-daily-pages\nkind: bell-ringer\nWhat made it land?\n```'
+      '```yawp-daily-pages\nkind: journal\nWhat made it land?\n```'
     );
     expect(exercises[0]).toEqual({
-      kind: 'daily-pages',
+      kind: 'class-starter',
       prompt: 'What made it land?',
       promptId: null,
     });
@@ -252,7 +259,7 @@ describe('which exercise a prompt is offered as', () => {
       '```yawp-daily-pages\nKindness costs nothing. Argue the other side.\n```'
     );
     expect(exercises[0]).toEqual({
-      kind: 'daily-pages',
+      kind: 'class-starter',
       prompt: 'Kindness costs nothing. Argue the other side.',
       promptId: null,
     });
@@ -265,4 +272,87 @@ describe('which exercise a prompt is offered as', () => {
       )
     ).toBe('> What made it land?');
   });
+});
+
+describe('which library a prompt came from decides its exercise', () => {
+  // The two libraries have disjoint ids: the freewrite library is FW-###, the
+  // graded short-form library is sf-…. The id is a fact about the prompt, so
+  // it outranks a kind line the model may have got wrong.
+  test('files a freewrite library prompt as a Class Starter even with no kind line', () => {
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nid: FW-117\nWhat is a rule you would change?\n```'
+    );
+    expect(exercises[0]!.kind).toBe('class-starter');
+  });
+
+  test('files a short-form library prompt as Daily Pages even with no kind line', () => {
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nid: sf-ev-03\nWhich line proves it? Explain.\n```'
+    );
+    expect(exercises[0]!.kind).toBe('daily-pages');
+  });
+
+  test('keeps a freewrite prompt a Class Starter when the kind line says Daily Pages', () => {
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nkind: daily-pages\nid: FW-001\nWhat made it land?\n```'
+    );
+    expect(exercises[0]).toEqual({
+      kind: 'class-starter',
+      prompt: 'What made it land?',
+      promptId: 'FW-001',
+    });
+  });
+
+  test('keeps a short-form prompt Daily Pages when the kind line says Class Starter', () => {
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nkind: class-starter\nid: sf-cr-01\nWhat does it cost him?\n```'
+    );
+    expect(exercises[0]!.kind).toBe('daily-pages');
+  });
+
+  // Every id in each library, including any added later, has to read as that
+  // library's exercise, or a new prompt quietly loses its protection.
+  test('files every freewrite library prompt as a Class Starter', () => {
+    expect(freewritePrompts.length).toBeGreaterThan(0);
+    for (const prompt of freewritePrompts as Array<{ id: string }>) {
+      expect(kindForPromptId(prompt.id)).toBe('class-starter');
+    }
+  });
+
+  test('files every short-form library prompt as Daily Pages', () => {
+    expect(shortFormPrompts.length).toBeGreaterThan(0);
+    for (const prompt of shortFormPrompts as Array<{ id: string }>) {
+      expect(kindForPromptId(prompt.id)).toBe('daily-pages');
+    }
+  });
+
+  test('accepts a short-form id, which is lower-case and hyphenated', () => {
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nid: sf-dp-05\nWhat did it cost him?\n```'
+    );
+    expect(exercises[0]!.promptId).toBe('sf-dp-05');
+    expect(exercises[0]!.prompt).toBe('What did it cost him?');
+  });
+});
+
+describe('the words a model reaches for when it names the exercise', () => {
+  test.each(['bell-ringer', 'Bell Ringer', 'warm-up', 'warmup', 'starter', 'do now', 'opener'])(
+    'reads "%s" as a Class Starter',
+    (written) => {
+      const { exercises } = readDailyPagesExercises(
+        '```yawp-daily-pages\nkind: ' + written + '\nWrite.\n```'
+      );
+      expect(exercises[0]!.kind).toBe('class-starter');
+    }
+  );
+
+  test.each(['reflection', 'Daily Page', 'dp'])(
+    'reads "%s" as Daily Pages',
+    (written) => {
+      const { exercises } = readDailyPagesExercises(
+        '```yawp-daily-pages\nkind: ' + written + '\nWrite.\n```'
+      );
+      expect(exercises[0]!.kind).toBe('daily-pages');
+    }
+  );
 });

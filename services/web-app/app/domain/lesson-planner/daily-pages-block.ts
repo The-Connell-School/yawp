@@ -1,5 +1,6 @@
 /**
- * A warm-up the planner wrote, offered as a real Daily Pages exercise.
+ * A short writing prompt the planner wrote or found, offered as a real Class
+ * Starter or Daily Pages exercise.
  *
  * When the library has nothing for a topic the planner writes its own prompt,
  * and until now it announced that fact — "no Daily Pages prompt matched, so
@@ -42,14 +43,15 @@ export const WRITING_EXERCISE_LABELS: Record<WritingExerciseKind, string> = {
 
 export type DailyPagesExercise = {
   /**
-   * Which exercise this is. Absent from every block written before the two
-   * were told apart, and those all meant Daily Pages.
+   * Which exercise this is. A library id settles it; otherwise the block's
+   * kind line does; and a block that says neither is a Class Starter, the one
+   * that cannot mark a student down for depth they were never asked for.
    */
   kind: WritingExerciseKind;
   /** The prompt exactly as students should see it. */
   prompt: string;
   /**
-   * The library prompt's id, when this came from Daily Pages rather than being
+   * The library prompt's id, when this came from a library rather than being
    * written for the lesson. Shown as provenance a teacher can check, not as a
    * disclaimer about where it did not come from.
    */
@@ -75,23 +77,64 @@ function unquote(raw: string): string {
   return (quoted?.[1] ?? withoutMarkers).trim();
 }
 
-/** An optional `id: FW-001` header line, naming a real library prompt. */
+/**
+ * An optional header line naming a real library prompt: `id: FW-001` from the
+ * freewrite library, or `id: sf-ev-03` from the graded short-form library.
+ */
 const ID_LINE = /^\s*id:\s*([A-Za-z0-9][\w-]{0,31})\s*$/;
+
+/**
+ * The two libraries' ids do not overlap, so an id says which exercise its
+ * prompt was written for. The freewrite prompts ask for no backing and are
+ * Class Starter material; the short-form prompts are written to be graded as
+ * Daily Pages. Null for an id from neither, which leaves the kind line to
+ * decide.
+ */
+export function kindForPromptId(promptId: string): WritingExerciseKind | null {
+  if (/^FW-\d+$/i.test(promptId)) return 'class-starter';
+  if (/^sf-/i.test(promptId)) return 'daily-pages';
+  return null;
+}
 
 /** An optional `kind: class-starter` header line. */
 const KIND_LINE = /^\s*kind:\s*([A-Za-z][A-Za-z -]{0,31})\s*$/;
 
 /**
+ * What a block is when nothing in it says otherwise.
+ *
+ * The two exercises fail in opposite directions. A reflection filed as a Class
+ * Starter is graded on engagement, which is lenient; a starter filed as Daily
+ * Pages is graded on depth, which marks a student down for thinking nobody
+ * asked them to show. So an unmarked block takes the one that cannot cost a
+ * student marks. It is also what the oldest blocks were: they predate the kind
+ * line, and they came from the freewrite library.
+ */
+const DEFAULT_KIND: WritingExerciseKind = 'class-starter';
+
+/** The other names a model gives each exercise, normalised as readKind does. */
+const KIND_ALIASES: Record<string, WritingExerciseKind> = {
+  'class-starter': 'class-starter',
+  starter: 'class-starter',
+  'bell-ringer': 'class-starter',
+  bellringer: 'class-starter',
+  'warm-up': 'class-starter',
+  warmup: 'class-starter',
+  'do-now': 'class-starter',
+  opener: 'class-starter',
+  'daily-pages': 'daily-pages',
+  'daily-page': 'daily-pages',
+  dp: 'daily-pages',
+  reflection: 'daily-pages',
+};
+
+/**
  * Read the kind however the model spelled it — "Class Starter", "class-starter",
- * "CLASS STARTER" are one answer. A word we do not know is not worth failing a
- * prompt over: it falls back to Daily Pages, which is what every block meant
- * before the line existed.
+ * "bell ringer" are one answer. A word we do not know is not worth failing a
+ * prompt over: it falls back to the default above.
  */
 function readKind(raw: string): WritingExerciseKind {
-  const normalized = raw.trim().toLowerCase().replace(/\s+/g, '-');
-  return (WRITING_EXERCISE_KINDS as readonly string[]).includes(normalized)
-    ? (normalized as WritingExerciseKind)
-    : 'daily-pages';
+  const normalized = raw.trim().toLowerCase().replace(/[\s_]+/g, '-');
+  return KIND_ALIASES[normalized] ?? DEFAULT_KIND;
 }
 
 /**
@@ -107,7 +150,7 @@ function splitHeader(raw: string): {
   rest: string;
 } {
   const lines = raw.split('\n');
-  let kind: WritingExerciseKind = 'daily-pages';
+  let kind: WritingExerciseKind = DEFAULT_KIND;
   let promptId: string | null = null;
   let cursor = 0;
 
@@ -129,13 +172,18 @@ function splitHeader(raw: string): {
     break;
   }
 
+  // The library the prompt came from outranks the label: the planner can
+  // mislabel a step, but a freewrite prompt is not written to be graded for
+  // depth whatever the line above it says.
+  if (promptId) kind = kindForPromptId(promptId) ?? kind;
+
   return { kind, promptId, rest: lines.slice(cursor).join('\n') };
 }
 
 /**
- * The Daily Pages warm-ups in a reply, and the reply without their blocks.
+ * The short writing prompts in a reply, and the reply without their blocks.
  *
- * Every warm-up goes through here, whether the planner found it in the library
+ * Every Class Starter and Daily Pages prompt goes through here, whether the planner found it in the library
  * or wrote it: a teacher should never read "Warm-up — Daily Pages (7 min)" and
  * have to guess what their students will actually be asked.
  */
@@ -164,7 +212,7 @@ export function readDailyPagesExercises(content: string): {
 }
 
 /**
- * The same reply, with each written warm-up turned back into a blockquote.
+ * The same reply, with each writing prompt turned back into a blockquote.
  *
  * On the packet page there is no button to offer — the packet is a thing to
  * print — but the prompt is real lesson content and has to appear. Printing the

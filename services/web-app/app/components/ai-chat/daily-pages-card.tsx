@@ -59,9 +59,11 @@ export function DailyPagesCard({
       <div className="flex items-center gap-2 border-b border-primary/15 px-4 py-2.5">
         <PenLine size={15} className="shrink-0 text-primary" />
         <span className="text-sm font-medium">
+          {/* Never "warm-up" for Daily Pages: the opening minutes are what a
+              Class Starter is for, and the two are graded differently. */}
           {isStarter
             ? `${WRITING_EXERCISE_LABELS['class-starter']} — opens the period`
-            : `${WRITING_EXERCISE_LABELS['daily-pages']} warm-up`}
+            : `${WRITING_EXERCISE_LABELS['daily-pages']} — graded reflection`}
         </span>
       </div>
 

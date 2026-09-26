@@ -221,6 +221,21 @@ describe('handleLessonPlannerToolCall', () => {
     expect(result.note).toMatch(/loosen/i);
   });
 
+  test('has a starter the planner writes itself filed as a Class Starter', async () => {
+    // A block with no kind line would otherwise be read by whatever the
+    // parser defaults to; the note should never leave it to chance.
+    const result = JSON.parse(
+      await callTool(
+        'search_daily_pages_prompts',
+        { text: 'a-book-yawp-does-not-have' },
+        { ...ctx }
+      )
+    );
+
+    expect(result.note).toContain('kind: class-starter');
+    expect(result.note).not.toContain('kind: daily-pages');
+  });
+
   test('returns a writing lesson with its full text and link', async () => {
     const listed = JSON.parse(
       await callTool('list_writing_lessons', {}, { ...ctx })
