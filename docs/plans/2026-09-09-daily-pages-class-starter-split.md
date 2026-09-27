@@ -22,8 +22,8 @@ and Daily Pages becomes the graded one.
 
 | | Class Starter | Daily Pages |
 |---|---|---|
-| What it is | Open-ended writing to begin class | A short, claim-first response, graded formally |
-| Shape | Explore; the point may arrive at the end, or not at all | A body paragraph: claim first, then the case for it |
+| What it is | Open-ended writing to begin class | Short academic paragraph practice, graded formally |
+| Shape | Explore; the point may arrive at the end, or not at all | One deliberate move (analyze, argue, compare, define…); a findable point, held up; no single required form |
 | Categories | Engagement | Depth of Thought (0.30), Development of Thought (0.25), Organization/Structure (0.12), Voice/Style (0.20), Grammar/Syntax/Mechanics (0.13) |
 | Scale | 0–3 (Absent → All in) | 1–5 (Beginning → Exemplary), the essay scale, with a written band per score |
 | Feedback | Overall only | Per category |
@@ -238,18 +238,27 @@ form or register. Silence there is not neutral: the instructions open with
 associates with school essays carried over by default, entry by entry, decided
 by the model rather than by us.
 
-**A Daily Pages entry is claim-first.** It is written the way a strong body
-paragraph is written — the claim in the first sentence, the support behind it,
-a close that lands. It is not an exploration. Writing to find out what you
-think, with the point arriving at the end, is what a Class Starter is for now,
-and that division is the whole reason there are two assignment types. The
-prompt may be anchored to a text or an excerpt, or be general; what does not
-vary is the shape.
+**A Daily Pages entry is paragraph practice, and not one fixed form.** It is
+short, academic writing — generally a paragraph, sometimes up to a page, written
+in the time the teacher sets (often ten or fifteen minutes). Each prompt asks
+for one deliberate academic move: analyzing, arguing a position, comparing,
+defining a term, interpreting, evaluating, synthesizing. That deliberateness is
+what separates it from a Class Starter, which is lower-stakes and open-ended.
+It is not an exploration: writing to find out what you think, with the point
+arriving at the end, is what a Class Starter is for.
+
+The first draft of this rubric required the claim in the first sentence. That
+fits an argued position and misfits most of the other moves — an analysis may
+open on the passage, a definition on the case that sets it up — so it was
+dropped. The rubric now asks that a reader can find the point, that the point
+is held up, and that the paragraph is shaped the way its kind of paragraph
+should be. A calibration case (`dp-definition-opens-on-a-case`) pins that a
+strong paragraph can open on something other than a claim.
 
 This changed the rubric's top bands, which had rewarded the opposite. "Arrives
 somewhere the piece did not begin" and "the thinking compounds" describe the
 exploration shape; they are gone, and Depth of Thought now reads whether the
-claim is worth making and survives the objection a reader raises first. A test
+point is worth making and survives the objection a reader raises first. A test
 asserts no top band asks for a journey, because that language is easy to
 reintroduce by accident.
 
@@ -260,16 +269,22 @@ top-entry writing rather than merely tolerated.
 
 **What the top of the scale asks for is an edited piece.** Voice/Style reads
 whether the prose has been worked on: an entry still carrying hedges in front
-of the claim, narration of its own process ("what I thought was", "I'm pretty
+of the point, narration of its own process ("what I thought was", "I'm pretty
 sure that"), or filler scores no higher than Proficient there, however good its
 ideas are. The assistant coaches the cut — handing the student their own
 sentence with the hedge removed — rather than deducting for the phrase, because
 scoring a phrase teaches students to write around the rubric instead of
 thinking. The cost lands on the piece being unedited, not on any one word.
 
-**The Tutor coaches the same two things**, because the tutor is the half of
+**Grammar is scored on the AP standard for timed writing.** Some grammar and
+spelling errors are understandable in a piece written this quickly; they lower
+the score only when they are frequent enough to distract from meaning. Every
+error is still marked up — the standard governs the score, not the
+highlighting.
+
+**The Tutor coaches the same things**, because the tutor is the half of
 this a student meets before any grade exists:
-`DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS` asks for the claim, then the
+`DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS` asks for the point, then the
 support, then offers the hedge as an edit — and tells it not to encourage
 exploring or freewriting.
 
@@ -284,6 +299,35 @@ what ships:
   behaviour. Doing the same for a customer is a deliberate content change, like
   the rubric reset beside it.
 
+## Calibrating strictness
+
+The first graded examples read as too lenient. Strictness is tuned against
+`app/domain/ai-evaluation/daily-pages-calibration.v1.ts`: eleven synthetic,
+fifteen-minute paragraphs across the scale, each with educator bands for every
+category. The bands encode the decisions above (effort alone below a passing
+composite; strong paragraphs of more than one kind at the top; AP grammar;
+unedited prose at or below Proficient on Voice/Style), and tests pin each.
+
+    bun services/web-app/scripts/run-daily-pages-calibration.ts
+
+runs it live against the built-in Daily Pages assistant and lists every score
+outside its band as lenient or strict. Run it after any rubric or instruction
+change, and before a new paragraph type is switched on. The cases are drafts
+until product and an educator approve them.
+
+## Per-assignment settings
+
+Four settings on the assignment sheet change how an entry is written or graded,
+and the about page names each:
+
+- **Time students have to write** — the grader and the grammar checker read the
+  entry as that many minutes of writing.
+- **Grammar grading** — off drops the grammar category for that assignment.
+- **Tutor enabled** — off makes it a **cold write**. The sheet tags it, the
+  student's prompt panel says so, and the grader is told it is unassisted work
+  and not to refer the student to a tutor.
+- **Submit for grade** — off runs it as practice; nothing reaches the gradebook.
+
 ## Still open
 
 - ~~**Whose sentence rules apply.**~~ Resolved by the writing time above: the
@@ -296,12 +340,11 @@ what ships:
 - **Brief versus underdeveloped.** The instructions say never to mark an entry
   down for being brief; the Development bands mark an entry that does not hold
   its claim up. A three-sentence entry against a half-page target is both.
-- **`exit-synthesis` may now belong to Class Starter.** One of the six corpus
-  kinds asks what changed today and what changed it — which is exploration by
-  design, and reads oddly against a claim-first rubric. Worth deciding before
-  the corpus grows.
+- ~~**`exit-synthesis` may now belong to Class Starter.**~~ Resolved: the kind
+  is removed from the Daily Pages corpus. It asks the student to explore, which
+  is a Class Starter's job.
 - **Whether Organization should weigh more than 15%.** Shape is now a named
-  requirement, and a response that buries its claim loses ground in two
+  requirement, and a response that buries its point loses ground in two
   categories rather than one. That may be enough; if it is not, the weight is
   the lever.
 
