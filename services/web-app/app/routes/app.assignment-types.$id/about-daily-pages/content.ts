@@ -90,7 +90,7 @@ const CATEGORY_GLOSS: Record<CategoryKey, string> = {
   voice_and_style:
     'Whether the prose has been edited. First person is fine; hedges, process narration and filler are what cost, and an unedited draft cannot reach the top two bands.',
   grammar_and_mechanics:
-    'Sentence construction, punctuation, usage, spelling. Graded and marked up here, unlike a Class Starter — and switchable per assignment.',
+    'Sentence construction, punctuation, usage, spelling, on the AP standard for timed writing: errors cost only when they are frequent enough to distract from meaning. Marked up either way, unlike a Class Starter — and switchable per assignment.',
 };
 
 export type GradingSummaryRow = {

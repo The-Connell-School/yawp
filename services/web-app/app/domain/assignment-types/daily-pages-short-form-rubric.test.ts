@@ -131,6 +131,47 @@ describe('grammar is graded, which is what Class Starter never does', () => {
   });
 });
 
+/**
+ * The AP standard for timed writing: some grammar and spelling errors are
+ * expected in a piece written in ten or fifteen minutes, and they cost only
+ * when they are frequent enough to distract from meaning. The errors are still
+ * marked up so the student can see them — the standard governs the score.
+ */
+describe('grammar is scored on the AP standard for timed writing', () => {
+  const instructions = (
+    DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG.gradingInstructions ?? ''
+  ).toLowerCase();
+  const grammar = categories.find(
+    (category) => category.key === DAILY_PAGES_SHORT_FORM_GRAMMAR_CATEGORY_KEY
+  );
+
+  test('tells the grader errors cost only when they distract from meaning', () => {
+    expect(instructions).toContain('the ap standard');
+    expect(instructions).toContain('frequent enough to distract from meaning');
+  });
+
+  test('still marks the errors up, so the student can see them', () => {
+    expect(instructions).toContain('mark the errors');
+  });
+
+  test('describes the standard where a teacher reads the category', () => {
+    expect(grammar?.description.toLowerCase()).toContain(
+      'distract from meaning'
+    );
+  });
+
+  test('lets a piece with occasional errors reach the top band', () => {
+    const top = grammar?.bands?.at(-1)?.description.toLowerCase() ?? '';
+    expect(top).toContain('occasional');
+    expect(top).not.toContain('clean and controlled');
+  });
+
+  test('keeps the low bands for errors that get in the way of meaning', () => {
+    const low = grammar?.bands?.[1]?.description.toLowerCase() ?? '';
+    expect(low).toContain('meaning');
+  });
+});
+
 describe('the Daily Pages short-form grading instructions', () => {
   const instructions = (
     DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG.gradingInstructions ?? ''

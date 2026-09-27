@@ -105,6 +105,14 @@ describe('the grading summary', () => {
     expect(thinking).toBeGreaterThan(50);
   });
 
+  test('tells a teacher grammar is scored on the AP standard', () => {
+    const grammar = GRADING_SUMMARY.find(
+      (row) => row.key === 'grammar_and_mechanics'
+    );
+    expect(grammar?.gloss).toContain('AP standard');
+    expect(grammar?.gloss).toContain('distract from meaning');
+  });
+
   test('glosses every category', () => {
     for (const row of GRADING_SUMMARY) {
       expect(row.gloss.length).toBeGreaterThan(20);
