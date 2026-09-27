@@ -122,7 +122,7 @@ test.describe.serial('Daily Pages about section', () => {
 
     await expect(page.getByText('Browse the prompts below')).toBeVisible();
     await expect(
-      page.getByText('The six kinds', { exact: true })
+      page.getByText('The kinds', { exact: true })
     ).toBeVisible();
   });
 

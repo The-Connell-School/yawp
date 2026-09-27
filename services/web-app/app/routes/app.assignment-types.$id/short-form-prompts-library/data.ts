@@ -18,16 +18,17 @@
 
 /**
  * The shape of the thinking a prompt sets up. Chosen so a teacher can pick by
- * what they want to grade rather than by topic — these are the six patterns
- * that produce something the short-form rubric can actually score.
+ * what they want to grade rather than by topic — these are the patterns that
+ * produce something the short-form rubric can actually score. Each is a
+ * deliberate academic move; exploration ("what changed today?") is left to the
+ * Class Starter corpus.
  */
 export type ShortFormPromptKind =
   | 'close-read'
   | 'claim-and-defend'
   | 'one-difference'
   | 'evaluate-a-choice'
-  | 'define-precisely'
-  | 'exit-synthesis';
+  | 'define-precisely';
 
 /**
  * The analytic moves, deliberately not the Class Starter set. That library
@@ -199,7 +200,6 @@ export const KIND_LABEL: Record<ShortFormPromptKind, string> = {
   'one-difference': 'Two things, one difference',
   'evaluate-a-choice': 'Evaluate a choice',
   'define-precisely': 'Define precisely',
-  'exit-synthesis': 'Exit-ticket synthesis',
 };
 
 export const KIND_DESCRIPTION: Record<ShortFormPromptKind, string> = {
@@ -213,8 +213,6 @@ export const KIND_DESCRIPTION: Record<ShortFormPromptKind, string> = {
     'A judgment that has to name its own standard. Good for Development, because the standard has to come before the verdict.',
   'define-precisely':
     'A boundary drawn and then tested. Rewards precision over fluency.',
-  'exit-synthesis':
-    'What changed today and what changed it. The one kind that works without a reading in front of the student.',
 };
 
 export const COGNITIVE_MOVE_LABEL: Record<ShortFormCognitiveMove, string> = {
@@ -246,7 +244,6 @@ export const KIND_ORDER = [
   'one-difference',
   'evaluate-a-choice',
   'define-precisely',
-  'exit-synthesis',
 ] as const satisfies readonly ShortFormPromptKind[];
 
 export const SOURCE_NEED_ORDER = [
@@ -289,7 +286,7 @@ export const TEACHING_NOTES: string[] = [
   'Filter by “Source required” for the prompts that follow a reading, and by “No source needed” on a day the class has read nothing.',
   'Every prompt names a target length. Keep it when you edit the wording — it is how a student knows when they are done, and length earns nothing on its own.',
   'Editing a prompt before you create the assignment is expected. These are starting points; the class in front of you is the reason to change one.',
-  'The six kinds above are also the six shapes worth copying when you write a prompt of your own.',
+  'The kinds above are also the shapes worth copying when you write a prompt of your own.',
 ];
 
 /** URL search-param keys. Prefixed `sf_` so they collide with neither library. */

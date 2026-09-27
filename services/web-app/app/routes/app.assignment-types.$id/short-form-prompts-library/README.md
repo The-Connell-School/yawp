@@ -51,16 +51,27 @@ reliably produces something the rubric can score in fifteen minutes.
 | `one-difference` | a comparison narrowed to the one distinction that matters |
 | `evaluate-a-choice` | a judgment that has to name its own standard |
 | `define-precisely` | a boundary drawn, then tested with a hard case |
-| `exit-synthesis` | what changed today and what changed it — needs no reading |
+
+There is deliberately no exploration kind. An `exit-synthesis` kind ("what
+changed today, and what changed it?") shipped in the first draft and was
+removed: it asks the student to explore rather than make a deliberate academic
+move, which is what a Class Starter is for.
+
+## Text-specific prompts
+
+Prompts anchored to one text use a text infix in the id (`sf-cr-rj-001` for
+Romeo and Juliet). Romeo and Juliet is there because it is taught in ninth
+grade alongside Yawp; these prompts lean toward analysis, the first paragraph
+type to ship.
 
 ## Schema
 
 | field | meaning |
 |---|---|
-| `id` | stable, prefixed by kind (`sf-cr-`, `sf-cd-`, `sf-od-`, `sf-ev-`, `sf-dp-`, `sf-ex-`) |
+| `id` | stable, prefixed by kind (`sf-cr-`, `sf-cd-`, `sf-od-`, `sf-ev-`, `sf-dp-`) |
 | `title` | short row heading; the directive lives in `prompt` |
 | `prompt` | the assignment text, used verbatim |
-| `kind` | one of the six above |
+| `kind` | one of the five above |
 | `cognitiveMoves` | the analytic set — deliberately not Class Starter's `introspect`/`tell-a-story` |
 | `sourceNeed` | `required` / `optional` / `none` — the filter a teacher reaches for first |
 | `lengthTarget` | `paragraph` / `half-page` / `page` |
