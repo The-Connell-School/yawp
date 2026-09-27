@@ -26,6 +26,8 @@ export function parseAssignmentExitTicket(
   formData: FormData
 ): ParseAssignmentExitTicketResult {
   const parsed = parseExitTicketConfigInput({
+    // Posted only by the quick builder, always beside the mode it names.
+    kind: formData.get('exitTicketKind')?.toString(),
     mode: formData.get('exitTicketMode')?.toString(),
     focus: formData.get('exitTicketFocus')?.toString(),
     topic: formData.get('exitTicketTopic')?.toString(),

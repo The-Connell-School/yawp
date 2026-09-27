@@ -25,6 +25,7 @@ import {
 import {
   DEFAULT_EXIT_TICKET_MODE,
   EXIT_TICKETS_ENABLED,
+  EXIT_TICKET_BUILDER_V2_ENABLED,
   EXIT_TICKET_ANSWER_TYPE_OPTIONS,
   EXIT_TICKET_ANSWER_TYPES,
   EXIT_TICKET_FOCUS_OPTIONS,
@@ -68,6 +69,7 @@ import {
   type AssignmentGradingMode,
 } from '~/domain/assignments/rubric-overrides';
 import { Tooltip } from '~/components/ui/tooltip';
+import { ExitTicketBuilder } from './exit-ticket-builder';
 import { cn } from '~/utils/misc';
 import { toDateInputValue } from '~/utils/date-only';
 
@@ -242,6 +244,11 @@ export type AssignmentCreationSheetProps = {
    * than resetting it to the default.
    */
   initialExitTicketMode?: ExitTicketMode;
+  /**
+   * Which exit ticket builder to render. Defaults to the feature flag; tests
+   * pin one explicitly so both stay covered while the flag exists.
+   */
+  exitTicketBuilder?: 'v1' | 'v2';
   initialExitTicketFocus?: ExitTicketFocus;
   initialExitTicketTopic?: string;
   /** Absent leaves the question unanswered, which is what blocks submission. */
@@ -403,6 +410,7 @@ export function AssignmentCreationSheetContent({
   initialRubricTotalPoints = null,
   initialGradingMode = DEFAULT_ASSIGNMENT_GRADING_MODE,
   initialExitTicketMode = DEFAULT_EXIT_TICKET_MODE,
+  exitTicketBuilder = EXIT_TICKET_BUILDER_V2_ENABLED ? 'v2' : 'v1',
   initialExitTicketFocus = EXIT_TICKET_FOCUS_OPTIONS[0].value,
   initialExitTicketAnswerType = null,
   initialExitTicketTopic = '',
@@ -479,9 +487,8 @@ export function AssignmentCreationSheetContent({
       initialGradingAssistantStrictnessLevel
     );
   const [gradingPanelOpen, setGradingPanelOpen] = useState(false);
-  const [gradingMode, setGradingMode] = useState<AssignmentGradingMode>(
-    initialGradingMode
-  );
+  const [gradingMode, setGradingMode] =
+    useState<AssignmentGradingMode>(initialGradingMode);
   const [exitTicketMode, setExitTicketMode] = useState<ExitTicketMode>(
     initialExitTicketMode
   );
@@ -775,6 +782,93 @@ export function AssignmentCreationSheetContent({
     </div>
   );
 
+  // Teacher-only context about the lesson. Rendered only while switched on,
+  // so a ticket without notes posts no note fields and stores none. Nothing
+  // here is ever composed into the prompt.
+  const exitTicketLessonNotesBlock = (
+    <div className="space-y-3 rounded-md border border-dashed p-3">
+      <div className="flex items-start gap-2.5">
+        <Checkbox
+          id="assignment-create-exit-ticket-lesson-notes"
+          checked={lessonNotesEnabled}
+          onCheckedChange={(checked) => setLessonNotesEnabled(checked === true)}
+          disabled={isSaving}
+          className="mt-0.5 size-4 shrink-0"
+        />
+        <Label
+          htmlFor="assignment-create-exit-ticket-lesson-notes"
+          className="cursor-pointer font-normal"
+        >
+          <span className="font-medium">Add notes about the lesson</span>
+          <span className="mt-0.5 block text-sm text-muted-foreground">
+            Students never see these. The more you tell us here, the more
+            targeted this exit ticket becomes — responses can be read against
+            what you actually taught, instead of just on their own terms.
+          </span>
+        </Label>
+      </div>
+
+      {lessonNotesEnabled ? (
+        <div className="space-y-3 pl-[calc(1rem+0.625rem)]">
+          {EXIT_TICKET_LESSON_NOTE_FIELDS.map((field) => {
+            const id = `assignment-create-exit-ticket-lesson-${field.key}`;
+            const name = `exitTicketLesson${field.key[0].toUpperCase()}${field.key.slice(1)}`;
+            return (
+              <div key={field.key} className="space-y-1.5">
+                <Label htmlFor={id}>
+                  {field.label}{' '}
+                  <span className="text-muted-foreground">(optional)</span>
+                </Label>
+                <Textarea
+                  id={id}
+                  name={name}
+                  value={lessonNotes[field.key]}
+                  onChange={(event) =>
+                    setLessonNotes((current) => ({
+                      ...current,
+                      [field.key]: event.target.value,
+                    }))
+                  }
+                  rows={2}
+                  maxLength={EXIT_TICKET_LESSON_NOTE_MAX_LENGTH}
+                  placeholder={field.placeholder}
+                  disabled={isSaving}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {field.helperText}
+                </p>
+              </div>
+            );
+          })}
+          <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+            {exitTicketTargetingHint(lessonNotes)}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  // The composed prompt goes along so any handler that still expects a
+  // prompt field keeps working. The server recomposes it from the answers
+  // rather than trusting this value.
+  const exitTicketHiddenFields = (
+    <>
+      <input type="hidden" name="exitTicketMode" value={exitTicketMode} />
+      {exitTicketMode === 'specific' ? (
+        <>
+          <input type="hidden" name="exitTicketFocus" value={exitTicketFocus} />
+          <input type="hidden" name="exitTicketTopic" value={exitTicketTopic} />
+          <input
+            type="hidden"
+            name="exitTicketAnswerType"
+            value={exitTicketAnswerType}
+          />
+        </>
+      ) : null}
+      <input type="hidden" name="prompt" value={exitTicketPrompt} />
+    </>
+  );
+
   const form = (
     <>
       {header}
@@ -1002,7 +1096,29 @@ export function AssignmentCreationSheetContent({
           ) : null}
         </div>
 
-        {isExitTicket ? (
+        {isExitTicket && exitTicketBuilder === 'v2' ? (
+          <div className="space-y-4">
+            <ExitTicketBuilder
+              mode={exitTicketMode}
+              onModeChange={(nextMode) => {
+                setExitTicketMode(nextMode);
+                setLessonNotesEnabled(
+                  defaultExitTicketLessonNotesEnabled(nextMode)
+                );
+              }}
+              focus={exitTicketFocus}
+              onFocusChange={setExitTicketFocus}
+              topic={exitTicketTopic}
+              onTopicChange={setExitTicketTopic}
+              answerType={exitTicketAnswerType}
+              onAnswerTypeChange={setExitTicketAnswerType}
+              preview={exitTicketPreview}
+              disabled={isSaving}
+            />
+            {exitTicketLessonNotesBlock}
+            {exitTicketHiddenFields}
+          </div>
+        ) : isExitTicket ? (
           <div className="space-y-4 rounded-md border p-3">
             <div className="space-y-2">
               <Label>Exit ticket</Label>
@@ -1144,76 +1260,7 @@ export function AssignmentCreationSheetContent({
               </div>
             ) : null}
 
-            {/* Teacher-only context about the lesson. Rendered only while
-                switched on, so a ticket without notes posts no note fields and
-                stores none. Nothing here is ever composed into the prompt. */}
-            <div className="space-y-3 rounded-md border border-dashed p-3">
-              <div className="flex items-start gap-2.5">
-                <Checkbox
-                  id="assignment-create-exit-ticket-lesson-notes"
-                  checked={lessonNotesEnabled}
-                  onCheckedChange={(checked) =>
-                    setLessonNotesEnabled(checked === true)
-                  }
-                  disabled={isSaving}
-                  className="mt-0.5 size-4 shrink-0"
-                />
-                <Label
-                  htmlFor="assignment-create-exit-ticket-lesson-notes"
-                  className="cursor-pointer font-normal"
-                >
-                  <span className="font-medium">
-                    Add notes about the lesson
-                  </span>
-                  <span className="mt-0.5 block text-sm text-muted-foreground">
-                    Students never see these. The more you tell us here, the
-                    more targeted this exit ticket becomes — responses can be
-                    read against what you actually taught, instead of just on
-                    their own terms.
-                  </span>
-                </Label>
-              </div>
-
-              {lessonNotesEnabled ? (
-                <div className="space-y-3 pl-[calc(1rem+0.625rem)]">
-                  {EXIT_TICKET_LESSON_NOTE_FIELDS.map((field) => {
-                    const id = `assignment-create-exit-ticket-lesson-${field.key}`;
-                    const name = `exitTicketLesson${field.key[0].toUpperCase()}${field.key.slice(1)}`;
-                    return (
-                      <div key={field.key} className="space-y-1.5">
-                        <Label htmlFor={id}>
-                          {field.label}{' '}
-                          <span className="text-muted-foreground">
-                            (optional)
-                          </span>
-                        </Label>
-                        <Textarea
-                          id={id}
-                          name={name}
-                          value={lessonNotes[field.key]}
-                          onChange={(event) =>
-                            setLessonNotes((current) => ({
-                              ...current,
-                              [field.key]: event.target.value,
-                            }))
-                          }
-                          rows={2}
-                          maxLength={EXIT_TICKET_LESSON_NOTE_MAX_LENGTH}
-                          placeholder={field.placeholder}
-                          disabled={isSaving}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          {field.helperText}
-                        </p>
-                      </div>
-                    );
-                  })}
-                  <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-                    {exitTicketTargetingHint(lessonNotes)}
-                  </p>
-                </div>
-              ) : null}
-            </div>
+            {exitTicketLessonNotesBlock}
 
             <div className="space-y-2">
               <Label htmlFor="assignment-create-exit-ticket-preview">
@@ -1237,32 +1284,7 @@ export function AssignmentCreationSheetContent({
               )}
             </div>
 
-            <input type="hidden" name="exitTicketMode" value={exitTicketMode} />
-            {exitTicketMode === 'specific' ? (
-              <>
-                <input
-                  type="hidden"
-                  name="exitTicketFocus"
-                  value={exitTicketFocus}
-                />
-                <input
-                  type="hidden"
-                  name="exitTicketTopic"
-                  value={exitTicketTopic}
-                />
-                <input
-                  type="hidden"
-                  name="exitTicketAnswerType"
-                  value={exitTicketAnswerType}
-                />
-              </>
-            ) : null}
-            {/*
-              The composed prompt goes along so any handler that still expects
-              a prompt field keeps working. The server recomposes it from the
-              answers above rather than trusting this value.
-            */}
-            <input type="hidden" name="prompt" value={exitTicketPrompt} />
+            {exitTicketHiddenFields}
           </div>
         ) : (
           <div className="space-y-2">
@@ -1601,11 +1623,7 @@ export function AssignmentCreationSheetContent({
         {selectedTypeGradesGrammar ? (
           <div className="pt-6">
             {isEditing ? null : (
-              <input
-                type="hidden"
-                name="grammarGradingEnabled"
-                value="false"
-              />
+              <input type="hidden" name="grammarGradingEnabled" value="false" />
             )}
             <div className="flex items-center gap-2.5">
               <Checkbox

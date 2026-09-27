@@ -14,10 +14,12 @@ async function openNewAssignmentSheet(page: import('@playwright/test').Page) {
   await expect(
     page.getByRole('heading', { name: 'New Assignment' })
   ).toBeVisible();
+  // Nothing can be created until it is assigned somewhere.
+  await page.getByRole('checkbox', { name: /Grade 9th/ }).check();
 }
 
 test.describe.serial('Exit tickets', () => {
-  test('a basic exit ticket is one click and shows the standard prompt', async ({
+  test('a reflection is the default and needs only a title', async ({
     page,
     e2eContext,
     signIn,
@@ -34,9 +36,15 @@ test.describe.serial('Exit tickets', () => {
 
     // No prompt box at all: the teacher answers the form instead.
     await expect(page.getByRole('textbox', { name: 'Prompt' })).toHaveCount(0);
-    await expect(page.getByText('Basic exit ticket')).toBeVisible();
 
-    // Basic is where the form opens, and the preview is already filled in.
+    // Reflection or check is the first choice, and reflection is where the
+    // form opens, with the preview already filled in.
+    await expect(
+      page.getByRole('radio', { name: /^Reflection/ })
+    ).toBeChecked();
+    await expect(
+      page.getByRole('radio', { name: /^Check for understanding/ })
+    ).not.toBeChecked();
     await expect(page.getByText(BASIC_OPENING)).toBeVisible();
 
     await page.getByLabel('Title (optional)').fill('Exit ticket: Tuesday');
@@ -47,7 +55,7 @@ test.describe.serial('Exit tickets', () => {
     ).toHaveCount(0);
   });
 
-  test('a specific exit ticket asks what to check for and previews it', async ({
+  test('a check for understanding asks what to check for and previews it', async ({
     page,
     e2eContext,
     signIn,
@@ -58,13 +66,14 @@ test.describe.serial('Exit tickets', () => {
     );
 
     await openNewAssignmentSheet(page);
-    await page.getByText('Specific exit ticket').click();
+    await page.getByRole('radio', { name: /^Check for understanding/ }).click();
 
     // The dropdown names the kind of understanding; the field names the topic.
     await expect(page.getByText('What are you checking for?')).toBeVisible();
     await page.getByLabel('What are you checking for?').click();
     await page.getByRole('option', { name: 'Explain a concept' }).click();
     await page.getByLabel('What specifically?').fill(TOPIC);
+    await page.getByRole('radio', { name: /^Yes/ }).click();
 
     // The teacher approves the exact wording before a class ever sees it.
     await expect(page.getByText(TOPIC).last()).toBeVisible();
@@ -78,7 +87,7 @@ test.describe.serial('Exit tickets', () => {
     ).toHaveCount(0);
   });
 
-  test('reopening a specific exit ticket keeps what it was checking for', async ({
+  test('reopening a check keeps what it was checking for', async ({
     page,
     e2eContext,
     signIn,
@@ -97,6 +106,9 @@ test.describe.serial('Exit tickets', () => {
       page.getByRole('heading', { name: 'Edit Assignment' })
     ).toBeVisible();
 
+    await expect(
+      page.getByRole('radio', { name: /^Check for understanding/ })
+    ).toBeChecked();
     await expect(page.getByLabel('What specifically?')).toHaveValue(TOPIC);
     await expect(page.getByText(TOPIC).last()).toBeVisible();
   });

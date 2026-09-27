@@ -25,6 +25,14 @@ export const EXIT_TICKET_ASSIGNMENT_TYPE_KIND = 'exit_ticket';
  */
 export const EXIT_TICKETS_ENABLED = true;
 
+/**
+ * The quicker builder: reflection or check first, grading only when asked for,
+ * explanations behind disclosures. Off renders the original form unchanged,
+ * and either form reads what the other one stored — the new builder writes
+ * `mode` exactly as the old one did and only adds optional fields beside it.
+ */
+export const EXIT_TICKET_BUILDER_V2_ENABLED = true;
+
 /** Bumped only if a stored config ever has to be read two ways at once. */
 export const EXIT_TICKET_CONFIG_SCHEMA_VERSION = 1 as const;
 
@@ -37,6 +45,59 @@ export type ExitTicketMode = (typeof EXIT_TICKET_MODES)[number];
 
 /** What the sheet opens on: the one-click option, not the one with fields. */
 export const DEFAULT_EXIT_TICKET_MODE: ExitTicketMode = 'basic';
+
+/**
+ * How a teacher thinks about the choice. A reflection asks how the lesson
+ * landed and has no answer to get wrong; a check asks for evidence of one
+ * specific thing. Each maps onto exactly one stored mode, so the kind is a
+ * name for the choice rather than a second switch that could disagree.
+ */
+export const EXIT_TICKET_KINDS = ['reflection', 'check'] as const;
+export type ExitTicketKind = (typeof EXIT_TICKET_KINDS)[number];
+
+/** The quick option: an ungraded reflection needs nothing but a title. */
+export const DEFAULT_EXIT_TICKET_KIND: ExitTicketKind = 'reflection';
+
+export type ExitTicketKindOption = {
+  value: ExitTicketKind;
+  label: string;
+  /** One short line. The longer explanation sits behind a disclosure. */
+  helperText: string;
+};
+
+export const EXIT_TICKET_KIND_OPTIONS: ExitTicketKindOption[] = [
+  {
+    value: 'reflection',
+    label: 'Reflection',
+    helperText: 'Open-ended: what landed, what stuck, what is still unclear.',
+  },
+  {
+    value: 'check',
+    label: 'Check for understanding',
+    helperText: 'Ask for evidence of one specific thing from today.',
+  },
+];
+
+const MODE_FOR_KIND: Record<ExitTicketKind, ExitTicketMode> = {
+  reflection: 'basic',
+  check: 'specific',
+};
+
+export function exitTicketModeForKind(kind: ExitTicketKind): ExitTicketMode {
+  return MODE_FOR_KIND[kind];
+}
+
+export function exitTicketKindForMode(mode: ExitTicketMode): ExitTicketKind {
+  return mode === 'specific' ? 'check' : 'reflection';
+}
+
+function parseExitTicketKind(
+  value: string | null | undefined
+): ExitTicketKind | null {
+  return EXIT_TICKET_KINDS.includes(value as ExitTicketKind)
+    ? (value as ExitTicketKind)
+    : null;
+}
 
 /**
  * Long enough for "the difference between a theme and a topic", short
@@ -102,7 +163,8 @@ export const EXIT_TICKET_LESSON_NOTE_FIELDS: ExitTicketLessonNoteField[] = [
     label: 'What they absolutely should mention',
     helperText:
       'The one thing a response cannot leave out and still show understanding.',
-    placeholder: 'e.g., That a theme has to make a claim, not just name a subject.',
+    placeholder:
+      'e.g., That a theme has to make a claim, not just name a subject.',
   },
   {
     key: 'watchFor',
@@ -287,9 +349,14 @@ type ExitTicketConfigBase = {
 };
 
 export type ExitTicketConfig =
-  | (ExitTicketConfigBase & { mode: 'basic' })
+  | (ExitTicketConfigBase & {
+      mode: 'basic';
+      /** Written by the new builder only; derived from `mode` otherwise. */
+      kind?: 'reflection';
+    })
   | (ExitTicketConfigBase & {
       mode: 'specific';
+      kind?: 'check';
       focus: ExitTicketFocus;
       topic: string;
       answerType: ExitTicketAnswerType;
@@ -304,6 +371,11 @@ export function isExitTicketAssignmentType(
   assignmentType: { kind?: string | null } | null | undefined
 ): boolean {
   return assignmentType?.kind === EXIT_TICKET_ASSIGNMENT_TYPE_KIND;
+}
+
+/** Which kind a ticket is, for rows written before the kind was stored too. */
+export function exitTicketKind(config: ExitTicketConfig): ExitTicketKind {
+  return config.kind ?? exitTicketKindForMode(config.mode);
 }
 
 export function exitTicketFocusOption(
@@ -352,6 +424,8 @@ export type ExitTicketConfigParseResult =
   | { success: false; message: string };
 
 export type ExitTicketConfigInput = {
+  /** Posted by the new builder. Absent from every v1 client. */
+  kind?: string | null;
   mode?: string | null;
   focus?: string | null;
   topic?: string | null;
@@ -407,11 +481,23 @@ function withLessonNotes<T extends ExitTicketConfig>(
 export function parseExitTicketConfigInput(
   input: ExitTicketConfigInput
 ): ExitTicketConfigParseResult {
-  const rawMode = input.mode?.toString().trim() ?? '';
+  const rawKind = input.kind?.toString().trim() ?? '';
+  const postedMode = input.mode?.toString().trim() ?? '';
 
-  if (rawMode && !EXIT_TICKET_MODES.includes(rawMode as ExitTicketMode)) {
+  if (postedMode && !EXIT_TICKET_MODES.includes(postedMode as ExitTicketMode)) {
     return { success: false, message: 'Exit ticket type is invalid.' };
   }
+
+  // A kind names the same choice as a mode. The new builder posts both; if
+  // they ever disagree, the form sent something nobody chose.
+  const kind = rawKind ? parseExitTicketKind(rawKind) : null;
+  if (rawKind && !kind) {
+    return { success: false, message: 'Exit ticket type is invalid.' };
+  }
+  if (kind && postedMode && exitTicketModeForKind(kind) !== postedMode) {
+    return { success: false, message: 'Exit ticket type is invalid.' };
+  }
+  const rawMode = kind ? exitTicketModeForKind(kind) : postedMode;
 
   const notes = parseLessonNotesInput(input);
   if (!notes.success) return notes;
@@ -420,7 +506,11 @@ export function parseExitTicketConfigInput(
     return {
       success: true,
       config: withLessonNotes(
-        { schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION, mode: 'basic' },
+        {
+          schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+          mode: 'basic',
+          ...(kind ? { kind: 'reflection' as const } : {}),
+        },
         notes
       ),
     };
@@ -462,6 +552,7 @@ export function parseExitTicketConfigInput(
       {
         schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
         mode: 'specific',
+        ...(kind ? { kind: 'check' as const } : {}),
         focus: option.value,
         topic,
         answerType,
@@ -485,10 +576,19 @@ export function parseStoredExitTicketConfig(
   if (record.schemaVersion !== EXIT_TICKET_CONFIG_SCHEMA_VERSION) return null;
 
   const notes = parseStoredLessonNotes(record.lessonNotes);
+  // Mode is the source of truth. A kind is kept only when it agrees, so a
+  // stored row can never read as a reflection and a check at once.
+  const storedKind = parseExitTicketKind(
+    typeof record.kind === 'string' ? record.kind : null
+  );
 
   if (record.mode === 'basic') {
     return withLessonNotes(
-      { schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION, mode: 'basic' },
+      {
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'basic',
+        ...(storedKind === 'reflection' ? { kind: storedKind } : {}),
+      },
       notes
     );
   }
@@ -507,6 +607,7 @@ export function parseStoredExitTicketConfig(
     {
       schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
       mode: 'specific',
+      ...(storedKind === 'check' ? { kind: storedKind } : {}),
       focus: option.value,
       topic,
       answerType:

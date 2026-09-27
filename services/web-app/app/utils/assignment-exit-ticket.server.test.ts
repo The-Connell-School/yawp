@@ -54,6 +54,27 @@ describe('parseAssignmentExitTicket', () => {
     });
   });
 
+  test('records the kind the quick builder posts beside the mode', () => {
+    const result = parseAssignmentExitTicket(
+      formDataFor({ exitTicketKind: 'reflection', exitTicketMode: 'basic' })
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.value.exitTicketConfigJson).toEqual({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'basic',
+      kind: 'reflection',
+    });
+  });
+
+  test('rejects a kind that contradicts the posted mode', () => {
+    const result = parseAssignmentExitTicket(
+      formDataFor({ exitTicketKind: 'check', exitTicketMode: 'basic' })
+    );
+    expect(result.success).toBe(false);
+  });
+
   test('ignores a prompt the browser posted alongside the answers', () => {
     // The sheet posts the composed prompt too, so the existing required-field
     // validation still fires. The server recomposes rather than trusting it.

@@ -844,13 +844,107 @@ describe('AssignmentCreationSheetContent', () => {
     });
   });
 
-  describe('exit tickets', () => {
+  // The original builder, kept as the flag-off path. These pin it so
+  // switching the new builder off always lands on exactly what shipped.
+  describe('exit tickets (quick builder)', () => {
+    function renderQuickExitTicketSheet(
+      props: Partial<Parameters<typeof AssignmentCreationSheetContent>[0]> = {}
+    ) {
+      return renderSheet({
+        assignmentTypes: exitTicketAssignmentTypes,
+        fixedAssignmentTypeId: 'exit-1',
+        exitTicketBuilder: 'v2',
+        ...props,
+      });
+    }
+
+    function submitButton() {
+      return document.querySelector<HTMLButtonElement>(
+        'button[type="submit"]'
+      )!;
+    }
+
+    it('opens on an ungraded reflection that can be created straight away', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-kind-reflection'))
+      ).toBe(true);
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-kind-check'))
+      ).toBe(false);
+      expectText(BASIC_EXIT_TICKET_PROMPT);
+      // Dual-write: the kind rides beside the mode the original form posts.
+      expect(inputByName('exitTicketKind').value).toBe('reflection');
+      expect(inputByName('exitTicketMode').value).toBe('basic');
+      expect(inputByName('prompt').value).toInclude(BASIC_EXIT_TICKET_PROMPT);
+      expect(submitButton().disabled).toBe(false);
+      // No prompt box and none of the original builder's wording.
+      expect(document.querySelector('textarea[name="prompt"]')).toBeNull();
+      expectNoText('Basic exit ticket');
+    });
+
+    it('asks what to check for once the teacher picks a check', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+      expectNoText('What are you checking for?');
+
+      act(() => {
+        controlById('assignment-create-exit-ticket-kind-check').click();
+      });
+
+      expectText('What are you checking for?');
+      expectText('What specifically?');
+      expectText('Is there a correct answer?');
+      expect(inputByName('exitTicketKind').value).toBe('check');
+      expect(inputByName('exitTicketMode').value).toBe('specific');
+      // No topic, no answer: nothing to create yet.
+      expect(submitButton().disabled).toBe(true);
+    });
+
+    it('reopens a stored check as a check', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'explain-concept',
+        initialExitTicketTopic: 'the causes of World War I',
+        initialExitTicketAnswerType: 'objective',
+      }).root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-kind-check'))
+      ).toBe(true);
+      expect(inputByName('exitTicketTopic').value).toBe(
+        'the causes of World War I'
+      );
+      expect(inputByName('exitTicketAnswerType').value).toBe('objective');
+      expectText('the causes of World War I');
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('will not create a check until the right-answer question is answered', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'explain-concept',
+        initialExitTicketTopic: 'the causes of World War I',
+      }).root;
+
+      expect(submitButton().disabled).toBe(true);
+      act(() => {
+        controlById('assignment-create-exit-ticket-answer-objective').click();
+      });
+      expect(submitButton().disabled).toBe(false);
+    });
+  });
+
+  describe('exit tickets (original builder)', () => {
     function renderExitTicketSheet(
       props: Partial<Parameters<typeof AssignmentCreationSheetContent>[0]> = {}
     ) {
       return renderSheet({
         assignmentTypes: exitTicketAssignmentTypes,
         fixedAssignmentTypeId: 'exit-1',
+        exitTicketBuilder: 'v1',
         ...props,
       });
     }
