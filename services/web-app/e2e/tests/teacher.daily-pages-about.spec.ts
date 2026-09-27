@@ -24,7 +24,7 @@ test.describe.serial('Daily Pages about section', () => {
       page.getByRole('heading', { name: 'About Daily Pages' })
     ).toBeVisible();
     await expect(
-      page.getByText('A Daily Pages entry is one short, crisp response')
+      page.getByText('Daily Pages is short academic paragraph practice.')
     ).toBeVisible();
 
     for (const section of [

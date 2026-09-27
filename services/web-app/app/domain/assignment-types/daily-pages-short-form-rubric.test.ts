@@ -176,31 +176,42 @@ describe('the Daily Pages short-form grading instructions', () => {
 });
 
 /**
- * The shape rules, which are what separate this from both of its neighbours:
- * a Class Starter explores, an essay argues at length, and this states a claim
- * and holds it up in a paragraph.
+ * The shape rules. Daily Pages is short academic paragraph practice, and the
+ * paragraph can be of more than one kind — analyzing, arguing, comparing,
+ * defining. What separates it from a Class Starter is that it is a deliberate
+ * academic move rather than an exploration; what it must not do is force every
+ * kind of paragraph into one rigid form.
  */
-describe('the claim-first shape', () => {
+describe('paragraph practice, not one fixed form', () => {
   const instructions = (
     DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG.gradingInstructions ?? ''
   ).toLowerCase();
+  const organization = categories.find(
+    (category) => category.key === 'organization_and_structure'
+  );
 
-  test('tells the grader the claim belongs in the first sentence', () => {
-    expect(instructions).toContain('claim');
-    expect(instructions).toContain('first sentence');
+  test('tells the grader this is paragraph practice', () => {
+    expect(instructions).toContain('paragraph practice');
+  });
+
+  test('does not require the claim in the first sentence', () => {
+    expect(instructions).not.toContain('first sentence');
+    expect(organization?.description.toLowerCase()).not.toContain(
+      'first sentence'
+    );
+    expect(instructions).toContain('does not have to open with a claim');
+  });
+
+  test('judges structure against the kind of paragraph asked for', () => {
+    expect(organization?.description.toLowerCase()).toContain(
+      'kind of paragraph'
+    );
+    expect(instructions).toContain('kind of paragraph the prompt asks for');
   });
 
   test('rules out exploration, and says where it belongs instead', () => {
     expect(instructions).toContain('not an exploration');
     expect(instructions).toContain('class starter');
-  });
-
-  test('marks throat-clearing rather than leaving the shape to taste', () => {
-    const organization = categories.find(
-      (category) => category.key === 'organization_and_structure'
-    );
-    expect(organization?.description.toLowerCase()).toContain('first sentence');
-    expect(instructions).toContain('throat-clearing');
   });
 
   test('every category band reaches the top without requiring a journey', () => {
@@ -271,14 +282,19 @@ describe('first person and hedging', () => {
 describe('the Daily Pages tutor instructions', () => {
   const tutor = DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS.toLowerCase();
 
-  test('coaches the claim first, the support next, the hedge last', () => {
-    expect(tutor.indexOf('the claim.')).toBeGreaterThan(-1);
-    expect(tutor.indexOf('the claim.')).toBeLessThan(
+  test('coaches the point first, the support next, the hedge last', () => {
+    expect(tutor.indexOf('the point.')).toBeGreaterThan(-1);
+    expect(tutor.indexOf('the point.')).toBeLessThan(
       tutor.indexOf('the support.')
     );
     expect(tutor.indexOf('the support.')).toBeLessThan(
       tutor.indexOf('the hedge.')
     );
+  });
+
+  test('does not hold every paragraph to a claim-in-the-first-sentence form', () => {
+    expect(tutor).not.toContain('first sentence');
+    expect(tutor).toContain('paragraph practice');
   });
 
   test('tells the tutor not to coach exploration, which is the old behaviour', () => {

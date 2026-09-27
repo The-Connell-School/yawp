@@ -129,7 +129,7 @@ export async function adoptShortFormRubricForSeededDailyPages(
 }
 
 /**
- * Point the seeded Daily Pages module's Tutor at the claim-first coaching.
+ * Point the seeded Daily Pages module's Tutor at paragraph-practice coaching.
  *
  * The tutor's instructions are module content, and the row that ships today is
  * the freewrite tutor: "help them think through an idea by asking them probing
@@ -150,7 +150,7 @@ export async function adoptShortFormTutorForSeededDailyPages(
     data: {
       tutorInstructions: DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS,
       description:
-        'Respond to the prompt in one short, crisp paragraph: your claim in the first sentence, then the case for it.',
+        'Respond to the prompt in one short academic paragraph: make your point clearly, then hold it up.',
       rubricAlignmentJson: {
         depth_of_thought: 'primary',
         development_of_thought: 'primary',

@@ -7,6 +7,7 @@ import {
 } from '~/domain/assignment-types/daily-pages-short-form-rubric';
 
 import {
+  ABOUT_LEDE,
   GRADING_SUMMARY,
   PROMPT_RECIPE,
   PROMPT_REWRITES,
@@ -15,7 +16,62 @@ import {
   WHAT_IT_IS,
   WHAT_IT_IS_NOT,
   HOW_TO_USE,
+  REGISTER_NOTE,
 } from './content';
+
+const allCopy = () =>
+  [
+    ABOUT_LEDE,
+    ...WHAT_IT_IS,
+    ...WHAT_IT_IS_NOT.map((item) => `${item.claim} ${item.detail}`),
+    ...HOW_TO_USE,
+    REGISTER_NOTE,
+    ...PROMPT_RECIPE.map((part) => `${part.move} ${part.detail}`),
+  ].join(' ');
+
+/**
+ * Daily Pages is short academic paragraph practice, and the paragraph can be
+ * of more than one kind. The page must say so, and must not tell a teacher that
+ * every entry opens with a claim.
+ */
+describe('paragraph practice, in more than one kind', () => {
+  test('opens by calling it paragraph practice', () => {
+    expect(ABOUT_LEDE).toContain('paragraph practice');
+  });
+
+  test('says the teacher sets the time, rather than fixing it', () => {
+    expect(ABOUT_LEDE).toMatch(/you set|you choose/i);
+  });
+
+  test('names the kinds of paragraph a teacher can ask for', () => {
+    const text = WHAT_IT_IS.join(' ').toLowerCase();
+    for (const move of [
+      'analyz',
+      'argu',
+      'compar',
+      'defin',
+      'interpret',
+      'evaluat',
+      'synthesiz',
+    ]) {
+      expect(text).toContain(move);
+    }
+  });
+
+  test('never pins the claim to the first sentence', () => {
+    const text = allCopy().toLowerCase();
+    expect(text).not.toContain('first sentence');
+    expect(text).not.toContain('claim-first');
+  });
+
+  test('says what separates it from a Class Starter: a deliberate academic move', () => {
+    const classStarter = WHAT_IT_IS_NOT.find((item) =>
+      item.detail.includes('Class Starter')
+    );
+    expect(classStarter?.detail).toContain('deliberate');
+    expect(classStarter?.detail).toContain('lower-stakes');
+  });
+});
 
 describe('the grading summary', () => {
   test('describes exactly the rubric’s categories, in rubric order', () => {
