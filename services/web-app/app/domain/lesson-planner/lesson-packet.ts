@@ -14,6 +14,7 @@ import { readLessonAsks } from './lesson-ask';
 import { inlineDailyPagesExercises } from './daily-pages-block';
 import { inlinePlannedExitTickets } from './exit-ticket-block';
 import { inlineLessonResources } from './lesson-resource';
+import { inlinePlannedPractice } from './practice-block';
 import { inlineUnitPlan } from './unit-plan';
 
 export const PACKET_AUDIENCES = ['teacher', 'student'] as const;
@@ -212,10 +213,16 @@ export function buildLessonPacket({
   title,
   className,
   sections,
+  practiceLessonTitles = {},
 }: {
   title: string;
   className: string | null;
   sections: PacketSectionInput[];
+  /**
+   * Quick Writing Lesson slug → title, so assigned practice prints under the
+   * lesson's real name. The catalog lives server-side, so the caller passes it.
+   */
+  practiceLessonTitles?: Record<string, string>;
 }): LessonPacket {
   const built = sections.map((section, index) => {
     // The suggestions block drives chat chips; it is not part of the lesson.
@@ -234,9 +241,14 @@ export function buildLessonPacket({
     // A unit map is a board on screen, where each day has a button. On paper
     // there is nothing to click, so it prints as the table a teacher can read
     // at a glance and write a date beside.
+    // Assigned writing practice has no button on paper either, but it is part
+    // of the lesson, so it prints as a line saying what was assigned.
     const body = inlineUnitPlan(
-      inlineLessonResources(
-        inlinePlannedExitTickets(inlineDailyPagesExercises(withWarmUps))
+      inlinePlannedPractice(
+        inlineLessonResources(
+          inlinePlannedExitTickets(inlineDailyPagesExercises(withWarmUps))
+        ),
+        practiceLessonTitles
       )
     );
     // The deck comes out of the prose and is carried as structure. Read from

@@ -206,7 +206,43 @@ describe('api.domain.lesson-planner action', () => {
     expect(handleLessonPlannerToolCall).toHaveBeenCalledWith(
       'list_classes',
       { a: 1 },
-      { membershipId: 'teacher-1', organizationId: 'org-1' }
+      {
+        membershipId: 'teacher-1',
+        organizationId: 'org-1',
+        writingPracticeEnabled: false,
+      }
+    );
+    // No Writing Practice, so nothing to assign and no practice block taught.
+    expect(llmArgs.system as string).not.toContain('yawp-practice');
+  });
+
+  test('lets a school with Writing Practice assign practice from a lesson', async () => {
+    requireLessonPlannerAccess.mockResolvedValue({
+      ...access,
+      membership: {
+        ...access.membership,
+        organization: {
+          ...access.membership.organization,
+          writingPracticeEnabled: true,
+        },
+      },
+    });
+    getLLMCompletion.mockResolvedValue('ok');
+    prisma.lessonPlanConversation.create.mockResolvedValue({
+      id: 'plan-1',
+      messages: [],
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({ request: formRequest({ message: 'hi' }) } as any);
+
+    const llmArgs = getLLMCompletion.mock.calls[0][0];
+    expect(llmArgs.system as string).toContain('yawp-practice');
+    llmArgs.handleToolCall('list_writing_lessons', {});
+    expect(handleLessonPlannerToolCall).toHaveBeenCalledWith(
+      'list_writing_lessons',
+      {},
+      expect.objectContaining({ writingPracticeEnabled: true })
     );
   });
 

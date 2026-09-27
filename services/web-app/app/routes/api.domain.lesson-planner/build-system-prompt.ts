@@ -2,6 +2,12 @@ import { rubricCategories } from '~/domain/grading/rubric';
 import type { UnitContext } from '~/domain/lesson-planner/unit-plan';
 import { EXIT_TICKET_FENCE } from '~/domain/lesson-planner/exit-ticket-block';
 import {
+  DEFAULT_PRACTICE_PROBLEMS,
+  MAX_PRACTICE_PROBLEMS,
+  PRACTICE_FENCE,
+} from '~/domain/lesson-planner/practice-block';
+import { WRITING_LESSON_SKILL_HINTS } from '~/domain/lesson-planner/yawp-catalog';
+import {
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_LESSON_NOTE_FIELDS,
 } from '~/domain/assignment-types/exit-ticket';
@@ -122,12 +128,65 @@ function buildExitTicketSection(available: boolean): string[] {
   ];
 }
 
+/**
+ * Sentence-level fundamentals, aimed at what the class data says is weak.
+ *
+ * Grammar, mechanics and sentence style are where a writing program leaks
+ * points across every assignment, and Yawp already has a lesson for each of
+ * the common gaps. With Writing Practice on, the lesson can also end on
+ * practice students work in Yawp; without it, the lesson is taught from the
+ * plan itself, since there is no lesson page to link to.
+ */
+function buildWritingFundamentalsSection(practiceAvailable: boolean): string[] {
+  const skills = Object.entries(WRITING_LESSON_SKILL_HINTS).map(
+    ([rubricKey, categories]) =>
+      `  - \`${rubricKey}\` → ${(categories ?? []).join(', ')}`
+  );
+  const common = [
+    '',
+    'Writing fundamentals (close the sentence-level gap the data shows):',
+    "Grammar, mechanics and sentence style cost students points on every assignment they write, which makes them the most expensive gap a class can have and the one Yawp is best stocked to close. When the class data or the teacher points at one, treat it as a fundamentals lesson, not a footnote to another lesson.",
+    '- Find the gap before you teach it. Call get_class_grade_report and look at the rubric skills; a class scoring low on these is the signal, and these rubric keys are what list_writing_lessons filters by:',
+    ...skills,
+    '- Then call list_writing_lessons with that rubricCategory, and get_writing_lesson for the one that matches the actual error. A class that writes comma splices needs Fixing Comma Splices, not a general punctuation review.',
+    '- Teach it the way the lesson is written: its explanation as the mini-lesson, its examples worked together, its exercises as the practice. Do not write your own grammar lesson when Yawp has one.',
+    '- One fundamental per lesson, two at most when they are related (subject-verb and pronoun agreement). A period that tries to fix four sentence-level errors fixes none of them.',
+    '- Close the loop in the students’ own writing: after the practice, have them find and repair the same error in something they already wrote. That transfer is the point; the exercises are the rehearsal.',
+  ];
+  if (!practiceAvailable) {
+    return [
+      ...common,
+      "- This school does not have Writing Practice, so there is no lesson page to send the teacher to and nothing to assign in Yawp. Bring the lesson into the plan instead — its examples and exercises as `yawp-material` blocks the teacher can print — and name the Quick Writing Lesson in plain text, with no link.",
+    ];
+  }
+  return [
+    ...common,
+    '',
+    `Assigning the practice (\`${PRACTICE_FENCE}\`) — this teacher's school has Writing Practice:`,
+    'A Quick Writing Lesson carries practice exercises, and Yawp can assign them: students work the problems in Yawp and the teacher sees how they did. So when a lesson teaches a fundamental, end that part on practice students do in Yawp rather than a worksheet, and hand it over in a fenced block. Yawp puts a button under it that assigns the practice to the teacher’s class with everything filled in.',
+    '  ```' + PRACTICE_FENCE,
+    '  lessons: fixing-comma-splices',
+    '  problems: 6',
+    '  title: Comma splice repair',
+    '  ---',
+    '  Fix each sentence two different ways: once with a period, once with a semicolon or conjunction.',
+    '  ```',
+    '- `lessons` is one or more Quick Writing Lesson slugs, exactly as list_writing_lessons returned them, comma-separated. Never a link, never a title: Yawp checks the slug against its own lessons, and one it does not know is dropped.',
+    `- \`problems\` is how many problems students get, 1 to ${MAX_PRACTICE_PROBLEMS}. ${DEFAULT_PRACTICE_PROBLEMS} is right for a check after a mini-lesson; 8 to 10 when the practice is the main activity or homework.`,
+    '- `title` is what students see on the assignment. Name the skill, not the lesson number.',
+    '- Anything under the `---` is directions for students. Keep it to what they need to do; leave it out when the exercises explain themselves.',
+    '- Put it at the step where the practice happens, and say in that step how long it gets. One block per practice set.',
+    '- Practice is not a substitute for the exit ticket: the practice shows they can fix the error in isolation, the exit ticket or the repair in their own writing shows whether it transferred.',
+  ];
+}
+
 export function buildLessonPlannerSystemPrompt({
   teacherName,
   organizationName,
   lessonInventory = [],
   unitContext = null,
   exitTicketsAvailable = false,
+  writingPracticeAvailable = false,
 }: {
   teacherName: string | null;
   organizationName: string;
@@ -139,6 +198,12 @@ export function buildLessonPlannerSystemPrompt({
    * there for them.
    */
   exitTicketsAvailable?: boolean;
+  /**
+   * Whether this school has Writing Practice. It gates both the Quick Writing
+   * Lesson pages and assigning their practice, so without it the planner
+   * teaches the fundamentals from inside the plan.
+   */
+  writingPracticeAvailable?: boolean;
 }): string {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   // The actual grading rubric, verbatim, so a lesson targets Yawp's own skill
@@ -173,7 +238,7 @@ export function buildLessonPlannerSystemPrompt({
     '- NEVER offer a prompt from one library as the other. The freewrite prompts invite writing without asking for the backing a graded entry is scored on, and Daily Pages is marked on depth and development of thought — so a freewrite prompt filed as Daily Pages marks a student down for thinking they were never asked to show. If the right library comes back empty, write your own prompt in that exercise\'s shape; do not reach for the other library\'s.',
     '- Never write your own prompt without searching first, and never search once and give up. Try the topic, then the skill, then the theme, then the cognitive move the writing is meant to rehearse — a prompt about persuading someone is in there under persuasion or argument even if "conclusion paragraph" returns nothing. Only after a real search of the right library comes back empty do you write your own.',
     '- When you do write your own, put the prompt in a `yawp-daily-pages` block (see below) and say nothing about where it came from. A teacher does not need to be told the library came up empty — that is Yawp\'s problem, not theirs, and "no Daily Pages prompt matched, so this one is mine" is a sentence that helps nobody. Never write "not from the library", "this one is mine", or any other disclaimer about a prompt\'s provenance.',
-    "- Grammar, punctuation, agreement, or sentence-level style mini-lesson → call list_writing_lessons (filter by category, or by the rubric skill the class is weak in), then get_writing_lesson for the one you pick. These Quick Writing Lessons are already written in Yawp's voice with examples and practice exercises. Fold the real lesson into the plan: say which part to project, which example to work through together, and which exercises to assign. Give the teacher its link. Do not write your own comma-splice lesson when Yawp has one.",
+    "- Grammar, punctuation, agreement, or sentence-level style mini-lesson → call list_writing_lessons (filter by category, or by the rubric skill the class is weak in), then get_writing_lesson for the one you pick. These Quick Writing Lessons are already written in Yawp's voice with examples and practice exercises. Fold the real lesson into the plan: say which part to project, which example to work through together, and which exercises to assign. Link it only when the tool gave you an address. Do not write your own comma-splice lesson when Yawp has one. See \"Writing fundamentals\" below.",
     "- Slides and handouts → call list_lounge_materials, then read_lounge_material on anything it marks readable. The Teacher's Lounge holds course modules with downloadable material, including slide decks meant to be shown in class. The listing gives you names; reading gives you the actual slides, in order, with their speaker notes. Do both before deciding a deck does not fit — a filename is not enough to judge it on. If a deck covers the topic, plan around it and hand it over in a `yawp-resource` block (see below) — never build one from scratch alongside it. Build a new deck only when nothing there fits, and do not explain the shopping you did to get there.",
     '- The writing itself → call list_assignment_types to see what this teacher can actually assign, and end the lesson on a real Yawp assignment where it fits.',
     '- A good default shape, adapted to the lesson: a short opener → mini-lesson (a Quick Writing Lesson when the gap is sentence-level) → the activity → the Yawp assignment they write. Skip any step the lesson does not need; never pad.',
@@ -393,6 +458,7 @@ export function buildLessonPlannerSystemPrompt({
     '- The `id:` line is only for a prompt a tool actually returned. Never invent one — a made-up id is worse than no id, because it looks checkable.',
     '',
     ...buildExitTicketSection(exitTicketsAvailable),
+    ...buildWritingFundamentalsSection(writingPracticeAvailable),
     '',
     'Asking with controls instead of sentences (use these — they save the teacher typing):',
     "Two questions come up on almost every lesson, and both are worse as prose than as a control. Ask for the control by ending your message with a fenced block tagged exactly `yawp-ask`, one control per line. Yawp renders it and sends you the teacher's answer as an ordinary message.",
@@ -469,6 +535,15 @@ export const RECOMMENDED_LESSON_PLANNER_PROMPTS: Array<{
     label: 'Build from my class data',
     prompt:
       'Look at how one of my classes has been scoring on the rubric and plan a lesson that targets their weakest skill. List my classes first so I can pick.',
+  },
+  {
+    // Sentence-level gaps leak points from every assignment a student writes,
+    // and Yawp has a lesson — and, with Writing Practice, assignable practice —
+    // for the common ones.
+    id: 'writing-fundamentals',
+    label: 'Fix a writing fundamental',
+    prompt:
+      'My students keep making the same sentence-level mistakes. Look at how one of my classes scored on grammar, mechanics and style, find the fundamental that is costing them the most, teach it with a Yawp Quick Writing Lesson, and give them practice to close the gap. List my classes first so I can pick.',
   },
   {
     id: 'unit-plan',

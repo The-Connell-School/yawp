@@ -26,7 +26,11 @@ const dependencies = {
 function callTool(
   name: string,
   input: Record<string, unknown>,
-  context = { ...ctx }
+  context: {
+    membershipId: string;
+    organizationId: string;
+    writingPracticeEnabled?: boolean;
+  } = { ...ctx }
 ) {
   return handleLessonPlannerToolCall(name, input, context, dependencies);
 }
@@ -238,15 +242,66 @@ describe('handleLessonPlannerToolCall', () => {
 
   test('returns a writing lesson with its full text and link', async () => {
     const listed = JSON.parse(
-      await callTool('list_writing_lessons', {}, { ...ctx })
+      await callTool(
+        'list_writing_lessons',
+        {},
+        { ...ctx, writingPracticeEnabled: true }
+      )
     );
     const slug = listed.lessons[0].slug;
 
     const lesson = JSON.parse(
-      await callTool('get_writing_lesson', { slug }, { ...ctx })
+      await callTool(
+        'get_writing_lesson',
+        { slug },
+        { ...ctx, writingPracticeEnabled: true }
+      )
     );
     expect(lesson.href).toBe(`/app/writing-lessons/${slug}`);
     expect(lesson.content.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * The lesson pages sit behind Writing Practice. Without it, a link sends the
+   * teacher to the dashboard in front of a class — so no link is handed out,
+   * and the link filter strips any the model invents. The lesson itself is
+   * still Yawp's to teach from.
+   */
+  test('hands out no lesson links when the school has no Writing Practice', async () => {
+    const listed = JSON.parse(
+      await callTool('list_writing_lessons', {}, { ...ctx })
+    );
+    expect(listed.lessons.length).toBeGreaterThan(0);
+    for (const lesson of listed.lessons) {
+      expect(lesson).not.toHaveProperty('href');
+    }
+    expect(listed.practiceAvailable).toBe(false);
+    expect(listed.note).toMatch(/no link/i);
+
+    const lesson = JSON.parse(
+      await callTool(
+        'get_writing_lesson',
+        { slug: listed.lessons[0].slug },
+        { ...ctx }
+      )
+    );
+    expect(lesson).not.toHaveProperty('href');
+    expect(lesson.content.length).toBeGreaterThan(0);
+  });
+
+  test('says what practice each lesson can assign when Writing Practice is on', async () => {
+    const listed = JSON.parse(
+      await callTool(
+        'list_writing_lessons',
+        { rubricCategory: 'grammar_and_mechanics' },
+        { ...ctx, writingPracticeEnabled: true }
+      )
+    );
+    expect(listed.practiceAvailable).toBe(true);
+    expect(listed.note).toContain('yawp-practice');
+    for (const lesson of listed.lessons) {
+      expect(lesson.practiceExercises).toBeGreaterThan(0);
+    }
   });
 
   test('reports an unknown lesson slug rather than improvising one', async () => {

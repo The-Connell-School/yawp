@@ -28,13 +28,22 @@ import {
   listLoungeMaterials,
   readLoungeMaterial,
 } from './yawp-catalog.server';
-import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
+import {
+  getQuickWritingLessonBySlug,
+  getQuickWritingPracticePrompts,
+} from '~/utils/writing-lessons/static-lessons.server';
 
 export type LessonPlannerToolContext = {
   /** The calling teacher's OrgMembership id. */
   membershipId: string;
   /** The calling teacher's organization id. */
   organizationId: string;
+  /**
+   * Whether the school has Writing Practice. The Quick Writing Lesson pages and
+   * practice assignments both sit behind it, so without it the planner gets no
+   * lesson links to hand out and no practice to assign.
+   */
+  writingPracticeEnabled?: boolean;
 };
 
 export type LessonPlannerToolDependencies = {
@@ -286,8 +295,27 @@ async function handleCatalogToolCall(
           : 'No graded short-form prompt matches those filters. Loosen them and search again, or write one yourself and put it in a yawp-daily-pages block with kind: daily-pages. Never substitute a freewrite prompt from search_daily_pages_prompts: those are written to be ungraded, and Daily Pages would score one for depth it never asked for. Do not tell the teacher the library came up empty.',
       };
     }
-    case 'list_writing_lessons':
-      return { lessons: listWritingLessonCatalog(input) };
+    case 'list_writing_lessons': {
+      const lessons = listWritingLessonCatalog(input);
+      if (!ctx.writingPracticeEnabled) {
+        // The lesson pages are behind Writing Practice, so a link would open
+        // the dashboard instead. No address goes out, which also means the
+        // link filter strips any the model makes up.
+        return {
+          lessons: lessons.map(({ href: _href, ...lesson }) => lesson),
+          practiceAvailable: false,
+          note: 'This school does not have Writing Practice, so there is no lesson page to send the teacher to and nothing to assign. Teach from the lesson: call get_writing_lesson and fold its explanation, examples and exercises into the plan as material. Name it in plain text with no link.',
+        };
+      }
+      return {
+        lessons: lessons.map((lesson) => ({
+          ...lesson,
+          practiceExercises: getQuickWritingPracticePrompts(lesson.slug).length,
+        })),
+        practiceAvailable: true,
+        note: 'Teach from the lesson, then assign its practice so students work it in Yawp: put the slug in a yawp-practice block and the teacher gets a button that assigns it to their class.',
+      };
+    }
     case 'get_writing_lesson': {
       const slug = typeof input.slug === 'string' ? input.slug : '';
       const lesson = getQuickWritingLessonBySlug(slug);
@@ -298,7 +326,13 @@ async function handleCatalogToolCall(
         slug: lesson.slug,
         title: lesson.title,
         category: lesson.category,
-        href: `/app/writing-lessons/${lesson.slug}`,
+        ...(ctx.writingPracticeEnabled
+          ? {
+              href: `/app/writing-lessons/${lesson.slug}`,
+              practiceExercises: getQuickWritingPracticePrompts(lesson.slug)
+                .length,
+            }
+          : {}),
         content: lesson.content,
       };
     }

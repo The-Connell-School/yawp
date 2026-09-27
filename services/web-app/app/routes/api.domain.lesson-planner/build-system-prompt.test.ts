@@ -4,6 +4,7 @@ import { SLIDE_LAYOUTS } from '~/domain/lesson-planner/slide-deck';
 import { MATERIAL_KINDS } from '~/domain/lesson-planner/lesson-material';
 import { UNIT_PLAN_FENCE } from '~/domain/lesson-planner/unit-plan';
 import { EXIT_TICKET_FENCE } from '~/domain/lesson-planner/exit-ticket-block';
+import { PRACTICE_FENCE } from '~/domain/lesson-planner/practice-block';
 import {
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_LESSON_NOTE_FIELDS,
@@ -1277,5 +1278,52 @@ describe('the Yawp exit ticket', () => {
     expect(without).not.toContain(EXIT_TICKET_FENCE);
     // The printable exit ticket is still on offer.
     expect(without).toContain('exit-ticket');
+  });
+});
+
+describe('writing fundamentals', () => {
+  const withPractice = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+    writingPracticeAvailable: true,
+  });
+  const without = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('aims the fundamentals at the gap the class data shows', () => {
+    // A sentence-level weakness is a program-wide deficit worth closing, not a
+    // lesson to improvise: read the scores, find the skill, teach Yawp's lesson.
+    for (const version of [withPractice, without]) {
+      const lower = version.toLowerCase();
+      expect(lower).toContain('writing fundamentals');
+      expect(version).toContain('get_class_grade_report');
+      expect(version).toContain('grammar_and_mechanics');
+      expect(version).toContain('list_writing_lessons');
+    }
+  });
+
+  test('teaches the practice block when the school can assign practice', () => {
+    expect(withPractice).toContain(PRACTICE_FENCE);
+    expect(withPractice).toContain('lessons:');
+    expect(withPractice).toContain('problems:');
+    // Slugs, never links: which lessons exist is the app's to check.
+    expect(withPractice.toLowerCase()).toContain('slug');
+  });
+
+  test('says nothing about assigning practice when the school cannot', () => {
+    // No Writing Practice means no button and no lesson page, so the lesson is
+    // taught from inside the plan, named in plain text.
+    expect(without).not.toContain(PRACTICE_FENCE);
+    expect(without.toLowerCase()).toContain('plain text');
+  });
+
+  test('offers the fundamentals as a place to start', () => {
+    const entry = RECOMMENDED_LESSON_PLANNER_PROMPTS.find(
+      (candidate) => candidate.id === 'writing-fundamentals'
+    );
+    expect(entry).toBeTruthy();
+    expect(entry!.prompt.toLowerCase()).toContain('practice');
   });
 });

@@ -445,6 +445,30 @@ describe('buildLessonPacket — a kept reply that ends on an exit ticket', () =>
   });
 });
 
+describe('buildLessonPacket — a kept reply that assigns writing practice', () => {
+  test('prints what was assigned, by the lesson’s own name, not the fence', () => {
+    const packet = buildLessonPacket({
+      title: 'Lesson',
+      className: null,
+      practiceLessonTitles: { 'fixing-comma-splices': 'Fixing Comma Splices' },
+      sections: [
+        {
+          id: 'msg-1',
+          content:
+            '## Practice (10 min)\n\nThey repair their own.\n\n```yawp-practice\nlessons: fixing-comma-splices\nproblems: 6\n```',
+          keptAudience: 'teacher',
+        },
+      ],
+    });
+
+    const printed = packet.sections[0]!.content;
+    expect(printed).not.toContain('yawp-practice');
+    expect(printed).not.toContain('lessons:');
+    expect(printed).toContain('Fixing Comma Splices');
+    expect(printed).toContain('6 problems');
+  });
+});
+
 const DECK = {
   title: 'Beyond the Quote',
   subtitle: 'English 11 · Writing analysis that argues',

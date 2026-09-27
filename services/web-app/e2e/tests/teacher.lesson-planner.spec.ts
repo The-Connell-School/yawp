@@ -22,6 +22,79 @@ async function setLessonPlannerEnabled(
   }
 }
 
+async function setWritingPracticeEnabled(
+  organizationId: string,
+  enabled: boolean
+) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.organization.update({
+      where: { id: organizationId },
+      data: { writingPracticeEnabled: enabled },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/**
+ * A lesson that teaches a writing fundamental and ends on practice students do
+ * in Yawp. The second block names a lesson Yawp does not have, which must never
+ * reach the assignment.
+ */
+async function seedPlannedPractice(e2eContext: {
+  teacherMembershipId: string;
+  organizationId: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Comma splices',
+        messages: {
+          create: [
+            {
+              role: 'user',
+              content: 'My class keeps writing comma splices.',
+              createdAt: new Date('2026-08-05T10:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content:
+                '## Practice (10 min)\n\nThey fix six on their own before repairing their drafts.\n\n' +
+                '```yawp-practice\n' +
+                'lessons: fixing-comma-splices, lesson-yawp-does-not-have\n' +
+                'problems: 6\n' +
+                'title: Comma splice repair\n' +
+                '---\n' +
+                'Fix each sentence two different ways.\n' +
+                '```',
+              createdAt: new Date('2026-08-05T10:00:01.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+async function clearWritingPractice(membershipId: string) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.writingPracticeAssignment.deleteMany({
+      where: { createdByMembershipId: membershipId },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 /**
  * Write a ready class summary straight to the DB so the hand-off test does not
  * depend on the insight generation path (covered by its own spec).
@@ -2760,6 +2833,84 @@ test.describe('YAWP! Lesson Planner', () => {
         `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
       )
     );
+  });
+
+  /**
+   * A fundamentals lesson ends on practice, and practice in Yawp is an
+   * assignment students work, not a worksheet to retype. The card assigns it
+   * from inside the lesson, with the planner's choices already in the sheet.
+   */
+  test('assigns the writing practice it planned, without leaving the lesson', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    await setWritingPracticeEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedPlannedPractice(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.locator('main')).not.toContainText('yawp-practice');
+    const card = page.getByTestId('practice-card');
+    await expect(card).toBeVisible();
+    // Named by the lesson's real title, and only the lesson Yawp has.
+    await expect(card).toContainText('Fixing Comma Splices');
+    await expect(card).not.toContainText('lesson-yawp-does-not-have');
+    await expect(card).toContainText('6 problems');
+
+    await card.getByTestId('practice-assign').click();
+    const sheet = page.getByRole('dialog');
+    await expect(sheet.getByLabel('Assignment title')).toHaveValue(
+      'Comma splice repair'
+    );
+    await expect(sheet.getByLabel('Number of problems')).toHaveValue('6');
+    await expect(sheet.getByLabel(/instructions/i)).toHaveValue(
+      'Fix each sentence two different ways.'
+    );
+
+    await sheet.getByRole('checkbox').first().check();
+    await sheet.getByLabel('Due date').fill('2026-12-01');
+    await sheet.getByRole('button', { name: 'Assign practice' }).click();
+    await expect(sheet.getByRole('status')).toContainText('Practice assigned');
+
+    // What was created is what the planner asked for, minus the lesson Yawp
+    // does not have.
+    const prisma = createE2EPrismaClient();
+    try {
+      const assigned = await prisma.writingPracticeAssignment.findFirst({
+        where: { createdByMembershipId: e2eContext.teacherMembershipId },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(assigned?.lessonSlugs).toEqual(['fixing-comma-splices']);
+      expect(assigned?.problemCount).toBe(6);
+      expect(assigned?.title).toBe('Comma splice repair');
+    } finally {
+      await prisma.$disconnect();
+    }
+
+    await clearWritingPractice(e2eContext.teacherMembershipId);
+    await setWritingPracticeEnabled(e2eContext.organizationId, false);
+  });
+
+  test('offers no practice button to a school without Writing Practice', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    await setWritingPracticeEnabled(e2eContext.organizationId, false);
+    const { conversationId } = await seedPlannedPractice(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    await page.waitForLoadState('networkidle');
+
+    // The practice is still lesson content the teacher can read, but there is
+    // nothing to press that would lead to a page this school cannot open.
+    await expect(page.locator('main')).not.toContainText('yawp-practice');
+    await expect(page.getByTestId('practice-card')).toContainText('6 problems');
+    await expect(page.getByTestId('practice-assign')).toHaveCount(0);
   });
 
   test('turns the check it planned into a real exit ticket', async ({

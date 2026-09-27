@@ -11,6 +11,7 @@ import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { buildLessonPacket, type LessonPacket } from './lesson-packet';
 import { packetKindForMaterial } from './lesson-material';
+import { getQuickWritingLessons } from '~/utils/writing-lessons/static-lessons.server';
 
 export type LoadedLessonPacket = {
   conversationId: string;
@@ -125,6 +126,9 @@ export async function loadLessonPacket({
       title: conversation.packetTitle ?? conversation.title,
       className,
       sections,
+      practiceLessonTitles: Object.fromEntries(
+        getQuickWritingLessons().map((lesson) => [lesson.slug, lesson.title])
+      ),
     }),
     packetTitleValue: conversation.packetTitle ?? '',
     published: Boolean(conversation.publishedAt),

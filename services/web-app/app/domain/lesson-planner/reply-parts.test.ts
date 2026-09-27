@@ -27,6 +27,26 @@ describe('splitReplyParts', () => {
     ]);
   });
 
+  test('keeps assigned writing practice at the step that uses it', () => {
+    const parts = splitReplyParts(
+      [
+        '## Mini-lesson (10 min)',
+        '```yawp-practice\nlessons: fixing-comma-splices\nproblems: 6\n```',
+        '## Closing',
+      ].join('\n\n')
+    );
+
+    expect(parts.map((part) => part.kind)).toEqual([
+      'markdown',
+      'practice',
+      'markdown',
+    ]);
+    const practice = parts[1]!;
+    if (practice.kind !== 'practice') throw new Error('wrong part');
+    expect(practice.practice.lessonSlugs).toEqual(['fixing-comma-splices']);
+    expect(practice.practice.problemCount).toBe(6);
+  });
+
   test('composes the ticket rather than carrying the block through', () => {
     const [part] = splitReplyParts(
       '```yawp-exit-ticket\nmode: basic\n```'
