@@ -18,6 +18,7 @@ import {
   Lightbulb,
   ListChecks,
   MessagesSquare,
+  PenLine,
   Presentation,
   Repeat,
   SplitSquareHorizontal,
@@ -29,7 +30,7 @@ import { cn } from '~/utils/misc';
 
 type TileFace = { icon: LucideIcon; hint: string };
 
-const TILE_FACES: Record<string, TileFace> = {
+export const TILE_FACES: Record<string, TileFace> = {
   'plan-a-lesson': {
     icon: Lightbulb,
     hint: 'Start from nothing. It asks what it needs to know.',
@@ -49,6 +50,10 @@ const TILE_FACES: Record<string, TileFace> = {
   'ground-in-class-data': {
     icon: BarChart3,
     hint: 'Let it read how the class actually scored first.',
+  },
+  'writing-fundamentals': {
+    icon: PenLine,
+    hint: 'Find the skill costing them points, teach it, assign the practice.',
   },
   'unit-plan': {
     icon: CalendarDays,
