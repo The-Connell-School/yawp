@@ -1043,11 +1043,16 @@ export function AssignmentCreationSheetContent({
             >
               Tutor enabled
             </Label>
+            {tutorEnabled ? null : (
+              <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                Cold write
+              </span>
+            )}
           </div>
           <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
             {isEditing
               ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
-              : "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."}
+              : "Turning the tutor off makes this a cold write: the tutor is removed from students' documents, so you see what they can write without its guidance."}
           </p>
         </div>
 

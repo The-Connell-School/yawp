@@ -255,7 +255,7 @@ describe('AssignmentCreationSheetContent', () => {
       );
       expectText('Tutor enabled');
       expectText(
-        "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."
+        "Turning the tutor off makes this a cold write: the tutor is removed from students' documents, so you see what they can write without its guidance."
       );
       expectNoText('Customize Grading');
       expectNoText('Tutor Context');
@@ -296,6 +296,17 @@ describe('AssignmentCreationSheetContent', () => {
       false
     );
     expect(inputByName('tutorEnabled').value).toBe('false');
+  });
+
+  it('names a tutor-off assignment a cold write', () => {
+    root = renderSheet().root;
+    expectNoText('Cold write');
+
+    act(() => {
+      controlById('assignment-create-tutor-enabled').click();
+    });
+
+    expectText('Cold write');
   });
 
   it('shows the grading assistant strictness picker to teachers', () => {
