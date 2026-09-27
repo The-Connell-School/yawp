@@ -2870,10 +2870,14 @@ test.describe('YAWP! Lesson Planner', () => {
       'Fix each sentence two different ways.'
     );
 
-    await sheet.getByRole('checkbox').first().check();
+    await sheet
+      .getByTestId(`writing-practice-class-${e2eContext.classId}`)
+      .click();
     await sheet.getByLabel('Due date').fill('2026-12-01');
     await sheet.getByRole('button', { name: 'Assign practice' }).click();
-    await expect(sheet.getByRole('status')).toContainText('Practice assigned');
+    await expect(
+      sheet.getByTestId('writing-practice-assign-result')
+    ).toContainText('Practice assigned');
 
     // What was created is what the planner asked for, minus the lesson Yawp
     // does not have.

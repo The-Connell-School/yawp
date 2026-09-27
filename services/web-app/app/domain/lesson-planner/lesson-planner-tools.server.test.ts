@@ -240,6 +240,62 @@ describe('handleLessonPlannerToolCall', () => {
     expect(result.note).not.toContain('kind: daily-pages');
   });
 
+  /**
+   * Composition is where the essay-level gaps live — claims, evidence,
+   * analysis, framing — so a class weak in those gets a Composition lesson,
+   * not a grammar one.
+   */
+  test('finds Composition lessons for an essay-level gap', async () => {
+    const previous = process.env.COMPOSITION_PRACTICE_ENABLED;
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
+    try {
+      const listed = JSON.parse(
+        await callTool(
+          'list_writing_lessons',
+          { rubricCategory: 'evidence_and_support' },
+          { ...ctx, writingPracticeEnabled: true }
+        )
+      );
+      const slugs = listed.lessons.map((lesson: { slug: string }) => lesson.slug);
+      expect(slugs).toContain('evidence');
+      expect(slugs).toContain('analysis');
+      for (const lesson of listed.lessons) {
+        expect(lesson.section).toBe('Composition');
+      }
+    } finally {
+      process.env.COMPOSITION_PRACTICE_ENABLED = previous;
+    }
+  });
+
+  test('keeps Composition out of the planner while its rollout flag is off', async () => {
+    const previous = process.env.COMPOSITION_PRACTICE_ENABLED;
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+    try {
+      const listed = JSON.parse(
+        await callTool(
+          'list_writing_lessons',
+          {},
+          { ...ctx, writingPracticeEnabled: true }
+        )
+      );
+      expect(listed.lessons.length).toBeGreaterThan(0);
+      for (const lesson of listed.lessons) {
+        expect(lesson.section).toBe('Grammar & Mechanics');
+      }
+
+      const lesson = JSON.parse(
+        await callTool(
+          'get_writing_lesson',
+          { slug: 'evidence' },
+          { ...ctx, writingPracticeEnabled: true }
+        )
+      );
+      expect(lesson.error).toBeTruthy();
+    } finally {
+      process.env.COMPOSITION_PRACTICE_ENABLED = previous;
+    }
+  });
+
   test('returns a writing lesson with its full text and link', async () => {
     const listed = JSON.parse(
       await callTool(

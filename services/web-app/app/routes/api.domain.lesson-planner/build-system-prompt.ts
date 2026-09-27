@@ -129,11 +129,11 @@ function buildExitTicketSection(available: boolean): string[] {
 }
 
 /**
- * Sentence-level fundamentals, aimed at what the class data says is weak.
+ * Writing fundamentals, aimed at what the class data says is weak.
  *
- * Grammar, mechanics and sentence style are where a writing program leaks
- * points across every assignment, and Yawp already has a lesson for each of
- * the common gaps. With Writing Practice on, the lesson can also end on
+ * Grammar and mechanics at the sentence, and claims, evidence, analysis and
+ * framing at the essay, are where a writing program leaks points across every
+ * assignment, and Yawp already has a lesson for each of the common gaps. With Writing Practice on, the lesson can also end on
  * practice students work in Yawp; without it, the lesson is taught from the
  * plan itself, since there is no lesson page to link to.
  */
@@ -144,13 +144,13 @@ function buildWritingFundamentalsSection(practiceAvailable: boolean): string[] {
   );
   const common = [
     '',
-    'Writing fundamentals (close the sentence-level gap the data shows):',
-    "Grammar, mechanics and sentence style cost students points on every assignment they write, which makes them the most expensive gap a class can have and the one Yawp is best stocked to close. When the class data or the teacher points at one, treat it as a fundamentals lesson, not a footnote to another lesson.",
+    'Writing fundamentals (close the gap the data shows):',
+    "Yawp's Writing Fundamentals lessons come in two strands. Grammar & Mechanics covers the sentence: comma splices, agreement, passive voice, parallelism, transitions. Composition, where the school has it switched on, covers the essay: topic sentences, thesis statements, evidence, analysis, hooks and openings, conclusions. Both cost students points on every assignment they write, which makes them the most expensive gaps a class can have and the ones Yawp is best stocked to close. When the class data or the teacher points at one, treat it as a fundamentals lesson, not a footnote to another lesson.",
     '- Find the gap before you teach it. Call get_class_grade_report and look at the rubric skills; a class scoring low on these is the signal, and these rubric keys are what list_writing_lessons filters by:',
     ...skills,
-    '- Then call list_writing_lessons with that rubricCategory, and get_writing_lesson for the one that matches the actual error. A class that writes comma splices needs Fixing Comma Splices, not a general punctuation review.',
+    '- Then call list_writing_lessons with that rubricCategory, and get_writing_lesson for the one that matches the actual problem. A class that writes comma splices needs Fixing Comma Splices, not a general punctuation review; a class that drops quotes without explaining them needs Analysis, not Evidence. When a skill turns up no lesson, it is not switched on for this school: teach it yourself.',
     '- Teach it the way the lesson is written: its explanation as the mini-lesson, its examples worked together, its exercises as the practice. Do not write your own grammar lesson when Yawp has one.',
-    '- One fundamental per lesson, two at most when they are related (subject-verb and pronoun agreement). A period that tries to fix four sentence-level errors fixes none of them.',
+    '- One fundamental per lesson, two at most when they are related (subject-verb and pronoun agreement, or evidence and analysis). A period that tries to fix four errors fixes none of them.',
     '- Close the loop in the students’ own writing: after the practice, have them find and repair the same error in something they already wrote. That transfer is the point; the exercises are the rehearsal.',
   ];
   if (!practiceAvailable) {
@@ -163,7 +163,7 @@ function buildWritingFundamentalsSection(practiceAvailable: boolean): string[] {
     ...common,
     '',
     `Assigning the practice (\`${PRACTICE_FENCE}\`) — this teacher's school has Writing Practice:`,
-    'A Quick Writing Lesson carries practice exercises, and Yawp can assign them: students work the problems in Yawp and the teacher sees how they did. So when a lesson teaches a fundamental, end that part on practice students do in Yawp rather than a worksheet, and hand it over in a fenced block. Yawp puts a button under it that assigns the practice to the teacher’s class with everything filled in.',
+    'Every Writing Fundamentals lesson carries practice, and Yawp can assign it: students work the problems on Yawp’s practice screen — multiple choice and a rewrite for Grammar & Mechanics, written responses with a revise-until-mastered loop for Composition — and the teacher sees per-class results and the questions their students miss. So when a lesson teaches a fundamental, end that part on practice students do in Yawp rather than a worksheet, and hand it over in a fenced block. Yawp puts a button under it that assigns the practice to the teacher’s class with everything filled in.',
     '  ```' + PRACTICE_FENCE,
     '  lessons: fixing-comma-splices',
     '  problems: 6',

@@ -169,6 +169,8 @@ export function searchShortFormPrompts(
 export type WritingLessonCatalogEntry = {
   slug: string;
   title: string;
+  /** Grammar & Mechanics (sentence-level) or Composition (essay-level). */
+  section: QuickWritingLesson['section'];
   category: QuickWritingLesson['category'];
   description: string;
   /** Where the teacher (or the class, projected) can open the lesson. */
@@ -187,15 +189,21 @@ export const WRITING_LESSON_SKILL_HINTS: Partial<
 } = {
   grammar_and_mechanics: ['Punctuation', 'Agreement'],
   voice_and_style: ['Sentence Structure'],
-  organization_and_structure: ['Flow'],
+  organization_and_structure: ['Flow', 'Framing the Essay'],
+  // The Composition strand: essay-level fundamentals.
+  thesis_and_content: ['Making Claims'],
+  evidence_and_support: ['Supporting Claims'],
 };
 
 export function listWritingLessonCatalog({
   category,
   rubricCategory,
+  includeComposition = true,
 }: {
   category?: string;
   rubricCategory?: string;
+  /** False while the Composition strand's rollout flag is off. */
+  includeComposition?: boolean;
 }): WritingLessonCatalogEntry[] {
   const allowedCategories = rubricCategory
     ? WRITING_LESSON_SKILL_HINTS[rubricCategory as RubricKey]
@@ -203,6 +211,7 @@ export function listWritingLessonCatalog({
 
   return getQuickWritingLessons()
     .filter((lesson) => {
+      if (!includeComposition && lesson.section === 'Composition') return false;
       if (category && lesson.category !== category) return false;
       if (allowedCategories && !allowedCategories.includes(lesson.category)) {
         return false;
@@ -212,6 +221,7 @@ export function listWritingLessonCatalog({
     .map((lesson) => ({
       slug: lesson.slug,
       title: lesson.title,
+      section: lesson.section,
       category: lesson.category,
       description: lesson.description,
       href: `/app/writing-lessons/${lesson.slug}`,

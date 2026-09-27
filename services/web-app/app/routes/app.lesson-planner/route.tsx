@@ -51,6 +51,11 @@ import { linkMaterialTitles } from '~/domain/lesson-planner/lesson-material';
 import { LessonResourceCard } from '~/components/ai-chat/lesson-resource-card';
 import { DailyPagesCard } from '~/components/ai-chat/daily-pages-card';
 import { ExitTicketCard } from '~/components/ai-chat/exit-ticket-card';
+import { PracticeCard } from '~/components/ai-chat/practice-card';
+import {
+  loadPracticeContext,
+  type PracticeContext,
+} from '~/domain/lesson-planner/practice-context.server';
 import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
 import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
@@ -187,8 +192,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     membershipId: access.membership.id,
     organizationId: access.membership.organization.id,
   });
+  // Writing Fundamentals practice the planner hands over becomes an assignment
+  // from inside the lesson; the classes are only loaded where that is possible.
+  const practice = await loadPracticeContext({
+    request,
+    membershipId: access.membership.id,
+    writingPracticeEnabled: Boolean(
+      access.membership.organization.writingPracticeEnabled
+    ),
+  });
 
   return {
+    practice,
     dailyPagesTypeId,
     classStarterTypeId,
     exitTicketTypeId,
@@ -251,6 +266,7 @@ export default function LessonPlannerRoute() {
     dailyPagesTypeId,
     classStarterTypeId,
     exitTicketTypeId,
+    practice,
     builtDays,
     unitMapConversation,
   } = useLoaderData<typeof loader>();
@@ -753,6 +769,7 @@ export default function LessonPlannerRoute() {
                   dailyPagesTypeId={dailyPagesTypeId}
                   classStarterTypeId={classStarterTypeId}
                   exitTicketTypeId={exitTicketTypeId}
+                  practice={practice}
                   conversationId={conversationId}
                   builtDays={builtDays}
                   onSuggestion={send}
@@ -959,6 +976,7 @@ function MessageBubble({
   dailyPagesTypeId,
   classStarterTypeId,
   exitTicketTypeId,
+  practice,
   conversationId,
   builtDays,
   onSuggestion,
@@ -981,6 +999,8 @@ function MessageBubble({
   classStarterTypeId: string | null;
   /** Where the lesson's check becomes a real assignment; null without the type. */
   exitTicketTypeId: string | null;
+  /** Writing Fundamentals lessons, and the classes practice can go to. */
+  practice: PracticeContext;
   conversationId: string | null;
   /** Day number → the conversation each already-built day lives in. */
   builtDays: Record<number, string>;
@@ -1095,6 +1115,16 @@ function MessageBubble({
             }
             if (part.kind === 'resource') {
               return <LessonResourceCard key={key} resource={part.resource} />;
+            }
+            if (part.kind === 'practice') {
+              return (
+                <PracticeCard
+                  key={key}
+                  practice={part.practice}
+                  lessons={practice.lessons}
+                  classes={practice.classes}
+                />
+              );
             }
             return (
               <div key={key} className="mt-3">

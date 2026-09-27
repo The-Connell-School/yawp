@@ -32,6 +32,7 @@ import {
   getQuickWritingLessonBySlug,
   getQuickWritingPracticePrompts,
 } from '~/utils/writing-lessons/static-lessons.server';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 
 export type LessonPlannerToolContext = {
   /** The calling teacher's OrgMembership id. */
@@ -179,13 +180,21 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
   {
     name: 'list_writing_lessons',
     description:
-      "List Yawp's Quick Writing Lessons — short, ready-made sentence-level lessons (comma splices, passive voice, parallel construction, transitions, agreement). Filter by category or by the rubric skill the class is weak in. Use one of these instead of writing your own grammar mini-lesson.",
+      "List Yawp's Writing Fundamentals lessons — short, ready-made lessons in two strands: Grammar & Mechanics (comma splices, passive voice, parallel construction, transitions, agreement) and, where it is switched on, Composition (topic sentences, thesis statements, evidence, analysis, hooks and openings, conclusions). Filter by category or by the rubric skill the class is weak in. Use one of these instead of writing your own mini-lesson on the skill.",
     input_schema: {
       type: 'object',
       properties: {
         category: {
           type: 'string',
-          enum: ['Punctuation', 'Sentence Structure', 'Agreement', 'Flow'],
+          enum: [
+            'Punctuation',
+            'Sentence Structure',
+            'Agreement',
+            'Flow',
+            'Making Claims',
+            'Supporting Claims',
+            'Framing the Essay',
+          ],
         },
         rubricCategory: {
           type: 'string',
@@ -296,7 +305,10 @@ async function handleCatalogToolCall(
       };
     }
     case 'list_writing_lessons': {
-      const lessons = listWritingLessonCatalog(input);
+      const lessons = listWritingLessonCatalog({
+        ...input,
+        includeComposition: isCompositionPracticeEnabled(),
+      });
       if (!ctx.writingPracticeEnabled) {
         // The lesson pages are behind Writing Practice, so a link would open
         // the dashboard instead. No address goes out, which also means the
@@ -319,7 +331,12 @@ async function handleCatalogToolCall(
     case 'get_writing_lesson': {
       const slug = typeof input.slug === 'string' ? input.slug : '';
       const lesson = getQuickWritingLessonBySlug(slug);
-      if (!lesson) {
+      // A Composition lesson while that strand is still dark is one the
+      // teacher could not open or assign, so it is not there to plan from.
+      if (
+        !lesson ||
+        (lesson.section === 'Composition' && !isCompositionPracticeEnabled())
+      ) {
         return { error: `No Quick Writing Lesson with slug "${slug}".` };
       }
       return {
