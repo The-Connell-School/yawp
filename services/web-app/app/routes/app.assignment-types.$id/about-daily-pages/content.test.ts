@@ -151,6 +151,31 @@ describe('the explanation of the type', () => {
   });
 });
 
+/**
+ * Three switches a teacher sets per assignment. The page names each one, in
+ * the words the assignment sheet uses.
+ */
+describe('the per-assignment switches', () => {
+  const text = HOW_TO_USE.join(' ');
+
+  test('names the cold write: the tutor switched off', () => {
+    expect(text).toContain('cold write');
+    expect(text).toContain('Tutor enabled');
+  });
+
+  test('names ungraded practice: grade submission switched off', () => {
+    expect(text).toContain('Submit for grade');
+  });
+
+  test('names the grammar switch', () => {
+    expect(text.toLowerCase()).toContain('grammar grading off');
+  });
+
+  test('names the writing time', () => {
+    expect(text).toContain('Time students have to write');
+  });
+});
+
 describe('the prompt-writing guidance', () => {
   test('carries the three parts a gradeable prompt needs', () => {
     expect(PROMPT_RECIPE).toHaveLength(3);

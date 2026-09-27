@@ -602,6 +602,7 @@ export async function action({ request }: ActionFunctionArgs) {
             gradingAssistantStrictnessLevel: true,
             grammarGradingEnabled: true,
             writingTimeMinutes: true,
+            tutorEnabled: true,
             apHistorySnapshot: true,
             prompt: true,
             pointValue: true,
@@ -1063,6 +1064,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     documentText: submission.text,
     assignmentPrompt: submission.document.assignment?.prompt,
     writingTimeMinutes: submission.document.assignment?.writingTimeMinutes,
+    coldWrite: submission.document.assignment?.tutorEnabled === false,
   });
   const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(

@@ -97,6 +97,19 @@ export function buildWritingTimeGradingBlock(
   ].join('\n');
 }
 
+/**
+ * What the grader is told when the tutor was off for the assignment: a cold
+ * write, the student's unassisted writing. Absent when the tutor was on, so
+ * those prompts are unchanged.
+ */
+export function buildColdWriteGradingBlock(coldWrite: boolean | null | undefined): string {
+  if (coldWrite !== true) return '';
+  return [
+    'Cold write: the tutor was switched off for this assignment, so this is the student\'s own unassisted writing.',
+    'Hold it to the same rubric, and do not refer the student to the tutor in your feedback.',
+  ].join('\n');
+}
+
 const GRAMMAR_CHECKER_SYSTEM_PROMPT = `You are the Grammar/Usage Checker.\nReturn ONLY valid JSON with the schema:\n{\n  \"issues\": [{\n    \"excerpt\": string,\n    \"occurrence\"?: number,\n    \"kind\": \"error\"|\"style\",\n    \"ruleNumber\"?: number,\n    \"rule\"?: string,\n    \"message\": string\n  }]\n}\nRules:\n- Highlight the smallest exact excerpt that demonstrates the issue (max 120 characters).\n- If the excerpt appears multiple times, set occurrence to the 1-based match index.\n- Keep message brief (1-2 sentences). State the rule plainly; do not offer to fix it for the student.\n- Focus on essentials: usage, composition, comma/semicolon rules, and omit needless words.\n\nComma rules:\n(1) In a series of three or more terms with a single conjunction, use a comma after each term except the last.\n(2) Enclose parenthetic expressions between commas.\n(3) Do not join independent clauses with a comma (comma splice); use a semicolon, conjunction, or separate sentences.\nSemicolon rule:\nUse a semicolon to join closely related independent clauses.\n\nStyle:\n(10) Omit needless words.`;
 
 export function buildGrammarCheckerSystemPrompt(

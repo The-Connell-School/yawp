@@ -132,7 +132,10 @@ export const HOW_TO_USE: string[] = [
   'Give them a rhythm students can feel — the same day each week, or the last ten minutes of every reading day. Scores climb once a class recognizes what the rubric is asking for.',
   'Put the prompt and the target length where students can see them. They cannot aim at a finish line nobody named.',
   'Read for the trend rather than the single score. Depth and Development are where movement shows up first.',
+  'Set Time students have to write to the time you actually give. The assistant grades the entry as that many minutes of writing — ten minutes is not held to a revised piece, and a longer session is held to more.',
   'Turn grammar grading off on the assignment when the point of the day is the thinking, and leave it on when you want mechanics tracked.',
+  'Untick Tutor enabled for a cold write: no tutor on the page, so you see what a student can do on their own. It suits a check on the move after a few tutored entries.',
+  'Untick Submit for grade to run an entry as practice: students write and use the tutor, and nothing reaches the gradebook.',
   'Use one as a rehearsal for an essay. An analysis or an argued position here is a body paragraph, so the habit transfers directly — and you will both already know what it scored.',
   'Name the move out loud the first few times: today we are analyzing, or defining, or comparing. Most of the early score movement comes from students who stop warming up and start doing the move the prompt asked for.',
 ];

@@ -1,7 +1,10 @@
 import { teacherNotesEnabled } from './teacher-notes';
 import { buildGradingPromptShape } from './grading-prompt-shape';
 import type { ResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
-import { buildWritingTimeGradingBlock } from './writing-time';
+import {
+  buildColdWriteGradingBlock,
+  buildWritingTimeGradingBlock,
+} from './writing-time';
 import {
   getGradingAssistantStrictnessInstructions,
   getGradingAssistantStrictnessLabel,
@@ -120,6 +123,7 @@ export function compileGradingAssistantInvocation({
   documentText,
   assignmentPrompt,
   writingTimeMinutes,
+  coldWrite,
 }: {
   gradingConfig: Pick<
     ResolvedAssignmentTypeGradingConfig,
@@ -141,6 +145,8 @@ export function compileGradingAssistantInvocation({
   assignmentPrompt?: string | null;
   /** How long the student had to write; null or absent leaves the prompt as it was. */
   writingTimeMinutes?: number | null;
+  /** True when the tutor was off: a cold write. Absent or false changes nothing. */
+  coldWrite?: boolean | null;
 }): CompiledGradingAssistantInvocation {
   const { minScore, maxScore } = gradingConfig;
   const promptShape = buildGradingPromptShape({
@@ -170,7 +176,14 @@ export function compileGradingAssistantInvocation({
   const template =
     gradingConfig.promptTemplate ??
     defaultGradingAssistantPromptTemplate(gradingConfig);
-  const writingTimeBlock = buildWritingTimeGradingBlock(writingTimeMinutes);
+  // The conditions the teacher set for the writing — how long, and whether the
+  // tutor was there — travel together as one block.
+  const writingTimeBlock = [
+    buildWritingTimeGradingBlock(writingTimeMinutes),
+    buildColdWriteGradingBlock(coldWrite),
+  ]
+    .filter(Boolean)
+    .join('\n');
   const variables = {
     assignment_type: gradingConfig.rubricTotalPoints
       ? `${gradingConfig.label} (total rubric points: ${gradingConfig.rubricTotalPoints})`

@@ -2090,7 +2090,11 @@ describe('api.domain.grade-essay-ai', () => {
       } as any);
     }
 
-    async function gradeTimed(id: string, writingTimeMinutes: number | null) {
+    async function gradeTimed(
+      id: string,
+      writingTimeMinutes: number | null,
+      tutorEnabled?: boolean
+    ) {
       prisma.assignmentType.findUnique.mockResolvedValue(
         mockAssignmentType({
           gradingPromptConfigJson: { gradingInstructions: 'Grade against this rubric.' },
@@ -2106,6 +2110,7 @@ describe('api.domain.grade-essay-ai', () => {
             id: `assignment-${id}`,
             prompt: 'Is it possible to be honest and kind at once?',
             writingTimeMinutes,
+            ...(tutorEnabled === undefined ? {} : { tutorEnabled }),
           },
         },
       };
@@ -2137,6 +2142,18 @@ describe('api.domain.grade-essay-ai', () => {
         )?.[0];
       return { grading: byKind('rubric-evaluation'), grammar: byKind('grammar-issues') };
     }
+
+    test('tells the grading assistant when the tutor was off: a cold write', async () => {
+      const { grading } = await gradeTimed('sub-cold', 15, false);
+
+      expect(grading.messages[0].content).toContain('Cold write:');
+    });
+
+    test('says nothing about a cold write when the tutor was on', async () => {
+      const { grading } = await gradeTimed('sub-tutored', 15, true);
+
+      expect(grading.messages[0].content).not.toContain('Cold write');
+    });
 
     test('tells both the grading assistant and the grammar checker how long the student had', async () => {
       const { grading, grammar } = await gradeTimed('sub-timed', 10);
