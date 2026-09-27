@@ -1,4 +1,14 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from 'bun:test';
+
+const ORIGINAL_COMPOSITION_FLAG = process.env.COMPOSITION_PRACTICE_ENABLED;
 
 const prisma = {
   classAssignment: { findMany: mock() },
@@ -18,12 +28,23 @@ const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const getStudentPreviewState = mock();
 const getStudentEnrolledClasses = mock();
+const getAssignedPracticeForStudent = mock();
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
 // before any file could mock.module() this path (see comment there).
 const actualAssignmentTypeAccess =
   globalThis.__realModules['~/utils/assignment-type-access.server'];
 
+mock.module('~/utils/writing-lessons/practice-assignments.server', () => ({
+  getAssignedPracticeForStudent,
+  computeAssignedProgress: (
+    attempts: Array<{ status: string; lessonSlug: string }>
+  ) => ({
+    attemptedCount: attempts.length,
+    masteredCount: attempts.filter((a) => a.status === 'strong').length,
+    doneCount: attempts.length,
+  }),
+}));
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
@@ -55,6 +76,14 @@ afterAll(() => {
   );
 });
 
+afterEach(() => {
+  if (ORIGINAL_COMPOSITION_FLAG === undefined) {
+    delete process.env.COMPOSITION_PRACTICE_ENABLED;
+  } else {
+    process.env.COMPOSITION_PRACTICE_ENABLED = ORIGINAL_COMPOSITION_FLAG;
+  }
+});
+
 describe('app index loader assignments', () => {
   beforeEach(() => {
     for (const model of Object.values(prisma)) {
@@ -72,6 +101,8 @@ describe('app index loader assignments', () => {
       active: false,
       organizationId: null,
     });
+    getAssignedPracticeForStudent.mockReset();
+    getAssignedPracticeForStudent.mockResolvedValue([]);
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
     getStudentEnrolledClasses.mockReset();
     getStudentEnrolledClasses.mockResolvedValue([]);
@@ -86,7 +117,11 @@ describe('app index loader assignments', () => {
       id: 'profile-1',
       role: 'STUDENT',
       isOrgOwner: false,
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingPracticeEnabled: true,
+      },
     });
     prisma.orgMembership.findUnique.mockResolvedValue({
       _count: { classesAsStudent: 2 },
@@ -190,6 +225,109 @@ describe('app index loader assignments', () => {
     const data = (response as { data: any }).data;
 
     expect(data).not.toHaveProperty(['writingPractice', 'Enabled'].join(''));
+  });
+
+  test('surfaces assigned writing practice on the student dashboard', async () => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
+    getAssignedPracticeForStudent.mockResolvedValue([
+      {
+        id: 'wpca-1',
+        assignment: {
+          title: null,
+          lessonSlugs: ['topic-sentences'],
+          problemCount: 3,
+          dueAt: new Date('2026-12-01T00:00:00Z'),
+        },
+        class: { id: 'class-1', grade: '10', period: '3', title: 'English 10' },
+        attempts: [
+          {
+            promptId: 'topic-sentences-1',
+            lessonSlug: 'topic-sentences',
+            status: 'strong',
+          },
+        ],
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app?tab=assignments'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(data.writingPracticeAssignments).toHaveLength(1);
+    const practice = data.writingPracticeAssignments[0];
+    expect(practice.id).toBe('wpca-1');
+    // Untitled assignment shows the assigned lesson's name.
+    expect(practice.title).toBe('Topic Sentences');
+    expect(practice.hasComposition).toBe(true);
+    expect(practice.masteredCount).toBe(1);
+    expect(practice.classLabel.title).toBe('English 10');
+  });
+
+  test('hides Composition assignments while their rollout flag is off', async () => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+    getAssignedPracticeForStudent.mockResolvedValue([
+      {
+        id: 'grammar-assignment',
+        assignment: {
+          title: 'Comma splices',
+          lessonSlugs: ['fixing-comma-splices'],
+          problemCount: 3,
+          dueAt: null,
+        },
+        class: { id: 'class-1', grade: '10', period: '3', title: 'English 10' },
+        attempts: [],
+      },
+      {
+        id: 'composition-assignment',
+        assignment: {
+          title: 'Topic sentences',
+          lessonSlugs: ['topic-sentences'],
+          problemCount: 3,
+          dueAt: null,
+        },
+        class: { id: 'class-1', grade: '10', period: '3', title: 'English 10' },
+        attempts: [],
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(
+      data.writingPracticeAssignments.map(
+        (assignment: { id: string }) => assignment.id
+      )
+    ).toEqual(['grammar-assignment']);
+  });
+
+  test('does not load assigned writing practice while the organization flag is off', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'STUDENT',
+      isOrgOwner: false,
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingPracticeEnabled: false,
+      },
+    });
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(getAssignedPracticeForStudent).not.toHaveBeenCalled();
+    expect(data.writingPracticeAssignments).toEqual([]);
   });
 
   test('keeps all teacher classes navigable while scoping assignment data to available classes', async () => {

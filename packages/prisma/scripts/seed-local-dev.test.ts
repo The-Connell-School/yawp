@@ -286,7 +286,7 @@ describe('local dev seed fixtures', () => {
     );
   });
 
-  test('does not create writing practice configuration in local dev seed or schema', () => {
+  test('configures writing practice with a plain column, not a feature-flag table', () => {
     const seedSource = readFileSync(
       join(import.meta.dirname, 'seed-local-dev.ts'),
       'utf8'
@@ -302,7 +302,7 @@ describe('local dev seed fixtures', () => {
     expect(schemaSource).not.toContain(['feature', 'Flag'].join(''));
   });
 
-  test('enables Reporter and Class Summary for local development', () => {
+  test('enables Reporter, Class Summary, and Writing Practice for local development', () => {
     const seedSource = readFileSync(
       join(import.meta.dirname, 'seed-local-dev.ts'),
       'utf8'
@@ -312,6 +312,9 @@ describe('local dev seed fixtures', () => {
     expect(seedSource).toContain('lessonPlannerEnabled: true');
     expect(seedSource).toContain('enableClassInsightsForOrganizations');
     expect(seedSource).toContain('[LOCAL_DEV_ORG_ID]');
+    // Writing practice is dark by default in production; a local dev or preview
+    // environment exists to look at the build, so it seeds on.
+    expect(seedSource).toContain('writingPracticeEnabled: true');
   });
 
   test('treats localhost database urls as local seed targets', () => {

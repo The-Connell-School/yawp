@@ -4,6 +4,7 @@ import {
   buildPreviewSeatDefinition,
   buildPreviewSeatDefinitions,
   createRuntimePreviewSeat,
+  enableWritingPracticeForPreviewOrganizations,
   ensurePreviewSeats,
   type PreviewSeatDefinition,
 } from './preview-seats';
@@ -126,6 +127,39 @@ describe('class insights seat enablement', () => {
       organizationIds
     );
     expect(results.every((result) => result.enabled)).toBe(true);
+  });
+});
+
+describe('writing practice preview enablement', () => {
+  test('repairs retained configured seats without touching other organizations', async () => {
+    const updateMany = mock(async () => ({ count: 2 }));
+
+    const result = await enableWritingPracticeForPreviewOrganizations(
+      { organization: { updateMany } } as never,
+      ['local-dev-org', 'preview-seat-2', 'local-dev-org']
+    );
+
+    expect(result).toEqual({ count: 2 });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['local-dev-org', 'preview-seat-2'] },
+        writingPracticeEnabled: false,
+      },
+      data: { writingPracticeEnabled: true },
+    });
+  });
+
+  test('runs on every preview-seat seed pass, including retained databases', async () => {
+    const seedSource = await Bun.file(
+      new URL('./seed-preview-seats.ts', import.meta.url)
+    ).text();
+
+    expect(seedSource).toContain(
+      'enableWritingPracticeForPreviewOrganizations'
+    );
+    expect(seedSource).toContain(
+      'seats.map(({ organizationId }) => organizationId)'
+    );
   });
 });
 
