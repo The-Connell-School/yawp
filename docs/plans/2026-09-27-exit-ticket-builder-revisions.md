@@ -7,7 +7,32 @@ its Lesson Planner hand-off.
 Source: team discussion notes on Exit Tickets (2026-09). Every point in those
 notes maps to a numbered change below.
 
-## Where the PR is today
+## Status (2026-09-28)
+
+All seven changes are implemented on `claude/busy-archimedes-kbhfxn`, one
+commit each, in order, behind `EXIT_TICKET_BUILDER_V2_ENABLED` (sheet, server
+criteria, bands) and `EXIT_TICKET_CLASS_READ_ENABLED` (class read). Where the
+build differs from this plan:
+
+- **#4 was a real behavior change, not a no-op.** Exit tickets defaulted to
+  *step* scoring like every other type, so bands-only changes how new
+  quick-builder tickets are scored. It applies only to forms from the quick
+  builder; stored rows are not rewritten.
+- **#6's "deck and handout listed as attached materials" gap is not built.**
+  There is no mechanism today to attach lesson materials to an assignment,
+  and adding one is its own feature. The printed packet already composes the
+  same prompt as the assignment. The deck drift is addressed in the planner
+  instructions: the closing slide points to the ticket in Yawp instead of
+  restating the question.
+- **#7 is deterministic.** No model call: band counts, open questions
+  pulled from student text, and a follow-up list. It lives on the assignment
+  page, and the planner seed uses the existing `from`/`step` path with
+  `step=exit-ticket`.
+- Open questions below were resolved with the defaults proposed: a graded
+  reflection defaults to Completion; length can be words or sentences, with
+  no live counter; custom prompts get the elaboration note.
+
+## Where the PR is today (before these changes)
 
 | Area | Current behavior | Code |
 | --- | --- | --- |
