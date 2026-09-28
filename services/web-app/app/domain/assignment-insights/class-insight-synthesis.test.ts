@@ -73,6 +73,64 @@ describe('buildInsightPrompt', () => {
   });
 });
 
+/**
+ * A fifteen-minute cold write and a revised essay should not get the same
+ * next steps. The summary is told the conditions the class wrote under, so it
+ * reads the scores as what they are and speaks to the skill practiced.
+ */
+describe('buildInsightPrompt writing conditions', () => {
+  const plain = buildInsightPrompt(sampleAggregate, {
+    className: 'English 9',
+    assignmentTitle: 'Juliet argues with a name',
+  });
+
+  test('is unchanged when no conditions are known', () => {
+    expect(
+      buildInsightPrompt(sampleAggregate, {
+        className: 'English 9',
+        assignmentTitle: 'Juliet argues with a name',
+        assignmentTypeTitle: null,
+        paragraphModeLabel: null,
+        writingTimeMinutes: null,
+        coldWrite: false,
+        grammarGraded: null,
+      })
+    ).toEqual(plain);
+    expect(plain.system).not.toContain('writing conditions');
+  });
+
+  const conditioned = buildInsightPrompt(sampleAggregate, {
+    className: 'English 9',
+    assignmentTitle: 'Juliet argues with a name',
+    assignmentTypeTitle: 'Daily Pages',
+    paragraphModeLabel: 'Analyze',
+    writingTimeMinutes: 15,
+    coldWrite: true,
+    grammarGraded: false,
+  });
+
+  test('names the type, paragraph type and time', () => {
+    expect(conditioned.user).toContain('Assignment type: Daily Pages');
+    expect(conditioned.user).toContain('Paragraph type: Analyze');
+    expect(conditioned.user).toContain('15 minutes');
+  });
+
+  test('names a cold write and says not to recommend the tutor for it', () => {
+    expect(conditioned.user).toContain('cold write');
+    expect(conditioned.system).toContain('cold write');
+    expect(conditioned.system.toLowerCase()).toContain('tutor');
+  });
+
+  test('says grammar was not graded, so no step targets it', () => {
+    expect(conditioned.user).toContain('Grammar: not graded');
+  });
+
+  test('asks for next steps suited to the conditions', () => {
+    expect(conditioned.system).toContain('writing conditions');
+    expect(conditioned.system).toContain('paragraph type');
+  });
+});
+
 describe('parseInsightResponse', () => {
   const validPayload = {
     overview:

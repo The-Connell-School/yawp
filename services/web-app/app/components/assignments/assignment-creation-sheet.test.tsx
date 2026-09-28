@@ -902,3 +902,93 @@ describe('AssignmentCreationSheetContent writing time', () => {
     expect(inputByName('writingTimeMinutes').value).toBe('');
   });
 });
+
+/**
+ * The kind of paragraph a Daily Pages entry practices. Offered only for types
+ * that take one, and only the types switched on (Analyze first). No choice is
+ * the default, which grades and tutors exactly as before.
+ */
+describe('AssignmentCreationSheetContent paragraph type', () => {
+  let root: Root | null = null;
+
+  afterEach(() => {
+    cleanup(root);
+    root = null;
+  });
+
+  const types = [
+    {
+      id: 'daily-pages',
+      title: 'Daily Pages',
+      collaborationSupported: true,
+      gradesGrammar: true,
+      offersParagraphModes: true,
+    },
+    {
+      id: 'essay',
+      title: 'Thesis Essay',
+      collaborationSupported: true,
+      gradesGrammar: true,
+    },
+  ];
+
+  function paragraphSelect() {
+    return document.querySelector<HTMLSelectElement>(
+      'select[name="paragraphMode"]'
+    );
+  }
+
+  it('offers the switched-on types for Daily Pages, defaulting to none', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'daily-pages',
+    }));
+
+    expectText('Paragraph type');
+    const select = paragraphSelect();
+    expect(select).not.toBeNull();
+    expect(select!.value).toBe('');
+    const options = Array.from(select!.options).map((option) => option.value);
+    expect(options).toEqual(['', 'analyze']);
+  });
+
+  it('describes the chosen type', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'daily-pages',
+    }));
+
+    act(() => {
+      const select = paragraphSelect()!;
+      select.value = 'analyze';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(paragraphSelect()!.value).toBe('analyze');
+    expectText('Claim-Evidence-Analysis');
+  });
+
+  it('is absent for a type that takes no paragraph type', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'essay',
+    }));
+
+    expect(paragraphSelect()).toBeNull();
+    expectNoText('Paragraph type');
+  });
+
+  it('is shown read-only when editing, and not submitted', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'daily-pages',
+      editingAssignment: { id: 'assignment-1' },
+      initialParagraphMode: 'analyze',
+    }));
+
+    expect(paragraphSelect()).toBeNull();
+    const shown = controlById('assignment-create-paragraph-mode') as HTMLSelectElement;
+    expect(shown.value).toBe('analyze');
+    expect(shown.disabled).toBe(true);
+  });
+});

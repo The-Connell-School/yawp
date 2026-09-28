@@ -328,6 +328,61 @@ and the about page names each:
   and not to refer the student to a tutor.
 - **Submit for grade** — off runs it as practice; nothing reaches the gradebook.
 
+## Paragraph types
+
+A teacher can name the move a Daily Pages entry practices — the **Paragraph
+type** on the assignment sheet, stored as `Assignment.paragraphMode`. The
+registry is `app/domain/assignment-types/daily-pages-paragraph-modes.ts`.
+
+- **Layers, not new assistants.** A type adds guidance beside the writing time
+  in the grading prompt, and coaching after the module's own tutor
+  instructions. The rubric is unchanged, so a new type is a text constant and
+  tests — not a new grading assistant built by hand.
+- **One type at a time.** Each type has an `enabled` switch; teachers see only
+  the enabled ones and the server refuses the rest. **Analyze** ships first,
+  built on Claim-Evidence-Analysis (offered as a guide, not the only form).
+  Before switching the next one on: write its grading and tutor text, add
+  calibration cases for it, run the calibration script, then flip `enabled`.
+- **No type is the default** ("Any kind of paragraph"), stored as null, which
+  grades and tutors exactly as before. Frozen after creation, like the grammar
+  toggle.
+- The universal tutor persona is still copied into each module row's
+  `tutorInstructions`; there is no shared tutor prompt in code. The type layer
+  sits on top of whatever the module carries.
+
+## Connected tools
+
+Changing an assignment type changes what the tools built on it assume.
+
+**Class Summary** now receives the conditions the class wrote under (type,
+paragraph type, writing time, cold write, grammar graded) and applies the
+grammar toggle to the rubric it summarizes.
+
+**Lesson Planner** ([#374](https://github.com/The-Connell-School/yawp/pull/374))
+is not on this branch. When it lands it needs:
+
+- `search_short_form_prompts` and its tool description: "a graded Daily Pages
+  reflection" → academic paragraph practice; filter by `cognitiveMoves` so a
+  lesson asking for analysis gets Analyze prompts.
+- `dailyPagesCreateHref`: pass the paragraph type (`analyze`) alongside
+  `newPrompt` so the sheet opens with it chosen.
+- The `sf-ex-*` ids no longer exist; the `/^sf-/` mapping to Daily Pages still
+  holds for every remaining id.
+
+**Re-test when an assignment type changes** (rubric, instructions, paragraph
+types, or per-assignment settings):
+
+1. `bun services/web-app/scripts/run-daily-pages-calibration.ts` — no new
+   lenient or strict drift.
+2. Grade one seeded Daily Pages entry end to end; check the marked-up grammar
+   and per-category feedback.
+3. Generate a Class Summary for a cold-write assignment; the next steps should
+   not send students to the tutor or ask for revision.
+4. Plan a lesson with a Daily Pages block in the Lesson Planner; the prompt and
+   type should carry into the sheet.
+5. Read teacher feedback since the last change for anything the tools now
+   assume that teachers no longer do.
+
 ## Still open
 
 - ~~**Whose sentence rules apply.**~~ Resolved by the writing time above: the

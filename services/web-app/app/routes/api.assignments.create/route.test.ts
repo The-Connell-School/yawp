@@ -107,11 +107,13 @@ function mockAssignmentTypeAvailable({
   id = 'at-1',
   systemKey = 'generic_essay',
   collaborationSupported = false,
+  kind = null as string | null,
 } = {}) {
   prisma.assignmentType.findFirst.mockResolvedValue({
     id,
     systemKey,
     collaborationSupported,
+    kind,
   });
 }
 
@@ -193,7 +195,7 @@ describe('api.assignments.create', () => {
         id: 'at-1',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true },
+      select: { id: true, systemKey: true, kind: true },
     });
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -400,6 +402,68 @@ describe('api.assignments.create', () => {
     });
   });
 
+  describe('paragraph type', () => {
+    function createWith(fields: Record<string, string>) {
+      return action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          prompt: 'Quote the line where the argument turns.',
+          title: 'Daily Pages',
+          ...fields,
+        }),
+        params: {},
+      } as any);
+    }
+
+    test('records the chosen type on a Daily Pages assignment', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      const body = await readBody(await createWith({ paragraphMode: 'analyze' }));
+
+      expect(body).toMatchObject({ success: true });
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ paragraphMode: 'analyze' }),
+        })
+      );
+    });
+
+    test('records none when no type is chosen (preserves current behavior)', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      await createWith({});
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ paragraphMode: null }),
+        })
+      );
+    });
+
+    test('ignores a type sent for an assignment type that is not Daily Pages', async () => {
+      mockAssignmentTypeAvailable({ kind: null });
+
+      await createWith({ paragraphMode: 'analyze' });
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ paragraphMode: null }),
+        })
+      );
+    });
+
+    test('rejects a type that is not switched on yet', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      const response = await createWith({ paragraphMode: 'argue' });
+
+      expect(responseStatus(response)).toBe(400);
+      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
+  });
+
   test('rejects a writing time that is not whole minutes', async () => {
     const response = await action({
       request: requestFor({
@@ -536,7 +600,7 @@ describe('api.assignments.create', () => {
         id: 'at-forbidden',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true },
+      select: { id: true, systemKey: true, kind: true },
     });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });

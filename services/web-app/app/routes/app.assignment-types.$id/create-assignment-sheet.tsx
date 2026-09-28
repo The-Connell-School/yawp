@@ -36,6 +36,8 @@ type Props = {
   assignmentTypeGradesGrammar?: boolean;
   /** The writing time the form suggests for this type; null leaves it blank. */
   assignmentTypeDefaultWritingTimeMinutes?: number | null;
+  /** Whether this type takes a paragraph type (Daily Pages). */
+  assignmentTypeOffersParagraphModes?: boolean;
   teacherClasses: TeacherClass[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -59,6 +61,7 @@ export function CreateAssignmentSheet({
   assignmentTypeCollaborationSupported = false,
   assignmentTypeGradesGrammar = false,
   assignmentTypeDefaultWritingTimeMinutes = null,
+  assignmentTypeOffersParagraphModes = false,
   teacherClasses,
   open,
   onOpenChange,
@@ -100,6 +103,7 @@ export function CreateAssignmentSheet({
             collaborationSupported: assignmentTypeCollaborationSupported,
             gradesGrammar: assignmentTypeGradesGrammar,
             defaultWritingTimeMinutes: assignmentTypeDefaultWritingTimeMinutes,
+            offersParagraphModes: assignmentTypeOffersParagraphModes,
           },
         ]}
         teacherClasses={teacherClasses}

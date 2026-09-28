@@ -171,6 +171,11 @@ describe('the per-assignment switches', () => {
     expect(text.toLowerCase()).toContain('grammar grading off');
   });
 
+  test('names the paragraph type', () => {
+    expect(text).toContain('Paragraph type');
+    expect(text).toContain('Analyze');
+  });
+
   test('names the writing time', () => {
     expect(text).toContain('Time students have to write');
   });

@@ -289,3 +289,43 @@ describe('compileGradingAssistantInvocation cold write', () => {
     );
   });
 });
+
+/**
+ * The paragraph type a teacher chose layers its own guidance onto the one
+ * Daily Pages rubric. No type is every assignment before this existed.
+ */
+describe('compileGradingAssistantInvocation paragraph type', () => {
+  const base = {
+    gradingConfig: gradingConfig(),
+    studentFirstName: 'Jordan',
+    strictnessLevel: 'intermediate' as const,
+    documentText: 'Nick never admits that he envies Gatsby.',
+  };
+
+  test('leaves the prompt exactly as it was when no type is chosen', () => {
+    const without = compileGradingAssistantInvocation(base);
+    expect(
+      compileGradingAssistantInvocation({ ...base, paragraphMode: null })
+    ).toEqual(without);
+    expect(without.userMessage).not.toContain('Paragraph type');
+  });
+
+  test('adds the type guidance ahead of the essay', () => {
+    const invocation = compileGradingAssistantInvocation({
+      ...base,
+      paragraphMode: 'analyze',
+      writingTimeMinutes: 15,
+    });
+    expect(invocation.userMessage).toContain('Paragraph type: Analyze');
+    expect(invocation.userMessage).toContain('Claim-Evidence-Analysis');
+    expect(invocation.userMessage.indexOf('Paragraph type:')).toBeLessThan(
+      invocation.userMessage.indexOf('Essay:')
+    );
+  });
+
+  test('ignores a type that is not switched on', () => {
+    expect(
+      compileGradingAssistantInvocation({ ...base, paragraphMode: 'argue' })
+    ).toEqual(compileGradingAssistantInvocation(base));
+  });
+});
