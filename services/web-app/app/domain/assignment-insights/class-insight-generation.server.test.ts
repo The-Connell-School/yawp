@@ -200,4 +200,100 @@ describe('generateClassAssignmentInsight rubric scoping', () => {
       'conventions'
     );
   });
+
+  /**
+   * The summary is told the conditions the class wrote under, read off the
+   * assignment, so a fifteen-minute cold write is not summarized as an essay.
+   */
+  test('passes the writing conditions to the summary', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue({
+      id: 'ca-1',
+      assignment: {
+        title: 'Juliet argues with a name',
+        tutorEnabled: false,
+        writingTimeMinutes: 15,
+        paragraphMode: 'analyze',
+        grammarGradingEnabled: false,
+        assignmentType: { title: 'Daily Pages' },
+      },
+      class: {
+        grade: '9',
+        period: '1',
+        school: {
+          organizationId: 'org-1',
+          organization: { classInsightsEnabled: true },
+        },
+      },
+    });
+
+    await generateClassAssignmentInsight({
+      classAssignmentId: 'ca-1',
+      organizationId: 'org-1',
+      generatedByMembershipId: 'teacher-1',
+    });
+
+    expect(generateClassInsight.mock.calls[0]?.[0]?.context).toMatchObject({
+      assignmentTitle: 'Juliet argues with a name',
+      assignmentTypeTitle: 'Daily Pages',
+      paragraphModeLabel: 'Analyze',
+      writingTimeMinutes: 15,
+      coldWrite: true,
+      grammarGraded: false,
+    });
+  });
+
+  test('leaves the conditions empty for an assignment that set none', async () => {
+    await generateClassAssignmentInsight({
+      classAssignmentId: 'ca-1',
+      organizationId: 'org-1',
+      generatedByMembershipId: 'teacher-1',
+    });
+
+    expect(generateClassInsight.mock.calls[0]?.[0]?.context).toMatchObject({
+      paragraphModeLabel: null,
+      writingTimeMinutes: null,
+      coldWrite: false,
+      grammarGraded: null,
+    });
+  });
+
+  /**
+   * With grammar grading off, the grammar category was never scored, so the
+   * summary must not aggregate it as a category the class did nothing in.
+   */
+  test('drops the grammar category when grammar grading was off', async () => {
+    prisma.classAssignment.findUnique.mockResolvedValue({
+      assignment: {
+        id: 'assignment-1',
+        assignmentTypeId: 'daily-pages-type',
+        grammarGradingEnabled: false,
+        assignmentType: { kind: 'daily_pages', title: 'Daily Pages' },
+      },
+    });
+    resolveAssignmentTypeGradingConfig.mockResolvedValue({
+      rubricCategories: [
+        ...ACT_RUBRIC_CATEGORIES.filter((c) => c.key === 'development'),
+        {
+          key: 'grammar_and_mechanics',
+          label: 'Grammar/Syntax/Mechanics',
+          weight: 0.25,
+          description: 'Mechanics',
+          grammarHighlighting: true,
+        },
+      ],
+      minScore: 1,
+      maxScore: 5,
+    });
+
+    await generateClassAssignmentInsight({
+      classAssignmentId: 'ca-1',
+      organizationId: 'org-1',
+      generatedByMembershipId: 'teacher-1',
+    });
+
+    const rubric = generateClassInsight.mock.calls[0]?.[0]?.rubric;
+    expect(
+      rubric.categories.map((category: { key: string }) => category.key)
+    ).toEqual(['development']);
+  });
 });
