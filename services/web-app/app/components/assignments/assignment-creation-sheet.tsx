@@ -1196,6 +1196,7 @@ export function AssignmentCreationSheetContent({
             as work done in this time, so a ten-minute paragraph is not held to
             the polish of a revised essay. Leave it blank for work students take
             home or revise.
+          </p>
         </div>
 
         {/* Collaborative drafts. Available for every assignment type, and frozen

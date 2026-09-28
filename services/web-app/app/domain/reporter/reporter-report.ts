@@ -229,7 +229,7 @@ export function summarizeClassRubrics(
 ): ClassRubricSummary[] {
   // Only aggregate categories from the canonical essay rubric to avoid mixing
   // incompatible scales (e.g., engagement-only 0–30 vs 1–5 essay categories).
-  const canonicalKeys = new Set(rubricCategories.map((c) => c.key));
+  const canonicalKeys = new Set<string>(rubricCategories.map((c) => c.key));
   const byCategory = new Map<string, number[]>();
   for (const row of rows) {
     if (!row.rubricScores) continue;
