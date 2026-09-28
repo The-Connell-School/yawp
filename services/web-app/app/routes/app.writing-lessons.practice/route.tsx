@@ -1,11 +1,4 @@
-import {
-  Link,
-  data as dataResponse,
-  redirect,
-  useLoaderData,
-  type ActionFunctionArgs,
-  type LoaderFunctionArgs,
-} from 'react-router';
+import { Link, data as dataResponse, redirect, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
@@ -241,6 +234,36 @@ export async function action({ request }: ActionFunctionArgs) {
         status: 400,
       });
     }
+    // Rate-limit per student/org to cap model usage.
+    const COMPOSITION_ADMISSION_POLICY = {
+      membershipLimit: 12,
+      membershipWindowMs: 60_000,
+      organizationLimit: 600,
+      organizationWindowMs: 60 * 60_000,
+    };
+    try {
+      await reserveAiRequest({
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        feature: 'composition-feedback',
+        policy: COMPOSITION_ADMISSION_POLICY,
+      });
+    } catch (error) {
+      if (error instanceof AiRateLimitError) {
+        return dataResponse(
+          {
+            error:
+              'Too many rewrite checks. Please wait a moment and try again.',
+          },
+          {
+            status: 429,
+            headers: { 'Retry-After': String(error.retryAfterSeconds) },
+          }
+        );
+      }
+      throw error;
+    }
+
     const feedback = await generatePracticeFeedback({
       lessonTitle: context.title,
       skill: context.skill,

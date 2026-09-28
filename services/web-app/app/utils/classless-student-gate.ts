@@ -18,8 +18,6 @@ export function shouldRedirectClasslessStudent({
     role === 'STUDENT' &&
     !isOrgOwner &&
     classCount === 0 &&
-    normalizedPath !== '/app' &&
-    !normalizedPath.startsWith('/app/writing-lessons') &&
-    !normalizedPath.startsWith('/app/reporter')
+    normalizedPath !== '/app'
   );
 }

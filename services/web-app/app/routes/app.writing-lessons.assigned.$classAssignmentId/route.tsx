@@ -1,10 +1,4 @@
-import {
-  data as dataResponse,
-  redirect,
-  useLoaderData,
-  type ActionFunctionArgs,
-  type LoaderFunctionArgs,
-} from 'react-router';
+import { data as dataResponse, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -23,21 +17,11 @@ import {
 } from '~/utils/writing-lessons/practice-assignments.server';
 import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
 import { detectPracticeGuardrail } from '~/utils/writing-lessons/practice-feedback.shared';
-import {
-  getQuickWritingLessonBySlug,
-  getQuickWritingLessonContext,
-  getQuickWritingLessonRecap,
-} from '~/utils/writing-lessons/static-lessons.server';
+import { getQuickWritingLessonContext, getQuickWritingLessonRecap } from '~/utils/writing-lessons/static-lessons.server';
 import {
   AiRateLimitError,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
-
-function assignmentIncludesComposition(lessonSlugs: string[]) {
-  return lessonSlugs.some(
-    (slug) => getQuickWritingLessonBySlug(slug)?.section === 'Composition'
-  );
-}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);

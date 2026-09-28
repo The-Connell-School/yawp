@@ -243,6 +243,34 @@ describe('self-directed practice session loader', () => {
       expect(data.hasComposition).toBe(true);
       expect(data.items).toHaveLength(3);
     });
+
+  test('degrades to fallback prompts when topic generation is rate-limited', async () => {
+    mock.module('~/utils/ai-admission.server', () => {
+      class AiRateLimitError extends Error {
+        retryAfterSeconds = 60;
+      }
+      return {
+        AiRateLimitError,
+        reserveAiRequest: () => {
+          throw new AiRateLimitError();
+        },
+      };
+    });
+    const { loader: limitedLoader } = await import('./route');
+    const response = (await limitedLoader({
+      request: new Request(
+        'https://example.test/app/writing-lessons/practice?skills=topic-sentences&count=2&topic=skateboarding'
+      ),
+      params: {},
+      context: {} as never,
+    } as any)) as any;
+    expect(response.data.items).toHaveLength(2);
+    for (const item of response.data.items) {
+      expect(
+        `${item.prompt?.exercise} ${item.prompt?.instruction}`
+      ).toContain('skateboarding');
+    }
+  });
   });
 });
 
@@ -351,6 +379,38 @@ describe('self-directed practice session action', () => {
       expect(result.feedback.status).not.toBe('strong');
       expect(result.feedback.strengths).toHaveLength(0);
     });
+
+  test('rate-limits rewrite checks per student', async () => {
+    mock.module('~/utils/ai-admission.server', () => {
+      class AiRateLimitError extends Error {
+        retryAfterSeconds = 42;
+      }
+      return {
+        AiRateLimitError,
+        reserveAiRequest: () => {
+          throw new AiRateLimitError();
+        },
+      };
+    });
+    const { action: limitedAction } = await import('./route');
+    const response = (await limitedAction({
+      request: new Request('https://example.test/app/writing-lessons/practice', {
+        method: 'POST',
+        body: new URLSearchParams([
+          ['intent', 'check-rewrite'],
+          ['lessonSlug', 'fixing-comma-splices'],
+          ['questionId', 'act-1'],
+          ['exercise', 'X'],
+          ['instruction', 'Y'],
+          ['response', 'Z'],
+        ]),
+      }),
+      params: {},
+      context: {} as never,
+    } as any)) as unknown as Response;
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBeTruthy();
+  });
 
     test('is refused on a composition lesson', async () => {
       process.env.COMPOSITION_PRACTICE_ENABLED = 'true';

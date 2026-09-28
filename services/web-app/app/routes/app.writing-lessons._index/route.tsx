@@ -6,13 +6,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import {
-  Link,
-  data as dataResponse,
-  redirect,
-  useLoaderData,
-  type LoaderFunctionArgs,
-} from 'react-router';
+import { Link, data as dataResponse, useLoaderData, type LoaderFunctionArgs } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
@@ -63,14 +57,6 @@ function toAssignmentCard(assignment: WritingPracticeAssignmentSummary) {
       classAssignmentId: klass.classAssignmentId,
     })),
   };
-}
-
-function assignmentIncludesComposition(
-  assignment: WritingPracticeAssignmentSummary
-) {
-  return assignment.lessonSlugs.some(
-    (slug) => getQuickWritingLessonBySlug(slug)?.section === 'Composition'
-  );
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
