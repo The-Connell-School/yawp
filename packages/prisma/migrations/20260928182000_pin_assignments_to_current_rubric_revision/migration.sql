@@ -20,6 +20,13 @@
 --   • Otherwise (assignment predates first publication), pick the earliest
 --     revision for that rubric (the captured legacy snapshot on first publish).
 -- - Run in small batches to keep row-level locks short on large tables.
+--
+-- For auditability and rollback, record which assignments this migration pins.
+CREATE TABLE IF NOT EXISTS "InternalAssignmentRubricPinBackfill" (
+  "assignmentId" TEXT PRIMARY KEY,
+  "selectedRevisionId" TEXT NOT NULL,
+  "pinnedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 DO $$
 DECLARE
   rows_changed integer := 0;
@@ -59,6 +66,10 @@ BEGIN
     SET "rubricRevisionId" = u.selected_revision_id
     FROM to_update u
     WHERE a.id = u.assignment_id;
+
+    INSERT INTO "InternalAssignmentRubricPinBackfill" ("assignmentId", "selectedRevisionId")
+    SELECT assignment_id, selected_revision_id FROM to_update
+    ON CONFLICT ("assignmentId") DO NOTHING;
 
     GET DIAGNOSTICS rows_changed = ROW_COUNT;
     EXIT WHEN rows_changed = 0;
