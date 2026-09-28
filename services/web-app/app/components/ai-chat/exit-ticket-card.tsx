@@ -15,8 +15,11 @@ import {
   type PlannedExitTicket,
 } from '~/domain/lesson-planner/exit-ticket-block';
 import {
+  EXIT_TICKET_GRADING_BASIS_OPTIONS,
   EXIT_TICKET_LESSON_NOTE_FIELDS,
   exitTicketFocusOption,
+  exitTicketReflectionPromptId,
+  exitTicketReflectionPromptOption,
 } from '~/domain/assignment-types/exit-ticket';
 
 export function ExitTicketCard({
@@ -36,6 +39,25 @@ export function ExitTicketCard({
   const { config } = ticket;
   const focus =
     config.mode === 'specific' ? exitTicketFocusOption(config.focus) : null;
+  // What kind of ticket this is, in the words the form will use.
+  const kindLabel = focus
+    ? focus.label
+    : `Reflection · ${
+        exitTicketReflectionPromptOption(exitTicketReflectionPromptId(config))
+          ?.label ?? 'What I learned'
+      }`;
+  const basisLabel = EXIT_TICKET_GRADING_BASIS_OPTIONS.find(
+    (option) => option.value === config.grading?.basis
+  )?.label;
+  const gradingLabel = ticket.graded
+    ? [
+        'Graded',
+        ticket.pointValue ? `${ticket.pointValue} points` : null,
+        config.mode === 'basic' && basisLabel ? basisLabel.toLowerCase() : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : 'Ungraded — feedback only';
   const notes = config.lessonNotes;
   const filledNotes = notes
     ? EXIT_TICKET_LESSON_NOTE_FIELDS.filter(
@@ -51,9 +73,13 @@ export function ExitTicketCard({
       <div className="flex items-center gap-2 border-b border-primary/15 px-4 py-2.5">
         <ClipboardCheck size={15} className="shrink-0 text-primary" />
         <span className="text-sm font-medium">Exit ticket</span>
-        {focus ? (
-          <span className="text-sm text-muted-foreground">{focus.label}</span>
-        ) : null}
+        <span className="text-sm text-muted-foreground">{kindLabel}</span>
+        <span
+          data-testid="exit-ticket-grading"
+          className="ml-auto text-xs text-muted-foreground"
+        >
+          {gradingLabel}
+        </span>
       </div>
 
       <blockquote className="whitespace-pre-wrap border-l-2 border-primary/40 px-4 py-3.5 text-sm leading-relaxed text-foreground/90">

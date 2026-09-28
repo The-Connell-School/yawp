@@ -1126,6 +1126,26 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Grading assistance');
     });
 
+    it('opens graded when the lesson planner planned a graded ticket', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketGradebook: { submitForGrade: true, pointValue: 4 },
+        initialExitTicketGrading: { basis: 'completion' },
+      }).root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-graded'))
+      ).toBe(true);
+      expect(
+        (
+          controlById(
+            'assignment-create-exit-ticket-points'
+          ) as HTMLInputElement
+        ).value
+      ).toBe('4');
+      expect(submitButton().disabled).toBe(false);
+    });
+
     it('reopens a graded ticket on the criteria it was given', () => {
       root = renderQuickExitTicketSheet({
         fixedClassId: 'class-1',
@@ -1172,7 +1192,10 @@ describe('AssignmentCreationSheetContent', () => {
 
     function isTuckedAway(element: Element) {
       const details = element.closest('details');
-      return Boolean(details && !details.open) || Boolean(element.closest('[hidden]'));
+      return (
+        Boolean(details && !details.open) ||
+        Boolean(element.closest('[hidden]'))
+      );
     }
 
     it('keeps tutor, groups and lesson notes under a closed "More options"', () => {
@@ -1218,7 +1241,9 @@ describe('AssignmentCreationSheetContent', () => {
       }).root;
 
       // Present for anyone who wants them, but not on screen by default.
-      expect(isTuckedAway(elementWithText('Judged on the reasoning'))).toBe(true);
+      expect(isTuckedAway(elementWithText('Judged on the reasoning'))).toBe(
+        true
+      );
       expect(
         isTuckedAway(elementWithText('a tutor in the document would answer'))
       ).toBe(true);

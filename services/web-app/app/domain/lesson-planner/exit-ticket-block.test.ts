@@ -19,9 +19,11 @@ function fenced(body: string) {
 describe('readPlannedExitTickets', () => {
   it('reads a basic ticket and composes the standard prompt', () => {
     const { tickets, body } = readPlannedExitTickets(
-      ['Closing (4 min).', fenced('mode: basic'), 'Collect on the way out.'].join(
-        '\n\n'
-      )
+      [
+        'Closing (4 min).',
+        fenced('mode: basic'),
+        'Collect on the way out.',
+      ].join('\n\n')
     );
 
     expect(tickets).toHaveLength(1);
@@ -112,7 +114,8 @@ describe('readPlannedExitTickets', () => {
   });
 
   it('leaves a reply with no ticket in it untouched', () => {
-    const content = 'Just a lesson plan.\n\n```yawp-material\nkind: handout\n```';
+    const content =
+      'Just a lesson plan.\n\n```yawp-material\nkind: handout\n```';
     const { tickets, body } = readPlannedExitTickets(content);
 
     expect(tickets).toEqual([]);
@@ -134,7 +137,9 @@ describe('inlinePlannedExitTickets', () => {
 
   it('drops a block it cannot build', () => {
     const printed = inlinePlannedExitTickets(
-      ['Closing.', fenced('mode: specific\nfocus: explain-concept')].join('\n\n')
+      ['Closing.', fenced('mode: specific\nfocus: explain-concept')].join(
+        '\n\n'
+      )
     );
 
     expect(printed.trim()).toBe('Closing.');
@@ -210,11 +215,17 @@ describe('readExitTicketPrefill', () => {
         mustMention: '',
         watchFor: '',
       },
+      reflectionPrompt: null,
+      graded: false,
+      pointValue: null,
+      grading: null,
     });
   });
 
   it('is null when the link is an ordinary one', () => {
-    expect(readExitTicketPrefill(new URLSearchParams('?newPrompt=hi'))).toBeNull();
+    expect(
+      readExitTicketPrefill(new URLSearchParams('?newPrompt=hi'))
+    ).toBeNull();
   });
 
   it('refuses a hand-edited focus rather than opening on a wrong one', () => {
@@ -241,6 +252,10 @@ describe('readExitTicketPrefill', () => {
       topic: 'mitosis',
       answerType: null,
       lessonNotes: null,
+      reflectionPrompt: null,
+      graded: false,
+      pointValue: null,
+      grading: null,
     });
   });
 });

@@ -288,6 +288,14 @@ export type AssignmentCreationSheetProps = {
    * than resetting it to the default.
    */
   initialExitTicketMode?: ExitTicketMode;
+  /**
+   * Whether a new exit ticket starts graded, and for how much. Set only by
+   * the Lesson Planner hand-off; without it a new ticket starts ungraded.
+   */
+  initialExitTicketGradebook?: {
+    submitForGrade: boolean;
+    pointValue: number | null;
+  } | null;
   /** What a stored graded ticket was graded on; null for ungraded. */
   initialExitTicketGrading?: ExitTicketGrading | null;
   /** The reflection question a stored ticket asks; null for the default. */
@@ -423,16 +431,29 @@ export function initialGradingFor({
   isExitTicket,
   initialSubmitForGrade,
   initialPointValue,
+  plannedGradebook = null,
 }: {
   isEditing: boolean;
   isExitTicket: boolean;
   initialSubmitForGrade: boolean;
   initialPointValue: number | null | undefined;
+  /** A planned ticket's own choice, which beats the exit ticket default. */
+  plannedGradebook?: {
+    submitForGrade: boolean;
+    pointValue: number | null;
+  } | null;
 }) {
   if (isEditing || !isExitTicket) {
     return {
       submitForGrade: initialSubmitForGrade,
       pointValue: initialPointValue,
+    };
+  }
+  if (plannedGradebook) {
+    return {
+      submitForGrade: plannedGradebook.submitForGrade,
+      pointValue:
+        plannedGradebook.pointValue ?? EXIT_TICKET_DEFAULT_POINT_VALUE,
     };
   }
   return {
@@ -485,6 +506,7 @@ export function AssignmentCreationSheetContent({
   exitTicketBuilder = EXIT_TICKET_BUILDER_V2_ENABLED ? 'v2' : 'v1',
   initialExitTicketReflectionPrompt = null,
   initialExitTicketGrading = null,
+  initialExitTicketGradebook = null,
   initialExitTicketFocus = EXIT_TICKET_FOCUS_OPTIONS[0].value,
   initialExitTicketAnswerType = null,
   initialExitTicketTopic = '',
@@ -523,6 +545,7 @@ export function AssignmentCreationSheetContent({
     ),
     initialSubmitForGrade,
     initialPointValue,
+    plannedGradebook: initialExitTicketGradebook,
   });
   const [submitForGrade, setSubmitForGrade] = useState(
     initialGrading.submitForGrade
@@ -774,6 +797,7 @@ export function AssignmentCreationSheetContent({
       ),
       initialSubmitForGrade,
       initialPointValue,
+      plannedGradebook: initialExitTicketGradebook,
     });
     setSubmitForGrade(grading.submitForGrade);
     setPointValue(pointValueFieldValue(grading.pointValue));
@@ -852,6 +876,7 @@ export function AssignmentCreationSheetContent({
     initialExitTicketLessonNotes,
     initialExitTicketReflectionPrompt,
     initialExitTicketGrading,
+    initialExitTicketGradebook,
     exitTicketBuilder,
     editingAssignment,
     initialPostAt,

@@ -709,6 +709,49 @@ async function seedPlannedExitTicket(e2eContext: {
   }
 }
 
+/** The same hand-off in the quick builder's terms: a graded reflection. */
+async function seedPlannedGradedReflection(e2eContext: {
+  teacherMembershipId: string;
+  organizationId: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Reflection lesson',
+        messages: {
+          create: [
+            {
+              role: 'user',
+              content: 'Plan a lesson on the water cycle, graded exit ticket.',
+              createdAt: new Date('2026-08-05T11:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content:
+                '## Closing (4 min)\n\n' +
+                '```yawp-exit-ticket\n' +
+                'kind: reflection\n' +
+                'prompt: wondering\n' +
+                'graded: yes\n' +
+                'points: 3\n' +
+                'basis: completion\n' +
+                '```',
+              createdAt: new Date('2026-08-05T11:00:01.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 /**
  * The default shape of a warm-up offer: three prompts, one block each.
  *
@@ -2964,6 +3007,37 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page).toHaveURL(
       new RegExp(`/app/lesson-planner\\?c=${conversationId}`)
     );
+  });
+
+  test('hands over a graded reflection with its question and points', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedPlannedGradedReflection(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const card = page.getByTestId('exit-ticket-card');
+    await expect(card).toContainText('Still wondering');
+    await expect(card).toContainText('What is one question you still have');
+    await expect(card.getByTestId('exit-ticket-grading')).toHaveText(
+      'Graded · 3 points · completion'
+    );
+
+    await card.getByTestId('exit-ticket-create').click();
+    await expect(
+      page.getByRole('radio', { name: /^Reflection/ })
+    ).toBeChecked();
+    await expect(
+      page.getByRole('radio', { name: 'Still wondering' })
+    ).toBeChecked();
+    await expect(page.getByLabel('Grade this ticket')).toBeChecked();
+    await expect(page.getByLabel('How many points?')).toHaveValue('3');
+    await expect(
+      page.getByRole('radio', { name: /^Completion/ })
+    ).toBeChecked();
   });
 
   test('refuses to present a reply that has no deck in it', async ({

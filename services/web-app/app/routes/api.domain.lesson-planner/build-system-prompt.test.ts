@@ -8,6 +8,7 @@ import { PRACTICE_FENCE } from '~/domain/lesson-planner/practice-block';
 import {
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_LESSON_NOTE_FIELDS,
+  EXIT_TICKET_REFLECTION_PROMPT_OPTIONS,
 } from '~/domain/assignment-types/exit-ticket';
 import {
   buildLessonPlannerSystemPrompt,
@@ -435,9 +436,10 @@ describe('buildLessonPlannerSystemPrompt — handing over real material', () => 
     // The house style for pointing at material is "the two drafts below",
     // which the planner generalised into pointing at things that were not
     // there at all.
-    expect(prompt.toLowerCase()).toContain('only true for a block in this reply');
+    expect(prompt.toLowerCase()).toContain(
+      'only true for a block in this reply'
+    );
   });
-
 });
 
 describe('buildLessonPlannerSystemPrompt — what the lesson already has', () => {
@@ -1181,7 +1183,9 @@ describe('buildLessonPlannerSystemPrompt — class starter vs Daily Pages', () =
   });
 
   test('forbids filing a freewrite prompt as a graded Daily Pages entry', () => {
-    expect(lower).toContain('never offer a prompt from one library as the other');
+    expect(lower).toContain(
+      'never offer a prompt from one library as the other'
+    );
   });
 
   test('tells it which block kind to write for each', () => {
@@ -1264,6 +1268,31 @@ describe('the Yawp exit ticket', () => {
 
   test('holds the ticket to the whole objective, as the paper one was', () => {
     expect(withExitTickets.toLowerCase()).toContain('whole objective');
+  });
+
+  test('speaks the quick builder: reflection or check, then its question', () => {
+    expect(withExitTickets).toContain('kind: reflection');
+    expect(withExitTickets).toContain('kind: check');
+    for (const option of EXIT_TICKET_REFLECTION_PROMPT_OPTIONS) {
+      expect(withExitTickets).toContain(`\`${option.id}\``);
+    }
+  });
+
+  test('defaults to an ungraded reflection and grades only with criteria', () => {
+    const lower = withExitTickets.toLowerCase();
+    expect(lower).toContain('ungraded reflection');
+    expect(withExitTickets).toContain('graded: yes');
+    // A graded ticket has to say what it is graded against, or the form
+    // would refuse it; the planner is told which field each shape needs.
+    expect(withExitTickets).toContain('mustMention');
+    expect(withExitTickets).toContain('assessFor');
+    expect(lower).toContain('completion');
+  });
+
+  test('keeps a deck from asking a different exit ticket question', () => {
+    // The packet prints the composed prompt, but a closing slide is written
+    // separately; restating the question there is how the two drift apart.
+    expect(withExitTickets.toLowerCase()).toContain('closing slide');
   });
 
   test('says nothing about the assignment when the org has no exit ticket type', () => {

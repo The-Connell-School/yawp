@@ -118,6 +118,18 @@ export function CreateAssignmentSheet({
         initialExitTicketTopic={plannedExitTicket?.topic}
         initialExitTicketAnswerType={plannedExitTicket?.answerType ?? null}
         initialExitTicketLessonNotes={plannedExitTicket?.lessonNotes ?? null}
+        initialExitTicketReflectionPrompt={
+          plannedExitTicket?.reflectionPrompt ?? null
+        }
+        initialExitTicketGrading={plannedExitTicket?.grading ?? null}
+        initialExitTicketGradebook={
+          plannedExitTicket
+            ? {
+                submitForGrade: plannedExitTicket.graded,
+                pointValue: plannedExitTicket.pointValue,
+              }
+            : null
+        }
         titleRequired={titleRequired}
       />
     );
