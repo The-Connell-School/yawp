@@ -5,6 +5,12 @@ import {
   isExitTicketAssignmentType,
   parseExitTicketConfigInput,
 } from '~/domain/assignment-types/exit-ticket';
+import { parseSubmitForGrade } from './assignment-grading-intent.server';
+
+function isGraded(formData: FormData): boolean {
+  const parsed = parseSubmitForGrade(formData);
+  return parsed.success && parsed.value;
+}
 
 export type ParseAssignmentExitTicketResult =
   | {
@@ -25,6 +31,10 @@ export type ParseAssignmentExitTicketResult =
 export function parseAssignmentExitTicket(
   formData: FormData
 ): ParseAssignmentExitTicketResult {
+  // Only the quick builder knows about grading criteria, and it always posts
+  // a kind. A form without one is from the original builder, which is never
+  // held to criteria it had no way to collect.
+  const fromQuickBuilder = formData.has('exitTicketKind');
   const parsed = parseExitTicketConfigInput({
     // Posted only by the quick builder, always beside the mode it names.
     kind: formData.get('exitTicketKind')?.toString(),
@@ -45,6 +55,17 @@ export function parseAssignmentExitTicket(
     lessonMainPoints: formData.get('exitTicketLessonMainPoints')?.toString(),
     lessonMustMention: formData.get('exitTicketLessonMustMention')?.toString(),
     lessonWatchFor: formData.get('exitTicketLessonWatchFor')?.toString(),
+    ...(fromQuickBuilder
+      ? {
+          // Read exactly as the gradebook reads it, so the ticket is held to
+          // criteria precisely when it is going to be graded.
+          graded: isGraded(formData),
+          gradingBasis: formData.get('exitTicketGradingBasis')?.toString(),
+          minWords: formData.get('exitTicketMinWords')?.toString(),
+          minSentences: formData.get('exitTicketMinSentences')?.toString(),
+          assessFor: formData.get('exitTicketAssessFor')?.toString(),
+        }
+      : {}),
   });
 
   if (!parsed.success) return parsed;

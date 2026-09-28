@@ -44,7 +44,7 @@ type AssignmentGradingIntent =
       message: string;
     };
 
-function parseSubmitForGrade(formData: FormData) {
+export function parseSubmitForGrade(formData: FormData) {
   const values = formData
     .getAll('submitForGrade')
     .map((value) => value.toString().trim().toLowerCase())

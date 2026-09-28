@@ -405,10 +405,83 @@ export const EXIT_TICKET_REFLECTION_PROMPT_OPTIONS: ExitTicketReflectionPromptOp
     },
   ];
 
+/**
+ * What a graded ticket is graded on. A reflection can be graded for
+ * completion — the quick-feedback case, and the common one — or on the quality
+ * of the reflection. A check is always read in bands: it exists to find out
+ * whether one specific thing landed.
+ *
+ * Bands, never steps: the rubric is one category with four bands, and a
+ * five-minute piece of writing does not have enough in it to step through.
+ */
+export const EXIT_TICKET_GRADING_BASES = ['completion', 'bands'] as const;
+export type ExitTicketGradingBasis = (typeof EXIT_TICKET_GRADING_BASES)[number];
+
+export const EXIT_TICKET_GRADING_BASIS_OPTIONS: {
+  value: ExitTicketGradingBasis;
+  label: string;
+  helperText: string;
+}[] = [
+  {
+    value: 'completion',
+    label: 'Completion',
+    helperText: 'Full credit for any honest attempt.',
+  },
+  {
+    value: 'bands',
+    label: 'Quality',
+    helperText: 'Scored on how well they explain it.',
+  },
+];
+
+/** What the builder opens on when a teacher turns grading on. */
+export const DEFAULT_EXIT_TICKET_GRADING_BASIS: ExitTicketGradingBasis =
+  'completion';
+
+export const EXIT_TICKET_MIN_WORDS_MAX = 500;
+export const EXIT_TICKET_MIN_SENTENCES_MAX = 20;
+export const EXIT_TICKET_ASSESS_FOR_MAX_LENGTH = 300;
+
+/**
+ * What the teacher said a graded ticket is graded on. Stored only on a graded
+ * ticket; an ungraded one is read for feedback against the prompt and notes.
+ */
+export type ExitTicketGrading = {
+  basis: ExitTicketGradingBasis;
+  /** A floor, not a target: short answers cap out, long ones earn nothing. */
+  minWords?: number;
+  minSentences?: number;
+  /** What to judge when there is no single right answer. */
+  assessFor?: string;
+};
+
+/**
+ * The lesson notes a graded ticket asks for as grading criteria, in the order
+ * the builder shows them. The same keys are stored as lesson notes either way,
+ * so a criterion typed here and a note typed in "More options" are one field.
+ */
+export function exitTicketCriteriaNoteKeys({
+  kind,
+  graded,
+  answerType,
+  basis,
+}: {
+  kind: ExitTicketKind;
+  graded: boolean;
+  answerType: string;
+  basis: ExitTicketGradingBasis;
+}): (keyof ExitTicketLessonNotes)[] {
+  if (!graded) return [];
+  if (kind === 'reflection') return basis === 'bands' ? ['mainPoints'] : [];
+  return answerType === 'objective' ? ['mustMention', 'watchFor'] : [];
+}
+
 type ExitTicketConfigBase = {
   schemaVersion: typeof EXIT_TICKET_CONFIG_SCHEMA_VERSION;
   /** Absent, never empty: a ticket without notes stores no key at all. */
   lessonNotes?: ExitTicketLessonNotes;
+  /** Present only on a ticket the teacher chose to grade. */
+  grading?: ExitTicketGrading;
 };
 
 export type ExitTicketConfig =
@@ -461,6 +534,142 @@ function normalizeTopic(topic: string): string {
     .trim()
     .replace(/\s+/g, ' ')
     .replace(/[.,;:!?\s]+$/u, '');
+}
+
+type GradingParseResult =
+  | { success: true; grading?: ExitTicketGrading }
+  | { success: false; message: string };
+
+/** A blank field is no expectation; anything else must be a sane count. */
+function parseMinimum(
+  value: string | number | null | undefined,
+  max: number,
+  noun: string
+): { success: true; value?: number } | { success: false; message: string } {
+  const raw = value?.toString().trim() ?? '';
+  if (!raw) return { success: true };
+  const count = Number(raw);
+  if (!Number.isInteger(count) || count < 1 || count > max) {
+    return {
+      success: false,
+      message: `Minimum ${noun} must be a whole number from 1 to ${max}.`,
+    };
+  }
+  return { success: true, value: count };
+}
+
+/**
+ * A graded ticket has to say what it is graded against. A general prompt read
+ * with nothing to hold it to cannot support a points-based grade, so the
+ * criteria each shape needs are required here rather than hoped for.
+ */
+function parseGradingInput(
+  input: ExitTicketConfigInput,
+  kind: ExitTicketKind,
+  answerType: ExitTicketAnswerType | null,
+  lessonNotes: ExitTicketLessonNotes | undefined
+): GradingParseResult {
+  if (input.graded !== true) return { success: true };
+
+  const minWords = parseMinimum(
+    input.minWords,
+    EXIT_TICKET_MIN_WORDS_MAX,
+    'words'
+  );
+  if (!minWords.success) return minWords;
+  const minSentences = parseMinimum(
+    input.minSentences,
+    EXIT_TICKET_MIN_SENTENCES_MAX,
+    'sentences'
+  );
+  if (!minSentences.success) return minSentences;
+  const hasLength =
+    minWords.value !== undefined || minSentences.value !== undefined;
+
+  const assessFor =
+    input.assessFor?.toString().trim().replace(/\s+/g, ' ') ?? '';
+  if (assessFor.length > EXIT_TICKET_ASSESS_FOR_MAX_LENGTH) {
+    return {
+      success: false,
+      message: `Keep “what to assess” under ${EXIT_TICKET_ASSESS_FOR_MAX_LENGTH} characters.`,
+    };
+  }
+
+  let basis: ExitTicketGradingBasis = 'bands';
+  if (kind === 'reflection') {
+    const posted = input.gradingBasis?.toString().trim() ?? '';
+    if (!(EXIT_TICKET_GRADING_BASES as readonly string[]).includes(posted)) {
+      return {
+        success: false,
+        message: 'Choose how this reflection is graded.',
+      };
+    }
+    basis = posted as ExitTicketGradingBasis;
+    if (basis === 'bands' && !lessonNotes?.mainPoints && !hasLength) {
+      return {
+        success: false,
+        message:
+          'Add the main points of the lesson or a minimum length, so there is something to grade against.',
+      };
+    }
+  } else if (answerType === 'objective') {
+    if (!lessonNotes?.mustMention) {
+      return {
+        success: false,
+        message: 'Add the correct answer so this can be graded.',
+      };
+    }
+  } else if (!assessFor && !hasLength) {
+    return {
+      success: false,
+      message: 'Say what to assess, since there is no single right answer.',
+    };
+  }
+
+  return {
+    success: true,
+    grading: {
+      basis,
+      ...(minWords.value !== undefined ? { minWords: minWords.value } : {}),
+      ...(minSentences.value !== undefined
+        ? { minSentences: minSentences.value }
+        : {}),
+      ...(assessFor && kind === 'check' && answerType !== 'objective'
+        ? { assessFor }
+        : {}),
+    },
+  };
+}
+
+/** Stored as written where it can be read; unreadable parts are dropped. */
+function parseStoredGrading(value: unknown): ExitTicketGrading | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    !(EXIT_TICKET_GRADING_BASES as readonly unknown[]).includes(record.basis)
+  ) {
+    return null;
+  }
+  const count = (entry: unknown, max: number) =>
+    typeof entry === 'number' &&
+    Number.isInteger(entry) &&
+    entry >= 1 &&
+    entry <= max
+      ? entry
+      : undefined;
+  const minWords = count(record.minWords, EXIT_TICKET_MIN_WORDS_MAX);
+  const minSentences = count(
+    record.minSentences,
+    EXIT_TICKET_MIN_SENTENCES_MAX
+  );
+  const assessFor =
+    typeof record.assessFor === 'string' ? record.assessFor.trim() : '';
+  return {
+    basis: record.basis as ExitTicketGradingBasis,
+    ...(minWords !== undefined ? { minWords } : {}),
+    ...(minSentences !== undefined ? { minSentences } : {}),
+    ...(assessFor ? { assessFor } : {}),
+  };
 }
 
 /** Whitespace tidied, wording untouched: this is the teacher's sentence. */
@@ -585,6 +794,15 @@ export type ExitTicketConfigInput = {
   /** Reflection only. Absent or 'learned' stores nothing. */
   reflectionPrompt?: string | null;
   reflectionPromptText?: string | null;
+  /**
+   * Whether the teacher is grading this ticket. Only the quick builder says;
+   * absent means "not asked", and nothing below is checked or stored.
+   */
+  graded?: boolean | null;
+  gradingBasis?: string | null;
+  minWords?: string | number | null;
+  minSentences?: string | number | null;
+  assessFor?: string | null;
   focus?: string | null;
   topic?: string | null;
   answerType?: string | null;
@@ -663,6 +881,13 @@ export function parseExitTicketConfigInput(
   if (!rawMode || rawMode === 'basic') {
     const reflection = parseReflectionPromptInput(input);
     if (!reflection.success) return reflection;
+    const grading = parseGradingInput(
+      input,
+      'reflection',
+      null,
+      notes.lessonNotes
+    );
+    if (!grading.success) return grading;
     return {
       success: true,
       config: withLessonNotes(
@@ -673,6 +898,7 @@ export function parseExitTicketConfigInput(
           ...(reflection.reflectionPrompt
             ? { reflectionPrompt: reflection.reflectionPrompt }
             : {}),
+          ...(grading.grading ? { grading: grading.grading } : {}),
         },
         notes
       ),
@@ -709,6 +935,14 @@ export function parseExitTicketConfigInput(
     };
   }
 
+  const grading = parseGradingInput(
+    input,
+    'check',
+    answerType,
+    notes.lessonNotes
+  );
+  if (!grading.success) return grading;
+
   return {
     success: true,
     config: withLessonNotes(
@@ -719,6 +953,7 @@ export function parseExitTicketConfigInput(
         focus: option.value,
         topic,
         answerType,
+        ...(grading.grading ? { grading: grading.grading } : {}),
       },
       notes
     ),
@@ -744,6 +979,8 @@ export function parseStoredExitTicketConfig(
   const storedKind = parseExitTicketKind(
     typeof record.kind === 'string' ? record.kind : null
   );
+  const storedGrading = parseStoredGrading(record.grading);
+  const gradingField = storedGrading ? { grading: storedGrading } : {};
 
   if (record.mode === 'basic') {
     const reflectionPrompt = parseStoredReflectionPrompt(
@@ -755,6 +992,7 @@ export function parseStoredExitTicketConfig(
         mode: 'basic',
         ...(storedKind === 'reflection' ? { kind: storedKind } : {}),
         ...(reflectionPrompt ? { reflectionPrompt } : {}),
+        ...gradingField,
       },
       notes
     );
@@ -781,6 +1019,7 @@ export function parseStoredExitTicketConfig(
         exitTicketAnswerType(
           typeof record.answerType === 'string' ? record.answerType : null
         ) ?? EXIT_TICKET_ANSWER_TYPE_FALLBACK,
+      ...gradingField,
     },
     notes
   );

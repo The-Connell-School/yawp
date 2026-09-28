@@ -918,6 +918,7 @@ export default function AssignmentDetailRoute() {
               ? (assignment.exitTicket.reflectionPrompt ?? null)
               : null
           }
+          initialExitTicketGrading={assignment.exitTicket?.grading ?? null}
         />
 
         {/* Same sheet, same props as the class page's "Add assignment", so
@@ -961,6 +962,7 @@ export default function AssignmentDetailRoute() {
               ? (assignment.exitTicket.reflectionPrompt ?? null)
               : null
           }
+          initialExitTicketGrading={assignment.exitTicket?.grading ?? null}
         />
       </div>
     </PageShell>

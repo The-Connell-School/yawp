@@ -10,6 +10,7 @@ import {
   exitTicketReflectionPromptOption,
   type ExitTicketAnswerType,
   type ExitTicketConfig,
+  type ExitTicketGrading,
 } from './exit-ticket';
 
 /** Exit Tickets judge one thing, so the rubric has one category. */
@@ -166,6 +167,41 @@ function reflectionGradingSection(
   ].join('\n');
 }
 
+/**
+ * What the teacher said to grade on. Every rule here is a band boundary, never
+ * a step: a length falls short or it does not, and a short answer is capped at
+ * a band rather than docked a point per missing word.
+ */
+function gradingSections(grading: ExitTicketGrading): string[] {
+  const sections: string[] = [];
+
+  if (grading.basis === 'completion') {
+    sections.push(
+      'The teacher is grading this for completion. Any good-faith response that engages with the question is complete: score it 100, however brief or unsure it is. Only a response with no evidence — blank, off topic, "idk" — scores 0. Still write the feedback exactly as you would otherwise.'
+    );
+  }
+
+  const lengths = [
+    grading.minWords ? `at least ${grading.minWords} words` : null,
+    grading.minSentences ? `at least ${grading.minSentences} sentences` : null,
+  ].filter(Boolean);
+  if (lengths.length > 0) {
+    sections.push(
+      grading.basis === 'completion'
+        ? `The teacher asked for ${lengths.join(' and ')}. A good-faith response shorter than that is not complete: score it within Names it only, and say in the feedback how much more was asked for.`
+        : `The teacher asked for ${lengths.join(' and ')}. A response shorter than that cannot score above Partly there, however good it is. Meeting the length earns nothing on its own: score the content.`
+    );
+  }
+
+  if (grading.assessFor) {
+    sections.push(
+      `There is no single right answer, so the teacher named what to assess: ${grading.assessFor}. Judge the response on that.`
+    );
+  }
+
+  return sections;
+}
+
 export function buildExitTicketGradingContext(
   config: ExitTicketConfig | null | undefined
 ): string | null {
@@ -186,6 +222,10 @@ export function buildExitTicketGradingContext(
       );
     }
     sections.push(EXIT_TICKET_ANSWER_TYPE_GUIDANCE[config.answerType]);
+  }
+
+  if (config?.grading) {
+    sections.push(...gradingSections(config.grading));
   }
 
   const notes = config?.lessonNotes;

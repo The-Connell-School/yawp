@@ -7,6 +7,7 @@ import { test, expect } from '../test-setup';
 
 const BASIC_OPENING = 'Tell me, in your own words, what you learned today';
 const TOPIC = 'the difference between weathering and erosion';
+const CORRECT_ANSWER = 'Weathering breaks rock down; erosion carries it away.';
 const CUSTOM_QUESTION = 'What would you teach a friend who missed today?';
 
 async function openNewAssignmentSheet(page: import('@playwright/test').Page) {
@@ -153,5 +154,51 @@ test.describe.serial('Exit tickets', () => {
       page.getByRole('radio', { name: 'Write your own' })
     ).toBeChecked();
     await expect(page.getByLabel('Your question')).toHaveValue(CUSTOM_QUESTION);
+  });
+
+  test('grading a check asks for points and the correct answer', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `/app/assignment-types/${e2eContext.exitTicketAssignmentTypeId}`
+    );
+    await openNewAssignmentSheet(page);
+
+    await page.getByRole('radio', { name: /^Check for understanding/ }).click();
+    await page.getByLabel('What are you checking for?').click();
+    await page.getByRole('option', { name: 'Explain a concept' }).click();
+    await page.getByLabel('What specifically?').fill(TOPIC);
+    await page.getByRole('radio', { name: /^Yes/ }).click();
+
+    // Ungraded until the teacher says otherwise.
+    await expect(page.getByLabel('Grade this ticket')).not.toBeChecked();
+    await page.getByLabel('Grade this ticket').check();
+    await page.getByLabel('How many points?').fill('5');
+
+    // Points without an answer key is not something that can be graded.
+    const create = page.getByRole('button', { name: /Create Assignment/i });
+    await page.getByLabel('Title (optional)').fill('Exit ticket: graded check');
+    await expect(create).toBeDisabled();
+    await page.getByLabel('Correct answer or key points').fill(CORRECT_ANSWER);
+    await expect(create).toBeEnabled();
+    await create.click();
+    await expect(
+      page.getByRole('heading', { name: 'New Assignment' })
+    ).toHaveCount(0);
+
+    await page.goto('/app/assignments');
+    await page.getByText('Exit ticket: graded check').first().click();
+    await page
+      .getByRole('button', { name: /^Edit$/ })
+      .first()
+      .click();
+    await expect(page.getByLabel('Grade this ticket')).toBeChecked();
+    await expect(page.getByLabel('How many points?')).toHaveValue('5');
+    await expect(page.getByLabel('Correct answer or key points')).toHaveValue(
+      CORRECT_ANSWER
+    );
   });
 });

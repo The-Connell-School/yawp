@@ -27,6 +27,9 @@ import {
   EXIT_TICKETS_ENABLED,
   EXIT_TICKET_BUILDER_V2_ENABLED,
   DEFAULT_EXIT_TICKET_REFLECTION_PROMPT,
+  DEFAULT_EXIT_TICKET_GRADING_BASIS,
+  exitTicketCriteriaNoteKeys,
+  exitTicketKindForMode,
   EXIT_TICKET_ANSWER_TYPE_OPTIONS,
   EXIT_TICKET_ANSWER_TYPES,
   EXIT_TICKET_FOCUS_OPTIONS,
@@ -47,6 +50,7 @@ import {
   type ExitTicketLessonNotes,
   type ExitTicketMode,
   type ExitTicketReflectionPrompt,
+  type ExitTicketGrading,
   type ExitTicketReflectionPromptId,
 } from '~/domain/assignment-types/exit-ticket';
 import {
@@ -72,7 +76,10 @@ import {
   type AssignmentGradingMode,
 } from '~/domain/assignments/rubric-overrides';
 import { Tooltip } from '~/components/ui/tooltip';
-import { ExitTicketBuilder } from './exit-ticket-builder';
+import {
+  ExitTicketBuilder,
+  type ExitTicketGradingDraft,
+} from './exit-ticket-builder';
 import { cn } from '~/utils/misc';
 import { toDateInputValue } from '~/utils/date-only';
 
@@ -247,6 +254,8 @@ export type AssignmentCreationSheetProps = {
    * than resetting it to the default.
    */
   initialExitTicketMode?: ExitTicketMode;
+  /** What a stored graded ticket was graded on; null for ungraded. */
+  initialExitTicketGrading?: ExitTicketGrading | null;
   /** The reflection question a stored ticket asks; null for the default. */
   initialExitTicketReflectionPrompt?: ExitTicketReflectionPrompt | null;
   /**
@@ -307,6 +316,30 @@ function pointValueFieldValue(pointValue: number | null | undefined) {
   return pointValue === null || pointValue === undefined
     ? ''
     : String(pointValue);
+}
+
+function gradingDraftFor(
+  grading: ExitTicketGrading | null | undefined
+): ExitTicketGradingDraft {
+  return {
+    basis: grading?.basis ?? DEFAULT_EXIT_TICKET_GRADING_BASIS,
+    minWords: grading?.minWords ? String(grading.minWords) : '',
+    minSentences: grading?.minSentences ? String(grading.minSentences) : '',
+    assessFor: grading?.assessFor ?? '',
+  };
+}
+
+/**
+ * Whether the lesson notes start open. The quick builder keeps them closed
+ * unless there is something in them; the original opens them for specific.
+ */
+function initialLessonNotesEnabled(
+  builder: 'v1' | 'v2',
+  notes: ExitTicketLessonNotes | null | undefined,
+  mode: ExitTicketMode
+) {
+  if (notes) return true;
+  return builder === 'v2' ? false : defaultExitTicketLessonNotesEnabled(mode);
 }
 
 const EMPTY_LESSON_NOTES: ExitTicketLessonNotes = {
@@ -417,6 +450,7 @@ export function AssignmentCreationSheetContent({
   initialExitTicketMode = DEFAULT_EXIT_TICKET_MODE,
   exitTicketBuilder = EXIT_TICKET_BUILDER_V2_ENABLED ? 'v2' : 'v1',
   initialExitTicketReflectionPrompt = null,
+  initialExitTicketGrading = null,
   initialExitTicketFocus = EXIT_TICKET_FOCUS_OPTIONS[0].value,
   initialExitTicketAnswerType = null,
   initialExitTicketTopic = '',
@@ -510,9 +544,14 @@ export function AssignmentCreationSheetContent({
     initialExitTicketAnswerType ?? ''
   );
   const [lessonNotesEnabled, setLessonNotesEnabled] = useState(
-    initialExitTicketLessonNotes
-      ? true
-      : defaultExitTicketLessonNotesEnabled(initialExitTicketMode)
+    initialLessonNotesEnabled(
+      exitTicketBuilder,
+      initialExitTicketLessonNotes,
+      initialExitTicketMode
+    )
+  );
+  const [gradingDraft, setGradingDraft] = useState<ExitTicketGradingDraft>(
+    gradingDraftFor(initialExitTicketGrading)
   );
   const [lessonNotes, setLessonNotes] = useState<ExitTicketLessonNotes>(
     initialExitTicketLessonNotes ?? EMPTY_LESSON_NOTES
@@ -557,15 +596,40 @@ export function AssignmentCreationSheetContent({
   // the ordinary prompt box, so an exit ticket type can exist before this does.
   const isExitTicket =
     EXIT_TICKETS_ENABLED && isExitTicketAssignmentType(selectedType);
+  // The quick builder asks for points itself, beside the criteria they need.
+  const isQuickExitTicket = isExitTicket && exitTicketBuilder === 'v2';
   const selectedExitTicketFocus = exitTicketFocusOption(exitTicketFocus);
   // Composed through the same parser the server uses, so the preview a teacher
   // approves and the prompt their students get cannot drift apart. Empty means
   // the form is not answered yet, which is also what blocks submission.
   // The quick builder's own answers. The original builder posts none of
   // these, so it composes exactly what it always did.
+  // Lesson notes post when the grading section asks for them as criteria, or
+  // when the notes are switched on; the gate reads exactly what will post.
+  const criteriaNoteKeys = exitTicketCriteriaNoteKeys({
+    kind: exitTicketKindForMode(exitTicketMode),
+    graded: submitForGrade,
+    answerType: exitTicketAnswerType,
+    basis: gradingDraft.basis,
+  });
+  const postedNote = (key: keyof ExitTicketLessonNotes) =>
+    lessonNotesEnabled || criteriaNoteKeys.includes(key)
+      ? lessonNotes[key]
+      : undefined;
   const quickBuilderInput =
     exitTicketBuilder === 'v2'
-      ? { reflectionPrompt: reflectionPromptId, reflectionPromptText }
+      ? {
+          reflectionPrompt: reflectionPromptId,
+          reflectionPromptText,
+          graded: submitForGrade,
+          gradingBasis: gradingDraft.basis,
+          minWords: gradingDraft.minWords,
+          minSentences: gradingDraft.minSentences,
+          assessFor: gradingDraft.assessFor,
+          lessonMainPoints: postedNote('mainPoints'),
+          lessonMustMention: postedNote('mustMention'),
+          lessonWatchFor: postedNote('watchFor'),
+        }
       : {};
   const exitTicketConfig = parseExitTicketConfigInput({
     mode: exitTicketMode,
@@ -699,10 +763,13 @@ export function AssignmentCreationSheetContent({
     setExitTicketTopic(initialExitTicketTopic);
     setExitTicketAnswerType(initialExitTicketAnswerType ?? '');
     setLessonNotesEnabled(
-      initialExitTicketLessonNotes
-        ? true
-        : defaultExitTicketLessonNotesEnabled(initialExitTicketMode)
+      initialLessonNotesEnabled(
+        exitTicketBuilder,
+        initialExitTicketLessonNotes,
+        initialExitTicketMode
+      )
     );
+    setGradingDraft(gradingDraftFor(initialExitTicketGrading));
     setLessonNotes(initialExitTicketLessonNotes ?? EMPTY_LESSON_NOTES);
     setReflectionPromptId(
       initialExitTicketReflectionPrompt?.id ??
@@ -739,6 +806,8 @@ export function AssignmentCreationSheetContent({
     initialExitTicketAnswerType,
     initialExitTicketLessonNotes,
     initialExitTicketReflectionPrompt,
+    initialExitTicketGrading,
+    exitTicketBuilder,
     editingAssignment,
     initialPostAt,
     initialDueAt,
@@ -1134,12 +1203,7 @@ export function AssignmentCreationSheetContent({
           <div className="space-y-4">
             <ExitTicketBuilder
               mode={exitTicketMode}
-              onModeChange={(nextMode) => {
-                setExitTicketMode(nextMode);
-                setLessonNotesEnabled(
-                  defaultExitTicketLessonNotesEnabled(nextMode)
-                );
-              }}
+              onModeChange={setExitTicketMode}
               focus={exitTicketFocus}
               onFocusChange={setExitTicketFocus}
               topic={exitTicketTopic}
@@ -1150,10 +1214,23 @@ export function AssignmentCreationSheetContent({
               onReflectionPromptIdChange={setReflectionPromptId}
               reflectionPromptText={reflectionPromptText}
               onReflectionPromptTextChange={setReflectionPromptText}
+              graded={submitForGrade}
+              onGradedChange={setSubmitForGrade}
+              pointValue={pointValue}
+              onPointValueChange={setPointValue}
+              grading={gradingDraft}
+              onGradingChange={(patch) =>
+                setGradingDraft((current) => ({ ...current, ...patch }))
+              }
+              lessonNotes={lessonNotes}
+              onLessonNoteChange={(key, value) =>
+                setLessonNotes((current) => ({ ...current, [key]: value }))
+              }
+              lessonNotesEnabled={lessonNotesEnabled}
+              onLessonNotesEnabledChange={setLessonNotesEnabled}
               preview={exitTicketPreview}
               disabled={isSaving}
             />
-            {exitTicketLessonNotesBlock}
             {exitTicketHiddenFields}
           </div>
         ) : isExitTicket ? (
@@ -1389,7 +1466,11 @@ export function AssignmentCreationSheetContent({
 
         <div className="pt-6">
           <input type="hidden" name="submitForGrade" value="false" />
-          {isExitTicket ? (
+          {isQuickExitTicket ? (
+            submitForGrade ? (
+              <input type="hidden" name="submitForGrade" value="true" />
+            ) : null
+          ) : isExitTicket ? (
             /* Same field, same values — this only reframes the choice in the
                terms an exit ticket is actually about. Feedback only still
                reads and scores every response; it just keeps the score out of
@@ -1511,39 +1592,41 @@ export function AssignmentCreationSheetContent({
                   id="assignment-create-grading-panel"
                   className="space-y-5 border-t border-border px-4 py-4"
                 >
-                  <div className="space-y-2">
-                    <Label htmlFor="assignment-create-point-value">
-                      Point value
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      {/* `Input` is `w-full`, so the width lives on a wrapper. */}
-                      <div className="w-24">
-                        <Input
-                          id="assignment-create-point-value"
-                          name="pointValue"
-                          type="number"
-                          min={1}
-                          max={1000}
-                          step={1}
-                          inputMode="numeric"
-                          value={pointValue}
-                          onChange={(event) =>
-                            setPointValue(event.target.value)
-                          }
-                          disabled={isSaving}
-                          required
-                          className="tabular-nums"
-                        />
+                  {isQuickExitTicket ? null : (
+                    <div className="space-y-2">
+                      <Label htmlFor="assignment-create-point-value">
+                        Point value
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        {/* `Input` is `w-full`, so the width lives on a wrapper. */}
+                        <div className="w-24">
+                          <Input
+                            id="assignment-create-point-value"
+                            name="pointValue"
+                            type="number"
+                            min={1}
+                            max={1000}
+                            step={1}
+                            inputMode="numeric"
+                            value={pointValue}
+                            onChange={(event) =>
+                              setPointValue(event.target.value)
+                            }
+                            disabled={isSaving}
+                            required
+                            className="tabular-nums"
+                          />
+                        </div>
+                        <span className="text-sm text-muted-foreground">
+                          points
+                        </span>
                       </div>
-                      <span className="text-sm text-muted-foreground">
-                        points
-                      </span>
+                      <p className="text-sm text-muted-foreground">
+                        What the assignment is worth in the gradebook. The
+                        rubric keeps its own scale either way.
+                      </p>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      What the assignment is worth in the gradebook. The rubric
-                      keeps its own scale either way.
-                    </p>
-                  </div>
+                  )}
 
                   <div className="space-y-2">
                     <p
@@ -1590,7 +1673,7 @@ export function AssignmentCreationSheetContent({
                     </p>
                   </div>
                 </div>
-              ) : (
+              ) : isQuickExitTicket ? null : (
                 <input type="hidden" name="pointValue" value={pointValue} />
               )}
 

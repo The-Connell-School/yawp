@@ -1003,6 +1003,135 @@ describe('AssignmentCreationSheetContent', () => {
       );
     });
 
+    function turnGradingOn() {
+      act(() => {
+        controlById('assignment-create-exit-ticket-graded').click();
+      });
+    }
+
+    function lastValue(name: string) {
+      return allInputsByName(name).at(-1)?.value;
+    }
+
+    it('starts ungraded and asks for nothing about grading', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-graded'))
+      ).toBe(false);
+      expect(lastValue('submitForGrade')).toBe('false');
+      expectNoText('How many points?');
+      // The original builder's grading radio is gone from this one.
+      expect(
+        document.getElementById('assignment-create-exit-ticket-for-points')
+      ).toBeNull();
+    });
+
+    it('grading a reflection asks for points and defaults to completion', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+      turnGradingOn();
+
+      expect(lastValue('submitForGrade')).toBe('true');
+      expect(
+        (
+          controlById(
+            'assignment-create-exit-ticket-points'
+          ) as HTMLInputElement
+        ).value
+      ).toBe('10');
+      // Posted exactly once, from the builder, not also from the grading panel.
+      expect(allInputsByName('pointValue')).toHaveLength(1);
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-basis-completion'))
+      ).toBe(true);
+      expect(inputByName('exitTicketGradingBasis').value).toBe('completion');
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('a quality-graded reflection needs the main points or a length', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+      turnGradingOn();
+      act(() => {
+        controlById('assignment-create-exit-ticket-basis-bands').click();
+      });
+
+      expect(submitButton().disabled).toBe(true);
+      act(() => {
+        setTextareaValue(
+          textareaByName('exitTicketLessonMainPoints')!,
+          'A theme makes a claim.'
+        );
+      });
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('a graded check with a right answer asks for that answer', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'explain-concept',
+        initialExitTicketTopic: 'erosion',
+        initialExitTicketAnswerType: 'objective',
+      }).root;
+      turnGradingOn();
+
+      expectText('Correct answer or key points');
+      expect(submitButton().disabled).toBe(true);
+      act(() => {
+        setTextareaValue(
+          textareaByName('exitTicketLessonMustMention')!,
+          'Weathering breaks rock; erosion moves it.'
+        );
+      });
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('a graded check without one asks what to assess', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'understand-text',
+        initialExitTicketTopic: 'the second stanza',
+        initialExitTicketAnswerType: 'subjective',
+      }).root;
+      turnGradingOn();
+
+      expectText('What should be assessed?');
+      expect(submitButton().disabled).toBe(true);
+      act(() => {
+        setTextareaValue(
+          textareaByName('exitTicketAssessFor')!,
+          'Points to a specific line'
+        );
+      });
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('reopens a graded ticket on the criteria it was given', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        editingAssignment: { id: 'a-1' },
+        initialSubmitForGrade: true,
+        initialPointValue: 5,
+        initialExitTicketGrading: { basis: 'bands', minSentences: 3 },
+      }).root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-graded'))
+      ).toBe(true);
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-basis-bands'))
+      ).toBe(true);
+      expect(inputByName('exitTicketMinSentences').value).toBe('3');
+      expect(
+        (
+          controlById(
+            'assignment-create-exit-ticket-points'
+          ) as HTMLInputElement
+        ).value
+      ).toBe('5');
+    });
+
     it('will not create a check until the right-answer question is answered', () => {
       root = renderQuickExitTicketSheet({
         fixedClassId: 'class-1',

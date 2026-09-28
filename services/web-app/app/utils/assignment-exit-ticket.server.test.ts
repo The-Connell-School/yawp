@@ -56,7 +56,11 @@ describe('parseAssignmentExitTicket', () => {
 
   test('records the kind the quick builder posts beside the mode', () => {
     const result = parseAssignmentExitTicket(
-      formDataFor({ exitTicketKind: 'reflection', exitTicketMode: 'basic' })
+      formDataFor({
+        exitTicketKind: 'reflection',
+        exitTicketMode: 'basic',
+        submitForGrade: 'false',
+      })
     );
 
     expect(result.success).toBe(true);
@@ -75,6 +79,7 @@ describe('parseAssignmentExitTicket', () => {
         exitTicketMode: 'basic',
         exitTicketReflectionPrompt: 'custom',
         exitTicketReflectionPromptText: 'What surprised you today?',
+        submitForGrade: 'false',
       })
     );
 
@@ -84,6 +89,69 @@ describe('parseAssignmentExitTicket', () => {
     expect(result.value.exitTicketConfigJson).toMatchObject({
       reflectionPrompt: { id: 'custom', text: 'What surprised you today?' },
     });
+  });
+
+  test('holds a graded quick-builder ticket to its criteria', () => {
+    const ungraded = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketKind: 'check',
+        exitTicketMode: 'specific',
+        exitTicketFocus: 'explain-concept',
+        exitTicketTopic: 'erosion',
+        exitTicketAnswerType: 'objective',
+        submitForGrade: 'false',
+      })
+    );
+    expect(ungraded.success).toBe(true);
+
+    // The sheet posts a hidden "false" and then the real value, so the last
+    // one is the answer — the same way every other checkbox here is read.
+    const graded = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketKind: 'check',
+        exitTicketMode: 'specific',
+        exitTicketFocus: 'explain-concept',
+        exitTicketTopic: 'erosion',
+        exitTicketAnswerType: 'objective',
+        submitForGrade: 'true',
+      })
+    );
+    expect(graded).toEqual({
+      success: false,
+      message: 'Add the correct answer so this can be graded.',
+    });
+  });
+
+  test('stores the criteria a graded reflection was given', () => {
+    const form = formDataFor({
+      exitTicketKind: 'reflection',
+      exitTicketMode: 'basic',
+      exitTicketGradingBasis: 'completion',
+      exitTicketMinWords: '30',
+    });
+    form.append('submitForGrade', 'false');
+    form.append('submitForGrade', 'true');
+
+    const result = parseAssignmentExitTicket(form);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.value.exitTicketConfigJson).toMatchObject({
+      grading: { basis: 'completion', minWords: 30 },
+    });
+  });
+
+  test('never applies grading rules to a form from the original builder', () => {
+    // No exitTicketKind: an older client that knows nothing about criteria.
+    const result = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketMode: 'specific',
+        exitTicketFocus: 'explain-concept',
+        exitTicketTopic: 'erosion',
+        exitTicketAnswerType: 'objective',
+        submitForGrade: 'true',
+      })
+    );
+    expect(result.success).toBe(true);
   });
 
   test('rejects a kind that contradicts the posted mode', () => {
