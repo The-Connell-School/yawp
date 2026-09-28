@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import type { AssignmentEditRecord } from '~/components/assignments/assignment-edit-sheet';
 import { AssignmentDocumentsPill } from './assignment-documents-pill';
+import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
@@ -23,6 +24,8 @@ import type { ClassInsight } from '../app.my-classes.$classId_.assignments.$assi
 
 export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
   classAssignmentId: string;
+  /** False marks a cold write — the row gets a "Tutor off" badge. */
+  tutorEnabled: boolean;
   assignmentType: AssignmentEditRecord['assignmentType'] & {
     systemKey: string | null;
   };
@@ -297,12 +300,15 @@ export function ClassAssignmentsTab({
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      <span
-                        data-testid={`assignment-open-${assignment.id}`}
-                        className="[overflow-wrap:anywhere]"
-                      >
-                        {title}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          data-testid={`assignment-open-${assignment.id}`}
+                          className="[overflow-wrap:anywhere]"
+                        >
+                          {title}
+                        </span>
+                        <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {assignment.assignmentType.title}

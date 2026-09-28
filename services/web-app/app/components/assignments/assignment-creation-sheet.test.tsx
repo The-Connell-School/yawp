@@ -255,7 +255,7 @@ describe('AssignmentCreationSheetContent', () => {
       );
       expectText('Tutor enabled');
       expectText(
-        "Turning the tutor off makes this a cold write: the tutor is removed from students' documents, so you see what they can write without its guidance."
+        "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against."
       );
       expectNoText('Customize Grading');
       expectNoText('Tutor Context');
