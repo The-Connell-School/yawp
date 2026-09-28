@@ -27,6 +27,7 @@ import {
 } from '~/components/ui/select';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
+import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   parseGradingAssistantStrictnessLevel,
@@ -768,6 +769,7 @@ export default function AssignmentDetailRoute() {
                       {assignment.assignmentType.title}
                     </Badge>
                   ) : null}
+                  <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
                   <span>
                     {assignment.submitForGrade
                       ? `${assignment.pointValue ?? 100} points`

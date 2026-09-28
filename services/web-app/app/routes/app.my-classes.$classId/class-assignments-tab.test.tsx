@@ -49,6 +49,7 @@ const ASSIGNMENTS: ClassAssignmentsTabAssignment[] = [
       title: 'DBQ',
       systemKey: null,
     },
+    tutorEnabled: false,
     gradedCount: 5,
     documentCount: 12,
     hasSharedWork: false,
@@ -68,6 +69,7 @@ const ASSIGNMENTS: ClassAssignmentsTabAssignment[] = [
       title: 'AP History Essay',
       systemKey: 'ap_history_essay',
     },
+    tutorEnabled: true,
     gradedCount: 2,
     documentCount: 7,
     hasSharedWork: false,
@@ -150,6 +152,22 @@ describe('ClassAssignmentsTab', () => {
       fixedClassId: 'class-1',
       teacherClasses: [{ id: 'class-1', name: 'History · Grade 9 • Period 2' }],
     });
+  });
+
+  it('marks the tutor-off rows and leaves the ordinary ones unmarked', () => {
+    const el = renderTab();
+
+    const coldRow = el
+      .querySelector('[data-testid="assignment-open-assignment-1"]')!
+      .closest('tr')!;
+    const warmRow = el
+      .querySelector('[data-testid="assignment-open-assignment-2"]')!
+      .closest('tr')!;
+
+    expect(
+      coldRow.querySelector('[data-testid="tutor-off-badge"]')?.textContent
+    ).toBe('Tutor off');
+    expect(warmRow.querySelector('[data-testid="tutor-off-badge"]')).toBeNull();
   });
 
   it('clicking a row calls onSelectAssignment with the assignment id — the detail is a full page now, not a sheet in place', () => {
