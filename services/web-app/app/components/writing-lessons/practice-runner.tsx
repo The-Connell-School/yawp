@@ -686,12 +686,12 @@ export function PracticeRunner({
 }
 
 function formatDueDate(iso: string): string {
-  const date = new Date(iso);
-  return date.toLocaleDateString(undefined, {
+  return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-  });
+    timeZone: 'UTC',
+  }).format(new Date(iso));
 }
 
 /**

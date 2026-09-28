@@ -128,11 +128,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 function formatDueDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-  });
+    timeZone: 'UTC',
+  }).format(new Date(iso));
 }
 
 const STATUS_STYLES: Record<PracticeFeedbackStatus, string> = {

@@ -52,11 +52,14 @@ import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/as
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
 function formatAssignmentDueDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  // Render date-only consistently regardless of local timezone
+  // by formatting in UTC (matches assignment due-date displays elsewhere).
+  return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-  });
+    timeZone: 'UTC',
+  }).format(new Date(iso));
 }
 
 export type AssignmentTypeRow = {
