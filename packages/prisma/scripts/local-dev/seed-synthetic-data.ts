@@ -362,6 +362,7 @@ export async function seedSyntheticLocalDevData(
       });
       const revision = await prisma.rubricRevision.create({
         data: {
+          id: randomUUID(),
           rubricName: String(rubricName),
           version: (latest?.version ?? 0) + 1,
           schemaJson: dailyPagesEngagementSchema,
