@@ -42,9 +42,11 @@ describe('verify-host-alarms.sh', () => {
       alarm('yawp-preview-host-disk-warning'),
       alarm('yawp-preview-host-memory-warning'),
       alarm('yawp-preview-host-memory-critical'),
+      alarm('yawp-preview-host-memory-sustained'),
       alarm('yawp-demo-host-disk-warning'),
       alarm('yawp-demo-host-memory-warning'),
       alarm('yawp-demo-host-memory-critical'),
+      alarm('yawp-demo-host-memory-sustained'),
     ]);
 
     expect(result.exitCode).toBe(0);
