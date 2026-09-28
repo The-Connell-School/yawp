@@ -210,6 +210,10 @@ scripts/production-sync.env
 .worktrees/
 .worktree-local/
 .claude/worktrees/
+
+# Per-session scheduler lock: records the holding session id and pid, so every
+# session rewrites it and it has no business in a diff.
+.claude/scheduled_tasks.lock
 .superpowers/
 .cursor/*
 !.cursor/environment.json

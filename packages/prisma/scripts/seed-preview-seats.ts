@@ -7,6 +7,7 @@ import {
   DEFAULT_PREVIEW_SEAT_COUNT,
   backfillLegacyPreviewSeatCodes,
   buildPreviewSeatDefinitions,
+  enableWritingPracticeForPreviewOrganizations,
   ensurePreviewSeats,
 } from './preview-seats';
 
@@ -20,6 +21,13 @@ const prisma = createPrismaClient();
 
 try {
   const results = await ensurePreviewSeats(prisma, seats);
+  const writingPractice = await enableWritingPracticeForPreviewOrganizations(
+    prisma,
+    seats.map(({ organizationId }) => organizationId)
+  );
+  console.log(
+    `Writing practice preview enablement: ${writingPractice.count} seat(s) updated`
+  );
   for (const seat of seats) {
     const result = results.find(
       ({ organizationId }) => organizationId === seat.organizationId

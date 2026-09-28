@@ -40,11 +40,16 @@ export function AssignmentsAtAGlance({
   assignmentTypes,
   onCreateAssignment,
   onCreateAssignmentForType,
+  writingPracticeTo,
 }: {
   assignmentTypes: AssignmentTypeGlanceRow[];
   onCreateAssignment: () => void;
   onCreateAssignmentForType: (assignmentTypeId: string) => void;
+  /** When set, shows a Writing Fundamentals Practice tile that links here. */
+  writingPracticeTo?: string;
 }) {
+  const hasTiles = assignmentTypes.length > 0 || Boolean(writingPracticeTo);
+
   return (
     <div data-testid="teacher-assignments-grid">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -59,9 +64,27 @@ export function AssignmentsAtAGlance({
         </button>
       </div>
 
-      {assignmentTypes.length > 0 ? (
+      {hasTiles ? (
         <div className="overflow-x-auto no-scrollbar">
           <div className="flex w-max gap-3 pb-1">
+            {writingPracticeTo ? (
+              <Link
+                to={writingPracticeTo}
+                className="group relative flex w-36 shrink-0 flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md"
+              >
+                <img
+                  src="/img/writing-fundamentals-cafe-cat.png"
+                  alt=""
+                  data-testid="writing-fundamentals-tile-image"
+                  className="h-20 w-full object-cover object-center"
+                />
+                <div className="p-2.5">
+                  <h3 className="line-clamp-2 text-sm font-medium text-foreground">
+                    Writing Fundamentals Practice
+                  </h3>
+                </div>
+              </Link>
+            ) : null}
             {assignmentTypes.map((assignmentType) => (
               <div
                 key={assignmentType.id}
@@ -84,9 +107,7 @@ export function AssignmentsAtAGlance({
                 <Tooltip text={`New ${assignmentType.title} assignment`}>
                   <button
                     type="button"
-                    onClick={() =>
-                      onCreateAssignmentForType(assignmentType.id)
-                    }
+                    onClick={() => onCreateAssignmentForType(assignmentType.id)}
                     aria-label={`New ${assignmentType.title} assignment`}
                     className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-black/10 transition-colors hover:bg-muted"
                   >
