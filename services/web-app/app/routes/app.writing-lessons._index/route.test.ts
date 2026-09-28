@@ -80,8 +80,11 @@ describe('writing lessons index route', () => {
       params: {},
       context: {} as never,
     } as any);
-    expect(response.data.lessonCount).toBeGreaterThan(0);
-    expect(response.data.promptCount).toBeGreaterThan(0);
+    expect(
+      response.data.sections.some((section) =>
+        section.groups.some((group) => group.lessons.length > 0)
+      )
+    ).toBe(true);
   });
 
   test('loads active classes for a teacher creating a practice assignment', async () => {

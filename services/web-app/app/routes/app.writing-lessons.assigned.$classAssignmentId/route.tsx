@@ -39,9 +39,6 @@ function assignmentIncludesComposition(lessonSlugs: string[]) {
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (!profile.organization.writingPracticeEnabled) {
-    throw redirect('/app');
-  }
 
   const classAssignment = await getAssignedPracticeForStudentById(
     params.classAssignmentId ?? '',
@@ -119,9 +116,6 @@ type AssignedActionData = PracticeRunnerResult;
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (!profile.organization.writingPracticeEnabled) {
-    throw new Response('Writing practice not found', { status: 404 });
-  }
 
   const classAssignment = await getAssignedPracticeForStudentById(
     params.classAssignmentId ?? '',

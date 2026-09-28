@@ -159,9 +159,6 @@ async function buildTopicSequence(
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (!profile.organization.writingPracticeEnabled) {
-    throw redirect('/app');
-  }
 
   const url = new URL(request.url);
   const skills = parseSkills(url.searchParams.get('skills'));
@@ -223,9 +220,6 @@ type PracticeSessionActionData = PracticeRunnerResult | RewriteCheckResult;
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (!profile.organization.writingPracticeEnabled) {
-    throw new Response('Writing practice not found', { status: 404 });
-  }
 
   const formData = await request.formData();
   const intent = String(formData.get('intent') ?? '');

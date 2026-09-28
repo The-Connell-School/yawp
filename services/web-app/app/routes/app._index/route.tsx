@@ -296,7 +296,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // mastery.
   const compositionPracticeEnabled = isCompositionPracticeEnabled();
   const writingPracticeAssignments =
-    useStudentExperience && profile.organization.writingPracticeEnabled
+    useStudentExperience
       ? (await getAssignedPracticeForStudent(profile.id))
           .filter(
             ({ assignment }) =>

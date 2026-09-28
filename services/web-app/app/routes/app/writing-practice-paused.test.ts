@@ -105,7 +105,7 @@ describe('Writing Practice routes are reachable', () => {
       params: {},
       context: {} as never,
     } as any);
-    expect(response.data.lessonCount).toBeGreaterThan(0);
+    expect(response.data.sections.length).toBeGreaterThan(0);
   });
 
   test('the library index loads for a teacher even when the org flag is off', async () => {

@@ -499,8 +499,8 @@ export default function OrganizationRoute() {
                           Writing Practice
                         </span>
                         <span className="block text-xs text-muted-foreground">
-                          Adds Writing Practice to the teacher and student
-                          sidebars. Off by default while the feature is paused.
+                          Retired: Writing Practice is always on for all organizations.
+                          This toggle is kept for historical data only.
                         </span>
                       </span>
                     </label>

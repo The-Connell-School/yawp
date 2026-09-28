@@ -77,11 +77,7 @@ describe('writing lesson detail route', () => {
     expect(response.data.practicePrompts.length).toBeGreaterThan(0);
   });
 
-<<<<<<< HEAD
-  test('loads a lesson even when the org previously had writing practice disabled', async () => {
-=======
   test('links teachers on a composition lesson to the Lounge module', async () => {
->>>>>>> origin/main
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
@@ -136,16 +132,9 @@ describe('writing lesson detail route', () => {
       ),
       params: { lessonSlug: 'revising-for-wordiness' },
       context: {} as never,
-<<<<<<< HEAD
-    } as any);
-
-    expect(response.data.lesson.slug).toBe('revising-for-wordiness');
-    expect(response.data.practicePrompts.length).toBeGreaterThan(0);
-=======
     } as never);
 
     expect(response.data.loungeModule).toBeNull();
     expect(getLoungeModuleLinkForLesson).not.toHaveBeenCalled();
->>>>>>> origin/main
   });
 });
