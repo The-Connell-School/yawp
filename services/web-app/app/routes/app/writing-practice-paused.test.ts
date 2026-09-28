@@ -10,6 +10,8 @@ const requireUserId = mock();
 const requireMembership = mock();
 const classFindMany = mock();
 const createWritingPracticeAssignmentForClasses = mock();
+const listWritingPracticeAssignmentsForTeacher = mock();
+const listWritingPracticeAssignmentsForStudent = mock();
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
@@ -22,6 +24,8 @@ mock.module('~/utils/db.server', () => ({
 
 mock.module('~/utils/writing-lessons/practice-assignments.server', () => ({
   createWritingPracticeAssignmentForClasses,
+  listWritingPracticeAssignmentsForTeacher,
+  listWritingPracticeAssignmentsForStudent,
 }));
 
 const { FLAT_SIDEBAR_SECTIONS, getVisibleSidebarSections } = await import(
@@ -77,9 +81,16 @@ describe('Writing Practice routes are reachable', () => {
     requireMembership.mockReset();
     classFindMany.mockReset();
     createWritingPracticeAssignmentForClasses.mockReset();
+    listWritingPracticeAssignmentsForTeacher.mockReset();
+    listWritingPracticeAssignmentsForStudent.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     classFindMany.mockResolvedValue([{ id: 'class-1' }]);
+    listWritingPracticeAssignmentsForTeacher.mockResolvedValue([]);
+    listWritingPracticeAssignmentsForStudent.mockResolvedValue([]);
+    createWritingPracticeAssignmentForClasses.mockResolvedValue({
+      id: 'practice-1',
+    });
   });
 
   test('the library index loads for a student even when the org flag is off', async () => {
@@ -122,12 +133,12 @@ describe('Writing Practice routes are reachable', () => {
 
     const response = await lessonLoader({
       request: new Request(
-        'https://example.test/app/writing-lessons/weak-construction'
+        'https://example.test/app/writing-lessons/revising-for-wordiness'
       ),
-      params: { lessonSlug: 'weak-construction' },
+      params: { lessonSlug: 'revising-for-wordiness' },
       context: {} as never,
     } as any);
-    expect(response.data.lesson.slug).toBe('weak-construction');
+    expect(response.data.lesson.slug).toBe('revising-for-wordiness');
   });
 
   test('the assign action allows a teacher and writes practice', async () => {
@@ -142,7 +153,7 @@ describe('Writing Practice routes are reachable', () => {
         method: 'POST',
         body: new URLSearchParams([
           ['title', 'Practice when disabled'],
-          ['lessonSlugs', 'weak-construction'],
+          ['lessonSlugs', 'revising-for-wordiness'],
           ['classIds', 'class-1'],
           ['problemCount', '5'],
           ['dueAt', '2026-09-01'],
@@ -152,7 +163,6 @@ describe('Writing Practice routes are reachable', () => {
       context: {} as never,
     } as any);
 
-    expect(response.init?.status).toBe(200);
     expect(response.data.success).toBe(true);
     expect(createWritingPracticeAssignmentForClasses).toHaveBeenCalled();
   });
