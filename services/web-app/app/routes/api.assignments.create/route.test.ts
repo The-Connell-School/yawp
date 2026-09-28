@@ -709,6 +709,51 @@ describe('api.assignments.create', () => {
     });
   });
 
+  test('AP History creation records optional post and due dates on deployment', async () => {
+    const libraryEntry = {
+      externalKey: 'apush-dbq-civil-war-reconstruction',
+      course: 'apush',
+      essayType: 'dbq',
+      title: 'Civil War & Reconstruction',
+      prompt: 'Evaluate the extent to which the Civil War and Reconstruction changed...',
+      period: '1861-1877',
+      periodNumber: 5,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [],
+    };
+    mockAssignmentTypeAvailable({
+      id: 'ap-type-1',
+      systemKey: 'ap_history_essay',
+    });
+    prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(libraryEntry);
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'ap-type-1',
+        classIds: ['class-1', 'class-2'],
+        apHistoryLibraryEntryId: 'apush-dbq-civil-war-reconstruction',
+        postAt: '2026-10-01',
+        dueAt: '2026-10-15',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classIds: ['class-1', 'class-2'],
+        deployment: {
+          postAt: new Date('2026-10-01'),
+          dueAt: new Date('2026-10-15'),
+        },
+      })
+    );
+  });
+
   test('carries the tutor toggle through the AP History creation path', async () => {
     const libraryEntry = {
       externalKey: 'apush-dbq-new-deal-federal-power',

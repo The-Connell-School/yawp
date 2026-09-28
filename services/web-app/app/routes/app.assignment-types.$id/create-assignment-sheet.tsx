@@ -185,6 +185,32 @@ export function CreateAssignmentSheet({
             />
           </div>
 
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="cs-post-at">
+                Post date{' '}
+                <span className="text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                id="cs-post-at"
+                name="postAt"
+                type="date"
+                disabled={isSaving}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cs-due-at">
+                Due date <span className="text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                id="cs-due-at"
+                name="dueAt"
+                type="date"
+                disabled={isSaving}
+              />
+            </div>
+          </div>
+
           <div className="space-y-2 rounded-lg border bg-muted/40 p-4">
             <div className="flex items-center justify-between gap-3">
               <Label>Selected Prompt</Label>
