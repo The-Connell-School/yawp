@@ -69,6 +69,7 @@ jobs:
             "mkdir -p ${PREVIEW_ROOT}/bootstrap/scripts/preview"
           scp -i ~/.ssh/preview_key \
             scripts/preview/bootstrap-host.sh \
+            scripts/preview/ensure-host-swap.sh \
             scripts/preview/certificate-manager.mjs \
             scripts/preview/ingress-server.mjs \
             scripts/preview/migrate-resident-database-roles.sh \
@@ -77,6 +78,12 @@ jobs:
             scripts/preview/wake-server.mjs \
             scripts/preview/wake-preview.sh \
             "${PREVIEW_SSH_USER}@${PREVIEW_HOST}:${PREVIEW_ROOT}/bootstrap/scripts/preview/"
+
+      - name: Ensure host swap
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/preview_key "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" \
+            "PREVIEW_ROOT=$(printf '%q' "$PREVIEW_ROOT") bash $(printf '%q' "${PREVIEW_ROOT}/bootstrap/scripts/preview/ensure-host-swap.sh")"
 
       - name: Run bootstrap
         run: |
