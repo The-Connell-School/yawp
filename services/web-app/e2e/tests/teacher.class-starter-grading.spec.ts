@@ -12,20 +12,20 @@ async function createDailyPagesSubmission(e2eContext: E2EContext) {
     const { assignment, classAssignment } = await createDeployedAssignment({
       prisma,
       classId: e2eContext.classId,
-      assignmentTypeId: e2eContext.dailyPagesAssignmentTypeId,
-      title: `Daily Pages e2e ${suffix}`,
+      assignmentTypeId: e2eContext.classStarterAssignmentTypeId,
+      title: `Class Starter e2e ${suffix}`,
       prompt: 'Write freely for ten minutes about something you noticed today.',
     });
 
-    const text = `Daily Pages entry ${suffix}. I kept writing past the point where I wanted to stop, and the thought went somewhere I did not expect.`;
+    const text = `Class Starter entry ${suffix}. I kept writing past the point where I wanted to stop, and the thought went somewhere I did not expect.`;
     const html = `<p>${text}</p>`;
     const document = await prisma.document.create({
       data: {
-        title: `Daily Pages document ${suffix}`,
+        title: `Class Starter document ${suffix}`,
         text,
         html,
         membershipId: e2eContext.membershipId,
-        assignmentTypeId: e2eContext.dailyPagesAssignmentTypeId,
+        assignmentTypeId: e2eContext.classStarterAssignmentTypeId,
         assignmentId: assignment.id,
         classAssignmentId: classAssignment.id,
       },
@@ -36,7 +36,7 @@ async function createDailyPagesSubmission(e2eContext: E2EContext) {
         documentId: document.id,
         html,
         text,
-        title: `Daily Pages submission ${suffix}`,
+        title: `Class Starter submission ${suffix}`,
         submittedAt: new Date(),
       },
       select: { id: true },
@@ -78,7 +78,7 @@ async function readGrade(submissionId: string) {
   }
 }
 
-test.describe.serial('Teacher grading: a Daily Pages submission', () => {
+test.describe.serial('Teacher grading: a Class Starter submission', () => {
   let documentId: string;
   let submissionId: string;
 
@@ -116,19 +116,15 @@ test.describe.serial('Teacher grading: a Daily Pages submission', () => {
     ).toHaveCount(0);
     await expect(page.getByTestId('grading-overall-comment')).toBeVisible();
 
-    // The four words Daily Pages scores on, including Absent as a real 0.
+    // The four words Class Starter scores on, including Absent as a real 0.
+    // The grading panel names each band by its word alone.
     await engagementScore.click();
-    for (const [value, label] of [
-      [0, 'Absent'],
-      [1, 'Hardly there'],
-      [2, 'Showed up'],
-      [3, 'All in'],
-    ] as const) {
+    for (const label of ['Absent', 'Hardly there', 'Showed up', 'All in']) {
       await expect(
-        page.getByRole('option', { name: `${value} - ${label}` })
+        page.getByRole('option', { name: label, exact: true })
       ).toBeVisible();
     }
-    await page.getByRole('option', { name: '0 - Absent' }).click();
+    await page.getByRole('option', { name: 'Absent', exact: true }).click();
     // Absent is a judgment, not a blank.
     await expect(page.getByText('Absent (0/3)')).toBeVisible();
 
@@ -137,6 +133,9 @@ test.describe.serial('Teacher grading: a Daily Pages submission', () => {
     await expect(page.getByText(/AI grammar issues:/i)).toHaveCount(0);
 
     await page.getByTestId('grading-assistant-generate').click();
+    // The Absent chosen above is teacher feedback, so the assistant asks
+    // before replacing it.
+    await page.getByRole('button', { name: 'Replace', exact: true }).click();
     await page.waitForResponse(
       (response) =>
         response.url().includes('/api/domain/grade-essay-ai') &&

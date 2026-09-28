@@ -1,0 +1,724 @@
+[
+  {
+    "id": "sf-cr-001",
+    "title": "What the narrator won't say",
+    "prompt": "Reread the last paragraph of today's chapter. What is the narrator refusing to say outright? Quote the words that give it away, and explain what they are doing.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [],
+    "themes": [
+      "truth",
+      "voice"
+    ],
+    "gradeBands": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-cr-002",
+    "title": "The sentence that changes the rest",
+    "prompt": "Find the one sentence in today's reading that changes how you read everything around it. Quote it, then explain what it changed and why.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [],
+    "themes": [
+      "meaning"
+    ],
+    "gradeBands": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-cr-003",
+    "title": "An image doing extra work",
+    "prompt": "Pick one image from the passage that is carrying more than it first appears to. Say what it carries, and point to the specific words that make it carry that.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Great Gatsby",
+      "Hamlet"
+    ],
+    "themes": [
+      "meaning",
+      "craft"
+    ],
+    "gradeBands": [
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-cr-004",
+    "title": "Where the tone turns",
+    "prompt": "Where does the speaker's tone shift in this passage? Mark the line where it turns, and explain what else shifts with it.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [],
+    "themes": [
+      "voice",
+      "change"
+    ],
+    "gradeBands": [
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-cr-005",
+    "title": "The word that could have been different",
+    "prompt": "Choose one word in the passage the author could easily have replaced. Name a replacement, and say precisely what the swap would cost.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze",
+      "evaluate"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [],
+    "themes": [
+      "craft",
+      "meaning"
+    ],
+    "gradeBands": [
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-cr-rj-001",
+    "title": "Juliet argues with a name",
+    "prompt": "In the balcony scene (2.2), Juliet argues with herself about names. Quote the line where her argument turns, and explain what she has decided by the end of it. One paragraph.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Romeo and Juliet"
+    ],
+    "themes": [
+      "identity",
+      "love"
+    ],
+    "gradeBands": [
+      "9",
+      "10"
+    ]
+  },
+  {
+    "id": "sf-cr-rj-002",
+    "title": "Romeo's light",
+    "prompt": "Romeo keeps describing Juliet in terms of light. Pick one of those images, quote it, and explain what it shows about how Romeo sees her — not just that he loves her. One paragraph.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Romeo and Juliet"
+    ],
+    "themes": [
+      "love",
+      "craft"
+    ],
+    "gradeBands": [
+      "9",
+      "10"
+    ]
+  },
+  {
+    "id": "sf-cr-rj-003",
+    "title": "What the Prologue gives away",
+    "prompt": "The Prologue tells us how the play ends before it begins. Quote one phrase from it, and explain how knowing the ending changes the way you read one scene we have read since. One paragraph.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Romeo and Juliet"
+    ],
+    "themes": [
+      "fate",
+      "craft"
+    ],
+    "gradeBands": [
+      "9",
+      "10"
+    ]
+  },
+  {
+    "id": "sf-cr-rj-004",
+    "title": "A plague on both houses",
+    "prompt": "Quote Mercutio's curse, \"A plague o' both your houses,\" and explain why it matters that the curse comes from a character who belongs to neither house. One paragraph.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Romeo and Juliet"
+    ],
+    "themes": [
+      "conflict",
+      "loyalty"
+    ],
+    "gradeBands": [
+      "9",
+      "10"
+    ]
+  },
+  {
+    "id": "sf-cd-001",
+    "title": "You become who you spend time with",
+    "prompt": "You become who you spend time with. Take a position, give your strongest reason, and then name the one case that most tests it.",
+    "kind": "claim-and-defend",
+    "cognitiveMoves": [
+      "argue-a-position"
+    ],
+    "sourceNeed": "none",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [],
+    "themes": [
+      "identity",
+      "belonging"
+    ],
+    "gradeBands": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-cd-002",
+    "title": "Honest and kind at once",
+    "prompt": "Is it possible to be fully honest and fully kind at the same time? One paragraph: your claim, your reason, and the hardest counterexample you can think of.",
+    "kind": "claim-and-defend",
+    "cognitiveMoves": [
+      "argue-a-position",
+      "evaluate"
+    ],
+    "sourceNeed": "none",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [],
+    "themes": [
+      "morality",
+      "truth"
+    ],
+    "gradeBands": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-cd-003",
+    "title": "Rules worth breaking",
+    "prompt": "Some rules are worth breaking. Defend or reject that claim, and ground it in one specific situation rather than in general.",
+    "kind": "claim-and-defend",
+    "cognitiveMoves": [
+      "argue-a-position"
+    ],
+    "sourceNeed": "optional",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "The Crucible"
+    ],
+    "themes": [
+      "morality",
+      "authority"
+    ],
+    "gradeBands": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-cd-004",
+    "title": "What ambition costs",
+    "prompt": "Ambition costs something. Say what it costs, and show it with one specific example — from the text, from the news, or from your own life.",
+    "kind": "claim-and-defend",
+    "cognitiveMoves": [
+      "argue-a-position",
+      "analyze"
+    ],
+    "sourceNeed": "optional",
+    "lengthTarget": "half-page",
+    "textsOrUnits": [
+      "Death of a Salesman",
+      "Macbeth"
+    ],
+    "themes": [
+      "ambition",
+      "suffering"
+    ],
+    "gradeBands": [
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-cd-005",
+    "title": "Loyalty: virtue or liability",
+    "prompt": "Is loyalty a virtue or a liability? Commit to one, support it with a specific case, and concede the strongest thing the other side gets right.",
+    "kind": "claim-and-defend",
+    "cognitiveMoves": [
+      "argue-a-position",
+      "evaluate"
+    ],
+    "sourceNeed": "optional",
+    "lengthTarget": "half-page",
+    "textsOrUnits": [
+      "Hamlet",
+      "The Crucible"
+    ],
+    "themes": [
+      "morality",
+      "belonging"
+    ],
+    "gradeBands": [
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-od-001",
+    "title": "The difference the play needs",
+    "prompt": "Name the one difference between two characters in today's reading that actually matters to the story, and explain why the story needs that difference.",
+    "kind": "one-difference",
+    "cognitiveMoves": [
+      "compare",
+      "analyze"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "The Crucible",
+      "Hamlet"
+    ],
+    "themes": [
+      "character"
+    ],
+    "gradeBands": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-od-002",
+    "title": "Same want, different reason",
+    "prompt": "Two characters want the same thing for different reasons. Name the difference in reason, and say which one the text takes more seriously.",
+    "kind": "one-difference",
+    "cognitiveMoves": [
+      "compare",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Great Gatsby",
+      "Death of a Salesman"
+    ],
+    "themes": [
+      "character",
+      "ambition"
+    ],
+    "gradeBands": [
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-od-003",
+    "title": "Two sources, one fact",
+    "prompt": "Compare how two sources we read this week handle the same fact. Name the single difference that most changes what the fact means, and quote the wording that creates it.",
+    "kind": "one-difference",
+    "cognitiveMoves": [
+      "compare",
+      "analyze"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "half-page",
+    "textsOrUnits": [
+      "argumentative-writing-unit"
+    ],
+    "themes": [
+      "truth",
+      "evidence"
+    ],
+    "gradeBands": [
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-od-004",
+    "title": "Alike, and not",
+    "prompt": "Pick two moments in the text that look alike and aren't. Name the difference, and say why it matters that the text repeats itself with a change.",
+    "kind": "one-difference",
+    "cognitiveMoves": [
+      "compare",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [],
+    "themes": [
+      "craft",
+      "change"
+    ],
+    "gradeBands": [
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-od-005",
+    "title": "A friend and an ally",
+    "prompt": "What separates a friend from an ally? Give the distinction in a sentence, then test it with one case that sits right on the line.",
+    "kind": "one-difference",
+    "cognitiveMoves": [
+      "compare",
+      "define-a-term"
+    ],
+    "sourceNeed": "none",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [],
+    "themes": [
+      "belonging",
+      "morality"
+    ],
+    "gradeBands": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-ev-001",
+    "title": "Argue against yourself first",
+    "prompt": "Was the main character right to do it? State the strongest case against your own answer first, then answer, using one moment from the reading.",
+    "kind": "evaluate-a-choice",
+    "cognitiveMoves": [
+      "evaluate",
+      "argue-a-position"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "half-page",
+    "textsOrUnits": [],
+    "themes": [
+      "morality",
+      "character"
+    ],
+    "gradeBands": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-ev-002",
+    "title": "Name the standard first",
+    "prompt": "Judge the decision at the center of today's reading. Name the standard you are judging by before you deliver the verdict, then give the one specific detail that most supports it.",
+    "kind": "evaluate-a-choice",
+    "cognitiveMoves": [
+      "evaluate"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "half-page",
+    "textsOrUnits": [],
+    "themes": [
+      "morality"
+    ],
+    "gradeBands": [
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-ev-003",
+    "title": "What the truth would have cost",
+    "prompt": "Should the character have told the truth? Weigh what telling it would have cost against what hiding it actually cost, and decide.",
+    "kind": "evaluate-a-choice",
+    "cognitiveMoves": [
+      "evaluate",
+      "analyze"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "half-page",
+    "textsOrUnits": [
+      "The Crucible",
+      "Catcher in the Rye"
+    ],
+    "themes": [
+      "truth",
+      "morality"
+    ],
+    "gradeBands": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-ev-004",
+    "title": "How far to trust the narrator",
+    "prompt": "How far should we trust this narrator? Point to the single moment that most affects your verdict, and say what it reveals.",
+    "kind": "evaluate-a-choice",
+    "cognitiveMoves": [
+      "evaluate",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Catcher in the Rye",
+      "Great Gatsby"
+    ],
+    "themes": [
+      "truth",
+      "voice"
+    ],
+    "gradeBands": [
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-ev-005",
+    "title": "Was the ending earned",
+    "prompt": "Was the ending earned? Argue yes or no from one specific thing the text set up earlier, and quote or name it.",
+    "kind": "evaluate-a-choice",
+    "cognitiveMoves": [
+      "evaluate",
+      "analyze"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "half-page",
+    "textsOrUnits": [],
+    "themes": [
+      "craft",
+      "meaning"
+    ],
+    "gradeBands": [
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-ev-rj-001",
+    "title": "Friar Laurence's plan",
+    "prompt": "Judge Friar Laurence's plan with the potion. Name the standard you are judging him by, then point to the moment in the play that most supports your verdict. One paragraph.",
+    "kind": "evaluate-a-choice",
+    "cognitiveMoves": [
+      "evaluate",
+      "argue-a-position"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Romeo and Juliet"
+    ],
+    "themes": [
+      "responsibility",
+      "choice"
+    ],
+    "gradeBands": [
+      "9",
+      "10"
+    ]
+  },
+  {
+    "id": "sf-dp-001",
+    "title": "Loyalty, as this text uses it",
+    "prompt": "Define loyalty as this text uses the word. Give one case that clearly fits your definition, and one that looks like it but doesn't.",
+    "kind": "define-precisely",
+    "cognitiveMoves": [
+      "define-a-term",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Hamlet",
+      "The Crucible"
+    ],
+    "themes": [
+      "morality",
+      "belonging"
+    ],
+    "gradeBands": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-dp-002",
+    "title": "What counts as courage here",
+    "prompt": "What counts as courage in this text? Draw the boundary in a sentence, then test it with a hard case that almost crosses it.",
+    "kind": "define-precisely",
+    "cognitiveMoves": [
+      "define-a-term",
+      "analyze"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [],
+    "themes": [
+      "morality",
+      "character"
+    ],
+    "gradeBands": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-dp-003",
+    "title": "Success, as the character sees it",
+    "prompt": "Define success the way the main character would define it. Then point to the moment where that definition fails them, and say why.",
+    "kind": "define-precisely",
+    "cognitiveMoves": [
+      "define-a-term",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Death of a Salesman",
+      "Great Gatsby"
+    ],
+    "themes": [
+      "ambition",
+      "meaning"
+    ],
+    "gradeBands": [
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-dp-004",
+    "title": "Which freedom we mean",
+    "prompt": "We have used the word freedom in more than one way this week. Pick the sense doing the most work in our argument and define it precisely, with an example.",
+    "kind": "define-precisely",
+    "cognitiveMoves": [
+      "define-a-term",
+      "synthesize"
+    ],
+    "sourceNeed": "optional",
+    "lengthTarget": "half-page",
+    "textsOrUnits": [
+      "argumentative-writing-unit"
+    ],
+    "themes": [
+      "meaning",
+      "authority"
+    ],
+    "gradeBands": [
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-dp-005",
+    "title": "A mistake and a failure",
+    "prompt": "What is the difference between a mistake and a failure? Define both, then give one example that could plausibly be either and say which it is.",
+    "kind": "define-precisely",
+    "cognitiveMoves": [
+      "define-a-term",
+      "compare"
+    ],
+    "sourceNeed": "none",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [],
+    "themes": [
+      "change",
+      "suffering"
+    ],
+    "gradeBands": [
+      "9",
+      "10",
+      "11",
+      "12"
+    ]
+  },
+  {
+    "id": "sf-dp-rj-001",
+    "title": "Love or infatuation",
+    "prompt": "Define the difference between love and infatuation as Romeo and Juliet shows it. Then test your definition against one specific moment in the play, and quote it. One paragraph.",
+    "kind": "define-precisely",
+    "cognitiveMoves": [
+      "define-a-term",
+      "analyze"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Romeo and Juliet"
+    ],
+    "themes": [
+      "love"
+    ],
+    "gradeBands": [
+      "9",
+      "10"
+    ]
+  }
+]

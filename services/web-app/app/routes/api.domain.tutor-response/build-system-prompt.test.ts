@@ -99,6 +99,35 @@ describe('buildTutorSystemPrompt', () => {
   });
 });
 
+/**
+ * A Daily Pages paragraph type layers its coaching onto the module's own tutor
+ * rather than replacing it: the shared tutor stays the base, the type adds the
+ * skill the teacher picked.
+ */
+describe('buildTutorSystemPrompt paragraph type', () => {
+  it('adds the type coaching after the module and instruction layers', () => {
+    const result = buildTutorSystemPrompt({
+      ...base,
+      paragraphModeInstructions: 'PARAGRAPH TYPE: Analyze\nCoach CEA.',
+    });
+    expect(result.indexOf(base.tutorInstructions)).toBeLessThan(
+      result.indexOf('PARAGRAPH TYPE: Analyze')
+    );
+    expect(result.indexOf(base.instructionTutorInstructions)).toBeLessThan(
+      result.indexOf('PARAGRAPH TYPE: Analyze')
+    );
+    expect(result.indexOf('PARAGRAPH TYPE: Analyze')).toBeLessThan(
+      result.indexOf('behind-the-scenes information')
+    );
+  });
+
+  it('is unchanged when no type is chosen', () => {
+    expect(
+      buildTutorSystemPrompt({ ...base, paragraphModeInstructions: '' })
+    ).toBe(buildTutorSystemPrompt(base));
+  });
+});
+
 describe('buildTutorSystemPromptBlocks (prompt caching)', () => {
   it('wraps the whole prompt in a single cache_control block', () => {
     const blocks = buildTutorSystemPromptBlocks(base);

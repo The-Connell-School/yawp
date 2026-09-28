@@ -9,7 +9,7 @@ const CLASS_LABEL = /Grade 9th .* Period 1st/;
 // which is asserted as visible text in expectStandardizedAssignmentForm below.
 const TUTOR_TOGGLE_LABEL = 'Tutor enabled';
 const TUTOR_TOGGLE_HELP =
-  "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance.";
+  "Turning the tutor off makes this a cold write: the tutor is removed from students' documents, so you see what they can write without its guidance.";
 
 async function expectStandardizedAssignmentForm(page: Page) {
   const dialog = page.getByRole('dialog');

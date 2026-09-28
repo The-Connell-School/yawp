@@ -1,3 +1,5 @@
+import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
+import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -158,6 +160,7 @@ import {
   buildPasteAlertsByStudentId,
   summarizeStudentPasteActivity,
 } from './class-paste-alerts';
+import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -483,6 +486,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
+    const writingTimeResult = parseWritingTimeMinutes(formData);
+    if (!writingTimeResult.success) {
+      return dataResponse(
+        { success: false, message: writingTimeResult.message },
+        { status: 400 }
+      );
+    }
+    // Only written when the form sent it, so an older caller that omits the
+    // field leaves the stored value alone. Blank clears it.
+    const writingTimeData = writingTimeResult.sent
+      ? { writingTimeMinutes: writingTimeResult.value }
+      : {};
     const rubricOverrideData = {
       ...(formData.has('rubricTotalPoints')
         ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
@@ -617,6 +632,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           ...(formData.has('tutorEnabled')
             ? { tutorEnabled: tutorEnabledResult.value }
             : {}),
+          ...writingTimeData,
           ...promptAttachmentData,
         },
       });
@@ -1262,22 +1278,38 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     : [];
   const pasteAlertsByStudentId = buildPasteAlertsByStudentId(pasteAlerts);
 
+  const creationTypeRows = availableAssignmentTypes.filter(
+    (assignmentType) =>
+      assignmentType.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+  );
+  // One query for the list, so the creation sheet knows which types can offer
+  // the teacher's grammar-grading toggle.
+  const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
+    creationTypeRows.map((assignmentType) => assignmentType.id)
+  );
+
+  const creationTypeDefaults = await getCreationTypeDefaultsById(
+    creationTypeRows.map((assignmentType) => assignmentType.id)
+  );
+
   return dataResponse({
     role: 'TEACHER' as const,
     klass,
     submissions,
     inProgressDocuments,
     assignments,
-    assignmentTypes: availableAssignmentTypes
-      .filter(
-        (assignmentType) =>
-          assignmentType.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
-      )
-      .map(({ id, title, collaborationSupported }) => ({
+    assignmentTypes: creationTypeRows.map(
+      ({ id, title, collaborationSupported }) => ({
         id,
         title,
         collaborationSupported,
-      })),
+        gradesGrammar: gradesGrammarIds.has(id),
+        defaultWritingTimeMinutes:
+          creationTypeDefaults.get(id)?.defaultWritingTimeMinutes ?? null,
+        offersParagraphModes:
+          creationTypeDefaults.get(id)?.offersParagraphModes ?? false,
+      })
+    ),
     assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,
