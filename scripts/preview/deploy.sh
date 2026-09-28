@@ -708,6 +708,11 @@ run_tooling_if_needed() {
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
   fi
+  # Always (idempotently) seed the AP History assignment type and prompt library so
+  # previews backed by an existing database pick up newly added prompts/sections.
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
+    tooling_command+=' && bun run seed-ap-history-library'
+  fi
 
   "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
