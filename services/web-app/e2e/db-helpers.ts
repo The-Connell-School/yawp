@@ -19,6 +19,8 @@ export async function createDeployedAssignment(params: {
   pointValue?: number | null;
   rubricTotalPoints?: number | null;
   gradingMode?: 'step' | 'bands';
+  /** Omit for the product default (tutor on); false seeds a cold write. */
+  tutorEnabled?: boolean;
 }) {
   const assignment = await params.prisma.assignment.create({
     data: {
@@ -27,6 +29,9 @@ export async function createDeployedAssignment(params: {
       prompt: params.prompt,
       ...(params.submitForGrade !== undefined
         ? { submitForGrade: params.submitForGrade }
+        : {}),
+      ...(params.tutorEnabled !== undefined
+        ? { tutorEnabled: params.tutorEnabled }
         : {}),
       ...(params.pointValue !== undefined
         ? { pointValue: params.pointValue }

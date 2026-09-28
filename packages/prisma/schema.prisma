@@ -1087,40 +1087,39 @@ model OrganizationAssignmentType {
 }
 
 model OrgMembership {
-  id                                String                         @id @default(cuid())
-  createdAt                         DateTime                       @default(now()) @db.Timestamptz(6)
-  userId                            String
-  user                              User                           @relation(fields: [userId], references: [id])
-  organizationId                    String
-  organization                      Organization                   @relation(fields: [organizationId], references: [id])
-  role                              MembershipRole
-  isOrgOwner                        Boolean                        @default(false)
-  isActive                          Boolean                        @default(true)
-  school                            String?
-  schoolTeacher                     String?
-  grade                             String?
-  period                            String?
-  documents                         Document[]
-  documentComments                  DocumentComment[]
-  documentCommentResponses          DocumentCommentResponse[]
-  pasteAlerts                       PasteAlert[]
-  submissionsGraded                 Submission[]                   @relation("SubmissionGradedBy")
-  submissionsUnsubmitted            Submission[]                   @relation("SubmissionUnsubmittedBy")
-  submissionActivities              SubmissionActivity[]           @relation("SubmissionActivityActor")
-  submissionComments                SubmissionComment[]            @relation("SubmissionCommentProfile")
-  ownedAssignmentTypes              AssignmentType[]               @relation("AssignmentTypeOwner")
-  classesAsTeacher                  Class[]                        @relation("ClassTeachers")
-  classesAsStudent                  Class[]                        @relation("ClassStudents")
-  schools                           School[]                       @relation("SchoolTeachers")
-  teacherTrainingModuleSessions     TeacherTrainingModuleSession[]
-  assignedTeacherTrainings          TeacherTraining[]              @relation("TeacherTrainingAssignments")
-  assignmentTypesCustomized         Boolean                        @default(false)
-  assignmentTypeAssignments         TeacherAssignmentType[]
-  writingPracticeAssignmentsCreated WritingPracticeAssignment[]    @relation("WritingPracticeAssignmentCreator")
-  reporterConversations             ReporterConversation[]
-  reporterGrowthPlansOwned          ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
-  reporterGrowthPlansAsStudent      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
-  aiRequestReservations             AiRequestReservation[]
+  id                            String                         @id @default(cuid())
+  createdAt                     DateTime                       @default(now()) @db.Timestamptz(6)
+  userId                        String
+  user                          User                           @relation(fields: [userId], references: [id])
+  organizationId                String
+  organization                  Organization                   @relation(fields: [organizationId], references: [id])
+  role                          MembershipRole
+  isOrgOwner                    Boolean                        @default(false)
+  isActive                      Boolean                        @default(true)
+  school                        String?
+  schoolTeacher                 String?
+  grade                         String?
+  period                        String?
+  documents                     Document[]
+  documentComments              DocumentComment[]
+  documentCommentResponses      DocumentCommentResponse[]
+  pasteAlerts                   PasteAlert[]
+  submissionsGraded             Submission[]                   @relation("SubmissionGradedBy")
+  submissionsUnsubmitted        Submission[]                   @relation("SubmissionUnsubmittedBy")
+  submissionActivities          SubmissionActivity[]           @relation("SubmissionActivityActor")
+  submissionComments            SubmissionComment[]            @relation("SubmissionCommentProfile")
+  ownedAssignmentTypes          AssignmentType[]               @relation("AssignmentTypeOwner")
+  classesAsTeacher              Class[]                        @relation("ClassTeachers")
+  classesAsStudent              Class[]                        @relation("ClassStudents")
+  schools                       School[]                       @relation("SchoolTeachers")
+  teacherTrainingModuleSessions TeacherTrainingModuleSession[]
+  assignedTeacherTrainings      TeacherTraining[]              @relation("TeacherTrainingAssignments")
+  assignmentTypesCustomized     Boolean                        @default(false)
+  assignmentTypeAssignments     TeacherAssignmentType[]
+  reporterConversations         ReporterConversation[]
+  reporterGrowthPlansOwned      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
+  reporterGrowthPlansAsStudent  ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
+  aiRequestReservations         AiRequestReservation[]
 
   classAssignmentInsightsGenerated ClassAssignmentInsight[]
   savedThesisPrompts               SavedThesisPrompt[]
@@ -1133,6 +1132,10 @@ model OrgMembership {
   documentGroupMemberGrades        DocumentGroupMemberGrade[]
   assignmentModuleSessions         AssignmentModuleSession[]
   documentGroupMemberGradesGiven   DocumentGroupMemberGrade[] @relation("DocumentGroupMemberGradedBy")
+
+  writingPracticeAssignmentsCreated WritingPracticeAssignment[] @relation("WritingPracticeAssignmentCreator")
+  writingPracticeAttempts           WritingPracticeAttempt[]    @relation("WritingPracticeAttemptStudent")
+  writingPracticePromptSets         WritingPracticePromptSet[]  @relation("WritingPracticePromptSetStudent")
 
   @@unique([userId, organizationId])
   @@unique([id, organizationId])
@@ -1389,13 +1392,15 @@ model WritingPracticeAssignment {
 
 /// Per-class deployment of a writing-practice assignment.
 model WritingPracticeClassAssignment {
-  id           String                    @id @default(cuid())
-  createdAt    DateTime                  @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
+  id           String                     @id @default(cuid())
+  createdAt    DateTime                   @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime                   @default(now()) @updatedAt @db.Timestamptz(6)
   assignmentId String
-  assignment   WritingPracticeAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignment   WritingPracticeAssignment  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   classId      String
-  class        Class                     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  class        Class                      @relation(fields: [classId], references: [id], onDelete: Cascade)
+  attempts     WritingPracticeAttempt[]
+  promptSets   WritingPracticePromptSet[]
 
   @@unique([assignmentId, classId])
   @@index([classId, createdAt(sort: Desc)])
@@ -1662,6 +1667,48 @@ model LlmLog {
   @@index([createdAt(sort: Desc)])
   @@index([model])
   @@index([provider])
+}
+
+/// A single student's persisted response to one practice prompt, with the
+/// tutor feedback it produced. Snapshots the prompt text so history survives
+/// lesson-content changes.
+model WritingPracticeAttempt {
+  id                String                         @id @default(cuid())
+  createdAt         DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                       @default(now()) @updatedAt @db.Timestamptz(6)
+  classAssignmentId String
+  classAssignment   WritingPracticeClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  membershipId      String
+  membership        OrgMembership                  @relation("WritingPracticeAttemptStudent", fields: [membershipId], references: [id], onDelete: Cascade)
+  lessonSlug        String
+  promptId          String
+  exercise          String
+  instruction       String
+  response          String
+  /// Feedback status: 'strong' | 'developing' | 'needs_revision'.
+  status            String
+  feedbackJson      Json
+
+  @@index([classAssignmentId, membershipId, createdAt(sort: Desc)])
+  @@index([membershipId, createdAt(sort: Desc)])
+}
+
+/// A student's generated (or static-fallback) practice sequence for one
+/// assignment. Stored so their prompts stay stable across reloads and can be a
+/// much larger, non-repeating set than the archived prompt bank.
+model WritingPracticePromptSet {
+  id                String                         @id @default(cuid())
+  createdAt         DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                       @default(now()) @updatedAt @db.Timestamptz(6)
+  classAssignmentId String
+  classAssignment   WritingPracticeClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  membershipId      String
+  membership        OrgMembership                  @relation("WritingPracticePromptSetStudent", fields: [membershipId], references: [id], onDelete: Cascade)
+  /// 'ai' when generated by the model, 'static' when the archived bank was used.
+  source            String
+  promptsJson       Json
+
+  @@unique([classAssignmentId, membershipId])
 }
 
 /// Durable receipt and provenance for trusted nonproduction scenario generation.

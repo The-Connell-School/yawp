@@ -119,6 +119,9 @@ export async function createPreviewSeat(
       numOfStudentSeats: 200,
       numOfTeacherSeats: 40,
       reporterEnabled: true,
+      // Same reasoning as the local-dev seed: a preview seat is for looking at
+      // the build, so the dark-by-default flag is on here.
+      writingPracticeEnabled: true,
       classInsightsEnabled: false,
       previewSeatCode: seat.previewSeatCode,
     },
@@ -167,6 +170,22 @@ export async function createPreviewSeat(
       `Could not enable class insights for preview seat ${seat.organizationId}.`
     );
   }
+}
+
+export async function enableWritingPracticeForPreviewOrganizations(
+  prisma: PrismaClient,
+  organizationIds: string[]
+) {
+  const uniqueOrganizationIds = [...new Set(organizationIds)];
+  if (uniqueOrganizationIds.length === 0) return { count: 0 };
+
+  return prisma.organization.updateMany({
+    where: {
+      id: { in: uniqueOrganizationIds },
+      writingPracticeEnabled: false,
+    },
+    data: { writingPracticeEnabled: true },
+  });
 }
 
 /**
