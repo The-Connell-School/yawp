@@ -49,6 +49,11 @@ try {
       classInsightsEnabled: false,
     },
   });
+  // Ensure AP History features are visible in preview/dev seeds by default.
+  await prisma.organization.update({
+    where: { id: LOCAL_DEV_ORG_ID },
+    data: { apHistoryEnabled: true },
+  });
   await prisma.organization.create({
     data: {
       id: UA_PREVIEW_ORG_ID,
