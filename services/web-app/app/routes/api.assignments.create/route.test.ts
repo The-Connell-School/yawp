@@ -5,6 +5,9 @@ const prisma = {
     findMany: mock(),
     findFirst: mock(),
   },
+  organization: {
+    findMany: mock(),
+  },
   assignmentType: {
     findFirst: mock(),
   },
@@ -121,6 +124,10 @@ describe('api.assignments.create', () => {
   beforeEach(() => {
     prisma.class.findMany.mockReset();
     prisma.class.findFirst.mockReset().mockResolvedValue(null);
+    prisma.organization.findMany.mockReset();
+    prisma.organization.findMany.mockResolvedValue([
+      { id: 'org-1', apHistoryEnabled: true },
+    ]);
     prisma.assignmentType.findFirst.mockReset();
     prisma.organizationAssignmentType.findMany.mockReset();
     prisma.school.findMany.mockReset();
@@ -209,6 +216,36 @@ describe('api.assignments.create', () => {
       classIds: ['class-1', 'class-2'],
       deployment: { postAt: null, dueAt: null },
     });
+  });
+
+  test('rejects AP History assignment creation when org flag is disabled', async () => {
+    mockAssignmentTypeAvailable({ id: 'ap-type-1', systemKey: 'ap_history_essay' });
+    prisma.class.findMany.mockResolvedValueOnce([
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
+    ]);
+    prisma.organizationAssignmentType.findMany.mockResolvedValue([
+      { organizationId: 'org-1', assignmentTypeId: 'ap-type-1' },
+    ]);
+    prisma.organization.findMany.mockResolvedValue([
+      { id: 'org-1', apHistoryEnabled: false },
+    ]);
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'ap-type-1',
+        classIds: ['class-1'],
+        prompt: 'APUSH DBQ prompt.',
+        apHistoryLibraryEntryId: 'apush-dbq-new-deal-federal-power',
+      }),
+      params: {},
+    } as any);
+    const body = await readBody(response);
+    expect(responseStatus(response)).toBe(403);
+    expect(body).toMatchObject({
+      success: false,
+      message: expect.stringContaining('AP History is not enabled'),
+    });
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('stores a PDF attachment for assignments created across classes', async () => {
