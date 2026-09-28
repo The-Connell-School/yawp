@@ -46,6 +46,21 @@ describe('REPORTER_TOOLS', () => {
   });
 });
 
+describe('REPORTER_TOOLS write-mode contract', () => {
+  test('every report tool advertises the cold/warm split it returns', () => {
+    const advertised = REPORTER_TOOLS.filter((tool) =>
+      /cold write/i.test(tool.description)
+    ).map((tool) => tool.name);
+
+    expect(advertised).toEqual([
+      'get_class_grade_report',
+      'get_student_grade_report',
+      'get_student_growth',
+      'get_submission_detail',
+    ]);
+  });
+});
+
 describe('handleReporterToolCall dispatch', () => {
   test('unknown tool returns a structured error', async () => {
     const result = JSON.parse(await handleReporterToolCall('nope', {}, ctx));
@@ -816,6 +831,7 @@ function submissionRow({
   pct,
   submittedAt = new Date('2026-01-01T00:00:00.000Z'),
   rubricScores = null,
+  tutorEnabled = true,
 }: {
   id: string;
   membershipId?: string;
@@ -826,6 +842,7 @@ function submissionRow({
     string,
     number | { score?: number; comment?: string; isAi?: boolean }
   > | null;
+  tutorEnabled?: boolean;
 }) {
   return {
     id,
@@ -837,7 +854,240 @@ function submissionRow({
     document: {
       membershipId,
       membership: { user: { name } },
-      classAssignment: { assignment: { title: 'Essay' } },
+      classAssignment: { assignment: { title: 'Essay', tutorEnabled } },
     },
   };
 }
+
+describe('cold vs warm writes', () => {
+  function resolveAdaByName() {
+    prisma.orgMembership.findFirst.mockResolvedValue(null);
+    prisma.orgMembership.findMany.mockResolvedValue([
+      { id: 'stu-1', user: { name: 'Ada Lovelace' } },
+    ]);
+  }
+
+  test('the graded-row query asks for the assignment tutor setting', async () => {
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      title: 'Honors English',
+      grade: '10',
+      period: '2',
+    });
+    prisma.submission.findMany.mockResolvedValue([]);
+
+    await handleReporterToolCall(
+      'get_class_grade_report',
+      { classId: 'class-1' },
+      ctx
+    );
+
+    const select = prisma.submission.findMany.mock.calls[0][0].select;
+    expect(
+      select.document.select.classAssignment.select.assignment.select
+        .tutorEnabled
+    ).toBe(true);
+  });
+
+  test('a class report splits the class and each student by write mode', async () => {
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      title: 'Honors English',
+      grade: '10',
+      period: '2',
+    });
+    prisma.submission.findMany.mockResolvedValue([
+      submissionRow({
+        id: 'cold-1',
+        name: 'Ada',
+        pct: 70,
+        tutorEnabled: false,
+        submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
+      submissionRow({
+        id: 'warm-1',
+        name: 'Ada',
+        pct: 90,
+        tutorEnabled: true,
+        submittedAt: new Date('2026-02-01T00:00:00.000Z'),
+      }),
+      submissionRow({
+        id: 'cold-2',
+        membershipId: 'stu-2',
+        name: 'Grace',
+        pct: 80,
+        tutorEnabled: false,
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+      }),
+    ]);
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_class_grade_report',
+        { classId: 'class-1' },
+        ctx
+      )
+    );
+
+    expect(result.writeModes.cold.gradedCount).toBe(2);
+    expect(result.writeModes.cold.averagePercentage).toBe(75);
+    expect(result.writeModes.warm.gradedCount).toBe(1);
+    expect(result.writeModes.warm.averagePercentage).toBe(90);
+    expect(result.writeModes.supportGapPercentage).toBe(15);
+    expect(result.writeModes.comparable).toBe(true);
+
+    const ada = result.students.find((s: any) => s.studentName === 'Ada');
+    expect(ada.coldAveragePercentage).toBe(70);
+    expect(ada.warmAveragePercentage).toBe(90);
+    const grace = result.students.find((s: any) => s.studentName === 'Grace');
+    expect(grace.coldAveragePercentage).toBe(80);
+    expect(grace.warmGradedCount).toBe(0);
+  });
+
+  test('a student grade report labels every submission with its write mode', async () => {
+    resolveAdaByName();
+    prisma.submission.findMany.mockResolvedValue([
+      submissionRow({
+        id: 'cold-1',
+        name: 'Ada Lovelace',
+        pct: 62,
+        tutorEnabled: false,
+        submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
+      submissionRow({
+        id: 'warm-1',
+        name: 'Ada Lovelace',
+        pct: 88,
+        tutorEnabled: true,
+        submittedAt: new Date('2026-02-01T00:00:00.000Z'),
+      }),
+    ]);
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_student_grade_report',
+        { student: 'Ada Lovelace' },
+        ctx
+      )
+    );
+
+    const byId = Object.fromEntries(
+      result.submissions.map((submission: any) => [
+        submission.submissionId,
+        submission,
+      ])
+    );
+    expect(byId['cold-1'].writeMode).toBe('cold');
+    expect(byId['cold-1'].tutorEnabled).toBe(false);
+    expect(byId['warm-1'].writeMode).toBe('warm');
+    expect(byId['warm-1'].tutorEnabled).toBe(true);
+    expect(result.writeModes.supportGapPercentage).toBe(26);
+  });
+
+  test('a growth report tracks the cold-write arc separately', async () => {
+    resolveAdaByName();
+    prisma.submission.findMany.mockResolvedValue([
+      submissionRow({
+        id: 'cold-1',
+        name: 'Ada Lovelace',
+        pct: 60,
+        tutorEnabled: false,
+        submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
+      submissionRow({
+        id: 'warm-1',
+        name: 'Ada Lovelace',
+        pct: 85,
+        tutorEnabled: true,
+        submittedAt: new Date('2026-02-01T00:00:00.000Z'),
+      }),
+      submissionRow({
+        id: 'cold-2',
+        name: 'Ada Lovelace',
+        pct: 78,
+        tutorEnabled: false,
+        submittedAt: new Date('2026-06-01T00:00:00.000Z'),
+      }),
+    ]);
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_student_growth',
+        { student: 'Ada Lovelace' },
+        ctx
+      )
+    );
+
+    expect(result.points.map((point: any) => point.writeMode)).toEqual([
+      'cold',
+      'warm',
+      'cold',
+    ]);
+    expect(result.writeModes.cold.firstPercentage).toBe(60);
+    expect(result.writeModes.cold.latestPercentage).toBe(78);
+    expect(result.writeModes.cold.deltaPercentage).toBe(18);
+    expect(result.writeModes.cold.trend).toBe('improving');
+    expect(result.writeModes.caveat).toBeNull();
+  });
+
+  test('a growth report says when there is no cold-write baseline', async () => {
+    resolveAdaByName();
+    prisma.submission.findMany.mockResolvedValue([
+      submissionRow({
+        id: 'warm-1',
+        name: 'Ada Lovelace',
+        pct: 85,
+        tutorEnabled: true,
+      }),
+    ]);
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_student_growth',
+        { student: 'Ada Lovelace' },
+        ctx
+      )
+    );
+
+    expect(result.writeModes.comparable).toBe(false);
+    expect(result.writeModes.caveat).toContain('no graded cold writes');
+  });
+
+  test('submission detail reports the condition the paper was written under', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      text: 'An independent draft.',
+      submittedAt: new Date('2026-02-01T00:00:00.000Z'),
+      numericPercentage: 72,
+      letterGrade: 'C',
+      overallScore: 3,
+      rubricScores: null,
+      overallComment: null,
+      feedback: null,
+      grammarIssues: null,
+      document: {
+        membership: { user: { name: 'Amelia Brooks' } },
+        classAssignment: {
+          assignment: { title: 'Diagnostic Essay', tutorEnabled: false },
+        },
+      },
+      comments: [],
+    });
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_submission_detail',
+        { submissionId: 'sub-1' },
+        ctx
+      )
+    );
+
+    expect(result.tutorEnabled).toBe(false);
+    expect(result.writeMode).toBe('cold');
+    expect(result.writeModeLabel).toBe('Cold write (tutor off)');
+    expect(
+      prisma.submission.findFirst.mock.calls[0][0].select.document.select
+        .classAssignment.select.assignment.select.tutorEnabled
+    ).toBe(true);
+  });
+});

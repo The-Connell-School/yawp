@@ -386,6 +386,17 @@ describe('worktree local setup contract', () => {
     expect(seedIndex).toBeGreaterThan(backfillIndex);
   });
 
+  test('Cloud Agent setup refreshes preview-seat flags for retained databases', () => {
+    const installScript = readRepoFile('.cursor/install.sh');
+    const seedGuardIndex = installScript.indexOf('if ! database_seeded');
+    const previewSeatIndex = installScript.indexOf(
+      'bun run --cwd packages/prisma seed-preview-seats'
+    );
+
+    expect(seedGuardIndex).toBeGreaterThan(-1);
+    expect(previewSeatIndex).toBeGreaterThan(seedGuardIndex);
+  });
+
   test('production domain terminates at a CloudFront TLS 1.3 edge before App Runner', () => {
     const infra = readRepoFile('infra/main.tf');
     const variables = readRepoFile('infra/variables.tf');

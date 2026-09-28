@@ -1,122 +1,195 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+
+const ORIGINAL_COMPOSITION_FLAG = process.env.COMPOSITION_PRACTICE_ENABLED;
+
+afterEach(() => {
+  if (ORIGINAL_COMPOSITION_FLAG === undefined) {
+    delete process.env.COMPOSITION_PRACTICE_ENABLED;
+  } else {
+    process.env.COMPOSITION_PRACTICE_ENABLED = ORIGINAL_COMPOSITION_FLAG;
+  }
+});
 
 const requireUserId = mock();
 const requireMembership = mock();
-const classFindMany = mock();
 const createWritingPracticeAssignmentForClasses = mock();
+const classFindMany = mock();
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
 }));
-
 mock.module('~/utils/db.server', () => ({
   prisma: { class: { findMany: classFindMany } },
 }));
-
 mock.module('~/utils/writing-lessons/practice-assignments.server', () => ({
   createWritingPracticeAssignmentForClasses,
 }));
 
 const { action } = await import('./route');
 
-afterAll(() => {
-  mock.restore();
-});
-
-function requestWith(entries: Array<[string, string]>) {
-  return new Request('https://example.test/app/writing-lessons/assign', {
+function buildRequest(fields: Record<string, string | string[]>) {
+  const body = new URLSearchParams();
+  for (const [key, value] of Object.entries(fields)) {
+    if (Array.isArray(value)) value.forEach((v) => body.append(key, v));
+    else body.append(key, value);
+  }
+  return new Request('http://localhost/app/writing-lessons/assign', {
     method: 'POST',
-    body: new URLSearchParams(entries),
+    body,
   });
 }
 
-describe('writing lessons assignment action', () => {
-  beforeEach(() => {
-    requireUserId.mockReset();
-    requireMembership.mockReset();
-    classFindMany.mockReset();
-    createWritingPracticeAssignmentForClasses.mockReset();
+async function run(fields: Record<string, string | string[]>) {
+  const response = await action({
+    request: buildRequest(fields),
+    params: {},
+    context: {},
+  } as never);
+  return (response as unknown as { data?: unknown }).data ?? response;
+}
 
-    requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({
-      id: 'teacher-1',
-      role: 'TEACHER',
-      organization: { id: 'org-1', writingPracticeEnabled: true },
-    });
-    classFindMany.mockResolvedValue([{ id: 'class-1' }]);
+beforeEach(() => {
+  requireUserId.mockReset();
+  requireMembership.mockReset();
+  createWritingPracticeAssignmentForClasses.mockReset();
+  classFindMany.mockReset();
+
+  requireUserId.mockResolvedValue('user-1');
+  requireMembership.mockResolvedValue({
+    id: 'teacher-1',
+    role: 'TEACHER',
+    organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
+  });
+  classFindMany.mockResolvedValue([{ id: 'class-a' }]);
+  createWritingPracticeAssignmentForClasses.mockResolvedValue({ id: 'wpa-1' });
+});
+
+describe('writing-lessons assign action', () => {
+  test('creates the assignment for an owned class', async () => {
+    const result = (await run({
+      title: 'Comma week',
+      lessonSlugs: 'fixing-comma-splices',
+      classIds: 'class-a',
+      problemCount: '5',
+      dueAt: '2026-09-01',
+    })) as { success: boolean; classCount?: number };
+
+    expect(result.success).toBe(true);
+    expect(result.classCount).toBe(1);
+    expect(createWritingPracticeAssignmentForClasses).toHaveBeenCalledTimes(1);
+    const [input, classIds] =
+      createWritingPracticeAssignmentForClasses.mock.calls[0];
+    expect(input.createdByMembershipId).toBe('teacher-1');
+    expect(input.title).toBe('Comma week');
+    expect(input.lessonSlugs).toEqual(['fixing-comma-splices']);
+    expect(input.problemCount).toBe(5);
+    expect(input.dueAt).toEqual(new Date('2026-09-01'));
+    expect(classIds).toEqual(['class-a']);
   });
 
-  test('creates a lesson assignment for the teacher-owned classes', async () => {
-    const response = await action({
-      request: requestWith([
-        ['lessonSlugs', 'revising-for-wordiness'],
-        ['classIds', 'class-1'],
-        ['title', 'Wordiness warm-up'],
-        ['problemCount', '5'],
-        ['dueAt', '2026-09-01'],
-        ['instructions', 'Complete before class.'],
-      ]),
-      params: {},
-      context: {} as never,
-    } as any);
-
-    expect(response.init?.status ?? 200).toBe(200);
-    expect(response.data).toEqual({
-      success: true,
-      message: 'Practice assigned to 1 class.',
-      classCount: 1,
-    });
-    expect(createWritingPracticeAssignmentForClasses).toHaveBeenCalledWith(
-      {
-        createdByMembershipId: 'teacher-1',
-        title: 'Wordiness warm-up',
-        lessonSlugs: ['revising-for-wordiness'],
-        problemCount: 5,
-        dueAt: new Date('2026-09-01'),
-        instructions: 'Complete before class.',
-      },
-      ['class-1']
-    );
-  });
-
-  test('rejects assignment creation by a student', async () => {
+  test('rejects non-teachers', async () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
       role: 'STUDENT',
-      organization: { id: 'org-1', writingPracticeEnabled: true },
+      organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
     });
 
-    const response = await action({
-      request: requestWith([]),
-      params: {},
-      context: {} as never,
-    } as any);
+    const result = (await run({
+      title: 'Comma week',
+      lessonSlugs: 'fixing-comma-splices',
+      classIds: 'class-a',
+      problemCount: '5',
+      dueAt: '2026-09-01',
+    })) as { success: boolean };
 
-    expect(response.init?.status).toBe(403);
-    expect(response.data.message).toBe(
-      'Only teachers can assign writing practice.'
-    );
+    expect(result.success).toBe(false);
+    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
   });
 
-  test('rejects classes the teacher does not own', async () => {
-    classFindMany.mockResolvedValue([]);
+  test('rejects an unknown lesson slug', async () => {
+    const result = (await run({
+      title: 'Comma week',
+      lessonSlugs: 'not-a-real-lesson',
+      classIds: 'class-a',
+      problemCount: '5',
+      dueAt: '2026-09-01',
+    })) as { success: boolean; message: string };
 
-    const response = await action({
-      request: requestWith([
-        ['lessonSlugs', 'revising-for-wordiness'],
-        ['classIds', 'class-other'],
-        ['title', 'Wordiness warm-up'],
-        ['problemCount', '5'],
-        ['dueAt', '2026-09-01'],
-      ]),
-      params: {},
-      context: {} as never,
-    } as any);
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('Unknown lesson');
+    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+  });
 
-    expect(response.init?.status).toBe(403);
-    expect(response.data.message).toBe(
-      'You can only assign to your own classes.'
-    );
+  test('rejects composition lessons while their rollout flag is off', async () => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+
+    const result = (await run({
+      title: 'Topic sentence practice',
+      lessonSlugs: 'topic-sentences',
+      classIds: 'class-a',
+      problemCount: '5',
+      dueAt: '2026-09-01',
+    })) as { success: boolean; message: string };
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('Composition practice is not enabled');
+    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+  });
+
+  test('rejects a class the teacher does not own', async () => {
+    classFindMany.mockResolvedValue([]); // ownership query returns nothing
+
+    const result = (await run({
+      title: 'Comma week',
+      lessonSlugs: 'fixing-comma-splices',
+      classIds: 'class-x',
+      problemCount: '5',
+      dueAt: '2026-09-01',
+    })) as { success: boolean; message: string };
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('your own classes');
+    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+  });
+
+  test('rejects an out-of-range problem count', async () => {
+    const result = (await run({
+      title: 'Comma week',
+      lessonSlugs: 'fixing-comma-splices',
+      classIds: 'class-a',
+      problemCount: '99',
+      dueAt: '2026-09-01',
+    })) as { success: boolean; message: string };
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('Number of problems');
+    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+  });
+
+  test('requires an assignment title', async () => {
+    const result = (await run({
+      lessonSlugs: 'fixing-comma-splices',
+      classIds: 'class-a',
+      problemCount: '5',
+      dueAt: '2026-09-01',
+    })) as { success: boolean; message: string };
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('title');
+    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+  });
+
+  test('requires a due date', async () => {
+    const result = (await run({
+      title: 'Comma week',
+      lessonSlugs: 'fixing-comma-splices',
+      classIds: 'class-a',
+      problemCount: '5',
+    })) as { success: boolean; message: string };
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('due date');
+    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
   });
 });

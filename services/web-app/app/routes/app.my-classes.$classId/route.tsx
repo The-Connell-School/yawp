@@ -1118,6 +1118,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             promptAttachmentName: true,
             submitForGrade: true,
             pointValue: true,
+            // Marks cold writes in the assignments table.
+            tutorEnabled: true,
             assignmentTypeId: true,
             assignmentType: {
               select: {
@@ -1205,6 +1207,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     promptAttachmentName: classAssignment.assignment.promptAttachmentName,
     submitForGrade: classAssignment.assignment.submitForGrade,
     pointValue: classAssignment.assignment.pointValue,
+    tutorEnabled: classAssignment.assignment.tutorEnabled,
     assignmentTypeId: classAssignment.assignment.assignmentTypeId,
     assignmentType: classAssignment.assignment.assignmentType,
     otherClassCount: Math.max(
