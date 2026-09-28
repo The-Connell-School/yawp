@@ -2,10 +2,11 @@ import { scaleDailyPagesForAssignment } from '~/domain/assignment-types/daily-pa
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import {
   legacyRubricDisplayConfig,
+  parseRubricDisplaySource,
   type RubricDisplayCategory,
   type RubricDisplayConfig,
-  type RubricDisplaySource,
 } from '~/domain/grading/rubric-display';
+import { applyAssignmentGrammarGrading } from '~/domain/assignment-types/assignment-grammar-grading';
 import {
   parseOptionalBoolean,
   parseRubricScoreBands,
@@ -23,20 +24,6 @@ export type LatestGradingRunRubricSnapshot = {
   assignmentTypeRubricSnapshot: unknown;
   source?: string | null;
 };
-
-const rubricDisplaySources = new Set<string>([
-  'assignment-type',
-  'thesis-default',
-  'daily-pages-default',
-]);
-
-function parseRubricDisplaySource(
-  value: string | null | undefined
-): RubricDisplaySource | undefined {
-  return value && rubricDisplaySources.has(value)
-    ? (value as RubricDisplaySource)
-    : undefined;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -131,18 +118,23 @@ export function buildRubricConfigFromSnapshot(
 }
 
 /**
- * Whether the assignment type's rubric currently asks for grammar highlighting.
+ * Whether this submission's writing should currently be shown marked up.
  *
  * Read separately from the graded snapshot on purpose: the snapshot records
  * what the rubric said at grading time, and a teacher who switches
  * highlighting off afterwards expects the marks to disappear, not to persist
- * because an older run had it on.
+ * because an older run had it on. The assignment's own toggle is read the same
+ * way and for the same reason — turning grammar grading off should take the
+ * marks off work that was already graded with it on.
  */
 export async function resolveGrammarHighlightingForAssignmentType(
-  assignmentTypeId: string
+  assignmentTypeId: string,
+  grammarGradingEnabled?: boolean | null
 ): Promise<boolean> {
   const config = await resolveAssignmentTypeGradingConfig({ assignmentTypeId });
-  return resolveGrammarHighlightingEnabled(config.rubricCategories);
+  return resolveGrammarHighlightingEnabled(
+    applyAssignmentGrammarGrading(config.rubricCategories, grammarGradingEnabled)
+  );
 }
 
 export async function resolveRubricConfigForSubmission({

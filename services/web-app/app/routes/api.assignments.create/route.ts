@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { z } from 'zod';
+import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/daily-pages-rubric';
+import { parseParagraphMode } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import {
   buildAssignmentCreateInputFromApHistoryEntry,
   buildAssignmentCreateInputFromCustomApHistory,
@@ -34,6 +36,8 @@ import {
 } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentCollaboration } from '~/utils/assignment-collaboration.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
+import { parseAssignmentGrammarGrading } from '~/utils/assignment-grammar-grading.server';
+import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -110,6 +114,32 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
   const tutorEnabled = tutorEnabledResult.value;
+
+  const grammarGradingResult = parseAssignmentGrammarGrading(formData);
+  if (!grammarGradingResult.success) {
+    return dataResponse(
+      { success: false, message: grammarGradingResult.message },
+      { status: 400 }
+    );
+  }
+  const grammarGradingEnabled = grammarGradingResult.value;
+
+  const writingTimeResult = parseWritingTimeMinutes(formData);
+  if (!writingTimeResult.success) {
+    return dataResponse(
+      { success: false, message: writingTimeResult.message },
+      { status: 400 }
+    );
+  }
+  const writingTimeMinutes = writingTimeResult.value;
+
+  const paragraphModeResult = parseParagraphMode(formData);
+  if (!paragraphModeResult.success) {
+    return dataResponse(
+      { success: false, message: paragraphModeResult.message },
+      { status: 400 }
+    );
+  }
 
   const collaborationResult = parseAssignmentCollaboration(formData);
   if (!collaborationResult.success) {
@@ -206,7 +236,7 @@ export async function action({ request }: ActionFunctionArgs) {
       id: assignmentTypeId,
       archivedAt: null,
     },
-    select: { id: true, systemKey: true },
+    select: { id: true, systemKey: true, kind: true },
   });
 
   if (!assignmentTypeAvailable || !assignmentType) {
@@ -218,6 +248,13 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 400 }
     );
   }
+
+  // A paragraph type only means something on Daily Pages; anything sent for
+  // another type is dropped rather than stored where nothing reads it.
+  const paragraphMode =
+    assignmentType.kind === DAILY_PAGES_ASSIGNMENT_TYPE_KIND
+      ? paragraphModeResult.value
+      : null;
 
   const collaboration = collaborationResult.value;
 
@@ -241,6 +278,27 @@ export async function action({ request }: ActionFunctionArgs) {
   const deployClassIds = classes.map((klass) => klass.id);
 
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
+    // Server-side per-school AP History feature flag: all target classes must
+    // belong to organizations where the feature is enabled.
+    const organizationIds = [
+      ...new Set(classes.map((klass) => klass.school.organizationId)),
+    ];
+    const organizations = await prisma.organization.findMany({
+      where: { id: { in: organizationIds } },
+      select: { id: true, apHistoryEnabled: true },
+    });
+    const disabledOrg = organizations.find((org) => !org.apHistoryEnabled);
+    if (disabledOrg) {
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'AP History is not enabled for one or more selected schools.',
+        },
+        { status: 403 }
+      );
+    }
+
     if (formData.get('apHistoryMode')?.toString() === 'custom') {
       const parsed = parseCustomApHistoryPayload(formData);
       if (!parsed.success) {
@@ -293,6 +351,9 @@ export async function action({ request }: ActionFunctionArgs) {
           gradingAssistantStrictnessLevel,
         }),
         tutorEnabled,
+        grammarGradingEnabled,
+        writingTimeMinutes,
+        paragraphMode,
         ...rubricOverrideData,
         ...collaboration,
       },
@@ -366,6 +427,9 @@ export async function action({ request }: ActionFunctionArgs) {
         gradingAssistantStrictnessLevel,
         ...rubricOverrideData,
         tutorEnabled,
+        grammarGradingEnabled,
+        writingTimeMinutes,
+        paragraphMode,
         ...collaboration,
         ...promptAttachmentData,
         ...(gradingIntent?.success

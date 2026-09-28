@@ -59,7 +59,7 @@ async function openMyPrompts(page: import('@playwright/test').Page) {
   if (!(await myPrompts.isChecked())) await myPrompts.check();
 }
 
-test.describe.serial('Daily Pages — My prompts', () => {
+test.describe.serial('Class Starter — My prompts', () => {
   test('saving a generated prompt puts it in the My prompts filter', async ({
     page,
     e2eContext,
@@ -68,10 +68,10 @@ test.describe.serial('Daily Pages — My prompts', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await stubGenerator(page);
     await page.goto(
-      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+      `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`
     );
     await expect(
-      page.getByRole('heading', { name: 'Daily Pages', level: 1 })
+      page.getByRole('heading', { name: 'Class Starter', level: 1 })
     ).toBeVisible();
 
     await openGenerator(page);
@@ -116,7 +116,7 @@ test.describe.serial('Daily Pages — My prompts', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await stubGenerator(page);
     await page.goto(
-      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+      `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`
     );
 
     await openGenerator(page);
@@ -138,14 +138,14 @@ test.describe.serial('Daily Pages — My prompts', () => {
     await expect(page.getByText(SAVED_OPTION.prompt)).toBeVisible();
   });
 
-  test('saved prompts keep their tags and are scoped to Daily Pages', async ({
+  test('saved prompts keep their tags and are scoped to Class Starter', async ({
     page,
     e2eContext,
     signIn,
   }) => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(
-      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+      `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`
     );
     await openMyPrompts(page);
 
@@ -173,10 +173,10 @@ test.describe.serial('Daily Pages — My prompts', () => {
   }) => {
     await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto(
-      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+      `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`
     );
     await expect(
-      page.getByRole('heading', { name: 'Daily Pages', level: 1 })
+      page.getByRole('heading', { name: 'Class Starter', level: 1 })
     ).toBeVisible();
     await expect(
       page.getByRole('button', { name: /Prompt Library/i })

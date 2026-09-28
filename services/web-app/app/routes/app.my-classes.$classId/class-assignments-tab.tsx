@@ -40,6 +40,7 @@ type ClassAssignmentsTabProps = {
     id: string;
     title: string;
     collaborationSupported: boolean;
+    gradesGrammar: boolean;
   }[];
   apHistoryAssignmentTypeId?: string | null;
   /** Gated on the organization's classInsightsEnabled flag. */

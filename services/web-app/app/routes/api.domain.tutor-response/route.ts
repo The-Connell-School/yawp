@@ -1,6 +1,7 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
+import { buildParagraphModeTutorInstructions } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
@@ -146,7 +147,6 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             text: true,
-            apHistorySnapshot: true,
             assignment: {
               select: {
                 id: true,
@@ -154,6 +154,7 @@ export async function action({ request }: ActionFunctionArgs) {
                 prompt: true,
                 tutorEnabled: true,
                 apHistorySnapshot: true,
+                paragraphMode: true,
               },
             },
           },
@@ -195,9 +196,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // AP History assignments carry an immutable snapshot; when present, the
     // tutor coaches against the AP rubric/sources instead of the generic
     // assignment-type tutor instructions.
-    const apHistorySnapshot =
-      cms.document.apHistorySnapshot ??
-      cms.document.assignment?.apHistorySnapshot;
+    const apHistorySnapshot = cms.document.assignment?.apHistorySnapshot;
     // DBQ and LEQ get separately authored coaching. The shared DB module stores
     // one representative variant; select the variant matching this document's
     // essay type, falling back to the stored value for legacy/uncanonical
@@ -247,6 +246,9 @@ export async function action({ request }: ActionFunctionArgs) {
             cms.assignmentModule.assignmentType?.tutorInstructions,
           tutorInstructions: cms.assignmentModule.tutorInstructions,
           instructionTutorInstructions: instruction.tutorInstructions,
+          paragraphModeInstructions: buildParagraphModeTutorInstructions(
+            cms.document?.assignment?.paragraphMode ?? null
+          ),
           moduleRubricGuidance,
         });
 

@@ -86,8 +86,18 @@ function idleFetcher(data: Record<string, unknown> | null = null) {
 
 const assignmentTypes = [
   // type-1 is in the collaborative-drafts pilot; type-2 is not.
-  { id: 'type-1', title: 'Literary Analysis', collaborationSupported: true },
-  { id: 'type-2', title: 'Daily Pages', collaborationSupported: false },
+  {
+    id: 'type-1',
+    title: 'Literary Analysis',
+    collaborationSupported: true,
+    gradesGrammar: true,
+  },
+  {
+    id: 'type-2',
+    title: 'Class Starter',
+    collaborationSupported: false,
+    gradesGrammar: false,
+  },
 ];
 
 const teacherClasses = [
@@ -245,7 +255,7 @@ describe('AssignmentCreationSheetContent', () => {
       );
       expectText('Tutor enabled');
       expectText(
-        "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."
+        "Turning the tutor off makes this a cold write: the tutor is removed from students' documents, so you see what they can write without its guidance."
       );
       expectNoText('Customize Grading');
       expectNoText('Tutor Context');
@@ -286,6 +296,17 @@ describe('AssignmentCreationSheetContent', () => {
       false
     );
     expect(inputByName('tutorEnabled').value).toBe('false');
+  });
+
+  it('names a tutor-off assignment a cold write', () => {
+    root = renderSheet().root;
+    expectNoText('Cold write');
+
+    act(() => {
+      controlById('assignment-create-tutor-enabled').click();
+    });
+
+    expectText('Cold write');
   });
 
   it('shows the grading assistant strictness picker to teachers', () => {
@@ -810,5 +831,164 @@ describe('AssignmentCreationSheetContent', () => {
         isChecked(controlById('assignment-create-collaboration-enabled'))
       ).toBe(false);
     });
+  });
+});
+
+describe('AssignmentCreationSheetContent writing time', () => {
+  let root: Root | null = null;
+
+  afterEach(() => {
+    cleanup(root);
+    root = null;
+  });
+
+  const timedTypes = [
+    {
+      id: 'daily-pages',
+      title: 'Daily Pages',
+      collaborationSupported: true,
+      gradesGrammar: true,
+      defaultWritingTimeMinutes: 15,
+    },
+    {
+      id: 'essay',
+      title: 'Thesis Essay',
+      collaborationSupported: true,
+      gradesGrammar: true,
+      defaultWritingTimeMinutes: null,
+    },
+  ];
+
+  it("prefills the assignment type's suggested writing time", () => {
+    ({ root } = renderSheet({
+      assignmentTypes: timedTypes,
+      fixedAssignmentTypeId: 'daily-pages',
+    }));
+
+    expect(inputByName('writingTimeMinutes').value).toBe('15');
+    expectText('Time students have to write');
+  });
+
+  it('is blank for a type with no suggested time', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: timedTypes,
+      fixedAssignmentTypeId: 'essay',
+    }));
+
+    expect(inputByName('writingTimeMinutes').value).toBe('');
+  });
+
+  it('shows the saved time when editing, and stays editable', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: timedTypes,
+      fixedAssignmentTypeId: 'daily-pages',
+      editingAssignment: { id: 'assignment-1' },
+      initialWritingTimeMinutes: 20,
+    }));
+
+    const input = inputByName('writingTimeMinutes');
+    expect(input.value).toBe('20');
+    expect(input.disabled).toBe(false);
+  });
+
+  it('never invents a time for an existing assignment that had none', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: timedTypes,
+      fixedAssignmentTypeId: 'daily-pages',
+      editingAssignment: { id: 'assignment-1' },
+      initialWritingTimeMinutes: null,
+    }));
+
+    expect(inputByName('writingTimeMinutes').value).toBe('');
+  });
+});
+
+/**
+ * The kind of paragraph a Daily Pages entry practices. Offered only for types
+ * that take one, and only the types switched on (Analyze first). No choice is
+ * the default, which grades and tutors exactly as before.
+ */
+describe('AssignmentCreationSheetContent paragraph type', () => {
+  let root: Root | null = null;
+
+  afterEach(() => {
+    cleanup(root);
+    root = null;
+  });
+
+  const types = [
+    {
+      id: 'daily-pages',
+      title: 'Daily Pages',
+      collaborationSupported: true,
+      gradesGrammar: true,
+      offersParagraphModes: true,
+    },
+    {
+      id: 'essay',
+      title: 'Thesis Essay',
+      collaborationSupported: true,
+      gradesGrammar: true,
+    },
+  ];
+
+  function paragraphSelect() {
+    return document.querySelector<HTMLSelectElement>(
+      'select[name="paragraphMode"]'
+    );
+  }
+
+  it('offers the switched-on types for Daily Pages, defaulting to none', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'daily-pages',
+    }));
+
+    expectText('Paragraph type');
+    const select = paragraphSelect();
+    expect(select).not.toBeNull();
+    expect(select!.value).toBe('');
+    const options = Array.from(select!.options).map((option) => option.value);
+    expect(options).toEqual(['', 'analyze']);
+  });
+
+  it('describes the chosen type', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'daily-pages',
+    }));
+
+    act(() => {
+      const select = paragraphSelect()!;
+      select.value = 'analyze';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(paragraphSelect()!.value).toBe('analyze');
+    expectText('Claim-Evidence-Analysis');
+  });
+
+  it('is absent for a type that takes no paragraph type', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'essay',
+    }));
+
+    expect(paragraphSelect()).toBeNull();
+    expectNoText('Paragraph type');
+  });
+
+  it('is shown read-only when editing, and not submitted', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'daily-pages',
+      editingAssignment: { id: 'assignment-1' },
+      initialParagraphMode: 'analyze',
+    }));
+
+    expect(paragraphSelect()).toBeNull();
+    const shown = controlById('assignment-create-paragraph-mode') as HTMLSelectElement;
+    expect(shown.value).toBe('analyze');
+    expect(shown.disabled).toBe(true);
   });
 });

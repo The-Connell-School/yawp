@@ -15,6 +15,10 @@ import {
   type CollaborationGroupMode,
 } from '~/domain/assignments/collaboration';
 import {
+  enabledParagraphModes,
+  getParagraphMode,
+} from '~/domain/assignment-types/daily-pages-paragraph-modes';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -46,6 +50,14 @@ import {
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import { toDateInputValue } from '~/utils/date-only';
+import {
+  MAX_WRITING_TIME_MINUTES,
+  MIN_WRITING_TIME_MINUTES,
+} from '~/domain/grading/writing-time';
+
+function writingTimeFieldValue(minutes: number | null | undefined): string {
+  return typeof minutes === 'number' && minutes > 0 ? String(minutes) : '';
+}
 
 /**
  * A segmented control in the shape of the app's pill buttons: a recessed track
@@ -118,6 +130,25 @@ export type AssignmentCreationAssignmentType = {
    * absent flag would look exactly like an unsupported type.
    */
   collaborationSupported: boolean;
+  /**
+   * Whether this kind of writing is graded for grammar and syntax at all.
+   * Required for the same reason `collaborationSupported` is: an absent flag
+   * would look exactly like a type that does not grade grammar, and the
+   * teacher would silently lose the toggle.
+   */
+  gradesGrammar: boolean;
+  /**
+   * The writing time the form suggests for a new assignment of this type, in
+   * minutes. Only a starting value for the field: absent or null leaves it
+   * blank, which is what every type without a suggestion should do.
+   */
+  defaultWritingTimeMinutes?: number | null;
+  /**
+   * Whether a new assignment of this type can name the kind of paragraph it
+   * practices (Daily Pages). Optional because absent is the safe answer: no
+   * selector, no paragraph type, grading and tutoring as before.
+   */
+  offersParagraphModes?: boolean;
 };
 
 export type AssignmentCreationEditingAssignment = {
@@ -196,6 +227,14 @@ export type AssignmentCreationSheetProps = {
   initialGradingAssistantStrictnessLevel?: GradingAssistantStrictnessLevel;
   initialRubricTotalPoints?: number | null;
   initialGradingMode?: AssignmentGradingMode;
+  /**
+   * The assignment's saved writing time. Undefined means the caller has none
+   * to give — a new assignment — and the type's suggestion is used; null means
+   * the assignment has no writing time, and the field stays blank.
+   */
+  initialWritingTimeMinutes?: number | null;
+  /** The assignment's saved paragraph type, shown read-only when editing. */
+  initialParagraphMode?: string | null;
   /** The rubric's authored total, shown before an assignment override is used. */
 };
 
@@ -286,6 +325,8 @@ export function AssignmentCreationSheetContent({
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   initialRubricTotalPoints = null,
   initialGradingMode = DEFAULT_ASSIGNMENT_GRADING_MODE,
+  initialWritingTimeMinutes,
+  initialParagraphMode = null,
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -315,6 +356,25 @@ export function AssignmentCreationSheetContent({
   const [postAt, setPostAt] = useState<string>('');
   const [dueAt, setDueAt] = useState<string>('');
   const [tutorEnabled, setTutorEnabled] = useState(initialTutorEnabled);
+  const [grammarGradingEnabled, setGrammarGradingEnabled] = useState(true);
+  const [paragraphMode, setParagraphMode] = useState(initialParagraphMode ?? '');
+  const initialWritingTimeValue = () =>
+    writingTimeFieldValue(
+      editingAssignment || initialWritingTimeMinutes !== undefined
+        ? initialWritingTimeMinutes
+        : assignmentTypes.find(
+            (type) =>
+              type.id ===
+              initialAssignmentTypeSelection(
+                assignmentTypes,
+                fixedAssignmentTypeId,
+                initialAssignmentTypeId
+              )
+          )?.defaultWritingTimeMinutes
+    );
+  const [writingTime, setWritingTime] = useState(initialWritingTimeValue);
+  // Once the teacher types a time, switching assignment type stops replacing it.
+  const writingTimeTouchedRef = useRef(false);
   const [collaborationEnabled, setCollaborationEnabled] = useState(
     initialCollaborationEnabled
   );
@@ -347,6 +407,17 @@ export function AssignmentCreationSheetContent({
   const assignmentTypeId =
     fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
   const selectedTypeSupportsCollaboration = Boolean(assignmentTypeId);
+  // Offered only where there is something to turn off. Switching it on cannot
+  // invent a grammar category for a rubric that has none.
+  const selectedTypeGradesGrammar = Boolean(
+    assignmentTypes.find((type) => type.id === assignmentTypeId)?.gradesGrammar
+  );
+  const selectedTypeOffersParagraphModes = Boolean(
+    assignmentTypes.find((type) => type.id === assignmentTypeId)
+      ?.offersParagraphModes
+  );
+  const paragraphModeOptions = enabledParagraphModes();
+  const selectedParagraphMode = getParagraphMode(paragraphMode);
   const hasFixedClass = Boolean(fixedClassId);
   // Every creation entry point uses the same server workflow. In particular,
   // the class page must not silently drop collaboration fields by posting to
@@ -416,6 +487,9 @@ export function AssignmentCreationSheetContent({
     setPostAt(toDateInputValue(initialPostAt));
     setDueAt(toDateInputValue(initialDueAt));
     setTutorEnabled(initialTutorEnabled);
+    setParagraphMode(initialParagraphMode ?? '');
+    setWritingTime(initialWritingTimeValue());
+    writingTimeTouchedRef.current = false;
     setCollaborationEnabled(initialCollaborationEnabled);
     setCollaborationGroupMode(initialCollaborationGroupMode);
     setCollaborationGroupSize(
@@ -445,11 +519,23 @@ export function AssignmentCreationSheetContent({
     initialCollaborationGroupSize,
     initialGradingAssistantStrictnessLevel,
     initialGradingMode,
+    initialWritingTimeMinutes,
+    initialParagraphMode,
     initialPostAt,
     initialDueAt,
     open,
     teacherClasses,
   ]);
+
+  // A new assignment follows its type's suggestion until the teacher types one.
+  // An edit never does: its saved time, or its lack of one, is the teacher's.
+  const selectedTypeDefaultWritingTime = assignmentTypes.find(
+    (type) => type.id === assignmentTypeId
+  )?.defaultWritingTimeMinutes;
+  useEffect(() => {
+    if (isEditing || writingTimeTouchedRef.current) return;
+    setWritingTime(writingTimeFieldValue(selectedTypeDefaultWritingTime));
+  }, [isEditing, selectedTypeDefaultWritingTime]);
 
   useEffect(() => {
     if (createFetcher.state !== 'idle' || !createFetcher.data?.success) return;
@@ -979,11 +1065,135 @@ export function AssignmentCreationSheetContent({
             >
               Tutor enabled
             </Label>
+            {tutorEnabled ? null : (
+              <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                Cold write
+              </span>
+            )}
           </div>
           <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
             {isEditing
               ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
-              : "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."}
+              : "Turning the tutor off makes this a cold write: the tutor is removed from students' documents, so you see what they can write without its guidance."}
+          </p>
+        </div>
+
+        {/* Graded for grammar and syntax. Shown only for assignment types whose
+            rubric grades grammar, because the toggle only ever turns it off.
+            Frozen after creation like the two toggles around it: work already
+            graded was scored against a rubric that included the category, and
+            flipping it afterwards would silently restate those grades. */}
+        {selectedTypeGradesGrammar ? (
+          <div className="pt-6">
+            {isEditing ? null : (
+              <input
+                type="hidden"
+                name="grammarGradingEnabled"
+                value="false"
+              />
+            )}
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                id="assignment-create-grammar-grading-enabled"
+                name={isEditing ? undefined : 'grammarGradingEnabled'}
+                value="true"
+                checked={grammarGradingEnabled}
+                onCheckedChange={(checked) =>
+                  setGrammarGradingEnabled(checked === true)
+                }
+                disabled={isSaving || isEditing}
+                className="size-4 shrink-0"
+              />
+              <Label
+                htmlFor="assignment-create-grammar-grading-enabled"
+                className={
+                  isEditing
+                    ? 'font-normal leading-none text-muted-foreground'
+                    : 'cursor-pointer font-normal leading-none'
+                }
+              >
+                Grade this for grammar and syntax
+              </Label>
+            </div>
+            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+              {isEditing
+                ? 'Grammar grading cannot be switched on or off after an assignment is created — work may already be graded against it.'
+                : 'On by default for this assignment type. Turn it off for a quick write you want graded on the thinking alone: the grammar category is dropped, the writing is not marked up, and the remaining categories carry the whole grade.'}
+            </p>
+          </div>
+        ) : null}
+
+        {/* The kind of paragraph a Daily Pages entry practices. Only the types
+            switched on are offered, so teachers see Analyze first and the rest
+            as they are ready. Frozen after creation like the grammar toggle:
+            work may already be graded and tutored against it. */}
+        {selectedTypeOffersParagraphModes && paragraphModeOptions.length > 0 ? (
+          <div className="pt-6">
+            <Label
+              htmlFor="assignment-create-paragraph-mode"
+              className="font-normal"
+            >
+              Paragraph type
+            </Label>
+            <select
+              id="assignment-create-paragraph-mode"
+              name={isEditing ? undefined : 'paragraphMode'}
+              value={paragraphMode}
+              onChange={(event) => setParagraphMode(event.target.value)}
+              disabled={isSaving || isEditing}
+              className="mt-2 block rounded border px-2 py-1 text-sm"
+            >
+              <option value="">Any kind of paragraph</option>
+              {paragraphModeOptions.map((mode) => (
+                <option key={mode.key} value={mode.key}>
+                  {mode.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {isEditing
+                ? 'The paragraph type cannot be changed after an assignment is created — work may already be graded against it.'
+                : selectedParagraphMode
+                  ? `${selectedParagraphMode.description} The tutor coaches toward it and the grading assistant reads for it.`
+                  : 'Choose the move students are practicing, and the tutor and grading assistant will focus on it. Leave it on any kind to grade the paragraph on its own terms.'}
+            </p>
+          </div>
+        ) : null}
+
+        {/* How long students have to write. Read by the grading assistant and
+            the grammar checker, so a ten-minute paragraph is not graded as a
+            revised essay. Unlike the toggles around it this stays editable:
+            it changes how future grading reads the work, not a grade given. */}
+        <div className="pt-6">
+          <Label htmlFor="assignment-create-writing-time" className="font-normal">
+            Time students have to write
+          </Label>
+          <div className="mt-2 flex items-center gap-2">
+            {/* Input fills its container, so the container sets the width. */}
+            <div className="w-24 shrink-0">
+              <Input
+                id="assignment-create-writing-time"
+                name="writingTimeMinutes"
+                type="number"
+                inputMode="numeric"
+                min={MIN_WRITING_TIME_MINUTES}
+                max={MAX_WRITING_TIME_MINUTES}
+                step={1}
+                value={writingTime}
+                onChange={(event) => {
+                  writingTimeTouchedRef.current = true;
+                  setWritingTime(event.target.value);
+                }}
+                disabled={isSaving}
+              />
+            </div>
+            <span className="text-sm text-muted-foreground">minutes</span>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Optional. The grading assistant and grammar checker judge the writing
+            as work done in this time, so a ten-minute paragraph is not held to
+            the polish of a revised essay. Leave it blank for work students take
+            home or revise.
           </p>
         </div>
 

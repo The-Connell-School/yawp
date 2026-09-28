@@ -282,6 +282,25 @@ model Assignment {
   gradingMode                     String            @default("step")
   gradingAssistantStrictnessLevel String            @default("intermediate")
   tutorEnabled                    Boolean           @default(true)
+  /// The teacher's per-assignment toggle: is this one graded for grammar and
+  /// syntax. Null means the rubric decides, which is every assignment that
+  /// predates the toggle. False drops the rubric's grammar category for this
+  /// assignment, so it is neither scored nor marked up and the weighted
+  /// composite renormalizes over what is left. Offered only for assignment
+  /// types whose rubric grades grammar at all.
+  grammarGradingEnabled           Boolean?
+  /// How long students have to write this, in minutes. The grading assistant
+  /// and grammar checker calibrate to it, so a ten-minute paragraph is not read
+  /// as a revised essay. Null means no time was given and both read the work
+  /// as they did before this existed. Editable after creation: it changes how
+  /// future grading reads the work, not a grade already given.
+  writingTimeMinutes              Int?
+  /// The kind of paragraph a Daily Pages entry practices (analyze, argue, …),
+  /// chosen at creation. Layers the type's guidance onto the grading assistant
+  /// and the tutor. Null means no type was chosen, which is every assignment
+  /// that predates this column, and then nothing changes. A string rather than
+  /// an enum so a type can be switched on without a migration.
+  paragraphMode                   String?
   /// The teacher's per-assignment toggle: are students writing one shared
   /// draft per group. Gated at runtime by Organization.collaborativeDraftsEnabled.
   collaborationEnabled            Boolean           @default(false)

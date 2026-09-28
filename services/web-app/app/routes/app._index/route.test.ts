@@ -513,8 +513,17 @@ describe('app index loader assignments', () => {
       },
     ]);
     expect(getAvailableAssignmentTypesForScopes).toHaveBeenCalledTimes(1);
-    expect(prisma.assignmentType.findMany).not.toHaveBeenCalled();
     expect(prisma.classAssignment.findMany).not.toHaveBeenCalled();
+
+    // Which types a teacher can see still comes only from the scoped helper.
+    // Reading grading config for them is allowed, but every such read has to be
+    // confined to ids that helper already returned — an unconstrained findMany
+    // here is how types from outside the teacher's scope would leak in.
+    for (const call of prisma.assignmentType.findMany.mock.calls) {
+      const ids = call[0]?.where?.id?.in;
+      expect(Array.isArray(ids)).toBe(true);
+      expect(ids.every((id: string) => id === 'type-1')).toBe(true);
+    }
   });
 
   test('loads assignment creation sheet data for teachers when assignments are enabled', async () => {
@@ -582,7 +591,18 @@ describe('app index loader assignments', () => {
       // Defaulted rather than omitted: the sheet reads this to decide whether to
       // offer collaborative drafts, and an absent flag would read as supported
       // nowhere but be indistinguishable from a select that forgot to ask.
-      { id: 'type-1', title: 'Daily Pages', collaborationSupported: false },
+      {
+        id: 'type-1',
+        title: 'Daily Pages',
+        collaborationSupported: false,
+        // Same reasoning: the sheet reads this to decide whether to offer the
+        // grammar-grading toggle, and the mocked type has no rubric to grade
+        // grammar with.
+        gradesGrammar: false,
+        // The mocked type has no kind, so no writing time is suggested.
+        defaultWritingTimeMinutes: null,
+        offersParagraphModes: false,
+      },
     ]);
   });
 });

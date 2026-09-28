@@ -195,6 +195,44 @@ describe('app.assignments.$assignmentId loader', () => {
     });
   });
 
+  test('edits how long students have to write', async () => {
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      school: { id: 'school-1', organizationId: 'org-1' },
+    });
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', systemKey: null },
+    ]);
+    prisma.assignment.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+      assignmentTypeId: 'at-1',
+      collaborationEnabled: false,
+      promptAttachmentKey: null,
+      assignmentType: { systemKey: null },
+    });
+    const form = new FormData();
+    form.set('intent', 'update-assignment');
+    form.set('assignmentId', 'assignment-1');
+    form.set('assignmentTypeId', 'at-1');
+    form.set('prompt', 'Write it.');
+    form.set('submitForGrade', 'true');
+    form.set('pointValue', '100');
+    form.set('writingTimeMinutes', '12');
+
+    await action({
+      request: new Request(
+        'https://example.com/app/assignments/assignment-1?classId=class-1',
+        { method: 'POST', body: form }
+      ),
+      params: { assignmentId: 'assignment-1' },
+    } as any);
+
+    expect(prisma.assignment.update).toHaveBeenCalledWith({
+      where: { id: 'assignment-1' },
+      data: expect.objectContaining({ writingTimeMinutes: 12 }),
+    });
+  });
+
   test('refuses to change assignment type after a shared artifact exists', async () => {
     prisma.class.findFirst.mockResolvedValue({
       id: 'class-1',

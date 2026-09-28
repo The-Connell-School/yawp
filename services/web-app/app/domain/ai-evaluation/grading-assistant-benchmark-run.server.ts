@@ -35,6 +35,34 @@ export type BenchmarkRunExecution = {
   criterionId?: string;
 };
 
+export const STATIC_DAILY_PAGES_GRADING_ASSISTANT_ID = 'static-daily-pages-default';
+
+/**
+ * The built-in Daily Pages grading assistant: the `daily_pages` kind with no
+ * saved rubric, so it resolves to the short-form rubric that ships in code.
+ */
+export function buildStaticDailyPagesGradingConfig(): ResolvedAssignmentTypeGradingConfig {
+  return buildResolvedAssignmentTypeGradingConfig({
+    assignmentTypeId: STATIC_DAILY_PAGES_GRADING_ASSISTANT_ID,
+    assignmentTypeKind: 'daily_pages',
+    assignmentTypeTitle: 'Daily Pages',
+    row: {
+      id: STATIC_DAILY_PAGES_GRADING_ASSISTANT_ID,
+      title: 'Daily Pages (static)',
+      kind: 'daily_pages',
+      scoringScaleJson: null,
+      rubricJson: null,
+      gradingPromptConfigJson: null,
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes:
+        'The built-in short-form rubric for Daily Pages paragraph practice.',
+      gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+    },
+  });
+}
+
 export function buildStaticThesisGradingConfig(): ResolvedAssignmentTypeGradingConfig {
   return buildResolvedAssignmentTypeGradingConfig({
     assignmentTypeId: STATIC_THESIS_GRADING_ASSISTANT_ID,
@@ -143,6 +171,8 @@ export async function runLiveGradingAssistantBenchmarkCase({
     studentFirstName: benchmarkCase.input.studentFirstName,
     strictnessLevel: benchmarkCase.input.strictness,
     documentText: benchmarkCase.input.essayText,
+    assignmentPrompt: benchmarkCase.input.assignmentPrompt ?? null,
+    writingTimeMinutes: benchmarkCase.input.writingTimeMinutes ?? null,
   });
 
   let rawOutput: unknown;
