@@ -232,9 +232,6 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!context || !lesson) {
     throw new Response('Unknown practice skill', { status: 400 });
   }
-  if (lesson.section === 'Composition' && !isCompositionPracticeEnabled()) {
-    throw new Response('Unknown practice skill', { status: 400 });
-  }
 
   // A written correction of an ACT sentence on a grammar lesson. Graded by the
   // same tutor service as composition, grounded in this lesson's skill + rule.

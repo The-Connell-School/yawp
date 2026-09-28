@@ -492,7 +492,7 @@ describe('self-directed practice session action', () => {
         }),
         params: {},
         context: {} as never,
-      } as any)) as Response;
+      } as any)) as unknown as Response;
       expect(response.status).toBe(429);
       expect(response.headers.get('Retry-After')).toBeTruthy();
     });
