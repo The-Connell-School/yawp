@@ -1,5 +1,6 @@
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import { Textarea } from '~/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group';
 import {
   Select,
@@ -10,6 +11,8 @@ import {
 } from '~/components/ui/select';
 import {
   EXIT_TICKET_ANSWER_TYPE_OPTIONS,
+  EXIT_TICKET_CUSTOM_PROMPT_MAX_LENGTH,
+  EXIT_TICKET_REFLECTION_PROMPT_OPTIONS,
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_KIND_OPTIONS,
   EXIT_TICKET_TOPIC_MAX_LENGTH,
@@ -19,6 +22,7 @@ import {
   type ExitTicketFocus,
   type ExitTicketKind,
   type ExitTicketMode,
+  type ExitTicketReflectionPromptId,
 } from '~/domain/assignment-types/exit-ticket';
 
 /**
@@ -44,6 +48,11 @@ export type ExitTicketBuilderProps = {
   /** Empty until answered: there is no safe default. */
   answerType: string;
   onAnswerTypeChange: (answerType: string) => void;
+  reflectionPromptId: ExitTicketReflectionPromptId;
+  onReflectionPromptIdChange: (id: ExitTicketReflectionPromptId) => void;
+  /** The teacher's own question; used only when the id is 'custom'. */
+  reflectionPromptText: string;
+  onReflectionPromptTextChange: (text: string) => void;
   /** The composed prompt, or empty while the form is incomplete. */
   preview: string;
   disabled: boolean;
@@ -64,6 +73,10 @@ export function ExitTicketBuilder({
   onTopicChange,
   answerType,
   onAnswerTypeChange,
+  reflectionPromptId,
+  onReflectionPromptIdChange,
+  reflectionPromptText,
+  onReflectionPromptTextChange,
   preview,
   disabled,
 }: ExitTicketBuilderProps) {
@@ -106,6 +119,66 @@ export function ExitTicketBuilder({
           ))}
         </RadioGroup>
       </div>
+
+      {kind === 'reflection' ? (
+        <div className="space-y-2">
+          <Label id="assignment-create-exit-ticket-reflection-label">
+            Question
+          </Label>
+          <RadioGroup
+            aria-labelledby="assignment-create-exit-ticket-reflection-label"
+            value={reflectionPromptId}
+            onValueChange={(value) =>
+              onReflectionPromptIdChange(value as ExitTicketReflectionPromptId)
+            }
+            disabled={disabled}
+            className="flex flex-wrap gap-2"
+          >
+            {EXIT_TICKET_REFLECTION_PROMPT_OPTIONS.map((option) => (
+              <div
+                key={option.id}
+                className="flex items-center gap-2 rounded-full border px-3 py-1.5"
+              >
+                <RadioGroupItem
+                  id={`assignment-create-exit-ticket-reflection-${option.id}`}
+                  value={option.id}
+                  className="size-4 shrink-0"
+                />
+                <Label
+                  htmlFor={`assignment-create-exit-ticket-reflection-${option.id}`}
+                  className="cursor-pointer text-sm font-normal"
+                >
+                  {option.label}
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+          {reflectionPromptId === 'custom' ? (
+            <Textarea
+              id="assignment-create-exit-ticket-reflection-text"
+              aria-label="Your question"
+              name="exitTicketReflectionPromptText"
+              value={reflectionPromptText}
+              onChange={(event) =>
+                onReflectionPromptTextChange(event.target.value)
+              }
+              rows={2}
+              maxLength={EXIT_TICKET_CUSTOM_PROMPT_MAX_LENGTH}
+              placeholder="e.g., What would you explain to a friend who missed today?"
+              disabled={disabled}
+            />
+          ) : null}
+          {/* The default posts nothing, so a default reflection is stored
+              exactly as the original builder stored a basic ticket. */}
+          {reflectionPromptId !== 'learned' ? (
+            <input
+              type="hidden"
+              name="exitTicketReflectionPrompt"
+              value={reflectionPromptId}
+            />
+          ) : null}
+        </div>
+      ) : null}
 
       {kind === 'check' ? (
         <div className="space-y-3">

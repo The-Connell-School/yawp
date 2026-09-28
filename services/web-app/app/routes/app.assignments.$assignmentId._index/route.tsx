@@ -882,7 +882,9 @@ export default function AssignmentDetailRoute() {
           initialSubmitForGrade={assignment.submitForGrade}
           initialPointValue={assignment.pointValue}
           initialRubricTotalPoints={assignment.rubricTotalPoints}
-          initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
+          initialGradingMode={
+            assignment.gradingMode === 'bands' ? 'bands' : 'step'
+          }
           initialTutorEnabled={assignment.tutorEnabled}
           initialCollaborationEnabled={Boolean(data.collaboration)}
           initialCollaborationGroupMode={toCollaborationGroupMode(
@@ -911,6 +913,11 @@ export default function AssignmentDetailRoute() {
           initialExitTicketLessonNotes={
             assignment.exitTicket?.lessonNotes ?? null
           }
+          initialExitTicketReflectionPrompt={
+            assignment.exitTicket?.mode === 'basic'
+              ? (assignment.exitTicket.reflectionPrompt ?? null)
+              : null
+          }
         />
 
         {/* Same sheet, same props as the class page's "Add assignment", so
@@ -927,7 +934,9 @@ export default function AssignmentDetailRoute() {
           initialTitle={`Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`}
           initialPrompt={assignment.prompt}
           initialRubricTotalPoints={assignment.rubricTotalPoints}
-          initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
+          initialGradingMode={
+            assignment.gradingMode === 'bands' ? 'bands' : 'step'
+          }
           initialExitTicketMode={assignment.exitTicket?.mode}
           initialExitTicketFocus={
             assignment.exitTicket?.mode === 'specific'
@@ -946,6 +955,11 @@ export default function AssignmentDetailRoute() {
           }
           initialExitTicketLessonNotes={
             assignment.exitTicket?.lessonNotes ?? null
+          }
+          initialExitTicketReflectionPrompt={
+            assignment.exitTicket?.mode === 'basic'
+              ? (assignment.exitTicket.reflectionPrompt ?? null)
+              : null
           }
         />
       </div>

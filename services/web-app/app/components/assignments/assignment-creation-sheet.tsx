@@ -26,6 +26,7 @@ import {
   DEFAULT_EXIT_TICKET_MODE,
   EXIT_TICKETS_ENABLED,
   EXIT_TICKET_BUILDER_V2_ENABLED,
+  DEFAULT_EXIT_TICKET_REFLECTION_PROMPT,
   EXIT_TICKET_ANSWER_TYPE_OPTIONS,
   EXIT_TICKET_ANSWER_TYPES,
   EXIT_TICKET_FOCUS_OPTIONS,
@@ -45,6 +46,8 @@ import {
   type ExitTicketFocus,
   type ExitTicketLessonNotes,
   type ExitTicketMode,
+  type ExitTicketReflectionPrompt,
+  type ExitTicketReflectionPromptId,
 } from '~/domain/assignment-types/exit-ticket';
 import {
   Sheet,
@@ -244,6 +247,8 @@ export type AssignmentCreationSheetProps = {
    * than resetting it to the default.
    */
   initialExitTicketMode?: ExitTicketMode;
+  /** The reflection question a stored ticket asks; null for the default. */
+  initialExitTicketReflectionPrompt?: ExitTicketReflectionPrompt | null;
   /**
    * Which exit ticket builder to render. Defaults to the feature flag; tests
    * pin one explicitly so both stay covered while the flag exists.
@@ -411,6 +416,7 @@ export function AssignmentCreationSheetContent({
   initialGradingMode = DEFAULT_ASSIGNMENT_GRADING_MODE,
   initialExitTicketMode = DEFAULT_EXIT_TICKET_MODE,
   exitTicketBuilder = EXIT_TICKET_BUILDER_V2_ENABLED ? 'v2' : 'v1',
+  initialExitTicketReflectionPrompt = null,
   initialExitTicketFocus = EXIT_TICKET_FOCUS_OPTIONS[0].value,
   initialExitTicketAnswerType = null,
   initialExitTicketTopic = '',
@@ -511,6 +517,16 @@ export function AssignmentCreationSheetContent({
   const [lessonNotes, setLessonNotes] = useState<ExitTicketLessonNotes>(
     initialExitTicketLessonNotes ?? EMPTY_LESSON_NOTES
   );
+  const [reflectionPromptId, setReflectionPromptId] =
+    useState<ExitTicketReflectionPromptId>(
+      initialExitTicketReflectionPrompt?.id ??
+        DEFAULT_EXIT_TICKET_REFLECTION_PROMPT
+    );
+  const [reflectionPromptText, setReflectionPromptText] = useState(
+    initialExitTicketReflectionPrompt?.id === 'custom'
+      ? initialExitTicketReflectionPrompt.text
+      : ''
+  );
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [extractionTruncated, setExtractionTruncated] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -545,11 +561,18 @@ export function AssignmentCreationSheetContent({
   // Composed through the same parser the server uses, so the preview a teacher
   // approves and the prompt their students get cannot drift apart. Empty means
   // the form is not answered yet, which is also what blocks submission.
+  // The quick builder's own answers. The original builder posts none of
+  // these, so it composes exactly what it always did.
+  const quickBuilderInput =
+    exitTicketBuilder === 'v2'
+      ? { reflectionPrompt: reflectionPromptId, reflectionPromptText }
+      : {};
   const exitTicketConfig = parseExitTicketConfigInput({
     mode: exitTicketMode,
     focus: exitTicketFocus,
     topic: exitTicketTopic,
     answerType: exitTicketAnswerType,
+    ...quickBuilderInput,
   });
   // The desired-response answer never reaches the student, so the preview is
   // composed without waiting on it — but the real config above is what gates
@@ -559,6 +582,7 @@ export function AssignmentCreationSheetContent({
     focus: exitTicketFocus,
     topic: exitTicketTopic,
     answerType: exitTicketAnswerType || EXIT_TICKET_ANSWER_TYPES[0],
+    ...quickBuilderInput,
   });
   const exitTicketPreview = exitTicketPreviewConfig.success
     ? composeExitTicketPrompt(exitTicketPreviewConfig.config)
@@ -680,6 +704,15 @@ export function AssignmentCreationSheetContent({
         : defaultExitTicketLessonNotesEnabled(initialExitTicketMode)
     );
     setLessonNotes(initialExitTicketLessonNotes ?? EMPTY_LESSON_NOTES);
+    setReflectionPromptId(
+      initialExitTicketReflectionPrompt?.id ??
+        DEFAULT_EXIT_TICKET_REFLECTION_PROMPT
+    );
+    setReflectionPromptText(
+      initialExitTicketReflectionPrompt?.id === 'custom'
+        ? initialExitTicketReflectionPrompt.text
+        : ''
+    );
     setAttachmentFile(null);
     setRemoveAttachment(false);
     setExtractionTruncated(false);
@@ -705,6 +738,7 @@ export function AssignmentCreationSheetContent({
     initialExitTicketTopic,
     initialExitTicketAnswerType,
     initialExitTicketLessonNotes,
+    initialExitTicketReflectionPrompt,
     editingAssignment,
     initialPostAt,
     initialDueAt,
@@ -1112,6 +1146,10 @@ export function AssignmentCreationSheetContent({
               onTopicChange={setExitTicketTopic}
               answerType={exitTicketAnswerType}
               onAnswerTypeChange={setExitTicketAnswerType}
+              reflectionPromptId={reflectionPromptId}
+              onReflectionPromptIdChange={setReflectionPromptId}
+              reflectionPromptText={reflectionPromptText}
+              onReflectionPromptTextChange={setReflectionPromptText}
               preview={exitTicketPreview}
               disabled={isSaving}
             />

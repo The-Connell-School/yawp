@@ -68,6 +68,24 @@ describe('parseAssignmentExitTicket', () => {
     });
   });
 
+  test('composes and stores a reflection question the teacher wrote', () => {
+    const result = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketKind: 'reflection',
+        exitTicketMode: 'basic',
+        exitTicketReflectionPrompt: 'custom',
+        exitTicketReflectionPromptText: 'What surprised you today?',
+      })
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.value.prompt).toStartWith('What surprised you today?');
+    expect(result.value.exitTicketConfigJson).toMatchObject({
+      reflectionPrompt: { id: 'custom', text: 'What surprised you today?' },
+    });
+  });
+
   test('rejects a kind that contradicts the posted mode', () => {
     const result = parseAssignmentExitTicket(
       formDataFor({ exitTicketKind: 'check', exitTicketMode: 'basic' })

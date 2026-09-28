@@ -342,6 +342,69 @@ export const BASIC_EXIT_TICKET_PROMPT =
 export const EXIT_TICKET_ELABORATION_NOTE =
   'Write as much as you can, and go further than your first sentence — the more you explain your thinking, the more this is worth. Don’t worry about polish. This is about what you understand, not how neatly you say it.';
 
+/**
+ * The reflection prompts a teacher can pick from, plus their own. A short list
+ * on purpose: a reflection should take seconds to set up, and the choice has
+ * to be quicker than writing the prompt would have been.
+ */
+export const EXIT_TICKET_REFLECTION_PROMPT_IDS = [
+  'learned',
+  'interesting',
+  'wondering',
+  'custom',
+] as const;
+export type ExitTicketReflectionPromptId =
+  (typeof EXIT_TICKET_REFLECTION_PROMPT_IDS)[number];
+
+export const DEFAULT_EXIT_TICKET_REFLECTION_PROMPT: ExitTicketReflectionPromptId =
+  'learned';
+
+/** A question, not an essay prompt: long enough for two sentences. */
+export const EXIT_TICKET_CUSTOM_PROMPT_MAX_LENGTH = 300;
+
+export type ExitTicketReflectionPromptOption = {
+  id: ExitTicketReflectionPromptId;
+  label: string;
+  /** What students read. Absent only for the teacher's own prompt. */
+  prompt?: string;
+  /**
+   * How the grader should read the shared bands for this prompt. Absent for
+   * the default, which is read against the prompt alone, as it always was.
+   */
+  gradingCriteria?: string;
+};
+
+export type ExitTicketReflectionPrompt =
+  | { id: 'interesting' | 'wondering' }
+  | { id: 'custom'; text: string };
+
+export const EXIT_TICKET_REFLECTION_PROMPT_OPTIONS: ExitTicketReflectionPromptOption[] =
+  [
+    {
+      id: 'learned',
+      label: 'What I learned',
+      prompt: BASIC_EXIT_TICKET_PROMPT,
+    },
+    {
+      id: 'interesting',
+      label: 'Most interesting',
+      prompt:
+        'What was the most interesting thing from today’s lesson? Explain what it was and why it stuck with you.',
+      gradingCriteria:
+        'The student was asked what they found most interesting, so there is no right answer to reach. Judge whether they name something specific from the lesson and explain it well enough to show they understood it — a vague "it was all interesting" is names it only. Why it interested them matters less than whether their account of it is accurate and their own.',
+    },
+    {
+      id: 'wondering',
+      label: 'Still wondering',
+      prompt:
+        'What is one question you still have about today’s lesson? Ask the real one — the thing you would actually want answered — and say what you have already worked out that led you to it.',
+    },
+    {
+      id: 'custom',
+      label: 'Write your own',
+    },
+  ];
+
 type ExitTicketConfigBase = {
   schemaVersion: typeof EXIT_TICKET_CONFIG_SCHEMA_VERSION;
   /** Absent, never empty: a ticket without notes stores no key at all. */
@@ -353,6 +416,8 @@ export type ExitTicketConfig =
       mode: 'basic';
       /** Written by the new builder only; derived from `mode` otherwise. */
       kind?: 'reflection';
+      /** Absent means the original basic prompt ("what I learned"). */
+      reflectionPrompt?: ExitTicketReflectionPrompt;
     })
   | (ExitTicketConfigBase & {
       mode: 'specific';
@@ -398,10 +463,100 @@ function normalizeTopic(topic: string): string {
     .replace(/[.,;:!?\s]+$/u, '');
 }
 
+/** Whitespace tidied, wording untouched: this is the teacher's sentence. */
+function normalizePromptText(text: string): string {
+  return text.trim().replace(/\s+/g, ' ');
+}
+
+type ReflectionPromptParseResult =
+  | { success: true; reflectionPrompt?: ExitTicketReflectionPrompt }
+  | { success: false; message: string };
+
+function parseReflectionPromptInput(
+  input: ExitTicketConfigInput
+): ReflectionPromptParseResult {
+  const id = input.reflectionPrompt?.toString().trim() ?? '';
+  if (!id || id === 'learned') return { success: true };
+
+  if (!(EXIT_TICKET_REFLECTION_PROMPT_IDS as readonly string[]).includes(id)) {
+    return { success: false, message: 'Choose a reflection prompt.' };
+  }
+  if (id !== 'custom') {
+    return {
+      success: true,
+      reflectionPrompt: { id: id as 'interesting' | 'wondering' },
+    };
+  }
+
+  const text = normalizePromptText(
+    input.reflectionPromptText?.toString() ?? ''
+  );
+  if (!text) {
+    return {
+      success: false,
+      message: 'Write the question students will answer.',
+    };
+  }
+  if (text.length > EXIT_TICKET_CUSTOM_PROMPT_MAX_LENGTH) {
+    return {
+      success: false,
+      message: `Keep your question under ${EXIT_TICKET_CUSTOM_PROMPT_MAX_LENGTH} characters.`,
+    };
+  }
+  return { success: true, reflectionPrompt: { id: 'custom', text } };
+}
+
+/** Stored as written, or nothing: an unreadable value is the default prompt. */
+function parseStoredReflectionPrompt(
+  value: unknown
+): ExitTicketReflectionPrompt | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (record.id === 'interesting' || record.id === 'wondering') {
+    return { id: record.id };
+  }
+  if (record.id === 'custom' && typeof record.text === 'string') {
+    const text = normalizePromptText(record.text);
+    return text ? { id: 'custom', text } : null;
+  }
+  return null;
+}
+
+/** Which reflection prompt a ticket asks; the default for everything else. */
+export function exitTicketReflectionPromptId(
+  config: ExitTicketConfig
+): ExitTicketReflectionPromptId {
+  if (config.mode !== 'basic') return DEFAULT_EXIT_TICKET_REFLECTION_PROMPT;
+  return config.reflectionPrompt?.id ?? DEFAULT_EXIT_TICKET_REFLECTION_PROMPT;
+}
+
+export function exitTicketReflectionPromptOption(
+  id: string | null | undefined
+): ExitTicketReflectionPromptOption | null {
+  return (
+    EXIT_TICKET_REFLECTION_PROMPT_OPTIONS.find((option) => option.id === id) ??
+    null
+  );
+}
+
+/** The words a reflection asks, before the elaboration note. */
+function reflectionPromptText(config: ExitTicketConfig): string {
+  if (config.mode !== 'basic' || !config.reflectionPrompt) {
+    return BASIC_EXIT_TICKET_PROMPT;
+  }
+  if (config.reflectionPrompt.id === 'custom') {
+    return config.reflectionPrompt.text;
+  }
+  return (
+    exitTicketReflectionPromptOption(config.reflectionPrompt.id)?.prompt ??
+    BASIC_EXIT_TICKET_PROMPT
+  );
+}
+
 /** The prompt the student actually sees. */
 export function composeExitTicketPrompt(config: ExitTicketConfig): string {
   if (config.mode === 'basic') {
-    return `${BASIC_EXIT_TICKET_PROMPT}\n\n${EXIT_TICKET_ELABORATION_NOTE}`;
+    return `${reflectionPromptText(config)}\n\n${EXIT_TICKET_ELABORATION_NOTE}`;
   }
 
   const option = exitTicketFocusOption(config.focus);
@@ -427,6 +582,9 @@ export type ExitTicketConfigInput = {
   /** Posted by the new builder. Absent from every v1 client. */
   kind?: string | null;
   mode?: string | null;
+  /** Reflection only. Absent or 'learned' stores nothing. */
+  reflectionPrompt?: string | null;
+  reflectionPromptText?: string | null;
   focus?: string | null;
   topic?: string | null;
   answerType?: string | null;
@@ -503,6 +661,8 @@ export function parseExitTicketConfigInput(
   if (!notes.success) return notes;
 
   if (!rawMode || rawMode === 'basic') {
+    const reflection = parseReflectionPromptInput(input);
+    if (!reflection.success) return reflection;
     return {
       success: true,
       config: withLessonNotes(
@@ -510,6 +670,9 @@ export function parseExitTicketConfigInput(
           schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
           mode: 'basic',
           ...(kind ? { kind: 'reflection' as const } : {}),
+          ...(reflection.reflectionPrompt
+            ? { reflectionPrompt: reflection.reflectionPrompt }
+            : {}),
         },
         notes
       ),
@@ -583,11 +746,15 @@ export function parseStoredExitTicketConfig(
   );
 
   if (record.mode === 'basic') {
+    const reflectionPrompt = parseStoredReflectionPrompt(
+      record.reflectionPrompt
+    );
     return withLessonNotes(
       {
         schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
         mode: 'basic',
         ...(storedKind === 'reflection' ? { kind: storedKind } : {}),
+        ...(reflectionPrompt ? { reflectionPrompt } : {}),
       },
       notes
     );

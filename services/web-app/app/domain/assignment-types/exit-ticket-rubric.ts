@@ -7,6 +7,7 @@ import type {
 import {
   EXIT_TICKET_LESSON_NOTE_FIELDS,
   exitTicketFocusOption,
+  exitTicketReflectionPromptOption,
   type ExitTicketAnswerType,
   type ExitTicketConfig,
 } from './exit-ticket';
@@ -135,10 +136,44 @@ export const EXIT_TICKET_ANSWER_TYPE_GUIDANCE: Record<
     'The teacher says there is no single right answer here. More than one response can be correct, so judge the reasoning and what it is anchored to, never whether the student landed where you or the teacher would have. Do not tell a student they are wrong for an answer that is defensible and supported, however unexpected it is. Only a reading that contradicts the source, or one asserted with nothing behind it, is weak.',
 };
 
+/**
+ * How to read a reflection that is not the default one. "Still wondering"
+ * asks for a question, so it borrows the ask-a-question criteria rather than
+ * restating them: the rule that not knowing is the task, never a failure, has
+ * to read identically wherever a ticket asks for a question.
+ */
+function reflectionGradingSection(
+  reflectionPrompt: NonNullable<
+    Extract<ExitTicketConfig, { mode: 'basic' }>['reflectionPrompt']
+  >
+): string {
+  if (reflectionPrompt.id === 'custom') {
+    return [
+      `The teacher wrote this reflection question themselves: "${reflectionPrompt.text}"`,
+      'There is no single right answer. Judge whether the response actually answers that question, specifically and in the student’s own words.',
+    ].join('\n');
+  }
+  if (reflectionPrompt.id === 'wondering') {
+    return [
+      'This reflection asks the student for a question they still have.',
+      exitTicketFocusOption('ask-question')?.gradingCriteria ?? '',
+    ].join('\n');
+  }
+  const option = exitTicketReflectionPromptOption(reflectionPrompt.id);
+  return [
+    `This reflection asks: ${option?.label.toLowerCase() ?? 'a reflection'}.`,
+    option?.gradingCriteria ?? '',
+  ].join('\n');
+}
+
 export function buildExitTicketGradingContext(
   config: ExitTicketConfig | null | undefined
 ): string | null {
   const sections: string[] = [];
+
+  if (config?.mode === 'basic' && config.reflectionPrompt) {
+    sections.push(reflectionGradingSection(config.reflectionPrompt));
+  }
 
   if (config?.mode === 'specific') {
     const option = exitTicketFocusOption(config.focus);

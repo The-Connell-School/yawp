@@ -178,6 +178,18 @@ function allInputsByName(name: string) {
   );
 }
 
+// happy-dom does not deliver a synthetic input event React will treat as a
+// change, so this calls the textarea's own onChange the way a keystroke would.
+// Real typing is covered by the e2e spec.
+function setTextareaValue(textarea: HTMLTextAreaElement, value: string) {
+  textarea.value = value;
+  const propsKey = Object.keys(textarea).find((key) =>
+    key.startsWith('__reactProps$')
+  );
+  const props = (textarea as unknown as Record<string, any>)[propsKey!];
+  props.onChange({ target: textarea, currentTarget: textarea });
+}
+
 function controlById(id: string) {
   const control = document.getElementById(id);
   expect(control).not.toBeNull();
@@ -919,6 +931,76 @@ describe('AssignmentCreationSheetContent', () => {
       expect(inputByName('exitTicketAnswerType').value).toBe('objective');
       expectText('the causes of World War I');
       expect(submitButton().disabled).toBe(false);
+    });
+
+    it('offers suggested reflection prompts and composes the chosen one', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      expect(
+        isChecked(
+          controlById('assignment-create-exit-ticket-reflection-learned')
+        )
+      ).toBe(true);
+      // The default posts nothing extra, so it stores exactly what v1 did.
+      expect(
+        document.querySelector('input[name="exitTicketReflectionPrompt"]')
+      ).toBeNull();
+
+      act(() => {
+        controlById(
+          'assignment-create-exit-ticket-reflection-wondering'
+        ).click();
+      });
+
+      expect(inputByName('exitTicketReflectionPrompt').value).toBe('wondering');
+      expect(inputByName('prompt').value).toInclude(
+        'What is one question you still have'
+      );
+      expect(inputByName('prompt').value).not.toInclude(
+        BASIC_EXIT_TICKET_PROMPT
+      );
+    });
+
+    it('lets the teacher write their own reflection question', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      act(() => {
+        controlById('assignment-create-exit-ticket-reflection-custom').click();
+      });
+
+      const box = textareaByName('exitTicketReflectionPromptText');
+      expect(box).not.toBeNull();
+      // Nothing written yet, nothing to create.
+      expect(submitButton().disabled).toBe(true);
+
+      act(() => {
+        setTextareaValue(box!, 'What surprised you today?');
+      });
+
+      expect(inputByName('exitTicketReflectionPrompt').value).toBe('custom');
+      expect(inputByName('prompt').value).toInclude(
+        'What surprised you today?'
+      );
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('reopens a stored reflection on the prompt it was given', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketReflectionPrompt: {
+          id: 'custom',
+          text: 'What surprised you today?',
+        },
+      }).root;
+
+      expect(
+        isChecked(
+          controlById('assignment-create-exit-ticket-reflection-custom')
+        )
+      ).toBe(true);
+      expect(textareaByName('exitTicketReflectionPromptText')!.value).toBe(
+        'What surprised you today?'
+      );
     });
 
     it('will not create a check until the right-answer question is answered', () => {

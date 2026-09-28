@@ -29,6 +29,11 @@ export function parseAssignmentExitTicket(
     // Posted only by the quick builder, always beside the mode it names.
     kind: formData.get('exitTicketKind')?.toString(),
     mode: formData.get('exitTicketMode')?.toString(),
+    // Quick builder only, and only for a reflection that is not the default.
+    reflectionPrompt: formData.get('exitTicketReflectionPrompt')?.toString(),
+    reflectionPromptText: formData
+      .get('exitTicketReflectionPromptText')
+      ?.toString(),
     focus: formData.get('exitTicketFocus')?.toString(),
     topic: formData.get('exitTicketTopic')?.toString(),
     // Required on a specific ticket, and deliberately without a default: it

@@ -7,6 +7,7 @@ import { test, expect } from '../test-setup';
 
 const BASIC_OPENING = 'Tell me, in your own words, what you learned today';
 const TOPIC = 'the difference between weathering and erosion';
+const CUSTOM_QUESTION = 'What would you teach a friend who missed today?';
 
 async function openNewAssignmentSheet(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: /^New/ }).click();
@@ -111,5 +112,46 @@ test.describe.serial('Exit tickets', () => {
     ).toBeChecked();
     await expect(page.getByLabel('What specifically?')).toHaveValue(TOPIC);
     await expect(page.getByText(TOPIC).last()).toBeVisible();
+  });
+
+  test("a reflection can ask a suggested question or the teacher's own", async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `/app/assignment-types/${e2eContext.exitTicketAssignmentTypeId}`
+    );
+    await openNewAssignmentSheet(page);
+
+    await page.getByRole('radio', { name: 'Still wondering' }).click();
+    await expect(
+      page.getByText('What is one question you still have')
+    ).toBeVisible();
+    await expect(page.getByText(BASIC_OPENING)).toHaveCount(0);
+
+    await page.getByRole('radio', { name: 'Write your own' }).click();
+    await page.getByLabel('Your question').fill(CUSTOM_QUESTION);
+    await expect(page.getByText(CUSTOM_QUESTION).last()).toBeVisible();
+
+    await page.getByLabel('Title (optional)').fill('Exit ticket: own question');
+    await page.getByRole('button', { name: /Create Assignment/i }).click();
+    await expect(
+      page.getByRole('heading', { name: 'New Assignment' })
+    ).toHaveCount(0);
+
+    // Reopening keeps the teacher's own words rather than resetting to the
+    // default question.
+    await page.goto('/app/assignments');
+    await page.getByText('Exit ticket: own question').first().click();
+    await page
+      .getByRole('button', { name: /^Edit$/ })
+      .first()
+      .click();
+    await expect(
+      page.getByRole('radio', { name: 'Write your own' })
+    ).toBeChecked();
+    await expect(page.getByLabel('Your question')).toHaveValue(CUSTOM_QUESTION);
   });
 });
