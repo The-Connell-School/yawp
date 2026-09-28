@@ -1,6 +1,7 @@
 import { teacherNotesEnabled } from './teacher-notes';
 import { buildGradingPromptShape } from './grading-prompt-shape';
 import type { ResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { buildParagraphModeGradingBlock } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import {
   buildColdWriteGradingBlock,
   buildWritingTimeGradingBlock,
@@ -124,6 +125,7 @@ export function compileGradingAssistantInvocation({
   assignmentPrompt,
   writingTimeMinutes,
   coldWrite,
+  paragraphMode,
 }: {
   gradingConfig: Pick<
     ResolvedAssignmentTypeGradingConfig,
@@ -147,6 +149,8 @@ export function compileGradingAssistantInvocation({
   writingTimeMinutes?: number | null;
   /** True when the tutor was off: a cold write. Absent or false changes nothing. */
   coldWrite?: boolean | null;
+  /** The Daily Pages paragraph type the teacher chose; absent changes nothing. */
+  paragraphMode?: string | null;
 }): CompiledGradingAssistantInvocation {
   const { minScore, maxScore } = gradingConfig;
   const promptShape = buildGradingPromptShape({
@@ -176,14 +180,16 @@ export function compileGradingAssistantInvocation({
   const template =
     gradingConfig.promptTemplate ??
     defaultGradingAssistantPromptTemplate(gradingConfig);
-  // The conditions the teacher set for the writing — how long, and whether the
-  // tutor was there — travel together as one block.
+  // The conditions the teacher set for the writing — how long, whether the
+  // tutor was there, and what kind of paragraph was asked for — travel
+  // together as one block.
   const writingTimeBlock = [
     buildWritingTimeGradingBlock(writingTimeMinutes),
     buildColdWriteGradingBlock(coldWrite),
+    buildParagraphModeGradingBlock(paragraphMode),
   ]
     .filter(Boolean)
-    .join('\n');
+    .join('\n\n');
   const variables = {
     assignment_type: gradingConfig.rubricTotalPoints
       ? `${gradingConfig.label} (total rubric points: ${gradingConfig.rubricTotalPoints})`

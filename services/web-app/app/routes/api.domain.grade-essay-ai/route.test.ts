@@ -2093,7 +2093,8 @@ describe('api.domain.grade-essay-ai', () => {
     async function gradeTimed(
       id: string,
       writingTimeMinutes: number | null,
-      tutorEnabled?: boolean
+      tutorEnabled?: boolean,
+      paragraphMode?: string | null
     ) {
       prisma.assignmentType.findUnique.mockResolvedValue(
         mockAssignmentType({
@@ -2111,6 +2112,7 @@ describe('api.domain.grade-essay-ai', () => {
             prompt: 'Is it possible to be honest and kind at once?',
             writingTimeMinutes,
             ...(tutorEnabled === undefined ? {} : { tutorEnabled }),
+            ...(paragraphMode === undefined ? {} : { paragraphMode }),
           },
         },
       };
@@ -2147,6 +2149,18 @@ describe('api.domain.grade-essay-ai', () => {
       const { grading } = await gradeTimed('sub-cold', 15, false);
 
       expect(grading.messages[0].content).toContain('Cold write:');
+    });
+
+    test('tells the grading assistant the paragraph type the teacher chose', async () => {
+      const { grading } = await gradeTimed('sub-analyze', 15, true, 'analyze');
+
+      expect(grading.messages[0].content).toContain('Paragraph type: Analyze');
+    });
+
+    test('says nothing about a paragraph type when none was chosen', async () => {
+      const { grading } = await gradeTimed('sub-any', 15, true, null);
+
+      expect(grading.messages[0].content).not.toContain('Paragraph type');
     });
 
     test('says nothing about a cold write when the tutor was on', async () => {
