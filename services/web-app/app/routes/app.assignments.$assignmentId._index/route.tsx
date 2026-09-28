@@ -1,4 +1,4 @@
-import { getDefaultWritingTimeMinutesByTypeId } from '~/domain/grading/writing-time.server';
+import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import {
@@ -135,6 +135,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           gradingMode: true,
           tutorEnabled: true,
           writingTimeMinutes: true,
+          paragraphMode: true,
           collaborationEnabled: true,
           collaborationGroupMode: true,
           collaborationGroupSize: true,
@@ -209,14 +210,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     assignmentTypes.map((assignmentType) => assignmentType.id)
   );
-  const writingTimeDefaults = await getDefaultWritingTimeMinutesByTypeId(
+  const creationTypeDefaults = await getCreationTypeDefaultsById(
     assignmentTypes.map((assignmentType) => assignmentType.id)
   );
   const assignmentTypeOptions = assignmentTypes.map((assignmentType) => ({
     ...assignmentType,
     gradesGrammar: gradesGrammarIds.has(assignmentType.id),
     defaultWritingTimeMinutes:
-      writingTimeDefaults.get(assignmentType.id) ?? null,
+      creationTypeDefaults.get(assignmentType.id)?.defaultWritingTimeMinutes ??
+      null,
+    offersParagraphModes:
+      creationTypeDefaults.get(assignmentType.id)?.offersParagraphModes ??
+      false,
   }));
 
   const insight =
@@ -265,6 +270,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       gradingMode: active.assignment.gradingMode,
       tutorEnabled: active.assignment.tutorEnabled,
       writingTimeMinutes: active.assignment.writingTimeMinutes,
+      paragraphMode: active.assignment.paragraphMode,
       collaborationGroupMode: active.assignment.collaborationGroupMode,
       collaborationGroupSize: active.assignment.collaborationGroupSize,
       gradingAssistantStrictnessLevel: active.assignment
@@ -871,6 +877,7 @@ export default function AssignmentDetailRoute() {
           initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
           initialTutorEnabled={assignment.tutorEnabled}
           initialWritingTimeMinutes={assignment.writingTimeMinutes ?? null}
+          initialParagraphMode={assignment.paragraphMode ?? null}
           initialCollaborationEnabled={Boolean(data.collaboration)}
           initialCollaborationGroupMode={toCollaborationGroupMode(
             assignment.collaborationGroupMode
@@ -896,6 +903,7 @@ export default function AssignmentDetailRoute() {
           initialPrompt={assignment.prompt}
           initialRubricTotalPoints={assignment.rubricTotalPoints}
           initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
+          initialParagraphMode={assignment.paragraphMode ?? null}
         />
       </div>
     </PageShell>

@@ -1,4 +1,4 @@
-import { getDefaultWritingTimeMinutesByTypeId } from '~/domain/grading/writing-time.server';
+import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 import {
   type ActionFunctionArgs,
@@ -1288,7 +1288,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     creationTypeRows.map((assignmentType) => assignmentType.id)
   );
 
-  const writingTimeDefaults = await getDefaultWritingTimeMinutesByTypeId(
+  const creationTypeDefaults = await getCreationTypeDefaultsById(
     creationTypeRows.map((assignmentType) => assignmentType.id)
   );
 
@@ -1304,7 +1304,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title,
         collaborationSupported,
         gradesGrammar: gradesGrammarIds.has(id),
-        defaultWritingTimeMinutes: writingTimeDefaults.get(id) ?? null,
+        defaultWritingTimeMinutes:
+          creationTypeDefaults.get(id)?.defaultWritingTimeMinutes ?? null,
+        offersParagraphModes:
+          creationTypeDefaults.get(id)?.offersParagraphModes ?? false,
       })
     ),
     assignmentsEnabled: true,

@@ -322,6 +322,7 @@ describe('My Assignments loader', () => {
           // no suggested writing time.
           gradesGrammar: false,
           defaultWritingTimeMinutes: null,
+          offersParagraphModes: false,
         },
       ]);
     }

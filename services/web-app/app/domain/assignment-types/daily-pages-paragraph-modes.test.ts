@@ -7,6 +7,7 @@ import {
   buildParagraphModeTutorInstructions,
   enabledParagraphModes,
   getParagraphMode,
+  offersParagraphModesForKind,
   parseParagraphMode,
 } from './daily-pages-paragraph-modes';
 
@@ -137,5 +138,14 @@ describe('the prompt layers', () => {
     const tutor = buildParagraphModeTutorInstructions('analyze');
     expect(tutor).toContain('Analyze');
     expect(tutor).toContain(getParagraphMode('analyze')!.tutorInstructions!);
+  });
+});
+
+describe('offersParagraphModesForKind', () => {
+  test('only Daily Pages takes a paragraph type', () => {
+    expect(offersParagraphModesForKind('daily_pages')).toBe(true);
+    expect(offersParagraphModesForKind('class_starter')).toBe(false);
+    expect(offersParagraphModesForKind(null)).toBe(false);
+    expect(offersParagraphModesForKind(undefined)).toBe(false);
   });
 });

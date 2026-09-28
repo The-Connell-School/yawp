@@ -1,15 +1,23 @@
 import { prisma } from '~/utils/db.server';
 
+import { offersParagraphModesForKind } from '~/domain/assignment-types/daily-pages-paragraph-modes';
+
 import { defaultWritingTimeMinutesForKind } from './writing-time';
 
+export type CreationTypeDefaults = {
+  defaultWritingTimeMinutes: number | null;
+  offersParagraphModes: boolean;
+};
+
 /**
- * The writing time the creation form suggests for each assignment type, by id.
- * One query for the whole list. Types with no suggestion are absent.
+ * What the creation form needs to know about each assignment type beyond its
+ * rubric, by id: the writing time it suggests and whether it takes a paragraph
+ * type. One query for the whole list. Types with neither are absent.
  */
-export async function getDefaultWritingTimeMinutesByTypeId(
+export async function getCreationTypeDefaultsById(
   assignmentTypeIds: string[]
-): Promise<Map<string, number>> {
-  const defaults = new Map<string, number>();
+): Promise<Map<string, CreationTypeDefaults>> {
+  const defaults = new Map<string, CreationTypeDefaults>();
   if (assignmentTypeIds.length === 0) return defaults;
 
   const rows = await prisma.assignmentType.findMany({
@@ -17,8 +25,11 @@ export async function getDefaultWritingTimeMinutesByTypeId(
     select: { id: true, kind: true },
   });
   for (const row of rows ?? []) {
-    const minutes = defaultWritingTimeMinutesForKind(row.kind);
-    if (minutes !== null) defaults.set(row.id, minutes);
+    const defaultWritingTimeMinutes = defaultWritingTimeMinutesForKind(row.kind);
+    const offersParagraphModes = offersParagraphModesForKind(row.kind);
+    if (defaultWritingTimeMinutes !== null || offersParagraphModes) {
+      defaults.set(row.id, { defaultWritingTimeMinutes, offersParagraphModes });
+    }
   }
   return defaults;
 }

@@ -405,6 +405,7 @@ describe('class detail loader document visibility', () => {
         gradesGrammar: false,
         // Nor a kind, so no writing time is suggested for it.
         defaultWritingTimeMinutes: null,
+        offersParagraphModes: false,
       },
     ]);
   });

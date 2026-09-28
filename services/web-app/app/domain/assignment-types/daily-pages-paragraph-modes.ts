@@ -119,6 +119,16 @@ export const DAILY_PAGES_PARAGRAPH_MODES: readonly ParagraphMode[] = [
   },
 ];
 
+/**
+ * Whether an assignment type takes a paragraph type at all: Daily Pages does,
+ * and only while at least one type is switched on.
+ */
+export function offersParagraphModesForKind(
+  kind: string | null | undefined
+): boolean {
+  return kind === 'daily_pages' && enabledParagraphModes().length > 0;
+}
+
 export function enabledParagraphModes(): ParagraphMode[] {
   return DAILY_PAGES_PARAGRAPH_MODES.filter((mode) => mode.enabled);
 }
