@@ -1,5 +1,4 @@
-import { describe, expect, test } from 'bun:test';
-import { planGrantUaStudentLicense, grantUaStudentLicense } from './grant-ua-student-license';
+import { describe, expect, test, mock } from 'bun:test';
 
 function fakePrisma({
   userId = 'user-1',
@@ -30,12 +29,21 @@ function fakePrisma({
         return { id: 'license-1', status: 'ACTIVE', validUntil: new Date('2026-12-31T23:59:59.999Z') };
       },
     },
+    internalImpersonationEvent: {
+      create: async (_: unknown) => ({}),
+    },
   };
   return { prisma: prisma as any, calls };
 }
 
 describe('planGrantUaStudentLicense', () => {
   test('errors when user is missing', async () => {
+    mock.module('@app/prisma', () => ({ PrismaClient: class {} }));
+    mock.module('../../../services/web-app/app/domain/student-license/student-license.server.ts', () => ({
+      UA_STUDENT_LICENSE_COHORT: 'ua-2026',
+      UA_STUDENT_LICENSE_VALID_UNTIL: new Date('2026-12-31T23:59:59.999Z'),
+    }));
+    const { planGrantUaStudentLicense } = await import('./grant-ua-student-license');
     const { prisma } = fakePrisma({ userId: null });
     const result = await planGrantUaStudentLicense(prisma, {
       email: 'jncrew@gmail.com',
@@ -45,6 +53,12 @@ describe('planGrantUaStudentLicense', () => {
   });
 
   test('errors when membership is missing', async () => {
+    mock.module('@app/prisma', () => ({ PrismaClient: class {} }));
+    mock.module('../../../services/web-app/app/domain/student-license/student-license.server.ts', () => ({
+      UA_STUDENT_LICENSE_COHORT: 'ua-2026',
+      UA_STUDENT_LICENSE_VALID_UNTIL: new Date('2026-12-31T23:59:59.999Z'),
+    }));
+    const { planGrantUaStudentLicense } = await import('./grant-ua-student-license');
     const { prisma } = fakePrisma({ membershipId: null });
     const result = await planGrantUaStudentLicense(prisma, {
       email: 'jncrew@gmail.com',
@@ -54,6 +68,12 @@ describe('planGrantUaStudentLicense', () => {
   });
 
   test('noops when an active valid license already exists', async () => {
+    mock.module('@app/prisma', () => ({ PrismaClient: class {} }));
+    mock.module('../../../services/web-app/app/domain/student-license/student-license.server.ts', () => ({
+      UA_STUDENT_LICENSE_COHORT: 'ua-2026',
+      UA_STUDENT_LICENSE_VALID_UNTIL: new Date('2026-12-31T23:59:59.999Z'),
+    }));
+    const { planGrantUaStudentLicense } = await import('./grant-ua-student-license');
     const future = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const { prisma } = fakePrisma({ existingLicense: { id: 'l-1', status: 'ACTIVE', validUntil: future } });
     const result = await planGrantUaStudentLicense(prisma, {
@@ -64,6 +84,12 @@ describe('planGrantUaStudentLicense', () => {
   });
 
   test('plans a grant when license missing or not active', async () => {
+    mock.module('@app/prisma', () => ({ PrismaClient: class {} }));
+    mock.module('../../../services/web-app/app/domain/student-license/student-license.server.ts', () => ({
+      UA_STUDENT_LICENSE_COHORT: 'ua-2026',
+      UA_STUDENT_LICENSE_VALID_UNTIL: new Date('2026-12-31T23:59:59.999Z'),
+    }));
+    const { planGrantUaStudentLicense } = await import('./grant-ua-student-license');
     const { prisma } = fakePrisma({ existingLicense: null });
     const result = await planGrantUaStudentLicense(prisma, {
       email: 'jncrew@gmail.com',
@@ -80,6 +106,12 @@ describe('planGrantUaStudentLicense', () => {
 
 describe('grantUaStudentLicense', () => {
   test('upserts ACTIVE manual license', async () => {
+    mock.module('@app/prisma', () => ({ PrismaClient: class {} }));
+    mock.module('../../../services/web-app/app/domain/student-license/student-license.server.ts', () => ({
+      UA_STUDENT_LICENSE_COHORT: 'ua-2026',
+      UA_STUDENT_LICENSE_VALID_UNTIL: new Date('2026-12-31T23:59:59.999Z'),
+    }));
+    const { planGrantUaStudentLicense, grantUaStudentLicense } = await import('./grant-ua-student-license');
     const { prisma, calls } = fakePrisma();
     const result = await planGrantUaStudentLicense(prisma, {
       email: 'jncrew@gmail.com',

@@ -30,7 +30,7 @@ Model notes relevant to roster ops
   - `_ClassTeachers` (“A” = classId, “B” = membershipId)
 - Student work is preserved when roster changes:
   - Group membership withdraws access via `DocumentGroupMember.removedAt` (soft), not a hard delete
-  - Documents and Submissions remain
+  - Documents and Submissions remain; removing/moving students hides prior class work from teacher views but does not delete it
 - Internal impersonation writes are audited in `InternalImpersonationEvent`, and DB triggers enforce coverage.
 
 Conventions for preview SQL (read‑only)
@@ -38,6 +38,7 @@ Conventions for preview SQL (read‑only)
 - Replace placeholders with actual values:
   - :school_name, :class_label, :org_id, :class_id, :teacher_name, :student_email, :student_name
 - Use case‑insensitive matches where appropriate (`ILIKE`).
+- Quote camelCase identifiers (tables and columns) to match the production schema.
 
 Operation 1 — SJP 1D: remove student Vincent Denecour from the class
 
@@ -69,13 +70,13 @@ SELECT s.id AS school_id, s.name
 FROM "School" s
 WHERE s.name ILIKE '%st. joe%prep%' OR s.name ILIKE '%sjp%';
 
-SELECT c.id AS class_id, c.schoolId, c.code, c.grade, c.period, c.title, c.isArchived
+SELECT c.id AS class_id, c."schoolId", c."code", c."grade", c."period", c."title", c."isArchived"
 FROM "Class" c
-WHERE c.schoolId = :school_id
+WHERE c."schoolId" = :school_id
   AND (
-    c.title ILIKE '%1D%' OR
-    (c.grade = '1' AND c.period ILIKE 'D') OR
-    c.code ILIKE '%1D%'
+    c."title" ILIKE '%1D%' OR
+    (c."grade" = '1' AND c."period" ILIKE 'D') OR
+    c."code" ILIKE '%1D%'
   );
 ```
 
@@ -83,7 +84,7 @@ WHERE c.schoolId = :school_id
 
 ```sql
 -- SJP’s organization id (single row expected per school)
-SELECT s.organizationId AS org_id FROM "School" s WHERE s.id = :school_id;
+SELECT s."organizationId" AS org_id FROM "School" s WHERE s.id = :school_id;
 
 -- Vincent’s student membership in that org
 SELECT m.id        AS membership_id,
@@ -93,7 +94,7 @@ SELECT m.id        AS membership_id,
 FROM "OrgMembership" m
 JOIN "User" u ON u.id = m."userId"
 WHERE m."organizationId" = :org_id
-  AND m.role = 'STUDENT'
+  AND m."role" = 'STUDENT'
   AND (u.email ILIKE '%vincent%denecour%' OR u.name ILIKE '%vincent%denecour%');
 ```
 
@@ -152,6 +153,7 @@ Recommended path
 - Open `/app/my-classes/:classId` for 1D → Students tab.
 - Multi‑select the affected students (Frank’s 1G roster who were placed in 1D).
 - Click “Move Students” → choose target class “1G” → confirm.
+- The acting teacher must teach both source and destination classes to move students between them.
 - Action `intent="move-students"`:
   - sets `DocumentGroupMember.removedAt` in 1D
   - disconnects from 1D and connects to 1G in `_ClassStudents`
@@ -169,22 +171,22 @@ Preview (read‑only) SQL
 SELECT m.id AS teacher_membership_id, u.email, u.name
 FROM "OrgMembership" m
 JOIN "User" u ON u.id = m."userId"
-WHERE m.role = 'TEACHER' AND u.name ILIKE '%frank%rocchi%';
+WHERE m."role" = 'TEACHER' AND u.name ILIKE '%frank%rocchi%';
 
 -- Candidate class ids (1D and 1G) in the same school/org
-SELECT c.id, c.code, c.grade, c.period, c.title, c."schoolId"
+SELECT c.id, c."code", c."grade", c."period", c."title", c."schoolId"
 FROM "Class" c
 WHERE c."schoolId" = :school_id
   AND (
-    c.title ILIKE '%1D%' OR (c.grade = '1' AND c.period ILIKE 'D') OR c.code ILIKE '%1D%'
-    OR c.title ILIKE '%1G%' OR (c.grade = '1' AND c.period ILIKE 'G') OR c.code ILIKE '%1G%'
+    c."title" ILIKE '%1D%' OR (c."grade" = '1' AND c."period" ILIKE 'D') OR c."code" ILIKE '%1D%'
+    OR c."title" ILIKE '%1G%' OR (c."grade" = '1' AND c."period" ILIKE 'G') OR c."code" ILIKE '%1G%'
   );
 
 -- Students in 1D whose schoolTeacher display matches Frank (best‑effort filter)
 SELECT s.id AS student_membership_id, u.email, u.name, s."schoolTeacher"
 FROM "OrgMembership" s
 JOIN "User" u ON u.id = s."userId"
-WHERE s.role = 'STUDENT'
+WHERE s."role" = 'STUDENT'
   AND s."organizationId" = :org_id
   AND s."schoolTeacher" ILIKE '%rocchi%'
   AND EXISTS (SELECT 1 FROM "_ClassStudents" x WHERE x."A" = :class_1d_id AND x."B" = s.id);
@@ -238,26 +240,30 @@ Path A (recommended, least invasive): UA signup + manual license grant (audited)
    - Send her to `/ua/sign-up` on the configured UA partner hostname (the app redirects non‑partner origins). She’ll receive a verification email.
    - This creates a `User` and an `OrgMembership` (role STUDENT) in the UA org after verification.
 2) After she verifies (and before she hits `/billing/ua`), grant a UA student license to her membership (one‑time, manual, audited):
-   - Use an internal impersonation session as a UA org owner (for audit scope) and run the small admin script below (dry‑run first, then `--yes`):
+   - Use an internal impersonation session as a UA org owner (for audit scope) and run the small admin script below (dry‑run first, then `--apply`):
 
-CLI (ops) — dry‑run by default
+CLI (ops) — dry‑run by default; pass `--apply` to write; include `--actor-id` and `--actor-email` for audit
 
 ```bash
 # Preview the planned grant (no writes)
 bun run packages/prisma/scripts/grant-ua-student-license.ts \
   --email jncrew@gmail.com \
-  --organization-id <UA_ORG_ID>
+  --organization-id <UA_ORG_ID> \
+  --actor-id <YOUR_STAFF_OR_MEMBERSHIP_ID> \
+  --actor-email you@yawp.school
 
 # Commit the grant (writes), once preview looks correct
 bun run packages/prisma/scripts/grant-ua-student-license.ts \
   --email jncrew@gmail.com \
   --organization-id <UA_ORG_ID> \
-  --yes
+  --actor-id <YOUR_STAFF_OR_MEMBERSHIP_ID> \
+  --actor-email you@yawp.school \
+  --apply
 ```
 
 What it does
 
-- Looks up `User` by email (case‑insensitive), resolves the active STUDENT `OrgMembership` in the given UA org, then upserts a `StudentLicense` for cohort `ua-2026` with `status='ACTIVE'` and `validUntil` set to the configured UA license end date. Source is recorded as `MANUAL`. Dry‑run prints the target ids and values without writing.
+- Looks up `User` by email (case‑insensitive), resolves the active STUDENT `OrgMembership` in the given UA org, then upserts a `StudentLicense` for cohort `ua-2026` with `status='ACTIVE'` and `validUntil` set to the configured UA license end date. Source is recorded as `MANUAL`. Dry‑run prints the target ids and values without writing. On `--apply` it appends an audit row to `InternalImpersonationEvent` and prints a SQL rollback plan.
 
 Preview (read‑only) SQL
 
@@ -270,12 +276,12 @@ SELECT m.id AS membership_id, u.id AS user_id, u.email, u.name, m."organizationI
 FROM "OrgMembership" m
 JOIN "User" u ON u.id = m."userId"
 WHERE u.email ILIKE 'jncrew@gmail.com'
-  AND m.role = 'STUDENT'
+  AND m."role" = 'STUDENT'
   AND m."organizationId" = :ua_org_id
   AND m."isActive" = TRUE;
 
 -- Any existing UA license (cohort is fixed)
-SELECT id, status, cohort, "validUntil"
+SELECT id, "status", "cohort", "validUntil"
 FROM "StudentLicense"
 WHERE "membershipId" = :membership_id AND cohort = 'ua-2026';
 ```
@@ -283,7 +289,7 @@ WHERE "membershipId" = :membership_id AND cohort = 'ua-2026';
 Verification
 
 ```sql
-SELECT id, status, cohort, "validUntil"
+SELECT id, "status", "cohort", "validUntil"
 FROM "StudentLicense"
 WHERE "membershipId" = :membership_id AND cohort = 'ua-2026';
 ```
@@ -301,7 +307,7 @@ Included small admin script (safe, dry‑run default)
 
 - File: `packages/prisma/scripts/grant-ua-student-license.ts`
 - Test: `packages/prisma/scripts/grant-ua-student-license.test.ts`
-- Behavior: dry‑run unless `--yes`; idempotent upsert on (`membershipId`,`cohort`); logs exactly what will change.
+- Behavior: dry‑run unless `--apply`; idempotent upsert on (`membershipId`,`cohort`); logs exactly what will change; writes an append‑only audit row and prints an exact rollback SQL plan.
 
 General audit/logging
 
