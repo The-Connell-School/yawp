@@ -13,6 +13,22 @@ export async function action({ request }: ActionFunctionArgs) {
   const body = await request.json().catch(() => null);
   const { documentId, textLength, content, eventId, sourceUrl } = body ?? {};
 
+  let invalidSource = false;
+  if (sourceUrl != null) {
+    if (typeof sourceUrl !== 'string' || sourceUrl.length > 2048) {
+      invalidSource = true;
+    } else {
+      try {
+        const u = new URL(sourceUrl);
+        if (!(u.protocol === 'http:' || u.protocol === 'https:')) {
+          invalidSource = true;
+        }
+      } catch {
+        invalidSource = true;
+      }
+    }
+  }
+
   if (
     typeof documentId !== 'string' ||
     !documentId ||
@@ -27,11 +43,7 @@ export async function action({ request }: ActionFunctionArgs) {
         !/^paste_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
           eventId
         ))) ||
-    (sourceUrl != null &&
-      (typeof sourceUrl !== 'string' ||
-        sourceUrl.length > 2048 ||
-        // Basic sanity check: allow http(s) only
-        !/^https?:\\/\\//i.test(sourceUrl)))
+    invalidSource
   ) {
     return dataResponse({ error: 'Invalid request' }, { status: 400 });
   }
