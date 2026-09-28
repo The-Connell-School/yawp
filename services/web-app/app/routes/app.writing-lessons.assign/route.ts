@@ -23,7 +23,6 @@ export async function action({ request }: ActionFunctionArgs) {
     return fail('Only teachers can assign writing practice.', 403);
   }
 
-  }
 
   const formData = await request.formData();
   const lessonSlugs = formData
