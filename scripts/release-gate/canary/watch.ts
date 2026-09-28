@@ -48,7 +48,7 @@ function fetchJson({ hostname, path, headers }: { hostname: string; path: string
   });
 }
 
-async function countPostHogErrors(minutes: number): Promise<number> {
+export async function countPostHogErrors(minutes: number): Promise<number> {
   const project = process.env.POSTHOG_PROJECT_ID || '';
   const host = (process.env.POSTHOG_HOST || 'https://us.posthog.com').replace(/^https?:\/\//, '');
   const token = process.env.POSTHOG_API_KEY || '';
@@ -76,7 +76,7 @@ async function countPostHogErrors(minutes: number): Promise<number> {
   return count;
 }
 
-function getAws5xx(minutes: number): number {
+export function getAws5xx(minutes: number): number {
   // Optional best-effort using AWS CLI if available
   if (!process.env.AWS_REGION || !process.env.APP_RUNNER_SERVICE_ARN) {
     console.warn('AWS not configured (AWS_REGION/APP_RUNNER_SERVICE_ARN). Skipping 5xx watch.');
@@ -118,28 +118,62 @@ function getAws5xx(minutes: number): number {
   }
 }
 
-function disableFlag(org: string, flag: string) {
+export function disableFlag(org: string, flag: string) {
   const res = spawnSync('bun', ['scripts/release-gate/canary/disable-flag.ts', '--org', org, '--flag', flag], { stdio: 'inherit' });
   if (res.error) throw res.error;
   return res.status ?? 0;
 }
 
+export async function evaluateAndMaybeRollback({
+  minutes,
+  errorThreshold,
+  server5xxThreshold,
+  org,
+  flag,
+  getErrors = countPostHogErrors,
+  get5xx = getAws5xx,
+  doDisable = disableFlag,
+}: {
+  minutes: number;
+  errorThreshold: number;
+  server5xxThreshold: number;
+  org: string;
+  flag: string;
+  getErrors?: (m: number) => Promise<number> | number;
+  get5xx?: (m: number) => number;
+  doDisable?: (org: string, flag: string) => number;
+}) {
+  const errs = await Promise.resolve(getErrors(minutes));
+  const fives = get5xx(minutes);
+  if (errs > errorThreshold || fives > server5xxThreshold) {
+    doDisable(org, flag);
+    return { rolledBack: true, errs, fives };
+  }
+  return { rolledBack: false, errs, fives };
+}
+
 async function main() {
   const { minutes, errorThreshold, server5xxThreshold, org, flag } = parseArgs();
   console.log(`Watching ${minutes}m: PostHog errors <= ${errorThreshold}, App Runner 5xx <= ${server5xxThreshold}`);
-  const errs = await countPostHogErrors(minutes);
-  const fives = getAws5xx(minutes);
+  const { rolledBack, errs, fives } = await evaluateAndMaybeRollback({
+    minutes,
+    errorThreshold,
+    server5xxThreshold,
+    org,
+    flag,
+  });
   console.log(`Observed: errors=${errs}, server5xx=${fives}`);
-  if (errs > errorThreshold || fives > server5xxThreshold) {
+  if (rolledBack) {
     console.error('Threshold exceeded — rolling back flag.');
-    disableFlag(org, flag);
     process.exit(2);
   }
   console.log('Stable — no rollback triggered.');
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(2);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(2);
+  });
+}
 

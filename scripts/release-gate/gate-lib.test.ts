@@ -4,7 +4,11 @@ import {
   checkTestsAlongsideSource,
   scanFeatureFlagGuards,
   checkPrBodySections,
+  checkVerdictFile,
+  checkFlagAgreement,
 } from './gate-lib.mjs';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
 
 describe('release gate library', () => {
   test('flags destructive and risky migration SQL', () => {
@@ -68,6 +72,28 @@ index 1111111..2222222 100644
   test('PR body must include Risks and Rollback sections', () => {
     const missing = checkPrBodySections('This PR changes some stuff.\n\nRisks: Low\n\n'); // no Rollback:
     expect(missing.map((r) => r.kind)).toEqual(['pr_missing_rollback_section']);
+  });
+
+  test('verdict file must exist per PR and match head SHA', () => {
+    const pr = 9999;
+    const sha = 'abc123';
+    const path = resolve(`.release-gate/verdicts/pr-${pr}.json`);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify({ headSha: sha, blockers: 0, majors: 0, flag: 'none' }));
+    const issues = checkVerdictFile({
+      prNumber: pr,
+      headSha: sha,
+    });
+    expect(issues).toEqual([]);
+    const mismatch = checkVerdictFile({ prNumber: pr, headSha: 'deadbeef' });
+    expect(mismatch.map((r) => r.kind)).toContain('verdict_sha_mismatch');
+  });
+
+  test('flag none override agreement allows skipping guard scan', () => {
+    const prBody = 'Summary\n\nFlag: none — bugfix only';
+    const { skipGuardScan, reasons } = checkFlagAgreement({ prBody, verdict: { flag: 'none' } });
+    expect(skipGuardScan).toBe(true);
+    expect(reasons).toEqual([]);
   });
 });
 

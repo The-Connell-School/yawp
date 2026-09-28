@@ -11,6 +11,7 @@ import {
   checkPrBodySections,
   checkCiStatus,
   checkVerdictFile,
+  checkFlagAgreement,
 } from './gate-lib.mjs';
 
 const BASE = process.env.BASE_BRANCH || 'main';
@@ -38,10 +39,6 @@ async function main() {
     reasons.push({ kind: 'branch_behind_main' });
   }
 
-  reasons.push(...checkMigrationSafety(changed));
-  reasons.push(...scanFeatureFlagGuards(BASE_REF));
-  reasons.push(...checkTestsAlongsideSource(changed));
-
   // PR body checks
   const event = loadPrInfoFromEvent();
   const repo = process.env.GITHUB_REPOSITORY || event?.repo;
@@ -63,11 +60,29 @@ async function main() {
   if (token && repo && sha) {
     reasons.push(...(await checkCiStatus({ sha, repo, token })));
   } else {
-    reasons.push({ kind: 'ci_status_unchecked' });
+    reasons.push({ kind: 'ci_status_unchecked' }); // blocks
   }
 
-  // Verdict file (required to exist)
-  reasons.push(...checkVerdictFile());
+  // Verdict file (required to exist) and must match head SHA; also supports flag agreement
+  const verdictIssues = checkVerdictFile({ prNumber, headSha: sha });
+  reasons.push(...verdictIssues);
+  let verdict = {};
+  if (verdictIssues.length === 0) {
+    try {
+      verdict = JSON.parse(require('node:fs').readFileSync(require('node:path').resolve(`.release-gate/verdicts/pr-${prNumber}.json`), 'utf8'));
+    } catch {
+      // already handled by issues if unreadable
+    }
+  }
+  const { skipGuardScan, reasons: flagAgreementIssues } = checkFlagAgreement({ prBody, verdict });
+  reasons.push(...flagAgreementIssues);
+
+  // Mechanical checks dependent on verdict/body parsing
+  reasons.push(...checkMigrationSafety(changed));
+  if (!skipGuardScan) {
+    reasons.push(...scanFeatureFlagGuards(BASE_REF));
+  }
+  reasons.push(...checkTestsAlongsideSource(changed));
 
   const ok = reasons.length === 0;
   printSummary(ok, reasons);

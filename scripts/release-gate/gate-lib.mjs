@@ -212,21 +212,54 @@ export async function checkCiStatus({ sha, repo, token }) {
   return [];
 }
 
-export function checkVerdictFile() {
-  const path = resolve('.release-gate/verdict.json');
-  if (!existsSync(path)) {
-    return [{ kind: 'verdict_file_missing' }];
+export function checkVerdictFile({ prNumber, headSha, exists = existsSync, read = (p) => readFileSync(p, 'utf8') }) {
+  if (!prNumber || !headSha) {
+    return [{ kind: 'verdict_pr_or_sha_missing' }];
+  }
+  const path = resolve(`.release-gate/verdicts/pr-${prNumber}.json`);
+  if (!exists(path)) {
+    return [{ kind: 'verdict_file_missing_for_pr', prNumber }];
   }
   try {
-    const v = JSON.parse(readFileSync(path, 'utf8'));
+    const v = JSON.parse(read(path));
     const blockers = Number(v?.blockers ?? 0);
     const majors = Number(v?.majors ?? 0);
+    const verdictSha = String(v?.headSha || '');
     const reasons = [];
+    if (!verdictSha || verdictSha !== headSha) {
+      reasons.push({ kind: 'verdict_sha_mismatch', expected: headSha, observed: verdictSha });
+    }
     if (blockers > 0) reasons.push({ kind: 'verdict_blockers_present', blockers });
     if (majors > 0) reasons.push({ kind: 'verdict_majors_present', majors });
     return reasons;
   } catch {
     return [{ kind: 'verdict_file_unreadable' }];
   }
+}
+
+export function parseFlagFromPrBody(prBody) {
+  const m = prBody?.match(/^\s*Flag\s*:\s*([^\n]+)$/im);
+  if (!m) return null;
+  const raw = m[1].trim();
+  if (/^none\b/i.test(raw)) return { kind: 'none', raw };
+  const name = raw.split(/\s/)[0].trim();
+  return { kind: 'named', name, raw };
+}
+
+export function checkFlagAgreement({ prBody, verdict }) {
+  const reasons = [];
+  const bodyFlag = parseFlagFromPrBody(prBody || '');
+  const verdictFlag = verdict?.flag;
+  if (bodyFlag?.kind === 'none') {
+    if (String(verdictFlag || '').toLowerCase() !== 'none') {
+      reasons.push({ kind: 'flag_agreement_mismatch', body: bodyFlag.raw, verdict: verdictFlag ?? '' });
+    }
+  }
+  if (bodyFlag?.kind === 'named') {
+    if (!verdictFlag || verdictFlag !== bodyFlag.name) {
+      reasons.push({ kind: 'flag_agreement_mismatch', body: bodyFlag.raw, verdict: verdictFlag ?? '' });
+    }
+  }
+  return { skipGuardScan: bodyFlag?.kind === 'none' && String(verdictFlag || '').toLowerCase() === 'none', reasons };
 }
 
