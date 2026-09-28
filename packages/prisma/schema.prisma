@@ -1067,6 +1067,8 @@ model Organization {
   classInsightsEnabled          Boolean                      @default(false)
   writingPracticeEnabled        Boolean                      @default(false)
   submissionActivityEnabled     Boolean                      @default(false)
+  /// Rollout gate for AP History features (per school/organization)
+  apHistoryEnabled              Boolean                      @default(false)
   /// Rollout gate for the student split-screen revision flow
   /// (/app/revise/:submissionId). Off keeps the legacy
   /// "Revise Essay" -> document editor path.
