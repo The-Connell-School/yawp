@@ -51,7 +51,10 @@ import {
   parseAssignmentRubricOverrides,
 } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
-import { resolveAssignmentPrompt } from '~/utils/assignment-exit-ticket.server';
+import {
+  exitTicketGradingModeFor,
+  resolveAssignmentPrompt,
+} from '~/utils/assignment-exit-ticket.server';
 import { parseStoredExitTicketConfig } from '~/domain/assignment-types/exit-ticket';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
@@ -507,7 +510,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
             rubricTotalPoints: rubricOverrides.data.rubricTotalPoints,
-            gradingMode: rubricOverrides.data.gradingMode,
+            gradingMode: exitTicketGradingModeFor({
+              assignmentTypeKind: selectedAssignmentType?.kind,
+              formData,
+              gradingMode: rubricOverrides.data.gradingMode,
+            }),
             gradingAssistantStrictnessLevel: gradingAssistantStrictnessLevel!,
             tutorEnabled: tutorEnabledResult.value,
             ...promptAttachmentData,
@@ -606,7 +613,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
             ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
             : {}),
           ...(formData.has('gradingMode')
-            ? { gradingMode: rubricOverrides.data.gradingMode }
+            ? {
+                gradingMode: exitTicketGradingModeFor({
+                  assignmentTypeKind: selectedAssignmentType?.kind,
+                  formData,
+                  gradingMode: rubricOverrides.data.gradingMode,
+                }),
+              }
             : {}),
           ...(gradingAssistantStrictnessLevel
             ? { gradingAssistantStrictnessLevel }

@@ -5,6 +5,7 @@ import {
   EXIT_TICKET_TOPIC_MAX_LENGTH,
 } from '~/domain/assignment-types/exit-ticket';
 import {
+  exitTicketGradingModeFor,
   parseAssignmentExitTicket,
   resolveAssignmentPrompt,
 } from './assignment-exit-ticket.server';
@@ -315,5 +316,34 @@ describe('resolveAssignmentPrompt', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe('exitTicketGradingModeFor', () => {
+  test('forces bands for an exit ticket from the quick builder', () => {
+    expect(
+      exitTicketGradingModeFor({
+        assignmentTypeKind: 'exit_ticket',
+        formData: formDataFor({ exitTicketKind: 'check' }),
+        gradingMode: 'step',
+      })
+    ).toBe('bands');
+  });
+
+  test('passes everything else through untouched', () => {
+    expect(
+      exitTicketGradingModeFor({
+        assignmentTypeKind: 'exit_ticket',
+        formData: formDataFor({ exitTicketMode: 'basic' }),
+        gradingMode: 'step',
+      })
+    ).toBe('step');
+    expect(
+      exitTicketGradingModeFor({
+        assignmentTypeKind: 'daily_pages',
+        formData: formDataFor({ exitTicketKind: 'check' }),
+        gradingMode: 'step',
+      })
+    ).toBe('step');
   });
 });

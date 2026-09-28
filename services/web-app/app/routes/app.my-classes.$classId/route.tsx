@@ -22,7 +22,10 @@ import {
   parseAssignmentRubricOverrides,
 } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
-import { resolveAssignmentPrompt } from '~/utils/assignment-exit-ticket.server';
+import {
+  exitTicketGradingModeFor,
+  resolveAssignmentPrompt,
+} from '~/utils/assignment-exit-ticket.server';
 import {
   formatClassLabel,
   type ClassDisplayFields,
@@ -509,7 +512,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
         : {}),
       ...(formData.has('gradingMode')
-        ? { gradingMode: rubricOverrides.data.gradingMode }
+        ? {
+            gradingMode: exitTicketGradingModeFor({
+              assignmentTypeKind: selectedAssignmentType?.kind,
+              formData,
+              gradingMode: rubricOverrides.data.gradingMode,
+            }),
+          }
         : {}),
     };
 
@@ -632,7 +641,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
             ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
             : {}),
           ...(formData.has('gradingMode')
-            ? { gradingMode: rubricOverrides.data.gradingMode }
+            ? {
+                gradingMode: exitTicketGradingModeFor({
+                  assignmentTypeKind: selectedAssignmentType?.kind,
+                  formData,
+                  gradingMode: rubricOverrides.data.gradingMode,
+                }),
+              }
             : {}),
           // Both controls now live on the edit form as well as the create
           // form. Only write them when the form actually sent them, so an

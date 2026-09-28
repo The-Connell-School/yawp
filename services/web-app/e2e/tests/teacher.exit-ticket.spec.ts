@@ -177,6 +177,10 @@ test.describe.serial('Exit tickets', () => {
     await expect(page.getByLabel('Grade this ticket')).not.toBeChecked();
     await page.getByLabel('Grade this ticket').check();
     await page.getByLabel('How many points?').fill('5');
+    // Always bands: there is no steps option to reach for.
+    await expect(page.getByText(/in\s+bands/)).toBeVisible();
+    await page.getByRole('button', { name: 'Change' }).click();
+    await expect(page.getByRole('button', { name: 'Steps' })).toHaveCount(0);
 
     // Points without an answer key is not something that can be graded.
     const create = page.getByRole('button', { name: /Create Assignment/i });

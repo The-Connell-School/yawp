@@ -1107,6 +1107,25 @@ describe('AssignmentCreationSheetContent', () => {
       expect(submitButton().disabled).toBe(false);
     });
 
+    it('is always graded in bands, with no steps option to pick', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialGradingMode: 'step',
+      }).root;
+      turnGradingOn();
+
+      expect(inputByName('gradingMode').value).toBe('bands');
+      expectText('in bands');
+      act(() => {
+        controlById('assignment-create-change-grading').click();
+      });
+      expect(
+        document.getElementById('assignment-create-grading-mode-step')
+      ).toBeNull();
+      // Strictness is still the teacher's call.
+      expectText('Grading assistance');
+    });
+
     it('reopens a graded ticket on the criteria it was given', () => {
       root = renderQuickExitTicketSheet({
         fixedClassId: 'class-1',

@@ -598,6 +598,11 @@ export function AssignmentCreationSheetContent({
     EXIT_TICKETS_ENABLED && isExitTicketAssignmentType(selectedType);
   // The quick builder asks for points itself, beside the criteria they need.
   const isQuickExitTicket = isExitTicket && exitTicketBuilder === 'v2';
+  // Bands, never steps, for the quick builder: the exit ticket rubric is one
+  // category with four bands, and a short response is not stepped through.
+  const effectiveGradingMode: AssignmentGradingMode = isQuickExitTicket
+    ? 'bands'
+    : gradingMode;
   const selectedExitTicketFocus = exitTicketFocusOption(exitTicketFocus);
   // Composed through the same parser the server uses, so the preview a teacher
   // approves and the prompt their students get cannot drift apart. Empty means
@@ -1564,7 +1569,7 @@ export function AssignmentCreationSheetContent({
                   </span>{' '}
                   in{' '}
                   <span className="font-medium text-foreground">
-                    {gradingMode === 'bands' ? 'bands' : 'steps'}
+                    {effectiveGradingMode === 'bands' ? 'bands' : 'steps'}
                   </span>
                   , read at the{' '}
                   <span className="font-medium text-foreground">
@@ -1628,28 +1633,30 @@ export function AssignmentCreationSheetContent({
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    <p
-                      id="assignment-create-scoring-behavior"
-                      className="text-sm font-medium"
-                    >
-                      Scoring behavior
-                    </p>
-                    <GradingChoiceGroup
-                      labelId="assignment-create-scoring-behavior"
-                      idPrefix="assignment-create-grading-mode"
-                      value={gradingMode}
-                      options={gradingModeOptions}
-                      onChange={setGradingMode}
-                      disabled={isSaving}
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      <span className="font-medium text-foreground">
-                        {gradingModeLabel}
-                      </span>{' '}
-                      — {gradingModeDescription}
-                    </p>
-                  </div>
+                  {isQuickExitTicket ? null : (
+                    <div className="space-y-2">
+                      <p
+                        id="assignment-create-scoring-behavior"
+                        className="text-sm font-medium"
+                      >
+                        Scoring behavior
+                      </p>
+                      <GradingChoiceGroup
+                        labelId="assignment-create-scoring-behavior"
+                        idPrefix="assignment-create-grading-mode"
+                        value={gradingMode}
+                        options={gradingModeOptions}
+                        onChange={setGradingMode}
+                        disabled={isSaving}
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        <span className="font-medium text-foreground">
+                          {gradingModeLabel}
+                        </span>{' '}
+                        — {gradingModeDescription}
+                      </p>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <p
@@ -1687,7 +1694,11 @@ export function AssignmentCreationSheetContent({
                 name="rubricTotalPoints"
                 value={pointValueFieldValue(initialRubricTotalPoints)}
               />
-              <input type="hidden" name="gradingMode" value={gradingMode} />
+              <input
+                type="hidden"
+                name="gradingMode"
+                value={effectiveGradingMode}
+              />
               <input
                 type="hidden"
                 name="gradingAssistantStrictnessLevel"

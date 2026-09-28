@@ -6,6 +6,7 @@ import {
   parseExitTicketConfigInput,
 } from '~/domain/assignment-types/exit-ticket';
 import { parseSubmitForGrade } from './assignment-grading-intent.server';
+import type { AssignmentGradingMode } from '~/domain/assignments/rubric-overrides';
 
 function isGraded(formData: FormData): boolean {
   const parsed = parseSubmitForGrade(formData);
@@ -129,4 +130,32 @@ export function resolveAssignmentPrompt({
     prompt: exitTicket.value.prompt,
     exitTicketConfigJson: exitTicket.value.exitTicketConfigJson,
   };
+}
+
+/**
+ * The grading mode to store for an assignment.
+ *
+ * An exit ticket from the quick builder is always read in bands: its rubric
+ * is one category with four bands, and snapping a five-minute response to a
+ * step label is not a judgment any teacher meant to make. Forms from the
+ * original builder keep whatever they posted, so switching the new builder
+ * off changes nothing.
+ */
+export function exitTicketGradingModeFor({
+  assignmentTypeKind,
+  formData,
+  gradingMode,
+}: {
+  assignmentTypeKind: string | null | undefined;
+  formData: FormData;
+  gradingMode: AssignmentGradingMode;
+}): AssignmentGradingMode {
+  if (
+    EXIT_TICKETS_ENABLED &&
+    isExitTicketAssignmentType({ kind: assignmentTypeKind }) &&
+    formData.has('exitTicketKind')
+  ) {
+    return 'bands';
+  }
+  return gradingMode;
 }

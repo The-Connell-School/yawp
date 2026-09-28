@@ -33,7 +33,10 @@ import {
 import { parseAssignmentCollaboration } from '~/utils/assignment-collaboration.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 import { parseAssignmentGrammarGrading } from '~/utils/assignment-grammar-grading.server';
-import { resolveAssignmentPrompt } from '~/utils/assignment-exit-ticket.server';
+import {
+  exitTicketGradingModeFor,
+  resolveAssignmentPrompt,
+} from '~/utils/assignment-exit-ticket.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -192,14 +195,6 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 400 }
     );
   }
-  const rubricOverrideData = {
-    ...(formData.has('rubricTotalPoints')
-      ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
-      : {}),
-    ...(formData.has('gradingMode')
-      ? { gradingMode: rubricOverrides.data.gradingMode }
-      : {}),
-  };
 
   const assignmentTypeAvailable = await isAssignmentTypeAvailableForEveryScope({
     assignmentTypeId,
@@ -227,6 +222,23 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 400 }
     );
   }
+
+  // Read once the type is known: a quick-builder exit ticket is always graded
+  // in bands, whatever mode the form carried.
+  const rubricOverrideData = {
+    ...(formData.has('rubricTotalPoints')
+      ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
+      : {}),
+    ...(formData.has('gradingMode')
+      ? {
+          gradingMode: exitTicketGradingModeFor({
+            assignmentTypeKind: assignmentType.kind,
+            formData,
+            gradingMode: rubricOverrides.data.gradingMode,
+          }),
+        }
+      : {}),
+  };
 
   const collaboration = collaborationResult.value;
 

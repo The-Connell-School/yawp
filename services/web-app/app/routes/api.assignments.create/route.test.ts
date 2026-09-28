@@ -1023,6 +1023,49 @@ describe('api.assignments.create', () => {
       });
     });
 
+    test('always grades a quick-builder exit ticket in bands', async () => {
+      mockExitTicketType();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketKind: 'reflection',
+          exitTicketMode: 'basic',
+          exitTicketGradingBasis: 'completion',
+          submitForGrade: 'true',
+          pointValue: '10',
+          // A stale or hand-made post cannot turn steps back on.
+          gradingMode: 'step',
+        }),
+        params: {},
+      } as any);
+
+      const data = createAssignmentDeployedToClasses.mock.calls.at(-1)![0].data;
+      expect(data.gradingMode).toBe('bands');
+    });
+
+    test('leaves the original builder on whatever mode it posted', async () => {
+      mockExitTicketType();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'basic',
+          submitForGrade: 'true',
+          pointValue: '10',
+          gradingMode: 'step',
+        }),
+        params: {},
+      } as any);
+
+      const data = createAssignmentDeployedToClasses.mock.calls.at(-1)![0].data;
+      expect(data.gradingMode).toBe('step');
+    });
+
     test('composes the focused prompt for a specific exit ticket', async () => {
       mockExitTicketType();
 
