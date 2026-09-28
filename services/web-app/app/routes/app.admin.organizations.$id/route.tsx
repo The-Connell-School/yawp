@@ -482,7 +482,8 @@ export default function OrganizationRoute() {
                       <span className="min-w-0">
                         <span className="block font-medium">Yawp Reporter</span>
                         <span className="block text-xs text-muted-foreground">
-                          Adds Reporter to the teacher sidebar.
+                          Retired: Reporter is always on for all organizations.
+                          This toggle is kept for historical data only.
                         </span>
                       </span>
                     </label>
@@ -499,8 +500,8 @@ export default function OrganizationRoute() {
                           Writing Practice
                         </span>
                         <span className="block text-xs text-muted-foreground">
-                          Adds Writing Practice to the teacher and student
-                          sidebars. Off by default while the feature is paused.
+                          Retired: Writing Practice is always on for all organizations.
+                          This toggle is kept for historical data only.
                         </span>
                       </span>
                     </label>

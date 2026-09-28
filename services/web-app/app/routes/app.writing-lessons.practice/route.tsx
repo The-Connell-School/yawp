@@ -1,11 +1,4 @@
-import {
-  Link,
-  data as dataResponse,
-  redirect,
-  useLoaderData,
-  type ActionFunctionArgs,
-  type LoaderFunctionArgs,
-} from 'react-router';
+import { Link, data as dataResponse, redirect, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
@@ -17,13 +10,15 @@ import {
   type RewriteCheckResult,
 } from '~/components/writing-lessons/practice-runner';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
+// Composition is always enabled for all orgs.
 import {
   buildTopicFallbackPrompts,
   sanitizeCompositionTopic,
 } from '~/utils/writing-lessons/composition-topic-prompts';
 import {
   buildMixedGeneratedPracticeSequence,
+  buildActPracticeSequence,
+  buildAssignedPracticeSequence,
   type MixedAssignedPracticeItem,
 } from '~/utils/writing-lessons/practice-assignments.server';
 import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
@@ -36,6 +31,10 @@ import {
   getQuickWritingPracticePrompts,
   type QuickWritingPracticePrompt,
 } from '~/utils/writing-lessons/static-lessons.server';
+import {
+  AiRateLimitError,
+  reserveAiRequest,
+} from '~/utils/ai-admission.server';
 
 const MAX_PROBLEMS = 20;
 const DEFAULT_PROBLEMS = 5;
@@ -46,9 +45,8 @@ const DEFAULT_PROBLEMS = 5;
  * must never reach past the same boundary an assigned one respects.
  */
 function parseSkills(raw: string | null): string[] {
-  const compositionEnabled = isCompositionPracticeEnabled();
   const seen = new Set<string>();
-  return (raw ?? '')
+  const parsed = (raw ?? '')
     .split(',')
     .map((slug) => slug.trim())
     .filter(Boolean)
@@ -57,8 +55,10 @@ function parseSkills(raw: string | null): string[] {
       seen.add(slug);
       const lesson = getQuickWritingLessonBySlug(slug);
       if (!lesson) return false;
-      return lesson.section !== 'Composition' || compositionEnabled;
+      return true;
     });
+  // Cap the number of skills to keep page-load generation bounded.
+  return parsed.slice(0, 5);
 }
 
 function clampCount(raw: string | null): number {
@@ -159,9 +159,6 @@ async function buildTopicSequence(
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (!profile.organization.writingPracticeEnabled) {
-    throw redirect('/app');
-  }
 
   const url = new URL(request.url);
   const skills = parseSkills(url.searchParams.get('skills'));
@@ -179,10 +176,114 @@ export async function loader({ request }: LoaderFunctionArgs) {
     : null;
   const topicApplies = Boolean(topic) && skills.every(isComposition);
 
-  const sequence =
-    topic && topicApplies
-      ? await buildTopicSequence(skills, count, topic)
-      : (await buildMixedGeneratedPracticeSequence(skills, count)).items;
+  let sequence: MixedAssignedPracticeItem[];
+  if (topic && topicApplies) {
+    // Admission for topic-shaped generation
+    const PRACTICE_GEN_POLICY = {
+      membershipLimit: 20,
+      membershipWindowMs: 60_000,
+      organizationLimit: 1000,
+      organizationWindowMs: 60 * 60_000,
+    };
+    try {
+      await reserveAiRequest({
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        feature: 'practice-generation',
+        policy: PRACTICE_GEN_POLICY,
+      });
+      sequence = await buildTopicSequence(skills, count, topic);
+    } catch (error) {
+      // Degrade to fallback prompts per composition skill — never crash
+      const fallback = skills
+        .map((slug) => {
+          const lesson = getQuickWritingLessonBySlug(slug);
+          if (!lesson) return null;
+          const prompts = buildTopicFallbackPrompts(slug, topic);
+          return { slug, title: lesson.title, prompts };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null);
+      const items: MixedAssignedPracticeItem[] = [];
+      let round = 0;
+      while (items.length < count) {
+        let added = false;
+        for (const entry of fallback) {
+          const prompt = entry.prompts[round];
+          if (!prompt) continue;
+          items.push({
+            kind: 'composition',
+            position: items.length + 1,
+            lessonSlug: entry.slug,
+            lessonTitle: entry.title,
+            prompt,
+          });
+          if (items.length >= count) break;
+          added = true;
+        }
+        if (!added) break;
+        round += 1;
+      }
+      sequence = items;
+    }
+  } else {
+    // Admission for mixed grammar/composition generation on page load
+    const PRACTICE_GEN_POLICY = {
+      membershipLimit: 20,
+      membershipWindowMs: 60_000,
+      organizationLimit: 1000,
+      organizationWindowMs: 60 * 60_000,
+    };
+    try {
+      await reserveAiRequest({
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        feature: 'practice-generation',
+        policy: PRACTICE_GEN_POLICY,
+      });
+      sequence = (await buildMixedGeneratedPracticeSequence(skills, count)).items;
+    } catch {
+      // Degrade to static bank: ACT from offline bank + composition from static prompts
+      const grammarSlugs = skills.filter((s) => !isComposition(s));
+      const compositionSlugs = skills.filter(isComposition);
+      let grammarCount = 0;
+      let compositionCount = 0;
+      if (grammarSlugs.length === 0) {
+        grammarCount = 0;
+        compositionCount = count;
+      } else if (compositionSlugs.length === 0) {
+        grammarCount = count;
+        compositionCount = 0;
+      } else {
+        const total = grammarSlugs.length + compositionSlugs.length;
+        grammarCount = Math.round((count * grammarSlugs.length) / total);
+        grammarCount = Math.max(1, Math.min(count - 1, grammarCount));
+        compositionCount = count - grammarCount;
+      }
+      const act = buildActPracticeSequence(grammarSlugs, grammarCount).map(
+        (item) => ({ ...item, kind: 'act' as const })
+      );
+      const compAssigned = buildAssignedPracticeSequence(
+        compositionSlugs,
+        compositionCount
+      ).map((item) => ({
+        kind: 'composition' as const,
+        position: item.position,
+        lessonSlug: item.lessonSlug,
+        lessonTitle: item.lessonTitle,
+        prompt: item.prompt,
+      }));
+      const items: MixedAssignedPracticeItem[] = [];
+      const maxLen = Math.max(act.length, compAssigned.length);
+      for (let i = 0; i < maxLen; i += 1) {
+        if (act[i]) items.push(act[i]!);
+        if (compAssigned[i]) items.push(compAssigned[i]!);
+      }
+      sequence = items.slice(0, count).map((it, idx) => ({
+        ...it,
+        position: idx + 1,
+      }));
+    }
+  }
 
   const items = sequence.map((item) => ({
     ...item,
@@ -223,9 +324,6 @@ type PracticeSessionActionData = PracticeRunnerResult | RewriteCheckResult;
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (!profile.organization.writingPracticeEnabled) {
-    throw new Response('Writing practice not found', { status: 404 });
-  }
 
   const formData = await request.formData();
   const intent = String(formData.get('intent') ?? '');
@@ -233,9 +331,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const context = getQuickWritingLessonContext(lessonSlug);
   const lesson = getQuickWritingLessonBySlug(lessonSlug);
   if (!context || !lesson) {
-    throw new Response('Unknown practice skill', { status: 400 });
-  }
-  if (lesson.section === 'Composition' && !isCompositionPracticeEnabled()) {
     throw new Response('Unknown practice skill', { status: 400 });
   }
 
@@ -247,6 +342,36 @@ export async function action({ request }: ActionFunctionArgs) {
         status: 400,
       });
     }
+    // Rate-limit per student/org to cap model usage.
+    const COMPOSITION_ADMISSION_POLICY = {
+      membershipLimit: 12,
+      membershipWindowMs: 60_000,
+      organizationLimit: 600,
+      organizationWindowMs: 60 * 60_000,
+    };
+    try {
+      await reserveAiRequest({
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        feature: 'rewrite-feedback',
+        policy: COMPOSITION_ADMISSION_POLICY,
+      });
+    } catch (error) {
+      if (error instanceof AiRateLimitError) {
+        return dataResponse(
+          {
+            error:
+              'Too many rewrite checks. Please wait a moment and try again.',
+          },
+          {
+            status: 429,
+            headers: { 'Retry-After': String(error.retryAfterSeconds) },
+          }
+        );
+      }
+      throw error;
+    }
+
     const feedback = await generatePracticeFeedback({
       lessonTitle: context.title,
       skill: context.skill,
@@ -287,6 +412,36 @@ export async function action({ request }: ActionFunctionArgs) {
         feedback: { ...guardrail, degraded: false },
         recorded: false,
       });
+    }
+
+    // Rate-limit per student/org to cap model usage.
+    const COMPOSITION_ADMISSION_POLICY = {
+      membershipLimit: 12,
+      membershipWindowMs: 60_000,
+      organizationLimit: 600,
+      organizationWindowMs: 60 * 60_000,
+    };
+    try {
+      await reserveAiRequest({
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        feature: 'composition-feedback',
+        policy: COMPOSITION_ADMISSION_POLICY,
+      });
+    } catch (error) {
+      if (error instanceof AiRateLimitError) {
+        return dataResponse(
+          {
+            error:
+              'Too many composition checks. Please wait a moment and try again.',
+          },
+          {
+            status: 429,
+            headers: { 'Retry-After': String(error.retryAfterSeconds) },
+          }
+        );
+      }
+      throw error;
     }
 
     const feedback = await generatePracticeFeedback({

@@ -941,7 +941,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (!klass) throw new Response('Class not found', { status: 404 });
 
   const classInsightsEnabled = klass.school.organization.classInsightsEnabled;
-  const reporterEnabled = klass.school.organization.reporterEnabled;
+  // Reporter is now always enabled for all organizations.
+  const reporterEnabled = true;
 
   const legacyClassDocumentIds = (
     await prisma.documentClassForensic.findMany({
@@ -1234,27 +1235,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     orderBy: [{ grade: 'asc' }, { period: 'asc' }],
   });
 
-  // Growth plans are only ever created via Reporter, so skip the query
-  // entirely for organizations that don't have it enabled.
-  const growthPlans = reporterEnabled
-    ? await prisma.reporterGrowthPlan.findMany({
-        where: {
-          organizationId: klass.school.organizationId,
-          studentMembershipId: { in: klass.students.map((s) => s.id) },
-        },
-        select: {
-          id: true,
-          focus: true,
-          targetSkills: true,
-          body: true,
-          checkInAt: true,
-          status: true,
-          createdAt: true,
-          studentMembershipId: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      })
-    : [];
+  // Growth plans are only ever created via Reporter.
+  const growthPlans = await prisma.reporterGrowthPlan.findMany({
+    where: {
+      organizationId: klass.school.organizationId,
+      studentMembershipId: { in: klass.students.map((s) => s.id) },
+    },
+    select: {
+      id: true,
+      focus: true,
+      targetSkills: true,
+      body: true,
+      checkInAt: true,
+      status: true,
+      createdAt: true,
+      studentMembershipId: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
 
   const growthPlansByStudentId = growthPlans.reduce<
     Record<string, typeof growthPlans>

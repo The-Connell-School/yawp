@@ -6,13 +6,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import {
-  Link,
-  data as dataResponse,
-  redirect,
-  useLoaderData,
-  type LoaderFunctionArgs,
-} from 'react-router';
+import { Link, data as dataResponse, useLoaderData, type LoaderFunctionArgs } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
@@ -30,7 +24,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { formatClassLabel } from '~/utils/class-display';
 import { formatDateOnly } from '~/utils/date-only';
 import { prisma } from '~/utils/db.server';
-import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
+// Composition is now always on — no rollout flag.
 import {
   resolveTeacherSchoolYearScope,
   schoolYearWhere,
@@ -65,28 +59,12 @@ function toAssignmentCard(assignment: WritingPracticeAssignmentSummary) {
   };
 }
 
-function assignmentIncludesComposition(
-  assignment: WritingPracticeAssignmentSummary
-) {
-  return assignment.lessonSlugs.some(
-    (slug) => getQuickWritingLessonBySlug(slug)?.section === 'Composition'
-  );
-}
-
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
 
-  if (!membership.organization.writingPracticeEnabled) {
-    throw redirect('/app');
-  }
-
-  // Composition is behind its rollout flag; hide the whole section until on.
-  const compositionEnabled = isCompositionPracticeEnabled();
+  // All sections, including Composition, are always visible.
   const sections = getQuickWritingLessonSections()
-    .filter(
-      (section) => compositionEnabled || section.section !== 'Composition'
-    )
     .map((section) => ({
       ...section,
       groups: section.groups.map((group) => ({
@@ -117,12 +95,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     isTeacher
       ? await listWritingPracticeAssignmentsForTeacher(membership.id)
       : await listWritingPracticeAssignmentsForStudent(membership.id)
-  )
-    .filter(
-      (assignment) =>
-        compositionEnabled || !assignmentIncludesComposition(assignment)
-    )
-    .map(toAssignmentCard);
+  ).map(toAssignmentCard);
 
   return dataResponse({
     sections,
