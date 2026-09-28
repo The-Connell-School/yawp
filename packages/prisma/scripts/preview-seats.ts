@@ -320,6 +320,12 @@ export async function seedCollaborationDemoForSeat(
         include: { currentRevision: true },
       });
     }
+    // Ensure the Daily Pages type opts into the engagement library rubric so pins match.
+    if (!rubric) return;
+    await prisma.assignmentType.update({
+      where: { id: dailyPagesType.id },
+      data: { rubricId: rubric.id },
+    });
     // Create if missing.
     const existing = await prisma.assignment.findFirst({
       where: {
@@ -330,6 +336,8 @@ export async function seedCollaborationDemoForSeat(
       select: { id: true },
     });
     if (!existing) {
+      const engagementRevisionId = rubric.currentRevision?.id;
+      if (!engagementRevisionId) return;
       const assignment = await prisma.assignment.create({
         data: {
           assignmentTypeId: dailyPagesType.id,
@@ -337,7 +345,7 @@ export async function seedCollaborationDemoForSeat(
           prompt: 'Write freely for ten minutes about something you noticed today.',
           submitForGrade: true,
           pointValue: 30,
-          rubricRevisionId: rubric!.currentRevision!.id,
+          rubricRevisionId: engagementRevisionId,
         },
       });
       await prisma.classAssignment.create({
