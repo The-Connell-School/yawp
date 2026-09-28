@@ -30,14 +30,12 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
       const copiedFromInsideApp = wasCopiedInsideApp(pastedText);
 
       if (!copiedFromInsideApp) {
-        const eventId =
-          textLength >= PASTE_ALERT_MIN_CHARS
-            ? `paste_${crypto.randomUUID()}`
-            : undefined;
-        // Always mark the pasted range so short external pastes still surface in the report.
+        const eventId = `paste_${crypto.randomUUID()}`;
+        // Always mark with a stable id so the snapshot can link the event.
         editor.commands.markLastPasteAsExternal?.(eventId);
 
-        if (textLength >= PASTE_ALERT_MIN_CHARS) {
+        // Always record an event for teacher review; percentage remains a lower-bound
+        // on 200+ chars, but the event list should include shorter pastes too.
           // Attempt to capture real provenance from clipboard data, when available.
         let sourceUrl: string | null = null;
         try {
@@ -75,11 +73,10 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
             documentId: docId,
             textLength,
             content: pastedText,
-            eventId: eventId!,
+            eventId,
             ...(sourceUrl ? { sourceUrl } : {}),
           }),
         }).catch(() => {});
-        }
       }
     };
 
