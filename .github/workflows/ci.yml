@@ -1,11 +1,9 @@
 name: CI
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -16,31 +14,61 @@ permissions:
   contents: read
 
 jobs:
+  paths:
+    name: Changed paths
+    runs-on: ubuntu-24.04
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      preview_tooling: ${{ steps.filter.outputs.preview_tooling }}
+      prisma: ${{ steps.filter.outputs.prisma }}
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+      - name: 🔍 Paths filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            code:
+              - 'services/**'
+              - 'packages/**'
+            preview_tooling:
+              - 'scripts/preview/**'
+            prisma:
+              - 'packages/prisma/**'
   # CI names every test file it runs, so a test file that is merely present never executes.
   # scripts/preview/*.test.js sat unrun for exactly that reason. It matters most here:
   # enforce-cap.sh removes trees as root before every deploy, and the ownership case it
   # guards can only be reproduced where bind mounts pass real UIDs through — which is
   # Linux, not a macOS workstation. This job is where that coverage actually happens.
   validate-preview-tooling:
+    needs: [paths]
     name: Preview tooling
     runs-on: ubuntu-24.04
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v3
+      - name: ⏭️ Skip (no preview tooling changes)
+        if: ${{ needs.paths.outputs.preview_tooling != 'true' }}
+        run: echo "No scripts/preview changes; skipping heavy steps."
 
       - name: 📥 Setup Bun
+        if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
+        if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
         run: bun install --frozen-lockfile
 
       # The root-owned-build-output test needs the image the preview host itself runs.
       - name: 🐳 Pull the preview runtime image
+        if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
         run: docker pull oven/bun:1.3.1
 
       # Fail rather than skip if the runner cannot produce root-owned files: a silent skip
       # here would leave the regression uncovered everywhere.
       - name: 🧪 Preview tooling tests
+        if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
         env:
           ENFORCE_CAP_REQUIRE_ROOT_OWNERSHIP: '1'
           # Exercise the real Postgres role/ACL migration on Linux. Local macOS runs
@@ -49,6 +77,7 @@ jobs:
         run: bun test ./scripts/preview/ --timeout 180000
 
   validate-prisma-migrations:
+    needs: [paths]
     name: Prisma migrations
     runs-on: ubuntu-22.04
     services:
@@ -67,11 +96,16 @@ jobs:
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v3
+      - name: ⏭️ Skip (no Prisma changes)
+        if: ${{ needs.paths.outputs.prisma != 'true' }}
+        run: echo "No packages/prisma changes; skipping heavy steps."
 
       - name: 📥 Setup Bun
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         run: bun install --frozen-lockfile
 
       # bunfig.toml preloads services/web-app/test-preload.ts for every `bun test` run in
@@ -80,43 +114,53 @@ jobs:
       # before the migration steps below. `prisma generate` reads the schema only — it does
       # not connect — so it can run before the validation database is created.
       - name: ⚙️ Generate Prisma Client
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma generate
 
       - name: 🧪 Validate deployment contract
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         run: bun test ./scripts/deployment-contract.test.ts
 
       - name: 🧪 Validate Blackboard LTI mock
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         run: bun test ./scripts/blackboard-lti-mock/ --timeout 60000
 
       - name: 🧪 Validate read-only impersonation contract
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         run: bun test ./scripts/read-only-impersonation-contract.test.ts
 
       - name: 🧰 Install Postgres client
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: 🛠️ Create migration validation database
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         env:
           PGPASSWORD: postgres
         run: createdb -h 127.0.0.1 -U postgres yawp_migration_ci
 
       - name: 🧪 Validate teacher training assignment migration data swap
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./packages/prisma/scripts/teacher-training-assignment-migration.test.ts
 
       - name: 🧱 Apply Prisma migrations
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma migrate deploy
 
       - name: 🎨 Backfill class artwork keys
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma backfill-class-art-key
 
       - name: 🧪 Assignment type release gate
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma assignment-type-release-gate
@@ -135,37 +179,48 @@ jobs:
       # install hoists it to the root, and only fails where node_modules is laid
       # out differently. Declaring what the seed imports is the guard for that.
       - name: 🌱 Seed local-dev data
+        if: ${{ needs.paths.outputs.prisma == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma seed-local-dev
 
   typecheck-web-app:
+    needs: [paths]
     name: ʦ TypeScript
     runs-on: ubuntu-22.04
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v3
+      - name: ⏭️ Skip (no code changes)
+        if: ${{ needs.paths.outputs.code != 'true' }}
+        run: echo "No services/** or packages/** changes; skipping heavy steps."
 
       - name: ⎔ Setup node
+        if: ${{ needs.paths.outputs.code == 'true' }}
         uses: actions/setup-node@v3
         with:
           node-version: 22
 
       - name: 📥 Download deps
+        if: ${{ needs.paths.outputs.code == 'true' }}
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
+        if: ${{ needs.paths.outputs.code == 'true' }}
         run: bun install --frozen-lockfile
 
       - name: ⚙️ Generate Prisma Client
+        if: ${{ needs.paths.outputs.code == 'true' }}
         run: bun prisma generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_typecheck
 
       - name: 🔎 Type check
+        if: ${{ needs.paths.outputs.code == 'true' }}
         run: bun web-app:typecheck
 
   e2e-web-app:
+    needs: [typecheck-web-app, validate-prisma-migrations, paths]
     name: 🧪 E2E Tests (Playwright)
     runs-on: ubuntu-22.04
     # The browser download hung for five hours on 2026-08-18 and would have run
@@ -173,7 +228,6 @@ jobs:
     # worth half a day of a runner: the tests themselves take about seven
     # minutes, so anything past half an hour is wedged, not slow.
     timeout-minutes: 30
-    needs: [typecheck-web-app, validate-prisma-migrations]
     services:
       postgres:
         image: postgres:16
@@ -190,19 +244,26 @@ jobs:
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v3
+      - name: ⏭️ Skip (draft PR or no code changes)
+        if: ${{ github.event_name == 'pull_request' && (github.event.pull_request.draft || needs.paths.outputs.code != 'true') }}
+        run: echo "Draft PR or no services/** or packages/** changes; skipping heavy steps."
 
       - name: ⎔ Setup node
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         uses: actions/setup-node@v3
         with:
           node-version: 22
 
       - name: 📥 Setup Bun
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         run: bun install --frozen-lockfile
 
       - name: ⚙️ Generate Prisma Client
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         run: bun prisma generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
@@ -211,12 +272,14 @@ jobs:
       # package.json invalidates the cache instead of restoring browsers that no
       # longer match the runner.
       - name: 🔖 Resolve Playwright version
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         id: playwright-version
         run: |
           echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: 💾 Cache Playwright browsers
         id: playwright-cache
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
@@ -226,7 +289,7 @@ jobs:
       # preview-access config defines a single chromium project, so Firefox was
       # downloaded on every run and never launched.
       - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true')) && steps.playwright-cache.outputs.cache-hit != 'true' }}
         working-directory: services/web-app
         timeout-minutes: 10
         run: npx --yes playwright install --with-deps chromium
@@ -234,12 +297,13 @@ jobs:
       # The cache holds the browsers, not the apt packages they link against, so
       # a restored cache still needs the system libraries putting back.
       - name: Install Playwright system dependencies
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true')) && steps.playwright-cache.outputs.cache-hit == 'true' }}
         working-directory: services/web-app
         timeout-minutes: 10
         run: npx --yes playwright install-deps chromium
 
       - name: 🧪 Run Playwright tests
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
         env:
           CI: true
@@ -247,6 +311,7 @@ jobs:
         run: bun run test:e2e:smoke
 
       - name: 🔐 Run preview access gate tests
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
         env:
           CI: true
