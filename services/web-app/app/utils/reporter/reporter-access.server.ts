@@ -27,12 +27,8 @@ export async function getReporterAccess(
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
   const isTeacher = membership.role === 'TEACHER';
-
-  const organization = await prisma.organization.findUnique({
-    where: { id: membership.organization.id },
-    select: { reporterEnabled: true },
-  });
-  const enabled = Boolean(organization?.reporterEnabled);
+  // Reporter is now always enabled for all organizations.
+  const enabled = true;
 
   return {
     userId,
@@ -44,8 +40,8 @@ export async function getReporterAccess(
 }
 
 /**
- * Throw a 404 unless the caller is a teacher in a reporter-enabled org. 404
- * (rather than 403) keeps the feature invisible to orgs that don't have it.
+ * Throw a 404 unless the caller is a teacher. 404 (rather than 403) keeps the
+ * feature invisible to non-teachers.
  */
 export async function requireReporterAccess(
   request: Request

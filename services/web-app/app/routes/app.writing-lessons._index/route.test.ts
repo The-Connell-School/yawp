@@ -58,19 +58,19 @@ describe('writing lessons index route', () => {
     expect(response.data.promptCount).toBeGreaterThan(0);
   });
 
-  test('redirects to the dashboard when the org has writing practice disabled', async () => {
+  test('loads by direct URL even when the org previously had writing practice disabled', async () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
+      role: 'STUDENT',
       organization: { id: 'org-1', writingPracticeEnabled: false },
     });
-
-    await expect(
-      loader({
-        request: new Request('https://example.test/app/writing-lessons'),
-        params: {},
-        context: {} as never,
-      } as any)
-    ).rejects.toMatchObject({ status: 302 });
+    const response = await loader({
+      request: new Request('https://example.test/app/writing-lessons'),
+      params: {},
+      context: {} as never,
+    } as any);
+    expect(response.data.lessonCount).toBeGreaterThan(0);
+    expect(response.data.promptCount).toBeGreaterThan(0);
   });
 
   test('loads active classes for a teacher creating a practice assignment', async () => {

@@ -18,10 +18,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
 
-  if (!membership.organization.writingPracticeEnabled) {
-    return fail('Writing practice is not enabled for your organization.', 404);
-  }
-
   if (membership.role !== 'TEACHER') {
     return fail('Only teachers can assign writing practice.', 403);
   }

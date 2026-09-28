@@ -21,7 +21,7 @@ test.describe('Yawp Reporter', () => {
     await setReporterEnabled(e2eContext.organizationId, false);
   });
 
-  test('is hidden and unreachable when the org flag is off', async ({
+  test('is visible and reachable when the org flag is off', async ({
     page,
     signIn,
     e2eContext,
@@ -29,12 +29,12 @@ test.describe('Yawp Reporter', () => {
     await setReporterEnabled(e2eContext.organizationId, false);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
-    // No sidebar entry.
-    await expect(page.getByRole('link', { name: 'Reporter' })).toHaveCount(0);
+    // Sidebar entry is present.
+    await expect(page.getByRole('link', { name: 'Reporter' })).toBeVisible();
 
-    // Direct navigation redirects back into the app, away from the reporter.
+    // Direct navigation reaches the reporter.
     await page.goto('/app/reporter');
-    await expect(page).toHaveURL(/\/app(?!\/reporter)/);
+    await expect(page).toHaveURL(/\/app\/reporter/);
   });
 
   test('lets an enabled teacher open the reporter and start a report', async ({

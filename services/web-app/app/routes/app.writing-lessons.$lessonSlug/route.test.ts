@@ -39,20 +39,21 @@ describe('writing lesson detail route', () => {
     expect(response.data.practicePrompts.length).toBeGreaterThan(0);
   });
 
-  test('redirects to the dashboard when the org has writing practice disabled', async () => {
+  test('loads a lesson even when the org previously had writing practice disabled', async () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
       organization: { id: 'org-1', writingPracticeEnabled: false },
     });
 
-    await expect(
-      loader({
-        request: new Request(
-          'https://example.test/app/writing-lessons/revising-for-wordiness'
-        ),
-        params: { lessonSlug: 'revising-for-wordiness' },
-        context: {} as never,
-      } as any)
-    ).rejects.toMatchObject({ status: 302 });
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/writing-lessons/revising-for-wordiness'
+      ),
+      params: { lessonSlug: 'revising-for-wordiness' },
+      context: {} as never,
+    } as any);
+
+    expect(response.data.lesson.slug).toBe('revising-for-wordiness');
+    expect(response.data.practicePrompts.length).toBeGreaterThan(0);
   });
 });

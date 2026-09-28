@@ -52,10 +52,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
 
-  if (!membership.organization.writingPracticeEnabled) {
-    throw redirect('/app');
-  }
-
   const groups = getQuickWritingLessonGroups().map((group) => ({
     ...group,
     lessons: group.lessons.map((lesson) => ({

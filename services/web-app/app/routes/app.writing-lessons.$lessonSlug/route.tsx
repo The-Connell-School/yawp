@@ -33,10 +33,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
 
-  if (!membership.organization.writingPracticeEnabled) {
-    throw redirect('/app');
-  }
-
   const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
   if (!lesson) {
     throw new Response('Lesson not found', { status: 404 });

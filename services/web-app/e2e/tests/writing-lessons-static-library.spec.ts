@@ -41,7 +41,7 @@ async function assertHeroAndGridLayout(page: Page) {
 }
 
 test.describe.serial('Writing practice prototype', () => {
-  test('keeps writing practice off the student dashboard', async ({
+  test('shows writing practice on the student dashboard', async ({
     page,
     e2eContext,
     signIn,
@@ -52,7 +52,7 @@ test.describe.serial('Writing practice prototype', () => {
 
     await expect(
       page.getByRole('link', { name: /writing practice/i })
-    ).toHaveCount(0);
+    ).toBeVisible();
   });
 
   test('loads lessons by direct URL and supports a self-guided practice check', async ({
@@ -60,72 +60,58 @@ test.describe.serial('Writing practice prototype', () => {
     e2eContext,
     signIn,
   }) => {
-    const prisma = createE2EPrismaClient();
-    try {
-      await prisma.organization.update({
-        where: { id: e2eContext.organizationId },
-        data: { writingPracticeEnabled: true },
-      });
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
 
-      await signIn(e2eContext.userEmail, 'johndoe');
-      await page.goto('/app/writing-lessons');
+    await expect(
+      page.getByRole('heading', { name: /writing practice/i })
+    ).toBeVisible();
 
-      await expect(
-        page.getByRole('heading', { name: /writing practice/i })
-      ).toBeVisible();
+    const studentIntro = page.getByTestId('writing-practice-student-intro');
+    await expect(studentIntro).toBeVisible();
+    await expect(studentIntro).toContainText(
+      'This is practice, not graded work.'
+    );
+    await expect(studentIntro).toContainText(
+      'Pick a lesson below, read the example, then answer the practice prompt.'
+    );
+    await expect(studentIntro).not.toContainText("your students' writing");
 
-      const studentIntro = page.getByTestId('writing-practice-student-intro');
-      await expect(studentIntro).toBeVisible();
-      await expect(studentIntro).toContainText(
-        'This is practice, not graded work.'
-      );
-      await expect(studentIntro).toContainText(
-        'Pick a lesson below, read the example, then answer the practice prompt.'
-      );
-      await expect(studentIntro).not.toContainText("your students' writing");
+    await expect(
+      page.getByRole('link', { name: /revising for wordiness/i })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /comma splices/i })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /pronoun agreement/i })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /^New .+ assignment$/ })
+    ).toHaveCount(0);
 
-      await expect(
-        page.getByRole('link', { name: /revising for wordiness/i })
-      ).toBeVisible();
-      await expect(
-        page.getByRole('link', { name: /comma splices/i })
-      ).toBeVisible();
-      await expect(
-        page.getByRole('link', { name: /pronoun agreement/i })
-      ).toBeVisible();
-      await expect(
-        page.getByRole('button', { name: /^New .+ assignment$/ })
-      ).toHaveCount(0);
+    await page.getByRole('link', { name: /revising for wordiness/i }).click();
 
-      await page.getByRole('link', { name: /revising for wordiness/i }).click();
+    await expect(
+      page.getByRole('heading', {
+        name: 'Revising for Wordiness',
+        level: 2,
+      })
+    ).toBeVisible();
+    await expect(page.getByText(/practice prompt/i)).toBeVisible();
+    await expect(
+      page.getByRole('complementary').getByText('At this point in time')
+    ).toBeVisible();
 
-      await expect(
-        page.getByRole('heading', {
-          name: 'Revising for Wordiness',
-          level: 2,
-        })
-      ).toBeVisible();
-      await expect(page.getByText(/practice prompt/i)).toBeVisible();
-      await expect(
-        page.getByRole('complementary').getByText('At this point in time')
-      ).toBeVisible();
+    await page
+      .getByLabel(/your practice response/i)
+      .fill('We cannot accept new applications now.');
+    await page.getByRole('button', { name: /check response/i }).click();
 
-      await page
-        .getByLabel(/your practice response/i)
-        .fill('We cannot accept new applications now.');
-      await page.getByRole('button', { name: /check response/i }).click();
-
-      await expect(page.getByText(/score preview/i)).toBeVisible();
-      await expect(page.getByText(/ready for tutor review/i)).toBeVisible();
-      await page.getByRole('button', { name: /try another prompt/i }).click();
-      await expect(page.getByText(/weak construction/i)).toBeVisible();
-    } finally {
-      await prisma.organization.update({
-        where: { id: e2eContext.organizationId },
-        data: { writingPracticeEnabled: false },
-      });
-      await prisma.$disconnect();
-    }
+    await expect(page.getByText(/score preview/i)).toBeVisible();
+    await expect(page.getByText(/ready for tutor review/i)).toBeVisible();
+    await page.getByRole('button', { name: /try another prompt/i }).click();
+    await expect(page.getByText(/weak construction/i)).toBeVisible();
   });
 
   test('lays out the hero and lesson grid without overflow or clipping (teacher)', async ({
@@ -133,27 +119,13 @@ test.describe.serial('Writing practice prototype', () => {
     e2eContext,
     signIn,
   }) => {
-    const prisma = createE2EPrismaClient();
-    try {
-      await prisma.organization.update({
-        where: { id: e2eContext.organizationId },
-        data: { writingPracticeEnabled: true },
-      });
+    // A common laptop width, narrower than a typical external monitor,
+    // so a regression to the flex/overflow bug would surface.
+    await page.setViewportSize({ width: 1024, height: 800 });
 
-      // A common laptop width, narrower than a typical external monitor,
-      // so a regression to the flex/overflow bug would surface.
-      await page.setViewportSize({ width: 1024, height: 800 });
-
-      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app/writing-lessons');
-      await assertHeroAndGridLayout(page);
-    } finally {
-      await prisma.organization.update({
-        where: { id: e2eContext.organizationId },
-        data: { writingPracticeEnabled: false },
-      });
-      await prisma.$disconnect();
-    }
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons');
+    await assertHeroAndGridLayout(page);
   });
 
   test('lays out the hero and lesson grid without overflow or clipping (student)', async ({
@@ -161,25 +133,11 @@ test.describe.serial('Writing practice prototype', () => {
     e2eContext,
     signIn,
   }) => {
-    const prisma = createE2EPrismaClient();
-    try {
-      await prisma.organization.update({
-        where: { id: e2eContext.organizationId },
-        data: { writingPracticeEnabled: true },
-      });
+    await page.setViewportSize({ width: 1024, height: 800 });
 
-      await page.setViewportSize({ width: 1024, height: 800 });
-
-      await signIn(e2eContext.userEmail, 'johndoe');
-      await page.goto('/app/writing-lessons');
-      await assertHeroAndGridLayout(page);
-    } finally {
-      await prisma.organization.update({
-        where: { id: e2eContext.organizationId },
-        data: { writingPracticeEnabled: false },
-      });
-      await prisma.$disconnect();
-    }
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
+    await assertHeroAndGridLayout(page);
   });
 
   test('lets a teacher create a lesson assignment from the card plus button', async ({
@@ -191,11 +149,6 @@ test.describe.serial('Writing practice prototype', () => {
     const assignmentTitle = `Wordiness practice ${Date.now()}`;
 
     try {
-      await prisma.organization.update({
-        where: { id: e2eContext.organizationId },
-        data: { writingPracticeEnabled: true },
-      });
-
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto('/app/writing-lessons');
 
@@ -242,10 +195,6 @@ test.describe.serial('Writing practice prototype', () => {
     } finally {
       await prisma.writingPracticeAssignment.deleteMany({
         where: { title: assignmentTitle },
-      });
-      await prisma.organization.update({
-        where: { id: e2eContext.organizationId },
-        data: { writingPracticeEnabled: false },
       });
       await prisma.$disconnect();
     }

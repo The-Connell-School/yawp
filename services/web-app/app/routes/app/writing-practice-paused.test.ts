@@ -1,12 +1,8 @@
 /**
- * Writing Practice is paused for the pre-school-start release.
+ * Writing Practice availability (always on).
  *
- * The feature code stays on the branch but ships dark behind
- * `Organization.writingPracticeEnabled`, which defaults to false. This file
- * pins the paused state in one place: with the flag off, neither a teacher nor
- * a student gets a navigation entry, and every Writing Practice route refuses
- * instead of rendering. Deleting or weakening these assertions is how the
- * feature would leak into a release it was pulled from.
+ * Writing Practice is now live for every organization. These tests prove it's
+ * visible and reachable even when an org previously had the flag off.
  */
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
@@ -63,28 +59,19 @@ function destinationsFor(user: any) {
   ).flatMap((section) => section.links.map((link) => link.to));
 }
 
-describe('Writing Practice is invisible while paused', () => {
-  test('a teacher gets no Writing Practice navigation entry', () => {
+describe('Writing Practice navigation is visible', () => {
+  test('a teacher sees the Writing Practice navigation entry even when the org flag is off', () => {
     const destinations = destinationsFor(pausedUser('TEACHER'));
-
-    expect(destinations).not.toContain('/app/writing-lessons');
-    expect(
-      destinations.some((to) => to.startsWith('/app/writing-lessons'))
-    ).toBe(false);
+    expect(destinations).toContain('/app/writing-lessons');
   });
 
-  test('a student gets no Writing Practice navigation entry', () => {
+  test('a student sees the Writing Practice navigation entry even when the org flag is off', () => {
     const destinations = destinationsFor(pausedUser('STUDENT'));
-
-    expect(destinations).not.toContain('/app/writing-lessons');
-    expect(
-      destinations.some((to) => to.startsWith('/app/writing-lessons'))
-    ).toBe(false);
+    expect(destinations).toContain('/app/writing-lessons');
   });
-
 });
 
-describe('Writing Practice routes refuse while paused', () => {
+describe('Writing Practice routes are reachable', () => {
   beforeEach(() => {
     requireUserId.mockReset();
     requireMembership.mockReset();
@@ -95,58 +82,55 @@ describe('Writing Practice routes refuse while paused', () => {
     classFindMany.mockResolvedValue([{ id: 'class-1' }]);
   });
 
-  test('the library index refuses for a student', async () => {
+  test('the library index loads for a student even when the org flag is off', async () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
       role: 'STUDENT',
       organization: { id: 'org-1', writingPracticeEnabled: false },
     });
 
-    await expect(
-      indexLoader({
-        request: new Request('https://example.test/app/writing-lessons'),
-        params: {},
-        context: {} as never,
-      } as any)
-    ).rejects.toMatchObject({ status: 302 });
+    const response = await indexLoader({
+      request: new Request('https://example.test/app/writing-lessons'),
+      params: {},
+      context: {} as never,
+    } as any);
+    expect(response.data.lessonCount).toBeGreaterThan(0);
   });
 
-  test('the library index refuses for a teacher', async () => {
+  test('the library index loads for a teacher even when the org flag is off', async () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
       organization: { id: 'org-1', writingPracticeEnabled: false },
     });
 
-    await expect(
-      indexLoader({
-        request: new Request('https://example.test/app/writing-lessons'),
-        params: {},
-        context: {} as never,
-      } as any)
-    ).rejects.toMatchObject({ status: 302 });
-    expect(classFindMany).not.toHaveBeenCalled();
+    const response = await indexLoader({
+      request: new Request('https://example.test/app/writing-lessons'),
+      params: {},
+      context: {} as never,
+    } as any);
+    expect(response.data.isTeacher).toBe(true);
+    expect(classFindMany).toHaveBeenCalled();
   });
 
-  test('a lesson detail URL refuses', async () => {
+  test('a lesson detail URL loads', async () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
       role: 'STUDENT',
       organization: { id: 'org-1', writingPracticeEnabled: false },
     });
 
-    await expect(
-      lessonLoader({
-        request: new Request(
-          'https://example.test/app/writing-lessons/weak-construction'
-        ),
-        params: { lessonSlug: 'weak-construction' },
-        context: {} as never,
-      } as any)
-    ).rejects.toMatchObject({ status: 302 });
+    const response = await lessonLoader({
+      request: new Request(
+        'https://example.test/app/writing-lessons/weak-construction'
+      ),
+      params: { lessonSlug: 'weak-construction' },
+      context: {} as never,
+    } as any);
+    expect(response.data.lesson.slug).toBe('weak-construction');
   });
 
-  test('the assign action refuses for a teacher and writes nothing', async () => {
+  test('the assign action allows a teacher and writes practice', async () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
@@ -157,7 +141,7 @@ describe('Writing Practice routes refuse while paused', () => {
       request: new Request('https://example.test/app/writing-lessons/assign', {
         method: 'POST',
         body: new URLSearchParams([
-          ['title', 'Paused practice'],
+          ['title', 'Practice when disabled'],
           ['lessonSlugs', 'weak-construction'],
           ['classIds', 'class-1'],
           ['problemCount', '5'],
@@ -168,11 +152,8 @@ describe('Writing Practice routes refuse while paused', () => {
       context: {} as never,
     } as any);
 
-    expect(response.init?.status).toBe(404);
-    expect(response.data.success).toBe(false);
-    expect(response.data.message).toBe(
-      'Writing practice is not enabled for your organization.'
-    );
-    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+    expect(response.init?.status).toBe(200);
+    expect(response.data.success).toBe(true);
+    expect(createWritingPracticeAssignmentForClasses).toHaveBeenCalled();
   });
 });
