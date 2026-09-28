@@ -384,7 +384,21 @@ export async function seedSyntheticLocalDevData(
       });
     }
 
+    // Point the seeded Daily Pages type at the engagement library rubric so pins match.
+    if (rubric) {
+      await prisma.assignmentType.update({
+        where: { id: dailyPagesAssignmentTypeId },
+        data: { rubricId: rubric.id },
+      });
+    }
+
     // Create the preview assignment pinned to the engagement rubric.
+    const engagementRevisionId = rubric?.currentRevision?.id;
+    if (!engagementRevisionId) {
+      // Skip creation when the library rubric is not fully published.
+      // Preview seat top-up repairs this on host.
+      // Continue seeding the rest of the data.
+    } else {
     const engagementAssignment = await prisma.assignment.create({
       data: {
         assignmentTypeId: dailyPagesAssignmentTypeId,
@@ -392,13 +406,14 @@ export async function seedSyntheticLocalDevData(
         prompt: 'Write freely for ten minutes about something you noticed today.',
         submitForGrade: true,
         pointValue: 30,
-        rubricRevisionId: rubric!.currentRevision!.id,
+        rubricRevisionId: engagementRevisionId,
       },
       select: { id: true },
     });
     await prisma.classAssignment.create({
       data: { assignmentId: engagementAssignment.id, classId: primaryClass.id },
     });
+    }
   }
 
   if (classStarterAssignmentTypeId) {
