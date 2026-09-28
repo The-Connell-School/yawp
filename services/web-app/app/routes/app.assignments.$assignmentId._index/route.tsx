@@ -1,3 +1,10 @@
+import { ExitTicketClassReadPanel } from '~/components/assignments/exit-ticket-class-read-panel';
+import {
+  EXIT_TICKET_CLASS_READ_ENABLED,
+  buildExitTicketClassRead,
+} from '~/domain/assignment-types/exit-ticket-class-read';
+import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-class-read.server';
+import { EXIT_TICKET_SEED_STEP } from '~/domain/lesson-planner/lesson-seed';
 import { Prisma } from '@app/prisma';
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import {
@@ -55,7 +62,10 @@ import {
   exitTicketGradingModeFor,
   resolveAssignmentPrompt,
 } from '~/utils/assignment-exit-ticket.server';
-import { parseStoredExitTicketConfig } from '~/domain/assignment-types/exit-ticket';
+import {
+  isExitTicketAssignmentType,
+  parseStoredExitTicketConfig,
+} from '~/domain/assignment-types/exit-ticket';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
 import {
@@ -122,7 +132,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             select: {
               id: true,
               organizationId: true,
-              organization: { select: { classInsightsEnabled: true } },
+              organization: {
+                select: {
+                  classInsightsEnabled: true,
+                  lessonPlannerEnabled: true,
+                },
+              },
             },
           },
         },
@@ -220,6 +235,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     gradesGrammar: gradesGrammarIds.has(assignmentType.id),
   }));
 
+  // An exit ticket is read for what the class understood, graded or not, so
+  // its class read is built from every response rather than waiting on a
+  // generated summary.
+  const exitTicketConfig = parseStoredExitTicketConfig(
+    active.assignment.exitTicketConfigJson
+  );
+  const exitTicketClassRead =
+    EXIT_TICKET_CLASS_READ_ENABLED &&
+    isExitTicketAssignmentType(active.assignment.assignmentType)
+      ? buildExitTicketClassRead({
+          responses: await loadExitTicketResponses(active.id),
+          config: exitTicketConfig,
+        })
+      : null;
+  const lessonPlannerEnabled =
+    active.class.school.organization.lessonPlannerEnabled === true;
+
   const insight =
     insightRow && insightRow.status === 'ready' && insightRow.summaryJson
       ? {
@@ -274,13 +306,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       // Null for everything that is not an exit ticket, and for an exit ticket
       // created before this column existed. The sheet falls back to the
       // default answers in both cases.
-      exitTicket: parseStoredExitTicketConfig(
-        active.assignment.exitTicketConfigJson
-      ),
+      exitTicket: exitTicketConfig,
       assignmentType: active.assignment.assignmentType,
       documentCount: active._count.documents,
       gradedCount,
       insight,
+      exitTicketClassRead,
+      // Only where the planner is on; the step is not an index, so it can
+      // never be read as a Class Summary next step.
+      exitTicketPlanHref:
+        exitTicketClassRead && lessonPlannerEnabled
+          ? `/app/lesson-planner?from=${active.id}&step=${EXIT_TICKET_SEED_STEP}`
+          : null,
     },
   };
 }
@@ -864,6 +901,14 @@ export default function AssignmentDetailRoute() {
             </div>
           </div>
 
+          {data.assignment.exitTicketClassRead ? (
+            <div className="mb-4">
+              <ExitTicketClassReadPanel
+                read={data.assignment.exitTicketClassRead}
+                planHref={data.assignment.exitTicketPlanHref}
+              />
+            </div>
+          ) : null}
           <AssignmentSummarySheetContent
             assignment={assignmentForContent}
             classInsightsEnabled={data.classInsightsEnabled}

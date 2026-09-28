@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { createE2EPrismaClient } from '../prisma-client';
 
 // An exit ticket is the one assignment type a teacher does not write a prompt
 // for: they answer the form and the product composes what students read. These
@@ -250,5 +251,85 @@ test.describe.serial('Exit tickets', () => {
     await expect(
       page.getByRole('heading', { name: 'New Assignment' })
     ).toHaveCount(0);
+  });
+
+  test('the class read shows how the tickets came back and plans tomorrow', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `/app/assignment-types/${e2eContext.exitTicketAssignmentTypeId}`
+    );
+    await openNewAssignmentSheet(page);
+    await page.getByLabel('Title (optional)').fill('Exit ticket: class read');
+    await page.getByRole('button', { name: /Create Assignment/i }).click();
+    await expect(
+      page.getByRole('heading', { name: 'New Assignment' })
+    ).toHaveCount(0);
+
+    // One ticket back, read and scored, with a question in it.
+    const prisma = createE2EPrismaClient();
+    let assignmentId: string;
+    try {
+      await prisma.organization.update({
+        where: { id: e2eContext.organizationId },
+        data: { lessonPlannerEnabled: true },
+      });
+      const classAssignment = await prisma.classAssignment.findFirstOrThrow({
+        where: {
+          classId: e2eContext.classId,
+          assignment: { title: 'Exit ticket: class read' },
+        },
+        select: { id: true, assignmentId: true },
+      });
+      assignmentId = classAssignment.assignmentId;
+      const text =
+        'Weathering breaks the rock. Why does erosion need water to move it?';
+      const document = await prisma.document.create({
+        data: {
+          title: 'Exit ticket: class read',
+          text,
+          html: `<p>${text}</p>`,
+          membershipId: e2eContext.membershipId,
+          assignmentTypeId: e2eContext.exitTicketAssignmentTypeId,
+          assignmentId,
+          classAssignmentId: classAssignment.id,
+        },
+        select: { id: true },
+      });
+      await prisma.submission.create({
+        data: {
+          documentId: document.id,
+          text,
+          html: `<p>${text}</p>`,
+          title: 'Exit ticket: class read',
+          submittedAt: new Date(),
+          gradedAt: new Date(),
+          rubricScores: { understanding: { score: 30, isAi: true } },
+        },
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+
+    await page.goto(`/app/assignments/${assignmentId}`);
+    const panel = page.getByTestId('exit-ticket-class-read');
+    await expect(panel).toContainText('1 of 1 responses read');
+    await expect(panel).toContainText('Names it only');
+    await expect(panel).toContainText(
+      'Why does erosion need water to move it?'
+    );
+    await page.screenshot({
+      path: 'test-results/exit-ticket-class-read.png',
+      fullPage: true,
+    });
+
+    await panel.getByTestId('exit-ticket-plan-tomorrow').click();
+    await expect(page).toHaveURL(/\/app\/lesson-planner/);
+    await expect(page.getByTestId('lesson-planner-seed')).toContainText(
+      'Exit ticket: class read'
+    );
   });
 });

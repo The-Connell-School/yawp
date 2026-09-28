@@ -1,6 +1,9 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
-const prisma = { classAssignment: { findFirst: mock() } };
+const prisma = {
+  classAssignment: { findFirst: mock() },
+  document: { findMany: mock() },
+};
 mock.module('~/utils/db.server', () => ({ prisma }));
 
 const { loadLessonSeed } = await import('./lesson-seed.server');
@@ -115,5 +118,80 @@ describe('loadLessonSeed', () => {
       stepIndex: '7',
     });
     expect(seed).toBeNull();
+  });
+});
+
+describe('loadLessonSeed from an exit ticket class read', () => {
+  function exitTicketRow() {
+    return classAssignmentRow({
+      assignment: {
+        title: 'Exit ticket: erosion',
+        exitTicketConfigJson: { schemaVersion: 1, mode: 'basic' },
+        assignmentType: { kind: 'exit_ticket' },
+      },
+      insight: null,
+    });
+  }
+
+  test('builds the ask from the tickets, not from a class summary', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue(exitTicketRow());
+    prisma.document.findMany.mockReset().mockResolvedValue([
+      {
+        membership: { user: { name: 'Dee', email: 'dee@x.test' } },
+        group: null,
+        submissions: [
+          {
+            text: 'Why does erosion need water?',
+            rubricScores: { understanding: { score: 30 } },
+          },
+        ],
+      },
+    ]);
+
+    const seed = await loadLessonSeed({
+      membershipId: 'teacher-1',
+      classAssignmentId: 'ca-1',
+      stepIndex: 'exit-ticket',
+    });
+
+    expect(seed?.classAssignmentId).toBe('ca-1');
+    expect(seed?.prompt).toContain('Exit ticket: erosion');
+    expect(seed?.prompt).toContain('Names it only: 1');
+    expect(seed?.prompt).toContain('Why does erosion need water?');
+    expect(seed?.prompt).not.toContain('Dee');
+  });
+
+  test('is no seed for an assignment that is not an exit ticket', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue(
+      classAssignmentRow({
+        assignment: {
+          title: 'Essay',
+          exitTicketConfigJson: null,
+          assignmentType: { kind: null },
+        },
+      })
+    );
+    prisma.document.findMany.mockReset().mockResolvedValue([]);
+
+    expect(
+      await loadLessonSeed({
+        membershipId: 'teacher-1',
+        classAssignmentId: 'ca-1',
+        stepIndex: 'exit-ticket',
+      })
+    ).toBeNull();
+  });
+
+  test('is no seed before any ticket has come back', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue(exitTicketRow());
+    prisma.document.findMany.mockReset().mockResolvedValue([]);
+
+    expect(
+      await loadLessonSeed({
+        membershipId: 'teacher-1',
+        classAssignmentId: 'ca-1',
+        stepIndex: 'exit-ticket',
+      })
+    ).toBeNull();
   });
 });

@@ -5,7 +5,21 @@
  */
 import { prisma } from '~/utils/db.server';
 import { parseInsightResponse } from '~/domain/assignment-insights/class-insight-synthesis';
-import { buildLessonSeed, pickNextStep } from './lesson-seed';
+import {
+  EXIT_TICKET_SEED_STEP,
+  buildLessonSeed,
+  pickNextStep,
+} from './lesson-seed';
+import {
+  EXIT_TICKET_CLASS_READ_ENABLED,
+  buildExitTicketClassRead,
+  buildExitTicketLessonSeed,
+} from '~/domain/assignment-types/exit-ticket-class-read';
+import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-class-read.server';
+import {
+  isExitTicketAssignmentType,
+  parseStoredExitTicketConfig,
+} from '~/domain/assignment-types/exit-ticket';
 
 export type LoadedLessonSeed = {
   classAssignmentId: string;
@@ -31,12 +45,54 @@ export async function loadLessonSeed({
     },
     select: {
       id: true,
-      assignment: { select: { title: true } },
+      assignment: {
+        select: {
+          title: true,
+          exitTicketConfigJson: true,
+          assignmentType: { select: { kind: true } },
+        },
+      },
       class: { select: { title: true, grade: true, period: true } },
       insight: { select: { status: true, summaryJson: true } },
     },
   });
-  if (!classAssignment?.insight || classAssignment.insight.status !== 'ready') {
+  if (!classAssignment) return null;
+
+  const klass = classAssignment.class;
+  const className =
+    klass.title ??
+    (klass.grade && klass.period
+      ? `${klass.grade} · Period ${klass.period}`
+      : (klass.grade ?? null));
+
+  // An exit ticket's class read seeds the planner straight from the tickets.
+  // The text is rebuilt here from stored responses, never taken from the URL.
+  if (stepIndex === EXIT_TICKET_SEED_STEP) {
+    if (
+      !EXIT_TICKET_CLASS_READ_ENABLED ||
+      !isExitTicketAssignmentType(classAssignment.assignment.assignmentType)
+    ) {
+      return null;
+    }
+    const responses = await loadExitTicketResponses(classAssignment.id);
+    if (responses.length === 0) return null;
+    const read = buildExitTicketClassRead({
+      responses,
+      config: parseStoredExitTicketConfig(
+        classAssignment.assignment.exitTicketConfigJson
+      ),
+    });
+    return {
+      classAssignmentId: classAssignment.id,
+      ...buildExitTicketLessonSeed({
+        read,
+        className,
+        assignmentTitle: classAssignment.assignment.title ?? null,
+      }),
+    };
+  }
+
+  if (!classAssignment.insight || classAssignment.insight.status !== 'ready') {
     return null;
   }
 
@@ -49,13 +105,6 @@ export async function loadLessonSeed({
 
   const step = pickNextStep(summary, stepIndex);
   if (!step) return null;
-
-  const klass = classAssignment.class;
-  const className =
-    klass.title ??
-    (klass.grade && klass.period
-      ? `${klass.grade} · Period ${klass.period}`
-      : (klass.grade ?? null));
 
   const seed = buildLessonSeed({
     step,

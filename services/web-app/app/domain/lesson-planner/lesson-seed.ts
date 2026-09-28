@@ -13,6 +13,12 @@ import type {
   TeachingNextStep,
 } from '~/domain/assignment-insights/class-insight-synthesis';
 
+/**
+ * The `step` an exit ticket's class read sends. Not an index, so it can
+ * never be mistaken for a Class Summary next step.
+ */
+export const EXIT_TICKET_SEED_STEP = 'exit-ticket';
+
 export type LessonSeed = {
   /** The pre-filled opening message for the composer. */
   prompt: string;
