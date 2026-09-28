@@ -33,6 +33,19 @@ jobs:
             code:
               - 'services/**'
               - 'packages/**'
+              - '.github/workflows/**'
+              - '.github/actions/**'
+              - 'package.json'
+              - 'bun.lock'
+              - 'bun.lockb'
+              - 'pnpm-lock.yaml'
+              - 'yarn.lock'
+              - 'package-lock.json'
+              - 'tsconfig*'
+              - 'bin/**'
+              - 'Dockerfile*'
+              - 'bunfig.toml'
+              - 'playwright.config.*'
             preview_tooling:
               - 'scripts/preview/**'
             prisma:
@@ -97,16 +110,16 @@ jobs:
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v3
-      - name: ⏭️ Skip (no Prisma changes)
-        if: ${{ needs.paths.outputs.prisma != 'true' }}
+      - name: ⏭️ Skip (no Prisma or core/code changes)
+        if: ${{ !(needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true') }}
         run: echo "No packages/prisma changes; skipping heavy steps."
 
       - name: 📥 Setup Bun
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         run: bun install --frozen-lockfile
 
       # bunfig.toml preloads services/web-app/test-preload.ts for every `bun test` run in
@@ -115,53 +128,53 @@ jobs:
       # before the migration steps below. `prisma generate` reads the schema only — it does
       # not connect — so it can run before the validation database is created.
       - name: ⚙️ Generate Prisma Client
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma generate
 
       - name: 🧪 Validate deployment contract
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         run: bun test ./scripts/deployment-contract.test.ts
 
       - name: 🧪 Validate Blackboard LTI mock
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         run: bun test ./scripts/blackboard-lti-mock/ --timeout 60000
 
       - name: 🧪 Validate read-only impersonation contract
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         run: bun test ./scripts/read-only-impersonation-contract.test.ts
 
       - name: 🧰 Install Postgres client
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: 🛠️ Create migration validation database
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           PGPASSWORD: postgres
         run: createdb -h 127.0.0.1 -U postgres yawp_migration_ci
 
       - name: 🧪 Validate teacher training assignment migration data swap
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./packages/prisma/scripts/teacher-training-assignment-migration.test.ts
 
       - name: 🧱 Apply Prisma migrations
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma migrate deploy
 
       - name: 🎨 Backfill class artwork keys
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma backfill-class-art-key
 
       - name: 🧪 Assignment type release gate
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma assignment-type-release-gate
@@ -180,7 +193,7 @@ jobs:
       # install hoists it to the root, and only fails where node_modules is laid
       # out differently. Declaring what the seed imports is the guard for that.
       - name: 🌱 Seed local-dev data
-        if: ${{ needs.paths.outputs.prisma == 'true' }}
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma seed-local-dev
