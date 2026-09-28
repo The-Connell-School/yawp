@@ -128,7 +128,16 @@ export async function action({ request }: ActionFunctionArgs) {
       include: {
         assignmentModule: {
           include: {
-            instructions: { orderBy: { position: 'asc' } },
+            instructions: {
+              orderBy: { position: 'asc' },
+              select: {
+                id: true,
+                title: true,
+                tutorInstructions: true,
+                tutorInstructionsVariantsJson: true,
+                position: true,
+              },
+            },
             assignmentType: {
               select: {
                 id: true,
@@ -140,6 +149,7 @@ export async function action({ request }: ActionFunctionArgs) {
                 tutorInstructions: true,
               },
             },
+            tutorInstructionsVariantsJson: true,
           },
         },
         messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
@@ -206,41 +216,47 @@ export async function action({ request }: ActionFunctionArgs) {
     // Seeds write the authored defaults into those rows, so this reads the
     // same text either way until somebody actually changes something.
     const system = isApHistorySnapshot(apHistorySnapshot)
-      ? buildApHistoryTutorSystemPrompt(
-          apHistorySnapshot,
+      ? [
           {
-            title: cms.assignmentModule.title,
-            tutorInstructions: resolveTutorInstructions(
-              readTutorInstructionVariant(
-                cms.assignmentModule.tutorInstructionsVariantsJson,
-                apHistorySnapshot.essayType
-              ),
-              resolveApHistorySectionTutorInstructions(
-                apHistorySnapshot.essayType,
-                cms.assignmentModule.title
-              ),
-              // Legacy single-module documents have no canonical guidance and
-              // no variants; their stored single string is all there is.
-              cms.assignmentModule.tutorInstructions
+            type: 'text' as const,
+            cache_control: { type: 'ephemeral' as const },
+            text: buildApHistoryTutorSystemPrompt(
+              apHistorySnapshot,
+              {
+                title: cms.assignmentModule.title,
+                tutorInstructions: resolveTutorInstructions(
+                  readTutorInstructionVariant(
+                    cms.assignmentModule.tutorInstructionsVariantsJson,
+                    apHistorySnapshot.essayType
+                  ),
+                  resolveApHistorySectionTutorInstructions(
+                    apHistorySnapshot.essayType,
+                    cms.assignmentModule.title
+                  ),
+                  // Legacy single-module documents have no canonical guidance and
+                  // no variants; their stored single string is all there is.
+                  cms.assignmentModule.tutorInstructions
+                ),
+                instruction: {
+                  title: instruction.title,
+                  tutorInstructions: resolveTutorInstructions(
+                    readTutorInstructionVariant(
+                      instruction.tutorInstructionsVariantsJson,
+                      apHistorySnapshot.essayType
+                    ),
+                    resolveApHistoryStepTutorInstructions(
+                      apHistorySnapshot.essayType,
+                      cms.assignmentModule.title,
+                      instruction.title
+                    ),
+                    instruction.tutorInstructions
+                  ),
+                },
+              },
+              cms.assignmentModule.assignmentType?.tutorInstructions
             ),
-            instruction: {
-              title: instruction.title,
-              tutorInstructions: resolveTutorInstructions(
-                readTutorInstructionVariant(
-                  instruction.tutorInstructionsVariantsJson,
-                  apHistorySnapshot.essayType
-                ),
-                resolveApHistoryStepTutorInstructions(
-                  apHistorySnapshot.essayType,
-                  cms.assignmentModule.title,
-                  instruction.title
-                ),
-                instruction.tutorInstructions
-              ),
-            },
           },
-          cms.assignmentModule.assignmentType?.tutorInstructions
-        )
+        ]
       : buildTutorSystemPromptBlocks({
           generalTutorInstructions:
             cms.assignmentModule.assignmentType?.tutorInstructions,

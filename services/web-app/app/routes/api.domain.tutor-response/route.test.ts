@@ -422,29 +422,31 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     } as any);
 
     const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
-    expect(completionArgs.system).toContain('DBQ Rubric (7 points');
-    expect(completionArgs.system).toContain(
+    expect((completionArgs.system[0].text as string)).toContain('DBQ Rubric (7 points');
+    expect((completionArgs.system[0].text as string)).toContain(
       'Current section: "Read the Documents"'
     );
     // The shared DB module stores a representative variant, but the route
     // selects the DBQ-specific section guidance for this DBQ document.
-    expect(completionArgs.system).toContain('HIPP angle');
-    expect(completionArgs.system).not.toContain('no documents on an LEQ');
-    expect(completionArgs.system).toContain(
+    expect((completionArgs.system[0].text as string)).toContain('HIPP angle');
+    expect((completionArgs.system[0].text as string)).not.toContain(
+      'no documents on an LEQ'
+    );
+    expect((completionArgs.system[0].text as string)).toContain(
       'Current step: "Analyze the sources"'
     );
     // This step has no canonical step-level guidance, so the stored value is
     // used as a fallback.
-    expect(completionArgs.system).toContain(
+    expect((completionArgs.system[0].text as string)).toContain(
       'Build a working sense of each document before drafting.'
     );
     // The universal YAWP! Tutor character rides at the top of every AP History
     // prompt, and the section's register mode resolves from its title.
-    expect(completionArgs.system).toContain('You are the YAWP! Tutor');
-    expect(completionArgs.system).toContain(
+    expect((completionArgs.system[0].text as string)).toContain('You are the YAWP! Tutor');
+    expect((completionArgs.system[0].text as string)).toContain(
       'REGISTER MODE FOR THIS MODULE: DRAFTING'
     );
-    expect(completionArgs.system).not.toContain(
+    expect((completionArgs.system[0].text as string)).not.toContain(
       'REGISTER MODE FOR THIS MODULE: POLISHED'
     );
   });
@@ -495,7 +497,18 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         ],
       },
       messages: [],
-      document: { id: 'doc-1', text: 'Original draft', apHistorySnapshot },
+      document: {
+        id: 'doc-1',
+        text: 'Original draft',
+        assignment: {
+          id: 'assignment-1',
+          title: 'APUSH DBQ',
+          prompt:
+            'Evaluate the extent to which the New Deal changed federal power.',
+          tutorEnabled: true,
+          apHistorySnapshot,
+        },
+      },
     });
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       id: 'cms-1',
@@ -520,19 +533,19 @@ describe('api.domain.tutor-response read-only impersonation', () => {
 
     const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
     // All three layers come from the database.
-    expect(completionArgs.system.startsWith('ADMIN GENERAL TUTOR INSTRUCTIONS.')).toBe(
-      true
-    );
-    expect(completionArgs.system).toContain('ADMIN DBQ SECTION GUIDANCE.');
-    expect(completionArgs.system).toContain('ADMIN DBQ STEP GUIDANCE.');
+    expect(Array.isArray(completionArgs.system)).toBe(true);
+    const systemText = completionArgs.system[0].text as string;
+    expect(systemText.startsWith('ADMIN GENERAL TUTOR INSTRUCTIONS.')).toBe(true);
+    expect(systemText).toContain('ADMIN DBQ SECTION GUIDANCE.');
+    expect(systemText).toContain('ADMIN DBQ STEP GUIDANCE.');
     // The stored LEQ variants are not leaked into a DBQ document, and the code
     // defaults and legacy string are both superseded.
-    expect(completionArgs.system).not.toContain('ADMIN LEQ');
-    expect(completionArgs.system).not.toContain('Legacy single-string guidance.');
-    expect(completionArgs.system).not.toContain('You are the YAWP! Tutor');
-    expect(completionArgs.system).not.toContain('HIPP angle');
+    expect(systemText).not.toContain('ADMIN LEQ');
+    expect(systemText).not.toContain('Legacy single-string guidance.');
+    expect(systemText).not.toContain('You are the YAWP! Tutor');
+    expect(systemText).not.toContain('HIPP angle');
     // AP History substance still comes from code.
-    expect(completionArgs.system).toContain('DBQ Rubric (7 points');
+    expect(systemText).toContain('DBQ Rubric (7 points');
   });
 
   test('AP History LEQ sessions get LEQ-specific section coaching, not the DBQ playbook', async () => {
@@ -577,7 +590,14 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       document: {
         id: 'doc-1',
         text: 'Original draft',
-        apHistorySnapshot,
+        assignment: {
+          id: 'assignment-1',
+          title: 'APUSH LEQ',
+          prompt:
+            'Evaluate the extent to which the Market Revolution transformed society.',
+          tutorEnabled: true,
+          apHistorySnapshot,
+        },
       },
     });
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
@@ -602,13 +622,13 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     } as any);
 
     const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
-    expect(completionArgs.system).toContain('LEQ Rubric (6 points');
-    expect(completionArgs.system).toContain(
+    expect((completionArgs.system[0].text as string)).toContain('LEQ Rubric (6 points');
+    expect((completionArgs.system[0].text as string)).toContain(
       'Current section: "Read the Documents"'
     );
     // LEQ-specific guidance, not the DBQ document/HIPP playbook.
-    expect(completionArgs.system).toContain('no documents on an LEQ');
-    expect(completionArgs.system).not.toContain('HIPP angle');
+    expect((completionArgs.system[0].text as string)).toContain('no documents on an LEQ');
+    expect((completionArgs.system[0].text as string)).not.toContain('HIPP angle');
   });
 
   test('returns a retry signal without writing messages when fallback retry is requested', async () => {
