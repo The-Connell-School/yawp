@@ -120,56 +120,66 @@ export async function action({ request }: ActionFunctionArgs) {
     // text) into the session, so only the student whose transcript it is may reach
     // it. On a shared draft that is the group member it belongs to rather than the
     // document's nominal owner. A revoked account no longer matches.
-    const cms = await prisma.assignmentModuleSession.findFirst({
+	    const cms = await prisma.assignmentModuleSession.findFirst({
       where: {
         id: data.cmsId,
         ...documentAuthorOwnSessionWhere({ profileId: profile.id, isAdmin }),
       },
-      include: {
-        assignmentModule: {
-          include: {
-            instructions: {
-              orderBy: { position: 'asc' },
-              select: {
-                id: true,
-                title: true,
-                tutorInstructions: true,
-                tutorInstructionsVariantsJson: true,
-                position: true,
-              },
-            },
-            assignmentType: {
-              select: {
-                id: true,
-                gradingAssistantVersion: true,
-                rubricJson: true,
-                // The assignment-level General Tutor Instructions, edited in
-                // admin. Empty on assignment types that have not been seeded
-                // or configured, which falls back to the authored default.
-                tutorInstructions: true,
-              },
-            },
-            tutorInstructionsVariantsJson: true,
-          },
-        },
-        messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
-        document: {
-          select: {
-            id: true,
-            text: true,
-            assignment: {
-              select: {
-                id: true,
-                title: true,
-                prompt: true,
-                tutorEnabled: true,
-                apHistorySnapshot: true,
-                paragraphMode: true,
-              },
-            },
-          },
-        },
-      },
+	      select: {
+	        id: true,
+	        instructionsCompleted: true,
+	        assignmentModuleId: true,
+	        assignmentModule: {
+	          select: {
+	            id: true,
+	            title: true,
+	            rubricAlignmentJson: true,
+	            tutorInstructions: true,
+	            tutorInstructionsVariantsJson: true,
+	            assignmentType: {
+	              select: {
+	                id: true,
+	                gradingAssistantVersion: true,
+	                rubricJson: true,
+	                // The assignment-level General Tutor Instructions, edited in
+	                // admin. Empty on assignment types that have not been seeded
+	                // or configured, which falls back to the authored default.
+	                tutorInstructions: true,
+	              },
+	            },
+	            instructions: {
+	              orderBy: { position: 'asc' },
+	              select: {
+	                id: true,
+	                title: true,
+	                tutorInstructions: true,
+	                tutorInstructionsVariantsJson: true,
+	                position: true,
+	              },
+	            },
+	          },
+	        },
+	        messages: {
+	          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+	          select: { id: true, agent: true, content: true, createdAt: true },
+	        },
+	        document: {
+	          select: {
+	            id: true,
+	            text: true,
+	            assignment: {
+	              select: {
+	                id: true,
+	                title: true,
+	                prompt: true,
+	                tutorEnabled: true,
+	                apHistorySnapshot: true,
+	                paragraphMode: true,
+	              },
+	            },
+	          },
+	        },
+	      },
     });
 
     if (!cms) {
