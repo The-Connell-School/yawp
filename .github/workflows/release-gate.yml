@@ -1,0 +1,30 @@
+name: release-gate
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  gate:
+    name: release-gate
+    runs-on: ubuntu-22.04
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+
+      - name: 🔎 Run release gate (lean)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_BRANCH: main
+        run: node scripts/release-gate/gate.mjs --pr "${{ github.event.pull_request.number }}"
+
