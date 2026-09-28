@@ -194,6 +194,34 @@ describe('api.domain.release-grades', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  test('rejects release by a teacher not teaching the class', async () => {
+    getGradingActor.mockResolvedValue({
+      userId: 'teacher-user-2',
+      membershipId: 'teacher-2',
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-2',
+      isTeacher: true,
+      isAdmin: false,
+    });
+    // teacherClassWhere excludes this teacher from the class
+    buildTeacherClassWhere.mockReturnValue({
+      OR: [{ classAssignment: { class: { teachers: { some: { id: 'teacher-1' } } } } }],
+    });
+    // Eligibility query resolves nothing for this actor
+    prisma.submission.findMany.mockResolvedValue([]);
+    const form = new FormData();
+    form.append('submissionIds', 'sub-1');
+    const response = await action({
+      request: new Request('https://example.com/api/domain/release-grades', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const payload = response as { init?: { status?: number } };
+    expect(payload.init?.status).toBe(404);
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
+  });
+
   test('records exactly one release event for each submission in a batch', async () => {
     prisma.submission.findMany.mockResolvedValue([
       {

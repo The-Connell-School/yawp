@@ -32,11 +32,46 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
       if (textLength >= PASTE_ALERT_MIN_CHARS && !copiedFromInsideApp) {
         const eventId = `paste_${crypto.randomUUID()}`;
         editor.commands.markLastPasteAsExternal?.(eventId);
+        // Attempt to capture real provenance from clipboard data, when available.
+        let sourceUrl: string | null = null;
+        try {
+          const html = event.clipboardData?.getData('text/html') || '';
+          const uriList = event.clipboardData?.getData('text/uri-list') || '';
+          const mozUrl = event.clipboardData?.getData('text/x-moz-url') || '';
+          // CF_HTML headers (Windows) sometimes surface a SourceURL: line.
+          const headerMatch = html.match(/SourceURL:([^\r\n]+)/i);
+          const uriListFirst = uriList
+            .split(/\\r?\\n/)
+            .map((l) => l.trim())
+            .find((l) => l && !l.startsWith('#'));
+          const mozFirst = mozUrl.split(/\\r?\\n/)[0]?.trim();
+          const candidate =
+            headerMatch?.[1]?.trim() ||
+            uriListFirst ||
+            (mozFirst && mozFirst.includes('\\t')
+              ? mozFirst.split('\\t')[0]
+              : mozFirst) ||
+            null;
+          if (candidate) {
+            const u = new URL(candidate);
+            if (u.protocol === 'http:' || u.protocol === 'https:') {
+              sourceUrl = u.toString();
+            }
+          }
+        } catch {
+          // Swallow — provenance is optional.
+        }
 
         fetch('/api/paste-alert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ documentId: docId, textLength, content: pastedText, eventId }),
+          body: JSON.stringify({
+            documentId: docId,
+            textLength,
+            content: pastedText,
+            eventId,
+            ...(sourceUrl ? { sourceUrl } : {}),
+          }),
         }).catch(() => {});
       }
     };

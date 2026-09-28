@@ -86,7 +86,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return missing();
   const events = await prisma.pasteAlert.findMany({
     where: eventScope,
-    select: { id: true, textLength: true, createdAt: true },
+    select: { id: true, textLength: true, createdAt: true, sourceUrl: true },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     take: 101,

@@ -11,7 +11,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const membership = await requireMembership(request, userId);
 
   const body = await request.json().catch(() => null);
-  const { documentId, textLength, content, eventId } = body ?? {};
+  const { documentId, textLength, content, eventId, sourceUrl } = body ?? {};
 
   if (
     typeof documentId !== 'string' ||
@@ -26,7 +26,12 @@ export async function action({ request }: ActionFunctionArgs) {
       (typeof eventId !== 'string' ||
         !/^paste_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
           eventId
-        )))
+        ))) ||
+    (sourceUrl != null &&
+      (typeof sourceUrl !== 'string' ||
+        sourceUrl.length > 2048 ||
+        // Basic sanity check: allow http(s) only
+        !/^https?:\\/\\//i.test(sourceUrl)))
   ) {
     return dataResponse({ error: 'Invalid request' }, { status: 400 });
   }
@@ -47,6 +52,7 @@ export async function action({ request }: ActionFunctionArgs) {
     membershipId: membership.id,
     textLength,
     content: content || null,
+    sourceUrl: sourceUrl || null,
   };
   if (eventId) {
     // New clients keep a stable link in saved document HTML. The old table and

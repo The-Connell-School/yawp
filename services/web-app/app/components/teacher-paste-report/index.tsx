@@ -8,7 +8,12 @@ import {
 import { PasteHighlightOverlay } from './highlight-overlay';
 import { cn } from '~/utils/misc';
 
-type PasteEvent = { id: string; createdAt: string; textLength: number };
+type PasteEvent = {
+  id: string;
+  createdAt: string;
+  textLength: number;
+  sourceUrl?: string | null;
+};
 type Report = { events: PasteEvent[]; nextCursor: string | null };
 type Props = {
   documentId?: string;
@@ -145,37 +150,6 @@ function AuthorizedTeacherPasteReport({
         setSelectedId(null);
       }
     });
-  }
-
-  function inferSourceSiteForEvent(eventId: string): string | null {
-    if (!contentRoot) return null;
-    const ranges = getPasteEventRanges(contentRoot, eventId);
-    for (const range of ranges) {
-      const common =
-        range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
-          ? (range.commonAncestorContainer as Element)
-          : range.commonAncestorContainer.parentElement;
-      if (!common) continue;
-      // Look for an anchor within the selected content.
-      const anchor = common.closest('a') ?? common.querySelector('a');
-      const href =
-        (anchor && (anchor as HTMLAnchorElement).href) || undefined;
-      if (href) {
-        try {
-          const url = new URL(href);
-          return url.hostname.replace(/^www\\./, '');
-        } catch {
-          // fall through
-        }
-      }
-      // Fallback: scan selected text for a URL.
-      const text = range.toString();
-      const match = text.match(/https?:\\/\\/([^\\s\\/]+)/i);
-      if (match?.[1]) {
-        return match[1].replace(/^www\\./, '');
-      }
-    }
-    return null;
   }
 
   return (
@@ -338,8 +312,17 @@ function AuthorizedTeacherPasteReport({
                 {report?.events.map((event) => {
                   const surviving = measurement?.byEvent[event.id] ?? 0;
                   const linked = event.id.startsWith('paste_');
-                  const sourceSite =
-                    (linked && inferSourceSiteForEvent(event.id)) || null;
+                  const sourceHost =
+                    (linked && event.sourceUrl
+                      ? (() => {
+                          try {
+                            const u = new URL(event.sourceUrl);
+                            return u.hostname.replace(/^www\\./, '');
+                          } catch {
+                            return null;
+                          }
+                        })()
+                      : null) || null;
                   return (
                     <li key={event.id}>
                       <button
@@ -370,8 +353,8 @@ function AuthorizedTeacherPasteReport({
                                 {new Date(event.createdAt).toLocaleString()}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                {sourceSite
-                                  ? `Source: ${sourceSite}`
+                                {sourceHost
+                                  ? `Source: ${sourceHost}`
                                   : 'Source: unknown'}
                               </div>
                             </div>
