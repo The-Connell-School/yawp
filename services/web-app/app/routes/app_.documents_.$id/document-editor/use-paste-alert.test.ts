@@ -138,9 +138,16 @@ describe('usePasteAlert', () => {
     });
   });
 
-  it('does not post for pastes under the 200-char threshold', () => {
+  it('posts an event for pastes under the 200-char threshold', () => {
     firePaste('x'.repeat(199));
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse((fetchMock.mock.calls[0] as any)[1].body);
+    expect(body).toMatchObject({
+      documentId: DOC_ID,
+      textLength: 199,
+      content: 'x'.repeat(199),
+      eventId: expect.stringMatching(/^paste_[0-9a-f-]{36}$/),
+    });
   });
 
   it('does not post when a copy happened anywhere in the app first', () => {
@@ -270,10 +277,19 @@ describe('usePasteAlert', () => {
     expect(editor!.getHTML()).not.toContain('data-pasted-source');
   });
 
-  it('does not mark the document for a paste under the threshold', () => {
+  it('records and links a short external paste event', () => {
     editor!.commands.focus('end');
-    firePaste('x'.repeat(199));
+    firePaste('x'.repeat(27));
 
-    expect(editor!.getHTML()).not.toContain('data-pasted-source');
+    const html = editor!.getHTML();
+    expect(html).toContain('data-pasted-source="external"');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse((fetchMock.mock.calls[0] as any)[1].body);
+    expect(body).toMatchObject({
+      documentId: DOC_ID,
+      textLength: 27,
+      content: 'x'.repeat(27),
+      eventId: expect.stringMatching(/^paste_[0-9a-f-]{36}$/),
+    });
   });
 });

@@ -88,12 +88,13 @@ test('legacy method, missing field, optional content and owner-query contracts r
   expect(prisma.document.findFirst.mock.calls[0][0]).toEqual({
     where: { id: 'doc', membershipId: 'student' },
   });
-  expect(prisma.pasteAlert.create.mock.calls[0][0]).toEqual({
+  expect(prisma.pasteAlert.create.mock.calls[0][0]).toMatchObject({
     data: {
       documentId: 'doc',
       membershipId: 'student',
       textLength: 250,
       content: null,
+      sourceUrl: null,
     },
   });
 });

@@ -1522,6 +1522,8 @@ model PasteAlert {
   createdAt    DateTime      @default(now()) @db.Timestamptz(6)
   textLength   Int
   content      String?
+  /// When available, the actual source URL captured by the client at paste time.
+  sourceUrl    String?
   documentId   String
   document     Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
   membershipId String

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Prisma, PrismaClient } from '../generated/prisma';
 import { enableClassInsightsForOrganizations } from './local-dev/class-insights';
 import {
@@ -244,6 +245,122 @@ export async function seedCollaborationDemoForSeat(
     console.log(
       `Collaboration demo seeded for ${seat.label}: ${seeded.groupIds.length} groups, ${seeded.cohort.length} students.`
     );
+  }
+
+  // Top-up: ensure the Daily Pages Engagement preview assignment exists and is
+  // pinned to the engagement rubric. Safe to run repeatedly.
+  try {
+    const teacherEmail = seat.personas.find((p) => p.key === 'teacher')?.email;
+    if (!teacherEmail) return;
+    const teacher = await prisma.orgMembership.findFirst({
+      where: { user: { email: teacherEmail } },
+      select: { id: true },
+    });
+    if (!teacher) return;
+    const klass = await prisma.class.findFirst({
+      where: {
+        isArchived: false,
+        teachers: { some: { id: teacher.id } },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (!klass) return;
+    const dailyPagesType = await prisma.assignmentType.findFirst({
+      where: { kind: 'daily_pages', archivedAt: null },
+      orderBy: { position: 'asc' },
+      select: { id: true },
+    });
+    if (!dailyPagesType) return;
+    // Ensure the engagement rubric exists and has a current revision.
+    const engagementModule = (await import('../../../services/web-app/app/domain/rubrics/library/daily-pages-engagement.json', {
+      with: { type: 'json' },
+    })) as unknown as { default: any };
+    const engagementSchema = (engagementModule as any).default ?? null;
+    const rubricName = (engagementSchema as any)?.name ?? 'daily-pages-engagement';
+    const rubricTitle = (engagementSchema as any)?.title ?? 'Daily Pages engagement';
+    let rubric = await prisma.rubric.findUnique({
+      where: { name: String(rubricName) },
+      include: { currentRevision: true },
+    });
+    if (!rubric) {
+      rubric = await prisma.rubric.create({
+        data: {
+          name: String(rubricName),
+          title: String(rubricTitle),
+          schemaJson: engagementSchema as Prisma.InputJsonValue,
+        },
+        include: { currentRevision: true },
+      });
+    }
+    if (!rubric.currentRevision) {
+      const latest = await prisma.rubricRevision.findFirst({
+        where: { rubricName: String(rubricName) },
+        orderBy: { version: 'desc' },
+      });
+      const revision = await prisma.rubricRevision.create({
+        data: {
+          id: randomUUID(),
+          rubricName: String(rubricName),
+          version: (latest?.version ?? 0) + 1,
+          schemaJson: engagementSchema as Prisma.InputJsonValue,
+          fingerprint: `seed-${rubricName}`,
+          requestId: randomUUID(),
+          requestHash: `seed-${rubricName}-${Date.now()}`,
+          createdBy: 'seed-preview-topup',
+          reason: 'Preview engagement rubric for Daily Pages',
+        } as any,
+      });
+      await prisma.rubric.update({
+        where: { id: rubric.id },
+        data: { currentRevisionId: revision.id },
+      });
+      rubric = await prisma.rubric.findUnique({
+        where: { id: rubric.id },
+        include: { currentRevision: true },
+      });
+    }
+    // Ensure the Daily Pages type opts into the engagement library rubric so pins match.
+    if (!rubric) return;
+    await prisma.assignmentType.update({
+      where: { id: dailyPagesType.id },
+      data: { rubricId: rubric.id },
+    });
+    // Create if missing.
+    const existing = await prisma.assignment.findFirst({
+      where: {
+        title: 'Engagement Check (Preview)',
+        assignmentTypeId: dailyPagesType.id,
+        classAssignments: { some: { classId: klass.id } },
+      },
+      select: { id: true },
+    });
+    if (!existing) {
+      const engagementRevisionId = rubric.currentRevision?.id;
+      if (!engagementRevisionId) return;
+      const assignment = await prisma.assignment.create({
+        data: {
+          assignmentTypeId: dailyPagesType.id,
+          title: 'Engagement Check (Preview)',
+          prompt: 'Write freely for ten minutes about something you noticed today.',
+          submitForGrade: true,
+          pointValue: 30,
+          rubricRevisionId: engagementRevisionId,
+        },
+      });
+      await prisma.classAssignment.create({
+        data: { assignmentId: assignment.id, classId: klass.id },
+      });
+      console.log(
+        `Engagement preview assignment created for ${seat.label} (${seat.organizationId}).`
+      );
+    } else {
+      console.log(
+        `Engagement preview assignment already present for ${seat.label} (${seat.organizationId}).`
+      );
+    }
+  } catch (error) {
+    console.error('Engagement preview assignment top-up failed:', error);
   }
 }
 
