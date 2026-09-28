@@ -111,6 +111,7 @@ bun run --cwd packages/prisma backfill-class-art-key
 if ! database_seeded; then
   bun db:seed-local-dev
 fi
+bun run --cwd packages/prisma seed-preview-seats
 bun run --cwd packages/prisma ensure-class-insights-local
 
 echo "Cloud Agent install complete."

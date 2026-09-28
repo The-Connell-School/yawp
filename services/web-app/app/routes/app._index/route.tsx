@@ -2,11 +2,13 @@ import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.serve
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
   Form,
+  Link,
   useFetcher,
   useLoaderData,
   useRevalidator,
   useRouteLoaderData,
 } from 'react-router';
+import { PenLine } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
@@ -30,6 +32,13 @@ import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
 import { formatClassLabel } from '~/utils/class-display';
+import { writingPracticeAssignmentTitle } from '~/utils/writing-lessons/assignment-title';
+import {
+  computeAssignedProgress,
+  getAssignedPracticeForStudent,
+} from '~/utils/writing-lessons/practice-assignments.server';
+import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import {
   Dialog,
   DialogContent,
@@ -41,6 +50,17 @@ import {
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
+
+function formatAssignmentDueDate(iso: string): string {
+  // Render date-only consistently regardless of local timezone
+  // by formatting in UTC (matches assignment due-date displays elsewhere).
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(iso));
+}
 
 export type AssignmentTypeRow = {
   id: string;
@@ -270,9 +290,59 @@ export async function loader({ request }: LoaderFunctionArgs) {
       creationTypeDefaults.get(type.id)?.offersParagraphModes ?? false,
   }));
 
+  // A student's assigned Writing Fundamentals practice, surfaced on their
+  // dashboard alongside their classes (each card links into the practice
+  // runner). Grammar sets report answered progress; composition sets report
+  // mastery.
+  const compositionPracticeEnabled = isCompositionPracticeEnabled();
+  const writingPracticeAssignments =
+    useStudentExperience && profile.organization.writingPracticeEnabled
+      ? (await getAssignedPracticeForStudent(profile.id))
+          .filter(
+            ({ assignment }) =>
+              compositionPracticeEnabled ||
+              !assignment.lessonSlugs.some(
+                (slug) =>
+                  getQuickWritingLessonBySlug(slug)?.section === 'Composition'
+              )
+          )
+          .map((classAssignment) => {
+            const { assignment } = classAssignment;
+            const progress = computeAssignedProgress(
+              classAssignment.attempts.map((attempt) => ({
+                promptId: attempt.promptId,
+                lessonSlug: attempt.lessonSlug,
+                status: attempt.status,
+              }))
+            );
+            const hasComposition = assignment.lessonSlugs.some(
+              (slug) =>
+                getQuickWritingLessonBySlug(slug)?.section === 'Composition'
+            );
+            return {
+              id: classAssignment.id,
+              title: writingPracticeAssignmentTitle(assignment),
+              problemCount: assignment.problemCount,
+              dueAt: assignment.dueAt ? assignment.dueAt.toISOString() : null,
+              hasComposition,
+              doneCount: Math.min(progress.doneCount, assignment.problemCount),
+              masteredCount: Math.min(
+                progress.masteredCount,
+                assignment.problemCount
+              ),
+              classLabel: {
+                grade: classAssignment.class.grade,
+                period: classAssignment.class.period,
+                title: classAssignment.class.title,
+              },
+            };
+          })
+      : [];
+
   return dataResponse({
     requiresClassCode: isStudentOnlyWithNoClasses,
     enrolledClasses,
+    writingPracticeAssignments,
     teacherClasses: teacherClassesOrdered,
     assignmentsEnabled,
     teacherClassCards,
@@ -401,6 +471,59 @@ export default function AppRoute() {
               />
             )}
           </div>
+          {data.writingPracticeAssignments.length > 0 ? (
+            <div className="mt-8 flex flex-col">
+              <p className="my-2 text-foreground/60">Writing practice</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {data.writingPracticeAssignments.map((practice) => {
+                  const remaining = practice.hasComposition
+                    ? practice.problemCount - practice.masteredCount
+                    : practice.problemCount - practice.doneCount;
+                  const progressLabel = practice.hasComposition
+                    ? `${practice.masteredCount} of ${practice.problemCount} mastered`
+                    : `${practice.doneCount} of ${practice.problemCount} done`;
+                  return (
+                    <Link
+                      to={`/app/writing-lessons/assigned/${practice.id}`}
+                      key={practice.id}
+                      data-testid="writing-practice-assignment-card"
+                      className="flex h-full w-full flex-col rounded-lg border bg-muted text-left transition-shadow hover:shadow"
+                    >
+                      <div className="flex h-24 w-full flex-col justify-between rounded-t-lg bg-gradient-to-br from-primary/10 to-primary/25 px-3 py-2">
+                        <span className="inline-flex w-fit items-center gap-1 rounded-full bg-background/70 px-2 py-0.5 text-[11px] font-medium text-primary">
+                          <PenLine className="h-3 w-3" />
+                          Writing practice
+                        </span>
+                        <p className="text-xs font-medium text-foreground/80">
+                          {remaining > 0
+                            ? `${remaining} problem${remaining === 1 ? '' : 's'} left`
+                            : 'All done — nice work!'}
+                        </p>
+                      </div>
+                      <div className="flex flex-1 flex-col gap-1 p-3">
+                        <h4 className="font-medium text-foreground/90">
+                          {practice.title}
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          {progressLabel}
+                          {practice.dueAt
+                            ? ` • Due ${formatAssignmentDueDate(practice.dueAt)}`
+                            : ''}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Grade {practice.classLabel.grade} • Period{' '}
+                          {practice.classLabel.period}
+                          {practice.classLabel.title
+                            ? ` • ${practice.classLabel.title}`
+                            : ''}
+                        </p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
       {data.requiresClassCode ? <ClassCodeGate /> : null}
