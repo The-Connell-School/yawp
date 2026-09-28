@@ -1,4 +1,5 @@
 /* eslint-disable no-console */
+import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
 import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
@@ -329,42 +330,68 @@ export async function seedSyntheticLocalDevData(
     });
   }
 
-  // Create a separate Engagement-flavored Daily Pages type for preview QA, using the
-  // original 0–30 engagement rubric snapshot captured above. This lets teachers pick
-  // the engagement rubric even though the primary Daily Pages type was re-pointed to
-  // the short-form rubric for sample entries.
-  if (engagementAssignmentTypeSnapshot?.rubricJson) {
-    const existingEngagementPreview = await prisma.assignmentType.findFirst({
-      where: { title: 'Daily Pages (Engagement – Preview)', archivedAt: null },
-      select: { id: true },
+  // Add a ready-to-use Engagement preview assignment under the existing Daily Pages
+  // type by pinning it to the engagement rubric's current revision. This avoids
+  // creating a second AssignmentType with a duplicate `kind`.
+  if (engagementAssignmentTypeSnapshot?.rubricJson && dailyPagesAssignmentTypeId) {
+    // Ensure the engagement rubric exists with a current revision.
+    // Import the portable library schema from the web-app domain.
+    const dailyPagesEngagementSchema = (await import('../../../../services/web-app/app/domain/rubrics/library/daily-pages-engagement.json', { with: { type: 'json' } }) as any)
+      .default as Prisma.InputJsonValue;
+    const rubricName = (dailyPagesEngagementSchema as any)?.name ?? 'daily-pages-engagement';
+    const rubricTitle = (dailyPagesEngagementSchema as any)?.title ?? 'Daily Pages engagement';
+
+    let rubric = await prisma.rubric.findUnique({
+      where: { name: String(rubricName) },
+      include: { currentRevision: true },
     });
-    const engagementTypeId =
-      existingEngagementPreview?.id ??
-      (
-        await prisma.assignmentType.create({
-          data: {
-            title: 'Daily Pages (Engagement – Preview)',
-            kind: 'daily_pages',
-            description:
-              'Low-stakes Daily Pages with 0–30 engagement bands (preview).',
-            position: 4,
-            rubricJson: engagementAssignmentTypeSnapshot.rubricJson,
-            // scoringScaleJson may be null on older snapshots; Prisma expects
-            // NullableJsonNullValueInput instead of bare null.
-            scoringScaleJson:
-              engagementAssignmentTypeSnapshot.scoringScaleJson ?? Prisma.JsonNull,
-          },
-          select: { id: true },
-        })
-      ).id;
-    // Add a ready-to-use assignment for the primary class so the rubric is reachable.
+    if (!rubric) {
+      rubric = await prisma.rubric.create({
+        data: {
+          name: String(rubricName),
+          title: String(rubricTitle),
+          schemaJson: dailyPagesEngagementSchema,
+        },
+        include: { currentRevision: true },
+      });
+    }
+    if (!rubric.currentRevision) {
+      const latest = await prisma.rubricRevision.findFirst({
+        where: { rubricName: String(rubricName) },
+        orderBy: { version: 'desc' },
+      });
+      const revision = await prisma.rubricRevision.create({
+        data: {
+          rubricName: String(rubricName),
+          version: (latest?.version ?? 0) + 1,
+          schemaJson: dailyPagesEngagementSchema,
+          fingerprint: `seed-${rubricName}`,
+          requestId: randomUUID(),
+          requestHash: `seed-${rubricName}-${Date.now()}`,
+          createdBy: 'seed-local-dev',
+          reason: 'Preview engagement rubric for Daily Pages',
+        } as any,
+      });
+      await prisma.rubric.update({
+        where: { id: rubric.id },
+        data: { currentRevisionId: revision.id },
+      });
+      // Refresh to load the relation for creation below.
+      rubric = await prisma.rubric.findUnique({
+        where: { id: rubric.id },
+        include: { currentRevision: true },
+      });
+    }
+
+    // Create the preview assignment pinned to the engagement rubric.
     const engagementAssignment = await prisma.assignment.create({
       data: {
-        assignmentTypeId: engagementTypeId,
+        assignmentTypeId: dailyPagesAssignmentTypeId,
         title: 'Engagement Check (Preview)',
         prompt: 'Write freely for ten minutes about something you noticed today.',
         submitForGrade: true,
         pointValue: 30,
+        rubricRevisionId: rubric!.currentRevision!.id,
       },
       select: { id: true },
     });
