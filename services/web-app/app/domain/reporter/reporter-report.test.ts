@@ -245,6 +245,19 @@ describe('summarizeClassRubrics', () => {
   test('returns nothing when no submission carries rubric scores', () => {
     expect(summarizeClassRubrics([row({ rubricScores: null })])).toEqual([]);
   });
+
+  test('ignores non-canonical categories (e.g., engagement-only scales)', () => {
+    const rubrics = summarizeClassRubrics([
+      row({
+        rubricScores: {
+          evidence_and_support: 3,
+          // Not part of the canonical essay rubric; should be ignored.
+          engagement: 18,
+        },
+      }),
+    ]);
+    expect(rubrics.map((r) => r.category)).toEqual(['evidence_and_support']);
+  });
 });
 
 describe('findStudentsNeedingAttention', () => {
