@@ -1151,6 +1151,116 @@ describe('AssignmentCreationSheetContent', () => {
       ).toBe('5');
     });
 
+    function elementWithText(text: string) {
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT
+      );
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (node.textContent?.includes(text)) return node.parentElement!;
+      }
+      throw new Error(`No element with text: ${text}`);
+    }
+
+    function buttonByText(text: string) {
+      const button = Array.from(document.querySelectorAll('button')).find(
+        (candidate) => candidate.textContent?.trim() === text
+      );
+      expect(button).toBeDefined();
+      return button!;
+    }
+
+    function isTuckedAway(element: Element) {
+      const details = element.closest('details');
+      return Boolean(details && !details.open) || Boolean(element.closest('[hidden]'));
+    }
+
+    it('keeps tutor, groups and lesson notes under a closed "More options"', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      const more = controlById('assignment-create-exit-ticket-more-options');
+      expect(more.tagName).toBe('DETAILS');
+      expect((more as HTMLDetailsElement).open).toBe(false);
+      for (const id of [
+        'assignment-create-tutor-enabled',
+        'assignment-create-collaboration-enabled',
+        'assignment-create-exit-ticket-lesson-notes',
+      ]) {
+        expect(more.contains(controlById(id))).toBe(true);
+      }
+      // Tucked away is not switched off: the tutor still posts its value.
+      expect(allInputsByName('tutorEnabled').length).toBeGreaterThan(0);
+    });
+
+    it('opens "More options" when there are lesson notes to show', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketLessonNotes: {
+          mainPoints: 'Weathering breaks rock down.',
+          mustMention: '',
+          watchFor: '',
+        },
+      }).root;
+
+      expect(
+        (
+          controlById(
+            'assignment-create-exit-ticket-more-options'
+          ) as HTMLDetailsElement
+        ).open
+      ).toBe(true);
+    });
+
+    it('puts the long explanations behind "Why?"', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+      }).root;
+
+      // Present for anyone who wants them, but not on screen by default.
+      expect(isTuckedAway(elementWithText('Judged on the reasoning'))).toBe(true);
+      expect(
+        isTuckedAway(elementWithText('a tutor in the document would answer'))
+      ).toBe(true);
+      expect(
+        isTuckedAway(elementWithText('nothing to lose by admitting'))
+      ).toBe(true);
+    });
+
+    it('can walk the teacher through it one step at a time', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      act(() => {
+        buttonByText('Walk me through it').click();
+      });
+      expectText('Step 1 of 3');
+      expect(
+        isTuckedAway(controlById('assignment-create-exit-ticket-graded'))
+      ).toBe(true);
+
+      act(() => {
+        buttonByText('Next').click();
+      });
+      expectText('Step 2 of 3');
+      act(() => {
+        buttonByText('Next').click();
+      });
+      expectText('Step 3 of 3');
+      expect(
+        isTuckedAway(controlById('assignment-create-exit-ticket-graded'))
+      ).toBe(false);
+
+      // Same state underneath: what posts is what the full form would post.
+      expect(inputByName('exitTicketKind').value).toBe('reflection');
+      expect(submitButton().disabled).toBe(false);
+
+      act(() => {
+        buttonByText('Show everything').click();
+      });
+      expectNoText('Step 1 of 3');
+      expectNoText('Step 3 of 3');
+    });
+
     it('will not create a check until the right-answer question is answered', () => {
       root = renderQuickExitTicketSheet({
         fixedClassId: 'class-1',

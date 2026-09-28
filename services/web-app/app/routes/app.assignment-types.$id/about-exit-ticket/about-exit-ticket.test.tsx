@@ -37,13 +37,12 @@ const {
   TWO_WAYS_HEADING,
   TWO_WAYS_INTRO,
   WHAT_MAKES_A_GOOD_ONE,
+  QUICK_BUILDER_COPY,
 } = await import('./content');
-const { EXIT_TICKET_FOCUS_OPTIONS } = await import(
-  '~/domain/assignment-types/exit-ticket'
-);
-const { EXIT_TICKET_SCORE_BANDS } = await import(
-  '~/domain/assignment-types/exit-ticket-rubric'
-);
+const { EXIT_TICKET_FOCUS_OPTIONS, EXIT_TICKET_REFLECTION_PROMPT_OPTIONS } =
+  await import('~/domain/assignment-types/exit-ticket');
+const { EXIT_TICKET_SCORE_BANDS } =
+  await import('~/domain/assignment-types/exit-ticket-rubric');
 
 const SECTION_HEADINGS = [
   TWO_WAYS_HEADING,
@@ -73,8 +72,14 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+// The original copy, kept while the original builder is the flag-off path.
 function renderAbout() {
-  activeRoot = render(<AboutExitTicket />);
+  activeRoot = render(<AboutExitTicket builder="v1" />);
+  return document.body;
+}
+
+function renderQuickAbout() {
+  activeRoot = render(<AboutExitTicket builder="v2" />);
   return document.body;
 }
 
@@ -280,5 +285,41 @@ describe('the exit ticket about section', () => {
     // The one line that keeps the toggle honest: a prompted answer is not an
     // unaided one, and the score carries that.
     expect(body.textContent).toContain(TUTOR_TRADE);
+  });
+});
+
+describe('the exit ticket about section, for the quick builder', () => {
+  it('describes reflection and check rather than basic and specific', () => {
+    renderQuickAbout();
+    const body = openSection(TWO_WAYS_HEADING);
+
+    for (const way of QUICK_BUILDER_COPY.twoWays) {
+      expect(body.textContent).toContain(way.mode);
+      expect(body.textContent).toContain(way.detail);
+    }
+    expect(body.textContent).not.toContain(TWO_WAYS[0]!.detail);
+  });
+
+  it('lists the reflection questions the form offers', () => {
+    renderQuickAbout();
+    const body = openSection(TWO_WAYS_HEADING);
+
+    for (const option of EXIT_TICKET_REFLECTION_PROMPT_OPTIONS) {
+      expect(body.textContent?.toLowerCase()).toContain(
+        option.label.toLowerCase()
+      );
+    }
+  });
+
+  it('says grading is optional and asks for what it is graded on', () => {
+    renderQuickAbout();
+    const body = openSection(SCORING_HEADING);
+
+    expect(body.textContent).toContain(QUICK_BUILDER_COPY.scoringIntro);
+    for (const mode of QUICK_BUILDER_COPY.scoringModes) {
+      expect(body.textContent).toContain(mode.label);
+      expect(body.textContent).toContain(mode.detail);
+    }
+    expect(body.textContent).not.toContain(SCORING_MODES[1]!.detail);
   });
 });

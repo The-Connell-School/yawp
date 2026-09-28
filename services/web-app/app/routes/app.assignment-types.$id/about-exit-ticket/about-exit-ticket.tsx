@@ -6,7 +6,11 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
-import { EXIT_TICKET_FOCUS_OPTIONS } from '~/domain/assignment-types/exit-ticket';
+import {
+  EXIT_TICKET_BUILDER_V2_ENABLED,
+  EXIT_TICKET_FOCUS_OPTIONS,
+  EXIT_TICKET_REFLECTION_PROMPT_OPTIONS,
+} from '~/domain/assignment-types/exit-ticket';
 import { EXIT_TICKET_SCORE_BANDS } from '~/domain/assignment-types/exit-ticket-rubric';
 
 import {
@@ -15,6 +19,7 @@ import {
   DESIRED_RESPONSE_DETAIL,
   DESIRED_RESPONSE_LEAD,
   FOCUS_INTRO,
+  QUICK_BUILDER_COPY,
   GOOD_TICKET_HEADING,
   SCORING_HEADING,
   SCORING_INTRO,
@@ -80,7 +85,25 @@ function AboutSection({
  * bands and the form's questions want to be open at the same time, and the
  * notes section is the one people reread while filling the form in.
  */
-export function AboutExitTicket() {
+export function AboutExitTicket({
+  builder = EXIT_TICKET_BUILDER_V2_ENABLED ? 'v2' : 'v1',
+}: {
+  /** Which builder the copy describes; the flag decides by default. */
+  builder?: 'v1' | 'v2';
+} = {}) {
+  const quick = builder === 'v2';
+  const twoWaysIntro = quick ? QUICK_BUILDER_COPY.twoWaysIntro : TWO_WAYS_INTRO;
+  const twoWays = quick ? QUICK_BUILDER_COPY.twoWays : TWO_WAYS;
+  const focusIntro = quick ? QUICK_BUILDER_COPY.focusIntro : FOCUS_INTRO;
+  const desiredResponseLead = quick
+    ? QUICK_BUILDER_COPY.desiredResponseLead
+    : DESIRED_RESPONSE_LEAD;
+  const basicNoNotesLead = quick
+    ? QUICK_BUILDER_COPY.basicNoNotesLead
+    : TELL_US_BASIC_NO_NOTES_LEAD;
+  const scoringIntro = quick ? QUICK_BUILDER_COPY.scoringIntro : SCORING_INTRO;
+  const scoringModes = quick ? QUICK_BUILDER_COPY.scoringModes : SCORING_MODES;
+
   return (
     <section className="mb-6 rounded-lg border bg-muted/40 p-4">
       <h2 className="text-base font-semibold">{ABOUT_HEADING}</h2>
@@ -88,17 +111,28 @@ export function AboutExitTicket() {
 
       <Accordion type="multiple" className="mt-3">
         <AboutSection value="two-ways" heading={TWO_WAYS_HEADING}>
-          <p className="mb-2 text-sm text-muted-foreground">{TWO_WAYS_INTRO}</p>
+          <p className="mb-2 text-sm text-muted-foreground">{twoWaysIntro}</p>
           <ul className="space-y-2 text-sm text-foreground/80">
-            {TWO_WAYS.map((way) => (
+            {twoWays.map((way) => (
               <li key={way.mode}>
                 <span className="font-medium">{way.mode}</span> —{' '}
                 <span className="text-muted-foreground">{way.detail}</span>
               </li>
             ))}
           </ul>
+          {quick ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {QUICK_BUILDER_COPY.reflectionIntro}{' '}
+              {EXIT_TICKET_REFLECTION_PROMPT_OPTIONS.map((option) =>
+                option.label.toLowerCase()
+              )
+                .join(', ')
+                .replace(/, ([^,]*)$/, ', or $1')}
+              .
+            </p>
+          ) : null}
           <p className="mt-3 text-sm text-muted-foreground">
-            {FOCUS_INTRO}{' '}
+            {focusIntro}{' '}
             {EXIT_TICKET_FOCUS_OPTIONS.map((option) =>
               option.label.toLowerCase()
             )
@@ -108,7 +142,7 @@ export function AboutExitTicket() {
           </p>
           <p className="mt-3 text-sm text-muted-foreground">
             <span className="font-medium text-foreground/80">
-              {DESIRED_RESPONSE_LEAD}
+              {desiredResponseLead}
             </span>{' '}
             {DESIRED_RESPONSE_DETAIL}
           </p>
@@ -121,16 +155,16 @@ export function AboutExitTicket() {
           </p>
           <p className="mt-3 text-sm text-muted-foreground">
             <span className="font-medium text-foreground/80">
-              {TELL_US_BASIC_NO_NOTES_LEAD}
+              {basicNoNotesLead}
             </span>{' '}
             {TELL_US_BASIC_NO_NOTES_DETAIL}
           </p>
         </AboutSection>
 
         <AboutSection value="scoring" heading={SCORING_HEADING}>
-          <p className="text-sm text-muted-foreground">{SCORING_INTRO}</p>
+          <p className="text-sm text-muted-foreground">{scoringIntro}</p>
           <dl className="mt-2 space-y-1.5 text-sm text-foreground/80">
-            {SCORING_MODES.map((mode) => (
+            {scoringModes.map((mode) => (
               <div key={mode.label}>
                 <dt className="inline font-medium">{mode.label} </dt>
                 <dd className="inline text-muted-foreground">{mode.detail}</dd>
@@ -143,9 +177,7 @@ export function AboutExitTicket() {
                 <span className="font-medium">{band.label}</span>{' '}
                 <span className="text-muted-foreground">
                   (
-                  {band.min === band.max
-                    ? band.min
-                    : `${band.min}–${band.max}`}
+                  {band.min === band.max ? band.min : `${band.min}–${band.max}`}
                   )
                 </span>{' '}
                 — {band.description}
@@ -157,7 +189,10 @@ export function AboutExitTicket() {
           </p>
         </AboutSection>
 
-        <AboutSection value="what-makes-a-good-one" heading={GOOD_TICKET_HEADING}>
+        <AboutSection
+          value="what-makes-a-good-one"
+          heading={GOOD_TICKET_HEADING}
+        >
           <ul className="space-y-2 text-sm text-foreground/80">
             {WHAT_MAKES_A_GOOD_ONE.map((item) => (
               <li key={item.title}>

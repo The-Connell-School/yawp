@@ -205,4 +205,50 @@ test.describe.serial('Exit tickets', () => {
       CORRECT_ANSWER
     );
   });
+
+  test('the quick default keeps the rest tucked away, and can walk through it', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `/app/assignment-types/${e2eContext.exitTicketAssignmentTypeId}`
+    );
+    await openNewAssignmentSheet(page);
+
+    // Tutor, groups and notes wait under "More options".
+    await expect(page.getByLabel('Tutor enabled')).toBeHidden();
+    await page.getByText('More options').click();
+    await expect(page.getByLabel('Tutor enabled')).toBeVisible();
+    await expect(page.getByLabel('Tutor enabled')).not.toBeChecked();
+
+    // Explanations are there for anyone who asks.
+    await expect(page.getByText(/nothing to lose by admitting/)).toBeHidden();
+    await page.getByText('Why?').nth(1).click();
+    await page.screenshot({
+      path: 'test-results/exit-ticket-quick-builder.png',
+      fullPage: true,
+    });
+
+    await page.getByRole('button', { name: 'Walk me through it' }).click();
+    await expect(page.getByText('Step 1 of 3')).toBeVisible();
+    await page.getByRole('radio', { name: /^Reflection/ }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('Step 2 of 3')).toBeVisible();
+    await page.getByRole('radio', { name: 'Most interesting' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('Step 3 of 3')).toBeVisible();
+    await page.screenshot({
+      path: 'test-results/exit-ticket-guided.png',
+      fullPage: true,
+    });
+    await page.getByRole('button', { name: 'Done' }).click();
+
+    await page.getByLabel('Title (optional)').fill('Exit ticket: guided');
+    await page.getByRole('button', { name: /Create Assignment/i }).click();
+    await expect(
+      page.getByRole('heading', { name: 'New Assignment' })
+    ).toHaveCount(0);
+  });
 });

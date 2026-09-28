@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type * as React from 'react';
 import { useFetcher, useNavigate } from 'react-router';
 import { FileUp, Loader2 } from 'lucide-react';
@@ -78,6 +78,8 @@ import {
 import { Tooltip } from '~/components/ui/tooltip';
 import {
   ExitTicketBuilder,
+  ExitTicketLessonNotesSection,
+  WhyDisclosure,
   type ExitTicketGradingDraft,
 } from './exit-ticket-builder';
 import { cn } from '~/utils/misc';
@@ -139,6 +141,38 @@ function GradingChoiceGroup<Value extends string>({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * A closed "More options" disclosure when enabled; its children unchanged
+ * otherwise. A native <details> keeps everything inside mounted, so every
+ * field still posts whether or not the teacher opened it.
+ */
+function MoreOptions({
+  enabled,
+  open,
+  onOpenChange,
+  children,
+}: {
+  enabled: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  if (!enabled) return <>{children}</>;
+  return (
+    <details
+      id="assignment-create-exit-ticket-more-options"
+      className="rounded-md border px-3 py-2"
+      open={open}
+      onToggle={(event) => onOpenChange(event.currentTarget.open)}
+    >
+      <summary className="cursor-pointer select-none py-1 text-sm font-medium">
+        More options
+      </summary>
+      {children}
+    </details>
   );
 }
 
@@ -550,6 +584,11 @@ export function AssignmentCreationSheetContent({
       initialExitTicketMode
     )
   );
+  // Opens itself when there is something in it worth seeing: notes the
+  // planner already filled in, for one.
+  const [moreOptionsOpen, setMoreOptionsOpen] = useState(
+    Boolean(initialExitTicketLessonNotes)
+  );
   const [gradingDraft, setGradingDraft] = useState<ExitTicketGradingDraft>(
     gradingDraftFor(initialExitTicketGrading)
   );
@@ -775,6 +814,7 @@ export function AssignmentCreationSheetContent({
       )
     );
     setGradingDraft(gradingDraftFor(initialExitTicketGrading));
+    setMoreOptionsOpen(Boolean(initialExitTicketLessonNotes));
     setLessonNotes(initialExitTicketLessonNotes ?? EMPTY_LESSON_NOTES);
     setReflectionPromptId(
       initialExitTicketReflectionPrompt?.id ??
@@ -1231,8 +1271,6 @@ export function AssignmentCreationSheetContent({
               onLessonNoteChange={(key, value) =>
                 setLessonNotes((current) => ({ ...current, [key]: value }))
               }
-              lessonNotesEnabled={lessonNotesEnabled}
-              onLessonNotesEnabledChange={setLessonNotesEnabled}
               preview={exitTicketPreview}
               disabled={isSaving}
             />
@@ -1708,200 +1746,245 @@ export function AssignmentCreationSheetContent({
           ) : null}
         </div>
 
-        {/* Frozen once the assignment exists: students may already have
+        {/* The quick builder keeps a default exit ticket to one screen:
+            everything a teacher rarely changes waits in here, still posting
+            its value, until they open it. */}
+        <MoreOptions
+          enabled={isQuickExitTicket}
+          open={moreOptionsOpen}
+          onOpenChange={setMoreOptionsOpen}
+        >
+          {isQuickExitTicket ? (
+            <div className="pt-4">
+              <ExitTicketLessonNotesSection
+                criteriaKeys={criteriaNoteKeys}
+                lessonNotes={lessonNotes}
+                onLessonNoteChange={(key, value) =>
+                  setLessonNotes((current) => ({ ...current, [key]: value }))
+                }
+                enabled={lessonNotesEnabled}
+                onEnabledChange={setLessonNotesEnabled}
+                disabled={isSaving}
+              />
+            </div>
+          ) : null}
+          {/* Frozen once the assignment exists: students may already have
             documents and tutor sessions built around this setting, so it is
             shown read-only rather than hidden. Nothing named tutorEnabled is
             submitted while editing, which is what tells the server to leave
             the stored value alone. */}
-        <div className="pt-6">
-          {isEditing ? null : (
-            <input type="hidden" name="tutorEnabled" value="false" />
-          )}
-          <div className="flex items-center gap-2.5">
-            <Checkbox
-              id="assignment-create-tutor-enabled"
-              name={isEditing ? undefined : 'tutorEnabled'}
-              value="true"
-              checked={tutorEnabled}
-              onCheckedChange={(checked) => setTutorEnabled(checked === true)}
-              disabled={isSaving || isEditing}
-              className="size-4 shrink-0"
-            />
-            <Label
-              htmlFor="assignment-create-tutor-enabled"
-              className={
-                isEditing
-                  ? 'font-normal leading-none text-muted-foreground'
-                  : 'cursor-pointer font-normal leading-none'
-              }
-            >
-              Tutor enabled
-            </Label>
+          <div className="pt-6">
+            {isEditing ? null : (
+              <input type="hidden" name="tutorEnabled" value="false" />
+            )}
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                id="assignment-create-tutor-enabled"
+                name={isEditing ? undefined : 'tutorEnabled'}
+                value="true"
+                checked={tutorEnabled}
+                onCheckedChange={(checked) => setTutorEnabled(checked === true)}
+                disabled={isSaving || isEditing}
+                className="size-4 shrink-0"
+              />
+              <Label
+                htmlFor="assignment-create-tutor-enabled"
+                className={
+                  isEditing
+                    ? 'font-normal leading-none text-muted-foreground'
+                    : 'cursor-pointer font-normal leading-none'
+                }
+              >
+                Tutor enabled
+              </Label>
+            </div>
+            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+              {isEditing
+                ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
+                : isQuickExitTicket
+                  ? 'Off by default for exit tickets.'
+                  : isExitTicket
+                    ? 'Off by default for an exit ticket: it checks what students understand on their own, and a tutor in the document would answer the question for them. Turn it on if you want them to have help.'
+                    : "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."}
+            </p>
+            {isQuickExitTicket && !isEditing ? (
+              <div className="mt-1 pl-[calc(1rem+0.625rem)]">
+                <WhyDisclosure>
+                  <p>
+                    An exit ticket checks what students understand on their own,
+                    and a tutor in the document would answer the question for
+                    them. Turn it on if you want them to have help.
+                  </p>
+                </WhyDisclosure>
+              </div>
+            ) : null}
           </div>
-          <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-            {isEditing
-              ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
-              : isExitTicket
-                ? 'Off by default for an exit ticket: it checks what students understand on their own, and a tutor in the document would answer the question for them. Turn it on if you want them to have help.'
-                : "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."}
-          </p>
-        </div>
 
-        {/* Graded for grammar and syntax. Shown only for assignment types whose
+          {/* Graded for grammar and syntax. Shown only for assignment types whose
             rubric grades grammar, because the toggle only ever turns it off.
             Frozen after creation like the two toggles around it: work already
             graded was scored against a rubric that included the category, and
             flipping it afterwards would silently restate those grades. */}
-        {selectedTypeGradesGrammar ? (
-          <div className="pt-6">
-            {isEditing ? null : (
-              <input type="hidden" name="grammarGradingEnabled" value="false" />
-            )}
-            <div className="flex items-center gap-2.5">
-              <Checkbox
-                id="assignment-create-grammar-grading-enabled"
-                name={isEditing ? undefined : 'grammarGradingEnabled'}
-                value="true"
-                checked={grammarGradingEnabled}
-                onCheckedChange={(checked) =>
-                  setGrammarGradingEnabled(checked === true)
-                }
-                disabled={isSaving || isEditing}
-                className="size-4 shrink-0"
-              />
-              <Label
-                htmlFor="assignment-create-grammar-grading-enabled"
-                className={
-                  isEditing
-                    ? 'font-normal leading-none text-muted-foreground'
-                    : 'cursor-pointer font-normal leading-none'
-                }
-              >
-                Grade this for grammar and syntax
-              </Label>
+          {selectedTypeGradesGrammar ? (
+            <div className="pt-6">
+              {isEditing ? null : (
+                <input
+                  type="hidden"
+                  name="grammarGradingEnabled"
+                  value="false"
+                />
+              )}
+              <div className="flex items-center gap-2.5">
+                <Checkbox
+                  id="assignment-create-grammar-grading-enabled"
+                  name={isEditing ? undefined : 'grammarGradingEnabled'}
+                  value="true"
+                  checked={grammarGradingEnabled}
+                  onCheckedChange={(checked) =>
+                    setGrammarGradingEnabled(checked === true)
+                  }
+                  disabled={isSaving || isEditing}
+                  className="size-4 shrink-0"
+                />
+                <Label
+                  htmlFor="assignment-create-grammar-grading-enabled"
+                  className={
+                    isEditing
+                      ? 'font-normal leading-none text-muted-foreground'
+                      : 'cursor-pointer font-normal leading-none'
+                  }
+                >
+                  Grade this for grammar and syntax
+                </Label>
+              </div>
+              <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+                {isEditing
+                  ? 'Grammar grading cannot be switched on or off after an assignment is created — work may already be graded against it.'
+                  : 'On by default for this assignment type. Turn it off for a quick write you want graded on the thinking alone: the grammar category is dropped, the writing is not marked up, and the remaining categories carry the whole grade.'}
+              </p>
             </div>
-            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-              {isEditing
-                ? 'Grammar grading cannot be switched on or off after an assignment is created — work may already be graded against it.'
-                : 'On by default for this assignment type. Turn it off for a quick write you want graded on the thinking alone: the grammar category is dropped, the writing is not marked up, and the remaining categories carry the whole grade.'}
-            </p>
-          </div>
-        ) : null}
+          ) : null}
 
-        {/* Collaborative drafts. Available for every assignment type, and frozen
+          {/* Collaborative drafts. Available for every assignment type, and frozen
             after creation for the same reason the tutor toggle is: students may
             already have group drafts built around it.
             Group membership itself is arranged per class afterwards, because an
             assignment fans out to one ClassAssignment per class. */}
-        {selectedTypeSupportsCollaboration ? (
-          <div className="pt-6">
-            {isEditing ? null : (
-              <input type="hidden" name="collaborationEnabled" value="false" />
-            )}
-            <div className="flex items-center gap-2.5">
-              <Checkbox
-                id="assignment-create-collaboration-enabled"
-                name={isEditing ? undefined : 'collaborationEnabled'}
-                value="true"
-                checked={collaborationEnabled}
-                onCheckedChange={(checked) =>
-                  setCollaborationEnabled(checked === true)
-                }
-                disabled={isSaving || isEditing}
-                className="size-4 shrink-0"
-              />
-              <Label
-                htmlFor="assignment-create-collaboration-enabled"
-                className={
-                  isEditing
-                    ? 'font-normal leading-none text-muted-foreground'
-                    : 'cursor-pointer font-normal leading-none'
-                }
-              >
-                Is this a collaborative assignment?
-              </Label>
-            </div>
-            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-              {isEditing
-                ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
-                : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp creates one shared document for each group.'}
-            </p>
-            {collaborationEnabled && !isEditing ? (
-              <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">
+          {selectedTypeSupportsCollaboration ? (
+            <div className="pt-6">
+              {isEditing ? null : (
                 <input
                   type="hidden"
-                  name="collaborationGroupMode"
-                  value={collaborationGroupMode}
+                  name="collaborationEnabled"
+                  value="false"
                 />
-                <div className="space-y-2">
-                  <Label>How should groups be made?</Label>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {COLLABORATION_GROUP_MODE_OPTIONS.map((option) => {
-                      const selected = collaborationGroupMode === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
-                            selected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background hover:bg-muted'
-                          }`}
-                          aria-pressed={selected}
-                          onClick={() =>
-                            setCollaborationGroupMode(option.value)
-                          }
-                          disabled={isSaving}
-                        >
-                          <span className="block font-medium">
-                            {option.label}
-                          </span>
-                          <span
-                            className={`mt-1 block text-xs ${
-                              selected
-                                ? 'text-primary-foreground/80'
-                                : 'text-muted-foreground'
-                            }`}
-                          >
-                            {option.description}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Whole class has no size to choose: the group is the roster. */}
-                {collaborationModeNeedsGroupSize(collaborationGroupMode) ? (
-                  <div>
-                    <Label
-                      htmlFor="assignment-create-collaboration-group-size"
-                      className="font-normal leading-none"
-                    >
-                      Students per group
-                    </Label>
-                    <select
-                      id="assignment-create-collaboration-group-size"
-                      name="collaborationGroupSize"
-                      value={collaborationGroupSize}
-                      onChange={(event) =>
-                        setCollaborationGroupSize(Number(event.target.value))
-                      }
-                      disabled={isSaving}
-                      className="mt-1 block rounded border px-2 py-1 text-sm"
-                    >
-                      {COLLABORATION_GROUP_SIZE_OPTIONS.map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
+              )}
+              <div className="flex items-center gap-2.5">
+                <Checkbox
+                  id="assignment-create-collaboration-enabled"
+                  name={isEditing ? undefined : 'collaborationEnabled'}
+                  value="true"
+                  checked={collaborationEnabled}
+                  onCheckedChange={(checked) =>
+                    setCollaborationEnabled(checked === true)
+                  }
+                  disabled={isSaving || isEditing}
+                  className="size-4 shrink-0"
+                />
+                <Label
+                  htmlFor="assignment-create-collaboration-enabled"
+                  className={
+                    isEditing
+                      ? 'font-normal leading-none text-muted-foreground'
+                      : 'cursor-pointer font-normal leading-none'
+                  }
+                >
+                  Is this a collaborative assignment?
+                </Label>
               </div>
-            ) : null}
-          </div>
-        ) : null}
+              <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+                {isEditing
+                  ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
+                  : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp creates one shared document for each group.'}
+              </p>
+              {collaborationEnabled && !isEditing ? (
+                <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">
+                  <input
+                    type="hidden"
+                    name="collaborationGroupMode"
+                    value={collaborationGroupMode}
+                  />
+                  <div className="space-y-2">
+                    <Label>How should groups be made?</Label>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {COLLABORATION_GROUP_MODE_OPTIONS.map((option) => {
+                        const selected =
+                          collaborationGroupMode === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
+                              selected
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border bg-background hover:bg-muted'
+                            }`}
+                            aria-pressed={selected}
+                            onClick={() =>
+                              setCollaborationGroupMode(option.value)
+                            }
+                            disabled={isSaving}
+                          >
+                            <span className="block font-medium">
+                              {option.label}
+                            </span>
+                            <span
+                              className={`mt-1 block text-xs ${
+                                selected
+                                  ? 'text-primary-foreground/80'
+                                  : 'text-muted-foreground'
+                              }`}
+                            >
+                              {option.description}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Whole class has no size to choose: the group is the roster. */}
+                  {collaborationModeNeedsGroupSize(collaborationGroupMode) ? (
+                    <div>
+                      <Label
+                        htmlFor="assignment-create-collaboration-group-size"
+                        className="font-normal leading-none"
+                      >
+                        Students per group
+                      </Label>
+                      <select
+                        id="assignment-create-collaboration-group-size"
+                        name="collaborationGroupSize"
+                        value={collaborationGroupSize}
+                        onChange={(event) =>
+                          setCollaborationGroupSize(Number(event.target.value))
+                        }
+                        disabled={isSaving}
+                        className="mt-1 block rounded border px-2 py-1 text-sm"
+                      >
+                        {COLLABORATION_GROUP_SIZE_OPTIONS.map((size) => (
+                          <option key={size} value={size}>
+                            {size}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </MoreOptions>
 
         {SAVED_ASSIGNMENTS_ENABLED && usesBulkCreateApi && !isEditing ? (
           <div className="pt-6">

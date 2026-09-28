@@ -42,7 +42,8 @@ export const DESIRED_RESPONSE_LEAD =
 export const DESIRED_RESPONSE_DETAIL =
   'Some things you check for have a right answer and some do not, and nothing about a topic tells us which. Say there is one and a response that contradicts it is marked wrong, plainly. Say there is not and the response is judged on its reasoning and what it is anchored to, never on whether it landed where you would have — so a student is not told they are wrong for a defensible answer you did not expect. There is no default on the form because the wrong guess is not a neutral one.';
 
-export const TELL_US_HEADING = 'The more you tell us, the more targeted it gets';
+export const TELL_US_HEADING =
+  'The more you tell us, the more targeted it gets';
 
 export const TELL_US_INTRO =
   'When you make an exit ticket you can add notes about the lesson: the main points, what a response absolutely should mention, and the mix-up you expect. Students never see any of it. It is there so the responses can be read against what you actually taught.';
@@ -106,7 +107,8 @@ export const TUTOR_HEADING = 'Why the tutor starts off, and when to turn it on';
 export const TUTOR_NOTE =
   'The tutor is switched off by default here. An exit ticket is asking what a student understands on their own, and a tutor in the document would answer the question for them. Every other assignment type starts with it on; this one does not.';
 
-export const TUTOR_WHY_ON_LEAD = 'There are lessons where you should turn it on.';
+export const TUTOR_WHY_ON_LEAD =
+  'There are lessons where you should turn it on.';
 
 export const TUTOR_WHY_ON =
   'A blank box and four minutes gets you a sentence and a full stop from students who would have told you plenty if anybody had asked them one more question. That is not them having nothing to say — it is them not knowing that “say more” was an option. Turn the tutor on when the thing you are worried about is silence rather than help: a class that is new to writing for a check, a group that habitually hands in six words, or a ticket asking students to explain reasoning they can do out loud but have never had to put on a page.';
@@ -122,3 +124,47 @@ export const TUTOR_BEHAVIOUR: string[] = [
 
 export const TUTOR_TRADE =
   'The honest trade: what comes back is what the student could reach when prompted, not what they could reach alone, and the score means that too. On a ticket where the point is to find out who has it unaided — a check before a test, a read on what actually landed today — leave it off. On a ticket where the point is to get thinking onto the page at all, the prompted answer is worth far more than the silence it replaces.';
+
+/**
+ * The same sections, worded for the quick builder: reflection or check first,
+ * and grading that is optional for both but asks what it is graded on when it
+ * is turned on. Only the parts that describe the form differ; the pedagogy,
+ * the scale and the tutor copy are shared.
+ */
+export const QUICK_BUILDER_COPY = {
+  twoWaysIntro:
+    'You never write the prompt from scratch. Hit New → Assignment, pick a reflection or a check, and the prompt students see is composed for you.',
+  twoWays: [
+    {
+      mode: 'Reflection',
+      detail:
+        'The quick default: nothing to fill in but a title. Students say how the lesson landed — what they learned, what they found most interesting, or what they are still wondering — or answer a question you write yourself. There is no answer to get wrong.',
+    },
+    {
+      mode: 'Check for understanding',
+      detail:
+        'You name what you are checking for and the topic it applies to. Good when the lesson had one idea you need evidence of.',
+    },
+  ],
+  reflectionIntro: 'A reflection asks one of:',
+  focusIntro:
+    'A check asks you to choose what kind of understanding you want to see:',
+  desiredResponseLead:
+    'It also asks whether there is a correct answer, and you have to answer.',
+  basicNoNotesLead:
+    'A default reflection with no notes is the hardest one to read well.',
+  scoringIntro:
+    'Every response is read and given feedback, on the one question of how much of the idea the student can explain. Grading is optional for both kinds; turning it on asks what the grade is judged against.',
+  scoringModes: [
+    {
+      label: 'Ungraded (the default)',
+      detail:
+        'Keeps it out of the gradebook — you still see the score and who understood it, and a student loses nothing by admitting what they missed.',
+    },
+    {
+      label: 'Graded',
+      detail:
+        'Asks how many points it is worth, then what it is judged on: a reflection for completion or for quality against the main points or a minimum length, a check against the correct answer — or, when there is no single right answer, against what you say to assess. Always read in bands, never steps.',
+    },
+  ],
+} as const;
