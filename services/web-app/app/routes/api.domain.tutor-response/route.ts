@@ -1,6 +1,7 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
+import { buildParagraphModeTutorInstructions } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
@@ -138,6 +139,7 @@ export async function action({ request }: ActionFunctionArgs) {
                 title: true,
                 prompt: true,
                 tutorEnabled: true,
+                paragraphMode: true,
               },
             },
           },
@@ -179,6 +181,9 @@ export async function action({ request }: ActionFunctionArgs) {
     const system = buildTutorSystemPromptBlocks({
       tutorInstructions: cms.assignmentModule.tutorInstructions,
       instructionTutorInstructions: instruction.tutorInstructions,
+      paragraphModeInstructions: buildParagraphModeTutorInstructions(
+        cms.document?.assignment?.paragraphMode
+      ),
       moduleRubricGuidance,
     });
 

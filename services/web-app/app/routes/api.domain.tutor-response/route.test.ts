@@ -143,6 +143,59 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect((thrown as Response).status).toBe(403);
   });
 
+  async function tutorSystemTextFor(assignment: Record<string, unknown>) {
+    getLLMCompletion.mockResolvedValue('What is your claim about the text?');
+    mockCms({ assignment });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+    const body = new FormData();
+    body.set('response', 'Can you help?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+    const completionArgs = getLLMCompletion.mock.calls.at(-1)?.[0] as any;
+    return completionArgs.system[0].text as string;
+  }
+
+  test('layers the chosen paragraph type onto the module tutor', async () => {
+    const systemText = await tutorSystemTextFor({
+      id: 'assignment-1',
+      title: 'Daily Pages',
+      prompt: 'Quote the line where her argument turns.',
+      tutorEnabled: true,
+      paragraphMode: 'analyze',
+    });
+
+    expect(systemText).toContain('Coach the student.');
+    expect(systemText).toContain('PARAGRAPH TYPE: Analyze');
+    expect(systemText.indexOf('Coach the student.')).toBeLessThan(
+      systemText.indexOf('PARAGRAPH TYPE: Analyze')
+    );
+  });
+
+  test('adds no paragraph-type layer when none was chosen', async () => {
+    const systemText = await tutorSystemTextFor({
+      id: 'assignment-1',
+      title: 'Daily Pages',
+      prompt: 'Quote the line where her argument turns.',
+      tutorEnabled: true,
+      paragraphMode: null,
+    });
+
+    expect(systemText).not.toContain('PARAGRAPH TYPE');
+  });
+
   test('sends the current document as explicit auditable tutor context', async () => {
     getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
     mockCms();
@@ -273,6 +326,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
                   title: true,
                   prompt: true,
                   tutorEnabled: true,
+                  paragraphMode: true,
                 },
               },
             }),
