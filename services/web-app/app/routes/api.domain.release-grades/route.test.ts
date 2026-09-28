@@ -325,6 +325,56 @@ describe('api.domain.release-grades', () => {
     expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });
 
+  test('allows a different class teacher to release a grade they did not originally grade', async () => {
+    // Actor is a teacher on the class but not the original grader.
+    getGradingActor.mockResolvedValue({
+      userId: 'teacher-user-2',
+      membershipId: 'teacher-2',
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-2',
+      isTeacher: true,
+      isAdmin: false,
+    });
+    buildTeacherClassWhere.mockReturnValue({
+      OR: [{ classAssignment: { class: { teachers: { some: { id: 'teacher-2' } } } } }],
+    });
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 'sub-eligible',
+        releasedAt: null,
+        updatedAt: new Date('2026-08-21T12:00:00.000Z'),
+        document: {
+          membership: { organizationId: 'org-1' },
+          classAssignment: {
+            class: {
+              id: 'class-1',
+              schoolId: 'school-1',
+              school: { organizationId: 'org-1' },
+              teachers: [{ id: 'teacher-2' }],
+            },
+          },
+        },
+      },
+    ]);
+    prisma.submission.updateMany.mockResolvedValue({ count: 1 });
+
+    const form = new FormData();
+    form.append('submissionIds', 'sub-eligible');
+    const response = await action({
+      request: new Request('https://example.com/api/domain/release-grades', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const payload = response as { data: Record<string, unknown> };
+    expect(payload.data).toMatchObject({ success: true, releasedCount: 1 });
+    // Ensure we never tried to bind release permission to the original grader.
+    const where = prisma.submission.updateMany.mock.calls[0][0].where;
+    expect(where).toEqual(
+      expect.not.objectContaining({ gradedByMembershipId: expect.anything() })
+    );
+  });
+
   test('rolls back when concurrent updates release fewer submissions than validated', async () => {
     prisma.submission.findMany.mockResolvedValue([
       {
