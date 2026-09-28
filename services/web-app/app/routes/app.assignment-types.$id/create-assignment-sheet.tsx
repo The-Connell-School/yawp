@@ -32,6 +32,10 @@ type Props = {
   assignmentTypeTitle: string;
   /** Whether this kind of writing is in the collaborative-drafts pilot. */
   assignmentTypeCollaborationSupported?: boolean;
+  /** Whether this type's rubric grades grammar, so the toggle is worth showing. */
+  assignmentTypeGradesGrammar?: boolean;
+  /** The writing time the form suggests for this type; null leaves it blank. */
+  assignmentTypeDefaultWritingTimeMinutes?: number | null;
   teacherClasses: TeacherClass[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -53,6 +57,8 @@ export function CreateAssignmentSheet({
   assignmentTypeId,
   assignmentTypeTitle,
   assignmentTypeCollaborationSupported = false,
+  assignmentTypeGradesGrammar = false,
+  assignmentTypeDefaultWritingTimeMinutes = null,
   teacherClasses,
   open,
   onOpenChange,
@@ -92,6 +98,8 @@ export function CreateAssignmentSheet({
             id: assignmentTypeId,
             title: assignmentTypeTitle,
             collaborationSupported: assignmentTypeCollaborationSupported,
+            gradesGrammar: assignmentTypeGradesGrammar,
+            defaultWritingTimeMinutes: assignmentTypeDefaultWritingTimeMinutes,
           },
         ]}
         teacherClasses={teacherClasses}

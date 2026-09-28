@@ -8,6 +8,9 @@ import type { AssignmentPrompt } from './document-editor/document-editor';
  * editor into a full-width page and pushing the prompt into a banner over the
  * document. The prompt takes the column instead: same place, same width, and
  * the writing surface keeps the shape it has when the tutor is on.
+ *
+ * A tutor-off assignment is a cold write, and the panel says so, so a student
+ * knows the missing tutor is the teacher's choice rather than a fault.
  */
 export function AssignmentPromptPanel({
   assignment,
@@ -33,6 +36,10 @@ export function AssignmentPromptPanel({
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pb-4 pl-4 pr-4 pt-3">
+        <p className="mb-3 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground/80">Cold write.</span>{' '}
+          There is no tutor on this one — write it on your own.
+        </p>
         <div className="whitespace-pre-wrap text-sm text-foreground/90">
           {prompt}
         </div>

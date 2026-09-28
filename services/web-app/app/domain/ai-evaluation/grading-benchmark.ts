@@ -33,6 +33,10 @@ export type GradingBenchmarkCase = {
     studentFirstName: string;
     essayText: string;
     strictness: GradingStrictness;
+    /** The assignment prompt the student answered, when the case has one. */
+    assignmentPrompt?: string;
+    /** How long the student had to write; absent grades it as untimed. */
+    writingTimeMinutes?: number;
   };
   expectations: {
     scoreBands: Record<string, { min: number; max: number }>;

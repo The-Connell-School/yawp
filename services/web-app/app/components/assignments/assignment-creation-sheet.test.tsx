@@ -86,8 +86,18 @@ function idleFetcher(data: Record<string, unknown> | null = null) {
 
 const assignmentTypes = [
   // type-1 is in the collaborative-drafts pilot; type-2 is not.
-  { id: 'type-1', title: 'Literary Analysis', collaborationSupported: true },
-  { id: 'type-2', title: 'Daily Pages', collaborationSupported: false },
+  {
+    id: 'type-1',
+    title: 'Literary Analysis',
+    collaborationSupported: true,
+    gradesGrammar: true,
+  },
+  {
+    id: 'type-2',
+    title: 'Class Starter',
+    collaborationSupported: false,
+    gradesGrammar: false,
+  },
 ];
 
 const teacherClasses = [
@@ -245,7 +255,7 @@ describe('AssignmentCreationSheetContent', () => {
       );
       expectText('Tutor enabled');
       expectText(
-        "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."
+        "Turning the tutor off makes this a cold write: the tutor is removed from students' documents, so you see what they can write without its guidance."
       );
       expectNoText('Customize Grading');
       expectNoText('Tutor Context');
@@ -286,6 +296,17 @@ describe('AssignmentCreationSheetContent', () => {
       false
     );
     expect(inputByName('tutorEnabled').value).toBe('false');
+  });
+
+  it('names a tutor-off assignment a cold write', () => {
+    root = renderSheet().root;
+    expectNoText('Cold write');
+
+    act(() => {
+      controlById('assignment-create-tutor-enabled').click();
+    });
+
+    expectText('Cold write');
   });
 
   it('shows the grading assistant strictness picker to teachers', () => {
@@ -810,5 +831,74 @@ describe('AssignmentCreationSheetContent', () => {
         isChecked(controlById('assignment-create-collaboration-enabled'))
       ).toBe(false);
     });
+  });
+});
+
+describe('AssignmentCreationSheetContent writing time', () => {
+  let root: Root | null = null;
+
+  afterEach(() => {
+    cleanup(root);
+    root = null;
+  });
+
+  const timedTypes = [
+    {
+      id: 'daily-pages',
+      title: 'Daily Pages',
+      collaborationSupported: true,
+      gradesGrammar: true,
+      defaultWritingTimeMinutes: 15,
+    },
+    {
+      id: 'essay',
+      title: 'Thesis Essay',
+      collaborationSupported: true,
+      gradesGrammar: true,
+      defaultWritingTimeMinutes: null,
+    },
+  ];
+
+  it("prefills the assignment type's suggested writing time", () => {
+    ({ root } = renderSheet({
+      assignmentTypes: timedTypes,
+      fixedAssignmentTypeId: 'daily-pages',
+    }));
+
+    expect(inputByName('writingTimeMinutes').value).toBe('15');
+    expectText('Time students have to write');
+  });
+
+  it('is blank for a type with no suggested time', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: timedTypes,
+      fixedAssignmentTypeId: 'essay',
+    }));
+
+    expect(inputByName('writingTimeMinutes').value).toBe('');
+  });
+
+  it('shows the saved time when editing, and stays editable', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: timedTypes,
+      fixedAssignmentTypeId: 'daily-pages',
+      editingAssignment: { id: 'assignment-1' },
+      initialWritingTimeMinutes: 20,
+    }));
+
+    const input = inputByName('writingTimeMinutes');
+    expect(input.value).toBe('20');
+    expect(input.disabled).toBe(false);
+  });
+
+  it('never invents a time for an existing assignment that had none', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: timedTypes,
+      fixedAssignmentTypeId: 'daily-pages',
+      editingAssignment: { id: 'assignment-1' },
+      initialWritingTimeMinutes: null,
+    }));
+
+    expect(inputByName('writingTimeMinutes').value).toBe('');
   });
 });

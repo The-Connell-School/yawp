@@ -5,6 +5,7 @@ import {
   isScored,
   normalizeRubricDisplayConfig,
   normalizeRubricScoresForCategories,
+  parseRubricDisplaySource,
   toPersistedRubricScores,
   unscoredValue,
 } from './rubric-display';
@@ -337,5 +338,26 @@ describe('normalizeRubricScoresForCategories', () => {
         maxScore: 3,
       })
     ).toEqual({ engagement: { score: -1, comment: 'later', isAi: false } });
+  });
+});
+
+describe('parseRubricDisplaySource', () => {
+  test('accepts every source a resolved grading config can report', () => {
+    for (const source of [
+      'assignment-type',
+      'thesis-default',
+      'daily-pages-default',
+      'daily-pages-short-form-default',
+      'class-starter-default',
+    ]) {
+      expect(parseRubricDisplaySource(source)).toBe(source as never);
+    }
+  });
+
+  test('drops anything else, including a source it cannot recognize', () => {
+    expect(parseRubricDisplaySource('act-writing-default')).toBeUndefined();
+    expect(parseRubricDisplaySource(null)).toBeUndefined();
+    expect(parseRubricDisplaySource(undefined)).toBeUndefined();
+    expect(parseRubricDisplaySource(7)).toBeUndefined();
   });
 });

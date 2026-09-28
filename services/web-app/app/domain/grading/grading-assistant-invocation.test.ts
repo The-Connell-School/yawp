@@ -182,3 +182,110 @@ describe('compileGradingAssistantInvocation', () => {
   });
 
 });
+
+describe('compileGradingAssistantInvocation writing time', () => {
+  const base = {
+    gradingConfig: gradingConfig(),
+    studentFirstName: 'Jordan',
+    strictnessLevel: 'intermediate' as const,
+    documentText: 'School uniforms should be optional.',
+  };
+
+  test('leaves the prompt exactly as it was when no writing time is set', () => {
+    const without = compileGradingAssistantInvocation(base);
+    expect(compileGradingAssistantInvocation({ ...base, writingTimeMinutes: null }))
+      .toEqual(without);
+    expect(without.userMessage).not.toContain('Writing time');
+  });
+
+  test('tells the assistant how long the student had', () => {
+    const invocation = compileGradingAssistantInvocation({
+      ...base,
+      writingTimeMinutes: 10,
+    });
+    expect(invocation.userMessage).toContain('Writing time:');
+    expect(invocation.userMessage).toContain('10 minutes');
+    // Placed before the essay, beside the other things the teacher decided.
+    expect(invocation.userMessage.indexOf('Writing time:')).toBeLessThan(
+      invocation.userMessage.indexOf('Essay:')
+    );
+  });
+
+  test('a managed template can place it with {{writing_time}}', () => {
+    const invocation = compileGradingAssistantInvocation({
+      ...base,
+      gradingConfig: gradingConfig({
+        promptTemplate: {
+          systemMessage: 'Grade it.',
+          userMessage: '{{writing_time}}\n---\n{{document}}',
+        },
+      }),
+      writingTimeMinutes: 20,
+    });
+    expect(invocation.userMessage.startsWith('Writing time:')).toBe(true);
+    expect(invocation.userMessage.match(/Writing time:/g)).toHaveLength(1);
+  });
+
+  test('an older managed template without the variable still receives it', () => {
+    const invocation = compileGradingAssistantInvocation({
+      ...base,
+      gradingConfig: gradingConfig({
+        promptTemplate: {
+          systemMessage: 'Grade it.',
+          userMessage: 'Essay:\n{{document}}',
+        },
+      }),
+      writingTimeMinutes: 20,
+    });
+    expect(invocation.userMessage).toContain('20 minutes');
+  });
+});
+
+/**
+ * A tutor-off assignment is a cold write: the student's unassisted writing.
+ * The grader is told so it holds the piece to the same rubric but does not send
+ * the student to a tutor they never had.
+ */
+describe('compileGradingAssistantInvocation cold write', () => {
+  const base = {
+    gradingConfig: gradingConfig(),
+    studentFirstName: 'Jordan',
+    strictnessLevel: 'intermediate' as const,
+    documentText: 'School uniforms should be optional.',
+  };
+
+  test('leaves the prompt exactly as it was when the tutor was on or unknown', () => {
+    const without = compileGradingAssistantInvocation(base);
+    expect(
+      compileGradingAssistantInvocation({ ...base, coldWrite: false })
+    ).toEqual(without);
+    expect(without.userMessage).not.toContain('Cold write');
+  });
+
+  test('tells the assistant it is grading a cold write, ahead of the essay', () => {
+    const invocation = compileGradingAssistantInvocation({
+      ...base,
+      coldWrite: true,
+    });
+    expect(invocation.userMessage).toContain('Cold write:');
+    expect(invocation.userMessage).toContain('same rubric');
+    expect(invocation.userMessage.indexOf('Cold write:')).toBeLessThan(
+      invocation.userMessage.indexOf('Essay:')
+    );
+  });
+
+  test('sits beside the writing time when both are set', () => {
+    const invocation = compileGradingAssistantInvocation({
+      ...base,
+      coldWrite: true,
+      writingTimeMinutes: 15,
+    });
+    expect(invocation.userMessage).toContain('15 minutes');
+    expect(invocation.userMessage.indexOf('Writing time:')).toBeLessThan(
+      invocation.userMessage.indexOf('Cold write:')
+    );
+    expect(invocation.userMessage.indexOf('Cold write:')).toBeLessThan(
+      invocation.userMessage.indexOf('Essay:')
+    );
+  });
+});

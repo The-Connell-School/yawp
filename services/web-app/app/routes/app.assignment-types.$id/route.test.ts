@@ -4,6 +4,9 @@ const prisma = {
   assignmentType: {
     findFirst: mock(),
     findMany: mock(),
+    // The loader resolves the type's grading config to report its default
+    // total points; without this the whole file dies on the first loader call.
+    findUnique: mock(),
   },
   document: {
     findMany: mock(),
@@ -107,6 +110,14 @@ describe('app.assignment-types.$id action', () => {
   beforeEach(() => {
     prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentType.findMany.mockReset();
+    prisma.assignmentType.findUnique.mockReset();
+    // The loader also reads grading config for this type, to decide whether the
+    // creation sheet offers the grammar-grading toggle. No rubric here, so the
+    // default resolves to no toggle.
+    prisma.assignmentType.findMany.mockResolvedValue([]);
+    // And reads the row itself for the default total points. A row with no
+    // rubric of its own falls back to the default for its kind.
+    prisma.assignmentType.findUnique.mockResolvedValue(null);
     prisma.class.findMany.mockReset();
     prisma.organizationAssignmentType.findMany.mockReset();
     prisma.school.findMany.mockReset();
@@ -239,10 +250,18 @@ describe('app.assignment-types.$id action', () => {
   });
 });
 
-describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
+describe('app.assignment-types.$id loader Class Starter prompt library', () => {
   beforeEach(() => {
     prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentType.findMany.mockReset();
+    prisma.assignmentType.findUnique.mockReset();
+    // The loader also reads grading config for this type, to decide whether the
+    // creation sheet offers the grammar-grading toggle. No rubric here, so the
+    // default resolves to no toggle.
+    prisma.assignmentType.findMany.mockResolvedValue([]);
+    // And reads the row itself for the default total points. A row with no
+    // rubric of its own falls back to the default for its kind.
+    prisma.assignmentType.findUnique.mockResolvedValue(null);
     prisma.document.findMany.mockReset();
     prisma.class.findMany.mockReset();
     prisma.organizationAssignmentType.findMany.mockReset();
@@ -261,7 +280,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
       organization: { id: 'org-1', name: 'Org' },
     });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
-      withOrganizationAssignment(makeAssignmentType()),
+      withOrganizationAssignment(makeAssignmentType({ title: 'Class Starter' })),
     ]);
     prisma.document.findMany.mockResolvedValue([]);
     prisma.class.findMany.mockResolvedValue([
@@ -284,7 +303,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.savedDailyPagesPrompt.findMany.mockResolvedValue([]);
   });
 
-  test('provides prompt library data for teachers viewing Daily Pages', async () => {
+  test('provides prompt library data for teachers viewing Class Starter', async () => {
     const response = (await loader({
       request: new Request('https://example.test/app/assignment-types/at-1'),
       params: { id: 'at-1' },
@@ -477,7 +496,37 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
       params: { id: 'at-1' },
     } as never)) as any;
     expect(dailyPagesResponse.data.thesisPromptLibrary).toBeNull();
-    expect(dailyPagesResponse.data.promptLibrary).not.toBeNull();
+    // Daily Pages reads the graded short-form corpus, not the freewrite one
+    // this folder holds — that swap is the point of having two libraries.
+    expect(dailyPagesResponse.data.promptLibrary).toBeNull();
+    expect(dailyPagesResponse.data.shortFormPromptLibrary).not.toBeNull();
+  });
+
+  test('Daily Pages gets the short-form library and Class Starter the freewrite one', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValueOnce([
+      withOrganizationAssignment(makeAssignmentType({ title: 'Daily Pages' })),
+    ]);
+    const dailyPages = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(dailyPages.data.shortFormPromptLibrary.totalCount).toBeGreaterThan(0);
+    expect(
+      dailyPages.data.shortFormPromptLibrary.facets.sourceNeeds
+    ).toContain('required');
+    expect(dailyPages.data.promptLibrary).toBeNull();
+
+    getAvailableAssignmentTypesForScopes.mockResolvedValueOnce([
+      withOrganizationAssignment(makeAssignmentType({ title: 'Class Starter' })),
+    ]);
+    const classStarter = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(classStarter.data.promptLibrary.totalCount).toBe(200);
+    expect(classStarter.data.shortFormPromptLibrary).toBeNull();
   });
 
   test('returns all teacher classes for assignment creation', async () => {

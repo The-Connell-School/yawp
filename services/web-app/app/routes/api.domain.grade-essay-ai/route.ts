@@ -28,6 +28,12 @@ import {
   isScoreInCategoryBands,
   resolveGrammarHighlightingEnabled,
 } from '~/domain/assignment-types/rubric-category-options';
+import { applyAssignmentGrammarGrading } from '~/domain/assignment-types/assignment-grammar-grading';
+import {
+  buildGrammarCheckerRetryUserPrompt,
+  buildGrammarCheckerSystemPrompt,
+  buildGrammarCheckerUserPrompt,
+} from '~/domain/grading/writing-time';
 import {
   buildGradingPromptShape,
   buildGradingResponseSchemaText,
@@ -594,6 +600,9 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             gradingAssistantStrictnessLevel: true,
+            grammarGradingEnabled: true,
+            writingTimeMinutes: true,
+            tutorEnabled: true,
             apHistorySnapshot: true,
             prompt: true,
             pointValue: true,
@@ -763,7 +772,13 @@ export async function action({ request }: ActionFunctionArgs) {
     requestedStrictnessLevel ??
     assignmentStrictnessLevel ??
     DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
-  const rubricCategories = resolvedGradingConfig.rubricCategories;
+  // The teacher's per-assignment answer to "is this graded for grammar". Off
+  // drops the grammar category here, once: scoring, the highlighting pass, and
+  // the grammar category keys are all derived from this list below.
+  const rubricCategories = applyAssignmentGrammarGrading(
+    resolvedGradingConfig.rubricCategories,
+    submission.document.assignment?.grammarGradingEnabled
+  );
   const rubricKeys = rubricCategories.map((category) => category.key);
   const { minScore, maxScore, step, scoringType } = resolvedGradingConfig;
   const rubricConfig = {
@@ -1048,6 +1063,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     strictnessLevel: gradingAssistantStrictnessLevel,
     documentText: submission.text,
     assignmentPrompt: submission.document.assignment?.prompt,
+    writingTimeMinutes: submission.document.assignment?.writingTimeMinutes,
+    coldWrite: submission.document.assignment?.tutorEnabled === false,
   });
   const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
@@ -1312,9 +1329,14 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     );
   } else {
     try {
-      const grammarSystem = `You are the Grammar/Usage Checker.\nReturn ONLY valid JSON with the schema:\n{\n  \"issues\": [{\n    \"excerpt\": string,\n    \"occurrence\"?: number,\n    \"kind\": \"error\"|\"style\",\n    \"ruleNumber\"?: number,\n    \"rule\"?: string,\n    \"message\": string\n  }]\n}\nRules:\n- Highlight the smallest exact excerpt that demonstrates the issue (max 120 characters).\n- If the excerpt appears multiple times, set occurrence to the 1-based match index.\n- Keep message brief (1-2 sentences). State the rule plainly; do not offer to fix it for the student.\n- Focus on essentials: usage, composition, comma/semicolon rules, and omit needless words.\n\nComma rules:\n(1) In a series of three or more terms with a single conjunction, use a comma after each term except the last.\n(2) Enclose parenthetic expressions between commas.\n(3) Do not join independent clauses with a comma (comma splice); use a semicolon, conjunction, or separate sentences.\nSemicolon rule:\nUse a semicolon to join closely related independent clauses.\n\nStyle:\n(10) Omit needless words.`;
+      const writingTimeMinutes =
+        submission.document.assignment?.writingTimeMinutes ?? null;
+      const grammarSystem = buildGrammarCheckerSystemPrompt(writingTimeMinutes);
 
-      const grammarUserPrompt = `Essay:\n${submission.text}\n\nReturn up to 15 issues.`;
+      const grammarUserPrompt = buildGrammarCheckerUserPrompt(
+        submission.text,
+        writingTimeMinutes
+      );
 
       let grammarResponseText = await getGradingLlmCompletion({
         model,
@@ -1342,7 +1364,10 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           messages: [
             {
               role: 'user',
-              content: `Essay:\n${submission.text}\n\nReturn 8-12 issues using the exact schema. Do not include markdown.`,
+              content: buildGrammarCheckerRetryUserPrompt(
+                submission.text,
+                writingTimeMinutes
+              ),
             },
           ],
           maxTokens: 1600,

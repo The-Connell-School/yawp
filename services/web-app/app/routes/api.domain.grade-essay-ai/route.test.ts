@@ -2090,6 +2090,94 @@ describe('api.domain.grade-essay-ai', () => {
       } as any);
     }
 
+    async function gradeTimed(
+      id: string,
+      writingTimeMinutes: number | null,
+      tutorEnabled?: boolean
+    ) {
+      prisma.assignmentType.findUnique.mockResolvedValue(
+        mockAssignmentType({
+          gradingPromptConfigJson: { gradingInstructions: 'Grade against this rubric.' },
+          rubricJson: { categories: [customRubricCategory()] },
+        })
+      );
+      const base = mockCustomRubricSubmission(id);
+      const submission = {
+        ...base,
+        document: {
+          ...base.document,
+          assignment: {
+            id: `assignment-${id}`,
+            prompt: 'Is it possible to be honest and kind at once?',
+            writingTimeMinutes,
+            ...(tutorEnabled === undefined ? {} : { tutorEnabled }),
+          },
+        },
+      };
+      prisma.submission.findFirst.mockResolvedValue(submission);
+      prisma.assignment.findUnique.mockResolvedValue({
+        assignmentTypeId: 'assignment-type-legacy',
+        rubricRevision: null,
+      });
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: [{ key: 'daily_habit', score: 5, comment: 'Clear.' }],
+            overallComment: 'Jordan, this lands.',
+          })
+        )
+        .mockResolvedValue(JSON.stringify({ issues: [] }));
+      const form = new FormData();
+      form.append('submissionId', id);
+      await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      const byKind = (kind: string) =>
+        getLLMCompletion.mock.calls.find(
+          (call: any[]) => call[0]?.metadata?.kind === kind
+        )?.[0];
+      return { grading: byKind('rubric-evaluation'), grammar: byKind('grammar-issues') };
+    }
+
+    test('tells the grading assistant when the tutor was off: a cold write', async () => {
+      const { grading } = await gradeTimed('sub-cold', 15, false);
+
+      expect(grading.messages[0].content).toContain('Cold write:');
+    });
+
+    test('says nothing about a cold write when the tutor was on', async () => {
+      const { grading } = await gradeTimed('sub-tutored', 15, true);
+
+      expect(grading.messages[0].content).not.toContain('Cold write');
+    });
+
+    test('tells both the grading assistant and the grammar checker how long the student had', async () => {
+      const { grading, grammar } = await gradeTimed('sub-timed', 10);
+
+      expect(grading.messages[0].content).toContain('Writing time:');
+      expect(grading.messages[0].content).toContain('10 minutes');
+      expect(grammar.system).toContain('written in 10 minutes');
+      expect(grammar.system).toMatch(/fragment used on purpose/);
+      expect(grammar.messages[0].content).toContain('Written in 10 minutes');
+    });
+
+    test('without a writing time, both prompts are what they were before the setting', async () => {
+      const { buildGrammarCheckerSystemPrompt } = await import(
+        '~/domain/grading/writing-time'
+      );
+      const { grading, grammar } = await gradeTimed('sub-untimed', null);
+
+      expect(grading.messages[0].content).not.toContain('Writing time');
+      expect(grammar.system).toBe(buildGrammarCheckerSystemPrompt(null));
+      expect(grammar.messages[0].content).toMatch(
+        /^Essay:\n[\s\S]*\n\nReturn up to 15 issues\.$/
+      );
+    });
+
     function grammarCallCount() {
       return getLLMCompletion.mock.calls.filter(
         (call: any[]) => call[0]?.metadata?.kind === 'grammar-issues'
@@ -2265,19 +2353,19 @@ describe('api.domain.grade-essay-ai', () => {
     expect(stored.rubricScores.country_1.score).toBe(18);
   });
 
-  describe('a Daily Pages submission', () => {
-    function mockDailyPagesSubmission(id: string) {
+  describe('a Class Starter submission', () => {
+    function mockClassStarterSubmission(id: string) {
       return mockSubmission({
         id,
         text: 'I kept writing until the ten minutes were up.',
         document: {
           id: `doc-${id}`,
           membershipId: 'student-profile-1',
-          assignmentTypeId: 'assignment-type-daily-pages',
+          assignmentTypeId: 'assignment-type-class-starter',
           assignmentType: {
-            id: 'assignment-type-daily-pages',
-            kind: 'daily_pages',
-            title: 'Daily Pages',
+            id: 'assignment-type-class-starter',
+            kind: 'class_starter',
+            title: 'Class Starter',
           },
           classAssignment: { class: { schoolId: 'school-1' } },
           membership: {
@@ -2288,16 +2376,16 @@ describe('api.domain.grade-essay-ai', () => {
       });
     }
 
-    async function gradeDailyPages(id: string, engagementScore = 2) {
+    async function gradeClassStarter(id: string, engagementScore = 2) {
       prisma.assignmentType.findUnique.mockResolvedValue(
         mockAssignmentType({
-          id: 'assignment-type-daily-pages',
-          title: 'Daily Pages',
-          kind: 'daily_pages',
+          id: 'assignment-type-class-starter',
+          title: 'Class Starter',
+          kind: 'class_starter',
         })
       );
       prisma.submission.findFirst.mockResolvedValue(
-        mockDailyPagesSubmission(id)
+        mockClassStarterSubmission(id)
       );
       getLLMCompletion.mockReset();
       getLLMCompletion.mockResolvedValue(
@@ -2325,12 +2413,12 @@ describe('api.domain.grade-essay-ai', () => {
       )?.[0];
     }
 
-    test('grades on the Daily Pages rubric without the assignment type saving one', async () => {
-      await gradeDailyPages('sub-daily-pages-config');
+    test('grades on the Class Starter rubric without the assignment type saving one', async () => {
+      await gradeClassStarter('sub-class-starter-config');
 
       const run =
         prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data;
-      expect(run.source).toBe('daily-pages-default');
+      expect(run.source).toBe('class-starter-default');
       expect(
         (
           run.assignmentTypeRubricSnapshot as { categories: { key: string }[] }
@@ -2339,7 +2427,7 @@ describe('api.domain.grade-essay-ai', () => {
     });
 
     test('asks the model for one engagement judgment on the 0-3 scale', async () => {
-      await gradeDailyPages('sub-daily-pages-prompt');
+      await gradeClassStarter('sub-class-starter-prompt');
 
       const call = gradingCall();
       expect(call.system).toContain('Make one judgment: Engagement.');
@@ -2350,7 +2438,7 @@ describe('api.domain.grade-essay-ai', () => {
     });
 
     test('asks for overall feedback only, never per-category feedback', async () => {
-      await gradeDailyPages('sub-daily-pages-feedback');
+      await gradeClassStarter('sub-class-starter-feedback');
 
       const call = gradingCall();
       expect(call.system).not.toContain('"comment": string');
@@ -2361,7 +2449,7 @@ describe('api.domain.grade-essay-ai', () => {
     });
 
     test('never asks for grammar or syntax highlighting', async () => {
-      await gradeDailyPages('sub-daily-pages-grammar');
+      await gradeClassStarter('sub-class-starter-grammar');
 
       // The rubric prompt never asks for grammar output. The grading
       // instructions do tell the model not to grade grammar, which is the
@@ -2384,7 +2472,7 @@ describe('api.domain.grade-essay-ai', () => {
     });
 
     test('accepts a scored category with no comment and stores an empty one', async () => {
-      await gradeDailyPages('sub-daily-pages-score', 3);
+      await gradeClassStarter('sub-class-starter-score', 3);
 
       const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
       expect(stored.rubricScores).toEqual({
@@ -2396,7 +2484,7 @@ describe('api.domain.grade-essay-ai', () => {
     });
 
     test('grades out of 3 points rather than as a percentage', async () => {
-      await gradeDailyPages('sub-daily-pages-grade', 3);
+      await gradeClassStarter('sub-class-starter-grade', 3);
 
       const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
       expect(stored.score).toBe('3/3');
@@ -2407,7 +2495,7 @@ describe('api.domain.grade-essay-ai', () => {
     });
 
     test('grades Absent as a real score rather than a missing one', async () => {
-      await gradeDailyPages('sub-daily-pages-absent', 0);
+      await gradeClassStarter('sub-class-starter-absent', 0);
 
       const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
       expect(stored.rubricScores).toEqual({

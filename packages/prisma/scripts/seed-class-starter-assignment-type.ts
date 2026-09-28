@@ -1,0 +1,201 @@
+/* eslint-disable no-console */
+/**
+ * Creates the Class Starter assignment type.
+ *
+ * `AssignmentType.kind` is what selects a grading assistant, and it is not
+ * something the admin "New assignment type" form can set — that form writes
+ * `kind: null`. So a Class Starter cannot be created through the UI: a row made
+ * that way would grade on the thesis-driven essay rubric instead of the soft,
+ * effort-based Class Starter assistant. This script is how the row gets made.
+ *
+ * `kind` is unique, so there is exactly one Class Starter row per database and
+ * running this twice is a no-op. Rerunning also un-archives it, which makes
+ * this the recovery path if someone archives it by mistake.
+ *
+ *   bun run --cwd packages/prisma seed-class-starter-assignment-type
+ */
+import { readFileSync } from 'node:fs';
+
+import { PrismaClient } from '../generated/prisma';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { isLocalDatabaseUrl } from './seed-overlay-connection';
+
+/**
+ * Raised when the database has no organization to attach the type to. Named so
+ * the CLI can treat it as a skip: this seed runs inside the preview deploy's
+ * `&&` chain, and an empty database should not fail a whole deployment. Every
+ * other failure still exits non-zero.
+ */
+export class MissingOrganizationError extends Error {}
+
+/** Must match CLASS_STARTER_ASSIGNMENT_TYPE_KIND in the web app. */
+export const CLASS_STARTER_KIND = 'class_starter';
+
+export const CLASS_STARTER_ASSIGNMENT_TYPE_DATA = {
+  title: 'Class Starter',
+  description:
+    'Open-ended writing to begin class. Graded on engagement: did the student write, and did they reflect.',
+  position: 51,
+} as const;
+
+/**
+ * The card artwork, drawn to sit with the Daily Pages image: same 940x788
+ * frame, same torn paper edge, same scratchy ink and Didone wordmark. It lives
+ * in the repo rather than in a fixture bundle because it is authored art, not
+ * a snapshot of production.
+ */
+export const CLASS_STARTER_IMAGE_PATH = new URL(
+  './assets/class-starter.jpg',
+  import.meta.url
+);
+
+export function readClassStarterImage() {
+  return {
+    blob: readFileSync(CLASS_STARTER_IMAGE_PATH),
+    contentType: 'image/jpeg',
+    altText:
+      'A scratchy ink drawing of a rooster mid-crow standing on the words Class Starter, on torn white paper.',
+  };
+}
+
+const MODULE_DATA = {
+  title: 'Class Starter',
+  position: 1,
+  description: 'Short writing to start the period.',
+} as const;
+
+const INSTRUCTION_DATA = {
+  title: 'Write',
+  prompt: 'Write freely about the prompt for ten minutes.',
+  position: 1,
+  showChatButton: true,
+} as const;
+
+type SeedablePrisma = Pick<
+  PrismaClient,
+  | 'organization'
+  | 'assignmentType'
+  | 'organizationAssignmentType'
+  | 'assignmentTypeImage'
+>;
+
+export async function seedClassStarterAssignmentType(prisma: SeedablePrisma) {
+  const org = await prisma.organization.findFirst({
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+
+  if (!org) {
+    throw new MissingOrganizationError(
+      'Cannot seed the Class Starter assignment type without an organization.'
+    );
+  }
+
+  const assignmentType = await prisma.assignmentType.upsert({
+    where: { kind: CLASS_STARTER_KIND },
+    // Deliberately narrow: title, description and position are ours to keep
+    // current, and archiving is undone. Ownership and module content belong to
+    // whoever has been editing the row since, so rerunning never takes those
+    // back.
+    update: {
+      ...CLASS_STARTER_ASSIGNMENT_TYPE_DATA,
+      archivedAt: null,
+    },
+    create: {
+      ...CLASS_STARTER_ASSIGNMENT_TYPE_DATA,
+      kind: CLASS_STARTER_KIND,
+      ownerOrgId: org.id,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: {
+          ...MODULE_DATA,
+          instructions: { create: INSTRUCTION_DATA },
+        },
+      },
+    },
+    select: { id: true },
+  });
+
+  // Separate from the create above so a row that predates this script — or one
+  // whose org link was removed — still ends up visible to that org's teachers.
+  await prisma.organizationAssignmentType.upsert({
+    where: {
+      organizationId_assignmentTypeId: {
+        organizationId: org.id,
+        assignmentTypeId: assignmentType.id,
+      },
+    },
+    create: {
+      organizationId: org.id,
+      assignmentTypeId: assignmentType.id,
+    },
+    update: {},
+  });
+
+  // Create-only. An admin who uploaded their own artwork keeps it: re-running
+  // this seed fills a gap, it never reverts somebody's upload. To replace the
+  // image deliberately, delete the AssignmentTypeImage row and run this again.
+  await prisma.assignmentTypeImage.upsert({
+    where: { assignmentTypeId: assignmentType.id },
+    create: {
+      assignmentTypeId: assignmentType.id,
+      ...readClassStarterImage(),
+    },
+    update: {},
+  });
+
+  return assignmentType;
+}
+
+function getSchemaFromDatabaseUrl(url: string): string | undefined {
+  const match = url.match(/[?&]schema=([^&]+)/i);
+  if (!match) return undefined;
+  return decodeURIComponent(match[1]);
+}
+
+function buildPrismaClient() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is not set');
+  }
+
+  const schema =
+    process.env.DATABASE_SCHEMA?.trim() ||
+    getSchemaFromDatabaseUrl(connectionString);
+  const isLocal = isLocalDatabaseUrl(connectionString);
+  const isSimpleLocal =
+    !schema &&
+    (connectionString.includes('localhost') ||
+      connectionString.includes('127.0.0.1'));
+
+  const adapter = isSimpleLocal
+    ? new PrismaPg({ connectionString, ssl: false })
+    : new PrismaPg(
+        {
+          connectionString,
+          ssl: isLocal ? false : { rejectUnauthorized: false },
+        },
+        schema ? { schema } : undefined
+      );
+
+  return new PrismaClient({ adapter });
+}
+
+if (import.meta.main) {
+  const prisma = buildPrismaClient();
+  seedClassStarterAssignmentType(prisma)
+    .then((assignmentType) => {
+      console.log(`Class Starter assignment type ready: ${assignmentType.id}`);
+    })
+    .catch((error) => {
+      if (error instanceof MissingOrganizationError) {
+        console.warn(`${error.message} Skipping.`);
+        return;
+      }
+      console.error(error);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}

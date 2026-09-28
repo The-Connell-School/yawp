@@ -1,3 +1,4 @@
+import { getDefaultWritingTimeMinutesByTypeId } from '~/domain/grading/writing-time.server';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -50,6 +51,7 @@ import {
   schoolYearWhere,
 } from '~/utils/school-year-scope.server';
 import { formatClassLabel } from '~/utils/teacher-document-work-utils';
+import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 
 export const handle = { breadcrumb: 'My Assignments' };
 
@@ -182,6 +184,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? await listSavedAssignments({ membershipId: profile.id })
     : [];
 
+  // AP History assignments are built from their own library rather than a
+  // free-text prompt, so they are not offered here.
+  const creationTypeRows = availableAssignmentTypes.filter(
+    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+  );
+  const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
+    creationTypeRows.map((type) => type.id)
+  );
+  const writingTimeDefaults = await getDefaultWritingTimeMinutesByTypeId(
+    creationTypeRows.map((type) => type.id)
+  );
+
   return {
     assignments,
     savedAssignments,
@@ -189,15 +203,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
       id: klass.id,
       name: formatClassLabel(klass),
     })),
-    // AP History assignments are built from their own library rather than a
-    // free-text prompt, so they are not offered here.
-    assignmentCreationTypes: availableAssignmentTypes
-      .filter((type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY)
-      .map((type) => ({
-        id: type.id,
-        title: type.title,
-        collaborationSupported: type.collaborationSupported,
-      })),
+
+    assignmentCreationTypes: creationTypeRows.map((type) => ({
+      id: type.id,
+      title: type.title,
+      collaborationSupported: type.collaborationSupported,
+      gradesGrammar: gradesGrammarIds.has(type.id),
+      defaultWritingTimeMinutes: writingTimeDefaults.get(type.id) ?? null,
+    })),
   };
 }
 
