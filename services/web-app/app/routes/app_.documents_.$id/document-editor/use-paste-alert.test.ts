@@ -270,10 +270,12 @@ describe('usePasteAlert', () => {
     expect(editor!.getHTML()).not.toContain('data-pasted-source');
   });
 
-  it('does not mark the document for a paste under the threshold', () => {
+  it('marks short external pastes but does not POST an event', () => {
     editor!.commands.focus('end');
     firePaste('x'.repeat(199));
 
-    expect(editor!.getHTML()).not.toContain('data-pasted-source');
+    const html = editor!.getHTML();
+    expect(html).toContain('data-pasted-source="external"');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

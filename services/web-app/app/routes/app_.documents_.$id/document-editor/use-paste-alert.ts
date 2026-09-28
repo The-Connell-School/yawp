@@ -29,10 +29,16 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
       const textLength = pastedText.length;
       const copiedFromInsideApp = wasCopiedInsideApp(pastedText);
 
-      if (textLength >= PASTE_ALERT_MIN_CHARS && !copiedFromInsideApp) {
-        const eventId = `paste_${crypto.randomUUID()}`;
+      if (!copiedFromInsideApp) {
+        const eventId =
+          textLength >= PASTE_ALERT_MIN_CHARS
+            ? `paste_${crypto.randomUUID()}`
+            : undefined;
+        // Always mark the pasted range so short external pastes still surface in the report.
         editor.commands.markLastPasteAsExternal?.(eventId);
-        // Attempt to capture real provenance from clipboard data, when available.
+
+        if (textLength >= PASTE_ALERT_MIN_CHARS) {
+          // Attempt to capture real provenance from clipboard data, when available.
         let sourceUrl: string | null = null;
         try {
           const html = event.clipboardData?.getData('text/html') || '';
@@ -41,15 +47,15 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
           // CF_HTML headers (Windows) sometimes surface a SourceURL: line.
           const headerMatch = html.match(/SourceURL:([^\r\n]+)/i);
           const uriListFirst = uriList
-            .split(/\\r?\\n/)
+            .split(/\r?\n/)
             .map((l) => l.trim())
             .find((l) => l && !l.startsWith('#'));
-          const mozFirst = mozUrl.split(/\\r?\\n/)[0]?.trim();
+          const mozFirst = mozUrl.split(/\r?\n/)[0]?.trim();
           const candidate =
             headerMatch?.[1]?.trim() ||
             uriListFirst ||
-            (mozFirst && mozFirst.includes('\\t')
-              ? mozFirst.split('\\t')[0]
+            (mozFirst && mozFirst.includes('\t')
+              ? mozFirst.split('\t')[0]
               : mozFirst) ||
             null;
           if (candidate) {
@@ -69,10 +75,11 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
             documentId: docId,
             textLength,
             content: pastedText,
-            eventId,
+            eventId: eventId!,
             ...(sourceUrl ? { sourceUrl } : {}),
           }),
         }).catch(() => {});
+        }
       }
     };
 
