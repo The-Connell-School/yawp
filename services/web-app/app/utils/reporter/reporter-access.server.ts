@@ -1,9 +1,9 @@
 /**
  * Access gate for the Yawp Reporter.
  *
- * Reporter is rolled out gradually behind a per-organization flag
- * (`Organization.reporterEnabled`) and is teacher-only. Both the page loader
- * and the chat action funnel through here so the gate stays in one place.
+ * Reporter is always on for all organizations and is teacher-only.
+ * Both the page loader and the chat action funnel through here so the
+ * teacher-only gate stays in one place.
  */
 import { data } from 'react-router';
 import {

@@ -482,7 +482,8 @@ export default function OrganizationRoute() {
                       <span className="min-w-0">
                         <span className="block font-medium">Yawp Reporter</span>
                         <span className="block text-xs text-muted-foreground">
-                          Adds Reporter to the teacher sidebar.
+                          Retired: Reporter is always on for all organizations.
+                          This toggle is kept for historical data only.
                         </span>
                       </span>
                     </label>

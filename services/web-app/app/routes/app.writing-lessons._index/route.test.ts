@@ -267,34 +267,16 @@ describe('writing lessons index route', () => {
     );
   });
 
-  test('hides the Composition section until its rollout flag is on', async () => {
-    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
-
-    const offResponse = await loader({
+  test('shows the Composition section by default', async () => {
+    const resp = await loader({
       request: new Request('https://example.test/app/writing-lessons'),
       params: {},
       context: {} as never,
     } as any);
-
-    expect(
-      offResponse.data.sections.map((section) => section.section)
-    ).not.toContain('Composition');
-
-    process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
-
-    const onResponse = await loader({
-      request: new Request('https://example.test/app/writing-lessons'),
-      params: {},
-      context: {} as never,
-    } as any);
-
-    expect(
-      onResponse.data.sections.map((section) => section.section)
-    ).toContain('Composition');
+    expect(resp.data.sections.map((s) => s.section)).toContain('Composition');
   });
 
-  test('hides assignments containing Composition until its rollout flag is on', async () => {
-    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+  test('lists assignments including Composition by default', async () => {
     listWritingPracticeAssignmentsForStudent.mockResolvedValue([
       {
         id: 'grammar-practice',
@@ -322,8 +304,9 @@ describe('writing lessons index route', () => {
       context: {} as never,
     } as any);
 
-    expect(response.data.assignments.map((assignment) => assignment.id)).toEqual(
-      ['grammar-practice']
-    );
+    expect(response.data.assignments.map((a: any) => a.id)).toEqual([
+      'grammar-practice',
+      'composition-practice',
+    ]);
   });
 });

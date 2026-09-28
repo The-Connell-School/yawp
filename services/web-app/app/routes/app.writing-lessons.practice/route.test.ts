@@ -148,16 +148,15 @@ describe('self-directed practice session loader', () => {
     expect(response.headers.get('location')).toBe('/app/writing-lessons');
   });
 
-  test('bounces the whole session when the org has writing practice paused', async () => {
+  test('still loads a session even when an org previously had writing practice disabled', async () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
       role: 'STUDENT',
       organization: { id: 'org-1', writingPracticeEnabled: false },
     });
-
-    await expect(
-      runLoader('?skills=fixing-comma-splices&count=5')
-    ).rejects.toMatchObject({ status: 302 });
+    getLLMCompletion.mockRejectedValue(new Error('no provider'));
+    const data = await loadSession('?skills=fixing-comma-splices&count=5');
+    expect(data.problemCount).toBeGreaterThan(0);
   });
 
   describe('composition', () => {
@@ -237,26 +236,12 @@ describe('self-directed practice session loader', () => {
       }
     });
 
-    test('is dropped from a session while the rollout flag is off', async () => {
-      process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
-
-      const response = (await runLoader(
-        '?skills=topic-sentences&count=3'
-      )) as Response;
-      expect(response.status).toBe(302);
-      expect(response.headers.get('location')).toBe('/app/writing-lessons');
-    });
-
-    test('keeps only the grammar half of a mixed set while the flag is off', async () => {
+    test('includes Composition skills even if the old env flag is off', async () => {
       process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
       getLLMCompletion.mockRejectedValue(new Error('no provider'));
-
-      const data = await loadSession(
-        '?skills=topic-sentences,fixing-comma-splices&count=4'
-      );
-
-      expect(data.skills).toEqual(['fixing-comma-splices']);
-      expect(data.hasComposition).toBe(false);
+      const data = await loadSession('?skills=topic-sentences&count=3');
+      expect(data.hasComposition).toBe(true);
+      expect(data.items).toHaveLength(3);
     });
   });
 });
@@ -279,17 +264,23 @@ describe('self-directed practice session action', () => {
     ).rejects.toMatchObject({ status: 400 });
   });
 
-  test('refuses every attempt when the org has writing practice paused', async () => {
+  test('accepts attempts even if an org previously had writing practice disabled', async () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
       role: 'STUDENT',
       organization: { id: 'org-1', writingPracticeEnabled: false },
     });
-
-    await expect(
-      run({ intent: 'check-rewrite', lessonSlug: 'fixing-comma-splices' })
-    ).rejects.toMatchObject({ status: 404 });
-    expect(getLLMCompletion).not.toHaveBeenCalled();
+    getLLMCompletion.mockRejectedValue(new Error('upstream 529'));
+    const result = await run({
+      intent: 'check-rewrite',
+      lessonSlug: 'fixing-comma-splices',
+      questionId: 'act-1',
+      exercise: 'The phone costs a lot, students cannot afford it.',
+      instruction:
+        'Rewrite the whole sentence so the underlined part is correct.',
+      response: 'The phone costs a great deal, students cannot afford it.',
+    });
+    expect(result.intent).toBe('check-rewrite');
   });
 
   describe('check-rewrite intent', () => {
@@ -452,21 +443,58 @@ describe('self-directed practice session action', () => {
       expect(result.recorded).toBe(true);
     });
 
-    test('is refused while the composition rollout flag is off', async () => {
+    test('is accepted even if the old env flag is off', async () => {
       process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+      getLLMCompletion.mockRejectedValue(new Error('tutor offline'));
+      const result = await run({
+        kind: 'composition',
+        lessonSlug: 'topic-sentences',
+        position: '1',
+        promptId: 'topic-sentences-1',
+        exercise: 'Rewrite this announcement as a claim.',
+        instruction: 'Write a topic sentence.',
+        response: 'a real revision attempt',
+      });
+      expect(result.recorded).toBe(true);
+    });
 
-      await expect(
-        run({
+    test('rate-limits composition attempts per student', async () => {
+      getLLMCompletion.mockResolvedValue(
+        JSON.stringify({
+          status: 'strong',
+          summary: 'ok',
+          strengths: [],
+          focus: [],
+          encouragement: '',
+        })
+      );
+      mock.module('~/utils/ai-admission.server', () => {
+        class AiRateLimitError extends Error {
+          retryAfterSeconds = 30;
+        }
+        return {
+          AiRateLimitError,
+          reserveAiRequest: () => {
+            throw new AiRateLimitError();
+          },
+        };
+      });
+      const { action: limitedAction } = await import('./route');
+      const response = (await limitedAction({
+        request: buildRequest({
           kind: 'composition',
           lessonSlug: 'topic-sentences',
           position: '1',
           promptId: 'topic-sentences-1',
-          exercise: 'Rewrite this announcement as a claim.',
+          exercise: 'Rewrite this',
           instruction: 'Write a topic sentence.',
-          response: 'a real revision attempt',
-        })
-      ).rejects.toMatchObject({ status: 400 });
-      expect(getLLMCompletion).not.toHaveBeenCalled();
+          response: 'A real attempt',
+        }),
+        params: {},
+        context: {} as never,
+      } as any)) as Response;
+      expect(response.status).toBe(429);
+      expect(response.headers.get('Retry-After')).toBeTruthy();
     });
 
     test('is refused on a grammar lesson', async () => {

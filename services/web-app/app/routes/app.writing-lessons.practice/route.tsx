@@ -17,7 +17,7 @@ import {
   type RewriteCheckResult,
 } from '~/components/writing-lessons/practice-runner';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
+// Composition is always enabled for all orgs.
 import {
   buildTopicFallbackPrompts,
   sanitizeCompositionTopic,
@@ -36,6 +36,10 @@ import {
   getQuickWritingPracticePrompts,
   type QuickWritingPracticePrompt,
 } from '~/utils/writing-lessons/static-lessons.server';
+import {
+  AiRateLimitError,
+  reserveAiRequest,
+} from '~/utils/ai-admission.server';
 
 const MAX_PROBLEMS = 20;
 const DEFAULT_PROBLEMS = 5;
@@ -46,7 +50,6 @@ const DEFAULT_PROBLEMS = 5;
  * must never reach past the same boundary an assigned one respects.
  */
 function parseSkills(raw: string | null): string[] {
-  const compositionEnabled = isCompositionPracticeEnabled();
   const seen = new Set<string>();
   return (raw ?? '')
     .split(',')
@@ -57,7 +60,7 @@ function parseSkills(raw: string | null): string[] {
       seen.add(slug);
       const lesson = getQuickWritingLessonBySlug(slug);
       if (!lesson) return false;
-      return lesson.section !== 'Composition' || compositionEnabled;
+      return true;
     });
 }
 
@@ -281,6 +284,36 @@ export async function action({ request }: ActionFunctionArgs) {
         feedback: { ...guardrail, degraded: false },
         recorded: false,
       });
+    }
+
+    // Rate-limit per student/org to cap model usage.
+    const COMPOSITION_ADMISSION_POLICY = {
+      membershipLimit: 12,
+      membershipWindowMs: 60_000,
+      organizationLimit: 600,
+      organizationWindowMs: 60 * 60_000,
+    };
+    try {
+      await reserveAiRequest({
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        feature: 'composition-feedback',
+        policy: COMPOSITION_ADMISSION_POLICY,
+      });
+    } catch (error) {
+      if (error instanceof AiRateLimitError) {
+        return dataResponse(
+          {
+            error:
+              'Too many composition checks. Please wait a moment and try again.',
+          },
+          {
+            status: 429,
+            headers: { 'Retry-After': String(error.retryAfterSeconds) },
+          }
+        );
+      }
+      throw error;
     }
 
     const feedback = await generatePracticeFeedback({
