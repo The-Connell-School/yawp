@@ -545,18 +545,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   let apHistoryLibrary = null;
   if (isApHistory) {
     if (profile.role === 'TEACHER' && assignmentEnabledTeacherClasses.length > 0) {
-      // Server-side per-school AP History feature flag
-      const org = await prisma.organization.findUnique({
-        where: { id: profile.organization.id },
-        select: { id: true, apHistoryEnabled: true },
-      });
-      if (org?.apHistoryEnabled) {
-        apHistoryLibrary = {
-          mode: 'teacher' as const,
-          entries: await listApHistoryLibraryEntries(assignmentType.id),
-          teacherClasses: assignmentEnabledTeacherClasses,
-        };
-      }
+      apHistoryLibrary = {
+        mode: 'teacher' as const,
+        entries: await listApHistoryLibraryEntries(assignmentType.id),
+        teacherClasses: assignmentEnabledTeacherClasses,
+      };
     }
   }
 

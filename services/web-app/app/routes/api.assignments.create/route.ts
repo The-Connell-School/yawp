@@ -278,26 +278,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const deployClassIds = classes.map((klass) => klass.id);
 
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
-    // Server-side per-school AP History feature flag: all target classes must
-    // belong to organizations where the feature is enabled.
-    const organizationIds = [
-      ...new Set(classes.map((klass) => klass.school.organizationId)),
-    ];
-    const organizations = await prisma.organization.findMany({
-      where: { id: { in: organizationIds } },
-      select: { id: true, apHistoryEnabled: true },
-    });
-    const disabledOrg = organizations.find((org) => !org.apHistoryEnabled);
-    if (disabledOrg) {
-      return dataResponse(
-        {
-          success: false,
-          message:
-            'AP History is not enabled for one or more selected schools.',
-        },
-        { status: 403 }
-      );
-    }
 
     if (formData.get('apHistoryMode')?.toString() === 'custom') {
       const parsed = parseCustomApHistoryPayload(formData);
