@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import type { Prisma, PrismaClient } from '../../generated/prisma';
+import { Prisma, type PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
 import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
 import { seedDailyPagesSampleEntries } from './seed-daily-pages-samples';
@@ -226,6 +226,23 @@ export async function seedSyntheticLocalDevData(
     assignmentTypes,
     (row) => row.kind === 'daily_pages' || row.title === 'Daily Pages'
   );
+  // If Daily Pages exists, snapshot its engagement rubric config BEFORE any seed
+  // step mutates it (the short-form preview seeding clears rubricJson).
+  let engagementAssignmentTypeSnapshot:
+    | { rubricJson: Prisma.InputJsonValue | null; scoringScaleJson: Prisma.InputJsonValue | null }
+    | null = null;
+  if (dailyPagesAssignmentTypeId) {
+    const original = await prisma.assignmentType.findUnique({
+      where: { id: dailyPagesAssignmentTypeId },
+      select: { rubricJson: true, scoringScaleJson: true },
+    });
+    if (original) {
+      engagementAssignmentTypeSnapshot = {
+        rubricJson: original.rubricJson as Prisma.InputJsonValue | null,
+        scoringScaleJson: original.scoringScaleJson as Prisma.InputJsonValue | null,
+      };
+    }
+  }
   const classStarterAssignmentTypeId = pickAssignmentTypeId(
     assignmentTypes,
     (row) => row.kind === 'class_starter' || row.title === 'Class Starter'
@@ -309,6 +326,50 @@ export async function seedSyntheticLocalDevData(
         'student-unreleased':
           personaRecords['student-unreleased'].membershipId,
       },
+    });
+  }
+
+  // Create a separate Engagement-flavored Daily Pages type for preview QA, using the
+  // original 0–30 engagement rubric snapshot captured above. This lets teachers pick
+  // the engagement rubric even though the primary Daily Pages type was re-pointed to
+  // the short-form rubric for sample entries.
+  if (engagementAssignmentTypeSnapshot?.rubricJson) {
+    const existingEngagementPreview = await prisma.assignmentType.findFirst({
+      where: { title: 'Daily Pages (Engagement – Preview)', archivedAt: null },
+      select: { id: true },
+    });
+    const engagementTypeId =
+      existingEngagementPreview?.id ??
+      (
+        await prisma.assignmentType.create({
+          data: {
+            title: 'Daily Pages (Engagement – Preview)',
+            kind: 'daily_pages',
+            description:
+              'Low-stakes Daily Pages with 0–30 engagement bands (preview).',
+            position: 4,
+            rubricJson: engagementAssignmentTypeSnapshot.rubricJson,
+            // scoringScaleJson may be null on older snapshots; Prisma expects
+            // NullableJsonNullValueInput instead of bare null.
+            scoringScaleJson:
+              engagementAssignmentTypeSnapshot.scoringScaleJson ?? Prisma.JsonNull,
+          },
+          select: { id: true },
+        })
+      ).id;
+    // Add a ready-to-use assignment for the primary class so the rubric is reachable.
+    const engagementAssignment = await prisma.assignment.create({
+      data: {
+        assignmentTypeId: engagementTypeId,
+        title: 'Engagement Check (Preview)',
+        prompt: 'Write freely for ten minutes about something you noticed today.',
+        submitForGrade: true,
+        pointValue: 30,
+      },
+      select: { id: true },
+    });
+    await prisma.classAssignment.create({
+      data: { assignmentId: engagementAssignment.id, classId: primaryClass.id },
     });
   }
 
