@@ -12,7 +12,6 @@ import { useState, type ReactNode } from 'react';
 import {
   Link,
   data as dataResponse,
-  redirect,
   useFetcher,
   useLoaderData,
   useSearchParams,

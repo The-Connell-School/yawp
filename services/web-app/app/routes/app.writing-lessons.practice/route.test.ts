@@ -13,6 +13,10 @@ const ORIGINAL_COMPOSITION_FLAG = process.env.COMPOSITION_PRACTICE_ENABLED;
 const requireUserId = mock();
 const requireMembership = mock();
 const getLLMCompletion = mock();
+const reserveAiRequest = mock();
+class MockAiRateLimitError extends Error {
+  retryAfterSeconds = 60;
+}
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
@@ -26,6 +30,10 @@ mock.module('~/utils/db.server', () => ({
 mock.module('~/utils/getLLMCompletion', () => ({
   AgentType: { Assistant: 'assistant', User: 'user' },
   getLLMCompletion,
+}));
+mock.module('~/utils/ai-admission.server', () => ({
+  AiRateLimitError: MockAiRateLimitError,
+  reserveAiRequest,
 }));
 
 const { action, loader } = await import('./route');
@@ -90,6 +98,7 @@ beforeEach(() => {
   requireUserId.mockReset();
   requireMembership.mockReset();
   getLLMCompletion.mockReset();
+  reserveAiRequest.mockReset();
 
   requireUserId.mockResolvedValue('user-1');
   requireMembership.mockResolvedValue({
@@ -97,6 +106,7 @@ beforeEach(() => {
     role: 'STUDENT',
     organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
   });
+  reserveAiRequest.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -245,19 +255,10 @@ describe('self-directed practice session loader', () => {
     });
 
   test('degrades to fallback prompts when topic generation is rate-limited', async () => {
-    mock.module('~/utils/ai-admission.server', () => {
-      class AiRateLimitError extends Error {
-        retryAfterSeconds = 60;
-      }
-      return {
-        AiRateLimitError,
-        reserveAiRequest: () => {
-          throw new AiRateLimitError();
-        },
-      };
+    reserveAiRequest.mockImplementation(() => {
+      throw new MockAiRateLimitError();
     });
-    const { loader: limitedLoader } = await import('./route');
-    const response = (await limitedLoader({
+    const response = (await loader({
       request: new Request(
         'https://example.test/app/writing-lessons/practice?skills=topic-sentences&count=2&topic=skateboarding'
       ),
@@ -270,6 +271,37 @@ describe('self-directed practice session loader', () => {
         `${item.prompt?.exercise} ${item.prompt?.instruction}`
       ).toContain('skateboarding');
     }
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('degrades to offline bank when mixed generation is rate-limited', async () => {
+    reserveAiRequest.mockImplementation(() => {
+      throw new MockAiRateLimitError();
+    });
+    getLLMCompletion.mockRejectedValue(new Error('no provider'));
+    const data = await loadSession(
+      '?skills=fixing-comma-splices,topic-sentences&count=5'
+    );
+    expect(data.problemCount).toBe(5);
+    expect(data.items).toHaveLength(5);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('caps the number of parsed skills', async () => {
+    // Build a list of at least 8 real lesson slugs and assert only 5 are used.
+    const { getQuickWritingLessonSections } = await import(
+      '~/utils/writing-lessons/static-lessons.server'
+    );
+    const allSlugs = getQuickWritingLessonSections().flatMap((section) =>
+      section.groups.flatMap((group) => group.lessons.map((l) => l.slug))
+    );
+    const many = allSlugs.slice(0, 8);
+    getLLMCompletion.mockRejectedValue(new Error('no provider'));
+    const data = await loadSession(
+      `?skills=${many.join(',')}&count=5`
+    );
+    expect(data.skills.length).toBeLessThanOrEqual(5);
+    expect(data.items).toHaveLength(5);
   });
   });
 });
@@ -381,19 +413,12 @@ describe('self-directed practice session action', () => {
     });
 
   test('rate-limits rewrite checks per student', async () => {
-    mock.module('~/utils/ai-admission.server', () => {
-      class AiRateLimitError extends Error {
-        retryAfterSeconds = 42;
-      }
-      return {
-        AiRateLimitError,
-        reserveAiRequest: () => {
-          throw new AiRateLimitError();
-        },
-      };
+    reserveAiRequest.mockImplementation(() => {
+      const err = new MockAiRateLimitError();
+      err.retryAfterSeconds = 42;
+      throw err;
     });
-    const { action: limitedAction } = await import('./route');
-    const response = (await limitedAction({
+    const result = (await action({
       request: new Request('https://example.test/app/writing-lessons/practice', {
         method: 'POST',
         body: new URLSearchParams([
@@ -407,9 +432,9 @@ describe('self-directed practice session action', () => {
       }),
       params: {},
       context: {} as never,
-    } as any)) as unknown as Response;
-    expect(response.status).toBe(429);
-    expect(response.headers.get('Retry-After')).toBeTruthy();
+    } as any)) as any;
+    expect(result.init?.status).toBe(429);
+    expect(new Headers(result.init?.headers).get('Retry-After')).toBeTruthy();
   });
 
     test('is refused on a composition lesson', async () => {
@@ -528,19 +553,12 @@ describe('self-directed practice session action', () => {
           encouragement: '',
         })
       );
-      mock.module('~/utils/ai-admission.server', () => {
-        class AiRateLimitError extends Error {
-          retryAfterSeconds = 30;
-        }
-        return {
-          AiRateLimitError,
-          reserveAiRequest: () => {
-            throw new AiRateLimitError();
-          },
-        };
+      reserveAiRequest.mockImplementation(() => {
+        const err = new MockAiRateLimitError();
+        err.retryAfterSeconds = 30;
+        throw err;
       });
-      const { action: limitedAction } = await import('./route');
-      const response = (await limitedAction({
+      const result = (await action({
         request: buildRequest({
           kind: 'composition',
           lessonSlug: 'topic-sentences',
@@ -552,9 +570,9 @@ describe('self-directed practice session action', () => {
         }),
         params: {},
         context: {} as never,
-      } as any)) as unknown as Response;
-      expect(response.status).toBe(429);
-      expect(response.headers.get('Retry-After')).toBeTruthy();
+      } as any)) as any;
+      expect(result.init?.status).toBe(429);
+      expect(new Headers(result.init?.headers).get('Retry-After')).toBeTruthy();
     });
 
     test('is refused on a grammar lesson', async () => {
