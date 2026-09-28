@@ -7,6 +7,7 @@ import {
   DEFAULT_PREVIEW_SEAT_COUNT,
   backfillLegacyPreviewSeatCodes,
   buildPreviewSeatDefinitions,
+  enableWritingPracticeForPreviewOrganizations,
   ensurePreviewSeats,
 } from './preview-seats';
 import { seedApHistoryLibrary } from './seed-ap-history-library';
@@ -22,6 +23,13 @@ const prisma = createPrismaClient();
 
 try {
   const results = await ensurePreviewSeats(prisma, seats);
+  const writingPractice = await enableWritingPracticeForPreviewOrganizations(
+    prisma,
+    seats.map(({ organizationId }) => organizationId)
+  );
+  console.log(
+    `Writing practice preview enablement: ${writingPractice.count} seat(s) updated`
+  );
   // PR previews retain their database across deploys. Reconcile this branch's
   // idempotent AP catalog on every seed-mode deploy, including existing seats.
   await seedApHistoryLibrary(prisma, seats[0].organizationId);

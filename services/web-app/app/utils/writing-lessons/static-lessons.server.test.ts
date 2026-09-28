@@ -1,16 +1,18 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  getQuickWritingLessonBody,
   getQuickWritingLessonBySlug,
+  getQuickWritingLessonContext,
+  getQuickWritingLessonSections,
   getQuickWritingLessons,
   getQuickWritingPracticePrompts,
 } from './static-lessons.server';
 
 describe('Quick Writing Lessons static lesson archive', () => {
-  test('recovers all ten old Quick Writing Lessons from the archived prompt', () => {
+  test('recovers the ten grammar lessons plus the composition lessons', () => {
     const lessons = getQuickWritingLessons();
 
-    expect(lessons).toHaveLength(10);
     expect(lessons.map((lesson) => lesson.slug)).toEqual([
       'fixing-comma-splices',
       'revising-for-wordiness',
@@ -22,7 +24,109 @@ describe('Quick Writing Lessons static lesson archive', () => {
       'subject-verb-agreement',
       'pronoun-agreement',
       'commas-introductory-phrases',
+      'topic-sentences',
+      'thesis-statements',
+      'evidence',
+      'analysis',
+      'hooks-and-openings',
+      'conclusions',
     ]);
+  });
+
+  test('every grammar lesson is tagged to the Grammar & Mechanics section', () => {
+    const lessons = getQuickWritingLessons();
+    const grammar = lessons.filter(
+      (lesson) => lesson.section === 'Grammar & Mechanics'
+    );
+
+    // The ten original lessons are all grammar/mechanics.
+    expect(grammar).toHaveLength(10);
+    for (const lesson of grammar) {
+      expect([
+        'Punctuation',
+        'Sentence Structure',
+        'Agreement',
+        'Flow',
+      ]).toContain(lesson.category);
+    }
+  });
+
+  test('composition lessons form their own section', () => {
+    const composition = getQuickWritingLessons().filter(
+      (lesson) => lesson.section === 'Composition'
+    );
+
+    expect(composition.map((lesson) => lesson.slug)).toEqual([
+      'topic-sentences',
+      'thesis-statements',
+      'evidence',
+      'analysis',
+      'hooks-and-openings',
+      'conclusions',
+    ]);
+    for (const lesson of composition) {
+      expect([
+        'Making Claims',
+        'Supporting Claims',
+        'Framing the Essay',
+      ]).toContain(lesson.category);
+    }
+  });
+
+  test('groups lessons into ordered sections, each with its categories', () => {
+    const sections = getQuickWritingLessonSections();
+
+    expect(sections.map((section) => section.section)).toEqual([
+      'Grammar & Mechanics',
+      'Composition',
+    ]);
+
+    const composition = sections.find(
+      (section) => section.section === 'Composition'
+    );
+    // Making Claims (topic sentences, thesis) then Supporting Claims
+    // (evidence, analysis), in first-appearance order.
+    expect(composition?.groups.map((group) => group.category)).toEqual([
+      'Making Claims',
+      'Supporting Claims',
+      'Framing the Essay',
+    ]);
+    expect(composition?.groups[1]).toEqual({
+      category: 'Supporting Claims',
+      lessons: expect.arrayContaining([
+        expect.objectContaining({ slug: 'evidence' }),
+        expect.objectContaining({ slug: 'analysis' }),
+      ]),
+    });
+  });
+
+  test('exposes grounding context (skill + rule) for a composition lesson', () => {
+    const context = getQuickWritingLessonContext('topic-sentences');
+
+    expect(context).not.toBeNull();
+    expect(context?.title).toBe('Topic Sentences');
+    expect(context?.skill).toBe('topic sentences');
+    expect(context?.rule).toContain('claim');
+    expect(context?.rule).not.toContain('Why This Matters');
+    expect(context?.rule).not.toContain('Your turn');
+  });
+
+  test('the framing lessons carry grounding context and practice prompts', () => {
+    const hooks = getQuickWritingLessonContext('hooks-and-openings');
+    expect(hooks?.title).toBe('Hooks & Openings');
+    expect(hooks?.skill).toBe('essay hooks and openings');
+    expect(hooks?.rule.length).toBeGreaterThan(0);
+    expect(
+      getQuickWritingPracticePrompts('hooks-and-openings').length
+    ).toBeGreaterThan(2);
+
+    const conclusions = getQuickWritingLessonContext('conclusions');
+    expect(conclusions?.title).toBe('Conclusions');
+    expect(conclusions?.skill).toBe('essay conclusions');
+    expect(conclusions?.rule.length).toBeGreaterThan(0);
+    expect(
+      getQuickWritingPracticePrompts('conclusions').length
+    ).toBeGreaterThan(2);
   });
 
   test('preserves lesson content without the generator instructions', () => {
@@ -48,5 +152,35 @@ describe('Quick Writing Lessons static lesson archive', () => {
       instruction: 'Cut the wordiness. Say the same thing in fewer words.',
     });
     expect(prompts[1].instruction).toContain('weak');
+  });
+
+  test('exposes grounding context (skill + rule) for tutor feedback', () => {
+    const context = getQuickWritingLessonContext('fixing-comma-splices');
+
+    expect(context).not.toBeNull();
+    expect(context?.title).toBe('Fixing Comma Splices');
+    expect(context?.skill).toBe('comma splices');
+    // The rule section, not the hook or the practice exercises.
+    expect(context?.rule).toContain('two complete sentences');
+    expect(context?.rule).not.toContain('Why This Matters');
+    expect(context?.rule).not.toContain('Your turn');
+  });
+
+  test('returns null context for an unknown slug', () => {
+    expect(getQuickWritingLessonContext('not-a-lesson')).toBeNull();
+  });
+
+  test('lesson body drops the redundant Practice Time section', () => {
+    const lesson = getQuickWritingLessonBySlug('fixing-comma-splices');
+    const body = getQuickWritingLessonBody(lesson!.content);
+
+    // Keeps the teaching content...
+    expect(body).toContain('Why This Matters');
+    expect(body).toContain('The Rule');
+    expect(body).toContain('Quick Tip');
+    // ...but not the practice exercises (the side panel owns those).
+    expect(body).not.toContain('Practice Time');
+    expect(body).not.toContain('Your turn');
+    expect(body).not.toContain('[Your response here]');
   });
 });
