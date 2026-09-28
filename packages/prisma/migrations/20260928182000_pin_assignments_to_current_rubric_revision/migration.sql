@@ -32,46 +32,51 @@ DECLARE
   rows_changed integer := 0;
 BEGIN
   LOOP
-    WITH to_update AS (
-      SELECT
-        a.id AS assignment_id,
-        COALESCE(
-          (
-            SELECT rv.id
-            FROM "RubricRevision" rv
-            WHERE rv."rubricName" = r.name
-              AND rv."createdAt" <= a."createdAt"
-            ORDER BY rv."createdAt" DESC
-            LIMIT 1
-          ),
-          (
-            SELECT rv2.id
-            FROM "RubricRevision" rv2
-            WHERE rv2."rubricName" = r.name
-            ORDER BY rv2."createdAt" ASC
-            LIMIT 1
-          )
-        ) AS selected_revision_id
-      FROM "Assignment" a
-      JOIN "AssignmentType" t ON t.id = a."assignmentTypeId"
-      JOIN "Rubric" r ON r.id = t."rubricId"
-      WHERE a."rubricRevisionId" IS NULL
-        AND EXISTS (
-          SELECT 1 FROM "RubricRevision" rx WHERE rx."rubricName" = r.name
+    CREATE TEMP TABLE IF NOT EXISTS "__tmp_assignment_rubric_pin_batch" (
+      assignment_id TEXT PRIMARY KEY,
+      selected_revision_id TEXT NOT NULL
+    ) ON COMMIT DROP;
+    TRUNCATE TABLE "__tmp_assignment_rubric_pin_batch";
+
+    INSERT INTO "__tmp_assignment_rubric_pin_batch" (assignment_id, selected_revision_id)
+    SELECT
+      a.id AS assignment_id,
+      COALESCE(
+        (
+          SELECT rv.id
+          FROM "RubricRevision" rv
+          WHERE rv."rubricName" = r.name
+            AND rv."createdAt" <= a."createdAt"
+          ORDER BY rv."createdAt" DESC
+          LIMIT 1
+        ),
+        (
+          SELECT rv2.id
+          FROM "RubricRevision" rv2
+          WHERE rv2."rubricName" = r.name
+          ORDER BY rv2."createdAt" ASC
+          LIMIT 1
         )
-      ORDER BY a.id
-      LIMIT 1000
-    )
+      ) AS selected_revision_id
+    FROM "Assignment" a
+    JOIN "AssignmentType" t ON t.id = a."assignmentTypeId"
+    JOIN "Rubric" r ON r.id = t."rubricId"
+    WHERE a."rubricRevisionId" IS NULL
+      AND EXISTS (
+        SELECT 1 FROM "RubricRevision" rx WHERE rx."rubricName" = r.name
+      )
+    ORDER BY a.id
+    LIMIT 1000;
+
     UPDATE "Assignment" a
-    SET "rubricRevisionId" = u.selected_revision_id
-    FROM to_update u
-    WHERE a.id = u.assignment_id;
+    SET "rubricRevisionId" = b.selected_revision_id
+    FROM "__tmp_assignment_rubric_pin_batch" b
+    WHERE a.id = b.assignment_id;
+    GET DIAGNOSTICS rows_changed = ROW_COUNT;
 
     INSERT INTO "InternalAssignmentRubricPinBackfill" ("assignmentId", "selectedRevisionId")
-    SELECT assignment_id, selected_revision_id FROM to_update
+    SELECT assignment_id, selected_revision_id FROM "__tmp_assignment_rubric_pin_batch"
     ON CONFLICT ("assignmentId") DO NOTHING;
-
-    GET DIAGNOSTICS rows_changed = ROW_COUNT;
     EXIT WHEN rows_changed = 0;
   END LOOP;
 END $$;
