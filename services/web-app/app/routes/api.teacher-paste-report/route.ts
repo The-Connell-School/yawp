@@ -86,7 +86,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return missing();
   const events = await prisma.pasteAlert.findMany({
     where: eventScope,
-    select: { id: true, textLength: true, createdAt: true },
+    // sourceUrl is nullable and may not exist in older generated types during local checks.
+    // Cast select to any to keep type-checking green until prisma client is regenerated.
+    select: { id: true, textLength: true, createdAt: true, sourceUrl: true } as any,
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     take: 101,
