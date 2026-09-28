@@ -18,10 +18,13 @@ import {
   buildGrowthSeries,
   buildPlanProgress,
   buildRubricTrends,
+  buildWriteModeComparison,
   captureRubricLevels,
   findStudentsNeedingAttention,
   summarizeClassRubrics,
   summarizeStudentGrades,
+  writeModeForTutorEnabled,
+  WRITE_MODE_LABELS,
   type GradedSubmissionRow,
   type PlanBaseline,
 } from './reporter-report';
@@ -78,7 +81,7 @@ export const REPORTER_TOOLS: ReporterTool[] = [
   {
     name: 'get_class_grade_report',
     description:
-      "Get a grade summary for one class: each student's average percentage across released, graded submissions, plus the class average. Only released grades are included.",
+      "Get a grade summary for one class: each student's average percentage across released, graded submissions, plus the class average. Only released grades are included. Also returns `writeModes`: the class split into cold writes (assignments with the Yawp tutor OFF — independent work) and warm writes (tutor ON — AI-supported work), with each student's cold and warm averages on their row.",
     input_schema: {
       type: 'object',
       properties: {
@@ -91,7 +94,7 @@ export const REPORTER_TOOLS: ReporterTool[] = [
   {
     name: 'get_student_grade_report',
     description:
-      "Get a single student's released, graded submissions across the classes this teacher teaches, with per-assignment scores and an overall average.",
+      "Get a single student's released, graded submissions across the classes this teacher teaches, with per-assignment scores and an overall average. Every submission is labeled with the condition it was written under (`writeMode`: a cold write = tutor off, a warm write = tutor on), and `writeModes` summarizes each condition separately plus the gap between them.",
     input_schema: {
       type: 'object',
       properties: {
@@ -108,7 +111,7 @@ export const REPORTER_TOOLS: ReporterTool[] = [
   {
     name: 'get_student_growth',
     description:
-      'Get a chronological growth series for one student: their released grades over time, with the first→latest change and a trend label. Use this for growth reports.',
+      'Get a chronological growth series for one student: their released grades over time, with the first→latest change and a trend label. Use this for growth reports. Each point carries its `writeMode` (a cold write = tutor off, a warm write = tutor on), and `writeModes` gives each condition its own first→latest arc — the cold-write arc is the evidence of skills transferring beyond the tutor.',
     input_schema: {
       type: 'object',
       properties: {
@@ -146,7 +149,7 @@ export const REPORTER_TOOLS: ReporterTool[] = [
   {
     name: 'get_submission_detail',
     description:
-      "Get the actual writing evidence for ONE graded submission: an excerpt of the student's essay, the teacher's inline margin comments (each tied to the quoted text it marks), the overall written feedback, the per-rubric scores, and any flagged grammar/style issues. Use this to talk specifically about a student's writing — quoting their real sentences and your own comments — after a grade or growth report surfaces a submissionId worth examining. Pass a submissionId returned by get_student_grade_report or get_student_growth.",
+      "Get the actual writing evidence for ONE graded submission: an excerpt of the student's essay, the teacher's inline margin comments (each tied to the quoted text it marks), the overall written feedback, the per-rubric scores, and any flagged grammar/style issues. Use this to talk specifically about a student's writing — quoting their real sentences and your own comments — after a grade or growth report surfaces a submissionId worth examining. Pass a submissionId returned by get_student_grade_report or get_student_growth. Also reports whether this was a cold write (tutor off) or a warm write (tutor on), so the writing is read against the right expectation.",
     input_schema: {
       type: 'object',
       properties: {
@@ -305,7 +308,9 @@ async function fetchScopedGradedRows(where: {
           membershipId: true,
           membership: { select: { user: { select: { name: true } } } },
           classAssignment: {
-            select: { assignment: { select: { title: true } } },
+            select: {
+              assignment: { select: { title: true, tutorEnabled: true } },
+            },
           },
         },
       },
@@ -340,6 +345,9 @@ async function fetchScopedGradedRows(where: {
           letterGrade: submission.letterGrade,
           rubricScores: normalizeRubricScores(submission.rubricScores),
           overallComment: submission.overallComment,
+          tutorEnabled:
+            submission.document.classAssignment?.assignment.tutorEnabled ??
+            null,
         },
       ];
     });
@@ -442,6 +450,10 @@ async function getClassGradeReport(ctx: ReporterToolContext, input: unknown) {
     // Per-writing-skill class averages, so "what's my class weakest at?" is
     // answerable from this one report without walking student by student.
     rubricSummary: summarizeClassRubrics(rows),
+    // Cold (tutor off) vs warm (tutor on) standing for the class as a whole.
+    // Each student row carries the same split, so a per-student cold/warm
+    // table needs no extra call.
+    writeModes: buildWriteModeComparison(rows),
     students,
   };
 }
@@ -581,6 +593,7 @@ async function getStudentGradeReport(ctx: ReporterToolContext, input: unknown) {
     averagePercentage: summary?.averagePercentage ?? null,
     latestLetterGrade: summary?.latestLetterGrade ?? null,
     rubricTrends: buildRubricTrends(rows),
+    writeModes: buildWriteModeComparison(rows),
     submissions: rows.map((row) => ({
       submissionId: row.submissionId,
       assignmentTitle: row.assignmentTitle,
@@ -589,6 +602,8 @@ async function getStudentGradeReport(ctx: ReporterToolContext, input: unknown) {
       letterGrade: row.letterGrade,
       rubricScores: row.rubricScores ?? null,
       comment: row.overallComment ?? null,
+      tutorEnabled: row.tutorEnabled ?? null,
+      writeMode: writeModeForTutorEnabled(row.tutorEnabled),
     })),
   };
 }
@@ -616,6 +631,7 @@ async function getStudentGrowth(ctx: ReporterToolContext, input: unknown) {
       : null,
     ...growth,
     rubricTrends: buildRubricTrends(rows),
+    writeModes: buildWriteModeComparison(rows),
     // Attach rubric detail and any written feedback to each point so the model
     // can talk specifically about the writing, not just the score.
     points: growth.points.map((point) => {
@@ -664,7 +680,9 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
         select: {
           membership: { select: { user: { select: { name: true } } } },
           classAssignment: {
-            select: { assignment: { select: { title: true } } },
+            select: {
+              assignment: { select: { title: true, tutorEnabled: true } },
+            },
           },
         },
       },
@@ -708,6 +726,10 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
       comment: comment.content.slice(0, MAX_COMMENT_CHARS),
     }));
 
+  const tutorEnabled =
+    submission.document.classAssignment?.assignment.tutorEnabled ?? null;
+  const writeMode = writeModeForTutorEnabled(tutorEnabled);
+
   return {
     submissionId: submission.id,
     student: {
@@ -717,6 +739,11 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
     assignmentTitle:
       submission.document.classAssignment?.assignment.title ??
       'Untitled assignment',
+    // The condition this paper was written under, so quoted sentences are read
+    // against the right expectation: independent work, or tutor-supported.
+    tutorEnabled,
+    writeMode,
+    writeModeLabel: writeMode ? WRITE_MODE_LABELS[writeMode] : null,
     submittedAt: submission.submittedAt.toISOString(),
     numericPercentage: submission.numericPercentage,
     letterGrade: submission.letterGrade,
