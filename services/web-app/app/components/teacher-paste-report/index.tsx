@@ -132,12 +132,50 @@ function AuthorizedTeacherPasteReport({
     if (!contentRoot) return;
     onSelectEvent?.();
     requestAnimationFrame(() => {
-      const node = getPasteEventRanges(contentRoot, id)[0]?.startContainer;
-      node?.parentElement?.scrollIntoView({
-        block: 'center',
-        behavior: 'smooth',
-      });
+      const ranges = getPasteEventRanges(contentRoot, id);
+      const node = ranges[0]?.startContainer ?? null;
+      // Graceful no-op when an event has no surviving linked text.
+      if (node && node.parentElement) {
+        node.parentElement.scrollIntoView({
+          block: 'center',
+          behavior: 'smooth',
+        });
+      } else {
+        // Clear selection for unlinked/earlier events.
+        setSelectedId(null);
+      }
     });
+  }
+
+  function inferSourceSiteForEvent(eventId: string): string | null {
+    if (!contentRoot) return null;
+    const ranges = getPasteEventRanges(contentRoot, eventId);
+    for (const range of ranges) {
+      const common =
+        range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+          ? (range.commonAncestorContainer as Element)
+          : range.commonAncestorContainer.parentElement;
+      if (!common) continue;
+      // Look for an anchor within the selected content.
+      const anchor = common.closest('a') ?? common.querySelector('a');
+      const href =
+        (anchor && (anchor as HTMLAnchorElement).href) || undefined;
+      if (href) {
+        try {
+          const url = new URL(href);
+          return url.hostname.replace(/^www\\./, '');
+        } catch {
+          // fall through
+        }
+      }
+      // Fallback: scan selected text for a URL.
+      const text = range.toString();
+      const match = text.match(/https?:\\/\\/([^\\s\\/]+)/i);
+      if (match?.[1]) {
+        return match[1].replace(/^www\\./, '');
+      }
+    }
+    return null;
   }
 
   return (
@@ -300,13 +338,15 @@ function AuthorizedTeacherPasteReport({
                 {report?.events.map((event) => {
                   const surviving = measurement?.byEvent[event.id] ?? 0;
                   const linked = event.id.startsWith('paste_');
+                  const sourceSite =
+                    (linked && inferSourceSiteForEvent(event.id)) || null;
                   return (
                     <li key={event.id}>
                       <button
                         type="button"
                         data-testid={`paste-event-${event.id}`}
                         aria-pressed={selectedId === event.id}
-                        disabled={!surviving}
+                        disabled={!surviving || !linked}
                         onClick={() => select(event.id)}
                         className={cn(
                           'w-full rounded-md border p-3 text-left text-sm transition disabled:cursor-default',
@@ -316,15 +356,31 @@ function AuthorizedTeacherPasteReport({
                           !surviving && 'opacity-80'
                         )}
                       >
-                        <span className="flex items-start justify-between gap-3">
-                          <span className="font-medium">
-                            {new Date(event.createdAt).toLocaleString()}
-                          </span>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-2">
+                            <TriangleAlert
+                              className={cn(
+                                'mt-0.5 h-4 w-4 shrink-0',
+                                surviving ? 'text-amber-600' : 'text-muted-foreground'
+                              )}
+                              aria-hidden="true"
+                            />
+                            <div>
+                              <div className="font-medium">
+                                {new Date(event.createdAt).toLocaleString()}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {sourceSite
+                                  ? `Source: ${sourceSite}`
+                                  : 'Source: unknown'}
+                              </div>
+                            </div>
+                          </div>
                           <span className="shrink-0 tabular-nums text-muted-foreground">
                             {event.textLength.toLocaleString()} chars
                           </span>
-                        </span>
-                        <span className="mt-1 block text-muted-foreground">
+                        </div>
+                        <div className="mt-1 block text-muted-foreground">
                           {surviving
                             ? `${surviving.toLocaleString()} characters remain — show in document`
                             : !measurement
@@ -332,7 +388,7 @@ function AuthorizedTeacherPasteReport({
                               : linked
                                 ? 'No linked text remains in this version (removed or tracking unavailable)'
                                 : 'Earlier event; position unavailable'}
-                        </span>
+                        </div>
                       </button>
                     </li>
                   );
