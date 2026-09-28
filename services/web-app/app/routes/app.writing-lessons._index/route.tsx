@@ -93,22 +93,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         })),
       })),
     }));
-  // Composition is behind its rollout flag; hide the whole section until on.
-  const compositionEnabled = isCompositionPracticeEnabled();
-  const sections = getQuickWritingLessonSections()
-    .filter(
-      (section) => compositionEnabled || section.section !== 'Composition'
-    )
-    .map((section) => ({
-      ...section,
-      groups: section.groups.map((group) => ({
-        ...group,
-        lessons: group.lessons.map((lesson) => ({
-          ...lesson,
-          promptCount: getQuickWritingPracticePrompts(lesson.slug).length,
-        })),
-      })),
-    }));
 
   const isTeacher = membership.role === 'TEACHER';
   const teacherClasses = isTeacher
