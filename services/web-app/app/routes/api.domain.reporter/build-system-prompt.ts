@@ -1,6 +1,9 @@
 import { rubricCategories } from '~/domain/grading/rubric';
 import type { CacheableSystemBlock } from '~/utils/getLLMCompletion/getLLMCompletion';
 
+/** Bump on any material prompt change to make cache keys obvious in logs. */
+const REPORTER_PROMPT_VERSION = '2026-09-28-cold-warm-split-v1';
+
 /**
  * The personalized opening sentence of the reporter system prompt — the
  * only part of it that varies per conversation (teacher name, org name).
@@ -37,6 +40,7 @@ export function buildReporterCacheableSystemPrompt(): string {
     )
     .join('\n');
   return [
+    `[Reporter Prompt ${REPORTER_PROMPT_VERSION}]`,
     'How you work:',
     '- Answer questions about classes, students, grades, and growth by calling the provided tools. Never fabricate grades, averages, or student names — if you do not have the data, call a tool to get it.',
     "- For class reports you need a class id: call list_classes first to discover ids. For student reports you can pass the student's full name directly (the tools match names within your classes) — you do not need their id.",

@@ -227,10 +227,14 @@ export type ClassRubricSummary = {
 export function summarizeClassRubrics(
   rows: GradedSubmissionRow[]
 ): ClassRubricSummary[] {
+  // Only aggregate categories from the canonical essay rubric to avoid mixing
+  // incompatible scales (e.g., engagement-only 0–30 vs 1–5 essay categories).
+  const canonicalKeys = new Set(rubricCategories.map((c) => c.key));
   const byCategory = new Map<string, number[]>();
   for (const row of rows) {
     if (!row.rubricScores) continue;
     for (const [category, value] of Object.entries(row.rubricScores)) {
+      if (!canonicalKeys.has(category)) continue;
       if (typeof value !== 'number' || Number.isNaN(value)) continue;
       const existing = byCategory.get(category);
       if (existing) existing.push(value);
