@@ -1,4 +1,15 @@
-import { Prisma, type PrismaClient } from '../../generated/prisma';
+// Types come from the generated client; the one runtime value this file needs
+// comes from the package's own ESM wrapper instead.
+//
+// This module is reachable from a web route — the admin organizations page
+// pulls in `preview-seats.ts`, which pulls in `seed-synthetic-data.ts`, which
+// pulls in this file — and in Vite's SSR graph `../../generated/prisma`
+// resolves to the client's *browser* build, whose first line of CommonJS
+// throws `exports is not defined`. `../../index` is the wrapper that
+// `createRequire`s the Node build on purpose, which is how `db.server.ts`
+// loads the client in the same environment.
+import type { Prisma, PrismaClient } from '../../generated/prisma';
+import { Prisma as PrismaRuntime } from '../../index';
 import {
   DAILY_PAGES_SAMPLE_ASSIGNMENT,
   DAILY_PAGES_SAMPLE_ENTRIES,
@@ -121,9 +132,9 @@ export async function adoptShortFormRubricForSeededDailyPages(
   await prisma.assignmentType.update({
     where: { id: assignmentTypeId },
     data: {
-      rubricJson: Prisma.DbNull,
-      scoringScaleJson: Prisma.DbNull,
-      gradingPromptConfigJson: Prisma.DbNull,
+      rubricJson: PrismaRuntime.DbNull,
+      scoringScaleJson: PrismaRuntime.DbNull,
+      gradingPromptConfigJson: PrismaRuntime.DbNull,
     },
   });
 }
