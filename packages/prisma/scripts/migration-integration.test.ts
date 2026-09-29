@@ -321,6 +321,14 @@ describe('migration integration (real Postgres)', () => {
     while (true) {
       const has = run('psql', ['-t', '-A', DB, '-c', lockQuery]).stdout.trim().split('\n').pop();
       if (has === 'f') break;
+      // Force-terminate any backend still holding the lock, then keep polling
+      psql(`
+        SELECT pg_terminate_backend(sa.pid)
+        FROM pg_locks l
+        JOIN pg_class c ON c.oid = l.relation
+        JOIN pg_stat_activity sa ON sa.pid = l.pid
+        WHERE c.relname='Assignment' AND l.mode='AccessExclusiveLock' AND l.granted
+      `);
       if (Date.now() - startWait > 15000) throw new Error('lock not released in time');
     }
     // Resolve and re-deploy after lock timeout
@@ -362,8 +370,7 @@ describe('migration integration (real Postgres)', () => {
     const fp = (v: unknown) => createHash('sha256').update(canonical(v)).digest('hex');
     for (const value of cases) {
       const sqlJson = JSON.stringify(value).replaceAll("'", "''");
-      const sql = `SELECT encode(sha256(convert_to(canonical_json('${sqlJson}'::jsonb),'UTF8')),'hex')`;
-      const got = run('psql', ['-t', '-A', DB, '-c', sql]).stdout.trim().split('\n').pop();
+      const got = jsonQuery(`encode(sha256(convert_to(canonical_json('${sqlJson}'::jsonb),'UTF8')),'hex')`);
       expect(got).toBe(fp(value));
     }
   });
