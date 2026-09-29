@@ -275,12 +275,55 @@ BEGIN
          FROM "AssignmentType" t JOIN "Rubric" r ON r.id = t."rubricId"
          WHERE t.id = a."assignmentTypeId"),
         -- Fallback to baseline mapping (per-type or library)
-        (SELECT b."rubricRevisionId" FROM "AssignmentTypeRubricBaseline" b WHERE b."assignmentTypeId" = a."assignmentTypeId")
+        (SELECT b."rubricRevisionId" FROM "AssignmentTypeRubricBaseline" b WHERE b."assignmentTypeId" = a."assignmentTypeId"),
+        -- Final fallback: resolve per-type baseline directly by name+schema when mapping is missing
+        (SELECT rr.id
+         FROM "AssignmentType" t
+         JOIN "RubricRevision" rr
+           ON rr."rubricName" = ('assignment-type:' || t.id)
+          AND rr."schemaJson" = jsonb_build_object(
+                'name', ('assignment-type:' || t.id),
+                'title', t.title,
+                'scoringScale', COALESCE(t."scoringScaleJson",'{}'::jsonb),
+                'rubric', COALESCE(t."rubricJson",'{}'::jsonb),
+                'promptConfig', COALESCE(t."gradingPromptConfigJson",'{}'::jsonb),
+                'outputSchema', COALESCE(t."gradingOutputSchemaJson",'{}'::jsonb),
+                'calibrationNotes', COALESCE(to_jsonb(t."gradingCalibrationNotes"), 'null'::jsonb)
+              )
+         WHERE t.id = a."assignmentTypeId")
       ) AS selected_revision_id
     FROM "Assignment" a
     WHERE a."rubricRevisionId" IS NULL
-      AND EXISTS (
-        SELECT 1 FROM "AssignmentTypeRubricBaseline" b WHERE b."assignmentTypeId" = a."assignmentTypeId"
+      AND (
+        -- Has a library rubric with a current pointer
+        EXISTS (
+          SELECT 1 FROM "AssignmentType" t
+          JOIN "Rubric" r ON r.id = t."rubricId"
+          WHERE t.id = a."assignmentTypeId" AND r."currentRevisionId" IS NOT NULL
+        )
+        OR
+        -- Has a baseline mapping recorded
+        EXISTS (
+          SELECT 1 FROM "AssignmentTypeRubricBaseline" b WHERE b."assignmentTypeId" = a."assignmentTypeId"
+        )
+        OR
+        -- Can resolve a per-type baseline directly by name+schema
+        EXISTS (
+          SELECT 1
+          FROM "AssignmentType" t
+          JOIN "RubricRevision" rr
+            ON rr."rubricName" = ('assignment-type:' || t.id)
+           AND rr."schemaJson" = jsonb_build_object(
+                 'name', ('assignment-type:' || t.id),
+                 'title', COALESCE(t.title, ('assignment-type:' || t.id)),
+                 'scoringScale', COALESCE(t."scoringScaleJson",'{}'::jsonb),
+                 'rubric', COALESCE(t."rubricJson",'{}'::jsonb),
+                 'promptConfig', COALESCE(t."gradingPromptConfigJson",'{}'::jsonb),
+                 'outputSchema', COALESCE(t."gradingOutputSchemaJson",'{}'::jsonb),
+                 'calibrationNotes', COALESCE(to_jsonb(t."gradingCalibrationNotes"), 'null'::jsonb)
+               )
+          WHERE t.id = a."assignmentTypeId"
+        )
       )
     ORDER BY a.id
     LIMIT 1000;
