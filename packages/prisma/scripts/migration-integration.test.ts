@@ -254,7 +254,7 @@ describe('migration integration (real Postgres)', () => {
 
     // (e) Changing a pin raises
     const someRev = jsonQuery(`SELECT id FROM "RubricRevision" WHERE "rubricName"='lib-shared' ORDER BY version ASC LIMIT 1`);
-    const upd = run('psql', ['-v', 'ON_ERROR_STOP=1', DB, '-c', `UPDATE "Assignment" SET "rubricRevisionId"='${someRev}' WHERE id='a-lib-3'`]);
+    const upd = run('psql', ['-v', 'ON_ERROR_STOP=1', DB, '-c', `UPDATE "Assignment" SET "rubricRevisionId"='${someRev}' WHERE id='a-lib-1'`]);
     expect(upd.status).not.toBe(0);
     expect(upd.stderr + upd.stdout).toContain('immutable');
 
@@ -365,6 +365,11 @@ describe('migration integration (real Postgres)', () => {
       if (has === 't') break;
       if (Date.now() - startPoll > 5000) throw new Error('lock not acquired in time');
     }
+    // Apply migration 1 first so migration 2 is the one that times out (matches production)
+    const onlyM1 = setupTempCopy([
+      '20260929034000_assignment_rubric_baseline_capture',
+    ]);
+    prismaDeploy(onlyM1);
     const current = setupTempCopy();
     const start = Date.now();
     const res = run('bun', ['run', 'prisma', 'migrate', 'deploy'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
