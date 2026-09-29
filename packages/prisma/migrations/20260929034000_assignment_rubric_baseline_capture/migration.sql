@@ -1,5 +1,13 @@
 SET lock_timeout = '5s';
 
+-- Runbook (lock_timeout recovery):
+-- If migrate deploy fails due to lock_timeout during this migration:
+-- 1) prisma migrate resolve --rolled-back 20260929034000_assignment_rubric_baseline_capture
+-- 2) prisma migrate deploy
+-- Notes:
+-- - Application queries touching Assignment can queue for up to ~5s during this migration.
+-- - canonical_json number formatting differs from JS for very large values (> 2^53), 1e21, and -0.
+
 -- Canonical JSON fingerprinting to match app's JSON.stringify semantics:
 -- - Objects: keys sorted in byte-wise "C" collation; no whitespace
 -- - Arrays: preserve order
@@ -187,16 +195,16 @@ BEGIN
     FROM lib_types l
     JOIN lib_rev r ON r.rubric_name = l.rubric_name
     ON CONFLICT ("assignmentTypeId") DO NOTHING
-  );
-  -- Record previous pointers before updating them to baseline revisions
-  INSERT INTO "InternalRubricCurrentPointerRestore" ("rubricId","previousRevisionId")
-  SELECT rub.id, rub."currentRevisionId"
-  FROM "Rubric" rub
-  JOIN "RubricRevision" rr ON rr."rubricName" = rub.name AND rr."schemaJson" = rub."schemaJson"
-  WHERE rub."currentRevisionId" IS NOT NULL
-    AND rub."currentRevisionId" <> rr.id
-  ON CONFLICT ("rubricId") DO NOTHING;
-  -- Advance current pointer to the baseline (the immutable snapshot matching current schema)
+  ), restore AS (
+    INSERT INTO "InternalRubricCurrentPointerRestore" ("rubricId","previousRevisionId")
+    SELECT rub.id, rub."currentRevisionId"
+    FROM "Rubric" rub
+    JOIN "RubricRevision" rr ON rr."rubricName" = rub.name AND rr."schemaJson" = rub."schemaJson"
+    WHERE rub."currentRevisionId" IS NOT NULL
+      AND rub."currentRevisionId" <> rr.id
+    ON CONFLICT ("rubricId") DO NOTHING
+    RETURNING 1
+  )
   UPDATE "Rubric" rub
   SET "currentRevisionId" = rr.id
   FROM "RubricRevision" rr

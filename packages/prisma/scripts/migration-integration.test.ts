@@ -339,7 +339,7 @@ describe('migration integration (real Postgres)', () => {
     // Expect failure due to lock_timeout (allow generous upper bound for CI variance)
     expect(res.status).not.toBe(0);
     expect(elapsed).toBeGreaterThanOrEqual(4500);
-    expect(elapsed).toBeLessThan(15000);
+    expect(elapsed).toBeLessThan(12000);
     expect(res.stderr + res.stdout).toMatch(/lock_timeout|timeout/i);
     // Ensure no baseline table was created
     const hasBaseline = run('psql', ['-t', '-A', DB, '-c', `SELECT to_regclass('public."AssignmentTypeRubricBaseline"') IS NOT NULL;`]).stdout.trim().split('\n').pop();
