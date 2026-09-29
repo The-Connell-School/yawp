@@ -71,6 +71,17 @@ describe('migration integration (real Postgres)', () => {
       '20260929034000_assignment_rubric_baseline_capture',
     ]);
     prismaDeploy(pre);
+    // Capture pre-migration schema and data hashes
+    const schemaPre = run('pg_dump', ['-s', DB]).stdout;
+    function hash(tbl: string) {
+      return run('psql', ['-t', '-A', DB, '-c', `SELECT md5(COALESCE(string_agg(row_to_json(t)::text, '' ORDER BY 1), '')) FROM (SELECT * FROM "${tbl}") t;`]).stdout.trim().split('\n').pop();
+    }
+    const preHash = {
+      Rubric: hash('Rubric'),
+      AssignmentType: hash('AssignmentType'),
+      Assignment: hash('Assignment'),
+      RubricRevision: hash('RubricRevision'),
+    };
 
     // Seed: library rubric + 2 types (one shared rubric), per-type JSON type, and no-JSON type.
     const libSchema = {
@@ -198,20 +209,27 @@ describe('migration integration (real Postgres)', () => {
     expect(JSON.stringify(afterGrade)).toBe(JSON.stringify(beforeGrade));
 
     // (g) rollback restores schema/data
-    const schemaBefore = run('pg_dump', ['-s', DB]).stdout;
     const rollback = readFileSync(join(PRISMA_DIR, 'migrations', '20260928182000_pin_assignments_to_current_rubric_revision', 'rollback.sql'), 'utf8');
     psql(rollback);
+    // Zero-diff schema vs pre-migration
     const schemaAfter = run('pg_dump', ['-s', DB]).stdout;
-    expect(schemaAfter).toContain('CREATE TABLE "Rubric"');
-    expect(schemaAfter).not.toContain('AssignmentTypeRubricBaseline');
-    // Data hashes for a few core tables
-    function tableHash(tbl: string) {
-      const out = run('psql', ['-t', '-A', DB, '-c', `SELECT md5(COALESCE(string_agg(row_to_json(t)::text, '' ORDER BY 1), '')) FROM (SELECT * FROM "${tbl}") t;`]).stdout.trim();
-      return out.split('\n').pop();
-    }
-    const hashRubric = tableHash('Rubric');
-    const hashType = tableHash('AssignmentType');
-    const hashAssign = tableHash('Assignment');
+    expect(schemaAfter).toBe(schemaPre);
+    // Data byte-identical vs pre for core tables
+    const postHash = {
+      Rubric: hash('Rubric'),
+      AssignmentType: hash('AssignmentType'),
+      Assignment: hash('Assignment'),
+      RubricRevision: hash('RubricRevision'),
+    };
+    expect(postHash).toEqual(preHash);
+    // No leftover auto triggers/functions
+    const triggers = run('psql', ['-t', '-A', DB, '-c', `SELECT tgname FROM pg_trigger WHERE tgname LIKE 'yawp_auto_%';`]).stdout.trim();
+    expect(triggers).toBe('');
+    const procs = run('psql', ['-t', '-A', DB, '-c', `SELECT proname FROM pg_proc WHERE proname LIKE 'yawp_auto_%';`]).stdout.trim();
+    expect(procs).toBe('');
+    // Per-type JSON edit after rollback works (no baseline table)
+    const edit = run('psql', ['-v', 'ON_ERROR_STOP=1', DB, '-c', `UPDATE "AssignmentType" SET "rubricJson" = jsonb_set(COALESCE("rubricJson",'{}'::jsonb),'{"categories"}','[]'::jsonb) WHERE id='t-per'`]);
+    expect(edit.status).toBe(0);
     // Re-apply migrations after rollback
     prismaDeploy(current);
     // (h) Confirm re-apply works and core tables intact (hash compare not strictly identical because ids may be regenerated elsewhere, but presence check suffices)

@@ -1,7 +1,7 @@
 -- Full rollback: clear pins from audit table, remove auto/baseline-created revisions,
 -- reset pointers, drop baseline/backfill tables, and restore original pin trigger.
 -- Idempotent and safe to re-run.
-DO $$
+DO $rb$
 DECLARE exists_backfill BOOLEAN;
 BEGIN
   -- 1) Detect audit table.
@@ -15,10 +15,8 @@ BEGIN
     EXCEPTION WHEN undefined_object THEN NULL;
     END;
 
-    UPDATE "Assignment" a
-    SET "rubricRevisionId" = NULL
-    FROM "InternalAssignmentRubricPinBackfill" i
-    WHERE a.id = i."assignmentId";
+    -- Clear all pins, not only audited rows.
+    UPDATE "Assignment" SET "rubricRevisionId" = NULL WHERE "rubricRevisionId" IS NOT NULL;
 
     -- 3) Reset currentRevisionId when it points to baseline/auto-created revisions.
     UPDATE "Rubric" r
@@ -30,7 +28,11 @@ BEGIN
           AND rr."createdBy" IN ('baseline-capture','auto-revision')
       );
 
-    -- 4) Delete revisions created by baseline/auto rewriters (temporarily relax immutability).
+    -- 4) Drop baseline/backfill tables first to avoid FK violations.
+    DROP TABLE IF EXISTS "AssignmentTypeRubricBaseline";
+    DROP TABLE IF EXISTS "InternalAssignmentRubricPinBackfill";
+
+    -- 5) Delete revisions created by baseline/auto rewriters (temporarily relax immutability).
     BEGIN
       DROP TRIGGER IF EXISTS rubric_revision_immutable ON "RubricRevision";
     EXCEPTION WHEN undefined_object THEN NULL;
@@ -40,11 +42,13 @@ BEGIN
     CREATE TRIGGER rubric_revision_immutable BEFORE UPDATE OR DELETE ON "RubricRevision"
     FOR EACH ROW EXECUTE FUNCTION internal_impersonation_audit_append_only();
 
-    -- 5) Drop baseline/backfill tables if present.
-    DROP TABLE IF EXISTS "AssignmentTypeRubricBaseline";
-    DROP TABLE IF EXISTS "InternalAssignmentRubricPinBackfill";
+    -- 6) Remove auto-revision triggers/functions introduced by the baseline capture.
+    DROP TRIGGER IF EXISTS yawp_auto_rubric_revision_on_update ON "Rubric";
+    DROP FUNCTION IF EXISTS yawp_auto_rubric_revision_on_update();
+    DROP TRIGGER IF EXISTS yawp_auto_assignment_type_baseline_on_update ON "AssignmentType";
+    DROP FUNCTION IF EXISTS yawp_auto_assignment_type_baseline_on_update();
 
-    -- 6) Re-enable (or recreate) the original pin trigger function/trigger (library-only behavior).
+    -- 7) Re-enable (or recreate) the original pin trigger function/trigger (library-only behavior).
     CREATE OR REPLACE FUNCTION internal_assignment_rubric_pin() RETURNS trigger LANGUAGE plpgsql AS $$
     DECLARE current_revision TEXT; selected_name TEXT;
     BEGIN
@@ -69,5 +73,9 @@ BEGIN
     CREATE TRIGGER internal_assignment_rubric_pin BEFORE INSERT OR UPDATE ON "Assignment"
     FOR EACH ROW EXECUTE FUNCTION internal_assignment_rubric_pin();
   END IF;
-END $$;
+  -- 8) Allow migrations to re-apply by removing these two migration receipts.
+  DELETE FROM "_prisma_migrations"
+   WHERE "migration_name" IN ('20260928182000_pin_assignments_to_current_rubric_revision',
+                              '20260929034000_assignment_rubric_baseline_capture');
+END $rb$;
 

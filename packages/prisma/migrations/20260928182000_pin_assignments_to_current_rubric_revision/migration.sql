@@ -1,3 +1,5 @@
+SET LOCAL lock_timeout = '5s';
+
 -- Pin existing assignments that grade with a selected library rubric to the
 -- historically-correct published revision, if they are not already pinned.
 --

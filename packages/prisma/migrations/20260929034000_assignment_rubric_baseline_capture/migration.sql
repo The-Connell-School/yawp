@@ -1,3 +1,5 @@
+SET LOCAL lock_timeout = '5s';
+
 -- Baseline-capture the current grading rubric for every assignment type in use,
 -- pin all existing assignments to that immutable baseline, and make new
 -- assignments pin automatically even when a type grades from per-type JSON.
@@ -52,6 +54,7 @@ BEGIN
     FROM "AssignmentTypeRubricBaseline" b
     JOIN "RubricRevision" rv ON rv.id = b."rubricRevisionId"
     WHERE b."assignmentTypeId" = NEW."assignmentTypeId"
+    ;
   END IF;
 
   IF NEW."rubricRevisionId" IS NULL THEN NEW."rubricRevisionId" := current_revision;
