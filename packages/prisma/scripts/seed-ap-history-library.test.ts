@@ -92,7 +92,8 @@ describe('AP History assignment type seed behavior', () => {
     const sourceUpsert = mock(async () => ({}));
     const prisma = {
       organization: {
-        findUnique: mock(async () => ({ id: 'preview-org' })),
+    findUnique: mock(async () => ({ id: 'preview-org' })),
+    findMany: mock(async () => [{ id: 'preview-org' }, { id: 'org-2' }]),
       },
       assignmentType: {
         findUnique: mock(async () => null),
