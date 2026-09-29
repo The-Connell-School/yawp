@@ -152,7 +152,7 @@ describe('migration integration (real Postgres)', () => {
     `);
     // Capture pre-migration schema and data hashes AFTER seeding and BEFORE deploy
     function normalizeSchemaDump(s: string) {
-      return s.split('\n').filter(l => !/^\\\\(?:un)?restrict\\b/.test(l)).join('\n');
+      return s.split('\n').filter(l => !/^\\(?:un)?restrict\\b/.test(l)).join('\n');
     }
     const schemaPre = normalizeSchemaDump(run('pg_dump', ['-s', DB]).stdout);
     function hash(tbl: string) {
