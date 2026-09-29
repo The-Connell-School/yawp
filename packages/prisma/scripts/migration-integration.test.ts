@@ -155,6 +155,17 @@ describe('migration integration (real Postgres)', () => {
       return s.split('\n').filter(l => !/^\s*\\(?:un)?restrict\b/.test(l)).join('\n');
     }
     const schemaPre = normalizeSchemaDump(run('pg_dump', ['-s', DB]).stdout);
+    // Capture full pre-migration table snapshots for diff-on-failure
+    function dumpTableRows(tbl: string): any[] {
+      const out = run('psql', ['-t', '-A', DB, '-c', `SELECT row_to_json(t) FROM "${tbl}" t ORDER BY id;`]).stdout.trim();
+      const rows = out ? out.split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
+      return rows;
+    }
+    const preRows = {
+      Rubric: dumpTableRows('Rubric'),
+      AssignmentType: dumpTableRows('AssignmentType'),
+      Assignment: dumpTableRows('Assignment'),
+    };
     function hash(tbl: string) {
       return run('psql', ['-t', '-A', DB, '-c', `SELECT md5(COALESCE(string_agg(row_to_json(t)::text, '' ORDER BY 1), '')) FROM (SELECT * FROM "${tbl}") t;`]).stdout.trim().split('\n').pop();
     }
@@ -182,9 +193,6 @@ describe('migration integration (real Postgres)', () => {
     // Apply correct migrations
     const current = setupTempCopy();
     const res2 = run('bun', ['run', 'prisma', 'migrate', 'deploy'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
-    if (res2.status !== 0) {
-      console.log('deploy stderr+stdout:\n' + res2.stderr + res2.stdout);
-    }
     expect(res2.status).toBe(0);
 
     // (a) Pins for library/per-type; no-JSON unpinned with reason
@@ -195,9 +203,6 @@ describe('migration integration (real Postgres)', () => {
         'codeDefault', (SELECT COUNT(*) FROM "InternalAssignmentRubricPinBackfill" WHERE reason = 'code-default')
       )
     `);
-    // Debug output on CI to diagnose unexpected pin counts
-    const pinDetails = run('psql', ['-t', '-A', DB, '-c', `SELECT id || ':' || (\"rubricRevisionId\" IS NOT NULL) FROM \"Assignment\" ORDER BY id;`]).stdout.trim();
-    console.log('Assignment pin state:\n' + pinDetails);
     expect(counts.pinned).toBe(4);
     expect(counts.unpinned).toBe(2);
     expect(counts.codeDefault).toBe(2);
@@ -277,7 +282,34 @@ describe('migration integration (real Postgres)', () => {
       Assignment: hash('Assignment'),
       RubricRevision: hash('RubricRevision'),
     };
-    expect(postHash).toEqual(preHash);
+    try {
+      expect(postHash).toEqual(preHash);
+    } catch (e) {
+      // Dump surgical diffs for diagnosis
+      function diffTable(tbl: 'Rubric' | 'AssignmentType' | 'Assignment', keys: string[]) {
+        const postRows = dumpTableRows(tbl);
+        const preIndex = new Map(preRows[tbl].map((r: any) => [r.id, r]));
+        const diffs: any[] = [];
+        for (const cur of postRows) {
+          const prev = preIndex.get(cur.id);
+          if (!prev) continue;
+          const changed: Record<string, any> = {};
+          for (const k of keys) {
+            const a = prev[k];
+            const b = cur[k];
+            if (JSON.stringify(a) !== JSON.stringify(b)) changed[k] = { before: a, after: b };
+          }
+          if (Object.keys(changed).length) diffs.push({ id: cur.id, changed });
+        }
+        if (diffs.length) {
+          console.log(`Diff for ${tbl}:` + JSON.stringify(diffs, null, 2));
+        }
+      }
+      diffTable('Rubric', ['updatedAt', 'currentRevisionId', 'schemaJson', 'name', 'title']);
+      diffTable('AssignmentType', ['updatedAt', 'rubricId', 'scoringScaleJson', 'rubricJson', 'gradingPromptConfigJson', 'gradingOutputSchemaJson', 'gradingCalibrationNotes', 'title', 'kind', 'position']);
+      diffTable('Assignment', ['updatedAt', 'assignmentTypeId', 'prompt', 'rubricRevisionId']);
+      throw e;
+    }
     // Migration receipts removed
     const migReceiptsAfterRollback = jsonQuery(`
       SELECT json_build_object(
@@ -366,19 +398,11 @@ describe('migration integration (real Postgres)', () => {
       `);
       if (Date.now() - startWait > 15000) throw new Error('lock not released in time');
     }
-    // Resolve and re-deploy after lock timeout
-    {
-      const mig1Present = run('psql', ['-t', '-A', DB, '-c', `SELECT EXISTS (SELECT 1 FROM "_prisma_migrations" WHERE "migration_name"='20260928182000_pin_assignments_to_current_rubric_revision')`]).stdout.trim().split('\n').pop();
-      const r1 = run('bun', ['run', 'prisma', 'migrate', 'resolve', '--rolled-back', '20260928182000_pin_assignments_to_current_rubric_revision'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
-      if (mig1Present === 't') expect(r1.status).toBe(0);
-      else expect(r1.status).not.toBe(0);
-    }
-    {
-      const mig2Present = run('psql', ['-t', '-A', DB, '-c', `SELECT EXISTS (SELECT 1 FROM "_prisma_migrations" WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture')`]).stdout.trim().split('\n').pop();
-      const r2 = run('bun', ['run', 'prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
-      if (mig2Present === 't') expect(r2.status).toBe(0);
-      else expect(r2.status).not.toBe(0);
-    }
+    // Resolve and re-deploy after lock timeout (exact sequence per production verification)
+    const mig2Unfinished = jsonQuery(`SELECT EXISTS (SELECT 1 FROM "_prisma_migrations" WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture' AND "finished_at" IS NULL)`);
+    expect(mig2Unfinished).toBe(true);
+    const r2 = run('bun', ['run', 'prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
+    expect(r2.status).toBe(0);
     prismaDeploy(current);
     // Deterministic final-state assertions after recovery
     // Baseline table exists now
@@ -388,8 +412,8 @@ describe('migration integration (real Postgres)', () => {
     const pinTriggerAfter = run('psql', ['-t', '-A', DB, '-c', `SELECT COUNT(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE c.relname='Assignment' AND t.tgname='internal_assignment_rubric_pin';`]).stdout.trim().split('\n').pop();
     expect(pinTriggerAfter).toBe('1');
     // Migrations recorded as finished
-    const m1Finished = jsonQuery(`SELECT COALESCE(BOOL_AND("finished_at" IS NOT NULL), false) FROM "_prisma_migrations" WHERE "migration_name"='20260928182000_pin_assignments_to_current_rubric_revision'`);
-    const m2Finished = jsonQuery(`SELECT COALESCE(BOOL_AND("finished_at" IS NOT NULL), false) FROM "_prisma_migrations" WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture'`);
+    const m1Finished = jsonQuery(`SELECT COALESCE(BOOL_AND("finished_at" IS NOT NULL AND "rolled_back_at" IS NULL), false) FROM "_prisma_migrations" WHERE "migration_name"='20260928182000_pin_assignments_to_current_rubric_revision'`);
+    const m2Finished = jsonQuery(`SELECT COALESCE(BOOL_AND("finished_at" IS NOT NULL AND "rolled_back_at" IS NULL), false) FROM "_prisma_migrations" WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture'`);
     expect(m1Finished).toBe(true);
     expect(m2Finished).toBe(true);
     // Pins correct for the seed in this test (one assignment, no rubric JSON or library)
