@@ -201,10 +201,37 @@ describe('migration integration (real Postgres)', () => {
     const pinTrigger = run('psql', ['-t', '-A', DB, '-c', `SELECT COUNT(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE c.relname='Assignment' AND t.tgname='internal_assignment_rubric_pin';`]).stdout.trim().split('\n').pop();
     expect(pinTrigger).toBe('1');
 
-    // Apply correct migrations
+    // Helper: dump debug rows for audit and key IDs
+    function dumpStage(stage: string) {
+      const hasAudit = run('psql', ['-t', '-A', DB, '-c', `SELECT to_regclass('public."InternalAssignmentRubricPinBackfill"') IS NOT NULL;`]).stdout.trim().split('\n').pop() === 't';
+      console.log(`STAGE=${stage} RUBRIC:`, run('psql', ['-t', '-A', DB, '-c', `SELECT json_build_object('rub','rub-1','current', "currentRevisionId") FROM "Rubric" WHERE id='rub-1'`]).stdout.trim());
+      console.log(`STAGE=${stage} ASSIGNMENT a-lib-1:`, run('psql', ['-t', '-A', DB, '-c', `SELECT row_to_json(a) FROM "Assignment" a WHERE id='a-lib-1'`]).stdout.trim());
+      if (hasAudit) {
+        console.log(`STAGE=${stage} AUDIT:`, run('psql', ['-t', '-A', DB, '-c', `SELECT row_to_json(b) FROM "InternalAssignmentRubricPinBackfill" b ORDER BY "assignmentId"`]).stdout.trim());
+      } else {
+        console.log(`STAGE=${stage} AUDIT: <absent>`);
+      }
+    }
+    dumpStage('seed');
+
+    // Apply migration 1 only, then assert a-lib-1 appears in audit with a selected revision id
+    const onlyM1 = setupTempCopy([
+      '20260929034000_assignment_rubric_baseline_capture',
+    ]);
+    prismaDeploy(onlyM1);
+    dumpStage('after-mig1');
+    const aLib1AuditAfterM1 = jsonQuery(`
+      SELECT EXISTS (
+        SELECT 1 FROM "InternalAssignmentRubricPinBackfill" WHERE "assignmentId"='a-lib-1'
+      )
+    `);
+    expect(aLib1AuditAfterM1).toBe(true);
+
+    // Apply correct migrations (migration 2)
     const current = setupTempCopy();
     const res2 = run('bun', ['run', 'prisma', 'migrate', 'deploy'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
     expect(res2.status).toBe(0);
+    dumpStage('after-mig2');
 
     // (a) Pins for library/per-type; no-JSON unpinned with reason
     const counts = jsonQuery(`
@@ -271,6 +298,7 @@ describe('migration integration (real Postgres)', () => {
     // (g) rollback restores schema/data
     const rollback = readFileSync(join(PRISMA_DIR, 'migrations', '20260928182000_pin_assignments_to_current_rubric_revision', 'rollback.sql'), 'utf8');
     psql(rollback);
+    dumpStage('after-rollback');
     // Zero-diff schema vs pre-migration
     const schemaAfter = normalizeSchemaDump(run('pg_dump', ['-s', DB]).stdout);
     expect(schemaAfter).toBe(schemaPre);
