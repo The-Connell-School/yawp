@@ -10,8 +10,6 @@
     "packages/*",
     "services/*"
   ],
-  "devDependencies": {
-  },
   "scripts": {
     "typecheck": "bun web-app:typecheck",
     "export-env": "export $(grep -v '^#' .env | xargs) ",
