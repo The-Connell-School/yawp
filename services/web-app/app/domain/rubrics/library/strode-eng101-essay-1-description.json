@@ -1,0 +1,178 @@
+{
+  "name": "strode-eng101-essay-1-description",
+  "title": "Strode ENG 101: Description / Angle of Vision",
+  "scoringScale": {
+    "type": "weighted_percent",
+    "minScore": 0,
+    "maxScore": 100,
+    "step": 1
+  },
+  "rubric": {
+    "categories": [
+      {
+        "key": "scene_selection",
+        "label": "Scene selection",
+        "weight": 1,
+        "description": "How well-bounded and specifically observed the scene is; whether sensory range goes beyond sight and details feel particular to an in-person visit.",
+        "scoreLabels": [
+          { "value": 55, "label": "Misses" },
+          { "value": 72, "label": "Satisfactory" },
+          { "value": 85, "label": "Somewhat better than satisfactory" },
+          { "value": 95, "label": "Does them very well" }
+        ],
+        "bands": [
+          { "min": 0, "max": 100, "label": "Full range", "description": "" }
+        ],
+        "feedbackEnabled": true
+      },
+      {
+        "key": "detail_as_engine",
+        "label": "Detail as engine",
+        "weight": 1,
+        "description": "Whether meaning rises from concrete details (induction) and every detail does work; stays physically real rather than impressionistic overlay.",
+        "scoreLabels": [
+          { "value": 55, "label": "Misses" },
+          { "value": 72, "label": "Satisfactory" },
+          { "value": 85, "label": "Somewhat better than satisfactory" },
+          { "value": 95, "label": "Does them very well" }
+        ],
+        "bands": [
+          { "min": 0, "max": 100, "label": "Full range", "description": "" }
+        ],
+        "feedbackEnabled": true
+      },
+      {
+        "key": "angle_of_vision",
+        "label": "Angle of vision",
+        "weight": 1,
+        "description": "Whether each paragraph carries a specific, discernible angle of vision beyond merely positive/negative; the effect lives in diction/figurative language, not announcement.",
+        "scoreLabels": [
+          { "value": 55, "label": "Misses" },
+          { "value": 72, "label": "Satisfactory" },
+          { "value": 85, "label": "Somewhat better than satisfactory" },
+          { "value": 95, "label": "Does them very well" }
+        ],
+        "bands": [
+          { "min": 0, "max": 100, "label": "Full range", "description": "" }
+        ],
+        "feedbackEnabled": true
+      },
+      {
+        "key": "parallel_structure",
+        "label": "Parallel structure",
+        "weight": 1,
+        "description": "Degree to which the second paragraph re-sees the same beats in the same order, with reversed valence and unchanged physical conditions.",
+        "scoreLabels": [
+          { "value": 55, "label": "Misses" },
+          { "value": 72, "label": "Satisfactory" },
+          { "value": 85, "label": "Somewhat better than satisfactory" },
+          { "value": 95, "label": "Does them very well" }
+        ],
+        "bands": [
+          { "min": 0, "max": 100, "label": "Full range", "description": "" }
+        ],
+        "feedbackEnabled": true
+      },
+      {
+        "key": "language_and_style",
+        "label": "Language and style",
+        "weight": 1,
+        "description": "Original, fitting figurative language; controlled tone; active voice as habit; avoids hedges and filler. Over-writing and mismatched comparisons lower the score.",
+        "scoreLabels": [
+          { "value": 55, "label": "Misses" },
+          { "value": 72, "label": "Satisfactory" },
+          { "value": 85, "label": "Somewhat better than satisfactory" },
+          { "value": 95, "label": "Does them very well" }
+        ],
+        "bands": [
+          { "min": 0, "max": 100, "label": "Full range", "description": "" }
+        ],
+        "feedbackEnabled": true
+      },
+      {
+        "key": "focus_and_restraint",
+        "label": "Focus and restraint",
+        "weight": 1,
+        "description": "Whether the setting, not the writer, remains the subject; commentary is restrained; people appear only as part of the environment rather than displacing it.",
+        "scoreLabels": [
+          { "value": 55, "label": "Misses" },
+          { "value": 72, "label": "Satisfactory" },
+          { "value": 85, "label": "Somewhat better than satisfactory" },
+          { "value": 95, "label": "Does them very well" }
+        ],
+        "bands": [
+          { "min": 0, "max": 100, "label": "Full range", "description": "" }
+        ],
+        "feedbackEnabled": true
+      },
+      {
+        "key": "self_reflection_part_b",
+        "label": "Self-reflection (Part B)",
+        "weight": 1,
+        "description": "Whether the theme is explicitly stated and matches the descriptions; discusses five strategies (selection/omission, word choice, figurative language, sentence structure, direct statement of meaning) with quoted pairs from the student's own text.",
+        "scoreLabels": [
+          { "value": 55, "label": "Misses" },
+          { "value": 72, "label": "Satisfactory" },
+          { "value": 85, "label": "Somewhat better than satisfactory" },
+          { "value": 95, "label": "Does them very well" }
+        ],
+        "bands": [
+          { "min": 0, "max": 100, "label": "Full range", "description": "" }
+        ],
+        "feedbackEnabled": true
+      }
+    ]
+  },
+  "promptConfig": {
+    "gradingInstructions": [
+      "You are grading Strode ENG 101, Essay 1: Description / Angle of Vision. Return ONLY valid JSON for the configured rubric.",
+      "",
+      "Tone of evaluation (never mention the source of this shorthand to students):",
+      "- Hold high, explicit standards and never inflate. Say shortfalls plainly and specifically; kindness lives in the delivery, not the score.",
+      "- Critique the work, never the writer. The shortfall belongs to the draft, and drafts can be fixed.",
+      "- Be genuinely delighted when work is good; reserve superlatives for the truly exemplary.",
+      "- Warmth throughout, especially when naming what went wrong.",
+      "- Always convert critique into the specific next move that fixes it.",
+      "",
+      "THREE GUARDS — read before anything else:",
+      "1. There is no thesis in this assignment. Do not look for one; do not mark a paper down for not having one. Do not use the words thesis, claim, argument, evidence, counterargument, or support in feedback.",
+      "2. There are no topic sentences. Paragraphs are governed by an ordering principle and an angle of vision, not a controlling sentence.",
+      "3. Assume the student visited the scene. Never imply doubt about whether the observation happened. Grade what is on the page.",
+      "",
+      "Scoring method:",
+      "- Seven categories. Four levels each. The four levels are anchored to percentages and used directly:",
+      "  4 = 95; 3 = 85; 2 = 72; 1 = 55.",
+      "- Final percentage = the mean of the seven category anchors, rounded to a whole number. All seven categories carry equal weight.",
+      "- Letter scale used by Strode: A 90–100; B+ 85–89; B 80–84; C+ 75–79; C 70–74; D+ 65–69; D 60–64; F <60. (The platform’s built-in letter display is A/B/C/D/F only; the numeric percentage is authoritative.)",
+      "",
+      "Category guidance and level descriptors (apply faithfully; do not quote verbatim to students):",
+      "1 · Scene selection — 4: tightly bounded (single room/counter/aisle/corner), sensory range genuinely wide, details particular and unguessable; 3: well chosen/appropriately sized; mostly visual or a few generic details; 2: workable but loosely bounded; thin detail; narrow sensory range; 1: too big to describe or reads as recollection rather than present observation.",
+      "2 · Detail as engine — 4: inductive method; details first and meaning rises; every detail has work to do; physically real; 3: mostly detail-driven with occasional laid-over ideas; 2: alternates real observation and asserted impression; several neutral placeholders; 1: overly impressionistic or idea-first hunting for proof.",
+      "3 · Angle of vision — 4: each paragraph carries a discernible and nuanced angle (an imagined mood/theme) carried entirely by diction/figures; 3: both paragraphs have a clear angle; at least one reaches beyond pleasant/unpleasant; 2: minimum met (one positive, one negative) but stays generic; 1: inconsistent/faint angle or the theme is stated outright.",
+      "4 · Parallel structure — 4: second paragraph re-sees every beat in the same order with reversed valence; physical conditions unchanged; 3: sequence holds across nearly all details; minor omissions/reorders; 2: same scene but sequence drifts; several beats appear only in one paragraph; 1: a new description or changed physical conditions.",
+      "5 · Language and style — 4: original, precisely matched figurative language; active voice; controlled/economical; 3: mostly fresh and fitting; some passive; 2: familiar comparisons or strained figures; passive often enough to slacken prose; 1: over-written/mismatched comparisons or default passive.",
+      "6 · Focus and restraint — 4: writer stays out of the way; setting unmistakably the subject; people only as part of environment; 3: largely disciplined with occasional intrusions; 2: too much you / personal narrative foregrounds the writer or people displace setting; 1: scene becomes stage for the writer or a character study.",
+      "7 · Self-reflection (Part B) — 4: states theme explicitly and matches the descriptions; works through five strategies (direct statement, selection/omission, word choice, figurative language, sentence structure) and quotes paired passages from the student's own text; 3: theme stated accurately; most strategies addressed with quoted support; 2: theme stated; reflection stays general with sparse quotation; 1: no explicit theme or one that contradicts the descriptions; strategies unaddressed or merely listed; no quotation.",
+      "",
+      "Grammar and syntax — flagged, never scored:",
+      "- This is not an eighth category; it carries no level and no anchor. The seven-category mean is the grade.",
+      "- Mark every mechanical error (spelling, commas, run-ons/fragments, agreement, apostrophes, capitalization, tense slips). Quote the student's words; give the corrected version.",
+      "- Group by pattern, not by instance. Add one plain line on scale (how many; which patterns; whether they interfere with meaning). Never recommend a deduction; describe effect on the reader. Do not let mechanics crowd out substantive feedback.",
+      "- In the description paragraphs, do not correct unconventional sentences unless clearly accidental. When ambiguous, flag as “fragment — intentional?” and move on. Hold Part B to standard academic expectations.",
+      "",
+      "What you can and cannot check:",
+      "- You can: parallel structure (detail sequence), active voice patterns, conditions consistency (unchanged physical state), whether theme is announced vs. carried, whether details are neutral or working, whether Part B quotes the student's own text.",
+      "- You cannot: whether the student visited the scene; what is in their photographs; whether their notes exist; whether the scene is “real”. When unverifiable, grade the writing and say nothing about the gap.",
+      "",
+      "Assignment-specific feedback notes:",
+      "- Name the beat, not the abstraction (quote both sides when praising a reversal).",
+      "- Never suggest adding a thesis, a topic sentence, or a transition word.",
+      "- Over-writing is common; name it gently: critique the sentence, delight in the one that lands, and give the fix in the same breath."
+    ].join(\"\\n\")
+  },
+  "outputSchema": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+  },
+  "calibrationNotes": "Seven equal-weight categories; four anchored levels scored as percentages (4=95, 3=85, 2=72, 1=55). Final grade is the rounded mean of category anchors. Letter bands noted in instructions; platform letter display is A/B/C/D/F only. Grammar/syntax flagged separately and never scored."
+}

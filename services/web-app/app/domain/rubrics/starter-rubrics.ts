@@ -1,6 +1,7 @@
 import { DEFAULT_OUTPUT_SCHEMA_JSON } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import type { RubricSchema } from './rubric-schema';
 import dailyPagesEngagementSchema from './library/daily-pages-engagement.json';
+import strodeEng101Essay1Schema from './library/strode-eng101-essay-1-description.json';
 import {
   THESIS_DRIVEN_ESSAY,
   THESIS_DRIVEN_ESSAY_RUBRIC_NAME,
@@ -89,4 +90,6 @@ export const STARTER_RUBRICS: RubricSchema[] = [
   // matched by name.
   classStarterEngagement,
   dailyPagesShortForm,
+  // New: Strode ENG 101 Essay 1 (Description / Angle of Vision)
+  strodeEng101Essay1Schema as RubricSchema,
 ];
