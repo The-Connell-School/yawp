@@ -87,6 +87,7 @@ model AssignmentType {
   title                              String
   kind                               String?                                @unique
   description                        String?
+  tutorInstructions                  String?
   position                           Int
   systemKey                          String?                                @unique
   archivedAt                         DateTime?                              @db.Timestamptz(6)
@@ -695,9 +696,23 @@ model ApHistoryPromptLibrarySource {
   mediaType            String                      @default("text")
   imageUrl             String?
   imageAlt             String?
+  imageBlob            Bytes?
+  imageContentType     String?
   provenanceUrl        String?
 
   @@index([promptLibraryEntryId, position])
+}
+
+model ApHistoryCustomSourceImage {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  key         String   @unique
+  contentType String
+  blob        Bytes
+  altText     String?
+  createdById String?
+
+  @@index([createdById])
 }
 
 model AssignmentTypeImage {
@@ -712,35 +727,37 @@ model AssignmentTypeImage {
 }
 
 model AssignmentModule {
-  id                  String                        @id @default(cuid())
-  createdAt           DateTime                      @default(now()) @db.Timestamptz(6)
-  updatedAt           DateTime                      @default(now()) @db.Timestamptz(6)
-  deletedAt           DateTime?                     @db.Timestamptz(6)
-  title               String
-  position            Int
-  description         String?
-  tutorInstructions   String?
-  isSelfGuided        Boolean                       @default(false)
-  rubricAlignmentJson Json?
-  assignmentTypeId    String
-  assignmentType      AssignmentType                @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
-  instructions        AssignmentModuleInstruction[]
-  sessions            AssignmentModuleSession[]
+  id                            String                        @id @default(cuid())
+  createdAt                     DateTime                      @default(now()) @db.Timestamptz(6)
+  updatedAt                     DateTime                      @default(now()) @db.Timestamptz(6)
+  deletedAt                     DateTime?                     @db.Timestamptz(6)
+  title                         String
+  position                      Int
+  description                   String?
+  tutorInstructions             String?
+  tutorInstructionsVariantsJson Json?
+  isSelfGuided                  Boolean                       @default(false)
+  rubricAlignmentJson           Json?
+  assignmentTypeId              String
+  assignmentType                AssignmentType                @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  instructions                  AssignmentModuleInstruction[]
+  sessions                      AssignmentModuleSession[]
 }
 
 model AssignmentModuleInstruction {
-  id                 String                              @id @default(cuid())
-  createdAt          DateTime                            @default(now()) @db.Timestamptz(6)
-  updatedAt          DateTime                            @default(now()) @db.Timestamptz(6)
-  position           Int
-  title              String
-  prompt             String
-  tutorInstructions  String?
-  showChatButton     Boolean?                            @default(false)
-  showNextButton     Boolean?                            @default(true)
-  assignmentModuleId String
-  assignmentModule   AssignmentModule                    @relation(fields: [assignmentModuleId], references: [id], onDelete: Cascade)
-  buttons            AssignmentModuleInstructionButton[]
+  id                            String                              @id @default(cuid())
+  createdAt                     DateTime                            @default(now()) @db.Timestamptz(6)
+  updatedAt                     DateTime                            @default(now()) @db.Timestamptz(6)
+  position                      Int
+  title                         String
+  prompt                        String
+  tutorInstructions             String?
+  tutorInstructionsVariantsJson Json?
+  showChatButton                Boolean?                            @default(false)
+  showNextButton                Boolean?                            @default(true)
+  assignmentModuleId            String
+  assignmentModule              AssignmentModule                    @relation(fields: [assignmentModuleId], references: [id], onDelete: Cascade)
+  buttons                       AssignmentModuleInstructionButton[]
 }
 
 model AssignmentModuleInstructionButton {
@@ -802,6 +819,7 @@ model Document {
   title                    String                    @default("Untitled")
   text                     String?
   html                     String?
+  apHistorySnapshot        Json?
   artifactKind             DocumentArtifactKind      @default(STUDENT)
   /// The owner of a solo student artifact. Assignment-group artifacts have no
   /// student owner; their active DocumentGroupMember rows grant collaboration.
@@ -1058,6 +1076,8 @@ model Organization {
   classInsightsEnabled          Boolean                      @default(false)
   writingPracticeEnabled        Boolean                      @default(false)
   submissionActivityEnabled     Boolean                      @default(false)
+  /// Rollout gate for AP History features (per school/organization)
+  apHistoryEnabled              Boolean                      @default(false)
   /// Rollout gate for the student split-screen revision flow
   /// (/app/revise/:submissionId). Off keeps the legacy
   /// "Revise Essay" -> document editor path.

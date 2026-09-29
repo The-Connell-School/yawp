@@ -35,6 +35,7 @@ type AssignmentTypeEditorFormProps = {
   descriptionDefaultValue?: string | null;
   /** Per-assignment-type override applied on top of the resolved rubric's instructions. */
   gradingInstructionsDefaultValue?: string;
+  tutorInstructionsDefaultValue?: string | null;
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
@@ -45,12 +46,14 @@ function formSnapshot(values: {
   description: string;
   gradingInstructions: string;
   rubricId: string | null;
+  tutorInstructions: string;
 }) {
   return [
     values.title.trim(),
     values.description.trim(),
     values.gradingInstructions.trim(),
     values.rubricId ?? '',
+    values.tutorInstructions.trim(),
   ].join('\u0000');
 }
 
@@ -108,6 +111,7 @@ export function AssignmentTypeEditorForm({
   titleDefaultValue = '',
   descriptionDefaultValue = '',
   gradingInstructionsDefaultValue = '',
+  tutorInstructionsDefaultValue = '',
   archivedAt = null,
   imageId = null,
   modules = [],
@@ -132,6 +136,9 @@ export function AssignmentTypeEditorForm({
     gradingInstructionsDefaultValue
   );
   const [rubricId, setRubricId] = useState<string | null>(selectedRubricId);
+  const [tutorInstructions, setTutorInstructions] = useState(
+    tutorInstructionsDefaultValue ?? ''
+  );
   const savedSnapshot = useMemo(
     () =>
       formSnapshot({
@@ -139,12 +146,14 @@ export function AssignmentTypeEditorForm({
         description: descriptionDefaultValue ?? '',
         gradingInstructions: gradingInstructionsDefaultValue,
         rubricId: selectedRubricId,
+        tutorInstructions: tutorInstructionsDefaultValue ?? '',
       }),
     [
       titleDefaultValue,
       descriptionDefaultValue,
       gradingInstructionsDefaultValue,
       selectedRubricId,
+      tutorInstructionsDefaultValue,
     ]
   );
 
@@ -153,6 +162,7 @@ export function AssignmentTypeEditorForm({
     setDescription(descriptionDefaultValue ?? '');
     setGradingInstructions(gradingInstructionsDefaultValue);
     setRubricId(selectedRubricId);
+    setTutorInstructions(tutorInstructionsDefaultValue ?? '');
   }, [savedSnapshot]);
 
   useEffect(() => {
@@ -178,8 +188,9 @@ export function AssignmentTypeEditorForm({
         description,
         gradingInstructions,
         rubricId,
+        tutorInstructions,
       }),
-    [title, description, gradingInstructions, rubricId]
+    [title, description, gradingInstructions, rubricId, tutorInstructions]
   );
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
@@ -197,6 +208,7 @@ export function AssignmentTypeEditorForm({
     setDescription(descriptionDefaultValue ?? '');
     setGradingInstructions(gradingInstructionsDefaultValue);
     setRubricId(selectedRubricId);
+    setTutorInstructions(tutorInstructionsDefaultValue ?? '');
     setPreviewUrl(null);
     setHasRemovedImage(false);
     if (imageFileInputRef.current) {
@@ -316,6 +328,29 @@ export function AssignmentTypeEditorForm({
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
+          </div>
+        </Section>
+
+        <Section
+          title="General tutor instructions"
+          description="The top of every tutor prompt for this assignment type. Paste the Universal YAWP! Tutor Instructions here and leave them unedited — this is the Tutor's character, identical across every course. Per-step substance belongs in the modules below."
+        >
+          <div className="space-y-2">
+            <FieldLabel htmlFor="assignmentTypeTutorInstructions">
+              Universal tutor instructions
+            </FieldLabel>
+            <Textarea
+              id="assignmentTypeTutorInstructions"
+              name="tutorInstructions"
+              rows={14}
+              className="font-mono text-xs"
+              placeholder="WHO YOU ARE. You are the YAWP! Tutor..."
+              value={tutorInstructions}
+              onChange={(event) => setTutorInstructions(event.target.value)}
+            />
+            <p className="text-sm text-muted-foreground">
+              Leave this empty to fall back to the built-in universal block.
+            </p>
           </div>
         </Section>
 

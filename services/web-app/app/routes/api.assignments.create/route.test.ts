@@ -5,6 +5,9 @@ const prisma = {
     findMany: mock(),
     findFirst: mock(),
   },
+  organization: {
+    findMany: mock(),
+  },
   assignmentType: {
     findFirst: mock(),
   },
@@ -127,6 +130,10 @@ describe('api.assignments.create', () => {
   beforeEach(() => {
     prisma.class.findMany.mockReset();
     prisma.class.findFirst.mockReset().mockResolvedValue(null);
+    prisma.organization.findMany.mockReset();
+    prisma.organization.findMany.mockResolvedValue([
+      { id: 'org-1', apHistoryEnabled: true },
+    ]);
     prisma.assignmentType.findFirst.mockReset();
     prisma.organizationAssignmentType.findMany.mockReset();
     prisma.school.findMany.mockReset();
@@ -216,6 +223,8 @@ describe('api.assignments.create', () => {
       deployment: { postAt: null, dueAt: null },
     });
   });
+
+// AP History is now always enabled; no org-level gating remains.
 
   test('stores a PDF attachment for assignments created across classes', async () => {
     const form = new FormData();
@@ -665,9 +674,24 @@ describe('api.assignments.create', () => {
         assignmentTypeId: 'ap-type-1',
         externalKey: 'apush-dbq-new-deal-federal-power',
         archivedAt: null,
-        course: 'apush',
       },
-      include: { sources: { orderBy: { position: 'asc' } } },
+      include: {
+        sources: {
+          orderBy: { position: 'asc' },
+          select: {
+            externalKey: true,
+            position: true,
+            title: true,
+            attribution: true,
+            body: true,
+            caption: true,
+            mediaType: true,
+            imageUrl: true,
+            imageAlt: true,
+            provenanceUrl: true,
+          },
+        },
+      },
     });
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -689,6 +713,51 @@ describe('api.assignments.create', () => {
       classIds: ['class-1', 'class-2'],
       deployment: { postAt: null, dueAt: null },
     });
+  });
+
+  test('AP History creation records optional post and due dates on deployment', async () => {
+    const libraryEntry = {
+      externalKey: 'apush-dbq-civil-war-reconstruction',
+      course: 'apush',
+      essayType: 'dbq',
+      title: 'Civil War & Reconstruction',
+      prompt: 'Evaluate the extent to which the Civil War and Reconstruction changed...',
+      period: '1861-1877',
+      periodNumber: 5,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [],
+    };
+    mockAssignmentTypeAvailable({
+      id: 'ap-type-1',
+      systemKey: 'ap_history_essay',
+    });
+    prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(libraryEntry);
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'ap-type-1',
+        classIds: ['class-1', 'class-2'],
+        apHistoryLibraryEntryId: 'apush-dbq-civil-war-reconstruction',
+        postAt: '2026-10-01',
+        dueAt: '2026-10-15',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classIds: ['class-1', 'class-2'],
+        deployment: {
+          postAt: new Date('2026-10-01'),
+          dueAt: new Date('2026-10-15'),
+        },
+      })
+    );
   });
 
   test('carries the tutor toggle through the AP History creation path', async () => {
@@ -733,6 +802,95 @@ describe('api.assignments.create', () => {
       classIds: ['class-1', 'class-2'],
       deployment: { postAt: null, dueAt: null },
     });
+  });
+
+  test('creates a custom AP History DBQ from teacher-authored input', async () => {
+    prisma.class.findMany.mockResolvedValue([
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
+    ]);
+    mockAssignmentTypeAvailable({
+      id: 'ap-type-1',
+      systemKey: 'ap_history_essay',
+    });
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'ap-type-1',
+        classIds: ['class-1'],
+        apHistoryMode: 'custom',
+        title: 'My Custom DBQ',
+        essayType: 'dbq',
+        prompt: 'Evaluate the causes of the Civil War.',
+        period: 'Period 5: 1844–1877',
+        periodNumber: '5',
+        reasoningSkill: 'causation',
+        timeMode: 'untimed',
+        durationMinutes: '60',
+        apHistorySourcesJson: JSON.stringify([
+          {
+            position: 1,
+            title: 'Doc 1',
+            attribution: 'Lincoln, 1861',
+            body: 'A house divided against itself cannot stand.',
+          },
+        ]),
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignmentTypeId: 'ap-type-1',
+        title: 'My Custom DBQ',
+        apHistorySnapshot: expect.objectContaining({
+          schemaVersion: 1,
+          essayType: 'dbq',
+          rubric: { rubricId: 'ap-history-dbq-2026', totalPoints: 7 },
+          sources: [
+            expect.objectContaining({
+              body: 'A house divided against itself cannot stand.',
+            }),
+          ],
+        }),
+      }),
+      classIds: ['class-1'],
+    });
+  });
+
+  test('rejects a custom AP History DBQ with no sources', async () => {
+    prisma.class.findMany.mockResolvedValue([
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
+    ]);
+    mockAssignmentTypeAvailable({
+      id: 'ap-type-1',
+      systemKey: 'ap_history_essay',
+    });
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'ap-type-1',
+        classIds: ['class-1'],
+        apHistoryMode: 'custom',
+        essayType: 'dbq',
+        prompt: 'Prompt without sources.',
+        period: 'Period 5',
+        periodNumber: '5',
+        reasoningSkill: 'causation',
+        timeMode: 'untimed',
+        durationMinutes: '60',
+        apHistorySourcesJson: '[]',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(false);
+    expect(responseStatus(response)).toBe(400);
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects AP History assignment creation without a library entry id', async () => {

@@ -7,6 +7,7 @@ import {
   useLoaderData,
   useRevalidator,
   useRouteLoaderData,
+  useNavigate,
 } from 'react-router';
 import { PenLine } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -352,6 +353,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function AppRoute() {
   const data = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
   const user = useUser();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
@@ -401,6 +403,15 @@ export default function AppRoute() {
                   setIsCreateSheetOpen(true);
                 }}
                 onCreateAssignmentForType={(assignmentTypeId) => {
+                  const assignmentType = data.teacherAssignmentTypes.find(
+                    (type) => type.id === assignmentTypeId
+                  );
+                  if (
+                    assignmentType?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
+                  ) {
+                    void navigate(`/app/assignment-types/${assignmentTypeId}`);
+                    return;
+                  }
                   setCreateAssignmentTypeId(assignmentTypeId);
                   setIsCreateSheetOpen(true);
                 }}

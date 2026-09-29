@@ -8,8 +8,10 @@ import {
   loadProdFidelityBundle,
 } from './local-dev/import-prod-fidelity-fixtures';
 import { seedCollaborationDemoData } from './local-dev/seed-collaboration';
+import { seedApHistoryLocalDev } from './local-dev/seed-ap-history';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
 import { seedStarterGradingEvaluations } from './local-dev/starter-grading-evaluations';
+import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { truncateAllPublicTables } from './local-dev/truncate-all';
 import { enableClassInsightsForOrganizations } from './local-dev/class-insights';
 import {
@@ -72,6 +74,23 @@ try {
   console.time('synthetic');
   const context = await seedSyntheticLocalDevData(prisma);
   console.timeEnd('synthetic');
+
+  // Additive AP History seed. Isolated in its own try/catch so a failure here
+  // can never abort or corrupt the rest of the local-dev/preview seed data.
+  console.time('ap-history');
+  try {
+    await seedApHistoryLocalDev(prisma, context.organizationId);
+  } catch (apHistoryError) {
+    console.warn(
+      '⚠️  AP History seed skipped (non-fatal); other seed data is unaffected:',
+      apHistoryError
+    );
+  }
+  console.timeEnd('ap-history');
+
+  console.time('ap-history');
+  await seedApHistoryLibrary(prisma, LOCAL_DEV_ORG_ID);
+  console.timeEnd('ap-history');
 
   console.time('grading-evaluations');
   const evaluationSummary = await seedStarterGradingEvaluations(prisma, {

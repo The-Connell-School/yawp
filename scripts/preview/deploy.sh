@@ -675,6 +675,12 @@ run_tooling_if_needed() {
   if [[ "$DATABASE_CREATED" == "0" && "$fingerprint" == "$previous_fingerprint" && -z "$missing_artifacts" ]]; then
     echo "Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate."
     TOOLING_CHANGED=0
+    # Even when skipping full tooling, always run idempotent seeds that must
+    # keep preview data current with the codebase (e.g., AP History library).
+    if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
+      echo "Running AP History library seed on existing preview database (skip path)."
+      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && bun run seed-ap-history-library'
+    fi
     return 0
   fi
 
@@ -716,6 +722,11 @@ run_tooling_if_needed() {
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
+  fi
+  # Always (idempotently) seed the AP History assignment type and prompt library so
+  # previews backed by an existing database pick up newly added prompts/sections.
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
+    tooling_command+=' && bun run seed-ap-history-library'
   fi
 
   "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"

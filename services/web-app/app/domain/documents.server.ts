@@ -1,3 +1,4 @@
+import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 
 export class DocumentCreationError extends Error {}
@@ -92,6 +93,7 @@ type CreateDocumentInput = {
   assignmentTypeId: string;
   assignmentId?: string | null;
   classAssignmentId?: string | null;
+  apHistorySnapshot?: unknown;
 };
 
 type CreatedDocument = {
@@ -234,6 +236,11 @@ export async function createDocumentForAssignmentType(
       ...(input.assignmentId ? { assignmentId: input.assignmentId } : {}),
       ...(input.classAssignmentId
         ? { classAssignmentId: input.classAssignmentId }
+        : {}),
+      ...(input.apHistorySnapshot
+        ? {
+            apHistorySnapshot: input.apHistorySnapshot as Prisma.InputJsonValue,
+          }
         : {}),
       assignmentModuleSessions: {
         create: buildAssignmentModuleSessionCreateData(assignmentModules),
