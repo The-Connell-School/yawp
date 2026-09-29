@@ -178,7 +178,8 @@ describe('migration integration (real Postgres)', () => {
       Assignment: dumpTableRows('Assignment'),
     };
     function hash(tbl: string) {
-      return run('psql', ['-t', '-A', DB, '-c', `SELECT md5(COALESCE(string_agg(row_to_json(t)::text, '' ORDER BY 1), '')) FROM (SELECT * FROM "${tbl}") t;`]).stdout.trim().split('\n').pop();
+      // Use jsonb text form for deterministic key ordering
+      return run('psql', ['-t', '-A', DB, '-c', `SELECT md5(COALESCE(string_agg((to_jsonb(t))::text, '' ORDER BY id), '')) FROM (SELECT * FROM "${tbl}" ORDER BY id) t;`]).stdout.trim().split('\n').pop();
     }
     const preHash = { Rubric: hash('Rubric'), AssignmentType: hash('AssignmentType'), Assignment: hash('Assignment'), RubricRevision: hash('RubricRevision') };
     // Submission snapshot before applying migrations
