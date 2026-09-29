@@ -187,7 +187,6 @@ BEGIN
     FROM lib_types l
     JOIN lib_rev r ON r.rubric_name = l.rubric_name
     ON CONFLICT ("assignmentTypeId") DO NOTHING
-    RETURNING "assignmentTypeId","rubricRevisionId"
   );
   -- Record previous pointers before updating them to baseline revisions
   INSERT INTO "InternalRubricCurrentPointerRestore" ("rubricId","previousRevisionId")
