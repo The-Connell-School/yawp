@@ -260,6 +260,8 @@ BEGIN
   ON CONFLICT ("assignmentTypeId") DO NOTHING;
 
   -- 5) Pin existing assignments to their baseline (library or per-type).
+  -- Temporarily disable immutability to perform the one-time backfill safely.
+  ALTER TABLE "Assignment" DISABLE TRIGGER "internal_assignment_rubric_pin";
   LOOP
     CREATE TEMP TABLE IF NOT EXISTS "__tmp_pin_assignments_batch" (
       assignment_id TEXT PRIMARY KEY,
@@ -312,6 +314,7 @@ BEGIN
 
     EXIT WHEN rows_changed = 0;
   END LOOP;
+  ALTER TABLE "Assignment" ENABLE TRIGGER "internal_assignment_rubric_pin";
 
   -- Record unpinned assignments that deliberately remain on code defaults.
   INSERT INTO "InternalAssignmentRubricPinBackfill" ("assignmentId","selectedRevisionId","reason")
