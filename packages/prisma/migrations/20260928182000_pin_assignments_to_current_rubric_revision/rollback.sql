@@ -22,6 +22,12 @@ BEGIN
       SELECT 1 FROM "InternalAssignmentRubricPinBackfill" b
       WHERE b."assignmentId" = a.id
     );
+    -- Fallback: also clear any pins that still reference baseline/auto-created revisions
+    UPDATE "Assignment" a
+    SET "rubricRevisionId" = NULL
+    WHERE a."rubricRevisionId" IN (
+      SELECT id FROM "RubricRevision" WHERE "createdBy" IN ('baseline-capture','auto-revision')
+    );
 
     -- 3) Restore currentRevisionId to its prior value when it was moved by baseline/auto flows.
     -- If no prior value was recorded, clear only pointers that target baseline/auto-created revisions.
