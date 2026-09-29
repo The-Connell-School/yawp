@@ -57,6 +57,14 @@ describe('Strode ENG 101 Essay 1 rubric', () => {
     expect(gi.includes('\\n')).toBe(false);
   });
 
+  test('gradingInstructions contains required spec wording', () => {
+    const gi = schema.promptConfig.gradingInstructions ?? '';
+    expect(gi.includes('Never imply doubt about whether the observation happened')).toBe(true);
+    expect(gi.includes('Never call a student')).toBe(true);
+    expect(gi.includes('Mechanics come last')).toBe(true);
+    expect(gi.includes('Describe the effect on the reader, not on the grade')).toBe(true);
+  });
+
   test('schema parses and round-trips via formatRubricSchema', () => {
     const parsed = parseRubricSchema(schema);
     expect(parsed.ok).toBe(true);
