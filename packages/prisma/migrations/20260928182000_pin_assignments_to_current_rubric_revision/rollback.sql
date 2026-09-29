@@ -44,12 +44,6 @@ BEGIN
     END
     $restore$;
 
-    -- Drop auto-revision triggers/functions introduced by the baseline capture early to avoid firing during restores.
-    DROP TRIGGER IF EXISTS yawp_auto_rubric_revision_on_update ON "Rubric";
-    DROP FUNCTION IF EXISTS yawp_auto_rubric_revision_on_update();
-    DROP TRIGGER IF EXISTS yawp_auto_assignment_type_baseline_on_update ON "AssignmentType";
-    DROP FUNCTION IF EXISTS yawp_auto_assignment_type_baseline_on_update();
-
     -- 4) Drop baseline/backfill tables first to avoid FK violations.
     DROP TABLE IF EXISTS "AssignmentTypeRubricBaseline";
     DROP TABLE IF EXISTS "InternalAssignmentRubricPinBackfill";
@@ -92,7 +86,7 @@ BEGIN
     CREATE TRIGGER rubric_revision_immutable BEFORE UPDATE OR DELETE ON "RubricRevision"
     FOR EACH ROW EXECUTE FUNCTION internal_impersonation_audit_append_only();
 
-    -- 6) Remove any remaining auto-revision triggers/functions (redundant safety).
+    -- 6) Remove auto-revision triggers/functions introduced by the baseline capture.
     DROP TRIGGER IF EXISTS yawp_auto_rubric_revision_on_update ON "Rubric";
     DROP FUNCTION IF EXISTS yawp_auto_rubric_revision_on_update();
     DROP TRIGGER IF EXISTS yawp_auto_assignment_type_baseline_on_update ON "AssignmentType";
