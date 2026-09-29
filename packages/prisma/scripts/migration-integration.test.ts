@@ -9,6 +9,8 @@ const PRISMA_DIR = join(import.meta.dir, '..');
 const ROOT = join(PRISMA_DIR, '..', '..');
 const DB = process.env.DATABASE_URL || 'postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration';
 const ADMIN_DB = (() => { const u = new URL(DB); u.pathname = '/postgres'; return u.toString(); })();
+const PATH_WITH_ROOT_BIN = `${join(ROOT, 'node_modules', '.bin')}:${process.env.PATH || ''}`;
+const NODE_PATH_WITH_ROOT = `${join(ROOT, 'node_modules')}${process.env.NODE_PATH ? `:${process.env.NODE_PATH}` : ''}`;
 
 function run(cmd: string, args: string[], cwd?: string, env?: Record<string, string>) {
   const res = spawnSync(cmd, args, {
@@ -66,14 +68,14 @@ function setupTempCopy(excludeMigrations: string[] = []) {
 }
 
 function prismaDeploy(cwd: string) {
-  const res = run('bun', ['prisma', 'migrate', 'deploy'], cwd);
+  const res = run('bun', ['run', 'prisma', 'migrate', 'deploy'], cwd, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
   if (res.status !== 0) {
     throw new Error(`migrate deploy failed: ${res.status}\n${res.stderr}\n${res.stdout}`);
   }
 }
 
 function prismaDeployExpectFail(cwd: string) {
-  const res = run('bun', ['prisma', 'migrate', 'deploy'], cwd);
+  const res = run('bun', ['run', 'prisma', 'migrate', 'deploy'], cwd, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
   expect(res.status).not.toBe(0);
   return { stderr: res.stderr, stdout: res.stdout };
 }
@@ -106,6 +108,14 @@ describe('migration integration (real Postgres)', () => {
       calibrationNotes: 'None',
     };
     psql(`
+      -- Minimal ownership graph to satisfy Document ownership CHECKs
+      INSERT INTO "Organization" ("id","createdAt","updatedAt","name")
+      VALUES ('org-1', now(), now(), 'Test Org');
+      INSERT INTO "User" ("id","createdAt","updatedAt","email","name","isAdmin","isSuperAdmin")
+      VALUES ('user-1', now(), now(), 'user1@example.com', 'User One', false, false);
+      INSERT INTO "OrgMembership" ("id","createdAt","userId","organizationId","role","isOrgOwner","isActive")
+      VALUES ('mem-1', now(), 'user-1', 'org-1', 'STUDENT', false, true);
+
       INSERT INTO "Rubric" ("id","createdAt","updatedAt","name","title","schemaJson")
       VALUES ('rub-1', now(), now(), 'lib-shared', 'Shared Library Rubric', '${JSON.stringify(libSchema).replaceAll("'", "''")}'::jsonb);
       INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position","rubricId")
@@ -123,8 +133,8 @@ describe('migration integration (real Postgres)', () => {
              ('a-nj-1', now(), now(), 't-default', 'No JSON 1'),
              ('a-nj-2', now(), now(), 't-default', 'No JSON 2');
       -- Minimal document/submission to prove grades untouched
-      INSERT INTO "Document" ("id","createdAt","updatedAt","revision","title","assignmentTypeId","assignmentId")
-      VALUES ('doc-1', now(), now(), 0, 'Doc', 't-per', 'a-per-1');
+      INSERT INTO "Document" ("id","createdAt","updatedAt","revision","title","assignmentTypeId","assignmentId","membershipId")
+      VALUES ('doc-1', now(), now(), 0, 'Doc', 't-per', 'a-per-1', 'mem-1');
       INSERT INTO "Submission" ("id","createdAt","updatedAt","title","text","html","submittedAt","score","rubricScores","overallScore","numericPercentage","documentId")
       VALUES ('sub-1', now(), now(), 'T', 'txt', '<p>t</p>', now(), '18/30', '{"engagement_with_prompt":{"score":18}}'::jsonb, 18, NULL, 'doc-1');
     `);
@@ -158,7 +168,7 @@ describe('migration integration (real Postgres)', () => {
     expect(fail1.stderr + fail1.stdout).toContain('schemajson');
     // Resolve rolled back migration and assert no partials
     {
-      const rr = run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], broken);
+      const rr = run('bun', ['run', 'prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], broken, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
       expect(rr.status).toBe(0);
     }
     const baselineExists = run('psql', ['-t', '-A', DB, '-c', `SELECT to_regclass('public."AssignmentTypeRubricBaseline"') IS NOT NULL;`]).stdout.trim().split('\n').pop();
@@ -168,7 +178,7 @@ describe('migration integration (real Postgres)', () => {
 
     // Apply correct migrations
     const current = setupTempCopy();
-    const res2 = run('bun', ['prisma', 'migrate', 'deploy'], current);
+    const res2 = run('bun', ['run', 'prisma', 'migrate', 'deploy'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
     expect(res2.status).toBe(0);
 
     // (a) Pins for library/per-type; no-JSON unpinned with reason
@@ -305,7 +315,7 @@ describe('migration integration (real Postgres)', () => {
     }
     const current = setupTempCopy();
     const start = Date.now();
-    const res = run('bun', ['prisma', 'migrate', 'deploy'], current);
+    const res = run('bun', ['run', 'prisma', 'migrate', 'deploy'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
     const elapsed = Date.now() - start;
     // Expect failure within ~5-7 seconds due to lock_timeout
     expect(res.status).not.toBe(0);
@@ -334,18 +344,41 @@ describe('migration integration (real Postgres)', () => {
     // Resolve and re-deploy after lock timeout
     {
       const mig1Present = run('psql', ['-t', '-A', DB, '-c', `SELECT EXISTS (SELECT 1 FROM "_prisma_migrations" WHERE "migration_name"='20260928182000_pin_assignments_to_current_rubric_revision')`]).stdout.trim().split('\n').pop();
-      const r1 = run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260928182000_pin_assignments_to_current_rubric_revision'], current);
+      const r1 = run('bun', ['run', 'prisma', 'migrate', 'resolve', '--rolled-back', '20260928182000_pin_assignments_to_current_rubric_revision'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
       if (mig1Present === 't') expect(r1.status).toBe(0);
       else expect(r1.status).not.toBe(0);
     }
     {
       const mig2Present = run('psql', ['-t', '-A', DB, '-c', `SELECT EXISTS (SELECT 1 FROM "_prisma_migrations" WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture')`]).stdout.trim().split('\n').pop();
-      const r2 = run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], current);
+      const r2 = run('bun', ['run', 'prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
       if (mig2Present === 't') expect(r2.status).toBe(0);
       else expect(r2.status).not.toBe(0);
     }
     prismaDeploy(current);
-  });
+    // Deterministic final-state assertions after recovery
+    // Both #383 migrations applied and finished (not rolled back)
+    const mig1Healthy = jsonQuery(`
+      SELECT COALESCE(BOOL_AND("finished_at" IS NOT NULL AND "rolled_back_at" IS NULL), false)
+      FROM "_prisma_migrations" WHERE "migration_name"='20260928182000_pin_assignments_to_current_rubric_revision'
+    `);
+    const mig2Healthy = jsonQuery(`
+      SELECT COALESCE(BOOL_AND("finished_at" IS NOT NULL AND "rolled_back_at" IS NULL), false)
+      FROM "_prisma_migrations" WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture'
+    `);
+    expect(mig1Healthy).toBe(true);
+    expect(mig2Healthy).toBe(true);
+    // Baseline table exists now
+    const baselineNow = run('psql', ['-t', '-A', DB, '-c', `SELECT to_regclass('public."AssignmentTypeRubricBaseline"') IS NOT NULL;`]).stdout.trim().split('\n').pop();
+    expect(baselineNow).toBe('t');
+    // Pin trigger exists
+    const pinTriggerAfter = run('psql', ['-t', '-A', DB, '-c', `SELECT COUNT(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE c.relname='Assignment' AND t.tgname='internal_assignment_rubric_pin';`]).stdout.trim().split('\n').pop();
+    expect(pinTriggerAfter).toBe('1');
+    // Code-default pin audit row recorded for a1 (type has no rubric json/library)
+    const codeDefaultCount = jsonQuery(`
+      SELECT (SELECT COUNT(*) FROM "InternalAssignmentRubricPinBackfill" WHERE "assignmentId"='a1' AND "reason"='code-default' AND "selectedRevisionId" IS NULL)
+    `);
+    expect(codeDefaultCount).toBe(1);
+  }, 30000);
 
   test('canonical JSON SQL fingerprint matches app fingerprint()', () => {
     // Fresh DB with migrations applied to ensure canonical_json() exists
