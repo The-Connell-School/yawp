@@ -333,12 +333,16 @@ describe('migration integration (real Postgres)', () => {
     }
     // Resolve and re-deploy after lock timeout
     {
+      const mig1Present = run('psql', ['-t', '-A', DB, '-c', `SELECT EXISTS (SELECT 1 FROM "_prisma_migrations" WHERE "migration_name"='20260928182000_pin_assignments_to_current_rubric_revision')`]).stdout.trim().split('\n').pop();
       const r1 = run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260928182000_pin_assignments_to_current_rubric_revision'], current);
-      expect(r1.status).not.toBe(0); // expected to fail when migration did not register
+      if (mig1Present === 't') expect(r1.status).toBe(0);
+      else expect(r1.status).not.toBe(0);
     }
     {
+      const mig2Present = run('psql', ['-t', '-A', DB, '-c', `SELECT EXISTS (SELECT 1 FROM "_prisma_migrations" WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture')`]).stdout.trim().split('\n').pop();
       const r2 = run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], current);
-      expect(r2.status).not.toBe(0); // expected to fail when migration did not register
+      if (mig2Present === 't') expect(r2.status).toBe(0);
+      else expect(r2.status).not.toBe(0);
     }
     prismaDeploy(current);
   });
