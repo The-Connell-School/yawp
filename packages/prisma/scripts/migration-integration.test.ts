@@ -336,6 +336,10 @@ describe('migration integration (real Postgres)', () => {
   });
 
   test('canonical JSON SQL fingerprint matches app fingerprint()', () => {
+    // Fresh DB with migrations applied to ensure canonical_json() exists
+    try { adminPsql('DROP DATABASE IF EXISTS yawp_migration_integration WITH (FORCE)'); } catch {}
+    adminPsql('CREATE DATABASE yawp_migration_integration');
+    prismaDeploy(PRISMA_DIR);
     const cases: unknown[] = [
       { b: true, a: 1.0, z: null, m: {}, n: [], c: { y: 'x', x: 'y' } },
       { obj: { nested: { a: 1, b: 0.5, c: [3, 2, 1] } }, arr: [ { k: 2 }, { k: 1 } ] },
