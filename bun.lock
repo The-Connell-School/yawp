@@ -4,9 +4,6 @@
   "workspaces": {
     "": {
       "name": "app",
-      "devDependencies": {
-        "yaml": "^2.4.5",
-      },
     },
     "packages/prisma": {
       "name": "@app/prisma",
