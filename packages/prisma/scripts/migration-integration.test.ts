@@ -328,12 +328,38 @@ describe('migration integration (real Postgres)', () => {
     // revert per-type edit
     psql(`UPDATE "AssignmentType" SET "rubricJson"='${JSON.stringify(typeSchema.rubric).replaceAll("'", "''")}'::jsonb WHERE id='t-per'`);
 
-    // NOTE: We considered adding a post-deploy publisher rev and pinning a new assignment to it,
-    // then asserting survival across rollback. However, "RubricRevision" has an append-only
-    // immutability trigger (internal_impersonation_audit_append_only) that prevents deletes.
-    // Leaving that extra publisher revision in place would break the strict post-rollback
-    // full-table hash equality for "RubricRevision". To preserve the invariant while keeping
-    // assertions strict, we skip creating the extra publisher revision here.
+    // Post-deploy publisher-pin scenario: add a publisher revision and pin a new library assignment to it.
+    // This proves the rollback fallback spares publisher pins (not baseline/auto) and that the
+    // baseline-capture pointer remains untouched pre-rollback.
+    const baselineCurrentId = jsonQuery(`
+      SELECT r."currentRevisionId"
+      FROM "Rubric" r
+      JOIN "RubricRevision" rr ON rr.id = r."currentRevisionId"
+      WHERE r.id='rub-1' AND rr."createdBy"='baseline-capture'
+    `);
+    const libSchemaJsonPub3 = JSON.stringify({
+      name: 'lib-shared',
+      title: 'Publisher Variant 3',
+      scoringScale: { type: 'rubric_points', minScore: 0, maxScore: 30, step: 10 },
+      rubric: { categories: [{ key: 'engagement_with_prompt', label: 'Engagement (pub3)', description: 'Shows up', weight: 1, scoreLabels: [{ value: 0, label: 'Absent' }, { value: 10, label: 'Hardly' }, { value: 20, label: 'Showed up' }, { value: 30, label: 'All in' }] }] }
+    }).replaceAll("'", "''");
+    psql(`
+      INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason","createdAt")
+      VALUES ('rev-pub-3','lib-shared',2,'${libSchemaJsonPub3}'::jsonb,
+              encode(sha256(convert_to(('${libSchemaJsonPub3}'::jsonb)::text,'UTF8')),'hex'),
+              'req-pub-3',
+              encode(sha256(convert_to(('${libSchemaJsonPub3}'::jsonb)::text,'UTF8')),'hex'),
+              'publisher-x','Seeded after deploy', now());
+      INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt","rubricRevisionId")
+      VALUES ('a-lib-4', now(), now(), 't-lib-b', 'Lib B 3 (pub3)', 'rev-pub-3');
+    `);
+    const lib4PinnedPre = jsonQuery(`SELECT "rubricRevisionId"='rev-pub-3' FROM "Assignment" WHERE id='a-lib-4'`);
+    expect(lib4PinnedPre).toBe(true);
+    const pointerUntouchedPre = jsonQuery(`
+      SELECT "currentRevisionId"='${baselineCurrentId}'
+      FROM "Rubric" WHERE id='rub-1'
+    `);
+    expect(pointerUntouchedPre).toBe(true);
 
     // (e) Changing a pin raises
     const targetRev = jsonQuery(`
@@ -362,17 +388,26 @@ describe('migration integration (real Postgres)', () => {
     expect(per3Cleared).toBe(true);
     const lib2StillPinned = jsonQuery(`SELECT "rubricRevisionId"='rev-pub-2' FROM "Assignment" WHERE id='a-lib-2'`);
     expect(lib2StillPinned).toBe(true);
+    const lib4StillPinned = jsonQuery(`SELECT "rubricRevisionId"='rev-pub-3' FROM "Assignment" WHERE id='a-lib-4'`);
+    expect(lib4StillPinned).toBe(true);
     // Clean up post-rollback-only rows before hash compare
-    psql(`DELETE FROM "Assignment" WHERE id IN ('a-per-3');`);
+    psql(`DELETE FROM "Assignment" WHERE id IN ('a-per-3','a-lib-4');`);
     // Zero-diff schema vs pre-migration
     const schemaAfter = normalizeSchemaDump(run('pg_dump', ['-s', DB]).stdout);
     expect(schemaAfter).toBe(schemaPre);
     // Data byte-identical vs pre for core tables
+    function hashWhere(tbl: string, whereSql?: string) {
+      const where = whereSql ? `WHERE ${whereSql}` : '';
+      return run('psql', ['-t', '-A', DB, '-c',
+        `SELECT md5(COALESCE(string_agg((to_jsonb(t))::text, '' ORDER BY id), ''))
+         FROM (SELECT * FROM "${tbl}" ${where} ORDER BY id) t;`]).stdout.trim().split('\n').pop();
+    }
     const postHash = {
       Rubric: hash('Rubric'),
       AssignmentType: hash('AssignmentType'),
       Assignment: hash('Assignment'),
-      RubricRevision: hash('RubricRevision'),
+      // Exclude rev-pub-3 which is intentionally preserved after rollback
+      RubricRevision: hashWhere('RubricRevision', `id <> 'rev-pub-3'`),
     };
     try {
       expect(postHash).toEqual(preHash);
@@ -475,6 +510,36 @@ describe('migration integration (real Postgres)', () => {
     expect(currentIsBaseline2).toBe(true);
     const restoreRows2 = jsonQuery(`SELECT COUNT(*) FROM "InternalRubricCurrentPointerRestore" WHERE "rubricId"='rub-1'`);
     expect(restoreRows2).toBe(1);
+    // (h2) No-op check for direct SQL replay: re-run both migrations' SQL files and verify no changes.
+    const replayBefore = {
+      rubRev: jsonQuery(`SELECT COUNT(*) FROM "RubricRevision"`),
+      baseline: jsonQuery(`SELECT COUNT(*) FROM "AssignmentTypeRubricBaseline"`),
+      audit: jsonQuery(`SELECT COUNT(*) FROM "InternalAssignmentRubricPinBackfill"`),
+      restore: jsonQuery(`SELECT COUNT(*) FROM "InternalRubricCurrentPointerRestore"`),
+      pinned: jsonQuery(`SELECT COUNT(*) FROM "Assignment" WHERE "rubricRevisionId" IS NOT NULL`),
+      hRubric: hash('Rubric'),
+      hType: hash('AssignmentType'),
+      hAssign: hash('Assignment'),
+      hRev: hash('RubricRevision'),
+    };
+    const m1File = join(current, 'migrations', '20260928182000_pin_assignments_to_current_rubric_revision', 'migration.sql');
+    const m2File = join(current, 'migrations', '20260929034000_assignment_rubric_baseline_capture', 'migration.sql');
+    const rps1 = run('psql', ['-v', 'ON_ERROR_STOP=1', DB, '-f', m1File]);
+    expect(rps1.status).toBe(0);
+    const rps2 = run('psql', ['-v', 'ON_ERROR_STOP=1', DB, '-f', m2File]);
+    expect(rps2.status).toBe(0);
+    const replayAfter = {
+      rubRev: jsonQuery(`SELECT COUNT(*) FROM "RubricRevision"`),
+      baseline: jsonQuery(`SELECT COUNT(*) FROM "AssignmentTypeRubricBaseline"`),
+      audit: jsonQuery(`SELECT COUNT(*) FROM "InternalAssignmentRubricPinBackfill"`),
+      restore: jsonQuery(`SELECT COUNT(*) FROM "InternalRubricCurrentPointerRestore"`),
+      pinned: jsonQuery(`SELECT COUNT(*) FROM "Assignment" WHERE "rubricRevisionId" IS NOT NULL`),
+      hRubric: hash('Rubric'),
+      hType: hash('AssignmentType'),
+      hAssign: hash('Assignment'),
+      hRev: hash('RubricRevision'),
+    };
+    expect(replayAfter).toEqual(replayBefore);
     // (i) Now insert a new assignment and verify auto-pin
     psql(`INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a-per-4', now(), now(), 't-per','New');`);
     const pinnedNew = jsonQuery(`SELECT "rubricRevisionId" IS NOT NULL FROM "Assignment" WHERE id='a-per-4'`);
