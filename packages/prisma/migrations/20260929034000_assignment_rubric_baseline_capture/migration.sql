@@ -193,7 +193,7 @@ BEGIN
     INSERT INTO "AssignmentTypeRubricBaseline" ("assignmentTypeId","rubricRevisionId")
     SELECT DISTINCT l.assignment_type_id, r.id
     FROM lib_types l
-    JOIN lib_rev r ON r.rubric_name = l.rubric_name
+    JOIN lib_rev r ON r."rubricName" = l.rubric_name
     ON CONFLICT ("assignmentTypeId") DO NOTHING
   ), restore AS (
     INSERT INTO "InternalRubricCurrentPointerRestore" ("rubricId","previousRevisionId")
