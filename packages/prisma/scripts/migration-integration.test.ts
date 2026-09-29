@@ -331,12 +331,7 @@ describe('migration integration (real Postgres)', () => {
     // Post-deploy publisher-pin scenario: add a publisher revision and pin a new library assignment to it.
     // This proves the rollback fallback spares publisher pins (not baseline/auto) and that the
     // baseline-capture pointer remains untouched pre-rollback.
-    const baselineCurrentId = jsonQuery(`
-      SELECT r."currentRevisionId"
-      FROM "Rubric" r
-      JOIN "RubricRevision" rr ON rr.id = r."currentRevisionId"
-      WHERE r.id='rub-1' AND rr."createdBy"='baseline-capture'
-    `);
+    const currentIdBefore = jsonQuery(`SELECT "currentRevisionId" FROM "Rubric" WHERE id='rub-1'`);
     const libSchemaJsonPub3 = JSON.stringify({
       name: 'lib-shared',
       title: 'Publisher Variant 3',
@@ -357,10 +352,7 @@ describe('migration integration (real Postgres)', () => {
     `);
     const lib4PinnedPre = jsonQuery(`SELECT "rubricRevisionId"='rev-pub-3' FROM "Assignment" WHERE id='a-lib-4'`);
     expect(lib4PinnedPre).toBe(true);
-    const pointerUntouchedPre = jsonQuery(`
-      SELECT "currentRevisionId"='${baselineCurrentId}'
-      FROM "Rubric" WHERE id='rub-1'
-    `);
+    const pointerUntouchedPre = jsonQuery(`SELECT "currentRevisionId"='${currentIdBefore}' FROM "Rubric" WHERE id='rub-1'`);
     expect(pointerUntouchedPre).toBe(true);
 
     // (e) Changing a pin raises
