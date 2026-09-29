@@ -6,7 +6,7 @@ SET lock_timeout = '5s';
 -- - Strings: escape via to_jsonb(text)::text
 -- - Numbers: minimal representation (1.0 -> 1, 0.50 -> 0.5)
 -- This function is kept because triggers below depend on it; rollback drops it.
-CREATE OR REPLACE FUNCTION canonical_json(value jsonb)
+CREATE OR REPLACE FUNCTION canonical_json(p_value jsonb)
 RETURNS text
 LANGUAGE plpgsql
 IMMUTABLE
@@ -20,25 +20,25 @@ DECLARE
   first boolean;
   num_text text;
 BEGIN
-  IF value IS NULL THEN
+  IF p_value IS NULL THEN
     RETURN 'null';
   END IF;
-  CASE jsonb_typeof(value)
+  CASE jsonb_typeof(p_value)
     WHEN 'null' THEN
       RETURN 'null';
     WHEN 'boolean' THEN
-      RETURN value::text;
+      RETURN p_value::text;
     WHEN 'number' THEN
       -- Parse as numeric to trim trailing zeros; emit minimal string form
-      num_text := ((value #>> '{}')::numeric)::text;
+      num_text := ((p_value #>> '{}')::numeric)::text;
       RETURN num_text;
     WHEN 'string' THEN
       -- Quote and escape using JSON rules
-      RETURN to_jsonb(value #>> '{}')::text;
+      RETURN to_jsonb(p_value #>> '{}')::text;
     WHEN 'array' THEN
       out := '[';
       first := true;
-      FOR v IN SELECT value FROM jsonb_array_elements(value) LOOP
+      FOR v IN SELECT value FROM jsonb_array_elements(p_value) LOOP
         IF NOT first THEN
           out := out || ',';
         END IF;
@@ -52,7 +52,7 @@ BEGIN
       first := true;
       FOR k, v IN
         SELECT key, value
-        FROM jsonb_each(value)
+        FROM jsonb_each(p_value)
         ORDER BY key COLLATE "C"
       LOOP
         IF NOT first THEN
@@ -65,7 +65,7 @@ BEGIN
       RETURN out;
   END CASE;
   -- Should be unreachable
-  RETURN value::text;
+  RETURN p_value::text;
 END
 $$;
 

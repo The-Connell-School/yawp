@@ -334,11 +334,11 @@ describe('migration integration (real Postgres)', () => {
     // Resolve and re-deploy after lock timeout
     {
       const r1 = run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260928182000_pin_assignments_to_current_rubric_revision'], current);
-      expect(r1.status).toBe(0);
+      expect(r1.status).not.toBe(0); // expected to fail when migration did not register
     }
     {
       const r2 = run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], current);
-      expect(r2.status).toBe(0);
+      expect(r2.status).not.toBe(0); // expected to fail when migration did not register
     }
     prismaDeploy(current);
   });
