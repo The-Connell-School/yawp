@@ -310,7 +310,7 @@ describe('migration integration (real Postgres)', () => {
       expect(postHash).toEqual(preHash);
     } catch (e) {
       // Dump surgical diffs for diagnosis
-      function diffTable(tbl: 'Rubric' | 'AssignmentType' | 'Assignment', keys: string[]) {
+      function diffTable(tbl: 'Rubric' | 'AssignmentType' | 'Assignment', keys: string[] | 'ALL') {
         const postRows = dumpTableRows(tbl);
         const preIndex = new Map(preRows[tbl].map((r: any) => [r.id, r]));
         const diffs: any[] = [];
@@ -318,7 +318,8 @@ describe('migration integration (real Postgres)', () => {
           const prev = preIndex.get(cur.id);
           if (!prev) continue;
           const changed: Record<string, any> = {};
-          for (const k of keys) {
+          const useKeys = keys === 'ALL' ? Array.from(new Set([...Object.keys(prev), ...Object.keys(cur)])) : keys;
+          for (const k of useKeys) {
             const a = prev[k];
             const b = cur[k];
             if (JSON.stringify(a) !== JSON.stringify(b)) changed[k] = { before: a, after: b };
@@ -339,7 +340,7 @@ describe('migration integration (real Postgres)', () => {
       }
       diffTable('Rubric', ['updatedAt', 'currentRevisionId', 'schemaJson', 'name', 'title']);
       diffTable('AssignmentType', ['updatedAt', 'rubricId', 'scoringScaleJson', 'rubricJson', 'gradingPromptConfigJson', 'gradingOutputSchemaJson', 'gradingCalibrationNotes', 'title', 'kind', 'position']);
-      diffTable('Assignment', ['updatedAt', 'assignmentTypeId', 'prompt', 'rubricRevisionId']);
+      diffTable('Assignment', 'ALL');
       throw e;
     }
     // Migration receipts removed
