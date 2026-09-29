@@ -15,11 +15,12 @@ BEGIN
     EXCEPTION WHEN undefined_object THEN NULL;
     END;
 
-    -- Clear pins only for revisions created by baseline/auto flows.
+    -- Clear pins recorded by the backfill audit table (assignments pinned by #383).
     UPDATE "Assignment" a
     SET "rubricRevisionId" = NULL
-    WHERE a."rubricRevisionId" IN (
-      SELECT id FROM "RubricRevision" WHERE "createdBy" IN ('baseline-capture','auto-revision')
+    WHERE EXISTS (
+      SELECT 1 FROM "InternalAssignmentRubricPinBackfill" b
+      WHERE b."assignmentId" = a.id
     );
 
     -- 3) Restore currentRevisionId to its prior value when it was moved by baseline/auto flows.
