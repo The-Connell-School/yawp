@@ -272,10 +272,7 @@ describe('migration integration (real Postgres)', () => {
     const afterCounts = jsonQuery(`SELECT (SELECT COUNT(*) FROM "RubricRevision")`);
     expect(typeof afterCounts).toBe('number');
 
-    // (c) Inserting a new assignment auto-pins
-    psql(`INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a-per-3', now(), now(), 't-per','New');`);
-    const pinnedNew = jsonQuery(`SELECT "rubricRevisionId" IS NOT NULL FROM "Assignment" WHERE id='a-per-3'`);
-    expect(pinnedNew).toBe(true);
+    // (c) Inserting a new assignment auto-pins (moved to after rollback/re-apply to avoid affecting rollback equality)
 
     // (d) (moved later) Updating schemaJson / rubricJson creates version+1 and moves baseline/current
 
@@ -370,6 +367,10 @@ describe('migration integration (real Postgres)', () => {
     `);
     expect(migReceiptsAfterReapply.m1).toBe(true);
     expect(migReceiptsAfterReapply.m2).toBe(true);
+    // (i) Now insert a new assignment and verify auto-pin
+    psql(`INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a-per-3', now(), now(), 't-per','New');`);
+    const pinnedNew = jsonQuery(`SELECT "rubricRevisionId" IS NOT NULL FROM "Assignment" WHERE id='a-per-3'`);
+    expect(pinnedNew).toBe(true);
   }, 30000);
 
   test('lock_timeout enforced under migrate deploy', () => {
