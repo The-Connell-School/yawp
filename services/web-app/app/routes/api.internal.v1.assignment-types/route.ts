@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { internalAssignmentTypes } from '~/utils/internal-assignment-types-runtime.server';
 
 export const loader = ({ request }: LoaderFunctionArgs) => internalAssignmentTypes.list(request);

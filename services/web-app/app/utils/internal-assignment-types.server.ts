@@ -107,31 +107,29 @@ export class InternalAssignmentTypes {
     // Fallback: compute per-row counts precisely
     const countsByType: Record<string, number> = {};
     for (const row of types) {
-      const current =
-        row.rubric?.currentRevision ??
-        row.rubricBaseline?.rubricRevision ??
-        null;
+      const current = row.rubric?.currentRevision ?? row.rubricBaseline?.rubricRevision ?? null;
       if (!current) {
         countsByType[row.id] = 0;
         continue;
       }
-      const rubricName =
-        row.rubric?.name ??
-        row.rubricBaseline?.rubricRevision.rubricName ??
-        null;
+      const rubricName = row.rubric?.name ?? row.rubricBaseline?.rubricRevision.rubricName ?? null;
       if (!rubricName) {
         countsByType[row.id] = 0;
         continue;
       }
-      const [{ n }] = (await this.db.$queryRaw<{ n: number }[]>`
-        SELECT COUNT(*)::int AS n
-        FROM "Assignment" a
-        JOIN "RubricRevision" rv ON rv.id = a."rubricRevisionId"
-        WHERE a."assignmentTypeId" = ${row.id}
-          AND rv."rubricName" = ${rubricName}
-          AND rv.version < ${current.version}
-      `).catch(() => [{ n: 0 }]);
-      countsByType[row.id] = n;
+      try {
+        const rows = await this.db.$queryRaw<{ n: number }[]>`
+          SELECT COUNT(*)::int AS n
+          FROM "Assignment" a
+          JOIN "RubricRevision" rv ON rv.id = a."rubricRevisionId"
+          WHERE a."assignmentTypeId" = ${row.id}
+            AND rv."rubricName" = ${rubricName}
+            AND rv.version < ${current.version}
+        `;
+        countsByType[row.id] = rows[0]?.n ?? 0;
+      } catch {
+        countsByType[row.id] = 0;
+      }
     }
     const items: AssignmentTypeListItem[] = types.map((t) => {
       const lib = t.rubric;
@@ -296,10 +294,10 @@ export class InternalAssignmentTypes {
       data: {
         rubricId: targetRubric.id,
         // Clear per-type JSON so the library rubric is authoritative
-        rubricJson: null,
-        scoringScaleJson: null,
-        gradingPromptConfigJson: null,
-        gradingOutputSchemaJson: null,
+        rubricJson: Prisma.DbNull,
+        scoringScaleJson: Prisma.DbNull,
+        gradingPromptConfigJson: Prisma.DbNull,
+        gradingOutputSchemaJson: Prisma.DbNull,
         gradingCalibrationNotes: null,
       },
     });
