@@ -191,20 +191,22 @@ BEGIN
     JOIN lib_rev r ON r.rubric_name = l.rubric_name
     ON CONFLICT ("assignmentTypeId") DO NOTHING
     RETURNING "assignmentTypeId","rubricRevisionId"
-  )
+  );
   -- Record previous pointers before updating them to baseline revisions
   INSERT INTO "InternalRubricCurrentPointerRestore" ("rubricId","previousRevisionId")
   SELECT rub.id, rub."currentRevisionId"
   FROM "Rubric" rub
-  JOIN lib_rev r ON rub.name = r.rubric_name
+  JOIN "RubricRevision" rr ON rr."rubricName" = rub.name AND rr."schemaJson" = rub."schemaJson"
   WHERE rub."currentRevisionId" IS NOT NULL
-    AND rub."currentRevisionId" <> r.id
+    AND rub."currentRevisionId" <> rr.id
   ON CONFLICT ("rubricId") DO NOTHING;
+  -- Advance current pointer to the baseline (the immutable snapshot matching current schema)
   UPDATE "Rubric" rub
-  SET "currentRevisionId" = r.id
-  FROM lib_rev r
-  WHERE rub.name = r.rubric_name
-    AND (rub."currentRevisionId" IS NULL OR rub."currentRevisionId" <> r.id);
+  SET "currentRevisionId" = rr.id
+  FROM "RubricRevision" rr
+  WHERE rr."rubricName" = rub.name
+    AND rr."schemaJson" = rub."schemaJson"
+    AND (rub."currentRevisionId" IS NULL OR rub."currentRevisionId" <> rr.id);
 
   -- 4) Baseline-capture for per-type rubrics (no library link) that have assignments.
   WITH per_types AS (
