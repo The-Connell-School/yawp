@@ -328,6 +328,14 @@ describe('migration integration (real Postgres)', () => {
         if (diffs.length) {
           console.log(`Diff for ${tbl}:` + JSON.stringify(diffs, null, 2));
         }
+        // Also list ids only in post or only in pre
+        const postIds = new Set(postRows.map((r: any) => r.id));
+        const preIds = new Set(preRows[tbl].map((r: any) => r.id));
+        const onlyPost = [...postIds].filter((id) => !preIds.has(id));
+        const onlyPre = [...preIds].filter((id) => !postIds.has(id));
+        if (onlyPost.length || onlyPre.length) {
+          console.log(`Row set diff for ${tbl}: onlyPost=${JSON.stringify(onlyPost)}, onlyPre=${JSON.stringify(onlyPre)}`);
+        }
       }
       diffTable('Rubric', ['updatedAt', 'currentRevisionId', 'schemaJson', 'name', 'title']);
       diffTable('AssignmentType', ['updatedAt', 'rubricId', 'scoringScaleJson', 'rubricJson', 'gradingPromptConfigJson', 'gradingOutputSchemaJson', 'gradingCalibrationNotes', 'title', 'kind', 'position']);
