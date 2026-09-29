@@ -22,19 +22,32 @@ BEGIN
       SELECT id FROM "RubricRevision" WHERE "createdBy" IN ('baseline-capture','auto-revision')
     );
 
-    -- 3) Reset currentRevisionId when it points to baseline/auto-created revisions.
-    UPDATE "Rubric" r
-    SET "currentRevisionId" = NULL
-    WHERE r."currentRevisionId" IS NOT NULL
-      AND EXISTS (
-        SELECT 1 FROM "RubricRevision" rr
-        WHERE rr.id = r."currentRevisionId"
-          AND rr."createdBy" IN ('baseline-capture','auto-revision')
-      );
+    -- 3) Restore currentRevisionId to its prior value when it was moved by baseline/auto flows.
+    -- If no prior value was recorded, clear only pointers that target baseline/auto-created revisions.
+    -- Prefer restore table when present.
+    DO $restore$
+    BEGIN
+      IF to_regclass('public."InternalRubricCurrentPointerRestore"') IS NOT NULL THEN
+        UPDATE "Rubric" r
+        SET "currentRevisionId" = irpr."previousRevisionId"
+        FROM "InternalRubricCurrentPointerRestore" irpr
+        WHERE irpr."rubricId" = r.id;
+      END IF;
+      UPDATE "Rubric" r
+      SET "currentRevisionId" = NULL
+      WHERE r."currentRevisionId" IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM "RubricRevision" rr
+          WHERE rr.id = r."currentRevisionId"
+            AND rr."createdBy" IN ('baseline-capture','auto-revision')
+        );
+    END
+    $restore$;
 
     -- 4) Drop baseline/backfill tables first to avoid FK violations.
     DROP TABLE IF EXISTS "AssignmentTypeRubricBaseline";
     DROP TABLE IF EXISTS "InternalAssignmentRubricPinBackfill";
+    DROP TABLE IF EXISTS "InternalRubricCurrentPointerRestore";
 
     -- 5) Delete revisions created by baseline/auto rewriters (temporarily relax immutability).
     BEGIN

@@ -83,6 +83,12 @@ CREATE TABLE IF NOT EXISTS "AssignmentTypeRubricBaseline" (
   "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Track prior rubric current pointers so rollback can restore publisher pins
+CREATE TABLE IF NOT EXISTS "InternalRubricCurrentPointerRestore" (
+  "rubricId" TEXT PRIMARY KEY REFERENCES "Rubric"("id") ON DELETE CASCADE,
+  "previousRevisionId" TEXT
+);
+
 -- Backfill audit table enhancements: permit reason and null selected id for code-default rows.
 ALTER TABLE "InternalAssignmentRubricPinBackfill" ADD COLUMN IF NOT EXISTS "reason" TEXT;
 DO $$ BEGIN
@@ -148,9 +154,12 @@ BEGIN
     FROM "AssignmentType" t
     JOIN "Rubric" r ON r.id = t."rubricId"
     WHERE EXISTS (SELECT 1 FROM "Assignment" a WHERE a."assignmentTypeId" = t.id)
+  ), lib_rubrics AS (
+    -- Deduplicate per rubric to avoid concurrent inserts for the same (rubricName, version)
+    SELECT DISTINCT rubric_name, schema_json FROM lib_types
   ), lib_missing AS (
-    SELECT l.*, COALESCE((SELECT MAX(version) FROM "RubricRevision" WHERE "rubricName" = l.rubric_name), 0) + 1 AS next_version
-    FROM lib_types l
+    SELECT lr.*, COALESCE((SELECT MAX(version) FROM "RubricRevision" WHERE "rubricName" = lr.rubric_name), 0) + 1 AS next_version
+    FROM lib_rubrics lr
   ), lib_created AS (
     INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
     SELECT
@@ -167,13 +176,14 @@ BEGIN
     WHERE NOT EXISTS (
       SELECT 1 FROM "RubricRevision" rr WHERE rr."rubricName" = m.rubric_name AND rr."schemaJson" = m.schema_json
     )
+    ON CONFLICT ("rubricName","version") DO NOTHING
     RETURNING "id","rubricName","version","schemaJson"
   ), lib_rev AS (
     -- Pick the inserted revision when created, otherwise reuse the existing identical row
     SELECT c.id, c."rubricName" AS rubric_name FROM lib_created c
     UNION ALL
-    SELECT rr.id, rr."rubricName" FROM lib_types l
-    JOIN "RubricRevision" rr ON rr."rubricName" = l.rubric_name AND rr."schemaJson" = l.schema_json
+    SELECT rr.id, rr."rubricName" FROM lib_rubrics lr
+    JOIN "RubricRevision" rr ON rr."rubricName" = lr.rubric_name AND rr."schemaJson" = lr.schema_json
   ), lib_map AS (
     INSERT INTO "AssignmentTypeRubricBaseline" ("assignmentTypeId","rubricRevisionId")
     SELECT DISTINCT l.assignment_type_id, r.id
@@ -182,6 +192,14 @@ BEGIN
     ON CONFLICT ("assignmentTypeId") DO NOTHING
     RETURNING "assignmentTypeId","rubricRevisionId"
   )
+  -- Record previous pointers before updating them to baseline revisions
+  INSERT INTO "InternalRubricCurrentPointerRestore" ("rubricId","previousRevisionId")
+  SELECT rub.id, rub."currentRevisionId"
+  FROM "Rubric" rub
+  JOIN lib_rev r ON rub.name = r.rubric_name
+  WHERE rub."currentRevisionId" IS NOT NULL
+    AND rub."currentRevisionId" <> r.id
+  ON CONFLICT ("rubricId") DO NOTHING;
   UPDATE "Rubric" rub
   SET "currentRevisionId" = r.id
   FROM lib_rev r
@@ -224,6 +242,7 @@ BEGIN
     WHERE NOT EXISTS (
       SELECT 1 FROM "RubricRevision" rr WHERE rr."rubricName" = m.rubric_name AND rr."schemaJson" = m.schema_json
     )
+    ON CONFLICT ("rubricName","version") DO NOTHING
     RETURNING "id","rubricName","version","schemaJson"
   ), per_rev AS (
     SELECT c.id, c."rubricName" AS rubric_name FROM per_created c

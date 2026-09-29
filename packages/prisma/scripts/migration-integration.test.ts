@@ -271,8 +271,16 @@ describe('migration integration (real Postgres)', () => {
       Assignment: hash('Assignment'),
       RubricRevision: hash('RubricRevision'),
     };
-    // Core revision table should be byte-identical; other tables may differ in non-essential metadata
-    expect(postHash.RubricRevision).toBe(preHash.RubricRevision);
+    expect(postHash).toEqual(preHash);
+    // Migration receipts removed
+    const migReceiptsAfterRollback = jsonQuery(`
+      SELECT json_build_object(
+        'm1', (SELECT COUNT(*) FROM "_prisma_migrations" WHERE "migration_name"='20260928182000_pin_assignments_to_current_rubric_revision'),
+        'm2', (SELECT COUNT(*) FROM "_prisma_migrations" WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture')
+      )
+    `);
+    expect(migReceiptsAfterRollback.m1).toBe(0);
+    expect(migReceiptsAfterRollback.m2).toBe(0);
     // Publisher seed and pin survived rollback
     const pubStillThere = jsonQuery(`SELECT EXISTS (SELECT 1 FROM "RubricRevision" WHERE id='rev-pub-1' AND "createdBy"='publisher-x')`);
     expect(pubStillThere).toBe(true);
@@ -288,8 +296,15 @@ describe('migration integration (real Postgres)', () => {
     expect(edit.status).toBe(0);
     // Re-apply migrations after rollback
     prismaDeploy(current);
-    // (h) Confirm re-apply works and core tables intact (hash compare not strictly identical because ids may be regenerated elsewhere, but presence check suffices)
-    expect(run('psql', ['-t', '-A', DB, '-c', `SELECT COUNT(*) FROM "Rubric"`]).status).toBe(0);
+    // (h) Confirm re-apply works and receipts recorded
+    const migReceiptsAfterReapply = jsonQuery(`
+      SELECT json_build_object(
+        'm1', (SELECT BOOL_AND("finished_at" IS NOT NULL) FROM "_prisma_migrations" WHERE "migration_name"='20260928182000_pin_assignments_to_current_rubric_revision'),
+        'm2', (SELECT BOOL_AND("finished_at" IS NOT NULL) FROM "_prisma_migrations" WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture')
+      )
+    `);
+    expect(migReceiptsAfterReapply.m1).toBe(true);
+    expect(migReceiptsAfterReapply.m2).toBe(true);
   }, 30000);
 
   test('lock_timeout enforced under migrate deploy', () => {
@@ -324,7 +339,7 @@ describe('migration integration (real Postgres)', () => {
     // Expect failure due to lock_timeout (allow generous upper bound for CI variance)
     expect(res.status).not.toBe(0);
     expect(elapsed).toBeGreaterThanOrEqual(4500);
-    expect(elapsed).toBeLessThan(20000);
+    expect(elapsed).toBeLessThan(15000);
     expect(res.stderr + res.stdout).toMatch(/lock_timeout|timeout/i);
     // Ensure no baseline table was created
     const hasBaseline = run('psql', ['-t', '-A', DB, '-c', `SELECT to_regclass('public."AssignmentTypeRubricBaseline"') IS NOT NULL;`]).stdout.trim().split('\n').pop();
@@ -366,7 +381,22 @@ describe('migration integration (real Postgres)', () => {
     // Pin trigger exists
     const pinTriggerAfter = run('psql', ['-t', '-A', DB, '-c', `SELECT COUNT(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE c.relname='Assignment' AND t.tgname='internal_assignment_rubric_pin';`]).stdout.trim().split('\n').pop();
     expect(pinTriggerAfter).toBe('1');
-    // Pins and schema are correct after recovery (baseline present and trigger installed)
+    // Migrations recorded as finished
+    const m1Finished = jsonQuery(`SELECT COALESCE(BOOL_AND("finished_at" IS NOT NULL), false) FROM "_prisma_migrations" WHERE "migration_name"='20260928182000_pin_assignments_to_current_rubric_revision'`);
+    const m2Finished = jsonQuery(`SELECT COALESCE(BOOL_AND("finished_at" IS NOT NULL), false) FROM "_prisma_migrations" WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture'`);
+    expect(m1Finished).toBe(true);
+    expect(m2Finished).toBe(true);
+    // Pins correct for the seed in this test (one assignment, no rubric JSON or library)
+    const lockCounts = jsonQuery(`
+      SELECT json_build_object(
+        'pinned', (SELECT COUNT(*) FROM "Assignment" WHERE "rubricRevisionId" IS NOT NULL),
+        'unpinned', (SELECT COUNT(*) FROM "Assignment" WHERE "rubricRevisionId" IS NULL),
+        'codeDefault', (SELECT COUNT(*) FROM "InternalAssignmentRubricPinBackfill" WHERE reason = 'code-default')
+      )
+    `);
+    expect(lockCounts.pinned).toBe(0);
+    expect(lockCounts.unpinned).toBe(1);
+    expect(lockCounts.codeDefault).toBe(1);
   }, 30000);
 
   test('canonical JSON SQL fingerprint matches app fingerprint()', () => {
