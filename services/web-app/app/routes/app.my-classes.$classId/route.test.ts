@@ -215,7 +215,7 @@ describe('class detail loader document visibility', () => {
     expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
   });
 
-  test('skips the growth plans query and gates the summary tab when the organization has not enabled it', async () => {
+  test('loads growth plans even when the organization previously had reporter disabled', async () => {
     const response = await loader({
       request: new Request('https://example.test/app/my-classes/class-1'),
       params: { classId: 'class-1' },
@@ -224,9 +224,8 @@ describe('class detail loader document visibility', () => {
     const data = (response as { data: any }).data;
 
     expect(data.classInsightsEnabled).toBe(false);
-    expect(data.reporterEnabled).toBe(false);
-    expect(data.growthPlansByStudentId).toEqual({});
-    expect(prisma.reporterGrowthPlan.findMany).not.toHaveBeenCalled();
+    expect(data.reporterEnabled).toBe(true);
+    expect(prisma.reporterGrowthPlan.findMany).toHaveBeenCalled();
   });
 
   test('groups growth plans by student when reporter is enabled for the organization', async () => {

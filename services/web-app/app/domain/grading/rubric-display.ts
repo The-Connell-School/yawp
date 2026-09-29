@@ -345,6 +345,24 @@ export function buildScoreOptions(
   const values = allowedScores?.length
     ? scaleValues.filter((score) => allowedScores.includes(score))
     : scaleValues;
+
+  // Display-only rename for Daily Pages engagement tiers. Stored rubric labels
+  // remain unchanged; only UI strings are mapped.
+  const mapDailyPagesBandTitle = (label: string | null) => {
+    switch (label) {
+      case 'ALL IN':
+        return 'Excellent';
+      case 'SHOWED UP':
+        return 'Good';
+      case 'HARDLY THERE':
+        return 'Needs Improvement';
+      case 'NOT HANDED IN':
+        return 'Absent/Missing';
+      default:
+        return label ?? '';
+    }
+  };
+
   return values.map((score) => {
     const configured = scoreLabels
       ? getCategoryScoreLabel({ scoreLabels }, score)
@@ -361,7 +379,7 @@ export function buildScoreOptions(
       // The numeric value is still the stored score and is shown separately
       // in grade summaries. The picker should show the teacher's configured
       // band/category label without a misleading numeric engagement prefix.
-      label: suffix ?? score.toString(),
+      label: mapDailyPagesBandTitle(suffix) || score.toString(),
     };
   });
 }

@@ -39,16 +39,16 @@ function allDestinations(user: any) {
 }
 
 describe('Reporter sidebar gating', () => {
-  test('visible for a teacher in a reporter-enabled org', () => {
+  test('visible for a teacher (always on)', () => {
     expect(
       reporterVisible(userWith({ role: 'TEACHER', reporterEnabled: true }))
     ).toBe(true);
   });
 
-  test('hidden for a teacher when the org flag is off', () => {
+  test('still visible for a teacher when the org flag is off', () => {
     expect(
       reporterVisible(userWith({ role: 'TEACHER', reporterEnabled: false }))
-    ).toBe(false);
+    ).toBe(true);
   });
 
   test('hidden for a student even if the org flag is on', () => {

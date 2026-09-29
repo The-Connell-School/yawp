@@ -8,7 +8,12 @@ import {
 import { PasteHighlightOverlay } from './highlight-overlay';
 import { cn } from '~/utils/misc';
 
-type PasteEvent = { id: string; createdAt: string; textLength: number };
+type PasteEvent = {
+  id: string;
+  createdAt: string;
+  textLength: number;
+  sourceUrl?: string | null;
+};
 type Report = { events: PasteEvent[]; nextCursor: string | null };
 type Props = {
   documentId?: string;
@@ -132,11 +137,18 @@ function AuthorizedTeacherPasteReport({
     if (!contentRoot) return;
     onSelectEvent?.();
     requestAnimationFrame(() => {
-      const node = getPasteEventRanges(contentRoot, id)[0]?.startContainer;
-      node?.parentElement?.scrollIntoView({
-        block: 'center',
-        behavior: 'smooth',
-      });
+      const ranges = getPasteEventRanges(contentRoot, id);
+      const node = ranges[0]?.startContainer ?? null;
+      // Graceful no-op when an event has no surviving linked text.
+      if (node && node.parentElement) {
+        node.parentElement.scrollIntoView({
+          block: 'center',
+          behavior: 'smooth',
+        });
+      } else {
+        // Clear selection for unlinked/earlier events.
+        setSelectedId(null);
+      }
     });
   }
 
@@ -300,13 +312,24 @@ function AuthorizedTeacherPasteReport({
                 {report?.events.map((event) => {
                   const surviving = measurement?.byEvent[event.id] ?? 0;
                   const linked = event.id.startsWith('paste_');
+                  const sourceHost =
+                    (linked && event.sourceUrl
+                      ? (() => {
+                          try {
+                            const u = new URL(event.sourceUrl);
+                            return u.hostname.replace(/^www\\./, '');
+                          } catch {
+                            return null;
+                          }
+                        })()
+                      : null) || null;
                   return (
                     <li key={event.id}>
                       <button
                         type="button"
                         data-testid={`paste-event-${event.id}`}
                         aria-pressed={selectedId === event.id}
-                        disabled={!surviving}
+                        disabled={!surviving || !linked}
                         onClick={() => select(event.id)}
                         className={cn(
                           'w-full rounded-md border p-3 text-left text-sm transition disabled:cursor-default',
@@ -316,15 +339,31 @@ function AuthorizedTeacherPasteReport({
                           !surviving && 'opacity-80'
                         )}
                       >
-                        <span className="flex items-start justify-between gap-3">
-                          <span className="font-medium">
-                            {new Date(event.createdAt).toLocaleString()}
-                          </span>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-2">
+                            <TriangleAlert
+                              className={cn(
+                                'mt-0.5 h-4 w-4 shrink-0',
+                                surviving ? 'text-amber-600' : 'text-muted-foreground'
+                              )}
+                              aria-hidden="true"
+                            />
+                            <div>
+                              <div className="font-medium">
+                                {new Date(event.createdAt).toLocaleString()}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {sourceHost
+                                  ? `Source: ${sourceHost}`
+                                  : 'Source: unknown'}
+                              </div>
+                            </div>
+                          </div>
                           <span className="shrink-0 tabular-nums text-muted-foreground">
                             {event.textLength.toLocaleString()} chars
                           </span>
-                        </span>
-                        <span className="mt-1 block text-muted-foreground">
+                        </div>
+                        <div className="mt-1 block text-muted-foreground">
                           {surviving
                             ? `${surviving.toLocaleString()} characters remain — show in document`
                             : !measurement
@@ -332,7 +371,7 @@ function AuthorizedTeacherPasteReport({
                               : linked
                                 ? 'No linked text remains in this version (removed or tracking unavailable)'
                                 : 'Earlier event; position unavailable'}
-                        </span>
+                        </div>
                       </button>
                     </li>
                   );

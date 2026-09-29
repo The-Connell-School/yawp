@@ -1,9 +1,9 @@
 /**
  * Access gate for the Yawp Reporter.
  *
- * Reporter is rolled out gradually behind a per-organization flag
- * (`Organization.reporterEnabled`) and is teacher-only. Both the page loader
- * and the chat action funnel through here so the gate stays in one place.
+ * Reporter is always on for all organizations and is teacher-only.
+ * Both the page loader and the chat action funnel through here so the
+ * teacher-only gate stays in one place.
  */
 import { data } from 'react-router';
 import {
@@ -27,12 +27,8 @@ export async function getReporterAccess(
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
   const isTeacher = membership.role === 'TEACHER';
-
-  const organization = await prisma.organization.findUnique({
-    where: { id: membership.organization.id },
-    select: { reporterEnabled: true },
-  });
-  const enabled = Boolean(organization?.reporterEnabled);
+  // Reporter is now always enabled for all organizations.
+  const enabled = true;
 
   return {
     userId,
@@ -44,8 +40,8 @@ export async function getReporterAccess(
 }
 
 /**
- * Throw a 404 unless the caller is a teacher in a reporter-enabled org. 404
- * (rather than 403) keeps the feature invisible to orgs that don't have it.
+ * Throw a 404 unless the caller is a teacher. 404 (rather than 403) keeps the
+ * feature invisible to non-teachers.
  */
 export async function requireReporterAccess(
   request: Request

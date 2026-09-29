@@ -59,7 +59,7 @@ describe('My Documents sidebar gating', () => {
 });
 
 describe('Writing Practice sidebar gating', () => {
-  test('visible for a student when the org flag is on', () => {
+  test('visible for a student (always on)', () => {
     expect(
       destinationsFor(
         userWith({ role: 'STUDENT', writingPracticeEnabled: true })
@@ -67,15 +67,15 @@ describe('Writing Practice sidebar gating', () => {
     ).toContain('/app/writing-lessons');
   });
 
-  test('hidden for a student when the org flag is off', () => {
+  test('still visible for a student when the org flag is off', () => {
     expect(
       destinationsFor(
         userWith({ role: 'STUDENT', writingPracticeEnabled: false })
       )
-    ).not.toContain('/app/writing-lessons');
+    ).toContain('/app/writing-lessons');
   });
 
-  test('visible for a teacher when the org flag is on', () => {
+  test('visible for a teacher (always on)', () => {
     expect(
       destinationsFor(
         userWith({ role: 'TEACHER', writingPracticeEnabled: true })
@@ -83,12 +83,12 @@ describe('Writing Practice sidebar gating', () => {
     ).toContain('/app/writing-lessons');
   });
 
-  test('hidden for a teacher when the org flag is off', () => {
+  test('still visible for a teacher when the org flag is off', () => {
     expect(
       destinationsFor(
         userWith({ role: 'TEACHER', writingPracticeEnabled: false })
       )
-    ).not.toContain('/app/writing-lessons');
+    ).toContain('/app/writing-lessons');
   });
 
 
