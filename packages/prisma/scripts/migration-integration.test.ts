@@ -417,11 +417,41 @@ describe('migration integration (real Postgres)', () => {
     // Pin trigger exists
     const pinTriggerAfter = run('psql', ['-t', '-A', DB, '-c', `SELECT COUNT(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE c.relname='Assignment' AND t.tgname='internal_assignment_rubric_pin';`]).stdout.trim().split('\n').pop();
     expect(pinTriggerAfter).toBe('1');
-    // Migrations recorded as finished
-    const m1Finished = jsonQuery(`SELECT COALESCE(BOOL_AND("finished_at" IS NOT NULL AND "rolled_back_at" IS NULL), false) FROM "_prisma_migrations" WHERE "migration_name"='20260928182000_pin_assignments_to_current_rubric_revision'`);
-    const m2Finished = jsonQuery(`SELECT COALESCE(BOOL_AND("finished_at" IS NOT NULL AND "rolled_back_at" IS NULL), false) FROM "_prisma_migrations" WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture'`);
-    expect(m1Finished).toBe(true);
-    expect(m2Finished).toBe(true);
+    // Migrations recorded properly after recovery:
+    // - there exists a finished row (finished_at NOT NULL, rolled_back_at IS NULL)
+    // - there is no stuck unfinished row (finished_at IS NULL AND rolled_back_at IS NULL)
+    const m1Ok = jsonQuery(`
+      SELECT json_build_object(
+        'hasFinished', EXISTS (
+          SELECT 1 FROM "_prisma_migrations"
+          WHERE "migration_name"='20260928182000_pin_assignments_to_current_rubric_revision'
+            AND "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL
+        ),
+        'hasUnfinished', EXISTS (
+          SELECT 1 FROM "_prisma_migrations"
+          WHERE "migration_name"='20260928182000_pin_assignments_to_current_rubric_revision'
+            AND "finished_at" IS NULL AND "rolled_back_at" IS NULL
+        )
+      )
+    `);
+    const m2Ok = jsonQuery(`
+      SELECT json_build_object(
+        'hasFinished', EXISTS (
+          SELECT 1 FROM "_prisma_migrations"
+          WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture'
+            AND "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL
+        ),
+        'hasUnfinished', EXISTS (
+          SELECT 1 FROM "_prisma_migrations"
+          WHERE "migration_name"='20260929034000_assignment_rubric_baseline_capture'
+            AND "finished_at" IS NULL AND "rolled_back_at" IS NULL
+        )
+      )
+    `);
+    expect(m1Ok.hasFinished).toBe(true);
+    expect(m1Ok.hasUnfinished).toBe(false);
+    expect(m2Ok.hasFinished).toBe(true);
+    expect(m2Ok.hasUnfinished).toBe(false);
     // Pins correct for the seed in this test (one assignment, no rubric JSON or library)
     const lockCounts = jsonQuery(`
       SELECT json_build_object(
