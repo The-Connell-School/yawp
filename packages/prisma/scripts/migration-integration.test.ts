@@ -345,7 +345,9 @@ describe('migration integration (real Postgres)', () => {
     }).replaceAll("'", "''");
     psql(`
       INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason","createdAt")
-      VALUES ('rev-pub-3','lib-shared',2,'${libSchemaJsonPub3}'::jsonb,
+      VALUES ('rev-pub-3','lib-shared',
+              (SELECT COALESCE(MAX(version),0) + 1 FROM \"RubricRevision\" WHERE \"rubricName\"='lib-shared'),
+              '${libSchemaJsonPub3}'::jsonb,
               encode(sha256(convert_to(('${libSchemaJsonPub3}'::jsonb)::text,'UTF8')),'hex'),
               'req-pub-3',
               encode(sha256(convert_to(('${libSchemaJsonPub3}'::jsonb)::text,'UTF8')),'hex'),
