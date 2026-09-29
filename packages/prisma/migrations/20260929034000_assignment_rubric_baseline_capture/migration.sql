@@ -139,6 +139,23 @@ BEGIN
     WHERE b."assignmentTypeId" = NEW."assignmentTypeId"
     ;
   END IF;
+  -- Final fallback: resolve per-type baseline directly by name+schema when mapping is missing.
+  IF current_revision IS NULL THEN
+    SELECT rr.id, rr."rubricName" INTO current_revision, selected_name
+    FROM "AssignmentType" t
+    JOIN "RubricRevision" rr
+      ON rr."rubricName" = ('assignment-type:' || t.id)
+     AND rr."schemaJson" = jsonb_build_object(
+           'name', ('assignment-type:' || t.id),
+           'title', COALESCE(t.title, ('assignment-type:' || t.id)),
+           'scoringScale', COALESCE(t."scoringScaleJson",'{}'::jsonb),
+           'rubric', COALESCE(t."rubricJson",'{}'::jsonb),
+           'promptConfig', COALESCE(t."gradingPromptConfigJson",'{}'::jsonb),
+           'outputSchema', COALESCE(t."gradingOutputSchemaJson",'{}'::jsonb),
+           'calibrationNotes', COALESCE(to_jsonb(t."gradingCalibrationNotes"), 'null'::jsonb)
+         )
+    WHERE t.id = NEW."assignmentTypeId";
+  END IF;
 
   IF NEW."rubricRevisionId" IS NULL THEN NEW."rubricRevisionId" := current_revision;
   ELSE
