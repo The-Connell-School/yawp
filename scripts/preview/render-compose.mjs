@@ -210,7 +210,6 @@ ${commonEnvironment}
 ${fastVolumes}${mediaVolumeMount}
     environment:
 ${commonEnvironment}
-    restart: unless-stopped
 `
       : `  web:
     image: ${q(`${routerBase}-web:current`)}
