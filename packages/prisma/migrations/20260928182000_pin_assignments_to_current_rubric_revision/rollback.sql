@@ -49,11 +49,38 @@ BEGIN
     DROP TABLE IF EXISTS "InternalAssignmentRubricPinBackfill";
     DROP TABLE IF EXISTS "InternalRubricCurrentPointerRestore";
 
-    -- 5) Delete revisions created by baseline/auto rewriters (temporarily relax immutability).
+    -- 5) Restore library and per-type sources to their pre-migration JSON using captured revisions,
+    --    then delete revisions created by baseline/auto rewriters (temporarily relax immutability).
     BEGIN
       DROP TRIGGER IF EXISTS rubric_revision_immutable ON "RubricRevision";
     EXCEPTION WHEN undefined_object THEN NULL;
     END;
+    -- Restore library rubric schemaJson from the restored current pointer when available
+    DO $restore_lib$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'InternalRubricCurrentPointerRestore') THEN
+        UPDATE "Rubric" r
+        SET "schemaJson" = rr."schemaJson"
+        FROM "InternalRubricCurrentPointerRestore" irpr
+        JOIN "RubricRevision" rr ON rr.id = irpr."previousRevisionId"
+        WHERE irpr."rubricId" = r.id;
+      END IF;
+    END
+    $restore_lib$;
+    -- Restore per-type JSON fields from their baseline-capture revision when present
+    UPDATE "AssignmentType" t
+    SET
+      "scoringScaleJson" = COALESCE(rr."schemaJson"->'scoringScale', NULL),
+      "rubricJson" = COALESCE(rr."schemaJson"->'rubric', NULL),
+      "gradingPromptConfigJson" = COALESCE(rr."schemaJson"->'promptConfig', NULL),
+      "gradingOutputSchemaJson" = COALESCE(rr."schemaJson"->'outputSchema', NULL),
+      "gradingCalibrationNotes" = CASE
+        WHEN COALESCE((rr."schemaJson"->'calibrationNotes')::text, 'null') = 'null' THEN NULL
+        ELSE rr."schemaJson"->>'calibrationNotes'
+      END
+    FROM "RubricRevision" rr
+    WHERE rr."rubricName" = ('assignment-type:' || t.id);
+    -- Now remove baseline/auto revisions
     DELETE FROM "RubricRevision" WHERE "createdBy" IN ('baseline-capture','auto-revision');
     -- restore immutability guard
     CREATE TRIGGER rubric_revision_immutable BEFORE UPDATE OR DELETE ON "RubricRevision"
