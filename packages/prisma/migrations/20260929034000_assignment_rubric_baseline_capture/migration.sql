@@ -177,11 +177,8 @@ BEGIN
       SELECT 1 FROM "RubricRevision" rr WHERE rr."rubricName" = m.rubric_name AND rr."schemaJson" = m.schema_json
     )
     ON CONFLICT ("rubricName","version") DO NOTHING
-    RETURNING "id","rubricName","version","schemaJson"
   ), lib_rev AS (
-    -- Pick the inserted revision when created, otherwise reuse the existing identical row
-    SELECT c.id, c."rubricName" AS rubric_name FROM lib_created c
-    UNION ALL
+    -- Resolve the revision id for each rubric (inserted above or pre-existing)
     SELECT rr.id, rr."rubricName" FROM lib_rubrics lr
     JOIN "RubricRevision" rr ON rr."rubricName" = lr.rubric_name AND rr."schemaJson" = lr.schema_json
   ), lib_map AS (
@@ -245,10 +242,7 @@ BEGIN
       SELECT 1 FROM "RubricRevision" rr WHERE rr."rubricName" = m.rubric_name AND rr."schemaJson" = m.schema_json
     )
     ON CONFLICT ("rubricName","version") DO NOTHING
-    RETURNING "id","rubricName","version","schemaJson"
   ), per_rev AS (
-    SELECT c.id, c."rubricName" AS rubric_name FROM per_created c
-    UNION ALL
     SELECT rr.id, rr."rubricName" FROM per_types p
     JOIN "RubricRevision" rr ON rr."rubricName" = p.rubric_name AND rr."schemaJson" = p.schema_json
   )
