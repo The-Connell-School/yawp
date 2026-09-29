@@ -4,13 +4,13 @@ import { AssignmentCreationSheet } from '~/components/assignments/assignment-cre
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import { ClassCheckboxList } from '~/components/assignments/class-checkbox-list';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select';
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '~/components/ui/accordion';
 import {
   Sheet,
   SheetContent,
@@ -18,7 +18,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
+import { FileTextIcon } from 'lucide-react';
 import { formatClassCardTitle } from '~/utils/class-display';
+import {
+  ApHistorySourceCarousel,
+  type ApHistorySourceCardData,
+} from '~/components/ap-history/source-card';
 
 type TeacherClass = {
   id: string;
@@ -39,6 +44,7 @@ type Props = {
   /** Whether this type takes a paragraph type (Daily Pages). */
   assignmentTypeOffersParagraphModes?: boolean;
   teacherClasses: TeacherClass[];
+  initialClassId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialPrompt?: string;
@@ -48,6 +54,7 @@ type Props = {
     title: string;
     prompt: string;
     essayType: string;
+    sources?: ApHistorySourceCardData[];
   } | null;
 };
 
@@ -63,6 +70,7 @@ export function CreateAssignmentSheet({
   assignmentTypeDefaultWritingTimeMinutes = null,
   assignmentTypeOffersParagraphModes = false,
   teacherClasses,
+  initialClassId,
   open,
   onOpenChange,
   initialPrompt = '',
@@ -70,18 +78,28 @@ export function CreateAssignmentSheet({
   apHistoryEntry = null,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
-  const [selectedClassId, setSelectedClassId] = useState(
-    teacherClasses[0]?.id ?? ''
+  // Only a class the teacher came from is preselected; with several targets
+  // possible, an implicit default is how an assignment lands on the wrong section.
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>(
+    initialClassId ? [initialClassId] : []
   );
   const [title, setTitle] = useState('');
 
   const isSaving = fetcher.state !== 'idle';
 
+  function toggleClass(classId: string) {
+    setSelectedClassIds((prev) =>
+      prev.includes(classId)
+        ? prev.filter((id) => id !== classId)
+        : [...prev, classId]
+    );
+  }
+
   useEffect(() => {
     if (!open || !apHistoryEntry) return;
-    setSelectedClassId(teacherClasses[0]?.id ?? '');
+    setSelectedClassIds(initialClassId ? [initialClassId] : []);
     setTitle('');
-  }, [open, teacherClasses, apHistoryEntry]);
+  }, [open, teacherClasses, apHistoryEntry, initialClassId]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
@@ -119,7 +137,7 @@ export function CreateAssignmentSheet({
         <SheetHeader>
           <SheetTitle>New Assignment</SheetTitle>
           <SheetDescription>
-            Create an APUSH assignment from the selected prompt.
+            Create an AP History assignment from the selected prompt.
           </SheetDescription>
         </SheetHeader>
 
@@ -129,7 +147,6 @@ export function CreateAssignmentSheet({
           className="mt-6 space-y-4"
         >
           <input type="hidden" name="intent" value="create-assignment" />
-          <input type="hidden" name="classIds" value={selectedClassId} />
           <input
             type="hidden"
             name="assignmentTypeId"
@@ -142,23 +159,18 @@ export function CreateAssignmentSheet({
           />
 
           <div className="space-y-2">
-            <Label>Class</Label>
-            <Select
-              value={selectedClassId}
-              onValueChange={setSelectedClassId}
+            <Label>Assign to</Label>
+            <ClassCheckboxList
+              idPrefix="ap-library"
+              name="classIds"
+              classes={teacherClasses.map((klass) => ({
+                id: klass.id,
+                label: classLabel(klass),
+              }))}
+              selectedIds={selectedClassIds}
+              onToggle={toggleClass}
               disabled={isSaving}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a class" />
-              </SelectTrigger>
-              <SelectContent>
-                {teacherClasses.map((klass) => (
-                  <SelectItem key={klass.id} value={klass.id}>
-                    {classLabel(klass)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           <div className="space-y-2">
@@ -173,9 +185,35 @@ export function CreateAssignmentSheet({
             />
           </div>
 
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="cs-post-at">
+                Post date{' '}
+                <span className="text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                id="cs-post-at"
+                name="postAt"
+                type="date"
+                disabled={isSaving}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cs-due-at">
+                Due date <span className="text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                id="cs-due-at"
+                name="dueAt"
+                type="date"
+                disabled={isSaving}
+              />
+            </div>
+          </div>
+
           <div className="space-y-2 rounded-lg border bg-muted/40 p-4">
             <div className="flex items-center justify-between gap-3">
-              <Label>Selected APUSH Prompt</Label>
+              <Label>Selected Prompt</Label>
               <span className="text-xs font-medium uppercase text-muted-foreground">
                 {apHistoryEntry.essayType}
               </span>
@@ -184,6 +222,31 @@ export function CreateAssignmentSheet({
             <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
               {apHistoryEntry.prompt}
             </p>
+            {apHistoryEntry.sources && apHistoryEntry.sources.length > 0 ? (
+              <Accordion type="single" collapsible defaultValue="sources">
+                <AccordionItem
+                  value="sources"
+                  className="rounded-md border bg-background px-3"
+                >
+                  <AccordionTrigger className="py-2 text-sm hover:no-underline">
+                    <span className="flex items-center gap-2">
+                      <FileTextIcon className="h-4 w-4 text-muted-foreground" />
+                      {apHistoryEntry.sources.length}{' '}
+                      {apHistoryEntry.sources.length === 1
+                        ? 'Source'
+                        : 'Sources'}
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="pb-2">
+                      <ApHistorySourceCarousel
+                        sources={apHistoryEntry.sources}
+                      />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            ) : null}
           </div>
 
           {fetcher.data && !fetcher.data.success ? (
@@ -201,7 +264,10 @@ export function CreateAssignmentSheet({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSaving || !selectedClassId}>
+            <Button
+              type="submit"
+              disabled={isSaving || selectedClassIds.length === 0}
+            >
               {isSaving ? 'Creating…' : 'Create Assignment'}
             </Button>
           </div>

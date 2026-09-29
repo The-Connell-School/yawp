@@ -207,4 +207,71 @@ describe('admin assignment module action', () => {
       },
     });
   });
+
+  test('writes per-variant tutor instructions when the form carries them', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateModule');
+    form.set('title', 'Pre-Writing');
+    form.set('tutorInstructionsVariantKeys', 'dbq,leq');
+    form.set('tutorInstructionsVariant.dbq', 'DBQ section guidance.');
+    form.set('tutorInstructionsVariant.leq', 'LEQ section guidance.');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/modules/mod-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'at-1', moduleId: 'mod-1' },
+      context: {} as never,
+    } as never);
+
+    const updateData = prisma.assignmentModule.update.mock.calls[0][0].data;
+    expect(updateData.tutorInstructionsVariantsJson).toEqual({
+      dbq: 'DBQ section guidance.',
+      leq: 'LEQ section guidance.',
+    });
+  });
+
+  test('a cleared variant box is dropped so the authored default returns', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateModule');
+    form.set('title', 'Pre-Writing');
+    form.set('tutorInstructionsVariantKeys', 'dbq,leq');
+    form.set('tutorInstructionsVariant.dbq', 'Edited DBQ guidance.');
+    form.set('tutorInstructionsVariant.leq', '   ');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/modules/mod-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'at-1', moduleId: 'mod-1' },
+      context: {} as never,
+    } as never);
+
+    const updateData = prisma.assignmentModule.update.mock.calls[0][0].data;
+    expect(updateData.tutorInstructionsVariantsJson).toEqual({
+      dbq: 'Edited DBQ guidance.',
+    });
+  });
+
+  test('a form without variant fields leaves the stored variants untouched', async () => {
+    // Non-variant assignment types never render the variant editor; their
+    // submissions must not blank a column they do not know about.
+    const form = new FormData();
+    form.set('intent', 'updateModule');
+    form.set('title', 'Draft Thesis');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/modules/mod-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'at-1', moduleId: 'mod-1' },
+      context: {} as never,
+    } as never);
+
+    const updateData = prisma.assignmentModule.update.mock.calls[0][0].data;
+    expect('tutorInstructionsVariantsJson' in updateData).toBe(false);
+  });
 });

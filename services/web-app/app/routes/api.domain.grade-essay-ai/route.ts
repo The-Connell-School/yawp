@@ -65,6 +65,7 @@ import {
 import {
   isApHistorySnapshot,
   parseApHistorySnapshot,
+  apHistoryCourseLabel,
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
 import {
@@ -79,6 +80,10 @@ import {
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
+import type {
+  ApHistoryDbqPointKey,
+  ApHistoryLeqPointKey,
+} from '~/domain/ap-history/rubric';
 
 const POST = z.object({
   documentId: z.string().optional(),
@@ -199,6 +204,10 @@ const AiOverallCommentSchema = z.object({
   overallComment: z.string().min(1),
 });
 
+// Scoring order, which is not the display order used on the assignment type
+// page. The `satisfies` ties both lists to the rubric shown to teachers and
+// students, so renaming a point key there fails the typecheck here rather than
+// silently grading a row nobody sees.
 const apHistoryDbqPointKeys = [
   'thesis',
   'contextualization',
@@ -207,7 +216,7 @@ const apHistoryDbqPointKeys = [
   'outside_evidence',
   'sourcing',
   'complexity',
-] as const;
+] as const satisfies readonly ApHistoryDbqPointKey[];
 
 const apHistoryLeqPointKeys = [
   'thesis',
@@ -216,7 +225,7 @@ const apHistoryLeqPointKeys = [
   'analysis_reasoning',
   'complexity',
   'supporting_evidence',
-] as const;
+] as const satisfies readonly ApHistoryLeqPointKey[];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -286,8 +295,8 @@ function buildApHistoryPrompt({
 
   return `Student first name: ${studentFirstName}
 
-AP History assignment: APUSH ${essayType}
-Course: APUSH
+AP History assignment: ${apHistoryCourseLabel(snapshot.course)} ${essayType}
+Course: ${apHistoryCourseLabel(snapshot.course)}
 Essay type: ${essayType}
 Assignment prompt: ${snapshot.prompt}
 Period: ${snapshot.period} (Period ${snapshot.periodNumber})
@@ -589,6 +598,7 @@ export async function action({ request }: ActionFunctionArgs) {
         // Only to tell a group brief from a solo essay when deciding who the
         // feedback is addressed to; see `gradingAddressee`.
         group: { select: { label: true, members: { where: { removedAt: null }, select: { membershipId: true, membership: { select: { userId: true } } } } } },
+        apHistorySnapshot: true,
         assignmentType: {
           select: {
             id: true,
@@ -856,6 +866,7 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const apHistorySnapshotCandidate =
+    submission.document.apHistorySnapshot ??
     submission.document.assignment?.apHistorySnapshot;
   const apHistorySnapshot = isApHistorySnapshot(apHistorySnapshotCandidate)
     ? parseApHistorySnapshot(apHistorySnapshotCandidate)
@@ -868,7 +879,7 @@ export async function action({ request }: ActionFunctionArgs) {
   "points": {"point_key": {"earned": boolean, "comment": string}},
   "overallComment": string
 }
-Grade the APUSH ${apHistorySnapshot.essayType.toUpperCase()} using the supplied immutable assignment snapshot and AP point-style rubric.
+Grade the ${apHistoryCourseLabel(apHistorySnapshot.course)} ${apHistorySnapshot.essayType.toUpperCase()} using the supplied immutable assignment snapshot and AP point-style rubric.
 Use only evidence from the essay and snapshot.
 For DBQ, score these point keys: ${apHistoryDbqPointKeys.join(', ')}.
 For LEQ, score these point keys: ${apHistoryLeqPointKeys.join(', ')}.

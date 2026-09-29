@@ -6,7 +6,7 @@ import {
   type ActionFunctionArgs,
   Form,
 } from 'react-router';
-import { Link, useLoaderData, useNavigation } from 'react-router';
+import { Link, useLoaderData, useNavigation, useSearchParams } from 'react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -45,6 +45,14 @@ import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { AboutDailyPages } from './about-daily-pages/about-daily-pages';
 import { ApHistoryLibrary } from './ap-history-library';
+import { ApPromptsLibrary } from './ap-history/ap-prompts-library';
+import { ApHistoryGradingBreakdown } from './ap-history/grading-breakdown';
+import { ApHistoryTeacherDirections } from './ap-history/teacher-directions';
+import {
+  CreateCustomApHistorySheet,
+  type CustomEssayType,
+} from './ap-history/create-custom-sheet';
+import type { ApHistorySourceCardData } from '~/components/ap-history/source-card';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
 import { PromptsLibrary } from './prompts-library/prompts-library';
@@ -370,7 +378,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
     }),
-    profile.role === "TEACHER"
+    profile.role === 'TEACHER'
       ? prisma.class.findMany({
           where: {
             teachers: { some: { id: profile.id } },
@@ -528,16 +536,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           totalCount: thesisLibraryEntries.length,
         }
       : null;
-  const enabledTeacherClassIds = profile.role === "TEACHER"
-    ? new Set(teacherClasses.map((klass) => klass.id))
-    : new Set<string>();
-  const assignmentEnabledTeacherClasses = profile.role === "TEACHER"
-    ? teacherClasses
-    : [];
+  const enabledTeacherClassIds =
+    profile.role === 'TEACHER'
+      ? new Set(teacherClasses.map((klass) => klass.id))
+      : new Set<string>();
+  const assignmentEnabledTeacherClasses =
+    profile.role === 'TEACHER' ? teacherClasses : [];
   let apHistoryLibrary = null;
-  if (profile.role === "TEACHER" && isApHistory) {
-    if (assignmentEnabledTeacherClasses.length > 0) {
+  if (isApHistory) {
+    if (profile.role === 'TEACHER' && assignmentEnabledTeacherClasses.length > 0) {
       apHistoryLibrary = {
+        mode: 'teacher' as const,
         entries: await listApHistoryLibraryEntries(assignmentType.id),
         teacherClasses: assignmentEnabledTeacherClasses,
       };
@@ -574,18 +583,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  const teacherClasses = profile.role === "TEACHER"
-    ? await prisma.class.findMany({
-        where: {
-          teachers: { some: { id: profile.id } },
-          isArchived: false,
-        },
-        select: {
-          id: true,
-          school: { select: { id: true, organizationId: true } },
-        },
-      })
-    : [];
+  const teacherClasses =
+    profile.role === 'TEACHER'
+      ? await prisma.class.findMany({
+          where: {
+            teachers: { some: { id: profile.id } },
+            isArchived: false,
+          },
+          select: {
+            id: true,
+            school: { select: { id: true, organizationId: true } },
+          },
+        })
+      : [];
   const assignmentTypeAvailable = params.id
     ? await isAssignmentTypeAvailableForAnyScope({
         assignmentTypeId: params.id,
@@ -661,6 +671,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function AppAssignmentTypesIdRoute() {
   const user = useUser();
+  const [searchParams] = useSearchParams();
   const data = useLoaderData<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const hasModules = data.assignmentType.assignmentModules.length > 0;
@@ -669,12 +680,15 @@ export default function AppAssignmentTypesIdRoute() {
   const docFormRef = useRef<HTMLFormElement>(null);
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
   const [isPromptGeneratorOpen, setIsPromptGeneratorOpen] = useState(false);
+  const [customEssayType, setCustomEssayType] =
+    useState<CustomEssayType | null>(null);
   const [libraryPrompt, setLibraryPrompt] = useState('');
   const [apHistoryEntry, setApHistoryEntry] = useState<{
     externalKey: string;
     title: string;
     prompt: string;
     essayType: string;
+    sources?: ApHistorySourceCardData[];
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
   const showShortFormLibrary = data.shortFormPromptLibrary != null;
@@ -690,6 +704,12 @@ export default function AppAssignmentTypesIdRoute() {
   const assignmentSheetClasses = isApHistoryAssignmentType
     ? (data.apHistoryLibrary?.teacherClasses ?? [])
     : data.teacherClasses;
+  const requestedClassId = searchParams.get('classId');
+  const initialApHistoryClassId = requestedClassId && assignmentSheetClasses.some(
+    (klass) => klass.id === requestedClassId
+  )
+    ? requestedClassId
+    : undefined;
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -741,6 +761,32 @@ export default function AppAssignmentTypesIdRoute() {
                   </DropdownMenu>
                 </>
               ) : null}
+              {isApHistoryAssignmentType ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      className="w-fit"
+                      disabled={assignmentSheetClasses.length === 0}
+                    >
+                      Create assignment{' '}
+                      <ChevronDownIcon className="ml-1 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onSelect={() => setCustomEssayType('dbq')}
+                    >
+                      New DBQ (document-based)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => setCustomEssayType('leq')}
+                    >
+                      New LEQ (long essay)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
@@ -755,6 +801,7 @@ export default function AppAssignmentTypesIdRoute() {
                   data.assignmentTypeOffersParagraphModes
                 }
                 teacherClasses={assignmentSheetClasses}
+                initialClassId={initialApHistoryClassId}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
@@ -786,6 +833,17 @@ export default function AppAssignmentTypesIdRoute() {
                   }}
                 />
               ) : null}
+              {isApHistoryAssignmentType ? (
+                <CreateCustomApHistorySheet
+                  assignmentTypeId={data.assignmentType.id}
+                  teacherClasses={assignmentSheetClasses}
+                  open={customEssayType !== null}
+                  onOpenChange={(o) => {
+                    if (!o) setCustomEssayType(null);
+                  }}
+                  essayType={customEssayType ?? 'dbq'}
+                />
+              ) : null}
             </>
           ) : null}
         </div>
@@ -809,6 +867,9 @@ export default function AppAssignmentTypesIdRoute() {
         ) : null}
         {showShortFormLibrary ? <AboutDailyPages /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
+        {data.apHistoryLibrary?.mode === 'teacher' ? (
+          <ApHistoryTeacherDirections />
+        ) : null}
         {showModules ? (
           <Accordion type="single" collapsible>
             <AccordionItem value="modules">
@@ -890,16 +951,21 @@ export default function AppAssignmentTypesIdRoute() {
           </div>
         ) : null}
         {data.apHistoryLibrary ? (
-          <div className="pb-6">
-            <ApHistoryLibrary
-              entries={data.apHistoryLibrary.entries}
-              onSelectEntry={(entry) => {
-                setApHistoryEntry(entry);
-                setLibraryPrompt('');
-                setIsAssignmentSheetOpen(true);
-              }}
+          <>
+            <ApHistoryGradingBreakdown
+              audience="teacher"
             />
-          </div>
+            <div className="pb-6">
+              <ApPromptsLibrary
+                entries={data.apHistoryLibrary.entries}
+                onSelectEntry={(entry) => {
+                  setApHistoryEntry(entry);
+                  setLibraryPrompt('');
+                  setIsAssignmentSheetOpen(true);
+                }}
+              />
+            </div>
+          </>
         ) : null}
         {data.documents.length ? (
           <>
@@ -953,7 +1019,7 @@ export default function AppAssignmentTypesIdRoute() {
                   create your first document.
                 </>
               ) : isTeacher ? (
-                'Choose a prompt from the APUSH library to create an assignment.'
+                'Choose a prompt from the AP History library to create an assignment.'
               ) : (
                 'Open an assignment from one of your classes to start writing.'
               )

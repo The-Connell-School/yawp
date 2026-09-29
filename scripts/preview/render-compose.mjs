@@ -204,6 +204,7 @@ ${commonEnvironment}
     env.runtime === 'fast'
       ? `  web:
     image: oven/bun:1.3.1
+    restart: unless-stopped
     working_dir: /app
     command: bash -lc "cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
 ${fastVolumes}${mediaVolumeMount}

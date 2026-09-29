@@ -18,6 +18,16 @@ import {
   buildModuleRubricGuidance,
   buildTutorSystemPromptBlocks,
 } from './build-system-prompt';
+import { isApHistorySnapshot } from '~/domain/ap-history/schema';
+import { buildApHistoryTutorSystemPrompt } from '~/domain/ap-history/tutor-prompt';
+import {
+  resolveApHistorySectionTutorInstructions,
+  resolveApHistoryStepTutorInstructions,
+} from '../../../../../packages/prisma/scripts/ap-history-module-data';
+import {
+  readTutorInstructionVariant,
+  resolveTutorInstructions,
+} from '~/domain/tutor/tutor-instructions-source';
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { normalizeModuleRubricAlignment } from '~/domain/assignment-types/assignment-type-rubric-config';
 import {
@@ -110,41 +120,66 @@ export async function action({ request }: ActionFunctionArgs) {
     // text) into the session, so only the student whose transcript it is may reach
     // it. On a shared draft that is the group member it belongs to rather than the
     // document's nominal owner. A revoked account no longer matches.
-    const cms = await prisma.assignmentModuleSession.findFirst({
+	    const cms = await prisma.assignmentModuleSession.findFirst({
       where: {
         id: data.cmsId,
         ...documentAuthorOwnSessionWhere({ profileId: profile.id, isAdmin }),
       },
-      include: {
-        assignmentModule: {
-          include: {
-            instructions: { orderBy: { position: 'asc' } },
-            assignmentType: {
-              select: {
-                id: true,
-                gradingAssistantVersion: true,
-                rubricJson: true,
-              },
-            },
-          },
-        },
-        messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
-        document: {
-          select: {
-            id: true,
-            text: true,
-            assignment: {
-              select: {
-                id: true,
-                title: true,
-                prompt: true,
-                tutorEnabled: true,
-                paragraphMode: true,
-              },
-            },
-          },
-        },
-      },
+	      select: {
+	        id: true,
+	        instructionsCompleted: true,
+	        assignmentModuleId: true,
+	        assignmentModule: {
+	          select: {
+	            id: true,
+	            title: true,
+	            rubricAlignmentJson: true,
+	            tutorInstructions: true,
+	            tutorInstructionsVariantsJson: true,
+	            assignmentType: {
+	              select: {
+	                id: true,
+	                gradingAssistantVersion: true,
+	                rubricJson: true,
+	                // The assignment-level General Tutor Instructions, edited in
+	                // admin. Empty on assignment types that have not been seeded
+	                // or configured, which falls back to the authored default.
+	                tutorInstructions: true,
+	              },
+	            },
+	            instructions: {
+	              orderBy: { position: 'asc' },
+	              select: {
+	                id: true,
+	                title: true,
+	                tutorInstructions: true,
+	                tutorInstructionsVariantsJson: true,
+	                position: true,
+	              },
+	            },
+	          },
+	        },
+	        messages: {
+	          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+	          select: { id: true, agent: true, content: true, createdAt: true },
+	        },
+	        document: {
+	          select: {
+	            id: true,
+	            text: true,
+	            assignment: {
+	              select: {
+	                id: true,
+	                title: true,
+	                prompt: true,
+	                tutorEnabled: true,
+	                apHistorySnapshot: true,
+	                paragraphMode: true,
+	              },
+	            },
+	          },
+	        },
+	      },
     });
 
     if (!cms) {
@@ -178,14 +213,70 @@ export async function action({ request }: ActionFunctionArgs) {
       alignment: cms.assignmentModule.rubricAlignmentJson,
     });
 
-    const system = buildTutorSystemPromptBlocks({
-      tutorInstructions: cms.assignmentModule.tutorInstructions,
-      instructionTutorInstructions: instruction.tutorInstructions,
-      paragraphModeInstructions: buildParagraphModeTutorInstructions(
-        cms.document?.assignment?.paragraphMode
-      ),
-      moduleRubricGuidance,
-    });
+    // AP History assignments carry an immutable snapshot; when present, the
+    // tutor coaches against the AP rubric/sources instead of the generic
+    // assignment-type tutor instructions.
+    const apHistorySnapshot = cms.document.assignment?.apHistorySnapshot;
+    // DBQ and LEQ get separately authored coaching. The shared DB module stores
+    // one representative variant; select the variant matching this document's
+    // essay type, falling back to the stored value for legacy/uncanonical
+    // modules that have no essay-type-specific guidance.
+    // Every tutor prompt layer prefers what admin has stored over the
+    // code-authored default, so an admin edit takes effect without a deploy.
+    // Seeds write the authored defaults into those rows, so this reads the
+    // same text either way until somebody actually changes something.
+    const system = isApHistorySnapshot(apHistorySnapshot)
+      ? [
+          {
+            type: 'text' as const,
+            cache_control: { type: 'ephemeral' as const },
+            text: buildApHistoryTutorSystemPrompt(
+              apHistorySnapshot,
+              {
+                title: cms.assignmentModule.title,
+                tutorInstructions: resolveTutorInstructions(
+                  readTutorInstructionVariant(
+                    cms.assignmentModule.tutorInstructionsVariantsJson,
+                    apHistorySnapshot.essayType
+                  ),
+                  resolveApHistorySectionTutorInstructions(
+                    apHistorySnapshot.essayType,
+                    cms.assignmentModule.title
+                  ),
+                  // Legacy single-module documents have no canonical guidance and
+                  // no variants; their stored single string is all there is.
+                  cms.assignmentModule.tutorInstructions
+                ),
+                instruction: {
+                  title: instruction.title,
+                  tutorInstructions: resolveTutorInstructions(
+                    readTutorInstructionVariant(
+                      instruction.tutorInstructionsVariantsJson,
+                      apHistorySnapshot.essayType
+                    ),
+                    resolveApHistoryStepTutorInstructions(
+                      apHistorySnapshot.essayType,
+                      cms.assignmentModule.title,
+                      instruction.title
+                    ),
+                    instruction.tutorInstructions
+                  ),
+                },
+              },
+              cms.assignmentModule.assignmentType?.tutorInstructions
+            ),
+          },
+        ]
+      : buildTutorSystemPromptBlocks({
+          generalTutorInstructions:
+            cms.assignmentModule.assignmentType?.tutorInstructions,
+          tutorInstructions: cms.assignmentModule.tutorInstructions,
+          instructionTutorInstructions: instruction.tutorInstructions,
+          paragraphModeInstructions: buildParagraphModeTutorInstructions(
+            cms.document?.assignment?.paragraphMode ?? null
+          ),
+          moduleRubricGuidance,
+        });
 
     const documentSource =
       data.content === undefined ? 'db-document-text' : 'client-content';
@@ -206,7 +297,9 @@ export async function action({ request }: ActionFunctionArgs) {
         moduleRubric.categories.length > 0 ? 'assignment-type' : 'missing',
       assignmentTypeGradingVersion:
         cms.assignmentModule.assignmentType?.gradingAssistantVersion ?? null,
-      rubricCategoryKeys: moduleRubric.categories.map((category) => category.key),
+      rubricCategoryKeys: moduleRubric.categories.map(
+        (category) => category.key
+      ),
     });
 
     const currentMessages = cms.messages.map((m) => ({

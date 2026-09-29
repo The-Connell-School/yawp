@@ -1,0 +1,86 @@
+import { describe, expect, test } from 'bun:test';
+import { AP_HISTORY_LIBRARY_ENTRIES } from '../ap-history-library-data';
+import { AP_HISTORY_SEED_MODULES } from '../ap-history-module-data';
+import {
+  AP_HISTORY_ASSIGNMENT_TYPE_SYSTEM_KEY,
+  buildApHistoryAssignmentTypeCreateInput,
+} from './seed-ap-history';
+
+describe('buildApHistoryAssignmentTypeCreateInput', () => {
+  const orgId = 'org-local-dev';
+  const input = buildApHistoryAssignmentTypeCreateInput(orgId);
+
+  test('creates the canonical AP History Essay type owned by the org', () => {
+    expect(input.systemKey).toBe(AP_HISTORY_ASSIGNMENT_TYPE_SYSTEM_KEY);
+    expect(input.systemKey).toBe('ap_history_essay');
+    expect(input.title).toBe('AP History Essay');
+    expect(input.ownerOrgId).toBe(orgId);
+  });
+
+  test('links the type to the org so it appears in org defaults', () => {
+    expect(input.organizationAssignments?.create).toEqual({
+      organizationId: orgId,
+    });
+  });
+
+  test('seeds every writing-process section (module) from the shared data source', () => {
+    const modules = (input.assignmentModules?.create ?? []) as Array<{
+      title: string;
+      position: number;
+      tutorInstructions?: string | null;
+      instructions?: { create: Array<{ title: string }> };
+    }>;
+
+    expect(modules.map((module) => module.title)).toEqual(
+      AP_HISTORY_SEED_MODULES.map((module) => module.title)
+    );
+    for (const [index, module] of modules.entries()) {
+      expect(module.position).toBe(AP_HISTORY_SEED_MODULES[index].position);
+      // The DB stores one representative (default essay-type) string per
+      // shared module; the runtime selects the correct variant per essay type.
+      expect(module.tutorInstructions).toBe(
+        AP_HISTORY_SEED_MODULES[index].tutorInstructions
+      );
+      expect(typeof module.tutorInstructions).toBe('string');
+      expect(module.instructions?.create).toHaveLength(
+        AP_HISTORY_SEED_MODULES[index].instructions.length
+      );
+    }
+  });
+
+  test('seeds every curated library entry from the shared data source', () => {
+    const entries = input.apHistoryLibraryEntries?.create ?? [];
+    expect(entries).toHaveLength(AP_HISTORY_LIBRARY_ENTRIES.length);
+
+    const seededKeys = entries.map((entry) => entry.externalKey).sort();
+    const sourceKeys = AP_HISTORY_LIBRARY_ENTRIES.map(
+      (entry) => entry.externalKey
+    ).sort();
+    expect(seededKeys).toEqual(sourceKeys);
+  });
+
+  test('attaches the history-collage hero image as an image blob', () => {
+    const image = input.image?.create;
+    expect(image).toBeTruthy();
+    expect(image?.contentType).toBe('image/webp');
+    expect(image?.altText).toContain('history');
+    expect(Buffer.isBuffer(image?.blob)).toBe(true);
+    expect((image?.blob as Buffer).length).toBeGreaterThan(0);
+  });
+
+  test('preserves DBQ sources and keeps LEQs source-free', () => {
+    const entries = input.apHistoryLibraryEntries?.create ?? [];
+    for (const entry of entries) {
+      const source = AP_HISTORY_LIBRARY_ENTRIES.find(
+        (candidate) => candidate.externalKey === entry.externalKey
+      );
+      const sourceCount = entry.sources?.create?.length ?? 0;
+      if (entry.essayType === 'dbq') {
+        expect(sourceCount).toBeGreaterThan(0);
+        expect(sourceCount).toBe(source?.sources.length ?? -1);
+      } else {
+        expect(sourceCount).toBe(0);
+      }
+    }
+  });
+});
