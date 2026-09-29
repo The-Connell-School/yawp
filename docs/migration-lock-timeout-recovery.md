@@ -14,4 +14,5 @@ If `prisma migrate deploy` fails due to `lock_timeout` while applying `202609290
 Notes:
 - Application queries that touch `Assignment` can queue for up to ~5 seconds during this migration.
 - `canonical_json(jsonb)` normalizes numbers differently than JS for values > 2^53, 1e21, and `-0`.
+- After recovery, both migrations should appear in `_prisma_migrations` with `finished_at` set and `rolled_back_at` null.
 
