@@ -272,17 +272,36 @@ describe('migration integration (real Postgres)', () => {
     `);
     expect(perEq).toBe(true);
 
-    // (b) Re-run is a no-op
+    // (b) Re-run is a no-op: verify counts and hashes identical before vs after a second deploy
+    const snapBefore = {
+      rubRev: jsonQuery(`SELECT COUNT(*) FROM "RubricRevision"`),
+      baseline: jsonQuery(`SELECT COUNT(*) FROM "AssignmentTypeRubricBaseline"`),
+      audit: jsonQuery(`SELECT COUNT(*) FROM "InternalAssignmentRubricPinBackfill"`),
+      restore: jsonQuery(`SELECT COUNT(*) FROM "InternalRubricCurrentPointerRestore"`),
+      pinned: jsonQuery(`SELECT COUNT(*) FROM "Assignment" WHERE "rubricRevisionId" IS NOT NULL`),
+      hRubric: hash('Rubric'),
+      hType: hash('AssignmentType'),
+      hAssign: hash('Assignment'),
+      hRev: hash('RubricRevision'),
+    };
     prismaDeploy(current);
-    const afterCounts = jsonQuery(`SELECT (SELECT COUNT(*) FROM "RubricRevision")`);
-    expect(typeof afterCounts).toBe('number');
+    const snapAfter = {
+      rubRev: jsonQuery(`SELECT COUNT(*) FROM "RubricRevision"`),
+      baseline: jsonQuery(`SELECT COUNT(*) FROM "AssignmentTypeRubricBaseline"`),
+      audit: jsonQuery(`SELECT COUNT(*) FROM "InternalAssignmentRubricPinBackfill"`),
+      restore: jsonQuery(`SELECT COUNT(*) FROM "InternalRubricCurrentPointerRestore"`),
+      pinned: jsonQuery(`SELECT COUNT(*) FROM "Assignment" WHERE "rubricRevisionId" IS NOT NULL`),
+      hRubric: hash('Rubric'),
+      hType: hash('AssignmentType'),
+      hAssign: hash('Assignment'),
+      hRev: hash('RubricRevision'),
+    };
+    expect(snapAfter).toEqual(snapBefore);
 
     // (c) Inserting a new assignment auto-pins (pre-rollback, then delete to keep rollback data hash clean)
     psql(`INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a-per-3', now(), now(), 't-per','New before RB');`);
     const pinnedNewPre = jsonQuery(`SELECT "rubricRevisionId" IS NOT NULL FROM "Assignment" WHERE id='a-per-3'`);
     expect(pinnedNewPre).toBe(true);
-    // Clean up for rollback hash
-    psql(`DELETE FROM "Assignment" WHERE id='a-per-3';`);
 
     // (d) Updating schemaJson / rubricJson creates version+1 and moves baseline/current; then revert to avoid rollback hash delta
     const prevMaxVerLib = jsonQuery(`SELECT COALESCE(MAX(version),0) FROM "RubricRevision" WHERE "rubricName"='lib-shared'`);
@@ -309,6 +328,37 @@ describe('migration integration (real Postgres)', () => {
     // revert per-type edit
     psql(`UPDATE "AssignmentType" SET "rubricJson"='${JSON.stringify(typeSchema.rubric).replaceAll("'", "''")}'::jsonb WHERE id='t-per'`);
 
+    // Additional publisher revision AFTER deploy: ensure assignment pins to it and survives rollback
+    psql(`
+      WITH v AS (SELECT COALESCE(MAX(version),0)+1 AS ver FROM "RubricRevision" WHERE "rubricName"='lib-shared')
+      INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason","createdAt")
+      SELECT 'rev-pub-3','lib-shared', ver, '${JSON.stringify({
+        name: 'lib-shared',
+        title: 'Publisher Post-Deploy',
+        scoringScale: libSchema.scoringScale,
+        rubric: libSchema.rubric,
+      }).replaceAll("'", "''")}'::jsonb,
+             encode(sha256(convert_to(('${JSON.stringify({
+        name: 'lib-shared',
+        title: 'Publisher Post-Deploy',
+        scoringScale: libSchema.scoringScale,
+        rubric: libSchema.rubric,
+      }).replaceAll("'", "''")}'::jsonb)::text,'UTF8')),'hex'),
+             gen_random_uuid()::text,
+             encode(sha256(convert_to(('${JSON.stringify({
+        name: 'lib-shared',
+        title: 'Publisher Post-Deploy',
+        scoringScale: libSchema.scoringScale,
+        rubric: libSchema.rubric,
+      }).replaceAll("'", "''")}'::jsonb)::text,'UTF8')),'hex'),
+             'publisher-x','Post-deploy publisher rev', now()
+      FROM v;
+      UPDATE "Rubric" SET "currentRevisionId"='rev-pub-3' WHERE id='rub-1';
+      INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a-lib-4', now(), now(), 't-lib-a','Lib A 2');
+    `);
+    const lib4Pinned = jsonQuery(`SELECT "rubricRevisionId"='rev-pub-3' FROM "Assignment" WHERE id='a-lib-4'`);
+    expect(lib4Pinned).toBe(true);
+
     // (e) Changing a pin raises
     const targetRev = jsonQuery(`
       SELECT id FROM "RubricRevision"
@@ -328,6 +378,18 @@ describe('migration integration (real Postgres)', () => {
     // (g) rollback restores schema/data
     const rollback = readFileSync(join(PRISMA_DIR, 'migrations', '20260928182000_pin_assignments_to_current_rubric_revision', 'rollback.sql'), 'utf8');
     psql(rollback);
+    // Pointer restore (direct)
+    const restoredPtr = jsonQuery(`SELECT "currentRevisionId" FROM "Rubric" WHERE id='rub-1'`);
+    expect(restoredPtr).toBe('rev-pub-2');
+    // Fallback cleared a-per-3, publisher pin survives, pre-pinned survives
+    const per3Cleared = jsonQuery(`SELECT "rubricRevisionId" IS NULL FROM "Assignment" WHERE id='a-per-3'`);
+    expect(per3Cleared).toBe(true);
+    const lib4StillPinned = jsonQuery(`SELECT "rubricRevisionId"='rev-pub-3' FROM "Assignment" WHERE id='a-lib-4'`);
+    expect(lib4StillPinned).toBe(true);
+    const lib2StillPinned = jsonQuery(`SELECT "rubricRevisionId"='rev-pub-2' FROM "Assignment" WHERE id='a-lib-2'`);
+    expect(lib2StillPinned).toBe(true);
+    // Clean up post-rollback-only rows before hash compare
+    psql(`DELETE FROM "Assignment" WHERE id IN ('a-per-3','a-lib-4'); DELETE FROM "RubricRevision" WHERE id='rev-pub-3';`);
     // Zero-diff schema vs pre-migration
     const schemaAfter = normalizeSchemaDump(run('pg_dump', ['-s', DB]).stdout);
     expect(schemaAfter).toBe(schemaPre);
@@ -408,9 +470,40 @@ describe('migration integration (real Postgres)', () => {
     `);
     expect(migReceiptsAfterReapply.m1).toBe(true);
     expect(migReceiptsAfterReapply.m2).toBe(true);
+    // Re-assert identical counts/state as first deploy
+    const counts2 = jsonQuery(`
+      SELECT json_build_object(
+        'pinned', (SELECT COUNT(*) FROM "Assignment" WHERE "rubricRevisionId" IS NOT NULL),
+        'unpinned', (SELECT COUNT(*) FROM "Assignment" WHERE "rubricRevisionId" IS NULL),
+        'codeDefault', (SELECT COUNT(*) FROM "InternalAssignmentRubricPinBackfill" WHERE reason = 'code-default')
+      )
+    `);
+    expect(counts2.pinned).toBe(5);
+    expect(counts2.unpinned).toBe(2);
+    expect(counts2.codeDefault).toBe(2);
+    const sharedBaseline2 = jsonQuery(`
+      SELECT json_build_object(
+        'rows', (SELECT COUNT(*) FROM "AssignmentTypeRubricBaseline" WHERE "assignmentTypeId" IN ('t-lib-a','t-lib-b')),
+        'distinctRevs', (SELECT COUNT(DISTINCT "rubricRevisionId") FROM "AssignmentTypeRubricBaseline" WHERE "assignmentTypeId" IN ('t-lib-a','t-lib-b'))
+      )
+    `);
+    expect(sharedBaseline2.rows).toBe(2);
+    expect(sharedBaseline2.distinctRevs).toBe(1);
+    const revCount2 = jsonQuery(`SELECT COUNT(*) FROM "RubricRevision" WHERE "rubricName"='lib-shared'`);
+    expect(revCount2).toBe(2);
+    const currentIsBaseline2 = jsonQuery(`
+      SELECT EXISTS (
+        SELECT 1 FROM "Rubric" r
+        JOIN "RubricRevision" rr ON rr.id = r."currentRevisionId"
+        WHERE r.id='rub-1' AND rr."createdBy"='baseline-capture'
+      )
+    `);
+    expect(currentIsBaseline2).toBe(true);
+    const restoreRows2 = jsonQuery(`SELECT COUNT(*) FROM "InternalRubricCurrentPointerRestore" WHERE "rubricId"='rub-1'`);
+    expect(restoreRows2).toBe(1);
     // (i) Now insert a new assignment and verify auto-pin
-    psql(`INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a-per-3', now(), now(), 't-per','New');`);
-    const pinnedNew = jsonQuery(`SELECT "rubricRevisionId" IS NOT NULL FROM "Assignment" WHERE id='a-per-3'`);
+    psql(`INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a-per-4', now(), now(), 't-per','New');`);
+    const pinnedNew = jsonQuery(`SELECT "rubricRevisionId" IS NOT NULL FROM "Assignment" WHERE id='a-per-4'`);
     expect(pinnedNew).toBe(true);
   }, 30000);
 
