@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Form } from 'react-router';
+import { Form, Link } from 'react-router';
 import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import type { AssignmentEditRecord } from '~/components/assignments/assignment-edit-sheet';
@@ -45,6 +45,7 @@ type ClassAssignmentsTabProps = {
     collaborationSupported: boolean;
     gradesGrammar: boolean;
   }[];
+  apHistoryAssignmentTypeId?: string | null;
   /** Gated on the organization's classInsightsEnabled flag. */
   classInsightsEnabled: boolean;
   onViewDocuments: (assignmentId: string) => void;
@@ -74,6 +75,7 @@ export function ClassAssignmentsTab({
   classOption,
   assignments,
   assignmentTypes,
+  apHistoryAssignmentTypeId,
   classInsightsEnabled,
   onViewDocuments,
   onSelectAssignment,
@@ -159,6 +161,15 @@ export function ClassAssignmentsTab({
           />
         </div>
         <div className="ml-auto flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+          {apHistoryAssignmentTypeId ? (
+            <Button asChild size="sm" variant="outline" className="shrink-0">
+              <Link
+                to={`/app/assignment-types/${apHistoryAssignmentTypeId}?classId=${encodeURIComponent(classOption.id)}`}
+              >
+                AP History Essay
+              </Link>
+            </Button>
+          ) : null}
           {hasSelection ? (
             <Form
               method="post"

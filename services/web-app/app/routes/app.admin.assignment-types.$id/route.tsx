@@ -180,6 +180,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (intent === 'updateCourse') {
     const title = formData.get('title')?.toString().trim();
     const description = formData.get('description')?.toString();
+    // The assignment-level General Tutor Instructions -- the top of every
+    // tutor prompt for this type. Only written when the form actually carried
+    // the field, so a partial submission can never blank it out.
+    const hasTutorInstructions = formData.has('tutorInstructions');
+    const tutorInstructions = formData
+      .get('tutorInstructions')
+      ?.toString()
+      .trim();
     const imageFile = formData.get('image') as File | null;
     const deleteImage = formData.get('deleteImage') === 'true';
     const hasGradingConfigFields =
@@ -298,6 +306,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
           title,
           description: description || null,
           ...(hasRubricIdField ? { rubricId } : {}),
+          ...(hasTutorInstructions
+            ? { tutorInstructions: tutorInstructions || null }
+            : {}),
           ...gradingConfigData,
         },
       });
@@ -368,6 +379,7 @@ export default function AssignmentTypeRoute() {
       rubrics={rubrics}
       selectedRubricId={course.rubricId ?? null}
       gradingInstructionsDefaultValue={readGradingInstructionsOverride(course.gradingPromptConfigJson)}
+      tutorInstructionsDefaultValue={course.tutorInstructions}
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}

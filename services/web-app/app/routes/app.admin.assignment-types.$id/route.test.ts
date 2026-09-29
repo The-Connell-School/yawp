@@ -236,6 +236,47 @@ describe('admin assignment type detail action', () => {
     });
   });
 
+  test('persists the assignment-level General Tutor Instructions', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'AP History Essay');
+    form.set('tutorInstructions', 'WHO YOU ARE. You are the YAWP! Tutor...');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+      data: expect.objectContaining({
+        tutorInstructions: 'WHO YOU ARE. You are the YAWP! Tutor...',
+      }),
+    });
+  });
+
+  test('a submission without the tutorInstructions field leaves it untouched', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'AP History Essay');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    const updateData = prisma.assignmentType.update.mock.calls[0][0].data;
+    expect('tutorInstructions' in updateData).toBe(false);
+  });
+
   test('updates basics without rewriting or versioning the production grading config', async () => {
     const form = new FormData();
     form.set('intent', 'updateCourse');
