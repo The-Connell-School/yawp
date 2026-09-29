@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { renderPreviewCompose } from './render-compose.mjs';
+import YAML from 'yaml';
 
 const requireFromWebApp = createRequire(
   new URL('../../services/web-app/package.json', import.meta.url)
@@ -405,3 +406,53 @@ describe('renderPreviewCompose', () => {
     });
   });
 });
+
+// Strict YAML duplicate-key guard to catch regressions like duplicate "restart" keys.
+describe('renderPreviewCompose (YAML uniqueness)', () => {
+  function strictArgs() {
+    return {
+      // Use a named slug so PR_NUMBER isn't required
+      slug: 'yaml-unique',
+      domain: 'preview.yawp.school',
+      root: '/srv/yawp-preview',
+      sourceDir: '/tmp/nonexistent-source',
+      dataMode: 'seed',
+      databaseUser: 'yawp_preview_app',
+      databasePassword: '12345678901234567890123456789012',
+      accessSeats: JSON.stringify([
+        { code: 'brisk-otter-4321', organizationId: 'local-dev-org', label: 'Local Dev Org' },
+      ]),
+      masterOrgGateEnabled: false,
+      accessSecret: 'x'.repeat(40),
+      sessionSecret: 'y'.repeat(40),
+      aiMode: 'disabled',
+      customIngressActive: false,
+    };
+  }
+
+  function parseYamlStrict(text) {
+    const doc = YAML.parseDocument(text, { uniqueKeys: true });
+    if (doc.errors.length > 0) {
+      throw new Error(
+        'YAML parse errors:\n' + doc.errors.map((e) => e.message).join('\n')
+      );
+    }
+    return doc.toJSON();
+  }
+
+  test('fast runtime parses with unique keys enforced', () => {
+    const compose = renderPreviewCompose({ ...strictArgs(), runtime: 'fast' });
+    const parsed = parseYamlStrict(compose);
+    expect(parsed).toHaveProperty('services.web');
+  });
+
+  test('production runtime parses with unique keys enforced', () => {
+    const compose = renderPreviewCompose({
+      ...strictArgs(),
+      runtime: 'production',
+    });
+    const parsed = parseYamlStrict(compose);
+    expect(parsed).toHaveProperty('services.web');
+  });
+});
+

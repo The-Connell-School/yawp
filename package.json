@@ -10,6 +10,9 @@
     "packages/*",
     "services/*"
   ],
+  "devDependencies": {
+    "yaml": "^2.4.5"
+  },
   "scripts": {
     "typecheck": "bun web-app:typecheck",
     "export-env": "export $(grep -v '^#' .env | xargs) ",
