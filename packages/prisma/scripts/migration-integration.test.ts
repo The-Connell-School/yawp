@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 
 const ROOT = join(dirname(import.meta.path.replace('file://', '')), '..', '..');
 const PRISMA_DIR = join(ROOT, 'packages', 'prisma');
@@ -17,6 +17,15 @@ function run(cmd: string, args: string[], cwd?: string, env?: Record<string, str
     timeout: 120000,
   });
   return res;
+}
+
+function runAsync(cmd: string, args: string[], cwd?: string, env?: Record<string, string>) {
+  const child = spawn(cmd, args, {
+    cwd: cwd || ROOT,
+    env: { ...process.env, DATABASE_URL: DB, ...env },
+    stdio: 'ignore',
+  });
+  return child;
 }
 
 function psql(sql: string) {
@@ -234,6 +243,34 @@ describe('migration integration (real Postgres)', () => {
     prismaDeploy(current);
     // (h) Confirm re-apply works and core tables intact (hash compare not strictly identical because ids may be regenerated elsewhere, but presence check suffices)
     expect(run('psql', ['-t', '-A', DB, '-c', `SELECT COUNT(*) FROM "Rubric"`]).status).toBe(0);
+  });
+
+  test('lock_timeout enforced under migrate deploy', () => {
+    try { psql('DROP DATABASE IF EXISTS yawp_migration_integration'); } catch {}
+    psql('CREATE DATABASE yawp_migration_integration');
+    const pre = setupTempCopy([
+      '20260928182000_pin_assignments_to_current_rubric_revision',
+      '20260929034000_assignment_rubric_baseline_capture',
+    ]);
+    prismaDeploy(pre);
+    // Seed just enough to reach the DROP TRIGGER point
+    psql(`INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position") VALUES ('t1', now(), now(), 'Type', 'k', 0);
+          INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a1', now(), now(), 't1','P');`);
+    // Hold lock on Assignment to block DROP TRIGGER
+    const locker = runAsync('psql', ['-v', 'ON_ERROR_STOP=1', DB, '-c', `BEGIN; LOCK TABLE "Assignment" IN ACCESS EXCLUSIVE MODE; SELECT pg_sleep(10); COMMIT;`]);
+    const current = setupTempCopy();
+    const start = Date.now();
+    const res = run('bun', ['prisma', 'migrate', 'deploy'], current);
+    const elapsed = Date.now() - start;
+    // Expect failure within ~5-7 seconds due to lock_timeout
+    expect(res.status).not.toBe(0);
+    expect(elapsed).toBeGreaterThanOrEqual(4500);
+    expect(elapsed).toBeLessThan(9000);
+    expect(res.stderr + res.stdout).toMatch(/lock_timeout|timeout/i);
+    // Ensure no baseline table was created
+    const hasBaseline = run('psql', ['-t', '-A', DB, '-c', `SELECT to_regclass('public."AssignmentTypeRubricBaseline"') IS NOT NULL;`]).stdout.trim().split('\n').pop();
+    expect(hasBaseline).toBe('f');
+    try { locker.kill('SIGKILL'); } catch {}
   });
 });
 

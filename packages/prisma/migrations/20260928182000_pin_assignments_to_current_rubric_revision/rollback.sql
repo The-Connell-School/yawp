@@ -50,25 +50,25 @@ BEGIN
 
     -- 7) Re-enable (or recreate) the original pin trigger function/trigger (library-only behavior).
     CREATE OR REPLACE FUNCTION internal_assignment_rubric_pin() RETURNS trigger LANGUAGE plpgsql AS $$
-    DECLARE current_revision TEXT; selected_name TEXT;
-    BEGIN
-      IF TG_OP = 'UPDATE' AND OLD."rubricRevisionId" IS NOT NULL THEN
-        IF NEW."rubricRevisionId" IS DISTINCT FROM OLD."rubricRevisionId" OR NEW."assignmentTypeId" IS DISTINCT FROM OLD."assignmentTypeId" THEN
-          RAISE EXCEPTION 'Assignment rubric pin is immutable';
-        END IF;
-        RETURN NEW;
-      END IF;
-      SELECT r."currentRevisionId", r.name INTO current_revision, selected_name
-      FROM "AssignmentType" t JOIN "Rubric" r ON t."rubricId" = r.id
-      WHERE t.id = NEW."assignmentTypeId" FOR SHARE OF r, t;
-      IF NEW."rubricRevisionId" IS NULL THEN NEW."rubricRevisionId" := current_revision;
-      ELSE
-        IF NOT EXISTS (SELECT 1 FROM "RubricRevision" WHERE id = NEW."rubricRevisionId" AND "rubricName" = selected_name) THEN
-          RAISE EXCEPTION 'Assignment rubric pin does not match its rubric';
-        END IF;
-      END IF;
-      RETURN NEW;
-    END $$;
+DECLARE current_revision TEXT; selected_name TEXT;
+BEGIN
+ IF TG_OP = 'UPDATE' AND OLD."rubricRevisionId" IS NOT NULL THEN
+   IF NEW."rubricRevisionId" IS DISTINCT FROM OLD."rubricRevisionId" OR NEW."assignmentTypeId" IS DISTINCT FROM OLD."assignmentTypeId" THEN
+     RAISE EXCEPTION 'Assignment rubric pin is immutable';
+   END IF;
+   RETURN NEW;
+ END IF;
+ SELECT r."currentRevisionId", r.name INTO current_revision, selected_name
+ FROM "AssignmentType" t JOIN "Rubric" r ON t."rubricId" = r.id
+ WHERE t.id = NEW."assignmentTypeId" FOR SHARE OF r, t;
+ IF NEW."rubricRevisionId" IS NULL THEN NEW."rubricRevisionId" := current_revision;
+ ELSE
+   IF NOT EXISTS (SELECT 1 FROM "RubricRevision" WHERE id = NEW."rubricRevisionId" AND "rubricName" = selected_name) THEN
+     RAISE EXCEPTION 'Assignment rubric pin does not match its rubric';
+   END IF;
+ END IF;
+ RETURN NEW;
+END $$;
     DROP TRIGGER IF EXISTS internal_assignment_rubric_pin ON "Assignment";
     CREATE TRIGGER internal_assignment_rubric_pin BEFORE INSERT OR UPDATE ON "Assignment"
     FOR EACH ROW EXECUTE FUNCTION internal_assignment_rubric_pin();

@@ -1,4 +1,4 @@
-SET LOCAL lock_timeout = '5s';
+SET lock_timeout = '5s';
 
 -- Baseline-capture the current grading rubric for every assignment type in use,
 -- pin all existing assignments to that immutable baseline, and make new
@@ -73,12 +73,6 @@ DO $$
 DECLARE
   rows_changed integer := 0;
 BEGIN
-  -- Ensure pgcrypto is available for digest/uuid helpers.
-  PERFORM 1 FROM pg_extension WHERE extname = 'pgcrypto';
-  IF NOT FOUND THEN
-    CREATE EXTENSION IF NOT EXISTS pgcrypto;
-  END IF;
-
   -- Library-linked types in use, with a baseline revision absent.
   WITH lib_types AS (
     SELECT DISTINCT t.id AS assignment_type_id, r.name AS rubric_name, r."schemaJson" AS schema_json
@@ -91,13 +85,13 @@ BEGIN
   ), lib_created AS (
     INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
     SELECT
-      gen_random_uuid()::text AS id,
+      md5(clock_timestamp()::text || random()::text)::text AS id,
       m.rubric_name,
       m.next_version,
       m.schema_json,
-      encode(digest(m.schema_json::text, 'sha256'), 'hex') AS fingerprint,
-      gen_random_uuid()::text AS requestId,
-      encode(digest(m.schema_json::text, 'sha256'), 'hex') AS requestHash,
+      md5(m.schema_json::text) AS fingerprint,
+      md5((clock_timestamp()::text || random()::text)) AS requestId,
+      md5(m.schema_json::text) AS requestHash,
       'baseline-capture' AS createdBy,
       'Captured baseline at deployment' AS reason
     FROM lib_missing m
@@ -148,13 +142,13 @@ BEGIN
   ), per_created AS (
     INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
     SELECT
-      gen_random_uuid()::text AS id,
+      md5(clock_timestamp()::text || random()::text)::text AS id,
       m.rubric_name,
       m.next_version,
       m.schema_json,
-      encode(digest(m.schema_json::text, 'sha256'), 'hex') AS fingerprint,
-      gen_random_uuid()::text AS requestId,
-      encode(digest(m.schema_json::text, 'sha256'), 'hex') AS requestHash,
+      md5(m.schema_json::text) AS fingerprint,
+      md5((clock_timestamp()::text || random()::text)) AS requestId,
+      md5(m.schema_json::text) AS requestHash,
       'baseline-capture' AS createdBy,
       'Captured per-type baseline at deployment' AS reason
     FROM per_missing m
@@ -233,12 +227,12 @@ BEGIN
     RETURN NEW;
   END IF;
   SELECT COALESCE(MAX(version), 0) + 1 INTO next_version FROM "RubricRevision" WHERE "rubricName" = NEW.name;
-  SELECT gen_random_uuid()::text INTO new_id;
+  SELECT md5(clock_timestamp()::text || random()::text)::text INTO new_id;
   INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
   VALUES (
     new_id, NEW.name, next_version, NEW."schemaJson",
-    encode(digest(NEW."schemaJson"::text, 'sha256'), 'hex'),
-    gen_random_uuid()::text, encode(digest(NEW."schemaJson"::text, 'sha256'), 'hex'),
+    md5(NEW."schemaJson"::text),
+    md5(clock_timestamp()::text || random()::text), md5(NEW."schemaJson"::text),
     'auto-revision', 'Rubric updated'
   );
   NEW."currentRevisionId" := new_id;
@@ -278,12 +272,12 @@ BEGIN
     'calibrationNotes', COALESCE(to_jsonb(NEW."gradingCalibrationNotes"), 'null'::jsonb)
   );
   SELECT COALESCE(MAX(version), 0) + 1 INTO next_version FROM "RubricRevision" WHERE "rubricName" = rubric_name;
-  SELECT gen_random_uuid()::text INTO new_id;
+  SELECT md5(clock_timestamp()::text || random()::text)::text INTO new_id;
   INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
   VALUES (
     new_id, rubric_name, next_version, schema_json,
-    encode(digest(schema_json::text, 'sha256'), 'hex'),
-    gen_random_uuid()::text, encode(digest(schema_json::text, 'sha256'), 'hex'),
+    md5(schema_json::text),
+    md5(clock_timestamp()::text || random()::text), md5(schema_json::text),
     'auto-revision', 'Assignment type rubric updated'
   )
   ON CONFLICT DO NOTHING;
