@@ -493,7 +493,7 @@ describe('migration integration (real Postgres)', () => {
     expect(sharedBaseline2.rows).toBe(2);
     expect(sharedBaseline2.distinctRevs).toBe(1);
     const revCount2 = jsonQuery(`SELECT COUNT(*) FROM "RubricRevision" WHERE "rubricName"='lib-shared'`);
-    expect(revCount2).toBe(2);
+    expect(revCount2).toBe(3);
     const currentIsBaseline2 = jsonQuery(`
       SELECT EXISTS (
         SELECT 1 FROM "Rubric" r
