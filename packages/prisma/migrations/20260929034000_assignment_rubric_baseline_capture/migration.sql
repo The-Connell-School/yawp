@@ -187,8 +187,7 @@ BEGIN
     FROM lib_rubrics lr
   )
   -- Create missing baseline-capture revisions for library rubrics
-  , lib_created AS (
-    INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
+  INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
     SELECT
       gen_random_uuid()::text AS id,
       m.rubric_name,
@@ -259,8 +258,7 @@ BEGIN
     FROM per_types p
   )
   -- Create missing baseline-capture revisions for per-type JSON grading
-  , per_created AS (
-    INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
+  INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
     SELECT
       gen_random_uuid()::text AS id,
       m.rubric_name,
