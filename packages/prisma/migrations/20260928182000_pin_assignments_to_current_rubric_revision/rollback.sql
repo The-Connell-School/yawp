@@ -52,7 +52,8 @@ BEGIN
 
     -- 4) Drop baseline/backfill tables first to avoid FK violations.
     DROP TABLE IF EXISTS "AssignmentTypeRubricBaseline";
-    -- Keep helper tables around until after JSON/timestamp restores
+    DROP TABLE IF EXISTS "InternalAssignmentRubricPinBackfill";
+    DROP TABLE IF EXISTS "InternalRubricCurrentPointerRestore";
 
     -- 5) Restore library and per-type sources to their pre-migration JSON using captured revisions,
     --    then delete revisions created by baseline/auto rewriters (temporarily relax immutability).
@@ -63,10 +64,9 @@ BEGIN
     -- Restore library rubric schemaJson from the restored current pointer when available
     DO $restore_lib$
     BEGIN
-      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'internalrubriccurrentpointerrestore') THEN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'InternalRubricCurrentPointerRestore') THEN
         UPDATE "Rubric" r
-        SET "schemaJson" = rr."schemaJson",
-            "updatedAt" = r."createdAt"
+        SET "schemaJson" = rr."schemaJson"
         FROM "InternalRubricCurrentPointerRestore" irpr
         JOIN "RubricRevision" rr ON rr.id = irpr."previousRevisionId"
         WHERE irpr."rubricId" = r.id;
@@ -83,18 +83,9 @@ BEGIN
       "gradingCalibrationNotes" = CASE
         WHEN COALESCE((rr."schemaJson"->'calibrationNotes')::text, 'null') = 'null' THEN NULL
         ELSE rr."schemaJson"->>'calibrationNotes'
-      END,
-      "updatedAt" = t."createdAt"
+      END
     FROM "RubricRevision" rr
     WHERE rr."rubricName" = ('assignment-type:' || t.id);
-    -- Restore updatedAt for assignments we touched during backfill (pins cleared)
-    UPDATE "Assignment" a
-    SET "updatedAt" = a."createdAt"
-    FROM "InternalAssignmentRubricPinBackfill" b
-    WHERE b."assignmentId" = a.id;
-    -- Now drop helper tables
-    DROP TABLE IF EXISTS "InternalAssignmentRubricPinBackfill";
-    DROP TABLE IF EXISTS "InternalRubricCurrentPointerRestore";
     -- Now remove baseline/auto revisions
     DELETE FROM "RubricRevision" WHERE "createdBy" IN ('baseline-capture','auto-revision');
     -- restore immutability guard
