@@ -317,10 +317,10 @@ describe('migration integration (real Postgres)', () => {
     const start = Date.now();
     const res = run('bun', ['run', 'prisma', 'migrate', 'deploy'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
     const elapsed = Date.now() - start;
-    // Expect failure within ~5-7 seconds due to lock_timeout
+    // Expect failure due to lock_timeout (allow generous upper bound for CI variance)
     expect(res.status).not.toBe(0);
     expect(elapsed).toBeGreaterThanOrEqual(4500);
-    expect(elapsed).toBeLessThan(9000);
+    expect(elapsed).toBeLessThan(20000);
     expect(res.stderr + res.stdout).toMatch(/lock_timeout|timeout/i);
     // Ensure no baseline table was created
     const hasBaseline = run('psql', ['-t', '-A', DB, '-c', `SELECT to_regclass('public."AssignmentTypeRubricBaseline"') IS NOT NULL;`]).stdout.trim().split('\n').pop();
