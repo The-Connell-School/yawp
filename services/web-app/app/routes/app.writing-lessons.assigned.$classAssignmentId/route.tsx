@@ -1,10 +1,4 @@
-import {
-  data as dataResponse,
-  redirect,
-  useLoaderData,
-  type ActionFunctionArgs,
-  type LoaderFunctionArgs,
-} from 'react-router';
+import { data as dataResponse, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -15,7 +9,6 @@ import {
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { gradeActAnswer } from '~/utils/writing-lessons/act-practice.shared';
 import { writingPracticeAssignmentTitle } from '~/utils/writing-lessons/assignment-title';
-import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import {
   getAssignedPracticeForStudentById,
   getOrCreateStudentPracticeSet,
@@ -24,24 +17,15 @@ import {
 } from '~/utils/writing-lessons/practice-assignments.server';
 import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
 import { detectPracticeGuardrail } from '~/utils/writing-lessons/practice-feedback.shared';
+import { getQuickWritingLessonContext, getQuickWritingLessonRecap } from '~/utils/writing-lessons/static-lessons.server';
 import {
-  getQuickWritingLessonBySlug,
-  getQuickWritingLessonContext,
-  getQuickWritingLessonRecap,
-} from '~/utils/writing-lessons/static-lessons.server';
-
-function assignmentIncludesComposition(lessonSlugs: string[]) {
-  return lessonSlugs.some(
-    (slug) => getQuickWritingLessonBySlug(slug)?.section === 'Composition'
-  );
-}
+  AiRateLimitError,
+  reserveAiRequest,
+} from '~/utils/ai-admission.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (!profile.organization.writingPracticeEnabled) {
-    throw redirect('/app');
-  }
 
   const classAssignment = await getAssignedPracticeForStudentById(
     params.classAssignmentId ?? '',
@@ -52,12 +36,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const { assignment } = classAssignment;
-  if (
-    assignmentIncludesComposition(assignment.lessonSlugs) &&
-    !isCompositionPracticeEnabled()
-  ) {
-    throw new Response('Assigned practice not found', { status: 404 });
-  }
   const sequence = await getOrCreateStudentPracticeSet({
     classAssignmentId: classAssignment.id,
     membershipId: profile.id,
@@ -119,21 +97,12 @@ type AssignedActionData = PracticeRunnerResult;
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (!profile.organization.writingPracticeEnabled) {
-    throw new Response('Writing practice not found', { status: 404 });
-  }
 
   const classAssignment = await getAssignedPracticeForStudentById(
     params.classAssignmentId ?? '',
     profile.id
   );
   if (!classAssignment) {
-    throw new Response('Assigned practice not found', { status: 404 });
-  }
-  if (
-    assignmentIncludesComposition(classAssignment.assignment.lessonSlugs) &&
-    !isCompositionPracticeEnabled()
-  ) {
     throw new Response('Assigned practice not found', { status: 404 });
   }
 
@@ -180,6 +149,46 @@ export async function action({ request, params }: ActionFunctionArgs) {
         feedback: { ...guardrail, degraded: false },
         recorded: false,
       });
+    }
+
+    // Rate-limit per student/org to cap model usage.
+    const COMPOSITION_ADMISSION_POLICY = {
+      membershipLimit: 12,
+      membershipWindowMs: 60_000,
+      organizationLimit: 600,
+      organizationWindowMs: 60 * 60_000,
+    };
+    try {
+      await reserveAiRequest({
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        feature: 'composition-feedback',
+        policy: COMPOSITION_ADMISSION_POLICY,
+      });
+    } catch (error) {
+      if (error instanceof AiRateLimitError) {
+        return dataResponse<AssignedActionData>(
+          {
+            kind: 'composition',
+            position: safePosition,
+            feedback: {
+              status: 'needs_revision',
+              summary:
+                'Too many composition checks. Please wait a moment and try again.',
+              degraded: false,
+              strengths: [],
+              focus: [],
+              encouragement: '',
+            } as any,
+            recorded: false,
+          },
+          {
+            status: 429,
+            headers: { 'Retry-After': String(error.retryAfterSeconds) },
+          }
+        );
+      }
+      throw error;
     }
 
     const feedback = await generatePracticeFeedback({

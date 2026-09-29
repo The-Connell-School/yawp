@@ -19,15 +19,22 @@ const DOCUMENT_CONTEXT_INSTRUCTION =
 export const buildTutorSystemPrompt = ({
   tutorInstructions,
   instructionTutorInstructions,
+  paragraphModeInstructions,
   moduleRubricGuidance,
 }: {
   tutorInstructions: string | null | undefined;
   instructionTutorInstructions: string | null | undefined;
+  /**
+   * The Daily Pages paragraph type's coaching, layered on top of the module's
+   * own tutor rather than replacing it. Empty when no type was chosen.
+   */
+  paragraphModeInstructions?: string | null | undefined;
   moduleRubricGuidance?: string | null | undefined;
 }): string => {
   return [
     tutorInstructions,
     instructionTutorInstructions,
+    paragraphModeInstructions,
     moduleRubricGuidance,
     BEHIND_THE_SCENES_INSTRUCTION,
     DOCUMENT_CONTEXT_INSTRUCTION,
@@ -41,7 +48,10 @@ export const buildTutorSystemPrompt = ({
  * The tutor system prompt as `system` content blocks. Every input here
  * (`tutorInstructions`, `instructionTutorInstructions`,
  * `moduleRubricGuidance`) is module-level — reused identically across every
- * student working through that module — and nothing student-specific
+ * student working through that module — except `paragraphModeInstructions`,
+ * which is assignment-level and still identical for every student on the
+ * assignment, so it only adds one cached variant per paragraph type. Nothing
+ * student-specific
  * (document text, chat history) is ever mixed in here; those flow through
  * `messages` instead. That makes the whole assembled prompt safe to cache as
  * one block: it's byte-identical for every student in the module, and only

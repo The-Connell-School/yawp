@@ -38,6 +38,10 @@ type Props = {
   /** `AssignmentType.kind`, which decides whether the sheet shows a prompt
    * box or the exit ticket form. */
   assignmentTypeKind?: string | null;
+  /** The writing time the form suggests for this type; null leaves it blank. */
+  assignmentTypeDefaultWritingTimeMinutes?: number | null;
+  /** Whether this type takes a paragraph type (Daily Pages). */
+  assignmentTypeOffersParagraphModes?: boolean;
   teacherClasses: TeacherClass[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -67,6 +71,8 @@ export function CreateAssignmentSheet({
   assignmentTypeCollaborationSupported = false,
   assignmentTypeGradesGrammar = false,
   assignmentTypeKind = null,
+  assignmentTypeDefaultWritingTimeMinutes = null,
+  assignmentTypeOffersParagraphModes = false,
   teacherClasses,
   open,
   onOpenChange,
@@ -109,6 +115,8 @@ export function CreateAssignmentSheet({
             collaborationSupported: assignmentTypeCollaborationSupported,
             gradesGrammar: assignmentTypeGradesGrammar,
             kind: assignmentTypeKind,
+            defaultWritingTimeMinutes: assignmentTypeDefaultWritingTimeMinutes,
+            offersParagraphModes: assignmentTypeOffersParagraphModes,
           },
         ]}
         teacherClasses={teacherClasses}

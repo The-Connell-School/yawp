@@ -32,6 +32,11 @@ import {
 } from '~/domain/assignment-types/rubric-category-options';
 import { applyAssignmentGrammarGrading } from '~/domain/assignment-types/assignment-grammar-grading';
 import {
+  buildGrammarCheckerRetryUserPrompt,
+  buildGrammarCheckerSystemPrompt,
+  buildGrammarCheckerUserPrompt,
+} from '~/domain/grading/writing-time';
+import {
   buildGradingPromptShape,
   buildGradingResponseSchemaText,
 } from '~/domain/grading/grading-prompt-shape';
@@ -598,6 +603,9 @@ export async function action({ request }: ActionFunctionArgs) {
             id: true,
             gradingAssistantStrictnessLevel: true,
             grammarGradingEnabled: true,
+            writingTimeMinutes: true,
+            tutorEnabled: true,
+            paragraphMode: true,
             apHistorySnapshot: true,
             prompt: true,
             pointValue: true,
@@ -1070,6 +1078,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     documentText: submission.text,
     assignmentPrompt,
     gradingContext,
+    writingTimeMinutes: submission.document.assignment?.writingTimeMinutes,
+    coldWrite: submission.document.assignment?.tutorEnabled === false,
+    paragraphMode: submission.document.assignment?.paragraphMode,
   });
   const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
@@ -1334,9 +1345,14 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     );
   } else {
     try {
-      const grammarSystem = `You are the Grammar/Usage Checker.\nReturn ONLY valid JSON with the schema:\n{\n  \"issues\": [{\n    \"excerpt\": string,\n    \"occurrence\"?: number,\n    \"kind\": \"error\"|\"style\",\n    \"ruleNumber\"?: number,\n    \"rule\"?: string,\n    \"message\": string\n  }]\n}\nRules:\n- Highlight the smallest exact excerpt that demonstrates the issue (max 120 characters).\n- If the excerpt appears multiple times, set occurrence to the 1-based match index.\n- Keep message brief (1-2 sentences). State the rule plainly; do not offer to fix it for the student.\n- Focus on essentials: usage, composition, comma/semicolon rules, and omit needless words.\n\nComma rules:\n(1) In a series of three or more terms with a single conjunction, use a comma after each term except the last.\n(2) Enclose parenthetic expressions between commas.\n(3) Do not join independent clauses with a comma (comma splice); use a semicolon, conjunction, or separate sentences.\nSemicolon rule:\nUse a semicolon to join closely related independent clauses.\n\nStyle:\n(10) Omit needless words.`;
+      const writingTimeMinutes =
+        submission.document.assignment?.writingTimeMinutes ?? null;
+      const grammarSystem = buildGrammarCheckerSystemPrompt(writingTimeMinutes);
 
-      const grammarUserPrompt = `Essay:\n${submission.text}\n\nReturn up to 15 issues.`;
+      const grammarUserPrompt = buildGrammarCheckerUserPrompt(
+        submission.text,
+        writingTimeMinutes
+      );
 
       let grammarResponseText = await getGradingLlmCompletion({
         model,
@@ -1364,7 +1380,10 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           messages: [
             {
               role: 'user',
-              content: `Essay:\n${submission.text}\n\nReturn 8-12 issues using the exact schema. Do not include markdown.`,
+              content: buildGrammarCheckerRetryUserPrompt(
+                submission.text,
+                writingTimeMinutes
+              ),
             },
           ],
           maxTokens: 1600,

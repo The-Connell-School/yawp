@@ -22,8 +22,8 @@ and Daily Pages becomes the graded one.
 
 | | Class Starter | Daily Pages |
 |---|---|---|
-| What it is | Open-ended writing to begin class | A short, claim-first response, graded formally |
-| Shape | Explore; the point may arrive at the end, or not at all | A body paragraph: claim first, then the case for it |
+| What it is | Open-ended writing to begin class | Short academic paragraph practice, graded formally |
+| Shape | Explore; the point may arrive at the end, or not at all | One deliberate move (analyze, argue, compare, define…); a findable point, held up; no single required form |
 | Categories | Engagement | Depth of Thought (0.30), Development of Thought (0.25), Organization/Structure (0.12), Voice/Style (0.20), Grammar/Syntax/Mechanics (0.13) |
 | Scale | 0–3 (Absent → All in) | 1–5 (Beginning → Exemplary), the essay scale, with a written band per score |
 | Feedback | Overall only | Per category |
@@ -104,6 +104,36 @@ alongside the tutor and collaboration toggles.
   graded was scored against a rubric that included the category, and flipping
   it afterwards would silently restate those grades. Making it editable is a
   reasonable future change, but it needs a re-grade story first.
+
+## How long students have to write
+
+The grammar checker is one prompt shared by every assignment type, and it read
+every submission as a revised essay: a deliberate fragment in a ten-minute
+paragraph was marked an error, and "omit needless words" applied to work no one
+had time to cut. The grading assistant had the same blind spot.
+
+`Assignment.writingTimeMinutes` fixes both. The teacher sets it on the
+assignment, and it reaches:
+
+- **The grading assistant**, as a block just ahead of the essay: grade it as
+  that many minutes of writing, not as a revised piece. Calibrating is not going
+  easy — a thin claim is still thin, and errors that get in the reader's way
+  still count.
+- **The grammar checker**, which then stops marking deliberate fragments and
+  informal-but-correct phrasing, and at thirty minutes or less returns errors
+  only, no style notes. Its schema-repair retry, which used to demand eight to
+  twelve issues, asks only for the real ones.
+
+**Null changes nothing.** With no writing time, both prompts are byte-for-byte
+what ran before (asserted in tests), which is every assignment written before
+the column existed — production's Daily Pages included.
+
+The creation form suggests a time by kind: 15 minutes for Daily Pages (what its
+about section promises), 10 for Class Starter, blank for everything else. The
+suggestion is only a starting value; nothing reads it at grading time, so an
+existing assignment is never given a time behind the teacher's back. Unlike the
+grammar toggle, it stays editable after creation — it changes how future grading
+reads the work, not a grade already given.
 
 ## Telling teachers what it is
 
@@ -208,18 +238,27 @@ form or register. Silence there is not neutral: the instructions open with
 associates with school essays carried over by default, entry by entry, decided
 by the model rather than by us.
 
-**A Daily Pages entry is claim-first.** It is written the way a strong body
-paragraph is written — the claim in the first sentence, the support behind it,
-a close that lands. It is not an exploration. Writing to find out what you
-think, with the point arriving at the end, is what a Class Starter is for now,
-and that division is the whole reason there are two assignment types. The
-prompt may be anchored to a text or an excerpt, or be general; what does not
-vary is the shape.
+**A Daily Pages entry is paragraph practice, and not one fixed form.** It is
+short, academic writing — generally a paragraph, sometimes up to a page, written
+in the time the teacher sets (often ten or fifteen minutes). Each prompt asks
+for one deliberate academic move: analyzing, arguing a position, comparing,
+defining a term, interpreting, evaluating, synthesizing. That deliberateness is
+what separates it from a Class Starter, which is lower-stakes and open-ended.
+It is not an exploration: writing to find out what you think, with the point
+arriving at the end, is what a Class Starter is for.
+
+The first draft of this rubric required the claim in the first sentence. That
+fits an argued position and misfits most of the other moves — an analysis may
+open on the passage, a definition on the case that sets it up — so it was
+dropped. The rubric now asks that a reader can find the point, that the point
+is held up, and that the paragraph is shaped the way its kind of paragraph
+should be. A calibration case (`dp-definition-opens-on-a-case`) pins that a
+strong paragraph can open on something other than a claim.
 
 This changed the rubric's top bands, which had rewarded the opposite. "Arrives
 somewhere the piece did not begin" and "the thinking compounds" describe the
 exploration shape; they are gone, and Depth of Thought now reads whether the
-claim is worth making and survives the objection a reader raises first. A test
+point is worth making and survives the objection a reader raises first. A test
 asserts no top band asks for a journey, because that language is easy to
 reintroduce by accident.
 
@@ -230,16 +269,22 @@ top-entry writing rather than merely tolerated.
 
 **What the top of the scale asks for is an edited piece.** Voice/Style reads
 whether the prose has been worked on: an entry still carrying hedges in front
-of the claim, narration of its own process ("what I thought was", "I'm pretty
+of the point, narration of its own process ("what I thought was", "I'm pretty
 sure that"), or filler scores no higher than Proficient there, however good its
 ideas are. The assistant coaches the cut — handing the student their own
 sentence with the hedge removed — rather than deducting for the phrase, because
 scoring a phrase teaches students to write around the rubric instead of
 thinking. The cost lands on the piece being unedited, not on any one word.
 
-**The Tutor coaches the same two things**, because the tutor is the half of
+**Grammar is scored on the AP standard for timed writing.** Some grammar and
+spelling errors are understandable in a piece written this quickly; they lower
+the score only when they are frequent enough to distract from meaning. Every
+error is still marked up — the standard governs the score, not the
+highlighting.
+
+**The Tutor coaches the same things**, because the tutor is the half of
 this a student meets before any grade exists:
-`DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS` asks for the claim, then the
+`DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS` asks for the point, then the
 support, then offers the hedge as an edit — and tells it not to encourage
 exploring or freewriting.
 
@@ -254,15 +299,95 @@ what ships:
   behaviour. Doing the same for a customer is a deliberate content change, like
   the rubric reset beside it.
 
+## Calibrating strictness
+
+The first graded examples read as too lenient. Strictness is tuned against
+`app/domain/ai-evaluation/daily-pages-calibration.v1.ts`: eleven synthetic,
+fifteen-minute paragraphs across the scale, each with educator bands for every
+category. The bands encode the decisions above (effort alone below a passing
+composite; strong paragraphs of more than one kind at the top; AP grammar;
+unedited prose at or below Proficient on Voice/Style), and tests pin each.
+
+    bun services/web-app/scripts/run-daily-pages-calibration.ts
+
+runs it live against the built-in Daily Pages assistant and lists every score
+outside its band as lenient or strict. Run it after any rubric or instruction
+change, and before a new paragraph type is switched on. The cases are drafts
+until product and an educator approve them.
+
+## Per-assignment settings
+
+Four settings on the assignment sheet change how an entry is written or graded,
+and the about page names each:
+
+- **Time students have to write** — the grader and the grammar checker read the
+  entry as that many minutes of writing.
+- **Grammar grading** — off drops the grammar category for that assignment.
+- **Tutor enabled** — off makes it a **cold write**. The sheet tags it, the
+  student's prompt panel says so, and the grader is told it is unassisted work
+  and not to refer the student to a tutor.
+- **Submit for grade** — off runs it as practice; nothing reaches the gradebook.
+
+## Paragraph types
+
+A teacher can name the move a Daily Pages entry practices — the **Paragraph
+type** on the assignment sheet, stored as `Assignment.paragraphMode`. The
+registry is `app/domain/assignment-types/daily-pages-paragraph-modes.ts`.
+
+- **Layers, not new assistants.** A type adds guidance beside the writing time
+  in the grading prompt, and coaching after the module's own tutor
+  instructions. The rubric is unchanged, so a new type is a text constant and
+  tests — not a new grading assistant built by hand.
+- **One type at a time.** Each type has an `enabled` switch; teachers see only
+  the enabled ones and the server refuses the rest. **Analyze** ships first,
+  built on Claim-Evidence-Analysis (offered as a guide, not the only form).
+  Before switching the next one on: write its grading and tutor text, add
+  calibration cases for it, run the calibration script, then flip `enabled`.
+- **No type is the default** ("Any kind of paragraph"), stored as null, which
+  grades and tutors exactly as before. Frozen after creation, like the grammar
+  toggle.
+- The universal tutor persona is still copied into each module row's
+  `tutorInstructions`; there is no shared tutor prompt in code. The type layer
+  sits on top of whatever the module carries.
+
+## Connected tools
+
+Changing an assignment type changes what the tools built on it assume.
+
+**Class Summary** now receives the conditions the class wrote under (type,
+paragraph type, writing time, cold write, grammar graded) and applies the
+grammar toggle to the rubric it summarizes.
+
+**Lesson Planner** ([#374](https://github.com/The-Connell-School/yawp/pull/374))
+is not on this branch. When it lands it needs:
+
+- `search_short_form_prompts` and its tool description: "a graded Daily Pages
+  reflection" → academic paragraph practice; filter by `cognitiveMoves` so a
+  lesson asking for analysis gets Analyze prompts.
+- `dailyPagesCreateHref`: pass the paragraph type (`analyze`) alongside
+  `newPrompt` so the sheet opens with it chosen.
+- The `sf-ex-*` ids no longer exist; the `/^sf-/` mapping to Daily Pages still
+  holds for every remaining id.
+
+**Re-test when an assignment type changes** (rubric, instructions, paragraph
+types, or per-assignment settings):
+
+1. `bun services/web-app/scripts/run-daily-pages-calibration.ts` — no new
+   lenient or strict drift.
+2. Grade one seeded Daily Pages entry end to end; check the marked-up grammar
+   and per-category feedback.
+3. Generate a Class Summary for a cold-write assignment; the next steps should
+   not send students to the tutor or ask for revision.
+4. Plan a lesson with a Daily Pages block in the Lesson Planner; the prompt and
+   type should carry into the sheet.
+5. Read teacher feedback since the last change for anything the tools now
+   assume that teachers no longer do.
+
 ## Still open
 
-- **Whose sentence rules apply.** Grammar/Mechanics grades "sentence
-  construction … and formatting" at 15%, and the markup comes from one
-  Grammar/Usage Checker prompt shared by every assignment type — it does not
-  know this is a paragraph written in ten minutes. A deliberate fragment ("Not
-  always. Only when it costs something.") is marked an error today. Relaxing
-  that means teaching the shared checker which type it is grading, which is
-  code rather than copy.
+- ~~**Whose sentence rules apply.**~~ Resolved by the writing time above: the
+  shared checker is told how long the student had rather than which type it is
+  grading, so a deliberate fragment in a timed piece is left alone.
 - **Does personal experience count as evidence?** The seeded exemplar backs its
   claim with a story about a grandmother's painting and scores 94%, which looks
   right for a prompt with no assigned text. What happens when a prompt *does*
@@ -270,12 +395,11 @@ what ships:
 - **Brief versus underdeveloped.** The instructions say never to mark an entry
   down for being brief; the Development bands mark an entry that does not hold
   its claim up. A three-sentence entry against a half-page target is both.
-- **`exit-synthesis` may now belong to Class Starter.** One of the six corpus
-  kinds asks what changed today and what changed it — which is exploration by
-  design, and reads oddly against a claim-first rubric. Worth deciding before
-  the corpus grows.
+- ~~**`exit-synthesis` may now belong to Class Starter.**~~ Resolved: the kind
+  is removed from the Daily Pages corpus. It asks the student to explore, which
+  is a Class Starter's job.
 - **Whether Organization should weigh more than 15%.** Shape is now a named
-  requirement, and a response that buries its claim loses ground in two
+  requirement, and a response that buries its point loses ground in two
   categories rather than one. That may be enough; if it is not, the weight is
   the lever.
 

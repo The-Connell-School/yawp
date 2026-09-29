@@ -2941,7 +2941,11 @@ test.describe('YAWP! Lesson Planner', () => {
     await setWritingPracticeEnabled(e2eContext.organizationId, false);
   });
 
-  test('offers no practice button to a school without Writing Practice', async ({
+  /**
+   * Writing Practice is on for every school now, and the old per-school toggle
+   * is retired. A school that still has it switched off gets the button too.
+   */
+  test('offers the practice button whatever the retired Writing Practice toggle says', async ({
     page,
     signIn,
     e2eContext,
@@ -2953,11 +2957,9 @@ test.describe('YAWP! Lesson Planner', () => {
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
     await page.waitForLoadState('networkidle');
 
-    // The practice is still lesson content the teacher can read, but there is
-    // nothing to press that would lead to a page this school cannot open.
     await expect(page.locator('main')).not.toContainText('yawp-practice');
     await expect(page.getByTestId('practice-card')).toContainText('6 problems');
-    await expect(page.getByTestId('practice-assign')).toHaveCount(0);
+    await expect(page.getByTestId('practice-assign')).toBeVisible();
   });
 
   test('turns the check it planned into a real exit ticket', async ({

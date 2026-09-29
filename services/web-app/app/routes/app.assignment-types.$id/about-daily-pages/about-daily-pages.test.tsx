@@ -194,7 +194,7 @@ describe('the Daily Pages about section', () => {
     renderAbout();
     const body = openSection(SHORT_FORM_LIBRARY_HEADING);
 
-    // The six kinds and the library's own notes, which used to sit in a
+    // The kinds and the library's own notes, which used to sit in a
     // second card below this one.
     for (const kind of KIND_ORDER) {
       expect(body.textContent).toContain(KIND_LABEL[kind]);

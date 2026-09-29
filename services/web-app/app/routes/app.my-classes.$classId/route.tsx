@@ -1,4 +1,6 @@
 import { Prisma } from '@app/prisma';
+import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
+import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -507,6 +509,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
+    const writingTimeResult = parseWritingTimeMinutes(formData);
+    if (!writingTimeResult.success) {
+      return dataResponse(
+        { success: false, message: writingTimeResult.message },
+        { status: 400 }
+      );
+    }
+    // Only written when the form sent it, so an older caller that omits the
+    // field leaves the stored value alone. Blank clears it.
+    const writingTimeData = writingTimeResult.sent
+      ? { writingTimeMinutes: writingTimeResult.value }
+      : {};
     const rubricOverrideData = {
       ...(formData.has('rubricTotalPoints')
         ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
@@ -658,6 +672,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           ...(formData.has('tutorEnabled')
             ? { tutorEnabled: tutorEnabledResult.value }
             : {}),
+          ...writingTimeData,
           ...promptAttachmentData,
         },
       });
@@ -966,7 +981,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (!klass) throw new Response('Class not found', { status: 404 });
 
   const classInsightsEnabled = klass.school.organization.classInsightsEnabled;
-  const reporterEnabled = klass.school.organization.reporterEnabled;
+  // Reporter is now always enabled for all organizations.
+  const reporterEnabled = true;
 
   const legacyClassDocumentIds = (
     await prisma.documentClassForensic.findMany({
@@ -1142,6 +1158,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             promptAttachmentName: true,
             submitForGrade: true,
             pointValue: true,
+            // Marks cold writes in the assignments table.
+            tutorEnabled: true,
             assignmentTypeId: true,
             assignmentType: {
               select: {
@@ -1231,6 +1249,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     promptAttachmentName: classAssignment.assignment.promptAttachmentName,
     submitForGrade: classAssignment.assignment.submitForGrade,
     pointValue: classAssignment.assignment.pointValue,
+    tutorEnabled: classAssignment.assignment.tutorEnabled,
     assignmentTypeId: classAssignment.assignment.assignmentTypeId,
     assignmentType: classAssignment.assignment.assignmentType,
     otherClassCount: Math.max(
@@ -1258,27 +1277,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     orderBy: [{ grade: 'asc' }, { period: 'asc' }],
   });
 
-  // Growth plans are only ever created via Reporter, so skip the query
-  // entirely for organizations that don't have it enabled.
-  const growthPlans = reporterEnabled
-    ? await prisma.reporterGrowthPlan.findMany({
-        where: {
-          organizationId: klass.school.organizationId,
-          studentMembershipId: { in: klass.students.map((s) => s.id) },
-        },
-        select: {
-          id: true,
-          focus: true,
-          targetSkills: true,
-          body: true,
-          checkInAt: true,
-          status: true,
-          createdAt: true,
-          studentMembershipId: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      })
-    : [];
+  // Growth plans are only ever created via Reporter.
+  const growthPlans = await prisma.reporterGrowthPlan.findMany({
+    where: {
+      organizationId: klass.school.organizationId,
+      studentMembershipId: { in: klass.students.map((s) => s.id) },
+    },
+    select: {
+      id: true,
+      focus: true,
+      targetSkills: true,
+      body: true,
+      checkInAt: true,
+      status: true,
+      createdAt: true,
+      studentMembershipId: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
 
   const growthPlansByStudentId = growthPlans.reduce<
     Record<string, typeof growthPlans>
@@ -1315,6 +1331,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     creationTypeRows.map((assignmentType) => assignmentType.id)
   );
 
+  const creationTypeDefaults = await getCreationTypeDefaultsById(
+    creationTypeRows.map((assignmentType) => assignmentType.id)
+  );
+
   return dataResponse({
     role: 'TEACHER' as const,
     klass,
@@ -1328,6 +1348,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         collaborationSupported,
         gradesGrammar: gradesGrammarIds.has(id),
         kind,
+        defaultWritingTimeMinutes:
+          creationTypeDefaults.get(id)?.defaultWritingTimeMinutes ?? null,
+        offersParagraphModes:
+          creationTypeDefaults.get(id)?.offersParagraphModes ?? false,
       })
     ),
     assignmentsEnabled: true,

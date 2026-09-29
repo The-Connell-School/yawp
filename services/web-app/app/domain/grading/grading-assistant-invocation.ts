@@ -1,6 +1,11 @@
 import { teacherNotesEnabled } from './teacher-notes';
 import { buildGradingPromptShape } from './grading-prompt-shape';
 import type { ResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { buildParagraphModeGradingBlock } from '~/domain/assignment-types/daily-pages-paragraph-modes';
+import {
+  buildColdWriteGradingBlock,
+  buildWritingTimeGradingBlock,
+} from './writing-time';
 import {
   getGradingAssistantStrictnessInstructions,
   getGradingAssistantStrictnessLabel,
@@ -120,6 +125,9 @@ export function compileGradingAssistantInvocation({
   documentText,
   assignmentPrompt,
   gradingContext,
+  writingTimeMinutes,
+  coldWrite,
+  paragraphMode,
 }: {
   gradingConfig: Pick<
     ResolvedAssignmentTypeGradingConfig,
@@ -146,6 +154,12 @@ export function compileGradingAssistantInvocation({
    * for every existing type byte-identical.
    */
   gradingContext?: string | null;
+  /** How long the student had to write; null or absent leaves the prompt as it was. */
+  writingTimeMinutes?: number | null;
+  /** True when the tutor was off: a cold write. Absent or false changes nothing. */
+  coldWrite?: boolean | null;
+  /** The Daily Pages paragraph type the teacher chose; absent changes nothing. */
+  paragraphMode?: string | null;
 }): CompiledGradingAssistantInvocation {
   const { minScore, maxScore } = gradingConfig;
   const promptShape = buildGradingPromptShape({
@@ -175,6 +189,16 @@ export function compileGradingAssistantInvocation({
   const template =
     gradingConfig.promptTemplate ??
     defaultGradingAssistantPromptTemplate(gradingConfig);
+  // The conditions the teacher set for the writing — how long, whether the
+  // tutor was there, and what kind of paragraph was asked for — travel
+  // together as one block.
+  const writingTimeBlock = [
+    buildWritingTimeGradingBlock(writingTimeMinutes),
+    buildColdWriteGradingBlock(coldWrite),
+    buildParagraphModeGradingBlock(paragraphMode),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
   const variables = {
     assignment_type: gradingConfig.rubricTotalPoints
       ? `${gradingConfig.label} (total rubric points: ${gradingConfig.rubricTotalPoints})`
@@ -193,6 +217,7 @@ export function compileGradingAssistantInvocation({
     strictness_label: strictnessLabel,
     student_first_name: studentFirstName,
     system_instructions: assignmentTypeSystemInstructions ?? '',
+    writing_time: writingTimeBlock,
   };
   const renderedSystem = renderPromptTemplate(template.systemMessage, variables);
   // Older managed templates do not carry the response-contract variable. The
@@ -203,9 +228,16 @@ export function compileGradingAssistantInvocation({
   const renderedUserMessage = renderPromptTemplate(template.userMessage, variables);
   // Existing managed templates predate assignment_prompt. Preserve their text
   // while ensuring a real prompt still reaches the grading assistant.
-  const userMessage = assignmentPrompt?.trim() && !/{{\s*assignment_prompt\s*}}/i.test(template.userMessage)
+  const userMessageWithPrompt = assignmentPrompt?.trim() && !/{{\s*assignment_prompt\s*}}/i.test(template.userMessage)
     ? `${renderedUserMessage}\n\nAssignment prompt: ${assignmentPrompt.trim()}`
     : renderedUserMessage;
+  // No template carries writing_time yet, and none needs to: with no writing
+  // time the block is empty and the message is untouched. With one, it goes in
+  // just ahead of the essay, beside the other things the teacher decided.
+  const userMessage =
+    writingTimeBlock && !/{{\s*writing_time\s*}}/i.test(template.userMessage)
+      ? insertBeforeEssay(userMessageWithPrompt, writingTimeBlock)
+      : userMessageWithPrompt;
   // Same story as the assignment prompt above: no existing template carries a
   // slot for what an assignment adds for the grader, so it is appended rather
   // than dropped. An assignment that supplies none appends nothing, which
@@ -221,4 +253,13 @@ export function compileGradingAssistantInvocation({
     messages: [{ role: 'user', content: userMessageWithContext }],
     maxTokens: 900,
   };
+}
+
+function insertBeforeEssay(message: string, block: string): string {
+  const essayHeading = '\n\nEssay:\n';
+  // The first heading, never one inside the student's own text below it.
+  const at = message.indexOf(essayHeading);
+  return at === -1
+    ? `${message}\n\n${block}`
+    : `${message.slice(0, at)}\n\n${block}${message.slice(at)}`;
 }

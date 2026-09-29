@@ -197,9 +197,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const practice = await loadPracticeContext({
     request,
     membershipId: access.membership.id,
-    writingPracticeEnabled: Boolean(
-      access.membership.organization.writingPracticeEnabled
-    ),
+    // Writing Practice is on for every school; the per-school toggle is retired.
+    writingPracticeEnabled: true,
   });
 
   return {

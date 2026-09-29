@@ -1,3 +1,4 @@
+import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
   Form,
@@ -37,7 +38,6 @@ import {
   getAssignedPracticeForStudent,
 } from '~/utils/writing-lessons/practice-assignments.server';
 import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
-import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import {
   Dialog,
   DialogContent,
@@ -51,11 +51,14 @@ import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/as
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
 function formatAssignmentDueDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  // Render date-only consistently regardless of local timezone
+  // by formatting in UTC (matches assignment due-date displays elsewhere).
+  return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-  });
+    timeZone: 'UTC',
+  }).format(new Date(iso));
 }
 
 export type AssignmentTypeRow = {
@@ -272,6 +275,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)
   );
+  const creationTypeDefaults = await getCreationTypeDefaultsById(
+    creationTypeRows.map((type) => type.id)
+  );
   const assignmentCreationTypes = creationTypeRows.map((type) => ({
     id: type.id,
     title: type.title,
@@ -280,24 +286,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
     collaborationSupported: type.collaborationSupported ?? false,
     gradesGrammar: gradesGrammarIds.has(type.id),
     kind: type.kind ?? null,
+    defaultWritingTimeMinutes:
+      creationTypeDefaults.get(type.id)?.defaultWritingTimeMinutes ?? null,
+    offersParagraphModes:
+      creationTypeDefaults.get(type.id)?.offersParagraphModes ?? false,
   }));
 
   // A student's assigned Writing Fundamentals practice, surfaced on their
   // dashboard alongside their classes (each card links into the practice
   // runner). Grammar sets report answered progress; composition sets report
   // mastery.
-  const compositionPracticeEnabled = isCompositionPracticeEnabled();
   const writingPracticeAssignments =
-    useStudentExperience && profile.organization.writingPracticeEnabled
+    useStudentExperience
       ? (await getAssignedPracticeForStudent(profile.id))
-          .filter(
-            ({ assignment }) =>
-              compositionPracticeEnabled ||
-              !assignment.lessonSlugs.some(
-                (slug) =>
-                  getQuickWritingLessonBySlug(slug)?.section === 'Composition'
-              )
-          )
           .map((classAssignment) => {
             const { assignment } = classAssignment;
             const progress = computeAssignedProgress(

@@ -246,28 +246,24 @@ describe('handleLessonPlannerToolCall', () => {
    * not a grammar one.
    */
   test('finds Composition lessons for an essay-level gap', async () => {
-    const previous = process.env.COMPOSITION_PRACTICE_ENABLED;
-    process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
-    try {
-      const listed = JSON.parse(
-        await callTool(
-          'list_writing_lessons',
-          { rubricCategory: 'evidence_and_support' },
-          { ...ctx, writingPracticeEnabled: true }
-        )
-      );
-      const slugs = listed.lessons.map((lesson: { slug: string }) => lesson.slug);
-      expect(slugs).toContain('evidence');
-      expect(slugs).toContain('analysis');
-      for (const lesson of listed.lessons) {
-        expect(lesson.section).toBe('Composition');
-      }
-    } finally {
-      process.env.COMPOSITION_PRACTICE_ENABLED = previous;
+    const listed = JSON.parse(
+      await callTool(
+        'list_writing_lessons',
+        { rubricCategory: 'evidence_and_support' },
+        { ...ctx, writingPracticeEnabled: true }
+      )
+    );
+    const slugs = listed.lessons.map((lesson: { slug: string }) => lesson.slug);
+    expect(slugs).toContain('evidence');
+    expect(slugs).toContain('analysis');
+    for (const lesson of listed.lessons) {
+      expect(lesson.section).toBe('Composition');
     }
   });
 
-  test('keeps Composition out of the planner while its rollout flag is off', async () => {
+  // Composition is on for every school now; the old rollout flag no longer
+  // hides it, even in an environment that still sets it off.
+  test('offers Composition whatever the retired rollout flag says', async () => {
     const previous = process.env.COMPOSITION_PRACTICE_ENABLED;
     process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
     try {
@@ -278,10 +274,11 @@ describe('handleLessonPlannerToolCall', () => {
           { ...ctx, writingPracticeEnabled: true }
         )
       );
-      expect(listed.lessons.length).toBeGreaterThan(0);
-      for (const lesson of listed.lessons) {
-        expect(lesson.section).toBe('Grammar & Mechanics');
-      }
+      const sections = new Set(
+        listed.lessons.map((lesson: { section: string }) => lesson.section)
+      );
+      expect(sections).toContain('Composition');
+      expect(sections).toContain('Grammar & Mechanics');
 
       const lesson = JSON.parse(
         await callTool(
@@ -290,9 +287,11 @@ describe('handleLessonPlannerToolCall', () => {
           { ...ctx, writingPracticeEnabled: true }
         )
       );
-      expect(lesson.error).toBeTruthy();
+      expect(lesson.error).toBeUndefined();
+      expect(lesson.slug).toBe('evidence');
     } finally {
-      process.env.COMPOSITION_PRACTICE_ENABLED = previous;
+      if (previous === undefined) delete process.env.COMPOSITION_PRACTICE_ENABLED;
+      else process.env.COMPOSITION_PRACTICE_ENABLED = previous;
     }
   });
 

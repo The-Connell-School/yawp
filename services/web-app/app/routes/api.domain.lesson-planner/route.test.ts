@@ -209,21 +209,21 @@ describe('api.domain.lesson-planner action', () => {
       {
         membershipId: 'teacher-1',
         organizationId: 'org-1',
-        writingPracticeEnabled: false,
+        writingPracticeEnabled: true,
       }
     );
-    // No Writing Practice, so nothing to assign and no practice block taught.
-    expect(llmArgs.system as string).not.toContain('yawp-practice');
   });
 
-  test('lets a school with Writing Practice assign practice from a lesson', async () => {
+  // Writing Practice is on for every school; the retired per-school toggle,
+  // left switched off here, no longer takes practice out of the plan.
+  test('lets any school assign practice from a lesson', async () => {
     requireLessonPlannerAccess.mockResolvedValue({
       ...access,
       membership: {
         ...access.membership,
         organization: {
           ...access.membership.organization,
-          writingPracticeEnabled: true,
+          writingPracticeEnabled: false,
         },
       },
     });

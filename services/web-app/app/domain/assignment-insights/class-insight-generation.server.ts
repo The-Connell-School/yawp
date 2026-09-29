@@ -14,6 +14,7 @@ import {
 } from '~/domain/assignment-insights/differentiate-students';
 import type { ClassInsightSummary } from '~/domain/assignment-insights/class-insight-synthesis';
 import { readInsightRubric } from '~/domain/assignment-insights/insight-rubric.server';
+import { getParagraphMode } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { prisma } from '~/utils/db.server';
 import {
   AiRateLimitError,
@@ -136,6 +137,27 @@ async function loadDifferentiationInputs(classAssignmentId: string) {
   });
 }
 
+/**
+ * The conditions the class wrote under, for the summary to read the scores
+ * against. Each is null or false when the assignment set none, which leaves the
+ * summary prompt as it was.
+ */
+function writingConditions(assignment: {
+  tutorEnabled?: boolean | null;
+  writingTimeMinutes?: number | null;
+  paragraphMode?: string | null;
+  grammarGradingEnabled?: boolean | null;
+  assignmentType?: { title?: string | null } | null;
+}) {
+  return {
+    assignmentTypeTitle: assignment.assignmentType?.title ?? null,
+    paragraphModeLabel: getParagraphMode(assignment.paragraphMode)?.label ?? null,
+    writingTimeMinutes: assignment.writingTimeMinutes ?? null,
+    coldWrite: assignment.tutorEnabled === false,
+    grammarGraded: assignment.grammarGradingEnabled ?? null,
+  };
+}
+
 export async function generateClassAssignmentInsight(input: {
   classAssignmentId: string;
   organizationId: string;
@@ -153,7 +175,16 @@ export async function generateClassAssignmentInsight(input: {
     },
     select: {
       id: true,
-      assignment: { select: { title: true } },
+      assignment: {
+        select: {
+          title: true,
+          tutorEnabled: true,
+          writingTimeMinutes: true,
+          paragraphMode: true,
+          grammarGradingEnabled: true,
+          assignmentType: { select: { title: true } },
+        },
+      },
       class: {
         select: {
           grade: true,
@@ -272,6 +303,7 @@ export async function generateClassAssignmentInsight(input: {
       context: {
         assignmentTitle: classAssignment.assignment.title,
         className: classLabel(classAssignment.class),
+        ...writingConditions(classAssignment.assignment),
       },
       rubric,
       metadata: { classAssignmentId: classAssignment.id },

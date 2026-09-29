@@ -15,7 +15,6 @@ import {
   resolveTeacherSchoolYearScope,
   schoolYearWhere,
 } from '~/utils/school-year-scope.server';
-import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import { getQuickWritingLessons } from '~/utils/writing-lessons/static-lessons.server';
 
 export type PracticeContext = {
@@ -24,11 +23,9 @@ export type PracticeContext = {
   classes: WritingPracticeAssignmentClass[] | null;
 };
 
-/** The lessons a practice set may name, with Composition only once it is on. */
+/** The lessons a practice set may name: both strands, for every school. */
 export function practiceLessonOptions(): PracticeSkillOption[] {
-  const includeComposition = isCompositionPracticeEnabled();
   return getQuickWritingLessons()
-    .filter((lesson) => includeComposition || lesson.section !== 'Composition')
     .map((lesson) => ({
       slug: lesson.slug,
       title: lesson.title,

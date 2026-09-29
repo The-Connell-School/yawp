@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { Prisma } from '@app/prisma';
 
 const prisma = {
   $transaction: mock(async (fn: any) => fn(prisma)),
@@ -215,7 +216,7 @@ describe('class detail loader document visibility', () => {
     expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
   });
 
-  test('skips the growth plans query and gates the summary tab when the organization has not enabled it', async () => {
+  test('loads growth plans even when the organization previously had reporter disabled', async () => {
     const response = await loader({
       request: new Request('https://example.test/app/my-classes/class-1'),
       params: { classId: 'class-1' },
@@ -224,9 +225,8 @@ describe('class detail loader document visibility', () => {
     const data = (response as { data: any }).data;
 
     expect(data.classInsightsEnabled).toBe(false);
-    expect(data.reporterEnabled).toBe(false);
-    expect(data.growthPlansByStudentId).toEqual({});
-    expect(prisma.reporterGrowthPlan.findMany).not.toHaveBeenCalled();
+    expect(data.reporterEnabled).toBe(true);
+    expect(prisma.reporterGrowthPlan.findMany).toHaveBeenCalled();
   });
 
   test('groups growth plans by student when reporter is enabled for the organization', async () => {
@@ -391,6 +391,7 @@ describe('class detail loader document visibility', () => {
         id: true,
         title: true,
         systemKey: true,
+        kind: true,
         collaborationSupported: true,
       },
       orderBy: { position: 'asc' },
@@ -403,6 +404,9 @@ describe('class detail loader document visibility', () => {
         // The mocked type has no rubric, so it grades no grammar and the
         // creation sheet offers the teacher no toggle for it.
         gradesGrammar: false,
+        // Nor a kind, so no writing time is suggested for it.
+        defaultWritingTimeMinutes: null,
+        offersParagraphModes: false,
       },
     ]);
   });
@@ -700,10 +704,72 @@ describe('class detail loader document visibility', () => {
         assignmentTypeId: 'archived-type-1',
         title: null,
         prompt: 'Updated prompt',
+        // Not an exit ticket, so any stale exit ticket config is cleared.
+        exitTicketConfigJson: Prisma.DbNull,
         submitForGrade: true,
         pointValue: 100,
       },
     });
+  });
+
+  test.each([
+    ['20', 20],
+    ['', null],
+  ])('edits how long students have to write (%p)', async (raw, expected) => {
+    prisma.assignment.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+      assignmentTypeId: 'archived-type-1',
+      assignmentType: { systemKey: null },
+    });
+
+    const form = new FormData();
+    form.set('intent', 'update-assignment');
+    form.set('assignmentId', 'assignment-1');
+    form.set('assignmentTypeId', 'archived-type-1');
+    form.set('prompt', 'Updated prompt');
+    form.set('writingTimeMinutes', raw);
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({ success: true });
+    expect(prisma.assignment.update).toHaveBeenCalledWith({
+      where: { id: 'assignment-1' },
+      data: expect.objectContaining({ writingTimeMinutes: expected }),
+    });
+  });
+
+  test('rejects an edit with an invalid writing time', async () => {
+    prisma.assignment.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+      assignmentTypeId: 'archived-type-1',
+      assignmentType: { systemKey: null },
+    });
+
+    const form = new FormData();
+    form.set('intent', 'update-assignment');
+    form.set('assignmentId', 'assignment-1');
+    form.set('assignmentTypeId', 'archived-type-1');
+    form.set('prompt', 'Updated prompt');
+    form.set('writingTimeMinutes', '0');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.init).toMatchObject({ status: 400 });
+    expect(prisma.assignment.update).not.toHaveBeenCalled();
   });
 
   test('creates a standardized class assignment with grading intent', async () => {

@@ -1237,15 +1237,31 @@ export function TeacherGradingPanel({
                 current.score,
                 activeRubricConfig.minScore
               );
+              // Display-only rename for Daily Pages engagement tiers.
+              const mapDailyPagesBandTitle = (label: string | null) => {
+                switch (label) {
+                  case 'ALL IN':
+                    return 'Excellent';
+                  case 'SHOWED UP':
+                    return 'Good';
+                  case 'HARDLY THERE':
+                    return 'Needs Improvement';
+                  case 'NOT HANDED IN':
+                    return 'Absent/Missing';
+                  default:
+                    return label;
+                }
+              };
               const configuredScoreLabel = hasScore
                 ? getCategoryScoreLabel(item, current.score)
                 : null;
               const categoryBounds = getCategoryScoreBounds(item);
               const categoryMaxScore =
                 categoryBounds?.max ?? activeRubricConfig.maxScore;
+              const effectiveLabel = mapDailyPagesBandTitle(configuredScoreLabel);
               const scoreLabel = hasScore
-                ? configuredScoreLabel
-                  ? `${configuredScoreLabel} (${current.score}/${categoryMaxScore})`
+                ? effectiveLabel
+                  ? `${effectiveLabel} (${current.score}/${categoryMaxScore})`
                   : `${current.score}/${categoryMaxScore}`
                 : 'Not scored';
               const isGrammarCategory = isGrammarHighlightCategory(item);
