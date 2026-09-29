@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { spawnSync, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
-const ROOT = join(dirname(import.meta.path.replace('file://', '')), '..', '..');
-const PRISMA_DIR = join(ROOT, 'packages', 'prisma');
+const PRISMA_DIR = join(import.meta.dir, '..');
+const ROOT = join(PRISMA_DIR, '..', '..');
 const DB = process.env.DATABASE_URL || 'postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration';
 const ADMIN_DB = (() => { const u = new URL(DB); u.pathname = '/postgres'; return u.toString(); })();
 
@@ -89,12 +90,6 @@ describe('migration integration (real Postgres)', () => {
       '20260929034000_assignment_rubric_baseline_capture',
     ]);
     prismaDeploy(pre);
-    // Capture pre-migration schema and data hashes AFTER seeding and BEFORE deploy
-    const schemaPre = run('pg_dump', ['-s', DB]).stdout;
-    function hash(tbl: string) {
-      return run('psql', ['-t', '-A', DB, '-c', `SELECT md5(COALESCE(string_agg(row_to_json(t)::text, '' ORDER BY 1), '')) FROM (SELECT * FROM "${tbl}") t;`]).stdout.trim().split('\n').pop();
-    }
-    const preHash = { Rubric: hash('Rubric'), AssignmentType: hash('AssignmentType'), Assignment: hash('Assignment'), RubricRevision: hash('RubricRevision') };
 
     // Seed: library rubric + 2 types (one shared rubric), per-type JSON type, and no-JSON type.
     const libSchema = {
@@ -133,6 +128,26 @@ describe('migration integration (real Postgres)', () => {
       INSERT INTO "Submission" ("id","createdAt","updatedAt","title","text","html","submittedAt","score","rubricScores","overallScore","numericPercentage","documentId")
       VALUES ('sub-1', now(), now(), 'T', 'txt', '<p>t</p>', now(), '18/30', '{"engagement_with_prompt":{"score":18}}'::jsonb, 18, NULL, 'doc-1');
     `);
+    // Seed a pre-existing publisher pin that must survive rollback
+    const libSchemaJson = JSON.stringify(libSchema).replaceAll("'", "''");
+    psql(`
+      INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason","createdAt")
+      VALUES ('rev-pub-1','lib-shared',1,'${libSchemaJson}'::jsonb,
+              encode(sha256(convert_to(('${libSchemaJson}'::jsonb)::text,'UTF8')),'hex'),
+              'req-pub-1',
+              encode(sha256(convert_to(('${libSchemaJson}'::jsonb)::text,'UTF8')),'hex'),
+              'publisher-x','Seeded revision', now());
+      UPDATE "Rubric" SET "currentRevisionId"='rev-pub-1' WHERE id='rub-1';
+      UPDATE "Assignment" SET "rubricRevisionId"='rev-pub-1' WHERE id='a-lib-2';
+    `);
+    // Capture pre-migration schema and data hashes AFTER seeding and BEFORE deploy
+    const schemaPre = run('pg_dump', ['-s', DB]).stdout;
+    function hash(tbl: string) {
+      return run('psql', ['-t', '-A', DB, '-c', `SELECT md5(COALESCE(string_agg(row_to_json(t)::text, '' ORDER BY 1), '')) FROM (SELECT * FROM "${tbl}") t;`]).stdout.trim().split('\n').pop();
+    }
+    const preHash = { Rubric: hash('Rubric'), AssignmentType: hash('AssignmentType'), Assignment: hash('Assignment'), RubricRevision: hash('RubricRevision') };
+    // Submission snapshot before applying migrations
+    const beforeGrade = jsonQuery(`SELECT row_to_json(s) FROM "Submission" s WHERE id='sub-1'`);
 
     // Apply broken migration copy to prove failure (break quoting)
     const broken = setupTempCopy();
@@ -142,7 +157,10 @@ describe('migration integration (real Postgres)', () => {
     const fail1 = prismaDeployExpectFail(broken);
     expect(fail1.stderr + fail1.stdout).toContain('schemajson');
     // Resolve rolled back migration and assert no partials
-    run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], broken);
+    {
+      const rr = run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], broken);
+      expect(rr.status).toBe(0);
+    }
     const baselineExists = run('psql', ['-t', '-A', DB, '-c', `SELECT to_regclass('public."AssignmentTypeRubricBaseline"') IS NOT NULL;`]).stdout.trim().split('\n').pop();
     expect(baselineExists).toBe('f');
     const pinTrigger = run('psql', ['-t', '-A', DB, '-c', `SELECT COUNT(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE c.relname='Assignment' AND t.tgname='internal_assignment_rubric_pin';`]).stdout.trim().split('\n').pop();
@@ -224,7 +242,6 @@ describe('migration integration (real Postgres)', () => {
     expect(upd.stderr + upd.stdout).toContain('immutable');
 
     // (f) Submission remains byte-identical
-    const beforeGrade = jsonQuery(`SELECT row_to_json(s) FROM "Submission" s WHERE id='sub-1'`);
     const afterGrade = jsonQuery(`SELECT row_to_json(s) FROM "Submission" s WHERE id='sub-1'`);
     expect(JSON.stringify(afterGrade)).toBe(JSON.stringify(beforeGrade));
 
@@ -242,6 +259,11 @@ describe('migration integration (real Postgres)', () => {
       RubricRevision: hash('RubricRevision'),
     };
     expect(postHash).toEqual(preHash);
+    // Publisher seed and pin survived rollback
+    const pubStillThere = jsonQuery(`SELECT EXISTS (SELECT 1 FROM "RubricRevision" WHERE id='rev-pub-1' AND "createdBy"='publisher-x')`);
+    expect(pubStillThere).toBe(true);
+    const pinStillThere = jsonQuery(`SELECT "rubricRevisionId"='rev-pub-1' FROM "Assignment" WHERE id='a-lib-2'`);
+    expect(pinStillThere).toBe(true);
     // No leftover auto triggers/functions
     const triggers = run('psql', ['-t', '-A', DB, '-c', `SELECT tgname FROM pg_trigger WHERE tgname LIKE 'yawp_auto_%';`]).stdout.trim();
     expect(triggers).toBe('');
@@ -268,7 +290,7 @@ describe('migration integration (real Postgres)', () => {
     psql(`INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position") VALUES ('t1', now(), now(), 'Type', 'k', 0);
           INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a1', now(), now(), 't1','P');`);
     // Hold lock on Assignment to block DROP TRIGGER
-    const locker = runAsync('psql', ['-v', 'ON_ERROR_STOP=1', DB, '-c', `BEGIN; LOCK TABLE "Assignment" IN ACCESS EXCLUSIVE MODE; SELECT pg_sleep(10); COMMIT;`]);
+    const locker = runAsync('psql', ['-v', 'ON_ERROR_STOP=1', DB, '-c', `BEGIN; LOCK TABLE "Assignment" IN ACCESS EXCLUSIVE MODE; SELECT pg_sleep(300);`]);
     // Wait until lock is held
     const lockQuery = `SELECT EXISTS (
       SELECT 1 FROM pg_locks l
@@ -293,16 +315,52 @@ describe('migration integration (real Postgres)', () => {
     // Ensure no baseline table was created
     const hasBaseline = run('psql', ['-t', '-A', DB, '-c', `SELECT to_regclass('public."AssignmentTypeRubricBaseline"') IS NOT NULL;`]).stdout.trim().split('\n').pop();
     expect(hasBaseline).toBe('f');
-    // Resolve and re-deploy after lock timeout
-    run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260928182000_pin_assignments_to_current_rubric_revision'], current);
-    run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], current);
-    prismaDeploy(current);
-    // Ensure locker transaction ended before recovery: wait until lock gone
+    // Kill locker and wait for lock to clear before recovery
+    locker.kill('SIGKILL');
     const startWait = Date.now();
     while (true) {
       const has = run('psql', ['-t', '-A', DB, '-c', lockQuery]).stdout.trim().split('\n').pop();
       if (has === 'f') break;
-      if (Date.now() - startWait > 12000) break;
+      if (Date.now() - startWait > 15000) throw new Error('lock not released in time');
+    }
+    // Resolve and re-deploy after lock timeout
+    {
+      const r1 = run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260928182000_pin_assignments_to_current_rubric_revision'], current);
+      expect(r1.status).toBe(0);
+    }
+    {
+      const r2 = run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], current);
+      expect(r2.status).toBe(0);
+    }
+    prismaDeploy(current);
+  });
+
+  test('canonical JSON SQL fingerprint matches app fingerprint()', () => {
+    const cases: unknown[] = [
+      { b: true, a: 1.0, z: null, m: {}, n: [], c: { y: 'x', x: 'y' } },
+      { obj: { nested: { a: 1, b: 0.5, c: [3, 2, 1] } }, arr: [ { k: 2 }, { k: 1 } ] },
+      { text: 'He said "Hello", then \\ escaped.\nNext line.', uni: '雪豹 🐆' },
+      0.5,
+      1.0,
+      2,
+      [],
+      {},
+      null,
+      true,
+      false,
+    ];
+    function canonical(value: any): string {
+      if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+      if (value !== null && typeof value === 'object')
+        return `{${Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${canonical((value as any)[k])}`).join(',')}}`;
+      return JSON.stringify(value);
+    }
+    const fp = (v: unknown) => createHash('sha256').update(canonical(v)).digest('hex');
+    for (const value of cases) {
+      const sqlJson = JSON.stringify(value).replaceAll("'", "''");
+      const sql = `SELECT encode(sha256(convert_to(canonical_json('${sqlJson}'::jsonb),'UTF8')),'hex')`;
+      const got = run('psql', ['-t', '-A', DB, '-c', sql]).stdout.trim().split('\n').pop();
+      expect(got).toBe(fp(value));
     }
   });
 });

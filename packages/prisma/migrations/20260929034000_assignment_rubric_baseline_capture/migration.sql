@@ -1,5 +1,74 @@
 SET lock_timeout = '5s';
 
+-- Canonical JSON fingerprinting to match app's JSON.stringify semantics:
+-- - Objects: keys sorted in byte-wise "C" collation; no whitespace
+-- - Arrays: preserve order
+-- - Strings: escape via to_jsonb(text)::text
+-- - Numbers: minimal representation (1.0 -> 1, 0.50 -> 0.5)
+-- This function is kept because triggers below depend on it; rollback drops it.
+CREATE OR REPLACE FUNCTION canonical_json(value jsonb)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+PARALLEL SAFE
+AS $$
+DECLARE
+  out text;
+  k text;
+  v jsonb;
+  first boolean;
+  num_text text;
+BEGIN
+  IF value IS NULL THEN
+    RETURN 'null';
+  END IF;
+  CASE jsonb_typeof(value)
+    WHEN 'null' THEN
+      RETURN 'null';
+    WHEN 'boolean' THEN
+      RETURN value::text;
+    WHEN 'number' THEN
+      -- Parse as numeric to trim trailing zeros; emit minimal string form
+      num_text := ((value #>> '{}')::numeric)::text;
+      RETURN num_text;
+    WHEN 'string' THEN
+      -- Quote and escape using JSON rules
+      RETURN to_jsonb(value #>> '{}')::text;
+    WHEN 'array' THEN
+      out := '[';
+      first := true;
+      FOR v IN SELECT value FROM jsonb_array_elements(value) LOOP
+        IF NOT first THEN
+          out := out || ',';
+        END IF;
+        out := out || canonical_json(v);
+        first := false;
+      END LOOP;
+      out := out || ']';
+      RETURN out;
+    WHEN 'object' THEN
+      out := '{';
+      first := true;
+      FOR k, v IN
+        SELECT key, value
+        FROM jsonb_each(value)
+        ORDER BY key COLLATE "C"
+      LOOP
+        IF NOT first THEN
+          out := out || ',';
+        END IF;
+        out := out || to_jsonb(k)::text || ':' || canonical_json(v);
+        first := false;
+      END LOOP;
+      out := out || '}';
+      RETURN out;
+  END CASE;
+  -- Should be unreachable
+  RETURN value::text;
+END
+$$;
+
 -- Baseline-capture the current grading rubric for every assignment type in use,
 -- pin all existing assignments to that immutable baseline, and make new
 -- assignments pin automatically even when a type grades from per-type JSON.
@@ -89,9 +158,9 @@ BEGIN
       m.rubric_name,
       m.next_version,
       m.schema_json,
-      encode(sha256(convert_to(m.schema_json::text,'UTF8')),'hex') AS fingerprint,
+      encode(sha256(convert_to(canonical_json(m.schema_json),'UTF8')),'hex') AS fingerprint,
       gen_random_uuid()::text AS requestId,
-      encode(sha256(convert_to(m.schema_json::text,'UTF8')),'hex') AS requestHash,
+      encode(sha256(convert_to(canonical_json(m.schema_json),'UTF8')),'hex') AS requestHash,
       'baseline-capture' AS createdBy,
       'Captured baseline at deployment' AS reason
     FROM lib_missing m
@@ -146,9 +215,9 @@ BEGIN
       m.rubric_name,
       m.next_version,
       m.schema_json,
-      encode(sha256(convert_to(m.schema_json::text,'UTF8')),'hex') AS fingerprint,
+      encode(sha256(convert_to(canonical_json(m.schema_json),'UTF8')),'hex') AS fingerprint,
       gen_random_uuid()::text AS requestId,
-      encode(sha256(convert_to(m.schema_json::text,'UTF8')),'hex') AS requestHash,
+      encode(sha256(convert_to(canonical_json(m.schema_json),'UTF8')),'hex') AS requestHash,
       'baseline-capture' AS createdBy,
       'Captured per-type baseline at deployment' AS reason
     FROM per_missing m
@@ -231,8 +300,8 @@ BEGIN
   INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
   VALUES (
     new_id, NEW.name, next_version, NEW."schemaJson",
-    encode(sha256(convert_to(NEW."schemaJson"::text,'UTF8')),'hex'),
-    gen_random_uuid()::text, encode(sha256(convert_to(NEW."schemaJson"::text,'UTF8')),'hex'),
+    encode(sha256(convert_to(canonical_json(NEW."schemaJson"),'UTF8')),'hex'),
+    gen_random_uuid()::text, encode(sha256(convert_to(canonical_json(NEW."schemaJson"),'UTF8')),'hex'),
     'auto-revision', 'Rubric updated'
   );
   NEW."currentRevisionId" := new_id;
@@ -276,8 +345,8 @@ BEGIN
   INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
   VALUES (
     new_id, rubric_name, next_version, schema_json,
-    encode(sha256(convert_to(schema_json::text,'UTF8')),'hex'),
-    gen_random_uuid()::text, encode(sha256(convert_to(schema_json::text,'UTF8')),'hex'),
+    encode(sha256(convert_to(canonical_json(schema_json),'UTF8')),'hex'),
+    gen_random_uuid()::text, encode(sha256(convert_to(canonical_json(schema_json),'UTF8')),'hex'),
     'auto-revision', 'Assignment type rubric updated'
   )
   ON CONFLICT DO NOTHING;

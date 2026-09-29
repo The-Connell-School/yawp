@@ -51,6 +51,8 @@ BEGIN
     DROP FUNCTION IF EXISTS yawp_auto_rubric_revision_on_update();
     DROP TRIGGER IF EXISTS yawp_auto_assignment_type_baseline_on_update ON "AssignmentType";
     DROP FUNCTION IF EXISTS yawp_auto_assignment_type_baseline_on_update();
+    -- Drop canonical JSON helper if present
+    DROP FUNCTION IF EXISTS canonical_json(jsonb);
 
     -- 7) Re-enable (or recreate) the original pin trigger function/trigger (library-only behavior).
     CREATE OR REPLACE FUNCTION internal_assignment_rubric_pin() RETURNS trigger LANGUAGE plpgsql AS $$
