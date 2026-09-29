@@ -251,17 +251,15 @@ describe('migration integration (real Postgres)', () => {
     const restoreRows = jsonQuery(`SELECT COUNT(*) FROM "InternalRubricCurrentPointerRestore" WHERE "rubricId"='rub-1'`);
     expect(restoreRows).toBe(1);
     // pinned content equals sources
-    const libEq = jsonQuery(`
+    const baselineEq = jsonQuery(`
       SELECT (
-        SELECT rr."schemaJson" FROM "Assignment" a
-        JOIN "RubricRevision" rr ON rr.id = a."rubricRevisionId"
-        WHERE a.id IN ('a-lib-1','a-lib-3')
-        LIMIT 1
-      ) = (
-        SELECT "schemaJson" FROM "Rubric" WHERE id = 'rub-1'
-      )
+        SELECT rr."schemaJson"
+        FROM "AssignmentTypeRubricBaseline" b
+        JOIN "RubricRevision" rr ON rr.id = b."rubricRevisionId"
+        WHERE b."assignmentTypeId"='t-lib-a'
+      ) = (SELECT "schemaJson" FROM "Rubric" WHERE id='rub-1')
     `);
-    expect(libEq).toBe(true);
+    expect(baselineEq).toBe(true);
     const perEq = jsonQuery(`
       SELECT (
         SELECT rr."schemaJson" FROM "Assignment" a
