@@ -222,7 +222,7 @@ describe('seedDailyPagesSampleEntries', () => {
     expect(calls.assignmentTypeUpdate).toHaveLength(1);
   });
 
-  test('points the seeded Tutor at claim-first coaching', async () => {
+  test('points the seeded Tutor at paragraph-practice coaching', async () => {
     const { prisma, calls } = fakePrisma();
 
     await seedDailyPagesSampleEntries(prisma as never, options);
@@ -231,7 +231,9 @@ describe('seedDailyPagesSampleEntries', () => {
     const { data } = calls.moduleUpdateMany[0].args;
     // The shipped row is the freewrite tutor, which coaches the exploration
     // this assignment type no longer wants.
-    expect(data.tutorInstructions).toContain('claim');
+    expect(data.tutorInstructions).toContain('paragraph practice');
+    // No single form: the module blurb does not pin the claim to sentence one.
+    expect(data.description).not.toContain('first sentence');
     expect(data.tutorInstructions).not.toContain('probing questions');
     // Without an alignment, no rubric language reaches the tutor at all.
     expect(data.rubricAlignmentJson.depth_of_thought).toBe('primary');

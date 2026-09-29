@@ -11,10 +11,11 @@ import type {
 } from '~/utils/writing-lessons/lesson-evidence';
 
 function formatDueDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
-  });
+    timeZone: 'UTC',
+  }).format(new Date(iso));
 }
 
 /**

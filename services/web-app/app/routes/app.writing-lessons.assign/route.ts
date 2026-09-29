@@ -2,7 +2,6 @@ import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import { createWritingPracticeAssignmentForClasses } from '~/utils/writing-lessons/practice-assignments.server';
 import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
 
@@ -23,11 +22,6 @@ export async function action({ request }: ActionFunctionArgs) {
     return fail('Only teachers can assign writing practice.', 403);
   }
 
-  // Checked ahead of any field validation: while the feature is paused the
-  // answer is the same whatever the form says, and nothing may be written.
-  if (!profile.organization.writingPracticeEnabled) {
-    return fail('Writing practice is not enabled for your organization.', 404);
-  }
 
   const formData = await request.formData();
   const lessonSlugs = formData
@@ -60,12 +54,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (invalidSlug) {
     return fail(`Unknown lesson: ${invalidSlug}.`);
   }
-  const includesComposition = lessonSlugs.some(
-    (slug) => getQuickWritingLessonBySlug(slug)?.section === 'Composition'
-  );
-  if (includesComposition && !isCompositionPracticeEnabled()) {
-    return fail('Composition practice is not enabled.', 404);
-  }
+  // Composition is always enabled for all orgs.
 
   if (classIds.length === 0) {
     return fail('Pick at least one class.');

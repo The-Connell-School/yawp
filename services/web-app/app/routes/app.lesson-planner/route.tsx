@@ -197,9 +197,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const practice = await loadPracticeContext({
     request,
     membershipId: access.membership.id,
-    writingPracticeEnabled: Boolean(
-      access.membership.organization.writingPracticeEnabled
-    ),
+    writingPracticeEnabled: true,
   });
 
   return {

@@ -4,6 +4,9 @@ const prisma = {
   classAssignment: { findMany: mock() },
   class: { findMany: mock(), findFirst: mock() },
   documentGroup: { findFirst: mock() },
+  // The loader reads the creation types' rubrics and kinds, to know which
+  // offer the grammar toggle and which suggest a writing time.
+  assignmentType: { findMany: mock(async () => []) },
 };
 const requireUserId = mock();
 const requireMembership = mock();
@@ -15,16 +18,18 @@ const getAvailableAssignmentTypesForScopes = mock();
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
 // before any file could mock.module() this path (see comment there).
-const actualAssignmentTypeAccess = globalThis.__realModules[
-  '~/utils/assignment-type-access.server'
-];
+const actualAssignmentTypeAccess =
+  globalThis.__realModules['~/utils/assignment-type-access.server'];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/assignment-deployment.server', () => ({
   AssignmentHasCollaborativeWorkError,
   deleteClassAssignmentDeployment,
 }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
 mock.module('~/utils/assignment-type-access.server', () => ({
   ...actualAssignmentTypeAccess,
   getAvailableAssignmentTypesForScopes,
@@ -39,9 +44,8 @@ const { action, loader } = await import('./route');
 // The loader reads the feature switch from the client-safe module, which is
 // deliberately not mocked here: these expectations follow the real flag rather
 // than a stand-in, so switching the feature changes the suite honestly.
-const { SAVED_ASSIGNMENTS_ENABLED } = await import(
-  '~/domain/assignments/saved-assignments'
-);
+const { SAVED_ASSIGNMENTS_ENABLED } =
+  await import('~/domain/assignments/saved-assignments');
 
 afterAll(() => {
   mock.restore();
@@ -235,51 +239,65 @@ describe('My Assignments loader', () => {
       'Honors · Grade 10th • Period 2nd'
     );
   });
-  test.skipIf(!SAVED_ASSIGNMENTS_ENABLED)('hands the page this teacher\'s saved assignments and what it takes to reuse one', async () => {
-    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
-    prisma.classAssignment.findMany.mockResolvedValue([]);
-    prisma.class.findMany.mockResolvedValue([
-      { id: 'class-1', grade: '9th', period: '1st', title: null,
-        school: { id: 'school-1', organizationId: 'org-1' } },
-    ]);
-    getAvailableAssignmentTypesForScopes.mockResolvedValue([
-      { id: 'at-1', title: 'Essay', systemKey: null },
-      { id: 'ap-1', title: 'AP History Essay', systemKey: 'ap_history_essay' },
-    ]);
-    listSavedAssignments.mockResolvedValue([
-      {
-        id: 'saved-1',
-        title: 'Rhetorical Analysis Essay',
-        prompt: 'Analyze the passage.',
-        submitForGrade: true,
-        pointValue: 100,
-        gradingAssistantStrictnessLevel: 'intermediate',
-        tutorEnabled: true,
-        assignmentTypeId: 'at-1',
-        assignmentTypeTitle: 'Essay',
-        savedAt: '2026-08-08T12:00:00.000Z',
-      },
-    ]);
+  test.skipIf(!SAVED_ASSIGNMENTS_ENABLED)(
+    "hands the page this teacher's saved assignments and what it takes to reuse one",
+    async () => {
+      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      prisma.classAssignment.findMany.mockResolvedValue([]);
+      prisma.class.findMany.mockResolvedValue([
+        {
+          id: 'class-1',
+          grade: '9th',
+          period: '1st',
+          title: null,
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
+      ]);
+      getAvailableAssignmentTypesForScopes.mockResolvedValue([
+        { id: 'at-1', title: 'Essay', systemKey: null },
+        {
+          id: 'ap-1',
+          title: 'AP History Essay',
+          systemKey: 'ap_history_essay',
+        },
+      ]);
+      listSavedAssignments.mockResolvedValue([
+        {
+          id: 'saved-1',
+          title: 'Rhetorical Analysis Essay',
+          prompt: 'Analyze the passage.',
+          submitForGrade: true,
+          pointValue: 100,
+          gradingAssistantStrictnessLevel: 'intermediate',
+          tutorEnabled: true,
+          assignmentTypeId: 'at-1',
+          assignmentTypeTitle: 'Essay',
+          savedAt: '2026-08-08T12:00:00.000Z',
+        },
+      ]);
 
-    const result = (await loader({
-      request: makeRequest(),
-      params: {},
-      context: {},
-    } as any)) as any;
+      const result = (await loader({
+        request: makeRequest(),
+        params: {},
+        context: {},
+      } as any)) as any;
 
-    expect(listSavedAssignments).toHaveBeenCalledWith({
-      membershipId: 'profile-1',
-    });
-    expect(result.savedAssignments).toHaveLength(1);
-    expect(result.savedAssignments[0].title).toBe('Rhetorical Analysis Essay');
-    expect(result.assignmentCreationClasses).toEqual([
-      { id: 'class-1', name: 'Grade 9th • Period 1st' },
-    ]);
-    // AP History assignments come from their own library, not a saved prompt.
-    expect(result.assignmentCreationTypes).toEqual([
-      { id: 'at-1', title: 'Essay' },
-    ]);
-  });
+      expect(listSavedAssignments).toHaveBeenCalledWith({
+        membershipId: 'profile-1',
+      });
+      expect(result.savedAssignments).toHaveLength(1);
+      expect(result.savedAssignments[0].title).toBe(
+        'Rhetorical Analysis Essay'
+      );
+      expect(result.assignmentCreationClasses).toEqual([
+        { id: 'class-1', name: 'Grade 9th • Period 1st' },
+      ]);
+      // AP History assignments come from their own library, not a saved prompt.
+      expect(result.assignmentCreationTypes).toEqual([
+        { id: 'at-1', title: 'Essay' },
+      ]);
+    }
+  );
 
   test.skipIf(SAVED_ASSIGNMENTS_ENABLED)(
     'reads no saved assignments while the feature is switched off, but still arms the creation sheet',
@@ -311,7 +329,16 @@ describe('My Assignments loader', () => {
         { id: 'class-1', name: 'Grade 9th • Period 1st' },
       ]);
       expect(result.assignmentCreationTypes).toEqual([
-        { id: 'at-1', title: 'Essay' },
+        {
+          id: 'at-1',
+          title: 'Essay',
+          collaborationSupported: undefined,
+          // No rubric and no kind on the mocked type: no grammar toggle and
+          // no suggested writing time.
+          gradesGrammar: false,
+          defaultWritingTimeMinutes: null,
+          offersParagraphModes: false,
+        },
       ]);
     }
   );
@@ -326,6 +353,52 @@ describe('My Assignments loader', () => {
     } as any);
 
     expect(listSavedAssignments).not.toHaveBeenCalled();
+  });
+
+  test('carries the tutor setting so cold writes can be marked in the list', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    prisma.classAssignment.findMany.mockResolvedValue([
+      {
+        id: 'ca-1',
+        class: { id: 'class-1', grade: '9th', period: '1st', title: null },
+        assignment: {
+          id: 'assignment-1',
+          title: 'Diagnostic Essay',
+          tutorEnabled: false,
+          assignmentType: { title: 'Essay' },
+        },
+        _count: { documents: 3 },
+      },
+      {
+        id: 'ca-2',
+        class: { id: 'class-1', grade: '9th', period: '1st', title: null },
+        assignment: {
+          id: 'assignment-2',
+          title: 'Essay Two',
+          tutorEnabled: true,
+          assignmentType: { title: 'Essay' },
+        },
+        _count: { documents: 2 },
+      },
+    ]);
+
+    const result = (await loader({
+      request: makeRequest(),
+      params: {},
+      context: {},
+    } as any)) as any;
+
+    const select = prisma.classAssignment.findMany.mock.calls[0][0].select;
+    expect(select.assignment.select.tutorEnabled).toBe(true);
+    expect(
+      result.assignments.map((assignment: any) => [
+        assignment.assignmentId,
+        assignment.tutorEnabled,
+      ])
+    ).toEqual([
+      ['assignment-1', false],
+      ['assignment-2', true],
+    ]);
   });
 });
 
@@ -350,7 +423,7 @@ describe('My Assignments action', () => {
       });
     }
 
-    test('removes every deployment of the assignment in this teacher\'s classes', async () => {
+    test("removes every deployment of the assignment in this teacher's classes", async () => {
       requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
       prisma.classAssignment.findMany.mockResolvedValue([
         { assignmentId: 'assignment-1', classId: 'class-1' },
@@ -388,7 +461,7 @@ describe('My Assignments action', () => {
       expect(response.success ?? response.data?.success).toBe(true);
     });
 
-    test('deletes nothing when one of the ids is outside the teacher\'s classes', async () => {
+    test("deletes nothing when one of the ids is outside the teacher's classes", async () => {
       requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
       prisma.classAssignment.findMany.mockResolvedValue([
         { assignmentId: 'assignment-1', classId: 'class-1' },

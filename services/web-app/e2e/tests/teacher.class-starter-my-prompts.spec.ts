@@ -17,7 +17,7 @@ const USED_OPTION = {
 // model. Mirrors the structured contract the real route returns.
 async function stubGenerator(page: import('@playwright/test').Page) {
   await page.route(
-    '**/api/domain/class-starter-prompt-generator',
+    '**/api/domain/daily-pages-prompt-generator',
     async (route) => {
       if (route.request().method() !== 'POST') {
         await route.continue();

@@ -365,6 +365,128 @@ describe('api.assignments.create', () => {
     });
   });
 
+  test('records how long students have to write', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        writingTimeMinutes: '10',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ writingTimeMinutes: 10 }),
+      classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
+    });
+  });
+
+  test('records no writing time when none is given (preserves current behavior)', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ writingTimeMinutes: null }),
+      classIds: ['class-1', 'class-2'],
+      deployment: { postAt: null, dueAt: null },
+    });
+  });
+
+  describe('paragraph type', () => {
+    function createWith(fields: Record<string, string>) {
+      return action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          prompt: 'Quote the line where the argument turns.',
+          title: 'Daily Pages',
+          ...fields,
+        }),
+        params: {},
+      } as any);
+    }
+
+    test('records the chosen type on a Daily Pages assignment', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      const body = await readBody(await createWith({ paragraphMode: 'analyze' }));
+
+      expect(body).toMatchObject({ success: true });
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ paragraphMode: 'analyze' }),
+        })
+      );
+    });
+
+    test('records none when no type is chosen (preserves current behavior)', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      await createWith({});
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ paragraphMode: null }),
+        })
+      );
+    });
+
+    test('ignores a type sent for an assignment type that is not Daily Pages', async () => {
+      mockAssignmentTypeAvailable({ kind: null });
+
+      await createWith({ paragraphMode: 'analyze' });
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ paragraphMode: null }),
+        })
+      );
+    });
+
+    test('rejects a type that is not switched on yet', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      const response = await createWith({ paragraphMode: 'argue' });
+
+      expect(responseStatus(response)).toBe(400);
+      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
+  });
+
+  test('rejects a writing time that is not whole minutes', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        writingTimeMinutes: 'ten',
+      }),
+      params: {},
+    } as any);
+
+    expect(responseStatus(response)).toBe(400);
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+  });
+
   test('rejects an invalid tutor toggle value', async () => {
     const response = await action({
       request: requestFor({

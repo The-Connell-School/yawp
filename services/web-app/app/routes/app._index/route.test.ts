@@ -738,6 +738,9 @@ describe('app index loader assignments', () => {
         // grammar with.
         gradesGrammar: false,
         kind: null,
+        // The mocked type has no kind, so no writing time is suggested.
+        defaultWritingTimeMinutes: null,
+        offersParagraphModes: false,
       },
     ]);
   });

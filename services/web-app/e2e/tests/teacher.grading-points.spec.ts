@@ -182,15 +182,15 @@ for (const scenario of [
   {
     pointValue: 10,
     selectedScore: 7,
-    selectedLabel: 'SHOWED UP',
-    labelledOptions: ['NOT HANDED IN', 'HARDLY THERE', 'SHOWED UP', 'ALL IN'],
+    selectedLabel: 'Good',
+    labelledOptions: ['Absent/Missing', 'Needs Improvement', 'Good', 'Excellent'],
     absentOptions: [],
   },
   {
     pointValue: 90,
     selectedScore: 60,
-    selectedLabel: 'SHOWED UP',
-    labelledOptions: ['NOT HANDED IN', 'HARDLY THERE', 'SHOWED UP', 'ALL IN'],
+    selectedLabel: 'Good',
+    labelledOptions: ['Absent/Missing', 'Needs Improvement', 'Good', 'Excellent'],
     absentOptions: [],
   },
 ] as const) {

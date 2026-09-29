@@ -7,6 +7,7 @@ import {
 } from '~/domain/assignment-types/daily-pages-short-form-rubric';
 
 import {
+  ABOUT_LEDE,
   GRADING_SUMMARY,
   PROMPT_RECIPE,
   PROMPT_REWRITES,
@@ -15,7 +16,62 @@ import {
   WHAT_IT_IS,
   WHAT_IT_IS_NOT,
   HOW_TO_USE,
+  REGISTER_NOTE,
 } from './content';
+
+const allCopy = () =>
+  [
+    ABOUT_LEDE,
+    ...WHAT_IT_IS,
+    ...WHAT_IT_IS_NOT.map((item) => `${item.claim} ${item.detail}`),
+    ...HOW_TO_USE,
+    REGISTER_NOTE,
+    ...PROMPT_RECIPE.map((part) => `${part.move} ${part.detail}`),
+  ].join(' ');
+
+/**
+ * Daily Pages is short academic paragraph practice, and the paragraph can be
+ * of more than one kind. The page must say so, and must not tell a teacher that
+ * every entry opens with a claim.
+ */
+describe('paragraph practice, in more than one kind', () => {
+  test('opens by calling it paragraph practice', () => {
+    expect(ABOUT_LEDE).toContain('paragraph practice');
+  });
+
+  test('says the teacher sets the time, rather than fixing it', () => {
+    expect(ABOUT_LEDE).toMatch(/you set|you choose/i);
+  });
+
+  test('names the kinds of paragraph a teacher can ask for', () => {
+    const text = WHAT_IT_IS.join(' ').toLowerCase();
+    for (const move of [
+      'analyz',
+      'argu',
+      'compar',
+      'defin',
+      'interpret',
+      'evaluat',
+      'synthesiz',
+    ]) {
+      expect(text).toContain(move);
+    }
+  });
+
+  test('never pins the claim to the first sentence', () => {
+    const text = allCopy().toLowerCase();
+    expect(text).not.toContain('first sentence');
+    expect(text).not.toContain('claim-first');
+  });
+
+  test('says what separates it from a Class Starter: a deliberate academic move', () => {
+    const classStarter = WHAT_IT_IS_NOT.find((item) =>
+      item.detail.includes('Class Starter')
+    );
+    expect(classStarter?.detail).toContain('deliberate');
+    expect(classStarter?.detail).toContain('lower-stakes');
+  });
+});
 
 describe('the grading summary', () => {
   test('describes exactly the rubric’s categories, in rubric order', () => {
@@ -47,6 +103,14 @@ describe('the grading summary', () => {
     const thinking =
       weightOf('depth_of_thought') + weightOf('development_of_thought');
     expect(thinking).toBeGreaterThan(50);
+  });
+
+  test('tells a teacher grammar is scored on the AP standard', () => {
+    const grammar = GRADING_SUMMARY.find(
+      (row) => row.key === 'grammar_and_mechanics'
+    );
+    expect(grammar?.gloss).toContain('AP standard');
+    expect(grammar?.gloss).toContain('distract from meaning');
   });
 
   test('glosses every category', () => {
@@ -84,6 +148,36 @@ describe('the explanation of the type', () => {
   test('gives a teacher something to do with it, not only a definition', () => {
     expect(WHAT_IT_IS.length).toBeGreaterThanOrEqual(3);
     expect(HOW_TO_USE.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+/**
+ * Three switches a teacher sets per assignment. The page names each one, in
+ * the words the assignment sheet uses.
+ */
+describe('the per-assignment switches', () => {
+  const text = HOW_TO_USE.join(' ');
+
+  test('names the cold write: the tutor switched off', () => {
+    expect(text).toContain('cold write');
+    expect(text).toContain('Tutor enabled');
+  });
+
+  test('names ungraded practice: grade submission switched off', () => {
+    expect(text).toContain('Submit for grade');
+  });
+
+  test('names the grammar switch', () => {
+    expect(text.toLowerCase()).toContain('grammar grading off');
+  });
+
+  test('names the paragraph type', () => {
+    expect(text).toContain('Paragraph type');
+    expect(text).toContain('Analyze');
+  });
+
+  test('names the writing time', () => {
+    expect(text).toContain('Time students have to write');
   });
 });
 

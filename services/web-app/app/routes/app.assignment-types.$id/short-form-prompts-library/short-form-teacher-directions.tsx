@@ -30,7 +30,7 @@ export function ShortFormTeacherDirections() {
         is expected — keep those two parts and it will still grade.
       </p>
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        The six kinds
+        The kinds
       </p>
       <dl className="mb-4 space-y-1.5 text-sm text-foreground/80">
         {KIND_ORDER.map((kind) => (

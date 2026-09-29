@@ -97,6 +97,56 @@ describe('the short-form corpus', () => {
   });
 });
 
+/**
+ * Daily Pages is deliberate academic paragraph practice. A prompt that asks
+ * what changed today, with no text and no move to make, is an exploration —
+ * which is a Class Starter's job — so that kind is not in this corpus.
+ */
+describe('the corpus is deliberate moves, not exploration', () => {
+  test('carries no exit-synthesis prompts', () => {
+    expect(KIND_ORDER as readonly string[]).not.toContain('exit-synthesis');
+    for (const prompt of prompts) {
+      expect(prompt.kind as string).not.toBe('exit-synthesis');
+      expect(prompt.id.startsWith('sf-ex-')).toBe(false);
+    }
+  });
+});
+
+/**
+ * Scranton reads Romeo and Juliet in ninth grade alongside Yawp, so the
+ * library carries prompts anchored to it — weighted toward analysis, the first
+ * paragraph type to ship.
+ */
+describe('Romeo and Juliet prompts', () => {
+  const romeo = prompts.filter((prompt) =>
+    prompt.textsOrUnits.includes('Romeo and Juliet')
+  );
+
+  test('there are enough to use across the unit', () => {
+    expect(romeo.length).toBeGreaterThanOrEqual(5);
+  });
+
+  test('every one is offered for ninth grade', () => {
+    for (const prompt of romeo) {
+      expect(prompt.gradeBands).toContain('9');
+    }
+  });
+
+  test('most of them are analysis', () => {
+    const analysis = romeo.filter((prompt) =>
+      prompt.cognitiveMoves.includes('analyze')
+    );
+    expect(analysis.length * 2).toBeGreaterThan(romeo.length);
+  });
+
+  test('each names the text it needs, since it cannot be answered without it', () => {
+    for (const prompt of romeo) {
+      expect(prompt.sourceNeed).toBe('required');
+      expect(prompt.id).toMatch(/^sf-(cr|cd|od|ev|dp)-rj-\d{3}$/);
+    }
+  });
+});
+
 describe('short-form library filtering', () => {
   test('an empty filter returns the whole corpus', () => {
     const filters = readFilters(new URL('https://example.test/app'));

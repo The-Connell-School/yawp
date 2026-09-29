@@ -1,4 +1,5 @@
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { applyAssignmentGrammarGrading } from '~/domain/assignment-types/assignment-grammar-grading';
 import { prisma } from '~/utils/db.server';
 import {
   DEFAULT_INSIGHT_RUBRIC,
@@ -30,6 +31,7 @@ export async function readInsightRubric({
         select: {
           id: true,
           assignmentTypeId: true,
+          grammarGradingEnabled: true,
           assignmentType: { select: { kind: true, title: true } },
         },
       },
@@ -49,8 +51,16 @@ export async function readInsightRubric({
 
   if (config.rubricCategories.length === 0) return DEFAULT_INSIGHT_RUBRIC;
 
+  // The teacher's grammar toggle, applied the way grading applies it: with
+  // grammar off the category was never scored, so it is not a category the
+  // class did badly in.
+  const categories = applyAssignmentGrammarGrading(
+    config.rubricCategories,
+    classAssignment.assignment.grammarGradingEnabled
+  );
+
   return insightRubricFromCategories({
-    categories: config.rubricCategories,
+    categories,
     minScore: config.minScore,
     maxScore: config.maxScore,
   });

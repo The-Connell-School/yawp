@@ -267,7 +267,7 @@ describe('handleLessonPlannerToolCall', () => {
     }
   });
 
-  test('keeps Composition out of the planner while its rollout flag is off', async () => {
+  test('offers Composition whatever the retired rollout flag says', async () => {
     const previous = process.env.COMPOSITION_PRACTICE_ENABLED;
     process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
     try {
@@ -278,10 +278,10 @@ describe('handleLessonPlannerToolCall', () => {
           { ...ctx, writingPracticeEnabled: true }
         )
       );
-      expect(listed.lessons.length).toBeGreaterThan(0);
-      for (const lesson of listed.lessons) {
-        expect(lesson.section).toBe('Grammar & Mechanics');
-      }
+      const sections = listed.lessons.map(
+        (lesson: { section: string }) => lesson.section
+      );
+      expect(sections).toContain('Composition');
 
       const lesson = JSON.parse(
         await callTool(
@@ -290,7 +290,8 @@ describe('handleLessonPlannerToolCall', () => {
           { ...ctx, writingPracticeEnabled: true }
         )
       );
-      expect(lesson.error).toBeTruthy();
+      expect(lesson.error).toBeUndefined();
+      expect(lesson.slug).toBe('evidence');
     } finally {
       process.env.COMPOSITION_PRACTICE_ENABLED = previous;
     }

@@ -9,7 +9,7 @@ const CLASS_LABEL = /Grade 9th .* Period 1st/;
 // which is asserted as visible text in expectStandardizedAssignmentForm below.
 const TUTOR_TOGGLE_LABEL = 'Tutor enabled';
 const TUTOR_TOGGLE_HELP =
-  "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance.";
+  "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against.";
 
 async function expectStandardizedAssignmentForm(page: Page) {
   const dialog = page.getByRole('dialog');
@@ -315,9 +315,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await expect(
       gradingGrid.getByRole('heading', { name: 'Grading' })
     ).toBeVisible();
-    await expect(
-      page.getByTestId('teacher-workspace-cards')
-    ).toHaveAttribute(
+    await expect(page.getByTestId('teacher-workspace-cards')).toHaveAttribute(
       'href',
       // reset=1 clears any filters the teacher left behind, so the card shows
       // everything that needs grading rather than a stale slice of it.

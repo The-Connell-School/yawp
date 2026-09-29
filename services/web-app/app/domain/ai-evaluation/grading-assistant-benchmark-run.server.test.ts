@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { gradingAssistantBenchmarkV1 } from './grading-assistant-benchmark.v1';
 import {
+  buildStaticDailyPagesGradingConfig,
   buildStaticThesisGradingConfig,
   runLiveGradingAssistantBenchmark,
   runLiveGradingAssistantBenchmarkCase,
@@ -35,7 +36,69 @@ describe('buildStaticThesisGradingConfig', () => {
   });
 });
 
+describe('buildStaticDailyPagesGradingConfig', () => {
+  test('builds the built-in Daily Pages grading assistant', () => {
+    const config = buildStaticDailyPagesGradingConfig();
+
+    expect(config.rubricCategories.map((category) => category.key)).toEqual([
+      'depth_of_thought',
+      'development_of_thought',
+      'organization_and_structure',
+      'voice_and_style',
+      'grammar_and_mechanics',
+    ]);
+    expect(config.minScore).toBe(1);
+    expect(config.maxScore).toBe(5);
+  });
+});
+
 describe('runLiveGradingAssistantBenchmarkCase', () => {
+  /**
+   * A timed piece has to be graded as a timed piece. The case carries the
+   * prompt and the writing time the way an assignment does, and both reach
+   * the grader exactly as they would in production.
+   */
+  test('hands the case prompt and writing time to the grader', async () => {
+    const benchmarkCase = {
+      ...gradingAssistantBenchmarkV1.cases[0],
+      input: {
+        ...gradingAssistantBenchmarkV1.cases[0].input,
+        assignmentPrompt: 'Quote the line where the argument turns.',
+        writingTimeMinutes: 15,
+      },
+    };
+    const gradingCalls: string[] = [];
+    const execute = mock(
+      async ({
+        purpose,
+        messages,
+      }: {
+        purpose: string;
+        messages: Array<{ content: string }>;
+      }) => {
+        if (purpose === 'criterion') {
+          return JSON.stringify({ passed: true, evidence: 'Grounded.' });
+        }
+        gradingCalls.push(messages.map((message) => message.content).join(''));
+        return JSON.stringify(validOutputFor(benchmarkCase));
+      }
+    );
+
+    await runLiveGradingAssistantBenchmarkCase({
+      suite: gradingAssistantBenchmarkV1,
+      benchmarkCase,
+      gradingConfig: buildStaticThesisGradingConfig(),
+      execute,
+    });
+
+    expect(gradingCalls).toHaveLength(1);
+    expect(gradingCalls[0]).toContain(
+      'Quote the line where the argument turns.'
+    );
+    expect(gradingCalls[0]).toContain('the student had 15 minutes');
+  });
+
+
   test('runs deterministic checks and LLM judges for qualitative criteria', async () => {
     const benchmarkCase = gradingAssistantBenchmarkV1.cases[0];
     const execute = mock(async ({ purpose }: { purpose: string }) => {

@@ -32,7 +32,6 @@ import {
   getQuickWritingLessonBySlug,
   getQuickWritingPracticePrompts,
 } from '~/utils/writing-lessons/static-lessons.server';
-import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 
 export type LessonPlannerToolContext = {
   /** The calling teacher's OrgMembership id. */
@@ -305,10 +304,7 @@ async function handleCatalogToolCall(
       };
     }
     case 'list_writing_lessons': {
-      const lessons = listWritingLessonCatalog({
-        ...input,
-        includeComposition: isCompositionPracticeEnabled(),
-      });
+      const lessons = listWritingLessonCatalog(input);
       if (!ctx.writingPracticeEnabled) {
         // The lesson pages are behind Writing Practice, so a link would open
         // the dashboard instead. No address goes out, which also means the
@@ -331,12 +327,7 @@ async function handleCatalogToolCall(
     case 'get_writing_lesson': {
       const slug = typeof input.slug === 'string' ? input.slug : '';
       const lesson = getQuickWritingLessonBySlug(slug);
-      // A Composition lesson while that strand is still dark is one the
-      // teacher could not open or assign, so it is not there to plan from.
-      if (
-        !lesson ||
-        (lesson.section === 'Composition' && !isCompositionPracticeEnabled())
-      ) {
+      if (!lesson) {
         return { error: `No Quick Writing Lesson with slug "${slug}".` };
       }
       return {

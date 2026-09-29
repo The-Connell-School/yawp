@@ -39,15 +39,13 @@ const teacher = (user: User) =>
 const student = (user: User) => user.selectedMembership?.role === 'STUDENT';
 const owner = (user: User) => user.selectedMembership?.isOrgOwner;
 const admin = (user: User) => user.isAdmin;
-const reporterEnabled = (user: User) =>
-  teacher(user) &&
-  Boolean(user.selectedMembership?.organization?.reporterEnabled);
+// Reporter and Writing Practice are now always on for all orgs.
+// Keep role-based visibility (Reporter is teacher-only; Writing Practice is for teachers and students).
+const reporterEnabled = (user: User) => teacher(user);
 const lessonPlannerEnabled = (user: User) =>
   teacher(user) &&
   Boolean(user.selectedMembership?.organization?.lessonPlannerEnabled);
-const writingPracticeEnabled = (user: User) =>
-  (teacher(user) || student(user)) &&
-  Boolean(user.selectedMembership?.organization?.writingPracticeEnabled);
+const writingPracticeEnabled = (user: User) => teacher(user) || student(user);
 
 const icons = {
   dashboard: <GaugeIcon size={20} className="shrink-0" />,

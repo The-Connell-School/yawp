@@ -99,3 +99,41 @@ describe('buildReporterSystemPromptBlocks (prompt caching)', () => {
     }
   });
 });
+
+describe('cold vs warm write guidance', () => {
+  const prompt = buildReporterSystemPrompt({
+    teacherName: 'Ms. Rivera',
+    organizationName: 'Connell School',
+  });
+  const lower = prompt.toLowerCase();
+
+  test('defines both conditions in terms of the tutor toggle', () => {
+    expect(lower).toContain('cold write');
+    expect(lower).toContain('warm write');
+    expect(lower).toContain('tutor off');
+    expect(lower).toContain('tutor on');
+  });
+
+  test('names the transfer question cold writes are there to answer', () => {
+    expect(lower).toContain('transfer');
+  });
+
+  test('requires the reporter to keep the two conditions apart', () => {
+    // The whole point of the split is lost if the model averages a diagnostic
+    // paper together with tutor-supported ones.
+    expect(lower).toContain('do not average cold and warm writes together');
+  });
+
+  test('requires it to repeat the caveat instead of over-reading thin data', () => {
+    expect(prompt).toContain('caveat');
+    expect(lower).toContain('comparable');
+  });
+
+  test('offers a cold-vs-warm starter prompt', () => {
+    const entry = RECOMMENDED_REPORTER_PROMPTS.find((candidate) =>
+      /cold/i.test(candidate.label)
+    );
+    expect(entry).toBeDefined();
+    expect(entry!.prompt.toLowerCase()).toContain('tutor');
+  });
+});

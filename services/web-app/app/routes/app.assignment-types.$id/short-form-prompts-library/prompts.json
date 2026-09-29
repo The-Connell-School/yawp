@@ -113,6 +113,97 @@
     ]
   },
   {
+    "id": "sf-cr-rj-001",
+    "title": "Juliet argues with a name",
+    "prompt": "In the balcony scene (2.2), Juliet argues with herself about names. Quote the line where her argument turns, and explain what she has decided by the end of it. One paragraph.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Romeo and Juliet"
+    ],
+    "themes": [
+      "identity",
+      "love"
+    ],
+    "gradeBands": [
+      "9",
+      "10"
+    ]
+  },
+  {
+    "id": "sf-cr-rj-002",
+    "title": "Romeo's light",
+    "prompt": "Romeo keeps describing Juliet in terms of light. Pick one of those images, quote it, and explain what it shows about how Romeo sees her — not just that he loves her. One paragraph.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Romeo and Juliet"
+    ],
+    "themes": [
+      "love",
+      "craft"
+    ],
+    "gradeBands": [
+      "9",
+      "10"
+    ]
+  },
+  {
+    "id": "sf-cr-rj-003",
+    "title": "What the Prologue gives away",
+    "prompt": "The Prologue tells us how the play ends before it begins. Quote one phrase from it, and explain how knowing the ending changes the way you read one scene we have read since. One paragraph.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Romeo and Juliet"
+    ],
+    "themes": [
+      "fate",
+      "craft"
+    ],
+    "gradeBands": [
+      "9",
+      "10"
+    ]
+  },
+  {
+    "id": "sf-cr-rj-004",
+    "title": "A plague on both houses",
+    "prompt": "Quote Mercutio's curse, \"A plague o' both your houses,\" and explain why it matters that the curse comes from a character who belongs to neither house. One paragraph.",
+    "kind": "close-read",
+    "cognitiveMoves": [
+      "analyze",
+      "interpret"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Romeo and Juliet"
+    ],
+    "themes": [
+      "conflict",
+      "loyalty"
+    ],
+    "gradeBands": [
+      "9",
+      "10"
+    ]
+  },
+  {
     "id": "sf-cd-001",
     "title": "You become who you spend time with",
     "prompt": "You become who you spend time with. Take a position, give your strongest reason, and then name the one case that most tests it.",
@@ -466,6 +557,29 @@
     ]
   },
   {
+    "id": "sf-ev-rj-001",
+    "title": "Friar Laurence's plan",
+    "prompt": "Judge Friar Laurence's plan with the potion. Name the standard you are judging him by, then point to the moment in the play that most supports your verdict. One paragraph.",
+    "kind": "evaluate-a-choice",
+    "cognitiveMoves": [
+      "evaluate",
+      "argue-a-position"
+    ],
+    "sourceNeed": "required",
+    "lengthTarget": "paragraph",
+    "textsOrUnits": [
+      "Romeo and Juliet"
+    ],
+    "themes": [
+      "responsibility",
+      "choice"
+    ],
+    "gradeBands": [
+      "9",
+      "10"
+    ]
+  },
+  {
     "id": "sf-dp-001",
     "title": "Loyalty, as this text uses it",
     "prompt": "Define loyalty as this text uses the word. Give one case that clearly fits your definition, and one that looks like it but doesn't.",
@@ -586,119 +700,25 @@
     ]
   },
   {
-    "id": "sf-ex-001",
-    "title": "Before, after, and what changed it",
-    "prompt": "What did you think before today's discussion, what do you think now, and what specifically changed it? Name the moment, not just the feeling.",
-    "kind": "exit-synthesis",
+    "id": "sf-dp-rj-001",
+    "title": "Love or infatuation",
+    "prompt": "Define the difference between love and infatuation as Romeo and Juliet shows it. Then test your definition against one specific moment in the play, and quote it. One paragraph.",
+    "kind": "define-precisely",
     "cognitiveMoves": [
-      "synthesize",
-      "evaluate"
-    ],
-    "sourceNeed": "none",
-    "lengthTarget": "paragraph",
-    "textsOrUnits": [],
-    "themes": [
-      "change",
-      "meaning"
-    ],
-    "gradeBands": [
-      "9",
-      "10",
-      "11",
-      "12"
-    ]
-  },
-  {
-    "id": "sf-ex-002",
-    "title": "The idea you're least sure of",
-    "prompt": "Name the one idea from today you are least sure about. Say why it is unsettled for you, and what evidence would settle it.",
-    "kind": "exit-synthesis",
-    "cognitiveMoves": [
-      "synthesize",
-      "evaluate"
-    ],
-    "sourceNeed": "none",
-    "lengthTarget": "paragraph",
-    "textsOrUnits": [],
-    "themes": [
-      "truth",
-      "evidence"
-    ],
-    "gradeBands": [
-      "9",
-      "10",
-      "11",
-      "12"
-    ]
-  },
-  {
-    "id": "sf-ex-003",
-    "title": "Three sentences and a weakness",
-    "prompt": "Summarize today's argument in three sentences. Then add a fourth naming the point where it is weakest, and why.",
-    "kind": "exit-synthesis",
-    "cognitiveMoves": [
-      "synthesize",
-      "evaluate"
-    ],
-    "sourceNeed": "optional",
-    "lengthTarget": "paragraph",
-    "textsOrUnits": [
-      "argumentative-writing-unit"
-    ],
-    "themes": [
-      "evidence",
-      "truth"
-    ],
-    "gradeBands": [
-      "10",
-      "11",
-      "12"
-    ]
-  },
-  {
-    "id": "sf-ex-004",
-    "title": "The question left open",
-    "prompt": "What question did today's reading leave open? State it precisely in one sentence, then say why the text cannot answer it.",
-    "kind": "exit-synthesis",
-    "cognitiveMoves": [
-      "synthesize",
-      "interpret"
+      "define-a-term",
+      "analyze"
     ],
     "sourceNeed": "required",
     "lengthTarget": "paragraph",
-    "textsOrUnits": [],
-    "themes": [
-      "meaning",
-      "truth"
-    ],
-    "gradeBands": [
-      "10",
-      "11",
-      "12"
-    ]
-  },
-  {
-    "id": "sf-ex-005",
-    "title": "Defend one, drop one",
-    "prompt": "Which claim from this unit would you defend in public, and which would you quietly drop? Give your reason for each.",
-    "kind": "exit-synthesis",
-    "cognitiveMoves": [
-      "synthesize",
-      "argue-a-position"
-    ],
-    "sourceNeed": "optional",
-    "lengthTarget": "half-page",
     "textsOrUnits": [
-      "argumentative-writing-unit"
+      "Romeo and Juliet"
     ],
     "themes": [
-      "truth",
-      "evidence"
+      "love"
     ],
     "gradeBands": [
-      "10",
-      "11",
-      "12"
+      "9",
+      "10"
     ]
   }
 ]

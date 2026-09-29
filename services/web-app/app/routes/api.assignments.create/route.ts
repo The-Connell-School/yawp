@@ -1,5 +1,7 @@
 import type { Prisma } from '@app/prisma';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
+import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/daily-pages-rubric';
+import { parseParagraphMode } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import {
   buildAssignmentCreateInputFromApHistoryEntry,
   getApHistoryLibraryEntryForSnapshot,
@@ -37,6 +39,7 @@ import {
   exitTicketGradingModeFor,
   resolveAssignmentPrompt,
 } from '~/utils/assignment-exit-ticket.server';
+import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -122,6 +125,23 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
   const grammarGradingEnabled = grammarGradingResult.value;
+
+  const writingTimeResult = parseWritingTimeMinutes(formData);
+  if (!writingTimeResult.success) {
+    return dataResponse(
+      { success: false, message: writingTimeResult.message },
+      { status: 400 }
+    );
+  }
+  const writingTimeMinutes = writingTimeResult.value;
+
+  const paragraphModeResult = parseParagraphMode(formData);
+  if (!paragraphModeResult.success) {
+    return dataResponse(
+      { success: false, message: paragraphModeResult.message },
+      { status: 400 }
+    );
+  }
 
   const collaborationResult = parseAssignmentCollaboration(formData);
   if (!collaborationResult.success) {
@@ -239,6 +259,12 @@ export async function action({ request }: ActionFunctionArgs) {
         }
       : {}),
   };
+  // A paragraph type only means something on Daily Pages; anything sent for
+  // another type is dropped rather than stored where nothing reads it.
+  const paragraphMode =
+    assignmentType.kind === DAILY_PAGES_ASSIGNMENT_TYPE_KIND
+      ? paragraphModeResult.value
+      : null;
 
   const collaboration = collaborationResult.value;
 
@@ -290,6 +316,8 @@ export async function action({ request }: ActionFunctionArgs) {
         }),
         tutorEnabled,
         grammarGradingEnabled,
+        writingTimeMinutes,
+        paragraphMode,
         ...rubricOverrideData,
         ...collaboration,
       },
@@ -384,6 +412,8 @@ export async function action({ request }: ActionFunctionArgs) {
         ...rubricOverrideData,
         tutorEnabled,
         grammarGradingEnabled,
+        writingTimeMinutes,
+        paragraphMode,
         ...collaboration,
         ...promptAttachmentData,
         ...(exitTicketConfigJson ? { exitTicketConfigJson } : {}),

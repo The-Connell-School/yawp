@@ -117,18 +117,14 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
     await expect(page.getByTestId('grading-overall-comment')).toBeVisible();
 
     // The four words Class Starter scores on, including Absent as a real 0.
+    // The grading panel names each band by its word alone.
     await engagementScore.click();
-    for (const [value, label] of [
-      [0, 'Absent'],
-      [1, 'Hardly there'],
-      [2, 'Showed up'],
-      [3, 'All in'],
-    ] as const) {
+    for (const label of ['Absent', 'Hardly there', 'Showed up', 'All in']) {
       await expect(
-        page.getByRole('option', { name: `${value} - ${label}` })
+        page.getByRole('option', { name: label, exact: true })
       ).toBeVisible();
     }
-    await page.getByRole('option', { name: '0 - Absent' }).click();
+    await page.getByRole('option', { name: 'Absent', exact: true }).click();
     // Absent is a judgment, not a blank.
     await expect(page.getByText('Absent (0/3)')).toBeVisible();
 
@@ -137,6 +133,9 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
     await expect(page.getByText(/AI grammar issues:/i)).toHaveCount(0);
 
     await page.getByTestId('grading-assistant-generate').click();
+    // The Absent chosen above is teacher feedback, so the assistant asks
+    // before replacing it.
+    await page.getByRole('button', { name: 'Replace', exact: true }).click();
     await page.waitForResponse(
       (response) =>
         response.url().includes('/api/domain/grade-essay-ai') &&

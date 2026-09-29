@@ -195,10 +195,8 @@ export async function action({ request }: ActionFunctionArgs) {
   const ctx = {
     membershipId: access.membership.id,
     organizationId: access.membership.organization.id,
-    // Quick Writing Lesson pages and practice assignments both sit behind it.
-    writingPracticeEnabled: Boolean(
-      access.membership.organization.writingPracticeEnabled
-    ),
+    // Writing Practice is on for every organization; the org flag is retired.
+    writingPracticeEnabled: true,
   };
 
   // Load an existing conversation (scoped to this teacher) or start a new one.
