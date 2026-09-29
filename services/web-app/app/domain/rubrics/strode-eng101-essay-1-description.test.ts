@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { STARTER_RUBRICS } from './starter-rubrics';
 import { computeWeightedBandPercentage } from '~/domain/grading/gradeMath';
+import { formatRubricSchema, parseRubricSchema } from './rubric-schema';
 
 describe('Strode ENG 101 Essay 1 rubric', () => {
   const schema = STARTER_RUBRICS.find(
@@ -47,6 +48,25 @@ describe('Strode ENG 101 Essay 1 rubric', () => {
       schema.rubric.categories.map((c, i) => [c.key, { score: mixedScores[i] }])
     );
     expect(computeWeightedBandPercentage(mixed, cats)).toBe(84);
+  });
+
+  test('gradingInstructions has real newlines and no literal \\n', () => {
+    const gi = schema.promptConfig.gradingInstructions ?? '';
+    expect(gi.length).toBeGreaterThan(0);
+    expect(gi.includes('\n')).toBe(true);
+    expect(gi.includes('\\n')).toBe(false);
+  });
+
+  test('schema parses and round-trips via formatRubricSchema', () => {
+    const parsed = parseRubricSchema(schema);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const formatted = formatRubricSchema(parsed.schema);
+    const reparsed = parseRubricSchema(JSON.parse(formatted));
+    expect(reparsed.ok).toBe(true);
+    if (!reparsed.ok) return;
+    expect(reparsed.schema.name).toBe('strode-eng101-essay-1-description');
+    expect(reparsed.schema.rubric.categories).toHaveLength(7);
   });
 });
 
