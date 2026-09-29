@@ -110,56 +110,51 @@ describe('migration integration (real Postgres)', () => {
     psql(`
       -- Minimal ownership graph to satisfy Document ownership CHECKs
       INSERT INTO "Organization" ("id","createdAt","updatedAt","name")
-      VALUES ('org-1', now(), now(), 'Test Org')
-      ON CONFLICT ("id") DO NOTHING;
+      VALUES ('org-1', now(), now(), 'Test Org');
       INSERT INTO "User" ("id","createdAt","updatedAt","email","name","isAdmin","isSuperAdmin")
-      VALUES ('user-1', now(), now(), 'user1@example.com', 'User One', false, false)
-      ON CONFLICT ("id") DO NOTHING;
+      VALUES ('user-1', now(), now(), 'user1@example.com', 'User One', false, false);
       INSERT INTO "OrgMembership" ("id","createdAt","userId","organizationId","role","isOrgOwner","isActive")
-      VALUES ('mem-1', now(), 'user-1', 'org-1', 'STUDENT', false, true)
-      ON CONFLICT ("id") DO NOTHING;
+      VALUES ('mem-1', now(), 'user-1', 'org-1', 'STUDENT', false, true);
 
       INSERT INTO "Rubric" ("id","createdAt","updatedAt","name","title","schemaJson")
-      VALUES ('rub-1', now(), now(), 'lib-shared', 'Shared Library Rubric', '${JSON.stringify(libSchema).replaceAll("'", "''")}'::jsonb)
-      ON CONFLICT ("id") DO NOTHING;
+      VALUES ('rub-1', now(), now(), 'lib-shared', 'Shared Library Rubric', '${JSON.stringify(libSchema).replaceAll("'", "''")}'::jsonb);
       INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position","rubricId")
       VALUES ('t-lib-a', now(), now(), 'Lib A', 'lib_a', 0, 'rub-1'),
-             ('t-lib-b', now(), now(), 'Lib B', 'lib_b', 0, 'rub-1')
-      ON CONFLICT ("id") DO NOTHING;
+             ('t-lib-b', now(), now(), 'Lib B', 'lib_b', 0, 'rub-1');
       INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position","rubricId","scoringScaleJson","rubricJson","gradingPromptConfigJson","gradingOutputSchemaJson","gradingCalibrationNotes")
-      VALUES ('t-per', now(), now(), 'Daily Pages', 'daily_pages', 0, NULL, '${JSON.stringify(typeSchema.scoringScale).replaceAll("'", "''")}'::jsonb, '${JSON.stringify(typeSchema.rubric).replaceAll("'", "''")}'::jsonb, '${JSON.stringify(typeSchema.promptConfig).replaceAll("'", "''")}'::jsonb, '${JSON.stringify(typeSchema.outputSchema).replaceAll("'", "''")}'::jsonb, 'None')
-      ON CONFLICT ("id") DO NOTHING;
+      VALUES ('t-per', now(), now(), 'Daily Pages', 'daily_pages', 0, NULL, '${JSON.stringify(typeSchema.scoringScale).replaceAll("'", "''")}'::jsonb, '${JSON.stringify(typeSchema.rubric).replaceAll("'", "''")}'::jsonb, '${JSON.stringify(typeSchema.promptConfig).replaceAll("'", "''")}'::jsonb, '${JSON.stringify(typeSchema.outputSchema).replaceAll("'", "''")}'::jsonb, 'None');
       INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position","rubricId")
-      VALUES ('t-default', now(), now(), 'Welcome', 'welcome', 0, NULL)
-      ON CONFLICT ("id") DO NOTHING;
+      VALUES ('t-default', now(), now(), 'Welcome', 'welcome', 0, NULL);
       INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt")
       VALUES ('a-lib-1', now(), now(), 't-lib-a', 'Lib A 1'),
              ('a-lib-2', now(), now(), 't-lib-b', 'Lib B 1'),
+             ('a-lib-3', now(), now(), 't-lib-b', 'Lib B 2'),
              ('a-per-1', now(), now(), 't-per', 'Per 1'),
              ('a-per-2', now(), now(), 't-per', 'Per 2'),
              ('a-nj-1', now(), now(), 't-default', 'No JSON 1'),
-             ('a-nj-2', now(), now(), 't-default', 'No JSON 2')
-      ON CONFLICT ("id") DO NOTHING;
+             ('a-nj-2', now(), now(), 't-default', 'No JSON 2');
       -- Minimal document/submission to prove grades untouched
       INSERT INTO "Document" ("id","createdAt","updatedAt","revision","title","assignmentTypeId","assignmentId","membershipId")
-      VALUES ('doc-1', now(), now(), 0, 'Doc', 't-per', 'a-per-1', 'mem-1')
-      ON CONFLICT ("id") DO NOTHING;
+      VALUES ('doc-1', now(), now(), 0, 'Doc', 't-per', 'a-per-1', 'mem-1');
       INSERT INTO "Submission" ("id","createdAt","updatedAt","title","text","html","submittedAt","score","rubricScores","overallScore","numericPercentage","documentId")
-      VALUES ('sub-1', now(), now(), 'T', 'txt', '<p>t</p>', now(), '18/30', '{"engagement_with_prompt":{"score":18}}'::jsonb, 18, NULL, 'doc-1')
-      ON CONFLICT ("id") DO NOTHING;
+      VALUES ('sub-1', now(), now(), 'T', 'txt', '<p>t</p>', now(), '18/30', '{"engagement_with_prompt":{"score":18}}'::jsonb, 18, NULL, 'doc-1');
     `);
-    // Seed a pre-existing publisher pin that must survive rollback
-    const libSchemaJson = JSON.stringify(libSchema).replaceAll("'", "''");
+    // Seed a differing-schema publisher revision and pin one assignment to it; make it current
+    const libSchemaJsonPub = JSON.stringify({
+      name: 'lib-shared',
+      title: 'Publisher Variant',
+      scoringScale: { type: 'rubric_points', minScore: 0, maxScore: 30, step: 10 },
+      rubric: { categories: [{ key: 'engagement_with_prompt', label: 'Engagement', description: 'Shows up (pub)', weight: 1, scoreLabels: [{ value: 0, label: 'Absent' }, { value: 10, label: 'Hardly' }, { value: 20, label: 'Showed up' }, { value: 30, label: 'All in' }] }] }
+    }).replaceAll("'", "''");
     psql(`
       INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason","createdAt")
-      VALUES ('rev-pub-1','lib-shared',1,'${libSchemaJson}'::jsonb,
-              encode(sha256(convert_to(('${libSchemaJson}'::jsonb)::text,'UTF8')),'hex'),
-              'req-pub-1',
-              encode(sha256(convert_to(('${libSchemaJson}'::jsonb)::text,'UTF8')),'hex'),
-              'publisher-x','Seeded revision', now())
-      ON CONFLICT ("id") DO NOTHING;
-      UPDATE "Rubric" SET "currentRevisionId"='rev-pub-1' WHERE id='rub-1';
-      UPDATE "Assignment" SET "rubricRevisionId"='rev-pub-1' WHERE id='a-lib-2';
+      VALUES ('rev-pub-2','lib-shared',1,'${libSchemaJsonPub}'::jsonb,
+              encode(sha256(convert_to(('${libSchemaJsonPub}'::jsonb)::text,'UTF8')),'hex'),
+              'req-pub-2',
+              encode(sha256(convert_to(('${libSchemaJsonPub}'::jsonb)::text,'UTF8')),'hex'),
+              'publisher-x','Seeded revision', now());
+      UPDATE "Rubric" SET "currentRevisionId"='rev-pub-2' WHERE id='rub-1';
+      UPDATE "Assignment" SET "rubricRevisionId"='rev-pub-2' WHERE id='a-lib-2';
     `);
     // Capture pre-migration schema and data hashes AFTER seeding and BEFORE deploy
     function normalizeSchemaDump(s: string) {
@@ -202,25 +197,11 @@ describe('migration integration (real Postgres)', () => {
     const pinTrigger = run('psql', ['-t', '-A', DB, '-c', `SELECT COUNT(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE c.relname='Assignment' AND t.tgname='internal_assignment_rubric_pin';`]).stdout.trim().split('\n').pop();
     expect(pinTrigger).toBe('1');
 
-    // Helper: dump debug rows for audit and key IDs
-    function dumpStage(stage: string) {
-      const hasAudit = run('psql', ['-t', '-A', DB, '-c', `SELECT to_regclass('public."InternalAssignmentRubricPinBackfill"') IS NOT NULL;`]).stdout.trim().split('\n').pop() === 't';
-      console.log(`STAGE=${stage} RUBRIC:`, run('psql', ['-t', '-A', DB, '-c', `SELECT json_build_object('rub','rub-1','current', "currentRevisionId") FROM "Rubric" WHERE id='rub-1'`]).stdout.trim());
-      console.log(`STAGE=${stage} ASSIGNMENT a-lib-1:`, run('psql', ['-t', '-A', DB, '-c', `SELECT row_to_json(a) FROM "Assignment" a WHERE id='a-lib-1'`]).stdout.trim());
-      if (hasAudit) {
-        console.log(`STAGE=${stage} AUDIT:`, run('psql', ['-t', '-A', DB, '-c', `SELECT row_to_json(b) FROM "InternalAssignmentRubricPinBackfill" b ORDER BY "assignmentId"`]).stdout.trim());
-      } else {
-        console.log(`STAGE=${stage} AUDIT: <absent>`);
-      }
-    }
-    dumpStage('seed');
-
     // Apply migration 1 only, then assert a-lib-1 appears in audit with a selected revision id
     const onlyM1 = setupTempCopy([
       '20260929034000_assignment_rubric_baseline_capture',
     ]);
     prismaDeploy(onlyM1);
-    dumpStage('after-mig1');
     const aLib1AuditAfterM1 = jsonQuery(`
       SELECT EXISTS (
         SELECT 1 FROM "InternalAssignmentRubricPinBackfill" WHERE "assignmentId"='a-lib-1'
@@ -232,7 +213,6 @@ describe('migration integration (real Postgres)', () => {
     const current = setupTempCopy();
     const res2 = run('bun', ['run', 'prisma', 'migrate', 'deploy'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
     expect(res2.status).toBe(0);
-    dumpStage('after-mig2');
 
     // (a) Pins for library/per-type; no-JSON unpinned with reason
     const counts = jsonQuery(`
@@ -242,15 +222,41 @@ describe('migration integration (real Postgres)', () => {
         'codeDefault', (SELECT COUNT(*) FROM "InternalAssignmentRubricPinBackfill" WHERE reason = 'code-default')
       )
     `);
-    expect(counts.pinned).toBe(4);
+    expect(counts.pinned).toBe(5);
     expect(counts.unpinned).toBe(2);
     expect(counts.codeDefault).toBe(2);
+    // Shared-rubric baseline mapping exists for both types and to the same revision
+    const sharedBaseline = jsonQuery(`
+      SELECT json_build_object(
+        'rows', (SELECT COUNT(*) FROM "AssignmentTypeRubricBaseline" WHERE "assignmentTypeId" IN ('t-lib-a','t-lib-b')),
+        'distinctRevs', (SELECT COUNT(DISTINCT "rubricRevisionId") FROM "AssignmentTypeRubricBaseline" WHERE "assignmentTypeId" IN ('t-lib-a','t-lib-b'))
+      )
+    `);
+    expect(sharedBaseline.rows).toBe(2);
+    expect(sharedBaseline.distinctRevs).toBe(1);
+    const sharedPins = jsonQuery(`SELECT COUNT(DISTINCT "rubricRevisionId") FROM "Assignment" WHERE id IN ('a-lib-1','a-lib-3')`);
+    expect(sharedPins).toBe(1);
+    // Revisions: baseline + one seeded publisher (rev-pub-2)
+    const revCount = jsonQuery(`SELECT COUNT(*) FROM "RubricRevision" WHERE "rubricName"='lib-shared'`);
+    expect(revCount).toBe(2);
+    // Baseline became current; previous pointer recorded once
+    const currentIsBaseline = jsonQuery(`
+      SELECT EXISTS (
+        SELECT 1 FROM "Rubric" r
+        JOIN "RubricRevision" rr ON rr.id = r."currentRevisionId"
+        WHERE r.id='rub-1' AND rr."createdBy"='baseline-capture'
+      )
+    `);
+    expect(currentIsBaseline).toBe(true);
+    const restoreRows = jsonQuery(`SELECT COUNT(*) FROM "InternalRubricCurrentPointerRestore" WHERE "rubricId"='rub-1'`);
+    expect(restoreRows).toBe(1);
     // pinned content equals sources
     const libEq = jsonQuery(`
       SELECT (
         SELECT rr."schemaJson" FROM "Assignment" a
         JOIN "RubricRevision" rr ON rr.id = a."rubricRevisionId"
-        WHERE a.id = 'a-lib-1'
+        WHERE a.id IN ('a-lib-1','a-lib-3')
+        LIMIT 1
       ) = (
         SELECT "schemaJson" FROM "Rubric" WHERE id = 'rub-1'
       )
@@ -273,9 +279,37 @@ describe('migration integration (real Postgres)', () => {
     const afterCounts = jsonQuery(`SELECT (SELECT COUNT(*) FROM "RubricRevision")`);
     expect(typeof afterCounts).toBe('number');
 
-    // (c) Inserting a new assignment auto-pins (moved to after rollback/re-apply to avoid affecting rollback equality)
+    // (c) Inserting a new assignment auto-pins (pre-rollback, then delete to keep rollback data hash clean)
+    psql(`INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a-per-3', now(), now(), 't-per','New before RB');`);
+    const pinnedNewPre = jsonQuery(`SELECT "rubricRevisionId" IS NOT NULL FROM "Assignment" WHERE id='a-per-3'`);
+    expect(pinnedNewPre).toBe(true);
+    // Clean up for rollback hash
+    psql(`DELETE FROM "Assignment" WHERE id='a-per-3';`);
 
-    // (d) (moved later) Updating schemaJson / rubricJson creates version+1 and moves baseline/current
+    // (d) Updating schemaJson / rubricJson creates version+1 and moves baseline/current; then revert to avoid rollback hash delta
+    const prevMaxVerLib = jsonQuery(`SELECT COALESCE(MAX(version),0) FROM "RubricRevision" WHERE "rubricName"='lib-shared'`);
+    const updRubric = run('psql', ['-v', 'ON_ERROR_STOP=1', DB, '-c',
+      `UPDATE "Rubric" SET "schemaJson" = jsonb_set("schemaJson",'{"title"}','"Shared Library Rubric (edited)"'::jsonb) WHERE id='rub-1'`]);
+    expect(updRubric.status).toBe(0);
+    const verLib = jsonQuery(`SELECT MAX(version) FROM "RubricRevision" WHERE "rubricName"='lib-shared'`);
+    expect(verLib).toBe(prevMaxVerLib + 1);
+    const createdByLib = jsonQuery(`SELECT "createdBy" FROM "RubricRevision" WHERE "rubricName"='lib-shared' AND version=${verLib} LIMIT 1`);
+    expect(createdByLib).toBe('auto-revision');
+    const pointerMoved = jsonQuery(`SELECT "currentRevisionId" = (SELECT id FROM "RubricRevision" WHERE "rubricName"='lib-shared' AND version=${verLib}) FROM "Rubric" WHERE id='rub-1'`);
+    expect(pointerMoved).toBe(true);
+    // revert rubric edit
+    psql(`UPDATE "Rubric" SET "schemaJson"='${JSON.stringify(libSchema).replaceAll("'", "''")}'::jsonb WHERE id='rub-1'`);
+
+    const prevMaxVerPer = jsonQuery(`SELECT COALESCE(MAX(version),0) FROM "RubricRevision" WHERE "rubricName"='assignment-type:t-per'`);
+    const updPerType = run('psql', ['-v', 'ON_ERROR_STOP=1', DB, '-c',
+      `UPDATE "AssignmentType" SET "rubricJson" = jsonb_set(COALESCE("rubricJson",'{}'::jsonb),'{"categories"}','[]'::jsonb) WHERE id='t-per'`]);
+    expect(updPerType.status).toBe(0);
+    const verPer = jsonQuery(`SELECT MAX(version) FROM "RubricRevision" WHERE "rubricName"='assignment-type:t-per'`);
+    expect(verPer).toBe(prevMaxVerPer + 1);
+    const createdByPer = jsonQuery(`SELECT "createdBy" FROM "RubricRevision" WHERE "rubricName"='assignment-type:t-per' AND version=${verPer} LIMIT 1`);
+    expect(createdByPer).toBe('auto-revision');
+    // revert per-type edit
+    psql(`UPDATE "AssignmentType" SET "rubricJson"='${JSON.stringify(typeSchema.rubric).replaceAll("'", "''")}'::jsonb WHERE id='t-per'`);
 
     // (e) Changing a pin raises
     const targetRev = jsonQuery(`
@@ -296,7 +330,6 @@ describe('migration integration (real Postgres)', () => {
     // (g) rollback restores schema/data
     const rollback = readFileSync(join(PRISMA_DIR, 'migrations', '20260928182000_pin_assignments_to_current_rubric_revision', 'rollback.sql'), 'utf8');
     psql(rollback);
-    dumpStage('after-rollback');
     // Zero-diff schema vs pre-migration
     const schemaAfter = normalizeSchemaDump(run('pg_dump', ['-s', DB]).stdout);
     expect(schemaAfter).toBe(schemaPre);
@@ -354,9 +387,9 @@ describe('migration integration (real Postgres)', () => {
     expect(migReceiptsAfterRollback.m1).toBe(0);
     expect(migReceiptsAfterRollback.m2).toBe(0);
     // Publisher seed and pin survived rollback
-    const pubStillThere = jsonQuery(`SELECT EXISTS (SELECT 1 FROM "RubricRevision" WHERE id='rev-pub-1' AND "createdBy"='publisher-x')`);
+    const pubStillThere = jsonQuery(`SELECT EXISTS (SELECT 1 FROM "RubricRevision" WHERE id='rev-pub-2' AND "createdBy"='publisher-x')`);
     expect(pubStillThere).toBe(true);
-    const pinStillThere = jsonQuery(`SELECT "rubricRevisionId"='rev-pub-1' FROM "Assignment" WHERE id='a-lib-2'`);
+    const pinStillThere = jsonQuery(`SELECT "rubricRevisionId"='rev-pub-2' FROM "Assignment" WHERE id='a-lib-2'`);
     expect(pinStillThere).toBe(true);
     // No leftover auto triggers/functions
     const triggers = run('psql', ['-t', '-A', DB, '-c', `SELECT tgname FROM pg_trigger WHERE tgname LIKE 'yawp_auto_%';`]).stdout.trim();
@@ -394,17 +427,12 @@ describe('migration integration (real Postgres)', () => {
     // Seed just enough to reach the DROP TRIGGER point, including one library-linked assignment to exercise library path
     psql(`
           INSERT INTO "Rubric" ("id","createdAt","updatedAt","name","title","schemaJson")
-          VALUES ('rub-L', now(), now(), 'lib-lock', 'Lib Lock', '{"name":"lib-lock","title":"Lib Lock","rubric":{"categories":[]}}'::jsonb)
-          ON CONFLICT ("id") DO NOTHING;
+          VALUES ('rub-L', now(), now(), 'lib-lock', 'Lib Lock', '{"name":"lib-lock","title":"Lib Lock","rubric":{"categories":[]}}'::jsonb);
           INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position","rubricId")
-          VALUES ('t-lib', now(), now(), 'LibType', 'lib_kind', 0, 'rub-L')
-          ON CONFLICT ("id") DO NOTHING;
-          INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a-lib', now(), now(), 't-lib','Lib A')
-          ON CONFLICT ("id") DO NOTHING;
-          INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position") VALUES ('t1', now(), now(), 'Type', 'k', 0)
-            ON CONFLICT ("id") DO NOTHING;
-          INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a1', now(), now(), 't1','P')
-            ON CONFLICT ("id") DO NOTHING;
+          VALUES ('t-lib', now(), now(), 'LibType', 'lib_kind', 0, 'rub-L');
+          INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a-lib', now(), now(), 't-lib','Lib A');
+          INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position") VALUES ('t1', now(), now(), 'Type', 'k', 0);
+          INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a1', now(), now(), 't1','P');
         `);
     // Apply migration 1 first so migration 2 is the one that times out (matches production)
     const onlyM1 = setupTempCopy([

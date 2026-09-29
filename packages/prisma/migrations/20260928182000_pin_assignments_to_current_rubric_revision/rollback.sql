@@ -21,13 +21,19 @@ BEGIN
     WHERE EXISTS (
       SELECT 1 FROM "InternalAssignmentRubricPinBackfill" b
       WHERE b."assignmentId" = a.id
+        AND b."selectedRevisionId" IS NOT NULL
     );
-    -- Fallback: also clear any pins that still reference baseline/auto-created revisions
+    -- Also clear auto-pins that happened after deploy: pins to baseline/auto-created revisions
+    -- but only for assignments not present in the audit table.
     UPDATE "Assignment" a
     SET "rubricRevisionId" = NULL
     WHERE a."rubricRevisionId" IN (
       SELECT id FROM "RubricRevision" WHERE "createdBy" IN ('baseline-capture','auto-revision')
-    );
+    )
+      AND NOT EXISTS (
+        SELECT 1 FROM "InternalAssignmentRubricPinBackfill" b
+        WHERE b."assignmentId" = a.id
+      );
 
     -- 3) Restore currentRevisionId to its prior value when it was moved by baseline/auto flows.
     -- If no prior value was recorded, clear only pointers that target baseline/auto-created revisions.
@@ -47,6 +53,10 @@ BEGIN
           SELECT 1 FROM "RubricRevision" rr
           WHERE rr.id = r."currentRevisionId"
             AND rr."createdBy" IN ('baseline-capture','auto-revision')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM "InternalRubricCurrentPointerRestore" ir
+          WHERE ir."rubricId" = r.id
         );
     END
     $restore$;
