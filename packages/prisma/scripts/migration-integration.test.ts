@@ -182,6 +182,9 @@ describe('migration integration (real Postgres)', () => {
     // Apply correct migrations
     const current = setupTempCopy();
     const res2 = run('bun', ['run', 'prisma', 'migrate', 'deploy'], current, { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT });
+    if (res2.status !== 0) {
+      console.log('deploy stderr+stdout:\n' + res2.stderr + res2.stdout);
+    }
     expect(res2.status).toBe(0);
 
     // (a) Pins for library/per-type; no-JSON unpinned with reason
