@@ -185,7 +185,9 @@ BEGIN
   ), lib_missing AS (
     SELECT lr.*, COALESCE((SELECT MAX(version) FROM "RubricRevision" WHERE "rubricName" = lr.rubric_name), 0) + 1 AS next_version
     FROM lib_rubrics lr
-  ), lib_created AS (
+  )
+  -- Create missing baseline-capture revisions for library rubrics
+  , lib_created AS (
     INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
     SELECT
       gen_random_uuid()::text AS id,
@@ -201,27 +203,33 @@ BEGIN
     WHERE NOT EXISTS (
       SELECT 1 FROM "RubricRevision" rr WHERE rr."rubricName" = m.rubric_name AND rr."schemaJson" = m.schema_json
     )
-    ON CONFLICT ("rubricName","version") DO NOTHING
-  ), lib_rev AS (
-    -- Resolve the revision id for each rubric (inserted above or pre-existing)
-    SELECT rr.id, rr."rubricName" FROM lib_rubrics lr
-    JOIN "RubricRevision" rr ON rr."rubricName" = lr.rubric_name AND rr."schemaJson" = lr.schema_json
-  ), lib_map AS (
-    INSERT INTO "AssignmentTypeRubricBaseline" ("assignmentTypeId","rubricRevisionId")
-    SELECT DISTINCT l.assignment_type_id, r.id
-    FROM lib_types l
-    JOIN lib_rev r ON r."rubricName" = l.rubric_name
-    ON CONFLICT ("assignmentTypeId") DO NOTHING
-  ), restore AS (
-    INSERT INTO "InternalRubricCurrentPointerRestore" ("rubricId","previousRevisionId")
-    SELECT rub.id, rub."currentRevisionId"
-    FROM "Rubric" rub
-    JOIN "RubricRevision" rr ON rr."rubricName" = rub.name AND rr."schemaJson" = rub."schemaJson"
-    WHERE rub."currentRevisionId" IS NOT NULL
-      AND rub."currentRevisionId" <> rr.id
-    ON CONFLICT ("rubricId") DO NOTHING
-    RETURNING 1
+    ON CONFLICT ("rubricName","version") DO NOTHING;
+
+  -- Map all library-linked types to their baseline-capture (or pre-existing matching) revision
+  WITH lib_types AS (
+    SELECT DISTINCT t.id AS assignment_type_id, r.name AS rubric_name, r."schemaJson" AS schema_json
+    FROM "AssignmentType" t
+    JOIN "Rubric" r ON r.id = t."rubricId"
+    WHERE EXISTS (SELECT 1 FROM "Assignment" a WHERE a."assignmentTypeId" = t.id)
   )
+  INSERT INTO "AssignmentTypeRubricBaseline" ("assignmentTypeId","rubricRevisionId")
+  SELECT DISTINCT l.assignment_type_id, rr.id
+  FROM lib_types l
+  JOIN "RubricRevision" rr
+    ON rr."rubricName" = l.rubric_name
+   AND rr."schemaJson" = l.schema_json
+  ON CONFLICT ("assignmentTypeId") DO NOTHING;
+
+  -- Record previous current pointers so rollback can restore them exactly
+  INSERT INTO "InternalRubricCurrentPointerRestore" ("rubricId","previousRevisionId")
+  SELECT rub.id, rub."currentRevisionId"
+  FROM "Rubric" rub
+  JOIN "RubricRevision" rr ON rr."rubricName" = rub.name AND rr."schemaJson" = rub."schemaJson"
+  WHERE rub."currentRevisionId" IS NOT NULL
+    AND rub."currentRevisionId" <> rr.id
+  ON CONFLICT ("rubricId") DO NOTHING;
+
+  -- Advance current pointers to the captured baseline revisions where applicable
   UPDATE "Rubric" rub
   SET "currentRevisionId" = rr.id
   FROM "RubricRevision" rr
@@ -249,7 +257,9 @@ BEGIN
   ), per_missing AS (
     SELECT p.*, COALESCE((SELECT MAX(version) FROM "RubricRevision" WHERE "rubricName" = p.rubric_name), 0) + 1 AS next_version
     FROM per_types p
-  ), per_created AS (
+  )
+  -- Create missing baseline-capture revisions for per-type JSON grading
+  , per_created AS (
     INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
     SELECT
       gen_random_uuid()::text AS id,
@@ -265,15 +275,32 @@ BEGIN
     WHERE NOT EXISTS (
       SELECT 1 FROM "RubricRevision" rr WHERE rr."rubricName" = m.rubric_name AND rr."schemaJson" = m.schema_json
     )
-    ON CONFLICT ("rubricName","version") DO NOTHING
-  ), per_rev AS (
-    SELECT rr.id, rr."rubricName" FROM per_types p
-    JOIN "RubricRevision" rr ON rr."rubricName" = p.rubric_name AND rr."schemaJson" = p.schema_json
+    ON CONFLICT ("rubricName","version") DO NOTHING;
+
+  -- Map per-type assignment types to their captured (or pre-existing matching) revision
+  WITH per_types AS (
+    SELECT DISTINCT t.id AS assignment_type_id,
+      jsonb_build_object(
+        'name', ('assignment-type:' || t.id),
+        'title', t.title,
+        'scoringScale', COALESCE(t."scoringScaleJson",'{}'::jsonb),
+        'rubric', COALESCE(t."rubricJson",'{}'::jsonb),
+        'promptConfig', COALESCE(t."gradingPromptConfigJson",'{}'::jsonb),
+        'outputSchema', COALESCE(t."gradingOutputSchemaJson",'{}'::jsonb),
+        'calibrationNotes', COALESCE(to_jsonb(t."gradingCalibrationNotes"), 'null'::jsonb)
+      ) AS schema_json,
+      ('assignment-type:' || t.id) AS rubric_name
+    FROM "AssignmentType" t
+    WHERE t."rubricId" IS NULL
+      AND (t."rubricJson" IS NOT NULL OR t."scoringScaleJson" IS NOT NULL)
+      AND EXISTS (SELECT 1 FROM "Assignment" a WHERE a."assignmentTypeId" = t.id)
   )
   INSERT INTO "AssignmentTypeRubricBaseline" ("assignmentTypeId","rubricRevisionId")
-  SELECT DISTINCT p.assignment_type_id, r.id
+  SELECT DISTINCT p.assignment_type_id, rr.id
   FROM per_types p
-  JOIN per_rev r ON r."rubricName" = p.rubric_name
+  JOIN "RubricRevision" rr
+    ON rr."rubricName" = p.rubric_name
+   AND rr."schemaJson" = p.schema_json
   ON CONFLICT ("assignmentTypeId") DO NOTHING;
 
   -- 5) Pin existing assignments to their baseline (library or per-type).

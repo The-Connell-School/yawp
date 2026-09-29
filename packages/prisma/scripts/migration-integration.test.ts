@@ -391,11 +391,21 @@ describe('migration integration (real Postgres)', () => {
       '20260929034000_assignment_rubric_baseline_capture',
     ]);
     prismaDeploy(pre);
-    // Seed just enough to reach the DROP TRIGGER point
-    psql(`INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position") VALUES ('t1', now(), now(), 'Type', 'k', 0)
+    // Seed just enough to reach the DROP TRIGGER point, including one library-linked assignment to exercise library path
+    psql(`
+          INSERT INTO "Rubric" ("id","createdAt","updatedAt","name","title","schemaJson")
+          VALUES ('rub-L', now(), now(), 'lib-lock', 'Lib Lock', '{"name":"lib-lock","title":"Lib Lock","rubric":{"categories":[]}}'::jsonb)
+          ON CONFLICT ("id") DO NOTHING;
+          INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position","rubricId")
+          VALUES ('t-lib', now(), now(), 'LibType', 'lib_kind', 0, 'rub-L')
+          ON CONFLICT ("id") DO NOTHING;
+          INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a-lib', now(), now(), 't-lib','Lib A')
+          ON CONFLICT ("id") DO NOTHING;
+          INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position") VALUES ('t1', now(), now(), 'Type', 'k', 0)
             ON CONFLICT ("id") DO NOTHING;
           INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a1', now(), now(), 't1','P')
-            ON CONFLICT ("id") DO NOTHING;`);
+            ON CONFLICT ("id") DO NOTHING;
+        `);
     // Apply migration 1 first so migration 2 is the one that times out (matches production)
     const onlyM1 = setupTempCopy([
       '20260929034000_assignment_rubric_baseline_capture',
@@ -499,7 +509,7 @@ describe('migration integration (real Postgres)', () => {
         'codeDefault', (SELECT COUNT(*) FROM "InternalAssignmentRubricPinBackfill" WHERE reason = 'code-default')
       )
     `);
-    expect(lockCounts.pinned).toBe(0);
+    expect(lockCounts.pinned).toBe(1);
     expect(lockCounts.unpinned).toBe(1);
     expect(lockCounts.codeDefault).toBe(1);
   }, 30000);
