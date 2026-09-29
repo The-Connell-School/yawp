@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { Prisma, PrismaClient } from '@app/prisma';
+import { Prisma, PrismaClient } from '@app/prisma';
 import { z } from 'zod';
 
 const json = (value: unknown): Prisma.InputJsonObject => JSON.parse(JSON.stringify(value));
@@ -87,9 +87,13 @@ export class InternalAssignmentTypes {
     const types = await this.db.assignmentType.findMany({
       where: { archivedAt: null },
       orderBy: [{ position: 'asc' }, { title: 'asc' }],
-      include: {
-        rubric: { include: { currentRevision: true } },
-        rubricBaseline: { include: { rubricRevision: true } },
+      select: {
+        id: true,
+        title: true,
+        systemKey: true,
+        kind: true,
+        updatedAt: true,
+        rubricId: true,
       },
     });
     // Preload assignment counts grouped by assignmentTypeId and revision version for efficiency
@@ -107,12 +111,39 @@ export class InternalAssignmentTypes {
     // Fallback: compute per-row counts precisely
     const countsByType: Record<string, number> = {};
     for (const row of types) {
-      const current = row.rubric?.currentRevision ?? row.rubricBaseline?.rubricRevision ?? null;
+      // Resolve current revision (library or per-type baseline)
+      let current: { id: string; version: number; fingerprint: string } | null = null;
+      let rubricName: string | null = null;
+      if (row.rubricId) {
+        const rub = await this.db.rubric.findUnique({
+          where: { id: row.rubricId },
+          include: { currentRevision: true },
+        });
+        if (rub?.currentRevision) {
+          current = {
+            id: rub.currentRevision.id,
+            version: rub.currentRevision.version,
+            fingerprint: rub.currentRevision.fingerprint,
+          };
+          rubricName = rub.name;
+        }
+      } else {
+        const rows = await this.db.$queryRaw<{ rubricRevisionId: string }[]>`
+          SELECT "rubricRevisionId" FROM "AssignmentTypeRubricBaseline" WHERE "assignmentTypeId" = ${row.id}
+        `;
+        const baselineId = rows[0]?.rubricRevisionId ?? null;
+        if (baselineId) {
+          const rr = await this.db.rubricRevision.findUnique({ where: { id: baselineId } });
+          if (rr) {
+            current = { id: rr.id, version: rr.version, fingerprint: rr.fingerprint };
+            rubricName = rr.rubricName;
+          }
+        }
+      }
       if (!current) {
         countsByType[row.id] = 0;
         continue;
       }
-      const rubricName = row.rubric?.name ?? row.rubricBaseline?.rubricRevision.rubricName ?? null;
       if (!rubricName) {
         countsByType[row.id] = 0;
         continue;
@@ -131,43 +162,79 @@ export class InternalAssignmentTypes {
         countsByType[row.id] = 0;
       }
     }
-    const items: AssignmentTypeListItem[] = types.map((t) => {
-      const lib = t.rubric;
-      const baseline = t.rubricBaseline?.rubricRevision ?? null;
-      const current =
-        lib?.currentRevision ??
-        baseline ??
-        null;
-      return {
+    const items: AssignmentTypeListItem[] = [];
+    for (const t of types) {
+      const libRow = t.rubricId
+        ? await this.db.rubric.findUnique({ where: { id: t.rubricId }, include: { currentRevision: true } })
+        : null;
+      let baselineRev: { id: string; version: number; fingerprint: string } | null = null;
+      if (!t.rubricId) {
+        const rows = await this.db.$queryRaw<{ rubricRevisionId: string }[]>`
+          SELECT "rubricRevisionId" FROM "AssignmentTypeRubricBaseline" WHERE "assignmentTypeId" = ${t.id}
+        `;
+        const baselineId = rows[0]?.rubricRevisionId ?? null;
+        if (baselineId) {
+          const rr = await this.db.rubricRevision.findUnique({ where: { id: baselineId } });
+          if (rr) baselineRev = { id: rr.id, version: rr.version, fingerprint: rr.fingerprint };
+        }
+      }
+      const current = libRow?.currentRevision ?? baselineRev ?? null;
+      items.push({
         id: t.id,
         key: t.systemKey ?? t.kind ?? null,
         title: t.title,
-        rubric: lib
-          ? { source: 'library' as const, name: lib.name, rubricId: lib.id }
+        rubric: libRow
+          ? { source: 'library' as const, name: libRow.name, rubricId: libRow.id }
           : { source: 'per-type' as const },
-        currentRevision: current
-          ? { id: current.id, version: current.version, fingerprint: current.fingerprint }
-          : null,
+        currentRevision: current ? { id: current.id, version: current.version, fingerprint: current.fingerprint } : null,
         updatedAt: t.updatedAt.toISOString(),
         outdatedPinnedAssignments: countsByType[t.id] ?? 0,
-      };
-    });
+      });
+    }
     return { items };
   }
 
   async read(assignmentTypeId: string) {
     const row = await this.db.assignmentType.findUnique({
       where: { id: assignmentTypeId },
-      include: {
-        rubric: { include: { currentRevision: true } },
-        rubricBaseline: { include: { rubricRevision: true } },
+      select: {
+        id: true,
+        title: true,
+        systemKey: true,
+        kind: true,
+        scoringScaleJson: true,
+        rubricJson: true,
+        gradingPromptConfigJson: true,
+        gradingOutputSchemaJson: true,
+        gradingCalibrationNotes: true,
+        rubricId: true,
       },
     });
     if (!row) return null;
-    const lib = row.rubric;
-    const baseline = row.rubricBaseline?.rubricRevision ?? null;
-    const current = lib?.currentRevision ?? baseline ?? null;
-    const rubricName = lib?.name ?? baseline?.rubricName ?? `assignment-type:${row.id}`;
+    let current: { id: string; version: number; fingerprint: string } | null = null;
+    let rubricName: string;
+    let rubricSource: { source: 'library'; name: string; rubricId: string } | { source: 'per-type' } =
+      { source: 'per-type' };
+    if (row.rubricId) {
+      const rub = await this.db.rubric.findUnique({ where: { id: row.rubricId }, include: { currentRevision: true } });
+      if (rub?.currentRevision) {
+        current = { id: rub.currentRevision.id, version: rub.currentRevision.version, fingerprint: rub.currentRevision.fingerprint };
+        rubricSource = { source: 'library', name: rub.name, rubricId: rub.id };
+      }
+      rubricName = rub?.name ?? `assignment-type:${row.id}`;
+    } else {
+      const rows = await this.db.$queryRaw<{ rubricRevisionId: string }[]>`
+        SELECT "rubricRevisionId" FROM "AssignmentTypeRubricBaseline" WHERE "assignmentTypeId" = ${assignmentTypeId}
+      `;
+      const baselineId = rows[0]?.rubricRevisionId ?? null;
+      if (baselineId) {
+        const rr = await this.db.rubricRevision.findUnique({ where: { id: baselineId } });
+        if (rr) current = { id: rr.id, version: rr.version, fingerprint: rr.fingerprint };
+        rubricName = rr?.rubricName ?? `assignment-type:${row.id}`;
+      } else {
+        rubricName = `assignment-type:${row.id}`;
+      }
+    }
     const revisions = await this.db.rubricRevision.findMany({
       where: { rubricName },
       orderBy: { version: 'desc' },
@@ -186,9 +253,7 @@ export class InternalAssignmentTypes {
       id: row.id,
       key: row.systemKey ?? row.kind ?? null,
       title: row.title,
-      rubric: lib
-        ? { source: 'library' as const, name: lib.name, rubricId: lib.id }
-        : { source: 'per-type' as const },
+      rubric: rubricSource,
       currentRevision: current
         ? { id: current.id, version: current.version, fingerprint: current.fingerprint }
         : null,
