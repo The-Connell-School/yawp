@@ -692,12 +692,15 @@ and dropped them both — `20260617120000_drop_feature_flags` and
 left behind as an `@@ignore`d husk. Do not build a third generic system.
 
 The live house pattern is a boolean column on `Organization`, default `false`.
-Three current examples: `reporterEnabled`, `classInsightsEnabled`,
-`writingPracticeEnabled` — most recently added by
+Current example: `classInsightsEnabled` — most recently added by
 `20260720163000_add_combined_feature_rollout_gates`. It is loaded in `root.tsx`,
 checked through a small availability helper
 (`class-insight-generate-availability.ts`), and enforced in query `where`
 clauses (`organization: { classInsightsEnabled: true }`).
+
+Note: `reporterEnabled` and `writingPracticeEnabled` were retired — Reporter and
+Writing Practice are always on for every organization now. The columns remain
+for backward-compatibility and historical data.
 
 Follow it: `Organization.collaborativeDraftsEnabled Boolean @default(false)`.
 

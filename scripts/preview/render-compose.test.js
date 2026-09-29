@@ -87,6 +87,19 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('docker push');
   });
 
+  test('keeps the web container alive across host and Docker restarts', () => {
+    const fast = renderCompose();
+    const production = renderCompose({ runtime: 'production' });
+
+    // The shared Postgres and Traefik containers already restart automatically;
+    // the per-PR web container must do the same or a preview goes 502 (and never
+    // recovers) whenever the host reboots or the Docker daemon restarts.
+    for (const compose of [fast, production]) {
+      const webBlock = compose.slice(compose.indexOf('\n  web:'));
+      expect(webBlock).toContain('restart: unless-stopped');
+    }
+  });
+
   test('still supports production-image previews when explicitly requested', () => {
     const compose = renderCompose({
       runtime: 'production',

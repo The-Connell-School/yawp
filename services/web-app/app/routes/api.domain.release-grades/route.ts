@@ -77,9 +77,6 @@ export async function action({ request }: ActionFunctionArgs) {
               ],
             },
           },
-          ...(actor.isAdmin
-            ? {}
-            : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
           // A student can unsubmit after a teacher's grade is saved but
           // before it's released. Exclude it from eligibility so it fails
@@ -166,9 +163,6 @@ export async function action({ request }: ActionFunctionArgs) {
               ],
             },
           },
-          ...(actor.isAdmin
-            ? {}
-            : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
           unsubmittedAt: null,
         },

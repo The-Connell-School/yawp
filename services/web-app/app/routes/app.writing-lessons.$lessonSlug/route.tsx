@@ -12,7 +12,6 @@ import { useState, type ReactNode } from 'react';
 import {
   Link,
   data as dataResponse,
-  redirect,
   useFetcher,
   useLoaderData,
   useSearchParams,
@@ -30,7 +29,6 @@ import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { formatClassLabel } from '~/utils/class-display';
 import { prisma } from '~/utils/db.server';
-import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import { COMPOSITION_TOPIC_SUGGESTIONS } from '~/utils/writing-lessons/composition-topic-prompts';
 import type { LessonEvidence } from '~/utils/writing-lessons/lesson-evidence';
 import { getLessonEvidenceForTeacher } from '~/utils/writing-lessons/lesson-evidence.server';
@@ -56,23 +54,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  // Writing practice ships dark behind the org flag, so a direct lesson URL
-  // has to bounce too — otherwise the feature leaks past the pause.
-  if (!profile.organization.writingPracticeEnabled) {
-    throw redirect('/app');
-  }
-
   const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
   if (!lesson) {
     throw new Response('Lesson not found', { status: 404 });
   }
 
   const isComposition = lesson.section === 'Composition';
-  // Composition is still behind its rollout flag: hide the lessons entirely
-  // (even by direct URL) until it is switched on.
-  if (isComposition && !isCompositionPracticeEnabled()) {
-    throw new Response('Lesson not found', { status: 404 });
-  }
 
   const isTeacher = profile.role === 'TEACHER';
   const teacherClasses: TeacherClass[] = isTeacher

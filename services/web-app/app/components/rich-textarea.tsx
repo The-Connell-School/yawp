@@ -5,6 +5,8 @@ import { Tooltip } from './ui/tooltip';
 
 export type RichTextareaProps = TextareaProps & {
   onCmdEnter?: (text: string) => void;
+  // When true, a plain Enter submits (Shift+Enter still inserts a newline).
+  submitOnEnter?: boolean;
   textareaTestId?: string;
   sendButtonTestId?: string;
 };
@@ -13,6 +15,7 @@ export const RichTextarea = ({
   size,
   className,
   onCmdEnter,
+  submitOnEnter,
   textareaTestId,
   sendButtonTestId,
   ...textareaProps
@@ -24,7 +27,7 @@ export const RichTextarea = ({
     handleTextareaChange,
     setHasText,
     hasText,
-  } = useRichTextarea({ onCmdEnter, height });
+  } = useRichTextarea({ onCmdEnter, height, submitOnEnter });
 
   return (
     <div className="relative flex w-full items-center">

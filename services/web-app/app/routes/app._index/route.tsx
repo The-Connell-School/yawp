@@ -7,6 +7,7 @@ import {
   useLoaderData,
   useRevalidator,
   useRouteLoaderData,
+  useNavigate,
 } from 'react-router';
 import { PenLine } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -38,7 +39,6 @@ import {
   getAssignedPracticeForStudent,
 } from '~/utils/writing-lessons/practice-assignments.server';
 import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
-import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import {
   Dialog,
   DialogContent,
@@ -294,18 +294,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // dashboard alongside their classes (each card links into the practice
   // runner). Grammar sets report answered progress; composition sets report
   // mastery.
-  const compositionPracticeEnabled = isCompositionPracticeEnabled();
   const writingPracticeAssignments =
-    useStudentExperience && profile.organization.writingPracticeEnabled
+    useStudentExperience
       ? (await getAssignedPracticeForStudent(profile.id))
-          .filter(
-            ({ assignment }) =>
-              compositionPracticeEnabled ||
-              !assignment.lessonSlugs.some(
-                (slug) =>
-                  getQuickWritingLessonBySlug(slug)?.section === 'Composition'
-              )
-          )
           .map((classAssignment) => {
             const { assignment } = classAssignment;
             const progress = computeAssignedProgress(
@@ -359,6 +350,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function AppRoute() {
   const data = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
   const user = useUser();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
@@ -408,6 +400,15 @@ export default function AppRoute() {
                   setIsCreateSheetOpen(true);
                 }}
                 onCreateAssignmentForType={(assignmentTypeId) => {
+                  const assignmentType = data.teacherAssignmentTypes.find(
+                    (type) => type.id === assignmentTypeId
+                  );
+                  if (
+                    assignmentType?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
+                  ) {
+                    void navigate(`/app/assignment-types/${assignmentTypeId}`);
+                    return;
+                  }
                   setCreateAssignmentTypeId(assignmentTypeId);
                   setIsCreateSheetOpen(true);
                 }}
