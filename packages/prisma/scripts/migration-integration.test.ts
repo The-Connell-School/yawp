@@ -7,6 +7,7 @@ import { spawnSync, spawn } from 'node:child_process';
 const ROOT = join(dirname(import.meta.path.replace('file://', '')), '..', '..');
 const PRISMA_DIR = join(ROOT, 'packages', 'prisma');
 const DB = process.env.DATABASE_URL || 'postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration';
+const ADMIN_DB = DB.replace(/\\/[^/?]+(\\?|$)/, '/postgres$1');
 
 function run(cmd: string, args: string[], cwd?: string, env?: Record<string, string>) {
   const res = spawnSync(cmd, args, {
@@ -32,6 +33,14 @@ function psql(sql: string) {
   const res = run('psql', ['-v', 'ON_ERROR_STOP=1', DB, '-c', sql]);
   if (res.status !== 0) {
     throw new Error(`psql failed: ${res.status}\n${res.stderr}\n${res.stdout}`);
+  }
+  return res.stdout;
+}
+
+function adminPsql(sql: string) {
+  const res = run('psql', ['-v', 'ON_ERROR_STOP=1', ADMIN_DB, '-c', sql]);
+  if (res.status !== 0) {
+    throw new Error(`admin psql failed: ${res.status}\n${res.stderr}\n${res.stdout}`);
   }
   return res.stdout;
 }
@@ -71,8 +80,8 @@ function prismaDeployExpectFail(cwd: string) {
 describe('migration integration (real Postgres)', () => {
   test('baseline-capture, pinning, idempotency, auto-revisions, immutability, rollback', () => {
     // Fresh database
-    try { psql('DROP DATABASE IF EXISTS yawp_migration_integration'); } catch {}
-    psql('CREATE DATABASE yawp_migration_integration');
+    try { adminPsql('DROP DATABASE IF EXISTS yawp_migration_integration WITH (FORCE)'); } catch {}
+    adminPsql('CREATE DATABASE yawp_migration_integration');
 
     // Apply main migrations up to before #383
     const pre = setupTempCopy([
@@ -80,17 +89,12 @@ describe('migration integration (real Postgres)', () => {
       '20260929034000_assignment_rubric_baseline_capture',
     ]);
     prismaDeploy(pre);
-    // Capture pre-migration schema and data hashes
+    // Capture pre-migration schema and data hashes AFTER seeding and BEFORE deploy
     const schemaPre = run('pg_dump', ['-s', DB]).stdout;
     function hash(tbl: string) {
       return run('psql', ['-t', '-A', DB, '-c', `SELECT md5(COALESCE(string_agg(row_to_json(t)::text, '' ORDER BY 1), '')) FROM (SELECT * FROM "${tbl}") t;`]).stdout.trim().split('\n').pop();
     }
-    const preHash = {
-      Rubric: hash('Rubric'),
-      AssignmentType: hash('AssignmentType'),
-      Assignment: hash('Assignment'),
-      RubricRevision: hash('RubricRevision'),
-    };
+    const preHash = { Rubric: hash('Rubric'), AssignmentType: hash('AssignmentType'), Assignment: hash('Assignment'), RubricRevision: hash('RubricRevision') };
 
     // Seed: library rubric + 2 types (one shared rubric), per-type JSON type, and no-JSON type.
     const libSchema = {
@@ -137,6 +141,12 @@ describe('migration integration (real Postgres)', () => {
     writeFileSync(file, brokenSql, 'utf8');
     const fail1 = prismaDeployExpectFail(broken);
     expect(fail1.stderr + fail1.stdout).toContain('schemajson');
+    // Resolve rolled back migration and assert no partials
+    run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], broken);
+    const baselineExists = run('psql', ['-t', '-A', DB, '-c', `SELECT to_regclass('public."AssignmentTypeRubricBaseline"') IS NOT NULL;`]).stdout.trim().split('\n').pop();
+    expect(baselineExists).toBe('f');
+    const pinTrigger = run('psql', ['-t', '-A', DB, '-c', `SELECT COUNT(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE c.relname='Assignment' AND t.tgname='internal_assignment_rubric_pin';`]).stdout.trim().split('\n').pop();
+    expect(pinTrigger).toBe('1');
 
     // Apply correct migrations
     const current = setupTempCopy();
@@ -246,8 +256,8 @@ describe('migration integration (real Postgres)', () => {
   });
 
   test('lock_timeout enforced under migrate deploy', () => {
-    try { psql('DROP DATABASE IF EXISTS yawp_migration_integration'); } catch {}
-    psql('CREATE DATABASE yawp_migration_integration');
+    try { adminPsql('DROP DATABASE IF EXISTS yawp_migration_integration WITH (FORCE)'); } catch {}
+    adminPsql('CREATE DATABASE yawp_migration_integration');
     const pre = setupTempCopy([
       '20260928182000_pin_assignments_to_current_rubric_revision',
       '20260929034000_assignment_rubric_baseline_capture',
@@ -258,6 +268,18 @@ describe('migration integration (real Postgres)', () => {
           INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt") VALUES ('a1', now(), now(), 't1','P');`);
     // Hold lock on Assignment to block DROP TRIGGER
     const locker = runAsync('psql', ['-v', 'ON_ERROR_STOP=1', DB, '-c', `BEGIN; LOCK TABLE "Assignment" IN ACCESS EXCLUSIVE MODE; SELECT pg_sleep(10); COMMIT;`]);
+    // Wait until lock is held
+    const lockQuery = `SELECT EXISTS (
+      SELECT 1 FROM pg_locks l
+      JOIN pg_class c ON c.oid = l.relation
+      WHERE c.relname='Assignment' AND l.mode='AccessExclusiveLock' AND l.granted
+    )`;
+    const startPoll = Date.now();
+    while (true) {
+      const has = run('psql', ['-t', '-A', DB, '-c', lockQuery]).stdout.trim().split('\n').pop();
+      if (has === 't') break;
+      if (Date.now() - startPoll > 5000) throw new Error('lock not acquired in time');
+    }
     const current = setupTempCopy();
     const start = Date.now();
     const res = run('bun', ['prisma', 'migrate', 'deploy'], current);
@@ -270,6 +292,10 @@ describe('migration integration (real Postgres)', () => {
     // Ensure no baseline table was created
     const hasBaseline = run('psql', ['-t', '-A', DB, '-c', `SELECT to_regclass('public."AssignmentTypeRubricBaseline"') IS NOT NULL;`]).stdout.trim().split('\n').pop();
     expect(hasBaseline).toBe('f');
+    // Resolve and re-deploy after lock timeout
+    run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260928182000_pin_assignments_to_current_rubric_revision'], current);
+    run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], current);
+    prismaDeploy(current);
     try { locker.kill('SIGKILL'); } catch {}
   });
 });

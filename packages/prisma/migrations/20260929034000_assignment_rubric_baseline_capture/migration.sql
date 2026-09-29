@@ -85,13 +85,13 @@ BEGIN
   ), lib_created AS (
     INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
     SELECT
-      md5(clock_timestamp()::text || random()::text)::text AS id,
+      gen_random_uuid()::text AS id,
       m.rubric_name,
       m.next_version,
       m.schema_json,
-      md5(m.schema_json::text) AS fingerprint,
-      md5((clock_timestamp()::text || random()::text)) AS requestId,
-      md5(m.schema_json::text) AS requestHash,
+      encode(digest(convert_to(m.schema_json::text,'UTF8'),'sha256'),'hex') AS fingerprint,
+      gen_random_uuid()::text AS requestId,
+      encode(digest(convert_to(m.schema_json::text,'UTF8'),'sha256'),'hex') AS requestHash,
       'baseline-capture' AS createdBy,
       'Captured baseline at deployment' AS reason
     FROM lib_missing m
@@ -142,13 +142,13 @@ BEGIN
   ), per_created AS (
     INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
     SELECT
-      md5(clock_timestamp()::text || random()::text)::text AS id,
+      gen_random_uuid()::text AS id,
       m.rubric_name,
       m.next_version,
       m.schema_json,
-      md5(m.schema_json::text) AS fingerprint,
-      md5((clock_timestamp()::text || random()::text)) AS requestId,
-      md5(m.schema_json::text) AS requestHash,
+      encode(digest(convert_to(m.schema_json::text,'UTF8'),'sha256'),'hex') AS fingerprint,
+      gen_random_uuid()::text AS requestId,
+      encode(digest(convert_to(m.schema_json::text,'UTF8'),'sha256'),'hex') AS requestHash,
       'baseline-capture' AS createdBy,
       'Captured per-type baseline at deployment' AS reason
     FROM per_missing m
@@ -227,12 +227,12 @@ BEGIN
     RETURN NEW;
   END IF;
   SELECT COALESCE(MAX(version), 0) + 1 INTO next_version FROM "RubricRevision" WHERE "rubricName" = NEW.name;
-  SELECT md5(clock_timestamp()::text || random()::text)::text INTO new_id;
+  SELECT gen_random_uuid()::text INTO new_id;
   INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
   VALUES (
     new_id, NEW.name, next_version, NEW."schemaJson",
-    md5(NEW."schemaJson"::text),
-    md5(clock_timestamp()::text || random()::text), md5(NEW."schemaJson"::text),
+    encode(digest(convert_to(NEW."schemaJson"::text,'UTF8'),'sha256'),'hex'),
+    gen_random_uuid()::text, encode(digest(convert_to(NEW."schemaJson"::text,'UTF8'),'sha256'),'hex'),
     'auto-revision', 'Rubric updated'
   );
   NEW."currentRevisionId" := new_id;
@@ -272,12 +272,12 @@ BEGIN
     'calibrationNotes', COALESCE(to_jsonb(NEW."gradingCalibrationNotes"), 'null'::jsonb)
   );
   SELECT COALESCE(MAX(version), 0) + 1 INTO next_version FROM "RubricRevision" WHERE "rubricName" = rubric_name;
-  SELECT md5(clock_timestamp()::text || random()::text)::text INTO new_id;
+  SELECT gen_random_uuid()::text INTO new_id;
   INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
   VALUES (
     new_id, rubric_name, next_version, schema_json,
-    md5(schema_json::text),
-    md5(clock_timestamp()::text || random()::text), md5(schema_json::text),
+    encode(digest(convert_to(schema_json::text,'UTF8'),'sha256'),'hex'),
+    gen_random_uuid()::text, encode(digest(convert_to(schema_json::text,'UTF8'),'sha256'),'hex'),
     'auto-revision', 'Assignment type rubric updated'
   )
   ON CONFLICT DO NOTHING;
@@ -290,3 +290,5 @@ DROP TRIGGER IF EXISTS yawp_auto_assignment_type_baseline_on_update ON "Assignme
 CREATE TRIGGER yawp_auto_assignment_type_baseline_on_update
 BEFORE UPDATE OF "scoringScaleJson","rubricJson","gradingPromptConfigJson","gradingOutputSchemaJson","gradingCalibrationNotes" ON "AssignmentType"
 FOR EACH ROW EXECUTE FUNCTION yawp_auto_assignment_type_baseline_on_update();
+ 
+RESET lock_timeout;

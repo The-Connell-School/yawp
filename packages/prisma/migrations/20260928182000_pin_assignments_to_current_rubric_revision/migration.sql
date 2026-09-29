@@ -1,4 +1,4 @@
-SET LOCAL lock_timeout = '5s';
+SET lock_timeout = '5s';
 
 -- Pin existing assignments that grade with a selected library rubric to the
 -- historically-correct published revision, if they are not already pinned.
@@ -82,3 +82,4 @@ BEGIN
     EXIT WHEN rows_changed = 0;
   END LOOP;
 END $$;
+RESET lock_timeout;
