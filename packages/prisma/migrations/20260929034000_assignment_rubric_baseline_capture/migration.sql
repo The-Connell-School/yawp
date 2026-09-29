@@ -256,7 +256,7 @@ BEGIN
   INSERT INTO "AssignmentTypeRubricBaseline" ("assignmentTypeId","rubricRevisionId")
   SELECT DISTINCT p.assignment_type_id, r.id
   FROM per_types p
-  JOIN per_rev r ON r.rubric_name = p.rubric_name
+  JOIN per_rev r ON r."rubricName" = p.rubric_name
   ON CONFLICT ("assignmentTypeId") DO NOTHING;
 
   -- 5) Pin existing assignments to their baseline (library or per-type).
