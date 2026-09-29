@@ -268,8 +268,10 @@ BEGIN
     TRUNCATE TABLE "__tmp_pin_assignments_batch";
 
     INSERT INTO "__tmp_pin_assignments_batch"(assignment_id, selected_revision_id)
-    SELECT a.id,
-      COALESCE(
+    SELECT a.id, sr.selected_revision_id
+    FROM "Assignment" a
+    JOIN LATERAL (
+      SELECT COALESCE(
         -- Prefer library current revision when present
         (SELECT r."currentRevisionId"
          FROM "AssignmentType" t JOIN "Rubric" r ON r.id = t."rubricId"
@@ -283,7 +285,7 @@ BEGIN
            ON rr."rubricName" = ('assignment-type:' || t.id)
           AND rr."schemaJson" = jsonb_build_object(
                 'name', ('assignment-type:' || t.id),
-                'title', t.title,
+                'title', COALESCE(t.title, ('assignment-type:' || t.id)),
                 'scoringScale', COALESCE(t."scoringScaleJson",'{}'::jsonb),
                 'rubric', COALESCE(t."rubricJson",'{}'::jsonb),
                 'promptConfig', COALESCE(t."gradingPromptConfigJson",'{}'::jsonb),
@@ -292,39 +294,9 @@ BEGIN
               )
          WHERE t.id = a."assignmentTypeId")
       ) AS selected_revision_id
-    FROM "Assignment" a
+    ) AS sr ON TRUE
     WHERE a."rubricRevisionId" IS NULL
-      AND (
-        -- Has a library rubric with a current pointer
-        EXISTS (
-          SELECT 1 FROM "AssignmentType" t
-          JOIN "Rubric" r ON r.id = t."rubricId"
-          WHERE t.id = a."assignmentTypeId" AND r."currentRevisionId" IS NOT NULL
-        )
-        OR
-        -- Has a baseline mapping recorded
-        EXISTS (
-          SELECT 1 FROM "AssignmentTypeRubricBaseline" b WHERE b."assignmentTypeId" = a."assignmentTypeId"
-        )
-        OR
-        -- Can resolve a per-type baseline directly by name+schema
-        EXISTS (
-          SELECT 1
-          FROM "AssignmentType" t
-          JOIN "RubricRevision" rr
-            ON rr."rubricName" = ('assignment-type:' || t.id)
-           AND rr."schemaJson" = jsonb_build_object(
-                 'name', ('assignment-type:' || t.id),
-                 'title', COALESCE(t.title, ('assignment-type:' || t.id)),
-                 'scoringScale', COALESCE(t."scoringScaleJson",'{}'::jsonb),
-                 'rubric', COALESCE(t."rubricJson",'{}'::jsonb),
-                 'promptConfig', COALESCE(t."gradingPromptConfigJson",'{}'::jsonb),
-                 'outputSchema', COALESCE(t."gradingOutputSchemaJson",'{}'::jsonb),
-                 'calibrationNotes', COALESCE(to_jsonb(t."gradingCalibrationNotes"), 'null'::jsonb)
-               )
-          WHERE t.id = a."assignmentTypeId"
-        )
-      )
+      AND sr.selected_revision_id IS NOT NULL
     ORDER BY a.id
     LIMIT 1000;
 
