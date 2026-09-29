@@ -89,9 +89,9 @@ BEGIN
       m.rubric_name,
       m.next_version,
       m.schema_json,
-      encode(digest(convert_to(m.schema_json::text,'UTF8'),'sha256'),'hex') AS fingerprint,
+      encode(sha256(convert_to(m.schema_json::text,'UTF8')),'hex') AS fingerprint,
       gen_random_uuid()::text AS requestId,
-      encode(digest(convert_to(m.schema_json::text,'UTF8'),'sha256'),'hex') AS requestHash,
+      encode(sha256(convert_to(m.schema_json::text,'UTF8')),'hex') AS requestHash,
       'baseline-capture' AS createdBy,
       'Captured baseline at deployment' AS reason
     FROM lib_missing m
@@ -146,9 +146,9 @@ BEGIN
       m.rubric_name,
       m.next_version,
       m.schema_json,
-      encode(digest(convert_to(m.schema_json::text,'UTF8'),'sha256'),'hex') AS fingerprint,
+      encode(sha256(convert_to(m.schema_json::text,'UTF8')),'hex') AS fingerprint,
       gen_random_uuid()::text AS requestId,
-      encode(digest(convert_to(m.schema_json::text,'UTF8'),'sha256'),'hex') AS requestHash,
+      encode(sha256(convert_to(m.schema_json::text,'UTF8')),'hex') AS requestHash,
       'baseline-capture' AS createdBy,
       'Captured per-type baseline at deployment' AS reason
     FROM per_missing m
@@ -231,8 +231,8 @@ BEGIN
   INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
   VALUES (
     new_id, NEW.name, next_version, NEW."schemaJson",
-    encode(digest(convert_to(NEW."schemaJson"::text,'UTF8'),'sha256'),'hex'),
-    gen_random_uuid()::text, encode(digest(convert_to(NEW."schemaJson"::text,'UTF8'),'sha256'),'hex'),
+    encode(sha256(convert_to(NEW."schemaJson"::text,'UTF8')),'hex'),
+    gen_random_uuid()::text, encode(sha256(convert_to(NEW."schemaJson"::text,'UTF8')),'hex'),
     'auto-revision', 'Rubric updated'
   );
   NEW."currentRevisionId" := new_id;
@@ -276,8 +276,8 @@ BEGIN
   INSERT INTO "RubricRevision" ("id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason")
   VALUES (
     new_id, rubric_name, next_version, schema_json,
-    encode(digest(convert_to(schema_json::text,'UTF8'),'sha256'),'hex'),
-    gen_random_uuid()::text, encode(digest(convert_to(schema_json::text,'UTF8'),'sha256'),'hex'),
+    encode(sha256(convert_to(schema_json::text,'UTF8')),'hex'),
+    gen_random_uuid()::text, encode(sha256(convert_to(schema_json::text,'UTF8')),'hex'),
     'auto-revision', 'Assignment type rubric updated'
   )
   ON CONFLICT DO NOTHING;

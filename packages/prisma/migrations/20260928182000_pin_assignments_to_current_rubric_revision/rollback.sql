@@ -15,8 +15,12 @@ BEGIN
     EXCEPTION WHEN undefined_object THEN NULL;
     END;
 
-    -- Clear all pins, not only audited rows.
-    UPDATE "Assignment" SET "rubricRevisionId" = NULL WHERE "rubricRevisionId" IS NOT NULL;
+    -- Clear pins only for revisions created by baseline/auto flows.
+    UPDATE "Assignment" a
+    SET "rubricRevisionId" = NULL
+    WHERE a."rubricRevisionId" IN (
+      SELECT id FROM "RubricRevision" WHERE "createdBy" IN ('baseline-capture','auto-revision')
+    );
 
     -- 3) Reset currentRevisionId when it points to baseline/auto-created revisions.
     UPDATE "Rubric" r
@@ -72,10 +76,10 @@ END $$;
     DROP TRIGGER IF EXISTS internal_assignment_rubric_pin ON "Assignment";
     CREATE TRIGGER internal_assignment_rubric_pin BEFORE INSERT OR UPDATE ON "Assignment"
     FOR EACH ROW EXECUTE FUNCTION internal_assignment_rubric_pin();
-  END IF;
-  -- 8) Allow migrations to re-apply by removing these two migration receipts.
-  DELETE FROM "_prisma_migrations"
+    -- 8) Allow migrations to re-apply by removing these two migration receipts.
+    DELETE FROM "_prisma_migrations"
    WHERE "migration_name" IN ('20260928182000_pin_assignments_to_current_rubric_revision',
                               '20260929034000_assignment_rubric_baseline_capture');
+  END IF;
 END $rb$;
 

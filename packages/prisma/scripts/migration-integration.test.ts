@@ -7,7 +7,7 @@ import { spawnSync, spawn } from 'node:child_process';
 const ROOT = join(dirname(import.meta.path.replace('file://', '')), '..', '..');
 const PRISMA_DIR = join(ROOT, 'packages', 'prisma');
 const DB = process.env.DATABASE_URL || 'postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration';
-const ADMIN_DB = DB.replace(/\\/[^/?]+(\\?|$)/, '/postgres$1');
+const ADMIN_DB = (() => { const u = new URL(DB); u.pathname = '/postgres'; return u.toString(); })();
 
 function run(cmd: string, args: string[], cwd?: string, env?: Record<string, string>) {
   const res = spawnSync(cmd, args, {
@@ -150,7 +150,8 @@ describe('migration integration (real Postgres)', () => {
 
     // Apply correct migrations
     const current = setupTempCopy();
-    prismaDeploy(current);
+    const res2 = run('bun', ['prisma', 'migrate', 'deploy'], current);
+    expect(res2.status).toBe(0);
 
     // (a) Pins for library/per-type; no-JSON unpinned with reason
     const counts = jsonQuery(`
@@ -296,7 +297,13 @@ describe('migration integration (real Postgres)', () => {
     run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260928182000_pin_assignments_to_current_rubric_revision'], current);
     run('bun', ['prisma', 'migrate', 'resolve', '--rolled-back', '20260929034000_assignment_rubric_baseline_capture'], current);
     prismaDeploy(current);
-    try { locker.kill('SIGKILL'); } catch {}
+    // Ensure locker transaction ended before recovery: wait until lock gone
+    const startWait = Date.now();
+    while (true) {
+      const has = run('psql', ['-t', '-A', DB, '-c', lockQuery]).stdout.trim().split('\n').pop();
+      if (has === 'f') break;
+      if (Date.now() - startWait > 12000) break;
+    }
   });
 });
 
