@@ -192,6 +192,9 @@ describe('migration integration (real Postgres)', () => {
         'codeDefault', (SELECT COUNT(*) FROM "InternalAssignmentRubricPinBackfill" WHERE reason = 'code-default')
       )
     `);
+    // Debug output on CI to diagnose unexpected pin counts
+    const pinDetails = run('psql', ['-t', '-A', DB, '-c', `SELECT id || ':' || (\"rubricRevisionId\" IS NOT NULL) FROM \"Assignment\" ORDER BY id;`]).stdout.trim();
+    console.log('Assignment pin state:\n' + pinDetails);
     expect(counts.pinned).toBe(4);
     expect(counts.unpinned).toBe(2);
     expect(counts.codeDefault).toBe(2);
