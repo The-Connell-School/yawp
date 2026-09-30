@@ -22,7 +22,7 @@ describe('seedStarterRubrics', () => {
     prisma.rubric.update.mockResolvedValue({});
   });
 
-  test('repairs a drifted protected rubric to the production definition', async () => {
+  test('does not overwrite a drifted protected rubric (preserve divergence)', async () => {
     prisma.rubric.findMany.mockResolvedValue([
       {
         id: 'thesis-1',
@@ -50,15 +50,11 @@ describe('seedStarterRubrics', () => {
       },
     ]);
 
+    // No revisions: still should not overwrite divergence.
+    (prisma as any).rubricRevision = { findMany: mock().mockResolvedValue([]) };
     await seedStarterRubrics();
 
-    expect(prisma.rubric.update).toHaveBeenCalledWith({
-      where: { id: 'thesis-1' },
-      data: {
-        title: STARTER_RUBRICS[0].title,
-        schemaJson: STARTER_RUBRICS[0],
-      },
-    });
+    expect(prisma.rubric.update).not.toHaveBeenCalled();
     expect(prisma.rubric.create).toHaveBeenCalledWith({
       data: {
         name: STARTER_RUBRICS[1].name,
@@ -69,6 +65,7 @@ describe('seedStarterRubrics', () => {
   });
 
   test('does not write when all protected rubrics already match their definitions', async () => {
+    (prisma as any).rubricRevision = { findMany: mock().mockResolvedValue([]) };
     prisma.rubric.findMany.mockResolvedValue(
       STARTER_RUBRICS.map((schema, index) => ({
         id: `rubric-${index}`,
@@ -81,6 +78,23 @@ describe('seedStarterRubrics', () => {
     await seedStarterRubrics();
 
     expect(prisma.rubric.create).not.toHaveBeenCalled();
+    expect(prisma.rubric.update).not.toHaveBeenCalled();
+  });
+
+  test('never overwrites when revisions exist', async () => {
+    prisma.rubric.findMany.mockResolvedValue([
+      {
+        id: 'thesis-1',
+        name: STARTER_RUBRICS[0].name,
+        title: 'Changed thesis again',
+        schemaJson: { ...STARTER_RUBRICS[0], title: 'Changed thesis again' },
+      },
+    ]);
+    (prisma as any).rubricRevision = {
+      findMany: mock().mockResolvedValue([{ rubricName: STARTER_RUBRICS[0].name }]),
+    };
+
+    await seedStarterRubrics();
     expect(prisma.rubric.update).not.toHaveBeenCalled();
   });
 });
