@@ -81,8 +81,22 @@ remove_legacy_postgres_volume() {
   local project="$1"
 
   if "$DOCKER" volume inspect "${project}_${project}-postgres-data" >/dev/null 2>&1; then
-    "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null
+    "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null || return 1
   fi
+}
+
+force_remove_project_containers() {
+  local project="$1"
+  "$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
+    | xargs -r "$DOCKER" rm -f >/dev/null 2>&1 || true
+}
+
+force_remove_project_resources() {
+  local project="$1"
+  "$DOCKER" volume ls -q --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
+    | xargs -r "$DOCKER" volume rm >/dev/null 2>&1 || true
+  "$DOCKER" network ls -q --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
+    | xargs -r "$DOCKER" network rm >/dev/null 2>&1 || true
 }
 
 assert_project_resources_absent() {
@@ -107,13 +121,8 @@ destroy_preview_path() {
   if [[ -f "$compose_file" ]]; then
     if ! "$DOCKER" compose -p "$project" -f "$compose_file" down -v --remove-orphans; then
       echo "::warning::compose down failed for pr-${pr_number}; forcing container/resource removal without compose file" >&2
-      # Force-remove containers, then volumes and networks strictly by compose project label.
-      "$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
-        | xargs -r "$DOCKER" rm -f >/dev/null 2>&1 || true
-      "$DOCKER" volume ls -q --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
-        | xargs -r "$DOCKER" volume rm >/dev/null 2>&1 || true
-      "$DOCKER" network ls -q --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
-        | xargs -r "$DOCKER" network rm >/dev/null 2>&1 || true
+      force_remove_project_containers "$project"
+      force_remove_project_resources "$project"
       if ! assert_project_resources_absent "$project"; then
         echo "::error::compose down failed and resources remain for pr-${pr_number}" >&2
         return 1
@@ -121,7 +130,9 @@ destroy_preview_path() {
       rm -f -- "$compose_file" || true
     fi
   else
-    # Without a compose file, refuse cleanup when Compose-managed resources exist.
+    # Without a compose file, force-remove any leftover resources by strict label, then verify.
+    force_remove_project_containers "$project"
+    force_remove_project_resources "$project"
     if ! assert_project_resources_absent "$project"; then
       echo "::error::refusing source-only cleanup for pr-${pr_number}; Compose resources exist or could not be ruled out without ${compose_file}" >&2
       return 1

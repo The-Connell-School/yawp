@@ -794,8 +794,9 @@ describe('PR preview deployment contract', () => {
     expect(cleanupScript).toContain(
       'dropuser -U postgres --if-exists "${database_name}_app"'
     );
-    expect(cleanupScript).toContain(
-      'docker volume rm "${project}_${project}-postgres-data"'
+    // Accept either direct docker or parameterized $DOCKER invocation.
+    expect(cleanupScript).toMatch(
+      /(?:"?\$DOCKER"?|docker) volume rm "\$\{project\}_\$\{project\}-postgres-data"/
     );
     expect(cleanupScript).toContain('preview_remove_path');
     expect(removeScript).toContain('preview_remove_path_is_safe');
