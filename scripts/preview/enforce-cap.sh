@@ -319,11 +319,11 @@ destroy_env() {
       echo "::warning::compose down failed for pr-${pr}; forcing container/resource removal without compose file" >&2
       force_remove_project_containers "$project"
       force_remove_project_resources "$project"
-      rm -f -- "$compose_file" || true
       if ! assert_project_resources_absent "$project"; then
         echo "::error::compose down failed and resources remain for pr-${pr}" >&2
         return 1
       fi
+      rm -f -- "$compose_file" || true
     fi
   elif ! assert_project_resources_absent "$project"; then
     echo "::error::refusing source-only cleanup for pr-${pr}; Compose resources exist or could not be ruled out without ${compose_file}" >&2
