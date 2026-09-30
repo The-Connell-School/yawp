@@ -1,11 +1,11 @@
 data "aws_availability_zones" "available" {}
 
 locals {
-  production_edge_enabled    = var.env == "production" && var.production_domain_name != ""
+  production_edge_enabled = var.env == "production" && var.production_domain_name != ""
   ua_billing_runtime_enabled = var.ua_student_billing_enabled && var.ua_stripe_credentials_configured
-  production_domain_zone     = "${trim(var.production_domain_name, ".")}."
-  production_edge_aliases    = distinct([var.production_domain_name, var.ua_partner_hostname])
-  apprunner_origin_domain    = trimsuffix(replace(replace(aws_apprunner_service.web.service_url, "https://", ""), "http://", ""), "/")
+  production_domain_zone  = "${trim(var.production_domain_name, ".")}."
+  production_edge_aliases = distinct([var.production_domain_name, var.ua_partner_hostname])
+  apprunner_origin_domain = trimsuffix(replace(replace(aws_apprunner_service.web.service_url, "https://", ""), "http://", ""), "/")
 }
 
 data "aws_route53_zone" "production_domain" {
@@ -32,7 +32,7 @@ module "vpc" {
   cidr = "10.0.0.0/16"
 
   azs             = [data.aws_availability_zones.available.names[0], data.aws_availability_zones.available.names[1]]
-  public_subnets  = ["10.0.0.0/24", "10.0.1.0/24"]
+  public_subnets  = ["10.0.0.0/24",  "10.0.1.0/24"]
   private_subnets = ["10.0.10.0/24", "10.0.11.0/24"]
 
   enable_nat_gateway = true
@@ -44,7 +44,7 @@ module "vpc" {
   }
 }
 
-resource "aws_security_group" "apprunner" {
+ resource "aws_security_group" "apprunner" {
   name        = "${var.app_name}-${var.env}-apprunner-connector"
   description = "Allows App Runner tasks to egress into the VPC"
   vpc_id      = module.vpc.vpc_id
@@ -61,9 +61,9 @@ resource "aws_security_group" "apprunner" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-}
+ }
 
-resource "aws_security_group" "rds" {
+ resource "aws_security_group" "rds" {
   name        = "${var.app_name}-${var.env}-rds"
   description = "Postgres access from App Runner"
   vpc_id      = module.vpc.vpc_id
@@ -96,7 +96,7 @@ resource "aws_security_group" "rds" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-}
+ }
 
 resource "aws_security_group" "bastion" {
   name        = "${var.app_name}-${var.env}-bastion"
@@ -130,10 +130,10 @@ resource "aws_key_pair" "bastion" {
 }
 
 resource "aws_instance" "bastion" {
-  ami                         = "ami-09e6f87a47903347c" # Amazon Linux 2023 AMI
-  instance_type               = "t2.micro"
-  subnet_id                   = module.vpc.public_subnets[0]
-  key_name                    = aws_key_pair.bastion.key_name
+  ami           = "ami-09e6f87a47903347c"  # Amazon Linux 2023 AMI
+  instance_type = "t2.micro"
+  subnet_id     = module.vpc.public_subnets[0]
+  key_name      = aws_key_pair.bastion.key_name
   associate_public_ip_address = true
 
   vpc_security_group_ids = [aws_security_group.bastion.id]
@@ -176,8 +176,8 @@ resource "aws_ecr_lifecycle_policy" "web_app" {
 }
 
 resource "random_password" "db_master" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
 }
 
 resource "aws_secretsmanager_secret" "db_url" {
@@ -206,7 +206,7 @@ resource "aws_db_instance" "postgres" {
   engine                 = "postgres"
   instance_class         = var.db_instance_class
   allocated_storage      = var.db_allocated_storage
-  db_name                = var.db_name
+  db_name                   = var.db_name
   username               = var.db_username
   password               = random_password.db_master.result
   db_subnet_group_name   = aws_db_subnet_group.db_subnets.name
@@ -258,8 +258,8 @@ resource "aws_iam_role_policy" "apprunner_ecr_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = [
+        Effect   = "Allow"
+        Action   = [
           "ecr:GetAuthorizationToken",
           "ecr:BatchCheckLayerAvailability",
           "ecr:GetDownloadUrlForLayer",
@@ -300,8 +300,8 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = ["secretsmanager:GetSecretValue"]
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
         Resource = concat(
           [
             aws_secretsmanager_secret.db_url.arn,
@@ -457,7 +457,7 @@ resource "aws_secretsmanager_secret_version" "stripe_webhook_secret" {
 }
 
 resource "aws_apprunner_service" "web" {
-  depends_on   = [aws_iam_role_policy.apprunner_instance_policy]
+  depends_on = [aws_iam_role_policy.apprunner_instance_policy]
   service_name = "${var.app_name}-${var.env}"
 
   source_configuration {
@@ -473,38 +473,38 @@ resource "aws_apprunner_service" "web" {
         port = "8080"
 
         runtime_environment_variables = merge({
-          NODE_ENV                   = var.env
-          PORT                       = "8080"
-          AI_MODEL                   = "claude-sonnet-4-6"
-          EMAIL_PROVIDER             = "ses"
-          AWS_SES_REGION             = var.aws_region
-          SES_FROM_EMAIL             = var.resend_from_email
-          RESEND_FROM_EMAIL          = var.resend_from_email
-          POSTHOG_API_KEY            = var.posthog_api_key
-          POSTHOG_HOST               = var.posthog_host
-          AWS_S3_BUCKET_FOR_VIDEOS   = aws_s3_bucket.videos.bucket
-          AWS_S3_REGION_FOR_VIDEOS   = "us-east-1"
-          UA_STUDENT_BILLING_ENABLED = tostring(local.ua_billing_runtime_enabled)
-          UA_ORGANIZATION_ID         = var.ua_organization_id
-          UA_PARTNER_CODE            = var.ua_partner_code
-          UA_PARTNER_HOSTNAME        = var.ua_partner_hostname
-          STRIPE_UA_2026_PRICE_ID    = var.stripe_ua_2026_price_id
-          YAWP_APP_ORIGIN            = var.yawp_app_origin
-          }, length(var.stripe_ua_existing_subscription_price_ids) > 0 ? {
+          NODE_ENV = var.env
+          PORT = "8080"
+          AI_MODEL = "claude-sonnet-4-6"
+          EMAIL_PROVIDER = "ses"
+          AWS_SES_REGION = var.aws_region
+          SES_FROM_EMAIL = var.resend_from_email
+          RESEND_FROM_EMAIL = var.resend_from_email
+          POSTHOG_API_KEY = var.posthog_api_key
+          POSTHOG_HOST = var.posthog_host
+          AWS_S3_BUCKET_FOR_VIDEOS = aws_s3_bucket.videos.bucket
+          AWS_S3_REGION_FOR_VIDEOS = "us-east-1"
+          UA_STUDENT_BILLING_ENABLED                = tostring(local.ua_billing_runtime_enabled)
+          UA_ORGANIZATION_ID                        = var.ua_organization_id
+          UA_PARTNER_CODE                           = var.ua_partner_code
+          UA_PARTNER_HOSTNAME                       = var.ua_partner_hostname
+          STRIPE_UA_2026_PRICE_ID                   = var.stripe_ua_2026_price_id
+          YAWP_APP_ORIGIN                           = var.yawp_app_origin
+        }, length(var.stripe_ua_existing_subscription_price_ids) > 0 ? {
           STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS = join(",", var.stripe_ua_existing_subscription_price_ids)
         } : {}, module.internal_platform_integration.variables, local.internal_content_variables)
 
         runtime_environment_secrets = merge({
-          HONEYPOT_SECRET        = aws_secretsmanager_secret.honeypot.arn
-          OPENAI_ORG_ID          = aws_secretsmanager_secret.openai_org.arn
-          OPENAI_API_KEY         = aws_secretsmanager_secret.openai_key.arn
-          ANTHROPIC_API_KEY      = aws_secretsmanager_secret.anthropic_key.arn
-          SESSION_SECRET         = aws_secretsmanager_secret.session.arn
+          HONEYPOT_SECRET = aws_secretsmanager_secret.honeypot.arn
+          OPENAI_ORG_ID = aws_secretsmanager_secret.openai_org.arn
+          OPENAI_API_KEY = aws_secretsmanager_secret.openai_key.arn
+          ANTHROPIC_API_KEY = aws_secretsmanager_secret.anthropic_key.arn
+          SESSION_SECRET = aws_secretsmanager_secret.session.arn
           INTERNAL_COMMAND_TOKEN = aws_secretsmanager_secret.internal_token.arn
-          DATABASE_URL           = aws_secretsmanager_secret.db_url.arn
-          RESEND_API_KEY         = aws_secretsmanager_secret.resend_api_key.arn
-          SENTRY_DSN             = aws_secretsmanager_secret.sentry_dsn.arn
-          }, local.ua_billing_runtime_enabled ? {
+          DATABASE_URL = aws_secretsmanager_secret.db_url.arn
+          RESEND_API_KEY = aws_secretsmanager_secret.resend_api_key.arn
+          SENTRY_DSN = aws_secretsmanager_secret.sentry_dsn.arn
+        }, local.ua_billing_runtime_enabled ? {
           STRIPE_SECRET_KEY     = aws_secretsmanager_secret.stripe_secret_key[0].arn
           STRIPE_WEBHOOK_SECRET = aws_secretsmanager_secret.stripe_webhook_secret[0].arn
         } : {}, module.internal_platform_integration.secrets, local.internal_content_secrets)
@@ -515,8 +515,8 @@ resource "aws_apprunner_service" "web" {
   }
 
   instance_configuration {
-    cpu               = "1024"
-    memory            = "2048"
+    cpu    = "1024"
+    memory = "2048"
     instance_role_arn = aws_iam_role.apprunner_instance.arn
   }
 
@@ -528,10 +528,10 @@ resource "aws_apprunner_service" "web" {
   }
 
   health_check_configuration {
-    protocol            = "HTTP"
-    path                = "/api/healthcheck"
-    interval            = 10
-    timeout             = 5
+    protocol = "HTTP"
+    path     = "/api/healthcheck"
+    interval = 10
+    timeout  = 5
     healthy_threshold   = 1
     unhealthy_threshold = 5
   }
@@ -556,16 +556,12 @@ resource "aws_apprunner_service" "web" {
           trimspace(var.ua_partner_hostname) != "" &&
           var.yawp_app_origin == "https://${var.ua_partner_hostname}"
         )) &&
-        (
-          var.internal_content_integration == null || (
-            var.internal_platform_integration == null ? true : (
-              var.internal_content_integration.secret_arn != var.internal_platform_integration.management_secret_arn &&
-              var.internal_content_integration.secret_arn != var.internal_platform_integration.production_secret_arn
-            )
-          )
-        )
+        (var.internal_content_integration == null || var.internal_platform_integration == null || !contains(
+          [var.internal_platform_integration.management_secret_arn, var.internal_platform_integration.production_secret_arn],
+          var.internal_content_integration.secret_arn
+        ))
       )
-      error_message = "UA Stripe credential staging requires the Stripe key, webhook secret, and price ID; enabling billing also requires the organization ID, partner code, partner hostname, and a matching HTTPS UA app origin. The Internal content service key must differ from both management and production keys."
+      error_message = "UA Stripe credential staging requires the Stripe key, webhook secret, and price ID; enabling billing also requires the organization ID, partner code, partner hostname, and a matching HTTPS UA app origin; the content service key must be a separate secret from the management/production keys."
     }
   }
 }
@@ -595,10 +591,10 @@ resource "aws_route53_record" "ua_apprunner_cert_validation" {
 }
 
 resource "aws_acm_certificate" "web_edge" {
-  count                     = local.production_edge_enabled ? 1 : 0
-  domain_name               = var.production_domain_name
+  count             = local.production_edge_enabled ? 1 : 0
+  domain_name       = var.production_domain_name
   subject_alternative_names = var.ua_partner_hostname == var.production_domain_name ? [] : [var.ua_partner_hostname]
-  validation_method         = "DNS"
+  validation_method = "DNS"
 
   lifecycle {
     create_before_destroy = true
@@ -822,8 +818,8 @@ resource "aws_iam_role_policy_attachment" "apprunner_instance_videos" {
 # EventBridge rule to call retention API daily
 # -----------------------
 resource "aws_cloudwatch_event_connection" "retention" {
-  name               = "${var.app_name}-${var.env}-retention-connection"
-  authorization_type = "API_KEY"
+  name                = "${var.app_name}-${var.env}-retention-connection"
+  authorization_type  = "API_KEY"
   auth_parameters {
     api_key {
       key   = "x-internal-token"
@@ -833,12 +829,12 @@ resource "aws_cloudwatch_event_connection" "retention" {
 }
 
 resource "aws_cloudwatch_event_api_destination" "retention" {
-  name                             = "${var.app_name}-${var.env}-retention-destination"
-  description                      = "Calls the app retention cleanup endpoint"
-  invocation_endpoint              = "${aws_apprunner_service.web.service_url}/api/domain/retention"
-  http_method                      = "POST"
+  name                       = "${var.app_name}-${var.env}-retention-destination"
+  description                = "Calls the app retention cleanup endpoint"
+  invocation_endpoint        = "${aws_apprunner_service.web.service_url}/api/domain/retention"
+  http_method                = "POST"
   invocation_rate_limit_per_second = 1
-  connection_arn                   = aws_cloudwatch_event_connection.retention.arn
+  connection_arn            = aws_cloudwatch_event_connection.retention.arn
 }
 
 resource "aws_iam_role" "events_invoke_api_destination" {
@@ -846,9 +842,9 @@ resource "aws_iam_role" "events_invoke_api_destination" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect    = "Allow",
+      Effect = "Allow",
       Principal = { Service = "events.amazonaws.com" },
-      Action    = "sts:AssumeRole"
+      Action = "sts:AssumeRole"
     }]
   })
 }
@@ -859,22 +855,22 @@ resource "aws_iam_role_policy" "events_invoke_api_destination_policy" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect   = "Allow",
-      Action   = ["events:InvokeApiDestination"],
+      Effect = "Allow",
+      Action = ["events:InvokeApiDestination"],
       Resource = aws_cloudwatch_event_api_destination.retention.arn
     }]
   })
 }
 
 resource "aws_cloudwatch_event_rule" "retention_daily" {
-  name = "${var.app_name}-${var.env}-retention-daily"
+  name                = "${var.app_name}-${var.env}-retention-daily"
   # Runs at 08:00 UTC daily (~2:00 AM CST / 3:00 AM CDT)
   schedule_expression = "cron(0 8 * * ? *)"
   description         = "Daily retention cleanup trigger"
 }
 
 resource "aws_cloudwatch_event_target" "retention_daily_target" {
-  rule     = aws_cloudwatch_event_rule.retention_daily.name
-  arn      = aws_cloudwatch_event_api_destination.retention.arn
-  role_arn = aws_iam_role.events_invoke_api_destination.arn
+  rule      = aws_cloudwatch_event_rule.retention_daily.name
+  arn       = aws_cloudwatch_event_api_destination.retention.arn
+  role_arn  = aws_iam_role.events_invoke_api_destination.arn
 }
