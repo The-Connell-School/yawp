@@ -743,7 +743,7 @@ describe('enforce-cap.sh', () => {
     expect(existsSync(path.join(root, 'previews/pr-101'))).toBe(true);
   });
 
-  test('failed sleep keeps the running count and produces full', () => {
+  test('failed stop falls back to container removal and keeps running count OK', () => {
     const root = makeRoot();
     makeEnv(root, 100, { withCompose: true });
     makeEnv(root, 101, { withCompose: true });
@@ -795,7 +795,7 @@ describe('enforce-cap.sh', () => {
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
   });
 
-  test('failed environment teardown preserves metadata and reports an error', () => {
+  test('failed compose down falls back to resource removal and succeeds', () => {
     const root = makeRoot();
     makeEnv(root, 100, { withCompose: true });
     const docker = makeDockerStub(root);
@@ -817,5 +817,40 @@ describe('enforce-cap.sh', () => {
     });
     expect(existsSync(path.join(root, 'previews/pr-100'))).toBe(false);
     expect(existsSync(path.join(root, 'sources/pr-100'))).toBe(false);
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).toMatch(/volume ls -q .*com\.docker\.compose\.project=yawp-pr-100/);
+    expect(log).toMatch(/volume rm/);
+    expect(log).toMatch(/network ls -q .*com\.docker\.compose\.project=yawp-pr-100/);
+  });
+
+  test('label-scoped removal does not collide: pr-1 does not remove pr-12', () => {
+    const root = makeRoot();
+    makeEnv(root, 1, { withCompose: true });
+    makeEnv(root, 12, { withCompose: true });
+    const docker = makeDockerStub(root, [1, 12]);
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '1 12',
+      // pr-1 idle over 48h, pr-12 recently active
+      PR_ACTIVITY: '1 200000 0 0\n12 399000 0 0',
+      PREVIEW_NOW_EPOCH: '400000',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+      PREVIEW_DOCKER_FAIL_STOP_PR: '1',
+      PREVIEW_MAX_RESIDENT: '20',
+      PREVIEW_MAX_RUNNING: '8',
+    });
+    expect(parse(result.stdout)).toMatchObject({
+      CAP_RESULT: 'ok',
+    });
+    // pr-1 should have been removed; pr-12 should remain running
+    const state = readFileSync(docker.state, 'utf8');
+    expect(state.split('\n')).not.toContain('1');
+    expect(/(^|\n)12(\n|$)/.test(state)).toBe(true);
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).toContain('ps --filter label=com.docker.compose.project=yawp-pr-1');
+    expect(log).toContain('rm -f container-1');
+    expect(log).not.toContain('rm -f container-12');
   });
 });

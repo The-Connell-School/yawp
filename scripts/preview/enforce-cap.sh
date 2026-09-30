@@ -261,7 +261,7 @@ sync_keep_awake_markers() {
 
 is_running() {
   local pr="$1"
-  command -v "$DOCKER" >/dev/null 2>&1 || return 0
+  command -v "$DOCKER" >/dev/null 2>&1 || return 1
   "$DOCKER" ps \
     --filter "label=com.docker.compose.project=yawp-pr-${pr}" \
     --filter "label=com.docker.compose.service=web" \
@@ -305,8 +305,6 @@ destroy_env() {
     local project="$1"
     "$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
       | xargs -r "$DOCKER" rm -f >/dev/null 2>&1 || true
-    "$DOCKER" ps -aq --filter "name=${project}" 2>/dev/null \
-      | xargs -r "$DOCKER" rm -f >/dev/null 2>&1 || true
   }
   force_remove_project_resources() {
     local project="$1"
@@ -322,18 +320,21 @@ destroy_env() {
       force_remove_project_containers "$project"
       force_remove_project_resources "$project"
       rm -f -- "$compose_file" || true
-      # Never let a bad compose file block cleanup: proceed even if some resources remain.
+      if ! assert_project_resources_absent "$project"; then
+        echo "::error::compose down failed and resources remain for pr-${pr}" >&2
+        return 1
+      fi
     fi
   elif ! assert_project_resources_absent "$project"; then
     echo "::error::refusing source-only cleanup for pr-${pr}; Compose resources exist or could not be ruled out without ${compose_file}" >&2
     return 1
   fi
   if "$DOCKER" inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
-    "$DOCKER" exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "yawp_pr_${pr}" >/dev/null 2>&1 || true
-    "$DOCKER" exec "$POSTGRES_CONTAINER" dropuser -U postgres --if-exists "yawp_pr_${pr}_app" >/dev/null 2>&1 || true
+    "$DOCKER" exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "yawp_pr_${pr}" || return 1
+    "$DOCKER" exec "$POSTGRES_CONTAINER" dropuser -U postgres --if-exists "yawp_pr_${pr}_app" || return 1
   fi
   if "$DOCKER" volume inspect "${project}_${project}-postgres-data" >/dev/null 2>&1; then
-    "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null 2>&1 || true
+    "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null || return 1
   fi
 
   preview_remove_path "$path" || echo "::warning::could not remove ${path}; it still counts against the resident cap"
@@ -354,8 +355,6 @@ stop_env() {
   if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop; then
     # Tolerate an invalid or stale compose file: fall back to removing running containers.
     "$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
-      | xargs -r "$DOCKER" rm -f >/dev/null 2>&1 || true
-    "$DOCKER" ps -aq --filter "name=${project}" 2>/dev/null \
       | xargs -r "$DOCKER" rm -f >/dev/null 2>&1 || true
   fi
   if is_running "$pr"; then
