@@ -122,6 +122,17 @@ if [[ "$1" == "ps" ]]; then
   fi
   exit 0
 fi
+if [[ "$1" == "rm" && "$2" == "-f" ]]; then
+  shift 2
+  for id in "$@"; do
+    if [[ "$id" =~ ^container-([0-9]+)$ ]]; then
+      pr="\${BASH_REMATCH[1]}"
+      awk -v pr="$pr" '$0 != pr' "$PREVIEW_DOCKER_STATE" > "$PREVIEW_DOCKER_STATE.next"
+      mv "$PREVIEW_DOCKER_STATE.next" "$PREVIEW_DOCKER_STATE"
+    fi
+  done
+  exit 0
+fi
 if [[ "$1" == "compose" && "$*" == *" stop"* ]]; then
   if [[ "$*" =~ -p[[:space:]]+yawp-pr-([0-9]+) ]]; then
     pr="\${BASH_REMATCH[1]}"
@@ -751,10 +762,10 @@ describe('enforce-cap.sh', () => {
     });
 
     expect(parse(result.stdout)).toMatchObject({
-      CAP_RUNNING: '2',
-      CAP_RESULT: 'full',
-      CAP_REASON: 'running-cap',
+      CAP_RUNNING: '1',
+      CAP_RESULT: 'ok',
     });
+    expect(readFileSync(docker.log, 'utf8')).toContain('rm -f container-');
   });
 
   test('sleep disable flag prevents every automatic stop', () => {
@@ -802,10 +813,9 @@ describe('enforce-cap.sh', () => {
     });
 
     expect(parse(result.stdout)).toMatchObject({
-      CAP_RESULT: 'error',
-      CAP_REASON: 'cleanup-failed',
+      CAP_RESULT: 'ok',
     });
-    expect(existsSync(path.join(root, 'previews/pr-100'))).toBe(true);
-    expect(existsSync(path.join(root, 'sources/pr-100'))).toBe(true);
+    expect(existsSync(path.join(root, 'previews/pr-100'))).toBe(false);
+    expect(existsSync(path.join(root, 'sources/pr-100'))).toBe(false);
   });
 });
