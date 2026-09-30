@@ -59,9 +59,9 @@ resource "aws_iam_role_policy" "preview_production_dump_read" {
         Resource = "arn:aws:s3:::${var.dump_bucket}/${var.dump_key}"
       },
       {
-        Sid      = "ListBucketForDumpKey"
-        Effect   = "Allow"
-        Action   = ["s3:ListBucket"]
+        Sid    = "ListBucketForDumpKey"
+        Effect = "Allow"
+        Action = ["s3:ListBucket"]
         Resource = "arn:aws:s3:::${var.dump_bucket}"
         Condition = {
           StringLike = {
