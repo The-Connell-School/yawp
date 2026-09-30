@@ -126,7 +126,7 @@ run "reject_content_wildcard_arn" {
       secret_arn = "arn:aws:secretsmanager:us-east-1:422348803522:secret:content-*"
     }
   }
-  expect_failures = [aws_apprunner_service.web]
+  expect_failures = [var.internal_content_integration]
 }
 
 run "reject_content_equal_to_management_key" {
