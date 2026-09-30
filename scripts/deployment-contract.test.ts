@@ -128,6 +128,12 @@ describe('production deployment contract', () => {
     expect(releaseGateIndex).toBeGreaterThan(backfillIndex);
   });
 
+  test('CI includes scripts/** in the code path filter', () => {
+    const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    // Guard against regressing the path filter that triggers Prisma contract tests.
+    expect(ciWorkflow).toContain("- 'scripts/**'");
+  });
+
   test('Prisma package keeps both migration release gates available', () => {
     const prismaPackage = JSON.parse(
       readRepoFile('packages/prisma/package.json')
@@ -972,7 +978,7 @@ describe('PR preview deployment contract', () => {
     expect(wakeProof).toContain('PROOF_CONTAINER_AFTER');
   });
 
-  test('preview idle defaults are two days and comments promise authorized URL wake', () => {
+  test('preview idle defaults are one day and comments promise authorized URL wake', () => {
     const workflow = readRepoFile('.github/workflows/preview-environments.yml');
     const bootstrapWorkflow = readRepoFile(
       '.github/workflows/preview-host-bootstrap.yml'
@@ -983,10 +989,10 @@ describe('PR preview deployment contract', () => {
     const wakeServer = readRepoFile('scripts/preview/wake-server.mjs');
 
     expect(workflow).toContain(
-      "PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '48' }}"
+      "PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '24' }}"
     );
     expect(workflow).toContain(
-      "PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '48' }}"
+      "PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '24' }}"
     );
     expect(
       workflow.match(

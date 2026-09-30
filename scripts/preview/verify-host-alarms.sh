@@ -9,9 +9,11 @@ alarms=(
   yawp-preview-host-disk-warning
   yawp-preview-host-memory-warning
   yawp-preview-host-memory-critical
+  yawp-preview-host-memory-sustained
   yawp-demo-host-disk-warning
   yawp-demo-host-memory-warning
   yawp-demo-host-memory-critical
+  yawp-demo-host-memory-sustained
 )
 
 response="$("$AWS" cloudwatch describe-alarms \

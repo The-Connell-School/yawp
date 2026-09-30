@@ -37,6 +37,8 @@ put_alarm() {
 
 put_alarm memory-warning MemoryUsedPercent 75
 put_alarm memory-critical MemoryUsedPercent 85  GreaterThanOrEqualToThreshold 2 3
+# Sustained memory uses a longer window to avoid flapping: 10 of 15 minutes.
+put_alarm memory-sustained MemoryUsedPercent 80 GreaterThanOrEqualToThreshold 10 15
 put_alarm disk-warning DiskUsedPercent 80
 
-echo "Provisioned alarms ${ALARM_PREFIX}-{memory-warning,memory-critical,disk-warning} for ${INSTANCE_ID}"
+echo "Provisioned alarms ${ALARM_PREFIX}-{memory-warning,memory-critical,memory-sustained,disk-warning} for ${INSTANCE_ID}"
