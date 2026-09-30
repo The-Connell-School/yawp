@@ -7,6 +7,7 @@ OPEN_PR_NUMBERS="${OPEN_PR_NUMBERS:-}"
 PREVIEW_TTL_HOURS="${PREVIEW_TTL_HOURS:-72}"
 TARGET_PR="${TARGET_PR:-}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
+DOCKER="${PREVIEW_DOCKER:-docker}"
 INFLIGHT_TTL_SECONDS="${PREVIEW_INFLIGHT_TTL_SECONDS:-3600}"
 now_epoch="$(date +%s)"
 cleanup_failed=0
@@ -70,18 +71,31 @@ drop_preview_database() {
   local pr_number="$1"
   local database_name="yawp_pr_${pr_number}"
 
-  if docker inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
-    docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "$database_name"
-    docker exec "$POSTGRES_CONTAINER" dropuser -U postgres --if-exists "${database_name}_app"
+  if "$DOCKER" inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
+    "$DOCKER" exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "$database_name"
+    "$DOCKER" exec "$POSTGRES_CONTAINER" dropuser -U postgres --if-exists "${database_name}_app"
   fi
 }
 
 remove_legacy_postgres_volume() {
   local project="$1"
 
-  if docker volume inspect "${project}_${project}-postgres-data" >/dev/null 2>&1; then
-    docker volume rm "${project}_${project}-postgres-data" >/dev/null
+  if "$DOCKER" volume inspect "${project}_${project}-postgres-data" >/dev/null 2>&1; then
+    "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null
   fi
+}
+
+assert_project_resources_absent() {
+  local project="$1"
+  # On hosts without Docker available, assume no Compose-managed resources remain.
+  command -v "$DOCKER" >/dev/null 2>&1 || return 0
+  local resources
+  resources="$("$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null)" || return 1
+  [[ -z "$resources" ]] || return 1
+  resources="$("$DOCKER" volume ls -q --filter "label=com.docker.compose.project=${project}" 2>/dev/null)" || return 1
+  [[ -z "$resources" ]] || return 1
+  resources="$("$DOCKER" network ls -q --filter "label=com.docker.compose.project=${project}" 2>/dev/null)" || return 1
+  [[ -z "$resources" ]]
 }
 
 destroy_preview_path() {
@@ -91,9 +105,27 @@ destroy_preview_path() {
   local compose_file="$preview_path/docker-compose.yml"
 
   if [[ -f "$compose_file" ]]; then
-    docker compose -p "$project" -f "$compose_file" down -v --remove-orphans || return 1
+    if ! "$DOCKER" compose -p "$project" -f "$compose_file" down -v --remove-orphans; then
+      echo "::warning::compose down failed for pr-${pr_number}; forcing container/resource removal without compose file" >&2
+      # Force-remove containers, then volumes and networks strictly by compose project label.
+      "$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
+        | xargs -r "$DOCKER" rm -f >/dev/null 2>&1 || true
+      "$DOCKER" volume ls -q --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
+        | xargs -r "$DOCKER" volume rm >/dev/null 2>&1 || true
+      "$DOCKER" network ls -q --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
+        | xargs -r "$DOCKER" network rm >/dev/null 2>&1 || true
+      if ! assert_project_resources_absent "$project"; then
+        echo "::error::compose down failed and resources remain for pr-${pr_number}" >&2
+        return 1
+      fi
+      rm -f -- "$compose_file" || true
+    fi
   else
-    docker compose -p "$project" down -v --remove-orphans || return 1
+    # Without a compose file, refuse cleanup when Compose-managed resources exist.
+    if ! assert_project_resources_absent "$project"; then
+      echo "::error::refusing source-only cleanup for pr-${pr_number}; Compose resources exist or could not be ruled out without ${compose_file}" >&2
+      return 1
+    fi
   fi
 
   drop_preview_database "$pr_number" || return 1

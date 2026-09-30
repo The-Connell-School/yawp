@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   rmSync,
   writeFileSync,
+  readFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -38,8 +39,26 @@ function makePreviewRoot(prNumbers) {
   writeFileSync(dockerLog, '');
   writeFileSync(docker, `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$PREVIEW_DOCKER_LOG"
+# Simulate compose down failure
 if [[ "$1" == "compose" && "\${PREVIEW_DOCKER_FAIL_DOWN:-false}" == "true" ]]; then exit 1; fi
+# Simulate dropdb/dropuser failure
 if [[ "$1" == "exec" && "\${PREVIEW_DOCKER_FAIL_DROPDB:-false}" == "true" ]]; then exit 1; fi
+# Simulate non-empty resource listings during fallback verification
+if [[ "$1" == "ps" && "$2" == "-aq" ]]; then
+  if [[ "\${PREVIEW_DOCKER_NONEMPTY:-}" == "ps" || "\${PREVIEW_DOCKER_NONEMPTY:-}" == "any" ]]; then
+    echo id-ps
+  fi
+fi
+if [[ "$1" == "volume" && "$2" == "ls" && "$3" == "-q" ]]; then
+  if [[ "\${PREVIEW_DOCKER_NONEMPTY:-}" == "volume" || "\${PREVIEW_DOCKER_NONEMPTY:-}" == "any" ]]; then
+    echo id-volume
+  fi
+fi
+if [[ "$1" == "network" && "$2" == "ls" && "$3" == "-q" ]]; then
+  if [[ "\${PREVIEW_DOCKER_NONEMPTY:-}" == "network" || "\${PREVIEW_DOCKER_NONEMPTY:-}" == "any" ]]; then
+    echo id-network
+  fi
+fi
 exit 0
 `);
   chmodSync(docker, 0o755);
@@ -164,14 +183,14 @@ describe('preview cleanup', () => {
     expect(existsSync(path.join(root, 'previews/pr-11'))).toBe(true);
   });
 
-  test('keeps retry metadata when Compose teardown fails', () => {
+  test('tolerates compose down failure by falling back to forced removal', () => {
     const { root, bin } = makePreviewRoot([11]);
 
     const result = runCleanup(root, bin, { PREVIEW_DOCKER_FAIL_DOWN: 'true' });
 
-    expect(result.exitCode).toBe(1);
-    expect(existsSync(path.join(root, 'previews/pr-11'))).toBe(true);
-    expect(existsSync(path.join(root, 'sources/pr-11'))).toBe(true);
+    expect(result.exitCode).toBe(0);
+    expect(existsSync(path.join(root, 'previews/pr-11'))).toBe(false);
+    expect(existsSync(path.join(root, 'sources/pr-11'))).toBe(false);
   });
 
   test('keeps retry metadata when database teardown fails', () => {
@@ -180,6 +199,57 @@ describe('preview cleanup', () => {
     const result = runCleanup(root, bin, { PREVIEW_DOCKER_FAIL_DROPDB: 'true' });
 
     expect(result.exitCode).toBe(1);
+    expect(existsSync(path.join(root, 'previews/pr-11'))).toBe(true);
+    expect(existsSync(path.join(root, 'sources/pr-11'))).toBe(true);
+  });
+
+  test('falls back to forced removal with strict label filters and succeeds', () => {
+    const { root, bin, dockerLog } = makePreviewRoot([11]);
+    const result = runCleanup(root, bin, {
+      PREVIEW_DOCKER_FAIL_DOWN: 'true',
+    });
+    // Fallback should succeed with empty resource listings; environment removed.
+    expect(result.exitCode).toBe(0);
+    expect(existsSync(path.join(root, 'previews/pr-11'))).toBe(false);
+    // Validate filters were by label, never by name.
+    const log = textOf(readFileSync(dockerLog));
+    expect(log).toContain(
+      'ps -aq --filter label=com.docker.compose.project=yawp-pr-11',
+    );
+    expect(log).toContain(
+      'volume ls -q --filter label=com.docker.compose.project=yawp-pr-11',
+    );
+    expect(log).toContain(
+      'network ls -q --filter label=com.docker.compose.project=yawp-pr-11',
+    );
+    expect(log).not.toMatch(/--filter name=/);
+  });
+
+  test('pr-1 vs pr-12 collision: never uses name filters (substring hazard)', () => {
+    const { root, bin, dockerLog } = makePreviewRoot([1, 12]);
+    const result = runCleanup(root, bin, {
+      PREVIEW_DOCKER_FAIL_DOWN: 'true',
+    });
+    expect(result.exitCode).toBe(0);
+    const log = textOf(readFileSync(dockerLog));
+    // Ensure we only used strict label filters for the target pr-1 project.
+    expect(log).toContain(
+      'ps -aq --filter label=com.docker.compose.project=yawp-pr-1',
+    );
+    expect(log).not.toMatch(/--filter name=.*yawp-pr-1/);
+  });
+
+  test('fallback verification fails when resources remain; compose file is kept', () => {
+    const { root, bin } = makePreviewRoot([11]);
+    const composeFile = path.join(root, 'previews', 'pr-11', 'docker-compose.yml');
+    const result = runCleanup(root, bin, {
+      PREVIEW_DOCKER_FAIL_DOWN: 'true',
+      PREVIEW_DOCKER_NONEMPTY: 'any',
+    });
+    expect(result.exitCode).toBe(1);
+    // Compose file must not be deleted when resources remain.
+    expect(existsSync(composeFile)).toBe(true);
+    // Retry metadata retained.
     expect(existsSync(path.join(root, 'previews/pr-11'))).toBe(true);
     expect(existsSync(path.join(root, 'sources/pr-11'))).toBe(true);
   });
