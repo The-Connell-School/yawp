@@ -156,10 +156,11 @@ jobs:
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           # Publish the marker before the source path. Capacity reconciliation ignores
           # fresh markers, so it cannot evict a tree while rsync or lock admission runs.
-          printf -v setup_command 'mkdir -p %q %q && touch %q %q && mkdir -p %q %q && if [ -f %q ]; then docker compose -p %q -f %q stop; fi' \
+          printf -v setup_command 'mkdir -p %q %q && touch %q %q && mkdir -p %q %q && if [ -f %q ]; then docker compose -p %q -f %q stop || true; fi; (docker ps -aq --filter label=com.docker.compose.project=%q || true) | xargs -r docker rm -f >/dev/null 2>&1 || true; (docker ps -aq --filter name=%q || true) | xargs -r docker rm -f >/dev/null 2>&1 || true; rm -f -- %q || true' \
             "$inflight_dir" "$quarantine_dir" "$inflight_marker" "$quarantine_marker" \
             "$remote_source" "$remote_control/scripts/preview" \
-            "$compose_file" "$compose_project" "$compose_file"
+            "$compose_file" "$compose_project" "$compose_file" \
+            "$compose_project" "$compose_project" "$compose_file"
           ssh -i ~/.ssh/preview_key "$ssh_target" \
             "flock -w 900 $(shell_quote "$lock_file") bash -lc $(shell_quote "$setup_command")"
           rsync -az --delete \
