@@ -88,4 +88,12 @@ describe('verify-host-alarms.sh', () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain('enable actions');
   });
+
+  test('fails when the memory-sustained alarm is missing (7/8 alarms)', () => {
+    const alarms = allAlarms().filter(a => a.AlarmName !== 'yawp-preview-host-memory-sustained');
+    const result = run(alarms);
+    expect(result.exitCode).not.toBe(0);
+    // Length mismatch triggers the same summary error.
+    expect(result.stderr.toString()).toContain('matching non-empty');
+  });
 });
