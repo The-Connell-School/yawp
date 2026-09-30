@@ -315,6 +315,7 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
             aws_secretsmanager_secret.resend_api_key.arn
           ],
           module.internal_platform_integration.secret_arns,
+          local.internal_content_secret_arns,
           local.ua_billing_runtime_enabled ? [
             aws_secretsmanager_secret.stripe_secret_key[0].arn,
             aws_secretsmanager_secret.stripe_webhook_secret[0].arn
@@ -491,7 +492,7 @@ resource "aws_apprunner_service" "web" {
           YAWP_APP_ORIGIN                           = var.yawp_app_origin
         }, length(var.stripe_ua_existing_subscription_price_ids) > 0 ? {
           STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS = join(",", var.stripe_ua_existing_subscription_price_ids)
-        } : {}, module.internal_platform_integration.variables)
+        } : {}, module.internal_platform_integration.variables, local.internal_content_variables)
 
         runtime_environment_secrets = merge({
           HONEYPOT_SECRET = aws_secretsmanager_secret.honeypot.arn
@@ -506,7 +507,7 @@ resource "aws_apprunner_service" "web" {
         }, local.ua_billing_runtime_enabled ? {
           STRIPE_SECRET_KEY     = aws_secretsmanager_secret.stripe_secret_key[0].arn
           STRIPE_WEBHOOK_SECRET = aws_secretsmanager_secret.stripe_webhook_secret[0].arn
-        } : {}, module.internal_platform_integration.secrets)
+        } : {}, module.internal_platform_integration.secrets, local.internal_content_secrets)
       }
     }
 
@@ -554,9 +555,17 @@ resource "aws_apprunner_service" "web" {
           trimspace(var.ua_partner_code) != "" &&
           trimspace(var.ua_partner_hostname) != "" &&
           var.yawp_app_origin == "https://${var.ua_partner_hostname}"
-        ))
+        )) &&
+        (
+          var.internal_content_integration == null || (
+            var.internal_platform_integration == null ? true : (
+              var.internal_content_integration.secret_arn != var.internal_platform_integration.management_secret_arn &&
+              var.internal_content_integration.secret_arn != var.internal_platform_integration.production_secret_arn
+            )
+          )
+        )
       )
-      error_message = "UA Stripe credential staging requires the Stripe key, webhook secret, and price ID; enabling billing also requires the organization ID, partner code, partner hostname, and a matching HTTPS UA app origin."
+      error_message = "UA Stripe credential staging requires the Stripe key, webhook secret, and price ID; enabling billing also requires the organization ID, partner code, partner hostname, and a matching HTTPS UA app origin. The Internal content service key must differ from both management and production keys."
     }
   }
 }

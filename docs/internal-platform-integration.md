@@ -119,7 +119,25 @@ Inspection returns `{ rubric: null }` if absent, otherwise the current schema/fi
 
 Bodies are streamed with a 300 KiB boundary limit; semantic rubric validation retains its 256 KiB document limit. Responses are non-cacheable. Disabled/unconfigured endpoints return 404; bad credentials 401, malformed envelopes 400, rubric issues 422, protected starter publication 403, and stale/conflicting retries 409. Infrastructure errors are sanitized. Internal must still authorize the initiating member/agent for the selected environment before calling this backend API. That Internal adapter and promotion workflow are not yet connected.
 
-`internal-rubrics-http` checks credential/enablement, source requirements, field/query rejection, validation without mutation and payload/error boundaries. The real database integration now publishes through this authenticated handler and verifies retained source metadata, retries and assignment pins. No production service credential has been created and no endpoint deployed.
+`internal-rubrics-http` checks credential/enablement, source requirements, field/query rejection, validation without mutation and payload/error boundaries. The real database integration now publishes through this authenticated handler and verifies retained source metadata, retries and assignment pins. No production service credential has been created. The content API at `/api/internal/v1/rubrics` is on main (commit `d44fed8a`) — it returns 404 until `INTERNAL_CONTENT_ENABLED=true`, 401 on a bad key, and 503 if the key is shorter than 43 characters. The endpoint is v1.
+
+### Content API wiring runbook (Terraform)
+
+Opt-in wiring is provided for the authenticated content API key:
+
+1. Provision the content service credential outside Terraform in AWS Secrets Manager.
+2. In `infra/`, set:
+   - `internal_content_integration.secret_arn` to the exact Secrets Manager ARN (no plaintext).
+   - `internal_content_integration.enabled = true` to expose `/api/internal/v1/rubrics` in this environment.
+3. The App Runner runtime will receive:
+   - `INTERNAL_CONTENT_ENABLED=true`
+   - Secret mapping `YAWP_CONTENT_SERVICE_KEY = <that ARN>`
+4. The App Runner instance role gains `secretsmanager:GetSecretValue` for that ARN.
+5. A precondition rejects plans where the content key ARN equals either Internal management or production ARNs from `internal_platform_integration`; use distinct credentials.
+
+Notes:
+- Do not run `terraform apply` without a reviewed plan. No plaintext secrets enter Terraform state; only ARNs.
+- The protected starter rubric `daily-pages-engagement` cannot be published; attempts return 403. Copy to a new portable name first.
 
 ## Deployment preflight and drain settings
 
