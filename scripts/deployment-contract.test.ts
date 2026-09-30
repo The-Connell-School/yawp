@@ -128,6 +128,12 @@ describe('production deployment contract', () => {
     expect(releaseGateIndex).toBeGreaterThan(backfillIndex);
   });
 
+  test('script-only changes still run Prisma contract and mock tests via CI code filter', () => {
+    const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    // Guard against regressing the path filter that triggers Prisma contract tests.
+    expect(ciWorkflow).toContain("- 'scripts/**'");
+  });
+
   test('Prisma package keeps both migration release gates available', () => {
     const prismaPackage = JSON.parse(
       readRepoFile('packages/prisma/package.json')

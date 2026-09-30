@@ -37,6 +37,19 @@ afterEach(() => {
 });
 
 describe('verify-host-alarms.sh', () => {
+  function allAlarms() {
+    return [
+      alarm('yawp-preview-host-disk-warning'),
+      alarm('yawp-preview-host-memory-warning'),
+      alarm('yawp-preview-host-memory-critical'),
+      alarm('yawp-preview-host-memory-sustained'),
+      alarm('yawp-demo-host-disk-warning'),
+      alarm('yawp-demo-host-memory-warning'),
+      alarm('yawp-demo-host-memory-critical'),
+      alarm('yawp-demo-host-memory-sustained'),
+    ];
+  }
+
   test('passes only when all preview and demo alarms retain matching recovery actions', () => {
     const result = run([
       alarm('yawp-preview-host-disk-warning'),
@@ -54,11 +67,11 @@ describe('verify-host-alarms.sh', () => {
   });
 
   test('fails when a recovery action is missing', () => {
-    const result = run([
-      alarm('yawp-preview-host-disk-warning'),
-      alarm('yawp-preview-host-memory-warning', undefined, []),
-      alarm('yawp-preview-host-memory-critical'),
-    ]);
+    const alarms = allAlarms();
+    // Make exactly one alarm fail by clearing its OKActions.
+    const idx = alarms.findIndex(a => a.AlarmName === 'yawp-preview-host-memory-warning');
+    alarms[idx] = alarm('yawp-preview-host-memory-warning', undefined, []);
+    const result = run(alarms);
 
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain('matching non-empty');
@@ -67,11 +80,10 @@ describe('verify-host-alarms.sh', () => {
   test('fails when alarm actions are disabled', () => {
     const disabled = alarm('yawp-preview-host-memory-warning');
     disabled.ActionsEnabled = false;
-    const result = run([
-      alarm('yawp-preview-host-disk-warning'),
-      disabled,
-      alarm('yawp-preview-host-memory-critical'),
-    ]);
+    const alarms = allAlarms();
+    const idx = alarms.findIndex(a => a.AlarmName === disabled.AlarmName);
+    alarms[idx] = disabled;
+    const result = run(alarms);
 
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain('enable actions');

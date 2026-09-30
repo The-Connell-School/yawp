@@ -30,9 +30,14 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
+            # scripts/** is included in the core code filter so the Prisma job
+            # runs deployment-contract and mock-contract tests on script-only PRs.
+            # These tests live under scripts/ and must execute even when no
+            # packages/** or services/** paths changed.
             code:
               - 'services/**'
               - 'packages/**'
+              - 'scripts/**'
               - '.github/workflows/**'
               - '.github/actions/**'
               - 'package.json'
