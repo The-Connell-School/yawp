@@ -105,6 +105,7 @@ describe('rubric schema', () => {
       'cristo-rey-hornbuckle-five-paragraph-essay',
       'class-starter-engagement',
       'daily-pages-short-form',
+      'strode-eng101-essay-1-description',
     ]);
 
     const thesis = STARTER_RUBRICS[0];

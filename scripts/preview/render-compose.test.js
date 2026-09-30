@@ -418,3 +418,50 @@ describe('renderPreviewCompose', () => {
     });
   });
 });
+
+// Strict YAML duplicate-key guard to catch regressions like duplicate "restart" keys.
+describe('renderPreviewCompose (YAML uniqueness)', () => {
+  function strictArgs() {
+    return {
+      // Use a named slug so PR_NUMBER isn't required
+      slug: 'yaml-unique',
+      domain: 'preview.yawp.school',
+      root: '/srv/yawp-preview',
+      sourceDir: '/tmp/nonexistent-source',
+      dataMode: 'seed',
+      databaseUser: 'yawp_preview_app',
+      databasePassword: '12345678901234567890123456789012',
+      accessSeats: JSON.stringify([
+        { code: 'brisk-otter-4321', organizationId: 'local-dev-org', label: 'Local Dev Org' },
+      ]),
+      masterOrgGateEnabled: false,
+      accessSecret: 'x'.repeat(40),
+      sessionSecret: 'y'.repeat(40),
+      aiMode: 'disabled',
+      customIngressActive: false,
+    };
+  }
+
+  function countRestartKeysInWebBlock(text) {
+    const webStart = text.indexOf('\n  web:');
+    if (webStart === -1) return 0;
+    const nextIdx = text.indexOf('\n  blackboard-lti-mock:', webStart);
+    const block = nextIdx === -1 ? text.slice(webStart) : text.slice(webStart, nextIdx);
+    const matches = block.match(/\n\s*restart\s*:/g) || [];
+    return matches.length;
+  }
+
+  test('fast runtime parses with unique keys enforced', () => {
+    const compose = renderPreviewCompose({ ...strictArgs(), runtime: 'fast' });
+    expect(countRestartKeysInWebBlock(compose)).toBe(1);
+  });
+
+  test('production runtime parses with unique keys enforced', () => {
+    const compose = renderPreviewCompose({
+      ...strictArgs(),
+      runtime: 'production',
+    });
+    expect(countRestartKeysInWebBlock(compose)).toBe(1);
+  });
+});
+

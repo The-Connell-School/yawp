@@ -221,6 +221,7 @@ ${commonEnvironment}
         DATABASE_URL: ${q(env.databaseUrl)}
     environment:
 ${commonEnvironment}
+    restart: unless-stopped
 `;
 
   // Renders the preview's own marketing jobs. Seed-mode fast previews only:
@@ -272,7 +273,7 @@ ${fastVolumes}
   return `name: ${env.composeProject}
 services:
 ${toolboxService}
-${rendererService}${webService}${legacyTraefikLabels}    restart: unless-stopped
+${rendererService}${webService}${legacyTraefikLabels}
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:8080/api/healthcheck').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s

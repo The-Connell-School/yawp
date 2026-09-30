@@ -1,6 +1,4 @@
 /* eslint-disable no-console */
-import { PrismaClient } from '../generated/prisma';
-import { PrismaPg } from '@prisma/adapter-pg';
 import { AP_HISTORY_LIBRARY_ENTRIES } from './ap-history-library-data';
 import { AP_HISTORY_SEED_MODULES } from './ap-history-module-data';
 import {
@@ -8,7 +6,8 @@ import {
   withoutTutorInstructionFields,
 } from './tutor-instructions-seed';
 import { UNIVERSAL_TUTOR_BLOCK } from './universal-tutor-block';
-import { isLocalDatabaseUrl } from './seed-overlay-connection';
+import { createPrismaClient } from './local-dev/connection';
+import type { PrismaClient } from '../generated/prisma';
 
 const AP_HISTORY_ASSIGNMENT_TYPE_KEY = 'ap_history_essay';
 
@@ -25,16 +24,7 @@ const ASSIGNMENT_TYPE_TUTOR_INSTRUCTIONS = {
   tutorInstructions: UNIVERSAL_TUTOR_BLOCK,
 };
 
-function getSchemaFromDatabaseUrl(url: string): string | undefined {
-  const match = url.match(/[?&]schema=([^&]+)/i);
-  if (!match) return undefined;
-  return decodeURIComponent(match[1]);
-}
-
-export async function seedApHistoryLibrary(
-  prisma: PrismaClient,
-  organizationId: string
-) {
+export async function seedApHistoryLibrary(prisma: PrismaClient, organizationId: string) {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     select: { id: true },
@@ -85,19 +75,25 @@ export async function seedApHistoryLibrary(
     select: { id: true },
   });
 
-  await prisma.organizationAssignmentType.upsert({
-    where: {
-      organizationId_assignmentTypeId: {
-        organizationId: org.id,
+  // Make the AP History assignment type available to every organization.
+  const organizations = await prisma.organization.findMany({
+    select: { id: true },
+  });
+  for (const { id: organizationId } of organizations) {
+    await prisma.organizationAssignmentType.upsert({
+      where: {
+        organizationId_assignmentTypeId: {
+          organizationId,
+          assignmentTypeId: assignmentType.id,
+        },
+      },
+      create: {
+        organizationId,
         assignmentTypeId: assignmentType.id,
       },
-    },
-    create: {
-      organizationId: org.id,
-      assignmentTypeId: assignmentType.id,
-    },
-    update: {},
-  });
+      update: {},
+    });
+  }
 
   // Upsert each section (module) by position. Position 1 upgrades the legacy
   // single "AP History Essay" module in place so existing documents keep
@@ -251,29 +247,7 @@ export async function seedApHistoryLibrary(
 }
 
 if (import.meta.main) {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error('DATABASE_URL environment variable is not set');
-  }
-
-  const schema =
-    process.env.DATABASE_SCHEMA?.trim() ||
-    getSchemaFromDatabaseUrl(connectionString);
-  const isLocal = isLocalDatabaseUrl(connectionString);
-  const isSimpleLocal =
-    !schema &&
-    (connectionString.includes('localhost') ||
-      connectionString.includes('127.0.0.1'));
-  const adapter = isSimpleLocal
-    ? new PrismaPg({ connectionString, ssl: false })
-    : new PrismaPg(
-        {
-          connectionString,
-          ssl: isLocal ? false : { rejectUnauthorized: false },
-        },
-        schema ? { schema } : undefined
-      );
-  const prisma = new PrismaClient({ adapter });
+  const prisma = createPrismaClient();
 
   try {
     const org = await prisma.organization.findFirst({
