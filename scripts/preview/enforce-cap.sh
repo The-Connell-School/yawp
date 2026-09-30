@@ -329,20 +329,15 @@ destroy_env() {
     return 1
   fi
   if "$DOCKER" inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
-    "$DOCKER" exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "yawp_pr_${pr}" || return 1
-    "$DOCKER" exec "$POSTGRES_CONTAINER" dropuser -U postgres --if-exists "yawp_pr_${pr}_app" || return 1
+    "$DOCKER" exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "yawp_pr_${pr}" >/dev/null 2>&1 || true
+    "$DOCKER" exec "$POSTGRES_CONTAINER" dropuser -U postgres --if-exists "yawp_pr_${pr}_app" >/dev/null 2>&1 || true
   fi
   if "$DOCKER" volume inspect "${project}_${project}-postgres-data" >/dev/null 2>&1; then
-    "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null || return 1
+    "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null 2>&1 || true
   fi
 
-  if ! preview_remove_path "$path"; then
-    echo "::error::could not remove ${path}; it still counts against the resident cap"
-    return 1
-  fi
-  if ! preview_remove_path "$ROOT/sources/pr-${pr}"; then
-    echo "::warning::left ${ROOT}/sources/pr-${pr} on disk; environment is gone but source leaked"
-  fi
+  preview_remove_path "$path" || echo "::warning::could not remove ${path}; it still counts against the resident cap"
+  preview_remove_path "$ROOT/sources/pr-${pr}" || echo "::warning::left ${ROOT}/sources/pr-${pr} on disk; environment is gone but source leaked"
   rm -f -- "$ACCESS_DIR/pr-${pr}"
 }
 
