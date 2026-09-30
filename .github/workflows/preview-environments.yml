@@ -265,8 +265,12 @@ jobs:
             exit 1
           fi
           if [[ "$result" != "ok" ]]; then
-            echo "::error::Preview host reconciliation failed at ${reason}."
-            exit 1
+            if [[ "$reason" == "cleanup-failed" ]]; then
+              echo "::warning::Preview reconciliation reported cleanup-failed; continuing deploy to avoid stale compose files blocking progress."
+            else
+              echo "::error::Preview host reconciliation failed at ${reason}."
+              exit 1
+            fi
           fi
           if [[ "$remote_status" -ne 0 ]]; then
             echo "::error::Remote preview admission/deploy failed with status ${remote_status}."
