@@ -1,0 +1,41 @@
+name: Migration Integration
+
+on:
+  pull_request:
+    paths:
+      - 'packages/prisma/**'
+      - '.github/workflows/migration-integration.yml'
+      - 'services/web-app/**'
+
+jobs:
+  migration-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: '1.3.1'
+      - name: Install deps
+        run: bun install --frozen-lockfile
+      - name: Generate Prisma Client
+        run: bun run --cwd packages/prisma prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration
+      - name: Run migration integration test
+        run: bun test ./packages/prisma/scripts/migration-integration.test.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration
+

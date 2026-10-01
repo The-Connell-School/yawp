@@ -20,6 +20,9 @@ const prisma = {
     findUnique: mock(),
     create: mock(),
   },
+  rubricRevision: {
+    findMany: mock(),
+  },
 };
 
 const requireAdmin = mock();
@@ -50,6 +53,7 @@ describe('admin assignment type detail action', () => {
     prisma.assignmentType.update.mockReset();
     prisma.assignmentTypePromptVersion.findMany.mockReset();
     prisma.rubric.findUnique.mockReset();
+    prisma.rubricRevision.findMany.mockReset();
     prisma.orgMembership.findMany.mockReset();
     prisma.orgMembership.findUnique.mockReset();
     requireAdmin.mockReset();
@@ -79,6 +83,7 @@ describe('admin assignment type detail action', () => {
     prisma.assignmentTypePromptVersion.findMany.mockResolvedValue([]);
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
+    prisma.rubricRevision.findMany.mockResolvedValue([]);
   });
 
   test('keeps a deleted rubric selection error in the editor', async () => {

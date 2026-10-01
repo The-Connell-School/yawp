@@ -132,6 +132,7 @@ model AssignmentType {
   savedThesisPrompts                 SavedThesisPrompt[]
   savedDailyPagesPrompts             SavedDailyPagesPrompt[]
   savedAssignments                   SavedAssignment[]
+  rubricBaseline                     AssignmentTypeRubricBaseline?
 
   @@index([ownerOrgId])
   @@index([ownerMembershipId])
@@ -1915,5 +1916,26 @@ model RubricRevision {
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   currentFor Rubric[] @relation("CurrentRubricRevision")
   assignments Assignment[]
+  typeBaselines AssignmentTypeRubricBaseline[]
   @@unique([rubricName, version])
+}
+
+/// Baseline mapping from an AssignmentType's current per-type rubric JSON to an immutable revision.
+model AssignmentTypeRubricBaseline {
+  assignmentTypeId String @id
+  rubricRevisionId String
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+
+  assignmentType   AssignmentType  @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  rubricRevision   RubricRevision  @relation(fields: [rubricRevisionId], references: [id], onDelete: Restrict)
+
+  @@index([rubricRevisionId])
+}
+
+/// Audit of rubric pins applied by backfill/baseline-capture. selectedRevisionId may be null for code-default cases.
+model InternalAssignmentRubricPinBackfill {
+  assignmentId       String   @id
+  selectedRevisionId String?
+  pinnedAt           DateTime @default(now()) @db.Timestamptz(6)
+  reason             String?
 }

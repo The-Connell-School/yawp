@@ -52,7 +52,7 @@ DATABASE_URL="postgresql://<user>:<password>@localhost:3306/<db_name>"
 ### Creating a database backup from production
 First login to the ssh server:
 ```
-ssh ec2-user@3.87.160.232 -i ~/.ssh/yawp-production-bastion
+ssh ec2-user@3.82.194.86 -i ~/.ssh/yawp-production-bastion
 
 ```
 On the ssh server, install the `pg_dump` command via postgresql tools and dump the database to a file:
@@ -63,5 +63,5 @@ exit
 ```
 Now that you are back on your local machine, copy the file over:
 ```
-scp -i ~/.ssh/yawp-production-bastion ec2-user@3.87.160.232:/home/ec2-user/backup.dump .
+scp -i ~/.ssh/yawp-production-bastion ec2-user@3.82.194.86:/home/ec2-user/backup.dump .
 ```

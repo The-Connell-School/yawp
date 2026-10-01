@@ -75,6 +75,11 @@ export async function seedStarterRubrics() {
     select: { id: true, name: true, title: true, schemaJson: true },
   });
   const byName = new Map(existing.map((row) => [row.name, row]));
+  const revisedNames = new Set(
+    (await prisma.rubricRevision.findMany({ select: { rubricName: true }, distinct: ['rubricName'] })).map(
+      (r) => r.rubricName
+    )
+  );
 
   const created: string[] = [];
   for (const schema of STARTER_RUBRICS) {
@@ -91,18 +96,14 @@ export async function seedStarterRubrics() {
       continue;
     }
 
+    // Do not overwrite once revisions exist or local content has diverged.
+    if (revisedNames.has(schema.name)) continue;
     const parsed = parseRubricSchema(row.schemaJson);
     const existingJson = parsed.ok ? formatRubricSchema(parsed.schema) : null;
     const parsedCanonical = parseRubricSchema(schema);
-    const canonicalJson = parsedCanonical.ok
-      ? formatRubricSchema(parsedCanonical.schema)
-      : formatRubricSchema(schema);
-    if (row.title !== schema.title || existingJson !== canonicalJson) {
-      await prisma.rubric.update({
-        where: { id: row.id },
-        data: { title: schema.title, schemaJson: schema as object },
-      });
-    }
+    const canonicalJson =
+      parsedCanonical.ok ? formatRubricSchema(parsedCanonical.schema) : formatRubricSchema(schema);
+    if (row.title !== schema.title || existingJson !== canonicalJson) continue;
   }
 
   return created;

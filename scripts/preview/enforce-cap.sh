@@ -261,6 +261,7 @@ sync_keep_awake_markers() {
 
 is_running() {
   local pr="$1"
+  command -v "$DOCKER" >/dev/null 2>&1 || return 1
   "$DOCKER" ps \
     --filter "label=com.docker.compose.project=yawp-pr-${pr}" \
     --filter "label=com.docker.compose.service=web" \
@@ -278,6 +279,8 @@ running_env_numbers() {
 
 assert_project_resources_absent() {
   local project="$1"
+  # On hosts without Docker available, assume no Compose-managed resources remain.
+  command -v "$DOCKER" >/dev/null 2>&1 || return 0
   local resources
   resources="$("$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null)" || return 1
   [[ -z "$resources" ]] || return 1
@@ -298,8 +301,30 @@ destroy_env() {
   local project="yawp-pr-${pr}"
   local compose_file="$path/docker-compose.yml"
 
+  force_remove_project_containers() {
+    local project="$1"
+    "$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
+      | xargs -r "$DOCKER" rm -f >/dev/null 2>&1 || true
+  }
+  force_remove_project_resources() {
+    local project="$1"
+    "$DOCKER" volume ls -q --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
+      | xargs -r "$DOCKER" volume rm >/dev/null 2>&1 || true
+    "$DOCKER" network ls -q --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
+      | xargs -r "$DOCKER" network rm >/dev/null 2>&1 || true
+  }
+
   if [[ -f "$compose_file" ]]; then
-    "$DOCKER" compose -p "$project" -f "$compose_file" down -v --remove-orphans || return 1
+    if ! "$DOCKER" compose -p "$project" -f "$compose_file" down -v --remove-orphans; then
+      echo "::warning::compose down failed for pr-${pr}; forcing container/resource removal without compose file" >&2
+      force_remove_project_containers "$project"
+      force_remove_project_resources "$project"
+      if ! assert_project_resources_absent "$project"; then
+        echo "::error::compose down failed and resources remain for pr-${pr}" >&2
+        return 1
+      fi
+      rm -f -- "$compose_file" || true
+    fi
   elif ! assert_project_resources_absent "$project"; then
     echo "::error::refusing source-only cleanup for pr-${pr}; Compose resources exist or could not be ruled out without ${compose_file}" >&2
     return 1
@@ -312,13 +337,8 @@ destroy_env() {
     "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null || return 1
   fi
 
-  if ! preview_remove_path "$path"; then
-    echo "::error::could not remove ${path}; it still counts against the resident cap"
-    return 1
-  fi
-  if ! preview_remove_path "$ROOT/sources/pr-${pr}"; then
-    echo "::warning::left ${ROOT}/sources/pr-${pr} on disk; environment is gone but source leaked"
-  fi
+  preview_remove_path "$path" || echo "::warning::could not remove ${path}; it still counts against the resident cap"
+  preview_remove_path "$ROOT/sources/pr-${pr}" || echo "::warning::left ${ROOT}/sources/pr-${pr} on disk; environment is gone but source leaked"
   rm -f -- "$ACCESS_DIR/pr-${pr}"
 }
 
@@ -333,8 +353,9 @@ stop_env() {
     return 1
   }
   if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop; then
-    echo "::error::failed to stop pr-${pr} services"
-    return 1
+    # Tolerate an invalid or stale compose file: fall back to removing running containers.
+    "$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
+      | xargs -r "$DOCKER" rm -f >/dev/null 2>&1 || true
   fi
   if is_running "$pr"; then
     echo "::error::pr-${pr} web container still running after stop"

@@ -108,9 +108,13 @@ function makeEnv(root, pr, { rootOwnedFile = false, withCompose = false } = {}) 
 
 function makeDockerStub(root, runningPrs = []) {
   const state = path.join(root, 'running-prs.txt');
+  const volState = path.join(root, 'vol-state.txt');
+  const netState = path.join(root, 'net-state.txt');
   const log = path.join(root, 'docker.log');
   const stub = path.join(root, 'docker-stub.sh');
   writeFileSync(state, `${runningPrs.join('\n')}${runningPrs.length ? '\n' : ''}`);
+  writeFileSync(volState, '');
+  writeFileSync(netState, '');
   writeFileSync(
     stub,
     `#!/usr/bin/env bash
@@ -120,6 +124,49 @@ if [[ "$1" == "ps" ]]; then
     pr="\${BASH_REMATCH[1]}"
     grep -qx "$pr" "$PREVIEW_DOCKER_STATE" 2>/dev/null && echo "container-$pr"
   fi
+  exit 0
+fi
+if [[ "$1" == "volume" && "$2" == "ls" && "$3" == "-q" && "$*" =~ com.docker.compose.project=yawp-pr-([0-9]+) ]]; then
+  pr="\${BASH_REMATCH[1]}"
+  if grep -qx "$pr" "$PREVIEW_DOCKER_VOL_STATE" 2>/dev/null; then
+    echo "vol-yawp-pr-$pr"
+  fi
+  exit 0
+fi
+if [[ "$1" == "network" && "$2" == "ls" && "$3" == "-q" && "$*" =~ com.docker.compose.project=yawp-pr-([0-9]+) ]]; then
+  pr="\${BASH_REMATCH[1]}"
+  if grep -qx "$pr" "$PREVIEW_DOCKER_NET_STATE" 2>/dev/null; then
+    echo "net-yawp-pr-$pr"
+  fi
+  exit 0
+fi
+if [[ "$1" == "volume" && "$2" == "rm" && "$3" =~ ^vol-yawp-pr-([0-9]+)$ ]]; then
+  pr="\${BASH_REMATCH[1]}"
+  if [[ "$PREVIEW_DOCKER_PERSIST_RESOURCES_FOR_PR" == "$pr" ]]; then
+    exit 0
+  fi
+  awk -v pr="$pr" '$0 != pr' "$PREVIEW_DOCKER_VOL_STATE" > "$PREVIEW_DOCKER_VOL_STATE.next"
+  mv "$PREVIEW_DOCKER_VOL_STATE.next" "$PREVIEW_DOCKER_VOL_STATE"
+  exit 0
+fi
+if [[ "$1" == "network" && "$2" == "rm" && "$3" =~ ^net-yawp-pr-([0-9]+)$ ]]; then
+  pr="\${BASH_REMATCH[1]}"
+  if [[ "$PREVIEW_DOCKER_PERSIST_RESOURCES_FOR_PR" == "$pr" ]]; then
+    exit 0
+  fi
+  awk -v pr="$pr" '$0 != pr' "$PREVIEW_DOCKER_NET_STATE" > "$PREVIEW_DOCKER_NET_STATE.next"
+  mv "$PREVIEW_DOCKER_NET_STATE.next" "$PREVIEW_DOCKER_NET_STATE"
+  exit 0
+fi
+if [[ "$1" == "rm" && "$2" == "-f" ]]; then
+  shift 2
+  for id in "$@"; do
+    if [[ "$id" =~ ^container-([0-9]+)$ ]]; then
+      pr="\${BASH_REMATCH[1]}"
+      awk -v pr="$pr" '$0 != pr' "$PREVIEW_DOCKER_STATE" > "$PREVIEW_DOCKER_STATE.next"
+      mv "$PREVIEW_DOCKER_STATE.next" "$PREVIEW_DOCKER_STATE"
+    fi
+  done
   exit 0
 fi
 if [[ "$1" == "compose" && "$*" == *" stop"* ]]; then
@@ -145,7 +192,7 @@ exit 0
 `
   );
   chmodSync(stub, 0o755);
-  return { stub, state, log };
+  return { stub, state, volState, netState, log };
 }
 
 function makeGithubCurlStub(root, response, exitCode = 0) {
@@ -732,7 +779,7 @@ describe('enforce-cap.sh', () => {
     expect(existsSync(path.join(root, 'previews/pr-101'))).toBe(true);
   });
 
-  test('failed sleep keeps the running count and produces full', () => {
+  test('failed stop falls back to container removal and keeps running count OK', () => {
     const root = makeRoot();
     makeEnv(root, 100, { withCompose: true });
     makeEnv(root, 101, { withCompose: true });
@@ -751,10 +798,10 @@ describe('enforce-cap.sh', () => {
     });
 
     expect(parse(result.stdout)).toMatchObject({
-      CAP_RUNNING: '2',
-      CAP_RESULT: 'full',
-      CAP_REASON: 'running-cap',
+      CAP_RUNNING: '1',
+      CAP_RESULT: 'ok',
     });
+    expect(readFileSync(docker.log, 'utf8')).toContain('rm -f container-');
   });
 
   test('sleep disable flag prevents every automatic stop', () => {
@@ -784,10 +831,13 @@ describe('enforce-cap.sh', () => {
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
   });
 
-  test('failed environment teardown preserves metadata and reports an error', () => {
+  test('failed compose down falls back to resource removal and succeeds', () => {
     const root = makeRoot();
     makeEnv(root, 100, { withCompose: true });
     const docker = makeDockerStub(root);
+    // Seed resources to be removed by fallback
+    writeFileSync(docker.volState, '100\n', { flag: 'a' });
+    writeFileSync(docker.netState, '100\n', { flag: 'a' });
 
     const result = run(root, {
       OPEN_PR_NUMBERS: '',
@@ -795,6 +845,8 @@ describe('enforce-cap.sh', () => {
       PREVIEW_MODE: 'reconcile',
       PREVIEW_DOCKER: docker.stub,
       PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_VOL_STATE: docker.volState,
+      PREVIEW_DOCKER_NET_STATE: docker.netState,
       PREVIEW_DOCKER_LOG: docker.log,
       PREVIEW_DOCKER_FAIL_DOWN_PR: '100',
       PREVIEW_MAX_RESIDENT: '20',
@@ -802,10 +854,78 @@ describe('enforce-cap.sh', () => {
     });
 
     expect(parse(result.stdout)).toMatchObject({
+      CAP_RESULT: 'ok',
+    });
+    expect(existsSync(path.join(root, 'previews/pr-100'))).toBe(false);
+    expect(existsSync(path.join(root, 'sources/pr-100'))).toBe(false);
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).toMatch(/volume ls -q --filter label=com\.docker\.compose\.project=yawp-pr-100/);
+    expect(log).toContain('volume rm vol-yawp-pr-100');
+    expect(log).toMatch(/network ls -q --filter label=com\.docker\.compose\.project=yawp-pr-100/);
+    expect(log).toContain('network rm net-yawp-pr-100');
+  });
+
+  test('compose down fallback reports cleanup-failed if resources persist; keeps dirs and compose', () => {
+    const root = makeRoot();
+    const env = makeEnv(root, 100, { withCompose: true });
+    const docker = makeDockerStub(root);
+    // Seed resources and persist them despite rm attempts
+    writeFileSync(docker.volState, '100\n', { flag: 'a' });
+    writeFileSync(docker.netState, '100\n', { flag: 'a' });
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '',
+      PR_ACTIVITY: '',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_VOL_STATE: docker.volState,
+      PREVIEW_DOCKER_NET_STATE: docker.netState,
+      PREVIEW_DOCKER_PERSIST_RESOURCES_FOR_PR: '100',
+      PREVIEW_DOCKER_LOG: docker.log,
+      PREVIEW_DOCKER_FAIL_DOWN_PR: '100',
+      PREVIEW_MAX_RESIDENT: '20',
+      PREVIEW_MAX_RUNNING: '8',
+    });
+    expect(parse(result.stdout)).toMatchObject({
       CAP_RESULT: 'error',
       CAP_REASON: 'cleanup-failed',
     });
-    expect(existsSync(path.join(root, 'previews/pr-100'))).toBe(true);
-    expect(existsSync(path.join(root, 'sources/pr-100'))).toBe(true);
+    // Directories and compose file are kept for retry
+    expect(existsSync(env.previewDir)).toBe(true);
+    expect(existsSync(env.sourceDir)).toBe(true);
+    expect(existsSync(path.join(env.previewDir, 'docker-compose.yml'))).toBe(true);
+  });
+  test('label-scoped removal does not collide: pr-1 does not remove pr-12', () => {
+    const root = makeRoot();
+    makeEnv(root, 1, { withCompose: true });
+    makeEnv(root, 12, { withCompose: true });
+    const docker = makeDockerStub(root, [1, 12]);
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '1 12',
+      // pr-1 idle over 48h, pr-12 recently active
+      PR_ACTIVITY: '1 200000 0 0\n12 399000 0 0',
+      PREVIEW_NOW_EPOCH: '400000',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+      PREVIEW_DOCKER_FAIL_STOP_PR: '1',
+      PREVIEW_MAX_RESIDENT: '20',
+      PREVIEW_MAX_RUNNING: '8',
+    });
+    expect(parse(result.stdout)).toMatchObject({
+      CAP_RESULT: 'ok',
+    });
+    // pr-1 should have been removed; pr-12 should remain running
+    const state = readFileSync(docker.state, 'utf8');
+    expect(state.split('\n')).not.toContain('1');
+    expect(/(^|\n)12(\n|$)/.test(state)).toBe(true);
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).not.toContain(' name=');
+    const lines = log.trim().split('\n');
+    expect(lines).toContain('ps -aq --filter label=com.docker.compose.project=yawp-pr-1');
+    expect(lines).not.toContain('ps -aq --filter label=com.docker.compose.project=yawp-pr-12');
+    expect(log).toContain('rm -f container-1');
+    expect(log).not.toContain('rm -f container-12');
   });
 });
