@@ -7,7 +7,7 @@ import {
 describe('requestGradeRelease', () => {
   test('POSTs FormData and returns ok:true when server returns success true', async () => {
     const submissionId = 'sub-1';
-    let calledUrl: string | null = null;
+    let calledUrl: string = '';
     let calledOptions: any = null;
     const mockFetch = async (url: string, options?: any) => {
       calledUrl = url;
