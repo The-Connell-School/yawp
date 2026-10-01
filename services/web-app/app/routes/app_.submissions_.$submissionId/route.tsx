@@ -33,6 +33,8 @@ import {
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
 import { Input } from '~/components/ui/input';
+import { toast } from 'sonner';
+import { requestGradeRelease } from './release-grade-request';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -1086,18 +1088,13 @@ function SubmissionDetail({
   const handleReleaseGrade = useCallback(async () => {
     setIsReleasing(true);
     try {
-      const formData = new FormData();
-      formData.append('submissionIds', submission.id);
-      const res = await fetch('/api/domain/release-grades', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) return;
-      const body = (await res.json()) as { success?: boolean };
-      if (body.success) {
-        setLocalReleasedAt(new Date().toISOString());
-        revalidator.revalidate();
+      const result = await requestGradeRelease(submission.id);
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
       }
+      setLocalReleasedAt(new Date().toISOString());
+      revalidator.revalidate();
     } finally {
       setIsReleasing(false);
     }
