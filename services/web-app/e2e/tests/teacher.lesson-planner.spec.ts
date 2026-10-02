@@ -1016,6 +1016,71 @@ test.describe('YAWP! Lesson Planner', () => {
     await clearClassInsight(e2eContext.classAssignmentId);
   });
 
+  test('opens the how-it-works guide from the planner header', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto('/app/lesson-planner');
+
+    await page.getByRole('link', { name: 'See how it works' }).click();
+    await expect(page).toHaveURL(/\/app\/lesson-planner\/how-it-works$/);
+
+    await expect(
+      page.getByRole('heading', { level: 1, name: /tomorrow’s lesson/i })
+    ).toBeVisible();
+    // The section a school approving the planner reads first.
+    const wont = page.getByTestId('guide-wont');
+    await expect(wont).toContainText(/assign anything to students/i);
+    await expect(wont).toContainText(/read students’ essays/i);
+    // The clips are served from the app, not an outside site.
+    const clip = page.locator('video source').first();
+    await expect(clip).toHaveAttribute(
+      'src',
+      /^\/img\/lesson-planner-guide\/.+\.mp4$/
+    );
+
+    await page.getByRole('link', { name: /back to the planner/i }).click();
+    await expect(page).toHaveURL(/\/app\/lesson-planner$/);
+  });
+
+  test('keeps the how-it-works guide behind the planner flag', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, false);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    await page.goto('/app/lesson-planner/how-it-works');
+    await expect(page).toHaveURL(/\/app(?!\/lesson-planner)/);
+  });
+
+  test('keeps the how-it-works guide in bounds on a phone', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    await page.goto('/app/lesson-planner');
+    // Icon only at this width, still named for anyone using a screen reader.
+    await expect(
+      page.getByRole('link', { name: 'See how it works' })
+    ).toBeVisible();
+
+    await page.goto('/app/lesson-planner/how-it-works');
+    await expect(page.getByTestId('guide-wont')).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
   test('keeps planner controls in bounds at desktop and mobile breakpoints', async ({
     page,
     signIn,
