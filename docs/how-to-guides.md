@@ -39,6 +39,7 @@ The thinking behind a feature is ours. Teachers feel it the moment they use the 
 ## Where it lives in the app
 
 - Route: `/app/<feature>/how-it-works`, behind the same access check as the feature.
+- Build it from `app/components/how-it-works/guide.tsx` (`GuidePage`, `GuideHero`, `GuideRow`, `GuideClip`, `WillWont`, `GuideFooter`, `SeeHowItWorksLink`). Reporter's guide is the example: `app/routes/app.reporter_.how-it-works/route.tsx`.
 - Media: `public/img/<feature>-guide/`.
 - Button: **See how it works**, in the feature's page header. Icon only on a phone, with an `aria-label`.
 - Test: an E2E test that opens the guide from the button, checks the "won't" section and checks phone width.
