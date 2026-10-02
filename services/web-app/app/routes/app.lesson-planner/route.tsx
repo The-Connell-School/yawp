@@ -13,6 +13,7 @@ import {
   BookmarkPlus,
   CornerDownRight,
   FileText,
+  CirclePlay,
   Lightbulb,
   Loader2,
   ChevronDown,
@@ -682,6 +683,16 @@ export default function LessonPlannerRoute() {
                 </p>
               )}
             </div>
+            {/* The way into the guide stays in the header, where a teacher who
+                is new here looks first, and shrinks to its icon on a phone. */}
+            <Link
+              to="/app/lesson-planner/how-it-works"
+              aria-label="See how it works"
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-background px-2.5 text-sm font-medium text-primary transition hover:bg-primary/10 sm:px-3"
+            >
+              <CirclePlay size={16} />
+              <span className="hidden sm:inline">See how it works</span>
+            </Link>
             <div className="flex shrink-0 items-center gap-2 md:hidden">
               {/* "Switch lesson", not "Your lessons": the rail's link to the
                   full list is called "All your lessons", and one accessible
