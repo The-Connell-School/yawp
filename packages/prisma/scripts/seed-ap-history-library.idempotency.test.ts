@@ -51,6 +51,11 @@ function makeMockPrisma() {
     },
     apHistoryPromptLibrarySource: {
       upsert: async () => ({}),
+      updateMany: async () => ({ count: 1 }),
+    },
+    assignmentTypeImage: {
+      findUnique: async () => ({ id: 'existing-image' }),
+      create: async () => ({}),
     },
   } as unknown as Parameters<typeof seedApHistoryLibrary>[0];
 }

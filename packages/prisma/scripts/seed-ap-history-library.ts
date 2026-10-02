@@ -7,6 +7,11 @@ import {
 } from './tutor-instructions-seed';
 import { UNIVERSAL_TUTOR_BLOCK } from './universal-tutor-block';
 import { createPrismaClient } from './local-dev/connection';
+import {
+  AP_HISTORY_HERO_IMAGE,
+  apHistoryHeroImageBytes,
+} from './local-dev/ap-history-hero-image';
+import { attachApHistorySourceImages } from './local-dev/seed-ap-history';
 import type { PrismaClient } from '../generated/prisma';
 
 const AP_HISTORY_ASSIGNMENT_TYPE_KEY = 'ap_history_essay';
@@ -243,7 +248,29 @@ export async function seedApHistoryLibrary(prisma: PrismaClient, organizationId:
     }
   }
 
-  console.log(`Seeded ${AP_HISTORY_LIBRARY_ENTRIES.length} AP History library entries.`);
+  // Card art: only seeded when the type has no image, so an admin's upload
+  // survives the next deploy.
+  const existingImage = await prisma.assignmentTypeImage.findUnique({
+    where: { assignmentTypeId: assignmentType.id },
+    select: { id: true },
+  });
+  if (!existingImage) {
+    await prisma.assignmentTypeImage.create({
+      data: {
+        assignmentTypeId: assignmentType.id,
+        contentType: AP_HISTORY_HERO_IMAGE.contentType,
+        altText: AP_HISTORY_HERO_IMAGE.altText,
+        blob: apHistoryHeroImageBytes(),
+      },
+    });
+  }
+
+  // Curated DBQ source images are served from our own origin by externalKey.
+  const imagesSeeded = await attachApHistorySourceImages(prisma);
+
+  console.log(
+    `Seeded ${AP_HISTORY_LIBRARY_ENTRIES.length} AP History library entries and ${imagesSeeded} self-hosted source images.`
+  );
 }
 
 if (import.meta.main) {

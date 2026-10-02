@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from 'bun:test';
 import { AP_HISTORY_LIBRARY_ENTRIES } from './ap-history-library-data';
 import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { readFileSync } from 'node:fs';
+import { AP_HISTORY_HERO_IMAGE } from './local-dev/ap-history-hero-image';
 
 describe('AP History library seed data', () => {
   test('exports a curated library of DBQ entries', () => {
@@ -109,7 +110,14 @@ describe('AP History assignment type seed behavior', () => {
         update: mock(async () => ({})),
       },
       apHistoryPromptLibraryEntry: { upsert: entryUpsert },
-      apHistoryPromptLibrarySource: { upsert: sourceUpsert },
+      apHistoryPromptLibrarySource: {
+        upsert: sourceUpsert,
+        updateMany: mock(async () => ({ count: 1 })),
+      },
+      assignmentTypeImage: {
+        findUnique: mock(async () => ({ id: 'existing-image' })),
+        create: mock(async () => ({})),
+      },
     };
 
     await seedApHistoryLibrary(prisma as never, 'preview-org');
@@ -143,4 +151,81 @@ describe('AP History assignment type seed behavior', () => {
     expect(updatePayload).toBeDefined();
     expect(updatePayload).not.toContain('ownerOrgId');
   });
+
+  test('seeds the hero image when the assignment type has none', async () => {
+    const prisma = makeImagePrisma({ existingImage: null });
+
+    await seedApHistoryLibrary(prisma as never, 'preview-org');
+
+    expect(prisma.assignmentTypeImage.create).toHaveBeenCalledTimes(1);
+    const { data } = prisma.assignmentTypeImage.create.mock.calls[0]?.[0] as {
+      data: { assignmentTypeId: string; contentType: string; blob: Buffer };
+    };
+    expect(data.assignmentTypeId).toBe('ap-type');
+    expect(data.contentType).toBe(AP_HISTORY_HERO_IMAGE.contentType);
+    expect(data.blob.length).toBeGreaterThan(0);
+  });
+
+  test('keeps an existing hero image (e.g. an admin upload)', async () => {
+    const prisma = makeImagePrisma({ existingImage: { id: 'admin-upload' } });
+
+    await seedApHistoryLibrary(prisma as never, 'preview-org');
+
+    expect(prisma.assignmentTypeImage.create).not.toHaveBeenCalled();
+  });
+
+  test('attaches the committed source images to curated image sources', async () => {
+    const prisma = makeImagePrisma({ existingImage: { id: 'admin-upload' } });
+
+    await seedApHistoryLibrary(prisma as never, 'preview-org');
+
+    const calls = prisma.apHistoryPromptLibrarySource.updateMany.mock.calls.map(
+      (call) =>
+        call[0] as {
+          where: { externalKey: string };
+          data: { imageBlob: Buffer; imageContentType: string };
+        }
+    );
+    expect(calls.length).toBeGreaterThan(0);
+    for (const { where, data } of calls) {
+      expect(where.externalKey).toMatch(/-doc-\d+$/);
+      expect(data.imageContentType).toBe('image/jpeg');
+      expect(data.imageBlob.length).toBeGreaterThan(0);
+    }
+  });
 });
+
+function makeImagePrisma({ existingImage }: { existingImage: { id: string } | null }) {
+  return {
+    organization: {
+      findUnique: mock(async () => ({ id: 'preview-org' })),
+      findMany: mock(async () => [{ id: 'preview-org' }]),
+    },
+    assignmentType: {
+      findUnique: mock(async () => null),
+      upsert: mock(async () => ({ id: 'ap-type' })),
+    },
+    organizationAssignmentType: { upsert: mock(async () => ({})) },
+    assignmentModule: {
+      findFirst: mock(async () => ({ id: 'ap-module' })),
+      update: mock(async () => ({ id: 'ap-module' })),
+    },
+    assignmentModuleInstruction: {
+      findFirst: mock(async () => ({ id: 'ap-instruction' })),
+      update: mock(async () => ({})),
+    },
+    apHistoryPromptLibraryEntry: {
+      upsert: mock(async ({ where }: { where: { externalKey: string } }) => ({
+        id: where.externalKey,
+      })),
+    },
+    apHistoryPromptLibrarySource: {
+      upsert: mock(async () => ({})),
+      updateMany: mock(async (_args: unknown) => ({ count: 1 })),
+    },
+    assignmentTypeImage: {
+      findUnique: mock(async () => existingImage),
+      create: mock(async (_args: unknown) => ({})),
+    },
+  };
+}
