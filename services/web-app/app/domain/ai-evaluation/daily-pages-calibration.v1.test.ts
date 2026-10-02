@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { getParagraphMode } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import {
   DAILY_PAGES_SHORT_FORM_CATEGORY_KEYS,
   DAILY_PAGES_SHORT_FORM_RUBRIC,
@@ -142,6 +143,59 @@ describe('the strictness the suite encodes', () => {
       expect(
         benchmarkCase.expectations.scoreBands.voice_and_style.max
       ).toBeLessThanOrEqual(3);
+    }
+  });
+});
+
+/**
+ * A paragraph type is switched on only after it is calibrated, so the suite
+ * grades cases under it the way an assignment with that type is graded: with
+ * the type's guidance in the prompt.
+ */
+describe('the paragraph types the suite grades under', () => {
+  function gradedUnder(key: string) {
+    return suite.cases.filter(
+      (benchmarkCase) => benchmarkCase.input.paragraphMode === key
+    );
+  }
+
+  test('names only paragraph types that are switched on', () => {
+    for (const benchmarkCase of suite.cases) {
+      const key = benchmarkCase.input.paragraphMode;
+      if (key === undefined) continue;
+      expect(getParagraphMode(key)).not.toBeNull();
+    }
+  });
+
+  test('grades Argue a position across the scale', () => {
+    const argued = gradedUnder('argue');
+    expect(argued.length).toBeGreaterThanOrEqual(3);
+    expect(
+      argued.some((benchmarkCase) => composite(benchmarkCase, 'min') >= 80)
+    ).toBe(true);
+  });
+
+  /** "Both sides have a point" is not a position, however well it is written. */
+  test('a straddle that takes no position stays low on Depth of Thought', () => {
+    const straddles = caseTagged('argue-straddle');
+    expect(straddles.length).toBeGreaterThanOrEqual(1);
+    for (const benchmarkCase of straddles) {
+      expect(benchmarkCase.input.paragraphMode).toBe('argue');
+      expect(
+        benchmarkCase.expectations.scoreBands.depth_of_thought.max
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+
+  /** Reasons held up only by generalities have not been tested. */
+  test('a position never tested against a specific case stays low on Development', () => {
+    const untested = caseTagged('argue-untested');
+    expect(untested.length).toBeGreaterThanOrEqual(1);
+    for (const benchmarkCase of untested) {
+      expect(benchmarkCase.input.paragraphMode).toBe('argue');
+      expect(
+        benchmarkCase.expectations.scoreBands.development_of_thought.max
+      ).toBeLessThanOrEqual(2);
     }
   });
 });

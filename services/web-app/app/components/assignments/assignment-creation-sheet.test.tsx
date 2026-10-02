@@ -905,7 +905,7 @@ describe('AssignmentCreationSheetContent writing time', () => {
 
 /**
  * The kind of paragraph a Daily Pages entry practices. Offered only for types
- * that take one, and only the types switched on (Analyze first). No choice is
+ * that take one, and only the types switched on (Analyze, then Argue a position). No choice is
  * the default, which grades and tutors exactly as before.
  */
 describe('AssignmentCreationSheetContent paragraph type', () => {
@@ -949,7 +949,7 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
     expect(select).not.toBeNull();
     expect(select!.value).toBe('');
     const options = Array.from(select!.options).map((option) => option.value);
-    expect(options).toEqual(['', 'analyze']);
+    expect(options).toEqual(['', 'analyze', 'argue']);
   });
 
   it('describes the chosen type', () => {
@@ -966,6 +966,22 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
 
     expect(paragraphSelect()!.value).toBe('analyze');
     expectText('Claim-Evidence-Analysis');
+  });
+
+  it('describes Argue a position when it is chosen', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'daily-pages',
+    }));
+
+    act(() => {
+      const select = paragraphSelect()!;
+      select.value = 'argue';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(paragraphSelect()!.value).toBe('argue');
+    expectText('Position-Reason-Test');
   });
 
   it('is absent for a type that takes no paragraph type', () => {

@@ -98,6 +98,48 @@ describe('runLiveGradingAssistantBenchmarkCase', () => {
     expect(gradingCalls[0]).toContain('the student had 15 minutes');
   });
 
+  /**
+   * A paragraph type is calibrated before it is switched on, so a case that
+   * names one has to reach the grader with that type's guidance layered in,
+   * exactly as an assignment with that type would.
+   */
+  test('hands the case paragraph type to the grader', async () => {
+    const benchmarkCase = {
+      ...gradingAssistantBenchmarkV1.cases[0],
+      input: {
+        ...gradingAssistantBenchmarkV1.cases[0].input,
+        writingTimeMinutes: 15,
+        paragraphMode: 'argue',
+      },
+    };
+    const gradingCalls: string[] = [];
+    const execute = mock(
+      async ({
+        purpose,
+        messages,
+      }: {
+        purpose: string;
+        messages: Array<{ content: string }>;
+      }) => {
+        if (purpose === 'criterion') {
+          return JSON.stringify({ passed: true, evidence: 'Grounded.' });
+        }
+        gradingCalls.push(messages.map((message) => message.content).join(''));
+        return JSON.stringify(validOutputFor(benchmarkCase));
+      }
+    );
+
+    await runLiveGradingAssistantBenchmarkCase({
+      suite: gradingAssistantBenchmarkV1,
+      benchmarkCase,
+      gradingConfig: buildStaticDailyPagesGradingConfig(),
+      execute,
+    });
+
+    expect(gradingCalls).toHaveLength(1);
+    expect(gradingCalls[0]).toContain('Paragraph type: Argue a position');
+  });
+
 
   test('runs deterministic checks and LLM judges for qualitative criteria', async () => {
     const benchmarkCase = gradingAssistantBenchmarkV1.cases[0];

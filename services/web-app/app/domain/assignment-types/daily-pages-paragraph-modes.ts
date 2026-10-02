@@ -17,7 +17,8 @@
  *
  * Rollout is one type at a time. A type is `enabled` only once its guidance is
  * written and checked against the calibration suite; until then a teacher does
- * not see it and the server refuses it. Analyze ships first.
+ * not see it and the server refuses it. Analyze shipped first, then Argue a
+ * position.
  *
  * The choice lives on the Assignment (`paragraphMode`), not the assignment
  * type, so the same teacher can run an analysis on Monday and an argument on
@@ -68,6 +69,25 @@ const ANALYZE_TUTOR_INSTRUCTIONS = [
   'If the student already has a shape that holds all three — opening on the quotation, say — do not make them rebuild it into this order. The model is a guide to what a reader needs, not a template.',
 ].join('\n');
 
+const ARGUE_GRADING_INSTRUCTIONS = [
+  'The teacher asked the student to argue a position. The student should take a position a reasonable reader could disagree with, give the strongest reason for it, and test it against a specific case: a situation, an example, or a moment in the text where the position might fail and does not, or holds only once it is narrowed.',
+  'The model the student has been taught is Position-Reason-Test: the position, the reason that carries it, and the case that tests it. It is not the only acceptable form — a paragraph may open on the case, or let the test sharpen the position at the end — but a reader should find all three. A formal counterargument and rebuttal is not required in a paragraph written this quickly; facing the one case that tests the position is the move.',
+  'Depth of Thought reads the position. A position no reader would dispute, or one that settles on "both sides have a point" without choosing, has not taken a position: it does not rise above Developing there, however even-handed it sounds. A position that names the condition under which it holds scores higher than one asserted without limits.',
+  'Development of Thought reads the reason and the test. One reason developed well is worth more than three listed. A reason that only restates the position in other words is circular, not support. A position held up only by generalities — "people", "society", "in many situations" — and never tested against a specific case does not rise above Developing there.',
+].join('\n');
+
+const ARGUE_TUTOR_INSTRUCTIONS = [
+  'Today the student is arguing a position. Guide them toward the Position-Reason-Test model, one part at a time, and never write any part of it for them:',
+  '',
+  '1. Position. Ask what they would say to someone who disagrees. If no one would disagree, it is not yet a position; if they are saying both sides have a point, ask which side they would choose if they had to.',
+  '',
+  '2. Reason. Ask for the strongest reason, not the most reasons. If they have listed several, ask which one they would keep if they could only keep one, and why that one.',
+  '',
+  '3. Test. Ask for one specific case — a situation, an example, or a moment in the text — where the position could fail. Does it hold there? If it only holds once it is narrowed, help them see that the narrower position is the stronger one.',
+  '',
+  'If the student already has a shape that holds all three — opening on the case, say — do not make them rebuild it into this order. The model is a guide to what a reader needs, not a template.',
+].join('\n');
+
 export const DAILY_PAGES_PARAGRAPH_MODES: readonly ParagraphMode[] = [
   {
     key: 'analyze',
@@ -82,8 +102,10 @@ export const DAILY_PAGES_PARAGRAPH_MODES: readonly ParagraphMode[] = [
     key: 'argue',
     label: 'Argue a position',
     description:
-      'A position, its strongest reason, and the case that tests it.',
-    enabled: false,
+      'A position someone could disagree with, its strongest reason, and a specific case that tests it (Position-Reason-Test).',
+    enabled: true,
+    gradingInstructions: ARGUE_GRADING_INSTRUCTIONS,
+    tutorInstructions: ARGUE_TUTOR_INSTRUCTIONS,
   },
   {
     key: 'compare',

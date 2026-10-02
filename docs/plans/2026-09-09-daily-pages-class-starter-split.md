@@ -339,13 +339,28 @@ registry is `app/domain/assignment-types/daily-pages-paragraph-modes.ts`.
   instructions. The rubric is unchanged, so a new type is a text constant and
   tests — not a new grading assistant built by hand.
 - **One type at a time.** Each type has an `enabled` switch; teachers see only
-  the enabled ones and the server refuses the rest. **Analyze** ships first,
+  the enabled ones and the server refuses the rest. **Analyze** shipped first,
   built on Claim-Evidence-Analysis (offered as a guide, not the only form).
-  Before switching the next one on: write its grading and tutor text, add
-  calibration cases for it, run the calibration script, then flip `enabled`.
+  **Argue a position** is second, built on Position-Reason-Test: a position a
+  reader could disagree with, its strongest reason, and a specific case that
+  tests it. Before switching the next one on: write its grading and tutor
+  text, add calibration cases for it, run the calibration script, then flip
+  `enabled`.
 - **No type is the default** ("Any kind of paragraph"), stored as null, which
   grades and tutors exactly as before. Frozen after creation, like the grammar
   toggle.
+- **Argue a position** reads the position in Depth of Thought and the reason
+  and its test in Development of Thought. A straddle ("both sides have a
+  point") does not rise above Developing on Depth; a position held up only by
+  generalities, never tested against a specific case, does not rise above
+  Developing on Development. One reason developed beats three listed, and a
+  formal counterargument and rebuttal is not required in a timed paragraph —
+  facing the one case that tests the position is the move. A position that
+  comes out of its test narrower is credited, not marked as a retreat.
+- Calibration cases can name a `paragraphMode`, and the live runner grades
+  them with that type's guidance in the prompt. The three Argue cases
+  (`dp-argue-*`) do; the Analyze-tagged cases predate this and are still
+  graded with no type chosen.
 - The universal tutor persona is still copied into each module row's
   `tutorInstructions`; there is no shared tutor prompt in code. The type layer
   sits on top of whatever the module carries.

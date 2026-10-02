@@ -325,7 +325,7 @@ describe('compileGradingAssistantInvocation paragraph type', () => {
 
   test('ignores a type that is not switched on', () => {
     expect(
-      compileGradingAssistantInvocation({ ...base, paragraphMode: 'argue' })
+      compileGradingAssistantInvocation({ ...base, paragraphMode: 'compare' })
     ).toEqual(compileGradingAssistantInvocation(base));
   });
 });

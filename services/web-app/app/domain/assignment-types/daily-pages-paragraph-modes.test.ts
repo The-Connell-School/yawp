@@ -31,12 +31,14 @@ describe('the paragraph types a teacher can choose', () => {
   });
 
   /**
-   * Rollout: Analyze is built and quality-checked first. Teachers see only
-   * the types that are switched on, and the others follow one at a time.
+   * Rollout: Analyze was built and quality-checked first, then Argue a
+   * position. Teachers see only the types that are switched on, and the
+   * others follow one at a time.
    */
-  test('ships with Analyze as the only type switched on', () => {
+  test('ships with Analyze and Argue a position switched on', () => {
     expect(enabledParagraphModes().map((mode) => mode.key)).toEqual([
       'analyze',
+      'argue',
     ]);
   });
 
@@ -50,7 +52,8 @@ describe('the paragraph types a teacher can choose', () => {
 
   test('looks a type up by key, and only a switched-on one', () => {
     expect(getParagraphMode('analyze')?.label).toBe('Analyze');
-    expect(getParagraphMode('argue')).toBeNull();
+    expect(getParagraphMode('argue')?.label).toBe('Argue a position');
+    expect(getParagraphMode('compare')).toBeNull();
     expect(getParagraphMode('nonsense')).toBeNull();
     expect(getParagraphMode(null)).toBeNull();
   });
@@ -86,6 +89,60 @@ describe('Analyze uses the Claim-Evidence-Analysis model', () => {
   });
 });
 
+/**
+ * Argue a position asks for a position someone could disagree with, the
+ * strongest reason for it, and a specific case that tests it. The case is
+ * what separates an argument from an opinion: a reason held up only by
+ * generalities has not been tested.
+ */
+describe('Argue a position: position, reason, test', () => {
+  const argue = getParagraphMode('argue')!;
+
+  test('the tutor coaches position, then reason, then the test', () => {
+    const tutor = argue.tutorInstructions!.toLowerCase();
+    expect(tutor).toContain('position-reason-test');
+    expect(tutor.indexOf('position.')).toBeLessThan(tutor.indexOf('reason.'));
+    expect(tutor.indexOf('reason.')).toBeLessThan(tutor.indexOf('test.'));
+    expect(tutor).toContain('never write');
+  });
+
+  test('the tutor asks for the strongest reason rather than more of them', () => {
+    expect(argue.tutorInstructions!.toLowerCase()).toContain('strongest');
+  });
+
+  test('the grader wants a position a reader could disagree with, not a straddle', () => {
+    const grading = argue.gradingInstructions!.toLowerCase();
+    expect(grading).toContain('position-reason-test');
+    expect(grading).toContain('disagree');
+    expect(grading).toContain('both sides');
+    expect(grading).toContain('depth of thought');
+  });
+
+  test('the grader holds an untested position down in Development of Thought', () => {
+    const grading = argue.gradingInstructions!.toLowerCase();
+    expect(grading).toContain('specific');
+    expect(grading).toContain('development of thought');
+    expect(grading).toContain('does not rise above developing');
+  });
+
+  /**
+   * A fifteen-minute paragraph cannot carry a full rebuttal. Facing the case
+   * that tests the position is the move; a formal counterargument section is
+   * not required.
+   */
+  test('does not demand a formal counterargument', () => {
+    expect(argue.gradingInstructions!.toLowerCase()).toContain(
+      'formal counterargument'
+    );
+  });
+
+  test('offers the model without making it the only acceptable form', () => {
+    expect(argue.gradingInstructions!.toLowerCase()).toContain(
+      'not the only acceptable form'
+    );
+  });
+});
+
 describe('parseParagraphMode', () => {
   test('absent or blank means no type chosen', () => {
     expect(parseParagraphMode(form({}))).toEqual({
@@ -102,11 +159,14 @@ describe('parseParagraphMode', () => {
     expect(
       parseParagraphMode(form({ [PARAGRAPH_MODE_FIELD]: 'analyze' }))
     ).toEqual({ success: true, value: 'analyze' });
+    expect(
+      parseParagraphMode(form({ [PARAGRAPH_MODE_FIELD]: 'argue' }))
+    ).toEqual({ success: true, value: 'argue' });
   });
 
   test('rejects a type that is not switched on yet, and nonsense', () => {
     expect(
-      parseParagraphMode(form({ [PARAGRAPH_MODE_FIELD]: 'argue' })).success
+      parseParagraphMode(form({ [PARAGRAPH_MODE_FIELD]: 'compare' })).success
     ).toBe(false);
     expect(
       parseParagraphMode(form({ [PARAGRAPH_MODE_FIELD]: 'freewrite' })).success
@@ -126,8 +186,8 @@ describe('the prompt layers', () => {
   });
 
   test('are empty for a stored type that has since been switched off', () => {
-    expect(buildParagraphModeGradingBlock('argue')).toBe('');
-    expect(buildParagraphModeTutorInstructions('argue')).toBe('');
+    expect(buildParagraphModeGradingBlock('compare')).toBe('');
+    expect(buildParagraphModeTutorInstructions('compare')).toBe('');
   });
 
   test('name the type and carry its guidance when one is chosen', () => {
@@ -138,6 +198,17 @@ describe('the prompt layers', () => {
     const tutor = buildParagraphModeTutorInstructions('analyze');
     expect(tutor).toContain('Analyze');
     expect(tutor).toContain(getParagraphMode('analyze')!.tutorInstructions!);
+  });
+
+  test('carry Argue a position under its own name', () => {
+    expect(
+      buildParagraphModeGradingBlock('argue').startsWith(
+        'Paragraph type: Argue a position'
+      )
+    ).toBe(true);
+    expect(buildParagraphModeTutorInstructions('argue')).toContain(
+      getParagraphMode('argue')!.tutorInstructions!
+    );
   });
 });
 

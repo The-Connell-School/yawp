@@ -439,6 +439,19 @@ describe('api.assignments.create', () => {
       );
     });
 
+    test('records Argue a position on a Daily Pages assignment', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      const body = await readBody(await createWith({ paragraphMode: 'argue' }));
+
+      expect(body).toMatchObject({ success: true });
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ paragraphMode: 'argue' }),
+        })
+      );
+    });
+
     test('records none when no type is chosen (preserves current behavior)', async () => {
       mockAssignmentTypeAvailable({ kind: 'daily_pages' });
 
@@ -466,7 +479,7 @@ describe('api.assignments.create', () => {
     test('rejects a type that is not switched on yet', async () => {
       mockAssignmentTypeAvailable({ kind: 'daily_pages' });
 
-      const response = await createWith({ paragraphMode: 'argue' });
+      const response = await createWith({ paragraphMode: 'compare' });
 
       expect(responseStatus(response)).toBe(400);
       expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();

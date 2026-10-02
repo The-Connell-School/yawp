@@ -174,6 +174,7 @@ describe('the per-assignment switches', () => {
   test('names the paragraph type', () => {
     expect(text).toContain('Paragraph type');
     expect(text).toContain('Analyze');
+    expect(text).toContain('Argue a position');
   });
 
   test('names the writing time', () => {

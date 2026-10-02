@@ -26,6 +26,13 @@ import type {
  *   the top bands, errors that distract from meaning do not
  *   (`ap-grammar-slips`, `ap-grammar-distracting`).
  * - Unedited prose stays at or below Proficient on Voice/Style (`unedited`).
+ * - Under Argue a position, a straddle stays low on Depth of Thought
+ *   (`argue-straddle`), and reasons never tested against a specific case stay
+ *   low on Development of Thought (`argue-untested`).
+ *
+ * A case that names a `paragraphMode` is graded with that type's guidance in
+ * the prompt, as an assignment with that type would be. Cases without one are
+ * graded with no type chosen.
  *
  * Every case is synthetic and starts as a draft; a release run needs product
  * and educator approval on each, as the core benchmark does.
@@ -120,6 +127,7 @@ function calibrationCase({
   essayText,
   bands,
   qualitative,
+  paragraphMode,
 }: {
   id: string;
   title: string;
@@ -129,6 +137,7 @@ function calibrationCase({
   essayText: string;
   bands: ScoreBands;
   qualitative: Array<{ evaluatorId: string; requirement: string }>;
+  paragraphMode?: string;
 }): GradingBenchmarkCase {
   return {
     id,
@@ -141,6 +150,7 @@ function calibrationCase({
       strictness: 'intermediate',
       assignmentPrompt,
       writingTimeMinutes: WRITING_TIME_MINUTES,
+      ...(paragraphMode ? { paragraphMode } : {}),
     },
     expectations: {
       scoreBands: bands,
@@ -380,6 +390,78 @@ const cases: GradingBenchmarkCase[] = [
         evaluatorId: 'false-positive-resistance',
         requirement:
           'Do not treat "Not the candle. The life." as a grammar error; it is a deliberate fragment for emphasis.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-argue-tested-against-hard-case',
+    title: 'Argued position narrowed by the case that tests it',
+    description:
+      'A strong argued paragraph that faces the hard case for its own position and comes out with a narrower, stronger one.',
+    tags: ['strong', 'argue-a-position'],
+    paragraphMode: 'argue',
+    assignmentPrompt:
+      'Should phones be banned during the school day? Take a position, give your strongest reason, and test it against one specific situation where your position might fail. One paragraph.',
+    essayText: `Phones should be locked away during class, but not for the whole school day. The strongest reason to take them is attention: a phone face-down on a desk still pulls at a student every time it buzzes, so the only phone that stops interrupting a lesson is one that is out of reach. The hard case is lunch, where nobody is being taught and a ban looks like control for its own sake. That case is why the line belongs at the classroom door rather than the school gate. A rule meant to protect attention has no reason to follow students into the cafeteria, and a rule that does follow them there stops being about learning and starts being about obedience, which students can tell.`,
+    bands: scoreBands([4, 5], [4, 5], [4, 5], [4, 5], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Credit narrowing the position to the classroom as the result of the test, not as a retreat from the position.',
+      },
+      {
+        evaluatorId: 'feedback-grounding',
+        requirement:
+          'Name the lunch case specifically as the test the position survives.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-argue-both-sides',
+    title: 'Both sides, no position',
+    description:
+      'Clean, fair-minded prose that lays out both sides and never chooses. Even-handedness is not a position.',
+    tags: ['argue-straddle', 'argue-a-position'],
+    paragraphMode: 'argue',
+    assignmentPrompt:
+      "Was Romeo's banishment a just punishment for killing Tybalt? Take a position, give your strongest reason, and test it against one moment in the play. One paragraph.",
+    essayText: `There are good arguments on both sides of whether Romeo's banishment was just. On one hand, Romeo killed Tybalt, and killing someone is a serious crime that deserves punishment. The Prince had already warned that anyone who fought in the streets again would pay with their life. On the other hand, Tybalt had just killed Mercutio, so Romeo was acting out of grief and anger, and Tybalt started the fight. Some people would say the banishment was too harsh and others would say it was too lenient. In the end it depends on how you look at it, and both sides have a point.`,
+    bands: scoreBands([1, 2], [2, 3], [2, 3], [2, 3], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Do not credit even-handedness as Depth of Thought: the paragraph never says whether the banishment was just.',
+      },
+      {
+        evaluatorId: 'priority-selection',
+        requirement:
+          "Make choosing a side the next step, and point to the Prince's earlier warning as the moment to test that choice against.",
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-argue-untested-generalities',
+    title: 'A position held up only by generalities',
+    description:
+      'A real, arguable position with several general reasons and no specific case. The reasons are listed, never tested.',
+    tags: ['argue-untested', 'argue-a-position'],
+    paragraphMode: 'argue',
+    assignmentPrompt:
+      'Is it ever right to break a promise? Take a position, give your strongest reason, and test it against one specific situation. One paragraph.',
+    essayText: `It is sometimes right to break a promise. Promises are important because they build trust, but people change and situations change. Sometimes keeping a promise could hurt someone, and in that situation breaking it is the better choice. Also, people sometimes make promises without thinking them through. Society expects people to keep their word, but society also expects people to do the right thing, and those are not always the same. So breaking a promise can be right when it prevents something worse.`,
+    bands: scoreBands([2, 3], [1, 2], [2, 3], [2, 3], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Do not credit the list of general reasons as development; none of them is tested against a specific situation.',
+      },
+      {
+        evaluatorId: 'priority-selection',
+        requirement:
+          'Make one specific situation the next step (a single promise, and what keeping it would cost) rather than adding more reasons.',
       },
     ],
   }),

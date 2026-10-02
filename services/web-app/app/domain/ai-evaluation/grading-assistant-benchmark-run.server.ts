@@ -173,6 +173,7 @@ export async function runLiveGradingAssistantBenchmarkCase({
     documentText: benchmarkCase.input.essayText,
     assignmentPrompt: benchmarkCase.input.assignmentPrompt ?? null,
     writingTimeMinutes: benchmarkCase.input.writingTimeMinutes ?? null,
+    paragraphMode: benchmarkCase.input.paragraphMode ?? null,
   });
 
   let rawOutput: unknown;

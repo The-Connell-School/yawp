@@ -129,7 +129,7 @@ export const REGISTER_NOTE =
 export const HOW_TO_USE_HEADING = 'Using it with a class';
 
 export const HOW_TO_USE: string[] = [
-  'Pick a Paragraph type on the assignment sheet to name the move the class is practicing. The tutor coaches toward it and the grading assistant reads for it. Analyze is available now, with Claim-Evidence-Analysis as its model; other types follow as they are ready.',
+  'Pick a Paragraph type on the assignment sheet to name the move the class is practicing. The tutor coaches toward it and the grading assistant reads for it. Two are available now: Analyze, with Claim-Evidence-Analysis as its model, and Argue a position, with Position-Reason-Test (a position someone could disagree with, its strongest reason, and a specific case that tests it). Other types follow as they are ready.',
   'Give them a rhythm students can feel — the same day each week, or the last ten minutes of every reading day. Scores climb once a class recognizes what the rubric is asking for.',
   'Put the prompt and the target length where students can see them. They cannot aim at a finish line nobody named.',
   'Read for the trend rather than the single score. Depth and Development are where movement shows up first.',

@@ -2,11 +2,11 @@ import { test, expect } from '../test-setup';
 
 /**
  * The kind of paragraph a Daily Pages entry practices. Offered only for Daily
- * Pages, and only the types switched on — Analyze first. "Any kind of
- * paragraph" is the default, which grades and tutors as before.
+ * Pages, and only the types switched on — Analyze, then Argue a position.
+ * "Any kind of paragraph" is the default, which grades and tutors as before.
  */
 test.describe.serial('Paragraph type at assignment creation', () => {
-  test('Daily Pages offers Analyze, defaulting to any kind of paragraph', async ({
+  test('Daily Pages offers Analyze and Argue a position, defaulting to any kind of paragraph', async ({
     page,
     e2eContext,
     signIn,
@@ -26,12 +26,16 @@ test.describe.serial('Paragraph type at assignment creation', () => {
     await expect(select.locator('option')).toHaveText([
       'Any kind of paragraph',
       'Analyze',
+      'Argue a position',
     ]);
 
     await select.selectOption('analyze');
     await expect(
       page.getByText(/Claim-Evidence-Analysis/).first()
     ).toBeVisible();
+
+    await select.selectOption('argue');
+    await expect(page.getByText(/Position-Reason-Test/).first()).toBeVisible();
   });
 
   test('Class Starter does not offer it', async ({
