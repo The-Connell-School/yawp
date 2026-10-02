@@ -204,6 +204,7 @@ ${commonEnvironment}
     env.runtime === 'fast'
       ? `  web:
     image: oven/bun:1.3.1
+    restart: unless-stopped
     working_dir: /app
     command: bash -lc "cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
 ${fastVolumes}${mediaVolumeMount}
@@ -220,6 +221,7 @@ ${commonEnvironment}
         DATABASE_URL: ${q(env.databaseUrl)}
     environment:
 ${commonEnvironment}
+    restart: unless-stopped
 `;
 
   // Renders the preview's own marketing jobs. Seed-mode fast previews only:
@@ -271,7 +273,7 @@ ${fastVolumes}
   return `name: ${env.composeProject}
 services:
 ${toolboxService}
-${rendererService}${webService}${legacyTraefikLabels}    restart: unless-stopped
+${rendererService}${webService}${legacyTraefikLabels}
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:8080/api/healthcheck').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s

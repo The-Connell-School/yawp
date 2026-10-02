@@ -148,11 +148,19 @@ async function runProductionMigrations(env: NodeJS.ProcessEnv) {
     return backfillCode;
   }
 
-  return runCommand(
+  const gateCode = await runCommand(
     'bun',
     ['run', 'scripts/assignment-type-release-gate.ts', '--require-data'],
     env
   );
+  if (gateCode !== 0) {
+    return gateCode;
+  }
+
+  // Always (idempotently) seed AP History assignment type + prompt library so
+  // new prompts/sections are available after production deploys without
+  // touching existing assignments or scores.
+  return runCommand('bun', ['run', 'scripts/seed-ap-history-library.ts'], env);
 }
 
 const sshProcess = spawn('ssh', [

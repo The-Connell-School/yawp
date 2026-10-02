@@ -434,7 +434,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return dataResponse(
         {
           success: false,
-          message: 'Choose an APUSH prompt from the library first.',
+          message: 'Choose an AP History prompt from the library first.',
         },
         { status: 400 }
       );
@@ -1311,6 +1311,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           creationTypeDefaults.get(id)?.offersParagraphModes ?? false,
       })
     ),
+    apHistoryAssignmentTypeId:
+      availableAssignmentTypes.find(
+        (assignmentType) =>
+          assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
+      )?.id ?? null,
     assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,
@@ -2134,6 +2139,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           }}
           assignments={managedAssignments}
           assignmentTypes={data.assignmentTypes}
+          apHistoryAssignmentTypeId={data.apHistoryAssignmentTypeId}
           classInsightsEnabled={classInsightsEnabled}
           onViewDocuments={handleViewAssignmentDocuments}
           onSelectAssignment={(assignmentId) =>

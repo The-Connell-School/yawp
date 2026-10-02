@@ -1,5 +1,9 @@
 import { Badge } from '~/components/ui/badge';
-import type { ApHistorySnapshot } from '~/domain/ap-history/schema';
+import { ApHistorySourceCarousel } from '~/components/ap-history/source-card';
+import {
+  type ApHistorySnapshot,
+  apHistoryCourseLabel,
+} from '~/domain/ap-history/schema';
 
 type Props = {
   snapshot: ApHistorySnapshot;
@@ -24,7 +28,12 @@ export function ApHistoryAssignmentPanel({ snapshot }: Props) {
             {snapshot.essayType.toUpperCase()}
           </Badge>
           <Badge variant="outline" size="sm">
-            APUSH Period {snapshot.periodNumber}
+            {apHistoryCourseLabel(snapshot.course)}
+          </Badge>
+          <Badge variant="outline" size="sm">
+            {snapshot.course === 'apush'
+              ? `Period ${snapshot.periodNumber}`
+              : snapshot.period}
           </Badge>
           <Badge variant="outline" size="sm">
             {titleCase(snapshot.reasoningSkill)}
@@ -53,31 +62,8 @@ export function ApHistoryAssignmentPanel({ snapshot }: Props) {
             <summary className="cursor-pointer text-sm font-medium text-foreground marker:text-muted-foreground">
               {sourceCount} {sourceCount === 1 ? 'source' : 'sources'}
             </summary>
-            <div className="mt-2 grid max-h-[min(20rem,35vh)] gap-2 overflow-y-auto pr-1">
-              {snapshot.sources.map((source) => (
-                <section
-                  key={`${source.position}-${source.externalKey}`}
-                  className="rounded-md border bg-white p-3"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline" size="sm">
-                      Source {source.position}
-                    </Badge>
-                    <h3 className="text-sm font-semibold">{source.title}</h3>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {source.attribution}
-                  </p>
-                  {source.caption ? (
-                    <p className="mt-2 text-sm italic text-muted-foreground">
-                      {source.caption}
-                    </p>
-                  ) : null}
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
-                    {source.body}
-                  </p>
-                </section>
-              ))}
+            <div className="mt-2">
+              <ApHistorySourceCarousel sources={snapshot.sources} />
             </div>
           </details>
         ) : null}

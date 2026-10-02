@@ -16,6 +16,9 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     baseURL: 'http://127.0.0.1:5173',
+    launchOptions: process.env.PW_EXECUTABLE_PATH
+      ? { executablePath: process.env.PW_EXECUTABLE_PATH }
+      : undefined,
   },
   projects: [
     {
@@ -25,6 +28,9 @@ export default defineConfig({
         // The test server binds IPv4; avoid another local app on IPv6 loopback.
         launchOptions: {
           args: ['--host-resolver-rules=MAP ua.localhost 127.0.0.1'],
+          ...(process.env.PW_EXECUTABLE_PATH
+            ? { executablePath: process.env.PW_EXECUTABLE_PATH }
+            : {}),
         },
       },
     },

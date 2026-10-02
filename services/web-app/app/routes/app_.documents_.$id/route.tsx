@@ -93,6 +93,7 @@ import {
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
 import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
+import { DbqLayout } from './_components/dbq-layout';
 import { AssignmentPromptPanel } from './assignment-prompt-panel';
 import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
 import { TeacherDocumentNavigation } from '~/components/teacher-document-navigation';
@@ -108,6 +109,14 @@ const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
 const GRADED_UNSUBMIT_TOOLTIP =
   'This submission has been graded and can no longer be unsubmitted.';
+
+function titleCase(value: string) {
+  return value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 function escapePrintHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => {
@@ -274,6 +283,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       html: true,
       text: true,
       group: { select: { id: true } },
+      apHistorySnapshot: true,
       assignmentType: {
         select: {
           id: true,
@@ -563,6 +573,82 @@ export function getGenericAssignmentPromptForEditor<T>(
     : null;
 }
 
+export function shouldRenderDbqWorkspace(
+  apHistorySnapshot: ApHistorySnapshot | null
+): apHistorySnapshot is ApHistorySnapshot & { essayType: 'dbq' } {
+  return (
+    apHistorySnapshot?.essayType === 'dbq' &&
+    apHistorySnapshot.sources.length > 0
+  );
+}
+
+export function AssignmentPromptStrip({
+  label,
+  title,
+  prompt,
+  metadata = [],
+}: {
+  label?: string | null;
+  title?: string | null;
+  prompt: string;
+  metadata?: string[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const normalizedPrompt = prompt.trim();
+  const canExpand =
+    normalizedPrompt.length > 180 || normalizedPrompt.includes('\n');
+
+  return (
+    <section
+      data-testid="assignment-prompt-strip"
+      className="border-b bg-amber-50/80 px-3 py-2"
+    >
+      <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="info-outlined" size="sm">
+            Assignment Prompt
+          </Badge>
+          {label ? (
+            <span className="text-xs font-semibold uppercase text-muted-foreground">
+              {label}
+            </span>
+          ) : null}
+          {title ? (
+            <span className="text-sm font-medium text-foreground">{title}</span>
+          ) : null}
+          {metadata.map((item) => (
+            <Badge key={item} variant="outline" size="sm">
+              {item}
+            </Badge>
+          ))}
+        </div>
+        <div className="flex items-start gap-2">
+          <p
+            className={
+              expanded
+                ? 'min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-foreground/90'
+                : 'line-clamp-2 min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-foreground/90'
+            }
+          >
+            {normalizedPrompt}
+          </p>
+          {canExpand ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 px-2 text-xs"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? 'Show less' : 'Show full prompt'}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /**
  * Whether the tutor affordance (tab + panel) should be shown for a document.
  * A document with no linked assignment (e.g. free writing) keeps today's
@@ -613,7 +699,13 @@ export default function Route() {
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
   const assignment = data.doc.assignment;
-  const apHistorySnapshot = getRenderableApHistorySnapshot(assignment);
+  // A student practice document carries its own snapshot; a teacher-assigned
+  // document inherits it from the assignment.
+  const apHistorySnapshot = getRenderableApHistorySnapshot({
+    apHistorySnapshot:
+      data.doc.apHistorySnapshot ?? assignment?.apHistorySnapshot,
+  });
+  const showDbqWorkspace = shouldRenderDbqWorkspace(apHistorySnapshot);
   const editorAssignmentPrompt = getGenericAssignmentPromptForEditor(
     assignment,
     apHistorySnapshot
@@ -721,6 +813,14 @@ export default function Route() {
       ? allComments
       : activeComments
     : activeComments;
+  const apHistoryTimingLabel = apHistorySnapshot
+    ? apHistorySnapshot.timing.mode === 'timed'
+      ? `Timed · ${apHistorySnapshot.timing.durationMinutes}m`
+      : 'Untimed'
+    : null;
+  const apHistoryContextLabel = apHistorySnapshot
+    ? `${apHistorySnapshot.essayType.toUpperCase()} · ${apHistorySnapshot.course.toUpperCase()}`
+    : null;
   const studentName =
     data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
@@ -831,7 +931,7 @@ export default function Route() {
   return (
     <>
       <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
-        {apHistorySnapshot ? (
+        {apHistorySnapshot && !showDbqWorkspace ? (
           <ApHistoryAssignmentPanel snapshot={apHistorySnapshot} />
         ) : null}
         <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
@@ -866,6 +966,14 @@ export default function Route() {
                     : undefined
                 }
               />
+              {apHistoryContextLabel ? (
+                <div
+                  data-testid="ap-history-context-pill"
+                  className="hidden h-8 shrink-0 items-center rounded-full border bg-white px-2.5 text-xs font-semibold text-muted-foreground md:flex"
+                >
+                  {apHistoryContextLabel}
+                </div>
+              ) : null}
             </div>
           </div>
           {hasAnySubmissionRecord && (
@@ -1039,6 +1147,15 @@ export default function Route() {
             />
           ) : null}
           <div className="ml-auto flex items-center gap-4">
+            {apHistoryTimingLabel ? (
+              <div
+                data-testid="ap-history-timing-pill"
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground"
+              >
+                <Clock className="h-3.5 w-3.5" />
+                <span>{apHistoryTimingLabel}</span>
+              </div>
+            ) : null}
             {!isViewingAsTeacher && (
               <>
                 {cannotSubmitEmpty && !isSubmitting ? (
@@ -1129,6 +1246,87 @@ export default function Route() {
             />
           </div>
         </nav>
+        {showDbqWorkspace && apHistorySnapshot ? (
+          <>
+            <AssignmentPromptStrip
+              label={`${apHistorySnapshot.essayType.toUpperCase()} · ${apHistorySnapshot.course.toUpperCase()}`}
+              title={assignment?.title?.trim() || 'AP History Essay'}
+              prompt={apHistorySnapshot.prompt}
+              metadata={[
+                `Period ${apHistorySnapshot.periodNumber}`,
+                titleCase(apHistorySnapshot.reasoningSkill),
+                `${apHistorySnapshot.sources.length} ${
+                  apHistorySnapshot.sources.length === 1 ? 'source' : 'sources'
+                }`,
+              ]}
+            />
+            <CommentsSelectionProvider>
+              <DbqLayout
+                snapshot={apHistorySnapshot}
+                tutor={
+                  tutorEnabled ? (
+                    <Tutor
+                      className="h-full border-r-0 md:w-full"
+                      docId={data.doc.id}
+                      cms={(tutor.cms ?? data.currentCms) as any}
+                      cmsIdx={cmsIdx}
+                      nextCmId={data.nextCmId}
+                      hasPreviousCms={tutorHasPreviousCms}
+                      isSessionLocked={auth.isLocked}
+                      beforeRespond={handleTutorBeforeRespond}
+                      onCmsUpdate={tutor.updateCms}
+                      getCurrentDocumentText={() =>
+                        editorBridgeRef.current?.getContent().text ??
+                        data.doc.text ??
+                        ''
+                      }
+                    />
+                  ) : (
+                    <AssignmentPromptPanel assignment={editorAssignmentPrompt} />
+                  )
+                }
+                editor={
+                  <DocumentEditor
+                    docId={data.doc.id}
+                    assignment={editorAssignmentPrompt}
+                    serverHtml={editorServerHtml}
+                    serverText={editorServerText}
+                    serverUpdatedAt={data.doc.updatedAt}
+                    initialRevision={data.doc.revision}
+                    isEditable={isEditorEditable}
+                    canUploadImages={data.canUploadImages}
+                    onBridgeReady={handleEditorBridgeReady}
+                    onSyncStatusChange={setSyncStatus}
+                    onSubmittableContentChange={handleSubmittableContentChange}
+                    onCommentCreated={(c) => commentsState.addComment(c as any)}
+                  />
+                }
+                comments={
+                  <TeacherPasteReport
+                    key={data.doc.id}
+                    enabled={isViewingAsTeacher}
+                    documentId={data.doc.id}
+                    contentRoot={editorRoot}
+                    onSelectEvent={() => {
+                      if (isMobile) changeTab('editor');
+                    }}
+                  >
+                    <Comments
+                      className="md:w-full"
+                      showCollapsibleHeader={!isViewingAsTeacher}
+                      comments={visibleComments as any}
+                      readOnly={!isDocumentEditable}
+                      onCommentRemoved={commentsState.removeComment}
+                      onResponseAdded={commentsState.addResponse}
+                      autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
+                    />
+                  </TeacherPasteReport>
+                }
+              />
+            </CommentsSelectionProvider>
+          </>
+        ) : (
+          <>
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
           <TabsList className="w-full rounded-none border-b px-3">
             {tutorEnabled ? (
@@ -1216,6 +1414,8 @@ export default function Route() {
             )}
           </div>
         </CommentsSelectionProvider>
+          </>
+        )}
       </main>
       <Dialog
         open={isFinalizeDialogOpen}

@@ -407,6 +407,7 @@ describe('class detail loader document visibility', () => {
         offersParagraphModes: false,
       },
     ]);
+    expect(data.apHistoryAssignmentTypeId).toBe('ap-history-type');
   });
 
   test('loads compact cross-class deployment details for assignments', async () => {
@@ -629,7 +630,7 @@ describe('class detail loader document visibility', () => {
 
     expect(response.data).toMatchObject({
       success: false,
-      message: 'Choose an APUSH prompt from the library first.',
+      message: 'Choose an AP History prompt from the library first.',
     });
     expect(response.init).toMatchObject({ status: 400 });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
@@ -667,7 +668,7 @@ describe('class detail loader document visibility', () => {
 
     expect(response.data).toMatchObject({
       success: false,
-      message: 'Choose an APUSH prompt from the library first.',
+      message: 'Choose an AP History prompt from the library first.',
     });
     expect(response.init).toMatchObject({ status: 400 });
     expect(prisma.assignment.update).not.toHaveBeenCalled();

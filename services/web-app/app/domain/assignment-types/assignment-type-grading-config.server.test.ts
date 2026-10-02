@@ -429,4 +429,41 @@ describe('September 14 Daily Pages library revision', () => {
     expect(result).toEqual({ overallScore: 55, score: '55/90', numericPercentage: null, letterGrade: null });
   });
 
+  test('existing recorded scores remain unchanged when assignment is pinned to a prior revision', async () => {
+    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
+    const { rubricScaleGradeFieldsFromScores } = await import('~/domain/grading/recorded-grade');
+    // Current library (e.g., post-Sep 14/16) is 90-point variant in this scenario.
+    const current = structuredClone(STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!);
+    current.scoringScale.maxScore = 90;
+    current.scoringScale.compositeMax = 90;
+    current.rubric.categories[0].bands = current.rubric.categories[0].bands!.map(b => ({ ...b, min: b.min * 3, max: b.max * 3 }));
+    // Prior revision (e.g., pre-Sep 14/16) is 30-point with original bands.
+    const prior = structuredClone(STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!);
+    // Mock: assignment type points at current library revision…
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'daily-pages-pinned-grade',
+      title: 'Daily Pages',
+      kind: 'daily_pages',
+      rubric: { name: current.name, schemaJson: current, currentRevision: { version: 6, rubricName: current.name, schemaJson: current } },
+      gradingAssistantVersion: 6,
+    });
+    // …but the specific assignment is pinned to the prior revision.
+    prisma.assignment.findUnique.mockResolvedValue({
+      assignmentTypeId: 'daily-pages-pinned-grade',
+      rubricRevision: { version: 5, rubricName: prior.name, schemaJson: prior },
+    });
+    const resolved = await resolveAssignmentTypeGradingConfig({
+      assignmentTypeId: 'daily-pages-pinned-grade',
+      assignmentId: 'historical-assignment',
+    });
+    // Teacher's recorded score (e.g., 18/30) should compute identically after the pin.
+    const grade = rubricScaleGradeFieldsFromScores({
+      categories: resolved.rubricCategories,
+      minScore: resolved.minScore,
+      maxScore: resolved.maxScore,
+      scoringType: resolved.scoringType,
+      rubricScores: { engagement_with_prompt: { score: 18 } },
+    });
+    expect(grade).toEqual({ overallScore: 18, score: '18/30', numericPercentage: null, letterGrade: null });
+  });
 });

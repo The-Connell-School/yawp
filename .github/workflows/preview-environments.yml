@@ -8,7 +8,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, closed]
   workflow_dispatch:
   schedule:
-    - cron: '17 */6 * * *'
+    - cron: '27 5 * * *'
 
 concurrency:
   group: preview-${{ github.event.pull_request.number || github.run_id }}
@@ -44,8 +44,8 @@ jobs:
       PREVIEW_MAX_RESIDENT: ${{ vars.PREVIEW_MAX_RESIDENT || vars.PREVIEW_MAX_ENVS || '20' }}
       PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '4' }}
       PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}
-      PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '48' }}
-      PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '48' }}
+      PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '24' }}
+      PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '24' }}
       PREVIEW_KEEP_AWAKE: ${{ contains(github.event.pull_request.labels.*.name, 'preview:keep-awake') }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
       PREVIEW_DATA_MODE: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'sanitized-production' || vars.PREVIEW_DATA_MODE || 'seed' }}
@@ -156,10 +156,11 @@ jobs:
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           # Publish the marker before the source path. Capacity reconciliation ignores
           # fresh markers, so it cannot evict a tree while rsync or lock admission runs.
-          printf -v setup_command 'mkdir -p %q %q && touch %q %q && mkdir -p %q %q && if [ -f %q ]; then docker compose -p %q -f %q stop; fi' \
+          printf -v setup_command 'set -euo pipefail; mkdir -p %q %q && touch %q %q && mkdir -p %q %q && if [ -f %q ]; then docker compose -p %q -f %q stop || { (docker ps -aq --filter label=com.docker.compose.project=%q | xargs -r docker rm -f >/dev/null 2>&1 || true); rm -f -- %q || true; }; fi' \
             "$inflight_dir" "$quarantine_dir" "$inflight_marker" "$quarantine_marker" \
             "$remote_source" "$remote_control/scripts/preview" \
-            "$compose_file" "$compose_project" "$compose_file"
+            "$compose_file" "$compose_project" "$compose_file" \
+            "$compose_project" "$compose_file"
           ssh -i ~/.ssh/preview_key "$ssh_target" \
             "flock -w 900 $(shell_quote "$lock_file") bash -lc $(shell_quote "$setup_command")"
           rsync -az --delete \
@@ -253,7 +254,7 @@ jobs:
           running="$(awk -F= '/^CAP_RUNNING=/{print $2}' /tmp/preview-deploy.log | tail -1)"
 
           for pr in $slept; do
-            gh pr comment "$pr" --body "Preview sleeping after 48 hours of inactivity. State and access code remain intact. Open its one-click URL, or revisit from an already authorized browser, to wake it automatically; the first request can take a minute." || true
+            gh pr comment "$pr" --body "Preview sleeping after 24 hours of inactivity. State and access code remain intact. Open its one-click URL, or revisit from an already authorized browser, to wake it automatically; the first request can take a minute." || true
           done
           for pr in $evicted; do
             gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit or add \`preview:keep-awake\` to rebuild it." || true
@@ -467,8 +468,8 @@ jobs:
       PREVIEW_MAX_RESIDENT: ${{ vars.PREVIEW_MAX_RESIDENT || vars.PREVIEW_MAX_ENVS || '20' }}
       PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '4' }}
       PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}
-      PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '48' }}
-      PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '48' }}
+      PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '24' }}
+      PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '24' }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
     steps:
       - name: Check preview cleanup configuration
@@ -529,7 +530,7 @@ jobs:
           resident="$(awk -F= '/^CAP_RESIDENT=/{print $2}' /tmp/reconcile.log | tail -1)"
 
           for pr in $slept; do
-            gh pr comment "$pr" --body "Preview sleeping after 48 hours of inactivity. State and access code remain intact. Open its one-click URL, or revisit from an already authorized browser, to wake it automatically; the first request can take a minute." || true
+            gh pr comment "$pr" --body "Preview sleeping after 24 hours of inactivity. State and access code remain intact. Open its one-click URL, or revisit from an already authorized browser, to wake it automatically; the first request can take a minute." || true
           done
           for pr in $evicted; do
             gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit or add \`preview:keep-awake\` to rebuild it." || true

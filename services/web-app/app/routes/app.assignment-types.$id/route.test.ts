@@ -25,6 +25,7 @@ const prisma = {
   },
   apHistoryPromptLibraryEntry: {
     findMany: mock(),
+    findFirst: mock(),
   },
   savedThesisPrompt: {
     findMany: mock(),
@@ -39,6 +40,7 @@ const requireMembership = mock();
 const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
 const getAvailableAssignmentTypesForScopes = mock();
+const isAssignmentTypeAvailableForAnyScope = mock();
 
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
@@ -61,7 +63,9 @@ mock.module('~/utils/toast.server', () => ({
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
   ...assignmentTypeAccessActual,
+  AssignmentTypeAccessScope: undefined,
   getAvailableAssignmentTypesForScopes,
+  isAssignmentTypeAvailableForAnyScope,
 }));
 
 const { action, loader } = await import('./route');
@@ -100,9 +104,7 @@ function mockActionAssignmentTypeAvailable({
   systemKey = null as string | null,
 } = {}) {
   prisma.assignmentType.findFirst.mockImplementation(async (args: any) =>
-    args.select?.systemKey !== undefined
-      ? { id, systemKey }
-      : { id }
+    args.select?.systemKey !== undefined ? { id, systemKey } : { id }
   );
 }
 
@@ -128,6 +130,7 @@ describe('app.assignment-types.$id action', () => {
     requireMembership.mockReset();
     createDocumentForAssignmentType.mockReset();
     redirectWithToast.mockReset();
+    isAssignmentTypeAvailableForAnyScope.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -141,6 +144,25 @@ describe('app.assignment-types.$id action', () => {
     ]);
     prisma.school.findMany.mockResolvedValue([]);
     prisma.orgMembership.findMany.mockResolvedValue([]);
+    isAssignmentTypeAvailableForAnyScope.mockImplementation(
+      async ({
+        assignmentTypeId,
+      }: {
+        assignmentTypeId: string;
+        scopes: unknown[];
+      }) => {
+        const assignmentType = await prisma.assignmentType.findFirst({
+          where: { id: assignmentTypeId, archivedAt: null },
+          select: { id: true },
+        });
+        if (!assignmentType) return false;
+        const assignments = await prisma.organizationAssignmentType.findMany();
+        return assignments.some(
+          (assignment: { assignmentTypeId: string }) =>
+            assignment.assignmentTypeId === assignmentTypeId
+        );
+      }
+    );
     mockActionAssignmentTypeAvailable();
     createDocumentForAssignmentType.mockResolvedValue({ documentId: 'doc-1' });
     redirectWithToast.mockImplementation((url, toast) => ({

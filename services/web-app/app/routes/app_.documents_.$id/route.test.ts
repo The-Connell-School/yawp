@@ -98,14 +98,17 @@ mock.module('./hooks/use-document-submit', () => ({
 }));
 
 const {
+  AssignmentPromptStrip,
   getGenericAssignmentPromptForEditor,
   getRenderableApHistorySnapshot,
   isTutorEnabledForAssignment,
   loader,
+  shouldRenderDbqWorkspace,
   shouldShowGenericAssignmentPrompt,
 } = await import('./route');
 const { ApHistoryAssignmentPanel } =
   await import('./ap-history-assignment-panel');
+const { DbqLayout } = await import('./_components/dbq-layout');
 
 const assignmentModules = [
   { id: 'module-prewriting', position: 1 },
@@ -622,15 +625,83 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
     ).toBe(assignment);
   });
 
-  test('renders AP History source content inside a bounded scroll area', () => {
+  test('uses the DBQ workspace only for DBQ snapshots with source documents', () => {
+    const leqSnapshot: ApHistorySnapshot = {
+      ...apHistorySnapshot,
+      essayType: 'leq',
+      sources: [],
+      rubric: {
+        rubricId: 'ap-history-leq-2026',
+        totalPoints: 6,
+      },
+    };
+
+    expect(shouldRenderDbqWorkspace(apHistorySnapshot)).toBe(true);
+    expect(
+      shouldRenderDbqWorkspace({ ...apHistorySnapshot, sources: [] })
+    ).toBe(false);
+    expect(shouldRenderDbqWorkspace(leqSnapshot)).toBe(false);
+    expect(shouldRenderDbqWorkspace(null)).toBe(false);
+  });
+
+  test('maps DBQ snapshots into the student workspace with the production editor slot', () => {
+    const html = renderToStaticMarkup(
+      createElement(DbqLayout, {
+        snapshot: apHistorySnapshot,
+        tutor: createElement('div', {}, 'Production tutor'),
+        editor: createElement('div', {}, 'Production document editor'),
+        comments: createElement('div', {}, 'Production comments'),
+      })
+    );
+
+    expect(html).not.toContain('DBQ · APUSH');
+    expect(html).not.toContain('Evaluate the extent');
+    expect(html).toContain('Source 1');
+    expect(html).toContain('Resolved, that');
+    expect(html).toContain('Production tutor');
+    expect(html).toContain('Production document editor');
+    expect(html).toContain('Document resources');
+    expect(html).toContain('Resize document sidebar');
+    expect(html).toContain('Documents');
+    expect(html).toContain('Comments');
+    expect(html).not.toContain('Production comments');
+    expect(html).not.toContain('Your essay');
+    expect(html).not.toContain('Cite [Doc');
+    expect(html).not.toContain('Planning');
+    expect(html).not.toContain('prototype');
+    expect(html).not.toContain('No persistence');
+  });
+
+  test('renders the AP History prompt in a shared compact assignment strip', () => {
+    const html = renderToStaticMarkup(
+      createElement(AssignmentPromptStrip, {
+        label: 'DBQ · APUSH',
+        title: 'AP History Essay',
+        prompt: apHistorySnapshot.prompt,
+        metadata: ['Period 3', 'Causation', '1 source'],
+      })
+    );
+
+    expect(html).toContain('data-testid="assignment-prompt-strip"');
+    expect(html).toContain('Assignment Prompt');
+    expect(html).toContain('DBQ · APUSH');
+    expect(html).toContain('AP History Essay');
+    expect(html).toContain('Evaluate the extent');
+    expect(html).toContain('Period 3');
+    expect(html).toContain('Causation');
+    expect(html).toContain('1 source');
+  });
+
+  test('renders AP History sources in a click-through carousel', () => {
     const html = renderToStaticMarkup(
       createElement(ApHistoryAssignmentPanel, { snapshot: apHistorySnapshot })
     );
 
     expect(html).toContain('Evaluate the extent');
     expect(html).toContain('Source 1');
-    expect(html).toContain('max-h-');
-    expect(html).toContain('overflow-y-auto');
+    expect(html).toContain('aria-label="Previous source"');
+    expect(html).toContain('aria-label="Next source"');
+    expect(html).toContain('Source 1 of 1');
   });
 });
 
