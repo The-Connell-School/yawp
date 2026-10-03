@@ -1692,6 +1692,31 @@ model LlmLog {
   @@index([provider])
 }
 
+/// Token-bucket state for rate limiting. One row per (subject scope + policy key).
+model RateLimitBucket {
+  key           String   @id
+  tokens        Int      @default(0)
+  capacity      Int
+  refillPerMs   Float    @default(0) // tokens per millisecond
+  lastRefillAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+}
+
+/// Append-only decision log for rate limit admissions/denials.
+model RateLimitDecision {
+  id                String   @id @default(cuid())
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  route             String
+  feature           String?
+  scope             String // 'user' | 'org' | 'ip' | 'global'
+  decision          String // 'ALLOWED' | 'DENIED_USER' | 'DENIED_ORG' | 'DENIED_IP' | 'DENIED_GLOBAL' | 'DENIED_PAYLOAD' | 'DENIED_CONCURRENCY'
+  subjectKey        String
+  retryAfterSeconds Int?
+  metadata          Json?
+  @@index([route, createdAt(sort: Desc)])
+  @@index([scope, createdAt(sort: Desc)])
+}
+
 /// A single student's persisted response to one practice prompt, with the
 /// tutor feedback it produced. Snapshots the prompt text so history survives
 /// lesson-content changes.

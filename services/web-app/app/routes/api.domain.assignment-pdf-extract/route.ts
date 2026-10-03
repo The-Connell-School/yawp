@@ -4,8 +4,10 @@ import { anthropic } from '~/services/anthropic';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
+import { enforcePdfExtractorLimits, rateLimitedJson, withAdvisorySingleFlight } from '~/utils/rate-limit.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
 
-const MAX_PDF_BYTES = 10 * 1024 * 1024;
+const MAX_PDF_BYTES = RATE_LIMITS.pdfExtract.maxBytes;
 
 const ExtractedAssignmentSchema = z.object({
   title: z.string().trim().max(200).optional(),
@@ -54,6 +56,17 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       { status: 403 }
     );
+  }
+
+  {
+    const decision = await enforcePdfExtractorLimits({
+      membershipId: profile.id,
+      route: '/api/domain/assignment-pdf-extract',
+      feature: 'assignment-pdf-extract',
+    });
+    if (!decision.allowed) {
+      return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Please wait before extracting another PDF.');
+    }
   }
 
   const contentLength = Number(request.headers.get('content-length'));
@@ -159,7 +172,9 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   try {
-    const message = await anthropic.messages.create(
+    const message = await withAdvisorySingleFlight(
+      `pdf-extract:${profile.id}:assignment`,
+      () => anthropic.messages.create(
       {
         model,
         max_tokens: 1200,
@@ -190,7 +205,7 @@ export async function action({ request }: ActionFunctionArgs) {
         ],
       } as any,
       { signal: AbortSignal.timeout(30_000) }
-    );
+    ));
 
     const responseText = (message.content as any[])
       .map((part) => (part?.type === 'text' ? (part.text as string) : ''))

@@ -8,10 +8,11 @@ import {
 
 const originalWarn = console.warn;
 
-function request(address: string) {
+function request(clientIp: string, cloudFrontEdgeIp = '198.51.100.1') {
   return new Request('https://preview.yawp.school/auth/preview-access', {
     method: 'POST',
-    headers: { 'x-forwarded-for': `198.51.100.1, ${address}` },
+    // Behind CloudFront the last hop is the CloudFront edge; the real client is second-from-last.
+    headers: { 'x-forwarded-for': `${clientIp}, ${cloudFrontEdgeIp}` },
   });
 }
 

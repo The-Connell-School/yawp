@@ -440,6 +440,7 @@ export async function getOrCreateStudentPracticeSet(params: {
   lessonSlugs: string[];
   problemCount: number;
 }): Promise<MixedAssignedPracticeItem[]> {
+  const { withAdvisorySingleFlight } = await import('~/utils/rate-limit.server');
   const where = {
     classAssignmentId_membershipId: {
       classAssignmentId: params.classAssignmentId,
@@ -452,9 +453,12 @@ export async function getOrCreateStudentPracticeSet(params: {
     return existing.promptsJson as unknown as MixedAssignedPracticeItem[];
   }
 
-  const { items, source } = await buildMixedGeneratedPracticeSequence(
-    params.lessonSlugs,
-    params.problemCount
+  const { items, source } = await withAdvisorySingleFlight(
+    `practice-set:${params.classAssignmentId}:${params.membershipId}`,
+    () => buildMixedGeneratedPracticeSequence(
+      params.lessonSlugs,
+      params.problemCount
+    )
   );
 
   try {

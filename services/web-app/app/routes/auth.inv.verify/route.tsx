@@ -17,6 +17,8 @@ import {
 } from '~/utils/schemas/invitation';
 import type { OrgMembership } from '@app/prisma';
 import { normalizeEmail } from '~/utils/normalize-email';
+import { enforceUnauthByIpAndTarget, rateLimitedJson } from '~/utils/rate-limit.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
 
 const Schema = z.object({
   code: z.string().min(6).max(6),
@@ -35,6 +37,20 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const { target, type } = data;
   const normalizedTarget = normalizeEmail(target);
+  {
+    const cfg = RATE_LIMITS.unauth.verify;
+    const decision = await enforceUnauthByIpAndTarget({
+      request,
+      route: '/auth/inv/verify',
+      targetKey: `${type}:${normalizedTarget}`,
+      perIpPerMinute: cfg.perIpPerMinute,
+      perIpPerHour: cfg.perIpPerHour,
+      perTargetPerHour: cfg.perEmailPerHour,
+    });
+    if (!decision.allowed) {
+      return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Too many verification attempts. Please wait and try again.');
+    }
+  }
 
   const invitation = await prisma.invitation.findFirst({
     where: {

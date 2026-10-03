@@ -37,11 +37,14 @@ import {
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
+import { RATE_LIMITS } from '~/config/rate-limits';
+import { clampTutorMessage, enforceTutorLimits, rateLimitedJson, trimChatHistoryToBudget } from '~/utils/rate-limit.server';
+
 const POST = z.object({
-  response: z.string().min(1),
+  response: z.string().min(1).max(RATE_LIMITS.tutor.maxMessageChars),
   cmsId: z.string().min(1),
-  content: z.string().optional(),
-  llmRetry: z.enum(['fallback']).optional(),
+  content: z.string().max(RATE_LIMITS.tutor.maxMessageChars).optional(),
+  llmRetry: z.enum(['fallback']).optional(), // accepted but ignored
 });
 
 const errorResponse = (error: { message: string }) => {
@@ -114,6 +117,17 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const { error, data } = await parseFormData(request, POST);
     if (error) return validationError(error);
+    // Enforce rate limits (per-student + global)
+    {
+      const decision = await enforceTutorLimits({
+        request,
+        membershipId: profile.id,
+        route: '/api/domain/tutor-response',
+      });
+      if (!decision.allowed) {
+        return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Give me a moment — try again soon.');
+      }
+    }
 
     // Scoped to the caller's OWN session, not merely authenticated: driving the
     // tutor bills a completion and writes two messages (one carrying the document
@@ -187,6 +201,12 @@ export async function action({ request }: ActionFunctionArgs) {
         { error: 'No course module session found' },
         { status: 404 }
       );
+    }
+
+    // Per-session turn cap
+    const userTurnCount = cms.messages.filter((m) => m.agent === AgentType.User).length;
+    if (userTurnCount >= RATE_LIMITS.tutor.maxSessionTurns) {
+      return rateLimitedJson('user', 3600, 'This tutor session has reached its turn limit.');
     }
 
     if (cms.document?.assignment?.tutorEnabled === false) {
@@ -280,7 +300,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const documentSource =
       data.content === undefined ? 'db-document-text' : 'client-content';
-    const documentText = data.content ?? cms.document.text ?? '';
+    const documentText = clampTutorMessage(data.content ?? cms.document.text ?? '');
     const documentContext = buildAiTextContextAudit({
       documentSource,
       documentId: cms.document.id,
@@ -318,7 +338,7 @@ export async function action({ request }: ActionFunctionArgs) {
       ? [{ role: AgentType.User, content: assignmentContext }]
       : [];
 
-    const messages: { role: AgentType; content: string; name?: string }[] = [
+    let messages: { role: AgentType; content: string; name?: string }[] = [
       {
         role: AgentType.User,
         content: `
@@ -340,12 +360,15 @@ export async function action({ request }: ActionFunctionArgs) {
         },
         {
           role: AgentType.User,
-          content: data.response,
+          content: clampTutorMessage(data.response),
         },
       ]);
+    // Bound the transcript we send to the model
+    messages = trimChatHistoryToBudget(messages, RATE_LIMITS.tutor.transcriptCharBudget);
 
     let completion: string;
-    const forceFallback = data.llmRetry === 'fallback';
+    // Ignore client-controlled llmRetry=fallback; server decides when to fall back.
+    const forceFallback = false;
     try {
       completion = await getLLMCompletion({
         model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
@@ -353,7 +376,7 @@ export async function action({ request }: ActionFunctionArgs) {
         system,
         maxTokens: 500,
         forceFallback,
-        signalFallbackRetry: !forceFallback,
+        signalFallbackRetry: true,
         metadata: {
           feature: 'tutor',
           kind: 'assignment-module-tutor',
