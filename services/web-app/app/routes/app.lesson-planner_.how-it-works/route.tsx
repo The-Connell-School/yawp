@@ -158,6 +158,72 @@ function Ticks({ items }: { items: React.ReactNode[] }) {
   );
 }
 
+/** The quote both versions on the hero slide are built on. */
+const CANDY_QUOTE = '“I shouldn’t ought to of let no stranger shoot my dog.”';
+
+/** A line from the novel, set apart from the student’s own words. */
+function Quoted({ children }: { children: React.ReactNode }) {
+  return <span className="font-serif italic text-primary">{children}</span>;
+}
+
+/**
+ * The hero: a slide from a planned lesson, drawn rather than screenshotted so
+ * the quote reads as a quote. Two student paragraphs use the same line from
+ * the novel; only one of them does anything with it.
+ */
+function QuoteSlide() {
+  const versions = [
+    {
+      label: 'Version A',
+      verdict: 'Drops the quote in and moves on',
+      body: (
+        <>
+          Candy is sad about his dog. Steinbeck writes,{' '}
+          <Quoted>{CANDY_QUOTE}</Quoted> This shows Candy feels bad.
+        </>
+      ),
+    },
+    {
+      label: 'Version B',
+      verdict: 'Reads one word of it closely',
+      body: (
+        <>
+          Candy says, <Quoted>{CANDY_QUOTE}</Quoted> His regret is that he let a
+          stranger do it. The word “stranger” carries the weight: the dog was
+          his responsibility, and he handed it away.
+        </>
+      ),
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg bg-secondary/40 p-4 sm:p-5">
+      <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        Slide 4 of 8 · Of Mice and Men, chapter 3
+      </p>
+      <p className="text-lg font-bold leading-snug sm:text-xl">
+        Same quote. Which one taught you something?
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {versions.map((version) => (
+          <div
+            key={version.label}
+            className="flex flex-col gap-1.5 rounded-md border bg-background p-3"
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+              {version.label}
+            </p>
+            <p className="text-[13px] leading-relaxed">{version.body}</p>
+            <p className="mt-auto border-t border-dotted pt-1.5 text-[11px] text-muted-foreground">
+              {version.verdict}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const PERIOD = [
   { minutes: 5, what: 'Class Starter' },
   { minutes: 10, what: 'Mini-lesson: the same quote used two ways' },
@@ -168,8 +234,9 @@ const PERIOD = [
 ];
 
 const WILL = [
+  'Work with you. It asks about your class, and you make the calls on what’s best for it.',
   'Plan lessons and full units for your classes.',
-  'Write the slides, handouts, answer keys and exit tickets.',
+  'Write the slides, handouts, answer keys, and exit tickets.',
   'Use how your class has been scoring in YAWP! to aim the lesson.',
   'Leave everything for you to edit before students see it.',
 ];
@@ -178,8 +245,8 @@ const WONT = [
   'Assign anything to students. Only you can.',
   'Talk to students. It’s for teachers only.',
   'Read students’ essays. It sees how a class scored, not what students wrote.',
-  'Make up class data, grades or student names.',
-  'Cite a study, statistic or standard it isn’t sure of.',
+  'Make up class data, grades, or student names.',
+  'Cite a study, statistic, or standard it isn’t sure of.',
   'Share your lessons with other teachers. They stay in your account.',
 ];
 
@@ -202,24 +269,16 @@ export default function LessonPlannerHowItWorksRoute() {
             <Eyebrow>See how it works</Eyebrow>
             <h1 className="text-3xl font-bold leading-tight md:text-5xl">
               Tomorrow’s lesson, planned for{' '}
-              <span className="text-primary">
-                the class you actually teach.
-              </span>
+              <span className="text-primary">each class you teach.</span>
             </h1>
             <p className="max-w-prose text-lg leading-relaxed text-muted-foreground">
               Describe your lesson in your own words. The planner writes a timed
-              plan with the slides, handouts and exit ticket already made.
+              plan with the slides, handouts, and exit ticket already made.
             </p>
           </div>
           <figure className="flex flex-col items-center gap-2">
-            <div className="rotate-1 rounded-2xl border bg-background p-2 shadow-lg">
-              <img
-                src={`${MEDIA}/hero.jpg`}
-                alt="A projected slide titled ‘Same quote. Which one taught you something?’ comparing two versions of a sentence about Candy’s dog in Of Mice and Men."
-                width={1120}
-                height={717}
-                className="block h-auto w-full rounded-lg"
-              />
+            <div className="w-full rotate-1 rounded-2xl border bg-background p-2 shadow-lg">
+              <QuoteSlide />
             </div>
             <figcaption className="text-xs text-muted-foreground">
               From a deck the planner built for an Of Mice and Men lesson
@@ -229,8 +288,8 @@ export default function LessonPlannerHowItWorksRoute() {
 
         <section aria-labelledby="guide-start" className="flex flex-col gap-8">
           <div className="flex flex-col gap-3">
-            <Eyebrow>Where it lives</Eyebrow>
-            <H2 id="guide-start">In the sidebar, right under Reporter</H2>
+            <Eyebrow>Easy to start</Eyebrow>
+            <H2 id="guide-start">Start with what you’re teaching</H2>
             <Copy>
               Open <strong className="text-foreground">Lesson Planner</strong>{' '}
               and there is one question on the page:{' '}
@@ -265,8 +324,10 @@ export default function LessonPlannerHowItWorksRoute() {
 
         <section aria-labelledby="guide-plan" className="flex flex-col gap-10">
           <div className="flex flex-col gap-3">
-            <Eyebrow>For teachers</Eyebrow>
-            <H2 id="guide-plan">From one sentence to a timed lesson plan</H2>
+            <Eyebrow>The plan</Eyebrow>
+            <H2 id="guide-plan">
+              Tailor the lesson plan to your specific class
+            </H2>
           </div>
 
           <Row
@@ -428,7 +489,7 @@ export default function LessonPlannerHowItWorksRoute() {
             <Copy>
               Tap <strong className="text-foreground">Add to stack</strong> on
               the pieces you want to keep. The stack puts the plan, handouts,
-              answer key and deck in lesson order, ready to print or save as a
+              answer key, and deck in lesson order, ready to print or save as a
               PDF.
             </Copy>
           </div>
