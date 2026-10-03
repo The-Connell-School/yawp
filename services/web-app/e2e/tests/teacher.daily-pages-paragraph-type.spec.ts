@@ -38,6 +38,34 @@ test.describe.serial('Paragraph type at assignment creation', () => {
     await expect(page.getByText(/Position-Reason-Test/).first()).toBeVisible();
   });
 
+  /**
+   * A teacher testing one type end to end starts a document that practices
+   * it: New → Document asks which type, and the document is named for it.
+   */
+  test('New Document asks which paragraph type to practice', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+    );
+
+    await page.getByRole('button', { name: /^New/ }).click();
+    await page.getByRole('menuitem', { name: 'Document' }).click();
+    await expect(
+      page.getByRole('menuitem', { name: 'Any kind of paragraph' })
+    ).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Analyze' })).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Argue a position' }).click();
+
+    await page.waitForURL(/\/app\/documents\//);
+    await expect(page.getByTestId('document-title-input')).toHaveValue(
+      'Argue a position'
+    );
+  });
+
   test('Class Starter does not offer it', async ({
     page,
     e2eContext,

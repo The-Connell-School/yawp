@@ -102,9 +102,10 @@ function withOrganizationAssignment(
 function mockActionAssignmentTypeAvailable({
   id = 'at-1',
   systemKey = null as string | null,
+  kind = null as string | null,
 } = {}) {
   prisma.assignmentType.findFirst.mockImplementation(async (args: any) =>
-    args.select?.systemKey !== undefined ? { id, systemKey } : { id }
+    args.select?.systemKey !== undefined ? { id, systemKey, kind } : { id }
   );
 }
 
@@ -211,11 +212,87 @@ describe('app.assignment-types.$id action', () => {
     });
     expect(prisma.assignmentType.findFirst).toHaveBeenNthCalledWith(2, {
       where: { archivedAt: null, id: 'at-1' },
-      select: { id: true, systemKey: true },
+      select: { id: true, systemKey: true, kind: true },
     });
     expect(createDocumentForAssignmentType).toHaveBeenCalledWith({
       membershipId: 'profile-1',
       assignmentTypeId: 'at-1',
+    });
+  });
+
+  /**
+   * A teacher testing Daily Pages names the paragraph type the document
+   * practices, so the tutor and the grader read it the way they would an
+   * assignment of that type.
+   */
+  describe('the paragraph type of a Daily Pages document', () => {
+    function postDocument(fields: Record<string, string>) {
+      const body = new FormData();
+      for (const [key, value] of Object.entries(fields)) body.set(key, value);
+      return action({
+        request: new Request('https://example.test/app/assignment-types/at-1', {
+          method: 'POST',
+          body,
+        }),
+        params: { id: 'at-1' },
+      } as never);
+    }
+
+    beforeEach(() => {
+      requireMembership.mockResolvedValue({
+        id: 'profile-1',
+        role: 'TEACHER',
+        organization: { id: 'org-1', name: 'Org' },
+      });
+    });
+
+    test('records the chosen type on the document', async () => {
+      mockActionAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      await postDocument({ paragraphMode: 'argue' });
+
+      expect(createDocumentForAssignmentType).toHaveBeenCalledWith({
+        membershipId: 'profile-1',
+        assignmentTypeId: 'at-1',
+        paragraphMode: 'argue',
+      });
+    });
+
+    test('records none for any kind of paragraph (preserves current behavior)', async () => {
+      mockActionAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      await postDocument({ paragraphMode: '' });
+
+      expect(createDocumentForAssignmentType).toHaveBeenCalledWith({
+        membershipId: 'profile-1',
+        assignmentTypeId: 'at-1',
+      });
+    });
+
+    test('refuses a type that is not switched on', async () => {
+      mockActionAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      const response = await postDocument({ paragraphMode: 'compare' });
+
+      expect(response as unknown).toEqual({
+        redirectedTo: '/app/assignment-types/at-1',
+        toast: {
+          type: 'error',
+          description: 'Paragraph type is not available.',
+        },
+      });
+      expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
+    });
+
+    test('ignores a type for an assignment type that takes none', async () => {
+      mockActionAssignmentTypeAvailable({ kind: 'class_starter' });
+
+      await postDocument({ paragraphMode: 'argue' });
+
+      expect(createDocumentForAssignmentType).toHaveBeenCalledWith({
+        membershipId: 'profile-1',
+        assignmentTypeId: 'at-1',
+      });
     });
   });
 

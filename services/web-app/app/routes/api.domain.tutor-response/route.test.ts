@@ -144,9 +144,12 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect((thrown as Response).status).toBe(403);
   });
 
-  async function tutorSystemTextFor(assignment: Record<string, unknown>) {
+  async function tutorSystemTextFor(
+    assignment: Record<string, unknown> | null,
+    documentOverrides: Record<string, unknown> = {}
+  ) {
     getLLMCompletion.mockResolvedValue('What is your claim about the text?');
-    mockCms({ assignment });
+    mockCms({ assignment, ...documentOverrides });
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       id: 'cms-1',
       messages: [],
@@ -183,6 +186,34 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect(systemText.indexOf('Coach the student.')).toBeLessThan(
       systemText.indexOf('PARAGRAPH TYPE: Analyze')
     );
+  });
+
+  /**
+   * A teacher's standalone Daily Pages document has no assignment, so the
+   * type it practices is recorded on the document itself.
+   */
+  test('layers the type of a standalone document onto the module tutor', async () => {
+    const systemText = await tutorSystemTextFor(null, {
+      paragraphMode: 'argue',
+    });
+
+    expect(systemText).toContain('PARAGRAPH TYPE: Argue a position');
+  });
+
+  test("prefers the assignment's type over the document's", async () => {
+    const systemText = await tutorSystemTextFor(
+      {
+        id: 'assignment-1',
+        title: 'Daily Pages',
+        prompt: 'Quote the line where her argument turns.',
+        tutorEnabled: true,
+        paragraphMode: 'analyze',
+      },
+      { paragraphMode: 'argue' }
+    );
+
+    expect(systemText).toContain('PARAGRAPH TYPE: Analyze');
+    expect(systemText).not.toContain('PARAGRAPH TYPE: Argue a position');
   });
 
   test('adds no paragraph-type layer when none was chosen', async () => {

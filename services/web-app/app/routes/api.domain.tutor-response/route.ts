@@ -167,6 +167,7 @@ export async function action({ request }: ActionFunctionArgs) {
 	          select: {
 	            id: true,
 	            text: true,
+	            paragraphMode: true,
 	            assignment: {
 	              select: {
 	                id: true,
@@ -273,7 +274,9 @@ export async function action({ request }: ActionFunctionArgs) {
           tutorInstructions: cms.assignmentModule.tutorInstructions,
           instructionTutorInstructions: instruction.tutorInstructions,
           paragraphModeInstructions: buildParagraphModeTutorInstructions(
-            cms.document?.assignment?.paragraphMode ?? null
+            cms.document?.assignment?.paragraphMode ??
+              cms.document?.paragraphMode ??
+              null
           ),
           moduleRubricGuidance,
         });

@@ -23,8 +23,17 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
+import {
+  PARAGRAPH_MODE_FIELD,
+  enabledParagraphModes,
+  offersParagraphModesForKind,
+  parseParagraphMode,
+} from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { useUser } from '~/hooks/useUser.js';
 import {
   createDocumentForAssignmentType,
@@ -613,7 +622,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           id: params.id,
           archivedAt: null,
         },
-        select: { id: true, systemKey: true },
+        select: { id: true, systemKey: true, kind: true },
       })
     : null;
 
@@ -638,11 +647,28 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
+  // A teacher testing Daily Pages names the paragraph type the document
+  // practices, so the tutor and grader read it as they would an assignment of
+  // that type. Blank is "any kind of paragraph", which changes nothing.
+  let paragraphMode: string | null = null;
+  if (offersParagraphModesForKind(assignmentType.kind)) {
+    const formData = await request.formData().catch(() => new FormData());
+    const parsed = parseParagraphMode(formData);
+    if (!parsed.success) {
+      return redirectWithToast(`/app/assignment-types/${params.id}`, {
+        type: 'error',
+        description: parsed.message,
+      });
+    }
+    paragraphMode = parsed.value;
+  }
+
   let documentId = '';
   try {
     const created = await createDocumentForAssignmentType({
       membershipId: profile.id,
       assignmentTypeId: assignmentType.id,
+      ...(paragraphMode ? { paragraphMode } : {}),
     });
     documentId = created.documentId;
   } catch (creationError) {
@@ -679,6 +705,13 @@ export default function AppAssignmentTypesIdRoute() {
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
+  const docParagraphModeRef = useRef<HTMLInputElement>(null);
+  const createDocument = (paragraphMode = '') => {
+    if (docParagraphModeRef.current) {
+      docParagraphModeRef.current.value = paragraphMode;
+    }
+    docFormRef.current?.requestSubmit();
+  };
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
   const [isPromptGeneratorOpen, setIsPromptGeneratorOpen] = useState(false);
   const [customEssayType, setCustomEssayType] =
@@ -726,7 +759,14 @@ export default function AppAssignmentTypesIdRoute() {
             <>
               {canCreateDirectDocument ? (
                 <>
-                  <Form method="post" ref={docFormRef} className="hidden" />
+                  <Form method="post" ref={docFormRef} className="hidden">
+                    <input
+                      ref={docParagraphModeRef}
+                      type="hidden"
+                      name={PARAGRAPH_MODE_FIELD}
+                      defaultValue=""
+                    />
+                  </Form>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button type="button" className="w-fit">
@@ -734,12 +774,40 @@ export default function AppAssignmentTypesIdRoute() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        disabled={!hasModules || isLoading}
-                        onSelect={() => docFormRef.current?.requestSubmit()}
-                      >
-                        Document
-                      </DropdownMenuItem>
+                      {data.assignmentTypeOffersParagraphModes ? (
+                        // Daily Pages: a test document names the paragraph
+                        // type it practices, so the tutor and grader read it
+                        // as they would an assignment of that type.
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger
+                            disabled={!hasModules || isLoading}
+                          >
+                            Document
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent>
+                            <DropdownMenuItem
+                              onSelect={() => createDocument('')}
+                            >
+                              Any kind of paragraph
+                            </DropdownMenuItem>
+                            {enabledParagraphModes().map((mode) => (
+                              <DropdownMenuItem
+                                key={mode.key}
+                                onSelect={() => createDocument(mode.key)}
+                              >
+                                {mode.label}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      ) : (
+                        <DropdownMenuItem
+                          disabled={!hasModules || isLoading}
+                          onSelect={() => createDocument()}
+                        >
+                          Document
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
                         disabled={data.teacherClasses.length === 0}
                         onSelect={() => {

@@ -824,6 +824,11 @@ model Document {
   assignment               Assignment?               @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   classAssignmentId        String?
   classAssignment          ClassAssignment?          @relation(fields: [classAssignmentId], references: [id], onDelete: SetNull)
+  /// The Daily Pages paragraph type a standalone document practices (analyze,
+  /// argue, …), chosen by a teacher at New → Document so the tutor and grader
+  /// read it as they would an assignment of that type. A document written for
+  /// an assignment takes the assignment's type instead. Null means no type.
+  paragraphMode            String?
   assignmentModuleSessions AssignmentModuleSession[]
   comments                 DocumentComment[]
   writeJournals            DocumentWriteJournal[]

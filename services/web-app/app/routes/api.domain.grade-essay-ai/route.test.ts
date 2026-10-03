@@ -2094,7 +2094,9 @@ describe('api.domain.grade-essay-ai', () => {
       id: string,
       writingTimeMinutes: number | null,
       tutorEnabled?: boolean,
-      paragraphMode?: string | null
+      paragraphMode?: string | null,
+      documentParagraphMode?: string | null,
+      withoutAssignment = false
     ) {
       prisma.assignmentType.findUnique.mockResolvedValue(
         mockAssignmentType({
@@ -2107,13 +2109,18 @@ describe('api.domain.grade-essay-ai', () => {
         ...base,
         document: {
           ...base.document,
-          assignment: {
-            id: `assignment-${id}`,
-            prompt: 'Is it possible to be honest and kind at once?',
-            writingTimeMinutes,
-            ...(tutorEnabled === undefined ? {} : { tutorEnabled }),
-            ...(paragraphMode === undefined ? {} : { paragraphMode }),
-          },
+          ...(documentParagraphMode === undefined
+            ? {}
+            : { paragraphMode: documentParagraphMode }),
+          assignment: withoutAssignment
+            ? null
+            : {
+                id: `assignment-${id}`,
+                prompt: 'Is it possible to be honest and kind at once?',
+                writingTimeMinutes,
+                ...(tutorEnabled === undefined ? {} : { tutorEnabled }),
+                ...(paragraphMode === undefined ? {} : { paragraphMode }),
+              },
         },
       };
       prisma.submission.findFirst.mockResolvedValue(submission);
@@ -2155,6 +2162,35 @@ describe('api.domain.grade-essay-ai', () => {
       const { grading } = await gradeTimed('sub-analyze', 15, true, 'analyze');
 
       expect(grading.messages[0].content).toContain('Paragraph type: Analyze');
+    });
+
+    /** A teacher's standalone Daily Pages document records its own type. */
+    test('reads the paragraph type of a document with no assignment', async () => {
+      const { grading } = await gradeTimed(
+        'sub-doc-argue',
+        null,
+        undefined,
+        undefined,
+        'argue',
+        true
+      );
+
+      expect(grading.messages[0].content).toContain(
+        'Paragraph type: Argue a position'
+      );
+    });
+
+    test("prefers the assignment's paragraph type over the document's", async () => {
+      const { grading } = await gradeTimed(
+        'sub-both',
+        15,
+        true,
+        'analyze',
+        'argue'
+      );
+
+      expect(grading.messages[0].content).toContain('Paragraph type: Analyze');
+      expect(grading.messages[0].content).not.toContain('Argue a position');
     });
 
     test('says nothing about a paragraph type when none was chosen', async () => {

@@ -595,6 +595,7 @@ export async function action({ request }: ActionFunctionArgs) {
         id: true,
         membershipId: true,
         assignmentTypeId: true,
+        paragraphMode: true,
         // Only to tell a group brief from a solo essay when deciding who the
         // feedback is addressed to; see `gradingAddressee`.
         group: { select: { label: true, members: { where: { removedAt: null }, select: { membershipId: true, membership: { select: { userId: true } } } } } },
@@ -1077,7 +1078,10 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     assignmentPrompt: submission.document.assignment?.prompt,
     writingTimeMinutes: submission.document.assignment?.writingTimeMinutes,
     coldWrite: submission.document.assignment?.tutorEnabled === false,
-    paragraphMode: submission.document.assignment?.paragraphMode,
+    // A teacher's standalone Daily Pages document records its own type.
+    paragraphMode:
+      submission.document.assignment?.paragraphMode ??
+      submission.document.paragraphMode,
   });
   const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(

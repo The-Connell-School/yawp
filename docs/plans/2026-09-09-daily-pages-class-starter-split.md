@@ -362,6 +362,12 @@ registry is `app/domain/assignment-types/daily-pages-paragraph-modes.ts`.
   prompt keeps only its switched-on tags and is hidden when none are left
   (22 of the 31 prompts show with Analyze and Argue on). Saved prompts are
   never hidden. Switching a type on brings its prompts back with it.
+- **A teacher can test one type end to end.** On Daily Pages, New → Document
+  asks which type the document practices (any kind of paragraph, or each
+  switched-on type). The choice is stored on `Document.paragraphMode`, which
+  the tutor and the grader read when the document has no assignment; an
+  assignment's own type always wins. A typed document is titled after its
+  type so test documents are easy to tell apart. Null changes nothing.
 - Calibration cases can name a `paragraphMode`, and the live runner grades
   them with that type's guidance in the prompt. The three Argue cases
   (`dp-argue-*`) do; the Analyze-tagged cases predate this and are still
