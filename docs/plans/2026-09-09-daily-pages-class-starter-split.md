@@ -357,6 +357,11 @@ registry is `app/domain/assignment-types/daily-pages-paragraph-modes.ts`.
   formal counterargument and rebuttal is not required in a timed paragraph —
   facing the one case that tests the position is the move. A position that
   comes out of its test narrower is credited, not marked as a retreat.
+- **The prompt library rolls out with the types.** Its Cognitive mode tags
+  are the same moves, so the library shows only switched-on types: a library
+  prompt keeps only its switched-on tags and is hidden when none are left
+  (22 of the 31 prompts show with Analyze and Argue on). Saved prompts are
+  never hidden. Switching a type on brings its prompts back with it.
 - Calibration cases can name a `paragraphMode`, and the live runner grades
   them with that type's guidance in the prompt. The three Argue cases
   (`dp-argue-*`) do; the Analyze-tagged cases predate this and are still

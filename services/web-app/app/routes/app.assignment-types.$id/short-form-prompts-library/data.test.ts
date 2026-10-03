@@ -1,13 +1,22 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  DAILY_PAGES_PARAGRAPH_MODES,
+  enabledParagraphModes,
+} from '~/domain/assignment-types/daily-pages-paragraph-modes';
+
+import {
+  COGNITIVE_MOVES,
+  COGNITIVE_MOVE_LABEL,
   KIND_ORDER,
+  PARAGRAPH_MODE_FOR_MOVE,
   LENGTH_TARGET_ORDER,
   SOURCE_NEED_ORDER,
   applyFilters,
   buildFacets,
   deriveTitleFromPrompt,
   buildOptionCounts,
+  onlySwitchedOnMoves,
   readFilters,
   savedPromptToLibraryEntry,
   toLibraryEntries,
@@ -211,6 +220,65 @@ describe('short-form library filtering', () => {
         readFilters(new URL('https://example.test/?sf_kind=close-read'))
       )
     ).not.toContain(saved);
+  });
+});
+
+/**
+ * The library's cognitive modes are the paragraph types a teacher can assign,
+ * and they roll out together: a mode appears in the library on the day its
+ * paragraph type is switched on, and not before. Otherwise a teacher can pick
+ * an Evaluate prompt that no Evaluate grading or tutoring stands behind.
+ */
+describe('the library shows only switched-on paragraph types', () => {
+  const switchedOnKeys = enabledParagraphModes().map((mode) => mode.key);
+  const shown = onlySwitchedOnMoves(entries);
+
+  test('every mode names the paragraph type it is, under the same label', () => {
+    for (const move of COGNITIVE_MOVES) {
+      const mode = DAILY_PAGES_PARAGRAPH_MODES.find(
+        (candidate) => candidate.key === PARAGRAPH_MODE_FOR_MOVE[move]
+      );
+      expect(mode?.label).toBe(COGNITIVE_MOVE_LABEL[move]);
+    }
+  });
+
+  test('the Cognitive mode filter lists exactly the switched-on types', () => {
+    expect(
+      buildFacets(shown).cognitiveMoves.map(
+        (move) => PARAGRAPH_MODE_FOR_MOVE[move]
+      )
+    ).toEqual(switchedOnKeys);
+  });
+
+  test('a prompt keeps only its switched-on modes', () => {
+    for (const entry of shown) {
+      expect(entry.cognitiveMoves.length).toBeGreaterThan(0);
+      for (const move of entry.cognitiveMoves) {
+        expect(switchedOnKeys).toContain(PARAGRAPH_MODE_FOR_MOVE[move]);
+      }
+    }
+  });
+
+  test('hides a library prompt with no switched-on mode, and only those', () => {
+    const expected = entries.filter((entry) =>
+      entry.cognitiveMoves.some((move) =>
+        switchedOnKeys.includes(PARAGRAPH_MODE_FOR_MOVE[move])
+      )
+    );
+    expect(shown.map((entry) => entry.id)).toEqual(
+      expected.map((entry) => entry.id)
+    );
+    expect(shown.length).toBeLessThan(entries.length);
+  });
+
+  test('never hides a prompt the teacher saved', () => {
+    const saved = savedPromptToLibraryEntry({
+      id: 'saved-1',
+      title: 'My own prompt',
+      prompt: 'Compare two characters and name the one difference that matters.',
+      savedAt: new Date().toISOString(),
+    });
+    expect(onlySwitchedOnMoves([saved, ...entries])).toContain(saved);
   });
 });
 

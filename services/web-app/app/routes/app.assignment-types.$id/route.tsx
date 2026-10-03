@@ -71,6 +71,7 @@ import {
   deriveTitleFromPrompt,
   readFilters as readShortFormFilters,
   savedPromptToLibraryEntry as savedShortFormPromptToLibraryEntry,
+  onlySwitchedOnMoves,
   toLibraryEntries as toShortFormLibraryEntries,
   type ShortFormPrompt,
 } from './short-form-prompts-library/data';
@@ -110,8 +111,8 @@ const ALL_PROMPTS = toLibraryEntries(promptsRaw as LibraryPrompt[]);
 const ALL_THESIS_PROMPTS = toThesisLibraryEntries(
   thesisPromptsRaw as ThesisPrompt[]
 );
-const ALL_SHORT_FORM_PROMPTS = toShortFormLibraryEntries(
-  shortFormPromptsRaw as ShortFormPrompt[]
+const ALL_SHORT_FORM_PROMPTS = onlySwitchedOnMoves(
+  toShortFormLibraryEntries(shortFormPromptsRaw as ShortFormPrompt[])
 );
 const SERIOUSNESS_ORDER: PromptSeriousness[] = [
   'playful',

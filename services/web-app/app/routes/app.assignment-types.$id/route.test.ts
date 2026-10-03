@@ -537,6 +537,10 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     expect(
       dailyPages.data.shortFormPromptLibrary.facets.sourceNeeds
     ).toContain('required');
+    // The library offers only the paragraph types that are switched on.
+    expect(
+      dailyPages.data.shortFormPromptLibrary.facets.cognitiveMoves
+    ).toEqual(['analyze', 'argue-a-position']);
     expect(dailyPages.data.promptLibrary).toBeNull();
 
     getAvailableAssignmentTypesForScopes.mockResolvedValueOnce([
