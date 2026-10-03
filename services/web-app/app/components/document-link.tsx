@@ -129,7 +129,9 @@ export const DocumentLink = ({
         </div>
         {!doc.group ? (
           <DropdownMenu>
-            <DropdownMenuTrigger>
+            {/* asChild: the trigger is this Button, not a button around it.
+                A button nested in a button breaks hydration for the page. */}
+            <DropdownMenuTrigger asChild>
               <Button
                 size="icon-sm"
                 variant="outline"
