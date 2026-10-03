@@ -104,8 +104,9 @@ import {
 } from './thesis-prompts-library/data';
 import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
+import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 
-const THESIS_ESSAY_TITLE = 'the thesis-driven essay';
 const ALL_PROMPTS = toLibraryEntries(promptsRaw as LibraryPrompt[]);
 const ALL_THESIS_PROMPTS = toThesisLibraryEntries(
   thesisPromptsRaw as ThesisPrompt[]
@@ -433,7 +434,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  const normalizedTitle = assignmentType.title.trim().toLowerCase();
   // Class Starter and Daily Pages share the open-ended prompt library; which
   // of the two this is decides the directions shown above it.
   const promptLibraryVariant = resolvePromptLibraryVariant({
@@ -446,7 +446,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isTeacher && usesOpenEndedLibrary(promptLibraryVariant);
   const showsShortFormLibrary =
     isTeacher && usesShortFormLibrary(promptLibraryVariant);
-  const isThesisEssay = normalizedTitle === THESIS_ESSAY_TITLE;
+  const isThesisEssay = isThesisDrivenEssayTitle(assignmentType.title);
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   // "My prompts": prompts this teacher generated and kept, shown in the same
@@ -722,7 +722,12 @@ export default function AppAssignmentTypesIdRoute() {
           </Button>
 
           {isTeacher ? (
-            <>
+            <div className="flex items-center gap-2">
+              {showThesisLibrary ? (
+                <SeeHowItWorksLink
+                  to={`/app/assignment-types/${data.assignmentType.id}/how-it-works`}
+                />
+              ) : null}
               {canCreateDirectDocument ? (
                 <>
                   <Form method="post" ref={docFormRef} className="hidden" />
@@ -844,7 +849,7 @@ export default function AppAssignmentTypesIdRoute() {
                   essayType={customEssayType ?? 'dbq'}
                 />
               ) : null}
-            </>
+            </div>
           ) : null}
         </div>
         <div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
