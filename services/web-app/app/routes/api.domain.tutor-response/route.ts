@@ -39,9 +39,14 @@ import {
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
+import { RATE_LIMITS } from '~/config/rate-limits';
+import { clampTutorMessage, enforceTutorLimits, rateLimitedJson, sessionTurnLimitJson, trimChatHistoryToBudget } from '~/utils/rate-limit.server';
+
 const POST = z.object({
-  response: z.string().min(1),
+  response: z.string().min(1).max(RATE_LIMITS.tutor.maxMessageChars),
   cmsId: z.string().min(1),
+  // `content` is the whole current document (not a chat message), so it is
+  // clamped to its own budget below rather than rejected at the message cap.
   content: z.string().optional(),
   llmRetry: z.enum(['fallback']).optional(),
 });
@@ -116,6 +121,17 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const { error, data } = await parseFormData(request, POST);
     if (error) return validationError(error);
+    // Enforce rate limits (per-student + global)
+    {
+      const decision = await enforceTutorLimits({
+        request,
+        membershipId: profile.id,
+        route: '/api/domain/tutor-response',
+      });
+      if (!decision.allowed) {
+        return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Give me a moment — try again soon.');
+      }
+    }
 
     // Scoped to the caller's OWN session, not merely authenticated: driving the
     // tutor bills a completion and writes two messages (one carrying the document
@@ -189,6 +205,12 @@ export async function action({ request }: ActionFunctionArgs) {
         { error: 'No course module session found' },
         { status: 404 }
       );
+    }
+
+    // Per-session turn cap
+    const userTurnCount = cms.messages.filter((m) => m.agent === AgentType.User).length;
+    if (userTurnCount >= RATE_LIMITS.tutor.maxSessionTurns) {
+      return sessionTurnLimitJson(RATE_LIMITS.tutor.maxSessionTurns);
     }
 
     if (cms.document?.assignment?.tutorEnabled === false) {
@@ -282,7 +304,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const documentSource =
       data.content === undefined ? 'db-document-text' : 'client-content';
-    const documentText = data.content ?? cms.document.text ?? '';
+    const documentText = (data.content ?? cms.document.text ?? '').slice(
+      0,
+      RATE_LIMITS.tutor.maxDocumentChars
+    );
     const documentContext = buildAiTextContextAudit({
       documentSource,
       documentId: cms.document.id,
@@ -329,7 +354,14 @@ export async function action({ request }: ActionFunctionArgs) {
 				Address me like you are talking first, and then I will respond.`,
       },
     ]
-      .concat(currentMessages)
+      // Bound only the chat history; the intro, assignment, document and the
+      // student's new message are always sent whole.
+      .concat(
+        trimChatHistoryToBudget(
+          currentMessages,
+          RATE_LIMITS.tutor.transcriptCharBudget
+        )
+      )
       .concat(assignmentContextMessages)
       .concat([
         {
@@ -342,11 +374,14 @@ export async function action({ request }: ActionFunctionArgs) {
         },
         {
           role: AgentType.User,
-          content: data.response,
+          content: clampTutorMessage(data.response),
         },
       ]);
 
     let completion: string;
+    // llmRetry=fallback completes the provider-failover handshake (202
+    // {retrying:true} -> client re-posts with it). Ignoring it would leave the
+    // tutor with no failover during a primary-provider outage.
     const forceFallback = data.llmRetry === 'fallback';
     try {
       completion = await getLLMCompletion({

@@ -20,6 +20,8 @@ import { generateTOTP } from '~/utils/totp.server';
 import { Prisma } from '@app/prisma';
 import { getDomainUrl } from '~/utils/misc';
 import { normalizeEmail } from '~/utils/normalize-email';
+import { enforceUnauthByIpAndTarget, rateLimitedFormResponse } from '~/utils/rate-limit.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
 
 const Schema = z.object({
   email: EmailSchema,
@@ -33,6 +35,20 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const { email } = parsed.data;
   const normalizedEmail = normalizeEmail(email);
+  {
+    const cfg = RATE_LIMITS.unauth.forgotPassword;
+    const decision = await enforceUnauthByIpAndTarget({
+      request,
+      route: '/auth/inv/forgot-password',
+      targetKey: normalizedEmail,
+      perIpPerMinute: cfg.perIpPerMinute,
+      perIpPerHour: cfg.perIpPerHour,
+      perTargetPerHour: cfg.perEmailPerHour,
+    });
+    if (!decision.allowed) {
+      return rateLimitedFormResponse('email', decision.retryAfterSeconds, 'Too many password reset attempts. Please wait and try again.');
+    }
+  }
 
   const user = await prisma.user.findFirst({
     where: {

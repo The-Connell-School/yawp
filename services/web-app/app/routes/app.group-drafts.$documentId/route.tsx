@@ -46,6 +46,7 @@ import {
 } from '~/domain/grading/grading-queue';
 import { loadDocumentNavigationNeighbors } from '~/domain/grading/grading-queue.server';
 import { sanitizeExitTarget } from '~/utils/document-exit';
+import { enforceTeacherGeneratorLimits, rateLimitedJson } from '~/utils/rate-limit.server';
 
 /**
  * The teacher's view of one group's draft: what it says, and who wrote it.
@@ -263,6 +264,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
   // Drafting individual grades. This writes nothing: it hands the teacher text
   // for the boxes on their form, and Save is still a separate, deliberate press.
   if (intent === 'suggest-member-grades') {
+    {
+      const decision = await enforceTeacherGeneratorLimits({
+        membershipId: profile.id,
+        route: '/app/group-drafts/:documentId',
+        feature: 'group-member-grade-suggestions',
+      });
+      if (!decision.allowed) {
+        return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Please wait before requesting more grade suggestions.');
+      }
+    }
     const roster = doc.group.members.map((member) => ({
       membershipId: member.membershipId,
       name: member.membership.user.name?.trim() || member.membership.user.email,

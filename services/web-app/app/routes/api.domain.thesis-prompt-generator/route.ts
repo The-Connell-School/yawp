@@ -15,6 +15,7 @@ import {
 } from '../app.assignment-types.$id/thesis-prompts-library/prompt-generator';
 import type { ThesisPrompt } from '../app.assignment-types.$id/thesis-prompts-library/data';
 import thesisPromptsRaw from '../app.assignment-types.$id/thesis-prompts-library/prompts.json';
+import { enforceTeacherGeneratorLimits, rateLimitedJson } from '~/utils/rate-limit.server';
 
 const ALL_THESIS_PROMPTS = thesisPromptsRaw as ThesisPrompt[];
 const SYSTEM_PROMPT = buildGeneratorSystemPrompt(ALL_THESIS_PROMPTS);
@@ -65,6 +66,17 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: 'Only teachers can generate prompts.' },
       { status: 403 }
     );
+  }
+
+  {
+    const decision = await enforceTeacherGeneratorLimits({
+      membershipId: profile.id,
+      route: '/api/domain/thesis-prompt-generator',
+      feature: 'thesis-prompt-generator',
+    });
+    if (!decision.allowed) {
+      return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Please wait before generating more prompts.');
+    }
   }
 
   const formData = await request.formData();
