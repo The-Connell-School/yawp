@@ -84,7 +84,7 @@ function Gap({
 
 export function TransferChart() {
   return (
-    <figure className="flex w-full max-w-3xl flex-col gap-3 self-center rounded-xl border bg-background p-4 shadow-sm md:p-6">
+    <figure className="flex w-full flex-col gap-3 rounded-xl border bg-background p-4 shadow-sm md:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-[15px] font-semibold">
           One student over a school year
@@ -223,9 +223,7 @@ export function TransferChart() {
       </svg>
 
       <figcaption className="text-sm text-muted-foreground">
-        The pattern to look for. Cold writes start well below warm writes and
-        rise faster, so the gap narrows. These numbers are made up to show the
-        shape. They aren’t student data.
+        These numbers are made up to show the shape. They aren’t student data.
       </figcaption>
     </figure>
   );

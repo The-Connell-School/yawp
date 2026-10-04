@@ -341,9 +341,17 @@ export default function ThesisEssayHowItWorksRoute() {
           </GuideCopy>
         </GuideRow>
 
-        <TransferChart />
+        <GuideRow media={<TransferChart />}>
+          <GuideH3>Watch the gap close</GuideH3>
+          <GuideCopy>
+            Early in the year, a student’s cold writes sit well below their warm
+            writes. As the skills become their own, cold writes rise faster and
+            the gap narrows. That narrowing gap is the pattern to look for.
+          </GuideCopy>
+        </GuideRow>
 
         <GuideRow
+          flip
           media={clip(
             'reporter',
             'The teacher asks Reporter how one student’s cold writes and warm writes are changing. Reporter answers with a table of six essays: Tutor-off scores rose from 58% to 74%, Tutor-on scores from 79% to 86%, and the gap narrowed from 21 points to 12.'
