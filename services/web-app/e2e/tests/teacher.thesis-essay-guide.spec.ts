@@ -22,6 +22,17 @@ test.describe('Thesis-Driven Essay: See how it works', () => {
         name: /teach the thesis-driven essay/i,
       })
     ).toBeVisible();
+    // The Tutor gets its own highlighted section, with its own clips.
+    const tutor = page.getByRole('region', {
+      name: 'How the Tutor works with students',
+    });
+    await expect(tutor).toBeVisible();
+    await expect(tutor).toContainText(/feedback on their own draft/i);
+    await expect(tutor).toContainText(/questions instead of answers/i);
+    await expect(tutor.locator('video source').first()).toHaveAttribute(
+      'src',
+      /^\/img\/thesis-essay-guide\/.+\.mp4$/
+    );
     // The section a school approving the Tutor reads first.
     const wont = page.getByTestId('guide-wont');
     await expect(wont).toContainText(/write the essay for a student/i);

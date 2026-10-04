@@ -13,6 +13,7 @@
 import { redirect, type LoaderFunctionArgs } from 'react-router';
 import { useLoaderData } from 'react-router';
 import {
+  Eyebrow,
   GuideClip,
   GuideCopy,
   GuideFooter,
@@ -71,6 +72,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return { pagePath };
 }
+
+const TUTOR_POINTS = [
+  {
+    title: 'Keeps them on the essay',
+    detail: 'Off-topic questions get a friendly nudge back to the writing.',
+  },
+  {
+    title: 'Reviews before they submit',
+    detail:
+      'The last step checks content, organization, syntax and grammar. It doesn’t give a grade.',
+  },
+  {
+    title: 'Steps aside for cold writes',
+    detail: 'Turn it off and students see only the prompt.',
+  },
+];
 
 const WILL = [
   'Walk students through the essay one step at a time.',
@@ -154,15 +171,16 @@ export default function ThesisEssayHowItWorksRoute() {
         <GuideRow
           flip
           media={clip(
-            'tutor',
-            'A student adds a sentence to a body paragraph and asks the Tutor to write the rest. The Tutor says that part is theirs to write and asks what Banquo notices about Macbeth.'
+            'steps',
+            'A student moves through the Tutor’s steps beside their draft: Pre-writing, Thesis Statement, Introduction Paragraph, Body Paragraphs, Conclusion Paragraph, Title Your Essay and Review my Essay. Each opens with a short lesson.'
           )}
         >
           <GuideStep n={2}>Students write with the Tutor</GuideStep>
           <GuideH3>Seven steps from pre-writing to a title</GuideH3>
           <GuideCopy>
-            The Tutor asks questions and gives feedback on each part of the
-            essay. It won’t write the essay for them.
+            Pre-writing, thesis, introduction, body paragraphs, conclusion,
+            title and a final review. Each step starts with a short lesson from
+            the Tutor.
           </GuideCopy>
         </GuideRow>
 
@@ -181,6 +199,68 @@ export default function ThesisEssayHowItWorksRoute() {
           </GuideCopy>
         </GuideRow>
       </GuideSection>
+
+      <section
+        aria-labelledby="guide-tutor"
+        className="flex flex-col gap-10 rounded-2xl bg-secondary p-6 md:p-10"
+      >
+        <div className="flex flex-col gap-3">
+          <Eyebrow>The YAWP! Tutor</Eyebrow>
+          <h2
+            id="guide-tutor"
+            className="text-2xl font-semibold leading-tight md:text-3xl"
+          >
+            How the Tutor works with students
+          </h2>
+          <p className="max-w-prose text-lg leading-relaxed text-muted-foreground">
+            The Tutor reads the student’s draft and coaches them through it one
+            step at a time. It asks questions, says what is working and gives
+            one or two things to try next. The writing stays the student’s.
+          </p>
+        </div>
+
+        <GuideRow
+          media={clip(
+            'feedback',
+            'On the Thesis Statement step, a student taps Give me feedback! The Tutor says the thesis is strong and arguable, then suggests one thing to try: show what changes once Macbeth’s ambition has a name.'
+          )}
+        >
+          <GuideH3>Feedback on their own draft</GuideH3>
+          <GuideCopy>
+            Students tap{' '}
+            <strong className="text-foreground">Give me feedback!</strong> or
+            ask a question whenever they want. The Tutor reads what they have
+            written, starts with what works and suggests one or two next steps.
+          </GuideCopy>
+        </GuideRow>
+
+        <GuideRow
+          flip
+          media={clip(
+            'tutor',
+            'A student adds a sentence to a body paragraph and asks the Tutor to write the rest. The Tutor says that part is theirs to write and asks what Banquo notices about Macbeth.'
+          )}
+        >
+          <GuideH3>Questions instead of answers</GuideH3>
+          <GuideCopy>
+            When a student asks the Tutor to write for them, it asks a
+            question, offers an example on another topic or gives a sentence
+            starter for them to finish.
+          </GuideCopy>
+        </GuideRow>
+
+        <ul className="grid gap-4 md:grid-cols-3">
+          {TUTOR_POINTS.map((point) => (
+            <li
+              key={point.title}
+              className="flex flex-col gap-2 rounded-xl border bg-background p-5"
+            >
+              <GuideH3>{point.title}</GuideH3>
+              <GuideCopy>{point.detail}</GuideCopy>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <GuideSection id="guide-cold" eyebrow="Also" title="Give a cold write">
         <GuideRow
@@ -217,7 +297,7 @@ export default function ThesisEssayHowItWorksRoute() {
       <WillWont will={WILL} wont={WONT} />
 
       <GuideFooter
-        note="Clips use demo classes. The Tutor’s reply, the Grading Assistant’s suggestions and Reporter’s answer in them were scripted for the recording. Reporter’s numbers are the demo class’s grades."
+        note="Clips use demo classes. The Tutor’s replies, the Grading Assistant’s suggestions and Reporter’s answer in them were scripted for the recording. Reporter’s numbers are the demo class’s grades."
         startTo={pagePath}
         startLabel="Create an assignment"
       />
