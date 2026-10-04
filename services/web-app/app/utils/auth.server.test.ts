@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { OrganizationPlan } from '@app/prisma';
 import { matchesOwnerWhere } from './testing/where-eval.ts';
 
 const prisma = {
@@ -55,7 +56,7 @@ const membershipFixture = {
   organization: {
     id: 'org-1',
     name: 'Yawp Org',
-    plan: 'SCHOOL',
+    plan: 'SCHOOL' as OrganizationPlan,
     reporterEnabled: false,
     classInsightsEnabled: false,
     writingPracticeEnabled: false,
