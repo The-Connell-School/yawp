@@ -4,8 +4,10 @@ import { anthropic } from '~/services/anthropic';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
+import { enforcePdfExtractorLimits, rateLimitedJson, withSingleFlight } from '~/utils/rate-limit.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
 
-const MAX_PDF_BYTES = 10 * 1024 * 1024;
+const MAX_PDF_BYTES = RATE_LIMITS.pdfExtract.maxBytes;
 
 const ExtractedApHistorySchema = z.object({
   title: z.string().trim().max(200).optional(),
@@ -34,6 +36,28 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: 'Only teachers can extract documents.' },
       { status: 403 }
     );
+  }
+
+  // Pre-check Content-Length if provided
+  {
+    const contentLength = Number(request.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_PDF_BYTES + 1024 * 1024) {
+      return dataResponse(
+        { success: false, message: 'PDF is too large. Maximum size is 10 MB.' },
+        { status: 413 }
+      );
+    }
+  }
+
+  {
+    const decision = await enforcePdfExtractorLimits({
+      membershipId: profile.id,
+      route: '/api/ap-history/extract-document',
+      feature: 'ap-history-extract',
+    });
+    if (!decision.allowed) {
+      return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Please wait before extracting another PDF.');
+    }
   }
 
   const formData = await request.formData();
@@ -88,7 +112,9 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   try {
-    const message = await anthropic.messages.create({
+    const flight = await withSingleFlight(
+      `pdf-extract:${profile.id}:ap-history`,
+      () => anthropic.messages.create({
       model,
       max_tokens: 4000,
       temperature: 0,
@@ -112,7 +138,16 @@ export async function action({ request }: ActionFunctionArgs) {
           ],
         },
       ],
-    } as any);
+    } as any)
+    );
+    if (!flight.ran) {
+      return rateLimitedJson(
+        'user',
+        10,
+        'A PDF extraction is already running for you. Please wait for it to finish.'
+      );
+    }
+    const message = flight.value;
 
     const responseText = (message.content as any[])
       .map((part) => (part?.type === 'text' ? (part.text as string) : ''))

@@ -80,6 +80,8 @@ import {
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
+import { enforceGradingLimits, rateLimitedJson } from '~/utils/rate-limit.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
 import type {
   ApHistoryDbqPointKey,
   ApHistoryLeqPointKey,
@@ -532,6 +534,7 @@ function applyStrictnessToGradeFields({
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  // Per-teacher throttle (minute, 10-min, hour/day, global)
   const gradingDeadlineSignal = createGradingRequestDeadlineSignal();
   const gradingDeadlineResponse = () =>
     dataResponse(
@@ -567,6 +570,16 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: 'Only teachers can grade essays.' },
       { status: 403 }
     );
+  }
+  {
+    const decision = await enforceGradingLimits({
+      request,
+      membershipId: actor.membershipId,
+      route: '/api/domain/grade-essay-ai',
+    });
+    if (!decision.allowed) {
+      return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Please wait before grading more submissions.');
+    }
   }
 
   const teacherClassWhere = buildTeacherClassWhere(actor);
@@ -838,18 +851,39 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
+  // llmRetry=fallback is the client half of the provider-failover handshake
+  // (the server answers 202 {retrying:true}, the client re-posts with it). It
+  // only selects the fallback model, and every request is rate limited above, so
+  // it stays honoured; ignoring it makes failover unreachable during an outage.
   const forceFallback = data.llmRetry === 'fallback';
   const llmRetryOptions = {
     forceFallback,
     signalFallbackRetry: !forceFallback,
   };
   const retryResponse = () => dataResponse({ retrying: true }, { status: 202 });
+  // Cap total LLM calls per submission processing
+  let llmCallCount = 0;
   const getGradingLlmCompletion = (
     params: Parameters<typeof getLLMCompletion>[0]
   ) =>
-    runWithGradingRequestDeadline(gradingDeadlineSignal, (signal) =>
-      getLLMCompletion({ ...params, ...llmRetryOptions, signal })
-    );
+    runWithGradingRequestDeadline(gradingDeadlineSignal, async (signal) => {
+      llmCallCount += 1;
+      if (llmCallCount > RATE_LIMITS.grading.maxLlmCallsPerSubmission) {
+        // 429 with Retry-After 60s default
+        throw new Response(
+          JSON.stringify({
+            error: {
+              code: 'RATE_LIMITED',
+              scope: 'user',
+              retryAfterSeconds: 60,
+              message: 'This grading request used too many model calls. Please try again.',
+            },
+          }),
+          { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '60' } }
+        );
+      }
+      return getLLMCompletion({ ...params, ...llmRetryOptions, signal });
+    });
   const useE2EFixture = shouldUseE2EGradingFixture();
   const documentContext = buildAiTextContextAudit({
     documentSource: 'submission-snapshot',
@@ -1119,6 +1153,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       if (isGradingRequestDeadlineError(error)) {
         return gradingDeadlineResponse();
       }
+      if (error instanceof Response && error.status === 429) return error;
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
       throw error;
     }
@@ -1401,6 +1436,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       if (isGradingRequestDeadlineError(error)) {
         return gradingDeadlineResponse();
       }
+      if (error instanceof Response && error.status === 429) return error;
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
       grammarIssues = null;
     }

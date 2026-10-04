@@ -18,6 +18,8 @@ import {
   isValidUaPartnerCode,
   requireUaOrganizationId,
 } from '~/utils/ua-partner.server';
+import { enforceUnauthByIpAndTarget, rateLimitedFormResponse } from '~/utils/rate-limit.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
 
 export async function studentSignupAction(
   { request }: ActionFunctionArgs,
@@ -44,6 +46,20 @@ export async function studentSignupAction(
     );
   }
   const normalizedEmail = normalizeEmail(data.email);
+  {
+    const cfg = RATE_LIMITS.unauth.signup;
+    const decision = await enforceUnauthByIpAndTarget({
+      request,
+      route: '/auth/inv/signup',
+      targetKey: normalizedEmail,
+      perIpPerMinute: cfg.perIpPerMinute,
+      perIpPerHour: cfg.perIpPerHour,
+      perTargetPerHour: cfg.perEmailPerHour,
+    });
+    if (!decision.allowed) {
+      return rateLimitedFormResponse('email', decision.retryAfterSeconds, 'Too many sign-up attempts. Please wait and try again.');
+    }
+  }
 
   const classes = isUa
     ? []

@@ -13,6 +13,7 @@ import {
 } from '../app.assignment-types.$id/prompts-library/prompt-generator';
 import type { LibraryPrompt } from '../app.assignment-types.$id/prompts-library/data';
 import promptsRaw from '../app.assignment-types.$id/prompts-library/prompts.json';
+import { enforceTeacherGeneratorLimits, rateLimitedJson } from '~/utils/rate-limit.server';
 
 const ALL_PROMPTS = promptsRaw as LibraryPrompt[];
 const SYSTEM_PROMPT = buildGeneratorSystemPrompt(ALL_PROMPTS);
@@ -65,6 +66,17 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: 'Only teachers can generate prompts.' },
       { status: 403 }
     );
+  }
+
+  {
+    const decision = await enforceTeacherGeneratorLimits({
+      membershipId: profile.id,
+      route: '/api/domain/daily-pages-prompt-generator',
+      feature: 'daily-pages-prompt-generator',
+    });
+    if (!decision.allowed) {
+      return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Please wait before generating more prompts.');
+    }
   }
 
   const formData = await request.formData();

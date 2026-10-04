@@ -12,6 +12,7 @@ import type {
   PracticeFeedbackResult,
 } from './practice-feedback.shared';
 import { generatePracticePrompts } from './practice-prompt-generation.server';
+import { withSingleFlight } from '~/utils/rate-limit.server';
 import {
   getQuickWritingLessonBySlug,
   getQuickWritingLessonContext,
@@ -452,10 +453,32 @@ export async function getOrCreateStudentPracticeSet(params: {
     return existing.promptsJson as unknown as MixedAssignedPracticeItem[];
   }
 
-  const { items, source } = await buildMixedGeneratedPracticeSequence(
-    params.lessonSlugs,
-    params.problemCount
+  // Single-flight the model call per student+assignment so a double-open or a
+  // revalidation does not pay for the same generation twice. A caller that loses
+  // the race waits briefly for the winner's saved set instead of erroring, and
+  // falls back to generating itself if the winner never delivers.
+  const flight = await withSingleFlight(
+    `practice-set:${params.classAssignmentId}:${params.membershipId}`,
+    () =>
+      buildMixedGeneratedPracticeSequence(
+        params.lessonSlugs,
+        params.problemCount
+      ),
+    { ttlMs: 120_000 }
   );
+  if (!flight.ran) {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      const saved = await prisma.writingPracticePromptSet.findUnique({ where });
+      if (saved) return saved.promptsJson as unknown as MixedAssignedPracticeItem[];
+    }
+  }
+  const { items, source } = flight.ran
+    ? flight.value
+    : await buildMixedGeneratedPracticeSequence(
+        params.lessonSlugs,
+        params.problemCount
+      );
 
   try {
     const created = await prisma.writingPracticePromptSet.create({
