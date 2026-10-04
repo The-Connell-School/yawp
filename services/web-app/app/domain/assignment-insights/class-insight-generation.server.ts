@@ -307,6 +307,13 @@ export async function generateClassAssignmentInsight(input: {
       },
       rubric,
       metadata: { classAssignmentId: classAssignment.id },
+      attribution: {
+        organizationId: input.organizationId,
+        membershipId: input.generatedByMembershipId ?? undefined,
+        classId: classAssignment.class.school.organizationId
+          ? classAssignment.class.id
+          : undefined,
+      },
     });
   } catch {
     await recordClassInsightFailure({

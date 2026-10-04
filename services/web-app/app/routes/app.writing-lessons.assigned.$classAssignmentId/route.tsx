@@ -1,4 +1,5 @@
 import { data as dataResponse, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
+import crypto from 'node:crypto';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -198,6 +199,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
       exercise: item.prompt.exercise,
       instruction: item.prompt.instruction,
       response: responseText,
+    }, {
+      organizationId: profile.organization.id,
+      membershipId: profile.id,
+      classId: classAssignment.id,
+      route: 'routes/app.writing-lessons.assigned.$classAssignmentId',
+      requestId: crypto.randomUUID(),
     });
 
     await recordCompositionPracticeAttempt({

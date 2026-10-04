@@ -1,4 +1,5 @@
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
+import crypto from 'node:crypto';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 
 import {
@@ -80,7 +81,14 @@ function buildUserPrompt(input: PracticeFeedbackInput): string {
  * outage-resilience used elsewhere in the grading stack.
  */
 export async function generatePracticeFeedback(
-  input: PracticeFeedbackInput
+  input: PracticeFeedbackInput,
+  attribution?: {
+    organizationId?: string;
+    membershipId?: string;
+    classId?: string;
+    route?: string;
+    requestId?: string;
+  }
 ): Promise<PracticeFeedbackResult> {
   const guardrail = detectPracticeGuardrail(input);
   if (guardrail) return { ...guardrail, degraded: false };
@@ -99,6 +107,13 @@ export async function generatePracticeFeedback(
         feature: 'writing-practice-feedback',
         skill: input.skill,
         lessonTitle: input.lessonTitle,
+      },
+      attribution: {
+        organizationId: attribution?.organizationId ?? '',
+        membershipId: attribution?.membershipId ?? '',
+        classId: attribution?.classId,
+        route: attribution?.route ?? 'utils/writing-lessons/practice-feedback',
+        requestId: attribution?.requestId ?? crypto.randomUUID(),
       },
     });
 

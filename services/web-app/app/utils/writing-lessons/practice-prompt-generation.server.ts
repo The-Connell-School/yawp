@@ -96,6 +96,12 @@ export async function generatePracticePrompts(input: {
   count: number;
   /** Optional student-chosen interest every generated item is grounded in. */
   topic?: string;
+}, attribution?: {
+  organizationId?: string;
+  membershipId?: string;
+  classId?: string;
+  route?: string;
+  requestId?: string;
 }): Promise<GeneratedPracticePrompt[]> {
   if (input.count <= 0) return [];
 
@@ -110,6 +116,15 @@ export async function generatePracticePrompts(input: {
         feature: 'writing-practice-prompt-generation',
         skill: input.skill,
         count: input.count,
+      },
+      attribution: {
+        organizationId: attribution?.organizationId ?? '',
+        membershipId: attribution?.membershipId ?? '',
+        classId: attribution?.classId,
+        route:
+          attribution?.route ??
+          'utils/writing-lessons/practice-prompt-generation',
+        requestId: attribution?.requestId ?? `${Date.now()}-${Math.random()}`,
       },
     });
 

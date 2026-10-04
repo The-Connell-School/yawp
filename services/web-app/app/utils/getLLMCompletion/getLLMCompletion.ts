@@ -2,6 +2,7 @@
 import { anthropic } from '~/services/anthropic';
 import { openai } from '~/services/openai';
 import { prisma } from '~/utils/db.server';
+import { logAllowedUsage } from '~/utils/ai-usage-log.server';
 import {
   getAnthropicOutageState,
   isAnthropicOutageCircuitOpen,
@@ -37,13 +38,27 @@ export interface CacheableSystemBlock {
   cache_control?: { type: 'ephemeral' };
 }
 
+export interface Attribution {
+  organizationId: string;
+  membershipId: string;
+  classId?: string | null;
+  route: string;
+  requestId: string;
+  ipHash?: string | null;
+}
+
 interface Params {
-  messages: { role: 'user' | 'assistant'; content: string; name?: string }[];
+  messages: {
+    role: 'user' | 'assistant';
+    content: string | Array<Record<string, unknown>>;
+    name?: string;
+  }[];
   system?: string | CacheableSystemBlock[];
   temperature?: number;
   maxTokens?: number;
   model: string;
   metadata?: Record<string, unknown>;
+  attribution: Attribution;
   tools?: Array<{
     name: string;
     description: string;
@@ -215,7 +230,10 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
     content: string | Array<Record<string, unknown>>;
   }> = params.messages.map(({ name: _, ...m }) => ({
     ...m,
-    content: m.content.replace(/\t/g, ''),
+    content:
+      typeof m.content === 'string'
+        ? m.content.replace(/\t/g, '')
+        : (m.content as Array<Record<string, unknown>>),
   }));
 
   const maxRounds = params.maxToolRounds ?? 3;
@@ -301,6 +319,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
             hasTools,
             toolRoundCount,
           }),
+          ...params.attribution,
           // Verifies the cache saving actually happened rather than assuming
           // it did: 0 cache_read + >0 cache_creation means this call wrote
           // the cache; >0 cache_read means a later call read it back cheap.
@@ -308,6 +327,21 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
           cacheReadInputTokens: totalCacheReadInputTokens,
         },
         logPayload: params.logPayload,
+      });
+      // Best-effort usage decision/attribution log
+      await logAllowedUsage({
+        route: params.attribution.route,
+        feature:
+          (params.metadata && (params.metadata as any).feature) || undefined,
+        membershipId: params.attribution.membershipId,
+        organizationId: params.attribution.organizationId,
+        classId: params.attribution.classId ?? undefined,
+        ipHash: params.attribution.ipHash ?? undefined,
+        requestId: params.attribution.requestId,
+        units: 1,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+        latencyMs: durationMs,
       });
 
       return responseText;
@@ -330,6 +364,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
           hasTools,
           toolRoundCount,
         }),
+        ...params.attribution,
         cacheCreationInputTokens: totalCacheCreationInputTokens,
         cacheReadInputTokens: totalCacheReadInputTokens,
       },
@@ -375,10 +410,13 @@ async function runOpenAiCompletion({
           },
         ]
       : []),
-    ...params.messages.map(({ name: _, ...m }) => ({
-      ...m,
-      content: m.content.replace(/\t/g, ''),
-    })),
+    ...params.messages.map(({ name: _, ...m }) => {
+      const content =
+        typeof m.content === 'string'
+          ? m.content.replace(/\t/g, '')
+          : (m.content as Array<Record<string, unknown>>);
+      return { ...m, content };
+    }),
   ];
   const tools = params.tools?.map((tool) => ({
     type: 'function' as const,
@@ -456,12 +494,29 @@ async function runOpenAiCompletion({
         totalTokens: totalInputTokens + totalOutputTokens,
         durationMs,
         metadata: buildLogMetadata({
-          metadata,
+          metadata: {
+            ...(metadata ?? {}),
+            ...params.attribution,
+          },
           messages: formattedMessages,
           hasTools,
           toolRoundCount,
         }),
         logPayload: params.logPayload,
+      });
+      await logAllowedUsage({
+        route: params.attribution.route,
+        feature:
+          (params.metadata && (params.metadata as any).feature) || undefined,
+        membershipId: params.attribution.membershipId,
+        organizationId: params.attribution.organizationId,
+        classId: params.attribution.classId ?? undefined,
+        ipHash: params.attribution.ipHash ?? undefined,
+        requestId: params.attribution.requestId,
+        units: 1,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+        latencyMs: durationMs,
       });
 
       return responseText;
@@ -478,7 +533,10 @@ async function runOpenAiCompletion({
       error: err instanceof Error ? err.message : String(err),
       durationMs,
       metadata: buildLogMetadata({
-        metadata,
+        metadata: {
+          ...(metadata ?? {}),
+          ...params.attribution,
+        },
         messages: formattedMessages,
         hasTools,
         toolRoundCount,

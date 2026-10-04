@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
+import { computeIpHash } from '~/utils/ai-usage-log.server';
 import {
   computeWeightedBandPercentage,
   formatGrade,
@@ -845,10 +846,21 @@ export async function action({ request }: ActionFunctionArgs) {
   };
   const retryResponse = () => dataResponse({ retrying: true }, { status: 202 });
   const getGradingLlmCompletion = (
-    params: Parameters<typeof getLLMCompletion>[0]
+    params: Omit<Parameters<typeof getLLMCompletion>[0], 'attribution'>
   ) =>
     runWithGradingRequestDeadline(gradingDeadlineSignal, (signal) =>
-      getLLMCompletion({ ...params, ...llmRetryOptions, signal })
+      getLLMCompletion({
+        ...params,
+        ...llmRetryOptions,
+        signal,
+        attribution: {
+          organizationId,
+          membershipId: actor.membershipId,
+          route: 'routes/api.domain.grade-essay-ai',
+          requestId: crypto.randomUUID(),
+          ipHash: computeIpHash(request),
+        },
+      })
     );
   const useE2EFixture = shouldUseE2EGradingFixture();
   const documentContext = buildAiTextContextAudit({

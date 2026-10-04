@@ -15,6 +15,8 @@ import {
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
+import crypto from 'node:crypto';
+import { computeIpHash } from '~/utils/ai-usage-log.server';
 
 const ScratchTestInputSchema = z.object({
   assignmentTypeId: z.string().min(1),
@@ -151,6 +153,13 @@ export async function action({ request }: ActionFunctionArgs) {
                 : 'scratch-criterion-evaluator',
             assignmentTypeId: assignmentType.id,
             gradingAssistantVersion: assignmentType.gradingAssistantVersion,
+          },
+          attribution: {
+            organizationId: '',
+            membershipId: '',
+            route: 'routes/api.domain.grading-assistant-test',
+            requestId: crypto.randomUUID(),
+            ipHash: computeIpHash(request),
           },
         });
       },

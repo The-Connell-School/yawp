@@ -270,7 +270,7 @@ export async function buildGeneratedPracticeSequence(
         rule: lesson.rule,
         exampleExercises: lesson.staticPrompts.map((prompt) => prompt.exercise),
         count: perLesson,
-      });
+      }, { route: 'utils/writing-lessons/practice-assignments' });
 
       if (generated.length > 0) {
         anyAi = true;
