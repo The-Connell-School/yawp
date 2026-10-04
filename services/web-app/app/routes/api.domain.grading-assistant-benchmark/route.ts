@@ -108,8 +108,8 @@ export async function action({ request }: ActionFunctionArgs) {
         ...(criterionId ? { criterionId } : {}),
       },
       attribution: {
-        organizationId: '',
-        membershipId: '',
+        organizationId: null,
+        membershipId: null,
         route: 'routes/api.domain.grading-assistant-benchmark',
         requestId: crypto.randomUUID(),
         ipHash: computeIpHash(request),

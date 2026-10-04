@@ -292,7 +292,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         attribution: {
           organizationId: profile.organization.id,
           membershipId: profile.id,
-          classId: doc.class?.id,
           route: 'routes/app.group-drafts.$documentId',
         },
       });

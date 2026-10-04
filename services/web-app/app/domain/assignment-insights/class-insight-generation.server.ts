@@ -175,6 +175,7 @@ export async function generateClassAssignmentInsight(input: {
     },
     select: {
       id: true,
+      classId: true,
       assignment: {
         select: {
           title: true,
@@ -310,9 +311,7 @@ export async function generateClassAssignmentInsight(input: {
       attribution: {
         organizationId: input.organizationId,
         membershipId: input.generatedByMembershipId ?? undefined,
-        classId: classAssignment.class.school.organizationId
-          ? classAssignment.class.id
-          : undefined,
+        classId: classAssignment.classId,
       },
     });
   } catch {

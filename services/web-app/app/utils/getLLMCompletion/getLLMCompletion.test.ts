@@ -64,6 +64,13 @@ function openAiTextResponse(content: string) {
   };
 }
 
+const testAttribution = {
+  organizationId: 'org-1',
+  membershipId: 'mem-1',
+  route: 'routes/test',
+  requestId: 'req-test',
+};
+
 describe('getLLMCompletion', () => {
   beforeEach(() => {
     anthropicCreate.mockReset();
@@ -154,6 +161,7 @@ describe('getLLMCompletion', () => {
 
   test('passes structured system blocks with cache_control straight through to Anthropic, tab-stripped', async () => {
     await getLLMCompletion({
+      attribution: testAttribution,
       model: 'claude-sonnet-4-6',
       system: [
         {
@@ -194,6 +202,7 @@ describe('getLLMCompletion', () => {
     );
 
     await getLLMCompletion({
+      attribution: testAttribution,
       model: 'claude-sonnet-4-6',
       system: [
         {
@@ -219,6 +228,7 @@ describe('getLLMCompletion', () => {
     );
 
     await getLLMCompletion({
+      attribution: testAttribution,
       model: 'claude-sonnet-4-6',
       system: [
         {
@@ -263,6 +273,7 @@ describe('getLLMCompletion', () => {
       );
 
     await getLLMCompletion({
+      attribution: testAttribution,
       model: 'claude-sonnet-4-6',
       system: [
         {
@@ -415,6 +426,7 @@ describe('getLLMCompletion', () => {
 
     await expect(
       getLLMCompletion({
+        attribution: testAttribution,
         model: 'claude-sonnet-4-6',
         messages: [{ role: 'user', content: 'Analyze this student record.' }],
         allowFallbackProvider: false,
@@ -427,6 +439,7 @@ describe('getLLMCompletion', () => {
 
   test('ignores a forced fallback request when fallback is forbidden', async () => {
     await getLLMCompletion({
+      attribution: testAttribution,
       model: 'claude-sonnet-4-6',
       messages: [{ role: 'user', content: 'Analyze this student record.' }],
       forceFallback: true,
@@ -445,6 +458,7 @@ describe('getLLMCompletion', () => {
     openAiCreate.mockResolvedValueOnce(openAiTextResponse('Still working.'));
 
     const result = await getLLMCompletion({
+      attribution: testAttribution,
       model: 'claude-sonnet-4-6',
       messages: [{ role: 'user', content: 'Can you review this?' }],
     });
@@ -470,6 +484,7 @@ describe('getLLMCompletion', () => {
     let thrown: unknown;
     try {
       await getLLMCompletion({
+        attribution: testAttribution,
         model: 'claude-sonnet-4-6',
         messages: [{ role: 'user', content: 'Retry this.' }],
         signalFallbackRetry: true,

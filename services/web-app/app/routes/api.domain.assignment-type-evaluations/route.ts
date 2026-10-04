@@ -474,8 +474,8 @@ export async function action({ request }: ActionFunctionArgs) {
           assignmentTypeId: assignmentType.id,
         },
         attribution: {
-          organizationId: '',
-          membershipId: '',
+          organizationId: null,
+          membershipId: null,
           route: 'routes/api.domain.assignment-type-evaluations',
           requestId: crypto.randomUUID(),
           ipHash: computeIpHash(request),
@@ -1031,8 +1031,8 @@ export async function action({ request }: ActionFunctionArgs) {
             gradingAssistantVersion: gradingConfig.version,
           },
           attribution: {
-            organizationId: '',
-            membershipId: '',
+            organizationId: null,
+            membershipId: null,
             route: 'routes/api.domain.assignment-type-evaluations',
             requestId: crypto.randomUUID(),
             ipHash: computeIpHash(request),

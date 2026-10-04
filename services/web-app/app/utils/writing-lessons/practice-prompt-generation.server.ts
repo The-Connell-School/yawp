@@ -118,8 +118,8 @@ export async function generatePracticePrompts(input: {
         count: input.count,
       },
       attribution: {
-        organizationId: attribution?.organizationId ?? '',
-        membershipId: attribution?.membershipId ?? '',
+        organizationId: attribution?.organizationId ?? null,
+        membershipId: attribution?.membershipId ?? null,
         classId: attribution?.classId,
         route:
           attribution?.route ??

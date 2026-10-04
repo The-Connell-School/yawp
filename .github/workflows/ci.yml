@@ -238,6 +238,13 @@ jobs:
         if: ${{ needs.paths.outputs.code == 'true' }}
         run: bun web-app:typecheck
 
+      # CI did not run any web-app unit tests before; name the AI usage log
+      # suites here so a regression in attribution or IP hashing fails the PR.
+      - name: 🧪 AI usage log unit tests
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: bun test app/utils/ai-usage-log.server.test.ts app/utils/getLLMCompletion/getLLMCompletion.test.ts
+
   e2e-web-app:
     needs: [typecheck-web-app, validate-prisma-migrations, paths]
     name: 🧪 E2E Tests (Playwright)

@@ -115,8 +115,8 @@ export async function generateClassInsight({
       ...metadata,
     },
     attribution: {
-      organizationId: attribution?.organizationId ?? '',
-      membershipId: attribution?.membershipId ?? '',
+      organizationId: attribution?.organizationId ?? null,
+      membershipId: attribution?.membershipId ?? null,
       classId: attribution?.classId,
       route: 'domain/assignment-insights/class-insight-synthesis.server',
       requestId: crypto.randomUUID(),

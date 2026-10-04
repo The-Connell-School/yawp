@@ -39,8 +39,9 @@ export interface CacheableSystemBlock {
 }
 
 export interface Attribution {
-  organizationId: string;
-  membershipId: string;
+  /** null for system/script calls that have no tenant (never an empty string). */
+  organizationId: string | null;
+  membershipId: string | null;
   classId?: string | null;
   route: string;
   requestId: string;
@@ -329,12 +330,13 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
         logPayload: params.logPayload,
       });
       // Best-effort usage decision/attribution log
-      await logAllowedUsage({
+      // Fire-and-forget: the usage log must never add latency to, or fail, a request.
+      void logAllowedUsage({
         route: params.attribution.route,
         feature:
           (params.metadata && (params.metadata as any).feature) || undefined,
-        membershipId: params.attribution.membershipId,
-        organizationId: params.attribution.organizationId,
+        membershipId: params.attribution.membershipId ?? undefined,
+        organizationId: params.attribution.organizationId ?? undefined,
         classId: params.attribution.classId ?? undefined,
         ipHash: params.attribution.ipHash ?? undefined,
         requestId: params.attribution.requestId,
@@ -504,12 +506,13 @@ async function runOpenAiCompletion({
         }),
         logPayload: params.logPayload,
       });
-      await logAllowedUsage({
+      // Fire-and-forget: the usage log must never add latency to, or fail, a request.
+      void logAllowedUsage({
         route: params.attribution.route,
         feature:
           (params.metadata && (params.metadata as any).feature) || undefined,
-        membershipId: params.attribution.membershipId,
-        organizationId: params.attribution.organizationId,
+        membershipId: params.attribution.membershipId ?? undefined,
+        organizationId: params.attribution.organizationId ?? undefined,
         classId: params.attribution.classId ?? undefined,
         ipHash: params.attribution.ipHash ?? undefined,
         requestId: params.attribution.requestId,

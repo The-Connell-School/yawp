@@ -172,20 +172,10 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   } catch (error) {
     if (!(error instanceof AiRateLimitError)) {
-      // Best-effort denial usage log
-      await logDeniedUsage({
-        route: 'routes/api.domain.reporter',
-        feature: 'reporter',
-        membershipId: ctx.membershipId,
-        organizationId: ctx.organizationId,
-        requestId: crypto.randomUUID(),
-        units: 1,
-        decision: 'DENIED_CONCURRENCY',
-        ipHash: computeIpHash(request),
-      });
+      // A store failure is not an admission decision, so it is not logged as one.
       return dataResponse({ error: REPORTER_FAILED }, { status: 503 });
     }
-    await logDeniedUsage({
+    void logDeniedUsage({
       route: 'routes/api.domain.reporter',
       feature: 'reporter',
       membershipId: ctx.membershipId,

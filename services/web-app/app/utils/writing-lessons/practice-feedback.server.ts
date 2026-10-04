@@ -109,8 +109,8 @@ export async function generatePracticeFeedback(
         lessonTitle: input.lessonTitle,
       },
       attribution: {
-        organizationId: attribution?.organizationId ?? '',
-        membershipId: attribution?.membershipId ?? '',
+        organizationId: attribution?.organizationId ?? null,
+        membershipId: attribution?.membershipId ?? null,
         classId: attribution?.classId,
         route: attribution?.route ?? 'utils/writing-lessons/practice-feedback',
         requestId: attribution?.requestId ?? crypto.randomUUID(),

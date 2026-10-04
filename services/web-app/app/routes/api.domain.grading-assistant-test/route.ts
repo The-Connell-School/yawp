@@ -155,8 +155,8 @@ export async function action({ request }: ActionFunctionArgs) {
             gradingAssistantVersion: assignmentType.gradingAssistantVersion,
           },
           attribution: {
-            organizationId: '',
-            membershipId: '',
+            organizationId: null,
+            membershipId: null,
             route: 'routes/api.domain.grading-assistant-test',
             requestId: crypto.randomUUID(),
             ipHash: computeIpHash(request),

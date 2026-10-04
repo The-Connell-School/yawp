@@ -52,8 +52,8 @@ async function main() {
           ...(criterionId ? { criterionId } : {}),
         },
         attribution: {
-          organizationId: '',
-          membershipId: '',
+          organizationId: null,
+          membershipId: null,
           route: 'scripts/run-daily-pages-calibration',
           requestId: `${Date.now()}-${Math.random()}`,
         },
