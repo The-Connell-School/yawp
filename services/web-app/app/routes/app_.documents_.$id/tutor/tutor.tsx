@@ -188,7 +188,11 @@ export const Tutor = ({
             onRetry: () => setIsTutorRetrying(true),
           });
         if (!res.ok || json.error) {
-          setTutorError(json.error ?? 'An error occurred.');
+          setTutorError(
+            typeof json.error === 'string'
+              ? json.error
+              : (json.error?.message ?? json.message ?? 'An error occurred.')
+          );
           setOptimisticMessage(null);
         } else {
           setOptimisticMessage(null);
