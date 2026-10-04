@@ -310,3 +310,16 @@ export const DAILY_PAGES_SHORT_FORM_WELCOME = [
   '',
   'When you want a second pair of eyes on your draft, click "Give me feedback." You can also use the chat button to ask me a question.',
 ].join('\n');
+
+/**
+ * How the Tutor module relates to each rubric category: the thinking
+ * categories are what the tutor coaches toward, the craft ones a secondary
+ * lens. Sent to the tutor as its rubric guidance.
+ */
+export const DAILY_PAGES_SHORT_FORM_RUBRIC_ALIGNMENT = {
+  depth_of_thought: 'primary',
+  development_of_thought: 'primary',
+  organization_and_structure: 'supporting',
+  voice_and_style: 'supporting',
+  grammar_and_mechanics: 'supporting',
+} as const;

@@ -328,6 +328,25 @@ outside its band as lenient or strict. Run it after any rubric or instruction
 change, and before a new paragraph type is switched on. The cases are drafts
 until product and an educator approve them.
 
+## Assessing the tutor
+
+The calibration suite asks whether the grader puts a finished entry in the
+right band. The tutor is the half a student meets first, so it has its own
+suite: `app/domain/ai-evaluation/daily-pages-tutor-evaluation.v1.ts`, one case
+per phase of a draft (no point yet, a quote with no analysis, a revision after
+feedback, a finished paragraph, "just write it for me", a hedged opener, a
+safety disclosure, and Argue's straddle and untested position).
+
+    bun services/web-app/scripts/run-daily-pages-tutor-evaluation.ts --repeat 3
+
+asks the tutor for each reply exactly as the route would (the request is built
+by the same `buildTutorMessages` and `buildTutorSystemPrompt`), then checks it
+by code (brief, one question, no gushing, never "avoid I", nothing behind the
+scenes exposed) and by an LLM judge against the case's criteria, quoting the
+reply as evidence. It prints every phase with the tutor's actual words. The
+tutor runs warm, so `--repeat` reports a pass rate rather than one sample. Run
+it after any change to the module, step or paragraph-type instructions.
+
 ## Per-assignment settings
 
 Four settings on the assignment sheet change how an entry is written or graded,

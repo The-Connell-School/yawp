@@ -27,6 +27,7 @@ import {
 import {
   DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
   DAILY_PAGES_SHORT_FORM_RUBRIC,
+  DAILY_PAGES_SHORT_FORM_RUBRIC_ALIGNMENT,
   DAILY_PAGES_SHORT_FORM_SCORING_SCALE,
   DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS,
   DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS,
@@ -169,13 +170,8 @@ export async function adoptShortFormTutorForSeededDailyPages(
       tutorInstructions: DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS,
       description:
         'Respond to the prompt in one short academic paragraph: make your point clearly, then hold it up.',
-      rubricAlignmentJson: {
-        depth_of_thought: 'primary',
-        development_of_thought: 'primary',
-        organization_and_structure: 'supporting',
-        voice_and_style: 'supporting',
-        grammar_and_mechanics: 'supporting',
-      } as unknown as Prisma.InputJsonValue,
+      rubricAlignmentJson:
+        DAILY_PAGES_SHORT_FORM_RUBRIC_ALIGNMENT as unknown as Prisma.InputJsonValue,
     },
   });
 
