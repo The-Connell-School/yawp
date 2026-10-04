@@ -49,7 +49,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   const scopes =
     teacherClasses.length === 0
-      ? [{ organizationId: profile.organization.id, teacherProfileId: profile.id }]
+      ? [
+          {
+            organizationId: profile.organization.id,
+            teacherProfileId: profile.id,
+          },
+        ]
       : teacherClasses.map((klass) => ({
           organizationId: klass.school.organizationId,
           schoolId: klass.school.id,
@@ -140,11 +145,12 @@ export default function ThesisEssayHowItWorksRoute() {
         title="On The Thesis-Driven Essay page"
       >
         <GuideCopy>
-          Open <strong className="text-foreground">The Thesis-Driven Essay</strong>{' '}
+          Open{' '}
+          <strong className="text-foreground">The Thesis-Driven Essay</strong>{' '}
           and choose <strong className="text-foreground">New</strong>, then{' '}
           <strong className="text-foreground">Assignment</strong>. When you
-          assign it you set the due date, the points, the time limit and
-          whether the Tutor and grammar grading are on.
+          assign it you set the due date, the points, the time limit and whether
+          the Tutor and grammar grading are on.
         </GuideCopy>
       </GuideSection>
 
@@ -162,9 +168,8 @@ export default function ThesisEssayHowItWorksRoute() {
           <GuideStep n={1}>Pick a prompt</GuideStep>
           <GuideH3>100 essay prompts ready to assign</GuideH3>
           <GuideCopy>
-            Search by subject, text or grade. You can also generate your own
-            and save it to{' '}
-            <strong className="text-foreground">My prompts</strong>.
+            Search by subject, text or grade. You can also generate your own and
+            save it to <strong className="text-foreground">My prompts</strong>.
           </GuideCopy>
         </GuideRow>
 
@@ -181,21 +186,6 @@ export default function ThesisEssayHowItWorksRoute() {
             Pre-writing, thesis, introduction, body paragraphs, conclusion,
             title and a final review. Each step starts with a short lesson from
             the Tutor.
-          </GuideCopy>
-        </GuideRow>
-
-        <GuideRow
-          media={clip(
-            'grade',
-            'The teacher opens a submitted essay and clicks Grading Assistant Suggestions. Scores and feedback fill in, the teacher reads one rubric comment, then releases the grade.'
-          )}
-        >
-          <GuideStep n={3}>Grade and release</GuideStep>
-          <GuideH3>A suggested grade you can change</GuideH3>
-          <GuideCopy>
-            The Grading Assistant scores thesis, organization, evidence, voice
-            and grammar and drafts feedback. Students see it only after you
-            release it.
           </GuideCopy>
         </GuideRow>
       </GuideSection>
@@ -243,9 +233,9 @@ export default function ThesisEssayHowItWorksRoute() {
         >
           <GuideH3>Questions instead of answers</GuideH3>
           <GuideCopy>
-            When a student asks the Tutor to write for them, it asks a
-            question, offers an example on another topic or gives a sentence
-            starter for them to finish.
+            When a student asks the Tutor to write for them, it asks a question,
+            offers an example on another topic or gives a sentence starter for
+            them to finish.
           </GuideCopy>
         </GuideRow>
 
@@ -262,6 +252,21 @@ export default function ThesisEssayHowItWorksRoute() {
         </ul>
       </section>
 
+      <GuideRow
+        media={clip(
+          'grade',
+          'The teacher opens a submitted essay and clicks Grading Assistant Suggestions. Scores and feedback fill in, the teacher reads one rubric comment, then releases the grade.'
+        )}
+      >
+        <GuideStep n={3}>Grade and release</GuideStep>
+        <GuideH3>A suggested grade you can change</GuideH3>
+        <GuideCopy>
+          The Grading Assistant scores thesis, organization, evidence, voice and
+          grammar and drafts feedback. Students see it only after you release
+          it.
+        </GuideCopy>
+      </GuideRow>
+
       <GuideSection id="guide-cold" eyebrow="Also" title="Give a cold write">
         <GuideRow
           flip
@@ -271,8 +276,8 @@ export default function ThesisEssayHowItWorksRoute() {
           )}
         >
           <GuideCopy>
-            The goal is for students to write better without the Tutor. Turn
-            it off for an in-class essay and use it as a diagnostic, as an
+            The goal is for students to write better without the Tutor. Turn it
+            off for an in-class essay and use it as a diagnostic, as an
             assessment or to track whether skills transfer.
           </GuideCopy>
         </GuideRow>
