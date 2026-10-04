@@ -10,10 +10,10 @@ export const RATE_LIMITS = {
     perMinute: 6, // B1_tutor_per_student user_per_minute
     perHour: 42, // B1_tutor_per_student user_per_hour
     perDay: 81, // B1_tutor_per_student user_per_day
-    maxSessionTurns: 82, // B1_tutor_per_student session_turns
+    maxSessionTurns: 130, // measured max 102 (p99.9 65); above every observed session
     maxMessageChars: 7202, // B1_tutor_per_student user_msg_chars
     // Global ceilings across the platform
-    globalPerMinute: 26, // A2_llmlog_global_peaks per_minute
+    globalPerMinute: 40, // measured max 27/min (p99.9 20); ceiling must clear the observed peak
     globalPerHour: 270, // A2_llmlog_global_peaks per_hour
     // Chat-history budget sent to the model (approximate); newest turns win
     transcriptCharBudget: 20000,
@@ -25,13 +25,13 @@ export const RATE_LIMITS = {
   grading: {
     // Per-teacher request counts
     perMinute: 6, // B2_grading_per_teacher teacher_subs_per_minute
-    perTenMinutes: 22, // B2_grading_per_teacher teacher_subs_per_10min
-    perHour: 41, // B2_grading_per_teacher teacher_subs_per_hour
-    perDay: 117, // B2_grading_per_teacher teacher_subs_per_day
+    perTenMinutes: 45, // measured max 19; sized so a whole-class batch (~40) passes
+    perHour: 80, // measured max 31; room for a ~40 batch plus follow-ups
+    perDay: 160, // measured max 69
     // Within one submission processing
     maxLlmCallsPerSubmission: 11, // B2_grading_per_teacher llm_calls_per_submission
     // Global ceilings
-    globalPerMinute: 6, // A2_llmlog_global_peaks per_minute
+    globalPerMinute: 12, // measured max 3/min; a few teachers batch-grading at once
   },
 
   // Teacher prompt generators (no measured distributions yet; conservative headroom)

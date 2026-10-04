@@ -38,7 +38,7 @@ import {
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
 import { RATE_LIMITS } from '~/config/rate-limits';
-import { clampTutorMessage, enforceTutorLimits, rateLimitedJson, trimChatHistoryToBudget } from '~/utils/rate-limit.server';
+import { clampTutorMessage, enforceTutorLimits, rateLimitedJson, sessionTurnLimitJson, trimChatHistoryToBudget } from '~/utils/rate-limit.server';
 
 const POST = z.object({
   response: z.string().min(1).max(RATE_LIMITS.tutor.maxMessageChars),
@@ -208,7 +208,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // Per-session turn cap
     const userTurnCount = cms.messages.filter((m) => m.agent === AgentType.User).length;
     if (userTurnCount >= RATE_LIMITS.tutor.maxSessionTurns) {
-      return rateLimitedJson('user', 3600, 'This tutor session has reached its turn limit.');
+      return sessionTurnLimitJson(RATE_LIMITS.tutor.maxSessionTurns);
     }
 
     if (cms.document?.assignment?.tutorEnabled === false) {

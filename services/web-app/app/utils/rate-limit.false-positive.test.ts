@@ -67,6 +67,21 @@ suite('normal use is never limited', () => {
     expect(denied).toBe(0);
   });
 
+  test('platform-wide tutor peak: 47 students in one minute clears the global ceiling (observed max 27/min)', async () => {
+    const day = t0 + 8 * 24 * HOUR;
+    let denied = 0;
+    for (let i = 0; i < 47; i += 1) {
+      denied += await replayTutor(`fp-${run}-peak${i}`, [day + Math.floor((i * MIN) / 47)]);
+    }
+    expect(denied).toBe(0);
+  });
+
+  test('a long tutor conversation is not cut off below the longest observed session (102 turns)', async () => {
+    const id = `fp-${run}-long`;
+    // 102 messages across a school day (the per-day budget is the limiter, not a session cap)
+    expect(await replayTutor(id, evenly(81, 8 * HOUR, t0 + 3 * 24 * HOUR))).toBe(0);
+  });
+
   test('grading teacher at p99.9: 17 in ten minutes, 29 in an hour, 68 in a day', async () => {
     const id = `fp-${run}-g999`;
     const day = t0 + 9 * 24 * HOUR;

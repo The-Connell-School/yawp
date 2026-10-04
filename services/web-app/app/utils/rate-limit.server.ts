@@ -55,6 +55,22 @@ export function rateLimitedJson(scope: LimitScope, retryAfterSeconds: number, me
 }
 
 /**
+ * The per-session turn cap is a property of the conversation, not of time, so it
+ * carries no Retry-After and says what to do instead of "try again later".
+ */
+export function sessionTurnLimitJson(maxTurns: number) {
+  const text = `This tutor session has reached its limit of ${maxTurns} messages. Start a new tutor session to keep going.`;
+  return new Response(
+    JSON.stringify({
+      success: false,
+      message: text,
+      error: { code: 'SESSION_TURN_LIMIT', scope: 'user', maxTurns, message: text },
+    }),
+    { status: 429, headers: { 'Content-Type': 'application/json' } }
+  );
+}
+
+/**
  * 429 for <ValidatedForm> routes. rvf only renders `fieldErrors`, so a plain
  * JSON body would leave the form silently doing nothing.
  */

@@ -2,6 +2,11 @@
 // RATE_LIMIT_DB_TESTS=1 and DATABASE_URL points at a migrated database:
 //   RATE_LIMIT_DB_TESTS=1 DATABASE_URL=postgresql://... bun test app/utils/rate-limit
 import { beforeEach, describe, expect, test } from 'bun:test';
+import { CLOUDFRONT_IPV4_RANGES } from './cloudfront-ranges.server';
+
+// The app trusts the address CloudFront appended (see ip.server.ts), so the tests
+// put a real edge address on the right, as production does.
+const EDGE_IP = CLOUDFRONT_IPV4_RANGES[0]!.split('/')[0]!.replace(/\d+$/, (n) => String(Number(n) + 1));
 
 const enabled = process.env.RATE_LIMIT_DB_TESTS === '1';
 const mod = enabled ? await import('./rate-limit.server') : null;
@@ -43,21 +48,37 @@ suite('token buckets enforce the configured windows', () => {
     }
   });
 
-  test('grading: a teacher pushing 6/min non-stop is cut off by the 10-minute window, and recovers', async () => {
-    const id = uid('grading-10m');
+  test('grading: a teacher pushing 6/min non-stop is eventually cut off by the hourly ceiling, and recovers', async () => {
+    const id = uid('grading-hour');
     const t0 = Date.now();
     let allowed = 0;
     let firstDenied = -1;
-    for (let i = 0; i < 60; i += 1) {
-      const r = await grading(id, t0 + i * 10_000); // 6/min for 10 minutes
+    for (let i = 0; i < 180; i += 1) {
+      const r = await grading(id, t0 + i * 10_000); // 6/min for 30 minutes
       if (r.allowed) allowed += 1;
       else if (firstDenied < 0) firstDenied = i;
     }
-    // The bucket holds 22 and earns 22 per 10 minutes, so ~22 + 2.2/min while draining at 6/min.
-    expect(allowed).toBeGreaterThanOrEqual(22);
-    expect(allowed).toBeLessThanOrEqual(44);
-    expect(firstDenied).toBeGreaterThanOrEqual(22);
-    expect((await grading(id, t0 + 11 * MIN + 10 * MIN)).allowed).toBe(true);
+    // Hourly bucket: 80 plus ~1.33/min earned while draining at 6/min.
+    expect(allowed).toBeGreaterThanOrEqual(80);
+    expect(allowed).toBeLessThanOrEqual(120);
+    expect(firstDenied).toBeGreaterThanOrEqual(80);
+    expect((await grading(id, t0 + 30 * MIN + 61 * MIN)).allowed).toBe(true);
+  });
+
+  test('grading: a whole-class batch of 40 submissions, one every 9 s, is never limited', async () => {
+    const id = uid('grading-batch40');
+    const t0 = Date.now();
+    for (let i = 0; i < 40; i += 1) {
+      expect((await grading(id, t0 + i * 9_000)).allowed).toBe(true);
+    }
+  });
+
+  test('grading: even at the 6/min ceiling a 40-submission batch passes in full', async () => {
+    const id = uid('grading-batch40-fast');
+    const t0 = Date.now();
+    for (let i = 0; i < 40; i += 1) {
+      expect((await grading(id, t0 + i * 10_000)).allowed).toBe(true);
+    }
   });
 
   test('grading: 22 requests inside a few minutes all pass', async () => {
@@ -100,7 +121,7 @@ suite('regressions found in review of the first version', () => {
   test('a request denied by the global bucket refunds the per-user buckets', async () => {
     const id = uid('refund');
     const t0 = Date.now() + 10 * 24 * 3_600_000; // isolate from other tests' global usage
-    const globalCap = 26;
+    const globalCap = 40;
     const others = Array.from({ length: globalCap }, (_, i) => uid(`g${i}`));
     for (const other of others) expect((await tutor(other, t0)).allowed).toBe(true);
     const denied = await tutor(id, t0);
@@ -127,12 +148,12 @@ suite('unauthenticated throttles tolerate a whole class behind one school IP', (
   });
   const fromSchool = () =>
     new Request('https://yawp.school/auth/inv/signup', {
-      headers: { 'x-forwarded-for': `198.18.${Math.floor(Math.random() * 250)}.7, 198.51.100.1` },
+      headers: { 'x-forwarded-for': `198.18.${Math.floor(Math.random() * 250)}.7, ${EDGE_IP}` },
     });
 
   test('47 different students sign up in the same minute from one IP', async () => {
     const school = new Request('https://yawp.school/auth/inv/signup', {
-      headers: { 'x-forwarded-for': `198.19.${Math.floor(Math.random() * 250)}.9, 198.51.100.1` },
+      headers: { 'x-forwarded-for': `198.19.${Math.floor(Math.random() * 250)}.9, ${EDGE_IP}` },
     });
     const t0 = Date.now();
     let allowed = 0;

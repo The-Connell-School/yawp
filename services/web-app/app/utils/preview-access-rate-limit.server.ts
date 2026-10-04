@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { getClientIp } from './ip.server';
 
 const WINDOW_MS = 10 * 60 * 1000;
 const BLOCK_MS = 15 * 60 * 1000;
@@ -13,27 +14,9 @@ type AttemptBucket = {
 
 const buckets = new Map<string, AttemptBucket>();
 
-// CloudFront sets X-Forwarded-For as: client, ... , CloudFront edge
-// The real client is the second-from-last entry.
-function extractClientIpBehindCloudFront(request: Request) {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const addresses = forwarded.split(',').map((value) => value.trim());
-    if (addresses.length >= 2) {
-      return addresses.at(-2) || 'unknown';
-    }
-    return addresses[0] || 'unknown';
-  }
-  return (
-    request.headers.get('cf-connecting-ip') ??
-    request.headers.get('x-real-ip') ??
-    'unknown'
-  );
-}
-
 function clientKey(request: Request) {
   return `client:${createHash('sha256')
-    .update(extractClientIpBehindCloudFront(request))
+    .update(getClientIp(request))
     .digest('hex')
     .slice(0, 24)}`;
 }
