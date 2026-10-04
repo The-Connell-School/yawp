@@ -19,3 +19,10 @@ Module: `services/web-app/app/utils/entitlements.server.ts`
 
 Out of scope for this PR: enforcing seat/class caps in routes; only the Reporter gate is wired now.
 
+
+## Rollout, rollback and known gaps
+
+- Every org-select that feeds reporter access goes through `membershipSelect` in `auth.server.ts` (typed, so dropping `plan` is a compile error). `getReporterAccess` is the only gate; `/app/reporter` and `/api/domain/reporter` both use it.
+- Existing orgs: `plan` is `NOT NULL DEFAULT 'SCHOOL'`, so reporter behavior is unchanged until a plan is explicitly set.
+- Rollback: revert the commit and redeploy. The enum and columns are additive and ignored by older code; leave them in place.
+- Not part of F1: the teacher sidebar link and the class-page growth-plan link still render for FREE_CLASSROOM orgs (the route itself redirects/404s). Hide them when the free tier ships.
