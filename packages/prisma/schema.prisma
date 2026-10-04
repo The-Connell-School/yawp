@@ -7,6 +7,47 @@ datasource db {
   provider = "postgresql"
 }
 
+enum FreeTierApplicationStatus {
+  LEAD
+  INVITED
+  ACCOUNT_CREATED
+  ADMIN_SUBMITTED
+  SENT
+  MANUAL_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+model FreeTierApplication {
+  id               String                    @id @default(cuid())
+  createdAt        DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
+  status           FreeTierApplicationStatus @default(LEAD)
+  name             String
+  email            String                    @unique
+  schoolName       String
+  location         String
+  gradeLevel       String
+  acquisitionTokenId String?
+  userId           String?
+  organizationId   String?
+  releasedAt       DateTime?                 @db.Timestamptz(6)
+  notes            String?
+}
+
+model AcquisitionToken {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  tokenHash   String    @unique
+  label       String
+  bypassWaitlist Boolean @default(false)
+  maxUses     Int?
+  uses        Int       @default(0)
+  expiresAt   DateTime? @db.Timestamptz(6)
+  createdBy   String?
+}
+
 enum MembershipRole {
   TEACHER
   STUDENT
