@@ -157,7 +157,7 @@ export default function ThesisEssayHowItWorksRoute() {
       <GuideSection
         id="guide-how"
         eyebrow="For teachers"
-        title="From a prompt to a released grade"
+        title="Thinking and feedback at every step"
       >
         <GuideRow
           media={clip(
