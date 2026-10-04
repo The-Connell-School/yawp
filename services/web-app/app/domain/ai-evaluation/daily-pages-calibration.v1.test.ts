@@ -44,9 +44,13 @@ describe('the Daily Pages calibration suite', () => {
     expect(suite.rubric.maxScore).toBe(5);
   });
 
+  /**
+   * Big enough to see drift, small enough to run live after every change.
+   * The ceiling grows a little as each paragraph type adds its cases.
+   */
   test('is big enough to see drift across the scale', () => {
     expect(suite.cases.length).toBeGreaterThanOrEqual(8);
-    expect(suite.cases.length).toBeLessThanOrEqual(14);
+    expect(suite.cases.length).toBeLessThanOrEqual(18);
   });
 
   test('gives every case a band for every category, inside the scale', () => {
@@ -173,6 +177,31 @@ describe('the paragraph types the suite grades under', () => {
     expect(
       argued.some((benchmarkCase) => composite(benchmarkCase, 'min') >= 80)
     ).toBe(true);
+  });
+
+  /**
+   * A top Argue paragraph takes a side with a stated condition, gives one
+   * reason, faces a hard case, and ends on the narrower position the test
+   * produced. More than one such paragraph, on different prompts, keeps the
+   * top band from being calibrated on a single example.
+   */
+  test('reaches the top for argued paragraphs that face their hardest case', () => {
+    const exemplars = gradedUnder('argue').filter((benchmarkCase) =>
+      benchmarkCase.tags.includes('strong')
+    );
+    expect(exemplars.length).toBeGreaterThanOrEqual(3);
+    expect(
+      new Set(exemplars.map((c) => c.input.assignmentPrompt)).size
+    ).toBe(exemplars.length);
+    for (const benchmarkCase of exemplars) {
+      expect(composite(benchmarkCase, 'min')).toBeGreaterThanOrEqual(80);
+      expect(
+        benchmarkCase.expectations.scoreBands.depth_of_thought.min
+      ).toBeGreaterThanOrEqual(4);
+      expect(
+        benchmarkCase.expectations.scoreBands.development_of_thought.min
+      ).toBeGreaterThanOrEqual(4);
+    }
   });
 
   /** "Both sides have a point" is not a position, however well it is written. */

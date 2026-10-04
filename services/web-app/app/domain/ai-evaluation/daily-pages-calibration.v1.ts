@@ -465,6 +465,54 @@ const cases: GradingBenchmarkCase[] = [
       },
     ],
   }),
+  calibrationCase({
+    id: 'dp-argue-loyalty-with-a-condition',
+    title: 'Loyalty argued with a condition, a hard case and a concession',
+    description:
+      'A top Argue paragraph: a position with its condition stated, one concrete reason, a hard case faced head on, and the concession the prompt asks for, ending on the narrower position the case produced.',
+    tags: ['strong', 'argue-a-position'],
+    paragraphMode: 'argue',
+    assignmentPrompt:
+      'Is loyalty a virtue or a liability? Commit to one, support it with a specific case, and concede the strongest thing the other side gets right.',
+    essayText: `Loyalty is a virtue, but only when it is loyalty to a person rather than to what that person has done. The strongest reason is that loyalty is what makes it safe to fail in front of someone: my teammates can miss a shot in practice because they know I will still pass them the ball in the game. The hard case is a friend who cheats. When Marcus copied a lab report last year and asked me to say we had worked together, loyalty seemed to mean covering for him. That is where the other side is right — loyalty that defends whatever a friend does is a liability, because it turns caring about someone into lying for them. But I didn't cover for him, and I didn't report him either; I told him I wouldn't lie and that I would help him redo it. That was the loyal thing, because it was loyal to Marcus and not to the cheating. Loyalty stays a virtue as long as it can say no.`,
+    bands: scoreBands([4, 5], [4, 5], [4, 5], [4, 5], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Credit the stated condition ("only when it is loyalty to a person rather than to what that person has done") in Depth of Thought, and the Marcus case as the test the position survives in Development of Thought.',
+      },
+      {
+        evaluatorId: 'false-positive-resistance',
+        requirement:
+          'Do not treat the concession as weakening the position; the prompt asks for it, and the paragraph keeps its side.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-argue-rules-tested-against-itself',
+    title: 'A rule-breaking position tested against its own misuse',
+    description:
+      'A top Argue paragraph that narrows an easy claim to a precise one, grounds it in one situation, then tests it against the obvious abuse of its own logic and draws the line between them.',
+    tags: ['strong', 'argue-a-position'],
+    paragraphMode: 'argue',
+    assignmentPrompt:
+      'Some rules are worth breaking. Defend or reject that claim, and ground it in one specific situation rather than in general.',
+    essayText: `A rule is worth breaking only when following it would defeat the reason the rule exists. Our library has a strict no-food rule, and the reason is obvious: food draws bugs and ruins books. But last spring a diabetic student in my study hall felt her blood sugar dropping during a timed test, and the librarian told her to put her juice box away. Following the rule there protected the books from a juice box while putting a person at risk, which is the opposite of what any school rule is for. The test of my position is whether it lets anyone break any rule they find inconvenient, and it doesn't: the student who wants chips during free period has a reason that is about himself, not about what the rule is protecting. So the rule should bend for the juice box and hold for the chips, and the line between them is whether breaking it serves the rule's purpose better than keeping it.`,
+    bands: scoreBands([4, 5], [4, 5], [4, 5], [4, 5], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Credit narrowing "some rules are worth breaking" to a precise condition in Depth of Thought, and the chips case as a genuine test of the position rather than another reason.',
+      },
+      {
+        evaluatorId: 'feedback-grounding',
+        requirement:
+          'Name the juice-box situation and the chips contrast specifically when crediting the paragraph.',
+      },
+    ],
+  }),
 ];
 
 export const dailyPagesCalibrationV1: GradingBenchmarkSuite = {
