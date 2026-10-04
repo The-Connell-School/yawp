@@ -5,13 +5,19 @@ import {
   recordFailedPreviewAccessAttempt,
   resetPreviewAccessRateLimitForTests,
 } from './preview-access-rate-limit.server';
+import { CLOUDFRONT_IPV4_RANGES } from './cloudfront-ranges.server';
 
 const originalWarn = console.warn;
 
-function request(address: string) {
+// A real CloudFront edge address (first published range, +1), so the shared helper
+// recognises it as the trusted hop to skip.
+const CLOUDFRONT_EDGE_IP = `${CLOUDFRONT_IPV4_RANGES[0]!.split('/')[0]!.replace(/\d+$/, (n) => String(Number(n) + 1))}`;
+
+function request(clientIp: string, cloudFrontEdgeIp = CLOUDFRONT_EDGE_IP) {
   return new Request('https://preview.yawp.school/auth/preview-access', {
     method: 'POST',
-    headers: { 'x-forwarded-for': `198.51.100.1, ${address}` },
+    // Behind CloudFront the last hop is the CloudFront edge; the real client is the first non-CloudFront hop from the right.
+    headers: { 'x-forwarded-for': `${clientIp}, ${cloudFrontEdgeIp}` },
   });
 }
 
