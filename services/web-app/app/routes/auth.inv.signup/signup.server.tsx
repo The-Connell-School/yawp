@@ -18,7 +18,7 @@ import {
   isValidUaPartnerCode,
   requireUaOrganizationId,
 } from '~/utils/ua-partner.server';
-import { enforceUnauthByIpAndTarget, rateLimitedJson } from '~/utils/rate-limit.server';
+import { enforceUnauthByIpAndTarget, rateLimitedFormResponse } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 
 export async function studentSignupAction(
@@ -57,7 +57,7 @@ export async function studentSignupAction(
       perTargetPerHour: cfg.perEmailPerHour,
     });
     if (!decision.allowed) {
-      return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Too many sign-up attempts. Please wait and try again.');
+      return rateLimitedFormResponse('email', decision.retryAfterSeconds, 'Too many sign-up attempts. Please wait and try again.');
     }
   }
 

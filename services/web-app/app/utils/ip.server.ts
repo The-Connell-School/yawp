@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 // CloudFront-aware client IP extraction.
 // X-Forwarded-For: client, proxy1, proxy2, ... , cloudfront-edge
 // We want the real client address, which is the second-from-last entry when present.
@@ -17,14 +19,7 @@ export function getClientIp(request: Request): string {
 }
 
 export function ipHash(ip: string): string {
-  // A short, non-reversible fingerprint suitable for logs and per-IP keys.
-  // Keep it short to avoid bloating log rows.
-  // We deliberately avoid bringing in a crypto dependency here; DB-side logs can HMAC if needed.
-  let hash = 0;
-  for (let i = 0; i < ip.length; i += 1) {
-    // Simple 32-bit rolling hash
-    hash = (hash * 31 + ip.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash).toString(36);
+  // Non-reversible fingerprint for per-IP bucket keys and logs. A 32-bit
+  // rolling hash collides far too easily to key a rate limiter on.
+  return createHash('sha256').update(ip).digest('hex').slice(0, 24);
 }
-

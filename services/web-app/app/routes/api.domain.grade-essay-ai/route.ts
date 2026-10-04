@@ -80,6 +80,8 @@ import {
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
+import { enforceGradingLimits, rateLimitedJson } from '~/utils/rate-limit.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
 import type {
   ApHistoryDbqPointKey,
   ApHistoryLeqPointKey,
@@ -89,7 +91,7 @@ const POST = z.object({
   documentId: z.string().optional(),
   submissionId: z.string().optional(),
   gradingAssistantStrictnessLevel: z.string().optional(),
-  llmRetry: z.enum(['fallback']).optional(), // accepted but ignored
+  llmRetry: z.enum(['fallback']).optional(),
 });
 
 function isPrismaRecordNotFoundError(error: unknown) {
@@ -533,8 +535,6 @@ function applyStrictnessToGradeFields({
 
 export async function action({ request }: ActionFunctionArgs) {
   // Per-teacher throttle (minute, 10-min, hour/day, global)
-  const { enforceGradingLimits, rateLimitedJson } = await import('~/utils/rate-limit.server');
-  const { RATE_LIMITS } = await import('~/config/rate-limits');
   const gradingDeadlineSignal = createGradingRequestDeadlineSignal();
   const gradingDeadlineResponse = () =>
     dataResponse(
@@ -851,11 +851,14 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
-  // Ignore client-controlled llmRetry; server decides.
-  const forceFallback = false;
+  // llmRetry=fallback is the client half of the provider-failover handshake
+  // (the server answers 202 {retrying:true}, the client re-posts with it). It
+  // only selects the fallback model, and every request is rate limited above, so
+  // it stays honoured; ignoring it makes failover unreachable during an outage.
+  const forceFallback = data.llmRetry === 'fallback';
   const llmRetryOptions = {
     forceFallback,
-    signalFallbackRetry: true,
+    signalFallbackRetry: !forceFallback,
   };
   const retryResponse = () => dataResponse({ retrying: true }, { status: 202 });
   // Cap total LLM calls per submission processing

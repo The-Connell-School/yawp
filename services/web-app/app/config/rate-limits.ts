@@ -15,8 +15,10 @@ export const RATE_LIMITS = {
     // Global ceilings across the platform
     globalPerMinute: 26, // A2_llmlog_global_peaks per_minute
     globalPerHour: 270, // A2_llmlog_global_peaks per_hour
-    // Transcript input budget sent to the model (approximate)
+    // Chat-history budget sent to the model (approximate); newest turns win
     transcriptCharBudget: 20000,
+    // The document the tutor reads is clamped, never rejected
+    maxDocumentChars: 40_000,
   },
 
   // Teacher grading
@@ -44,8 +46,8 @@ export const RATE_LIMITS = {
   // Keep existing 10 MiB body cap and add a concurrency single-flight per user.
   pdfExtract: {
     maxBytes: 10 * 1024 * 1024, // 10 MiB
-    // One in-flight per user per route (advisory lock)
-    lockTtlMs: 30_000,
+    // One in-flight per user per route (single-flight lease row)
+    leaseTtlMs: 90_000, // self-expiring single-flight lease (> the 30 s model timeout)
     perMinute: 3,
     perHour: 20,
     perDay: 60,
@@ -58,22 +60,26 @@ export const RATE_LIMITS = {
     perDay: 30,
   },
 
-  // Unauthenticated email/OTP surface — throttle per-IP and per-target (email)
-  // These are generous defaults; the WAF/CloudFront layer should carry most weight.
+  // Unauthenticated email/OTP surface — throttle per-IP and per-target (email).
+  // Per-IP budgets must tolerate a whole class behind one school NAT signing up
+  // or verifying in the same minute (measured: up to 47 distinct people per IP
+  // per day), so they are sized for ~2 classes at once. The per-email budget is
+  // what actually stops mail-bombing a single address; the WAF/CloudFront layer
+  // carries the volumetric weight.
   unauth: {
     signup: {
-      perIpPerMinute: 5,
-      perIpPerHour: 30,
+      perIpPerMinute: 60,
+      perIpPerHour: 200,
       perEmailPerHour: 6,
     },
     forgotPassword: {
-      perIpPerMinute: 5,
-      perIpPerHour: 30,
+      perIpPerMinute: 30,
+      perIpPerHour: 120,
       perEmailPerHour: 6,
     },
     verify: {
-      perIpPerMinute: 12,
-      perIpPerHour: 60,
+      perIpPerMinute: 120,
+      perIpPerHour: 600,
       perEmailPerHour: 20,
     },
   },

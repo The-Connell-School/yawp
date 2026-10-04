@@ -43,8 +43,10 @@ import { clampTutorMessage, enforceTutorLimits, rateLimitedJson, trimChatHistory
 const POST = z.object({
   response: z.string().min(1).max(RATE_LIMITS.tutor.maxMessageChars),
   cmsId: z.string().min(1),
-  content: z.string().max(RATE_LIMITS.tutor.maxMessageChars).optional(),
-  llmRetry: z.enum(['fallback']).optional(), // accepted but ignored
+  // `content` is the whole current document (not a chat message), so it is
+  // clamped to its own budget below rather than rejected at the message cap.
+  content: z.string().optional(),
+  llmRetry: z.enum(['fallback']).optional(),
 });
 
 const errorResponse = (error: { message: string }) => {
@@ -300,7 +302,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const documentSource =
       data.content === undefined ? 'db-document-text' : 'client-content';
-    const documentText = clampTutorMessage(data.content ?? cms.document.text ?? '');
+    const documentText = (data.content ?? cms.document.text ?? '').slice(
+      0,
+      RATE_LIMITS.tutor.maxDocumentChars
+    );
     const documentContext = buildAiTextContextAudit({
       documentSource,
       documentId: cms.document.id,
@@ -338,7 +343,7 @@ export async function action({ request }: ActionFunctionArgs) {
       ? [{ role: AgentType.User, content: assignmentContext }]
       : [];
 
-    let messages: { role: AgentType; content: string; name?: string }[] = [
+    const messages: { role: AgentType; content: string; name?: string }[] = [
       {
         role: AgentType.User,
         content: `
@@ -347,7 +352,14 @@ export async function action({ request }: ActionFunctionArgs) {
 				Address me like you are talking first, and then I will respond.`,
       },
     ]
-      .concat(currentMessages)
+      // Bound only the chat history; the intro, assignment, document and the
+      // student's new message are always sent whole.
+      .concat(
+        trimChatHistoryToBudget(
+          currentMessages,
+          RATE_LIMITS.tutor.transcriptCharBudget
+        )
+      )
       .concat(assignmentContextMessages)
       .concat([
         {
@@ -363,12 +375,12 @@ export async function action({ request }: ActionFunctionArgs) {
           content: clampTutorMessage(data.response),
         },
       ]);
-    // Bound the transcript we send to the model
-    messages = trimChatHistoryToBudget(messages, RATE_LIMITS.tutor.transcriptCharBudget);
 
     let completion: string;
-    // Ignore client-controlled llmRetry=fallback; server decides when to fall back.
-    const forceFallback = false;
+    // llmRetry=fallback completes the provider-failover handshake (202
+    // {retrying:true} -> client re-posts with it). Ignoring it would leave the
+    // tutor with no failover during a primary-provider outage.
+    const forceFallback = data.llmRetry === 'fallback';
     try {
       completion = await getLLMCompletion({
         model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
@@ -376,7 +388,7 @@ export async function action({ request }: ActionFunctionArgs) {
         system,
         maxTokens: 500,
         forceFallback,
-        signalFallbackRetry: true,
+        signalFallbackRetry: !forceFallback,
         metadata: {
           feature: 'tutor',
           kind: 'assignment-module-tutor',

@@ -4,7 +4,7 @@ import { anthropic } from '~/services/anthropic';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
-import { enforcePdfExtractorLimits, rateLimitedJson, withAdvisorySingleFlight } from '~/utils/rate-limit.server';
+import { enforcePdfExtractorLimits, rateLimitedJson, withSingleFlight } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 
 const MAX_PDF_BYTES = RATE_LIMITS.pdfExtract.maxBytes;
@@ -172,7 +172,7 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   try {
-    const message = await withAdvisorySingleFlight(
+    const flight = await withSingleFlight(
       `pdf-extract:${profile.id}:assignment`,
       () => anthropic.messages.create(
       {
@@ -206,6 +206,14 @@ export async function action({ request }: ActionFunctionArgs) {
       } as any,
       { signal: AbortSignal.timeout(30_000) }
     ));
+    if (!flight.ran) {
+      return rateLimitedJson(
+        'user',
+        10,
+        'A PDF extraction is already running for you. Please wait for it to finish.'
+      );
+    }
+    const message = flight.value;
 
     const responseText = (message.content as any[])
       .map((part) => (part?.type === 'text' ? (part.text as string) : ''))

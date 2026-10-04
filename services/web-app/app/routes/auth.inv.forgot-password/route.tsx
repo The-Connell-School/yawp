@@ -20,7 +20,7 @@ import { generateTOTP } from '~/utils/totp.server';
 import { Prisma } from '@app/prisma';
 import { getDomainUrl } from '~/utils/misc';
 import { normalizeEmail } from '~/utils/normalize-email';
-import { enforceUnauthByIpAndTarget, rateLimitedJson } from '~/utils/rate-limit.server';
+import { enforceUnauthByIpAndTarget, rateLimitedFormResponse } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 
 const Schema = z.object({
@@ -46,7 +46,7 @@ export async function action({ request }: ActionFunctionArgs) {
       perTargetPerHour: cfg.perEmailPerHour,
     });
     if (!decision.allowed) {
-      return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Too many password reset attempts. Please wait and try again.');
+      return rateLimitedFormResponse('email', decision.retryAfterSeconds, 'Too many password reset attempts. Please wait and try again.');
     }
   }
 

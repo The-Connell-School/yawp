@@ -1,6 +1,9 @@
 import { prisma } from '~/utils/db.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { getClientIp, ipHash } from '~/utils/ip.server';
+import { createHash } from 'node:crypto';
+import { validationError } from '@rvf/react-router';
+import type { Prisma } from '@app/prisma';
 
 export type LimitScope = 'user' | 'org' | 'ip' | 'global';
 
@@ -21,22 +24,53 @@ export type LimitResult = {
   retryAfterSeconds: number;
 };
 
+function retryAfterHeader(retryAfterSeconds: number) {
+  return String(Math.max(1, Math.ceil(retryAfterSeconds)));
+}
+
+/**
+ * 429 for JSON/fetch callers. `error` carries the machine-readable shape;
+ * `success: false` and the top-level `message` follow the convention the
+ * existing clients already read (see the PDF extractors and prompt generators).
+ */
 export function rateLimitedJson(scope: LimitScope, retryAfterSeconds: number, message?: string) {
+  const text = message ?? 'Please wait before trying again.';
   const body = {
+    success: false,
+    message: text,
     error: {
       code: 'RATE_LIMITED',
       scope,
       retryAfterSeconds,
-      message: message ?? 'Please wait before trying again.',
+      message: text,
     },
   };
   return new Response(JSON.stringify(body), {
     status: 429,
     headers: {
       'Content-Type': 'application/json',
-      'Retry-After': String(Math.max(1, Math.ceil(retryAfterSeconds)) ),
+      'Retry-After': retryAfterHeader(retryAfterSeconds),
     },
   });
+}
+
+/**
+ * 429 for <ValidatedForm> routes. rvf only renders `fieldErrors`, so a plain
+ * JSON body would leave the form silently doing nothing.
+ */
+export function rateLimitedFormResponse(
+  field: string,
+  retryAfterSeconds: number,
+  message: string
+) {
+  return validationError({ fieldErrors: { [field]: message } }, undefined, {
+    status: 429,
+    headers: { 'Retry-After': retryAfterHeader(retryAfterSeconds) },
+  });
+}
+
+function hashTarget(value: string) {
+  return createHash('sha256').update(value).digest('hex').slice(0, 32);
 }
 
 type BucketConsumeParams = {
@@ -47,90 +81,167 @@ type BucketConsumeParams = {
   nowMs?: number;
 };
 
-// Single-statement upsert with refill math. Only subtracts when enough tokens exist.
-async function consumeBucket({
+type BucketSpec = BucketConsumeParams & {
+  scope: LimitScope;
+  subjectKey: string;
+  route: string;
+  feature?: string;
+};
+
+/** Upper bound on how long the limiter may delay a request before failing open. */
+const LIMITER_TIMEOUT_MS = 2_500;
+
+async function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('rate limiter timed out')), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+// Whole tokens accrued since "lastRefillAt". Only whole tokens are credited and
+// "lastRefillAt" only advances by the time those tokens took to accrue, so
+// fractional progress is never discarded (callers that arrive more often than
+// one refill interval still earn tokens).
+const ACCRUED_SQL = `FLOOR(EXCLUDED."refillPerMs" * GREATEST(0::float8, $5::float8 - EXTRACT(EPOCH FROM "RateLimitBucket"."lastRefillAt")::float8 * 1000))`;
+
+/**
+ * Single-statement token-bucket consume. The conditional DO UPDATE only fires
+ * when enough tokens are available, so a denied call changes nothing and no row
+ * is returned. Returns true when the cost was taken.
+ */
+async function tryTakeTokens({
   key,
   capacity,
   refillPerMs,
   cost,
   nowMs,
-}: BucketConsumeParams): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
-  // Use a deterministic now() so tests can drive time.
-  // to_timestamp(ms/1000.0) yields timestamptz
-  const nowParam = Math.floor((nowMs ?? Date.now()));
-  const result = await prisma.$queryRawUnsafe<[{ allowed: boolean; retry_after_s: number } & Record<string, unknown>]>(`
-    WITH upserted AS (
-      INSERT INTO "RateLimitBucket" ("key", "tokens", "capacity", "refillPerMs", "lastRefillAt", "updatedAt")
-      VALUES ($1, GREATEST(0, $2 - $3), $2, $4, to_timestamp($5 / 1000.0), to_timestamp($5 / 1000.0))
-      ON CONFLICT ("key") DO UPDATE
-      SET
-        "capacity" = EXCLUDED."capacity",
-        "refillPerMs" = EXCLUDED."refillPerMs",
-        "updatedAt" = to_timestamp($5 / 1000.0),
-        "lastRefillAt" = to_timestamp($5 / 1000.0),
-        "tokens" = (
-          -- Refill from lastRefillAt, cap at capacity
-          CASE
-            WHEN LEAST(EXCLUDED."capacity",
-                       "RateLimitBucket"."tokens" + FLOOR( EXCLUDED."refillPerMs" * GREATEST(0, ($5 - EXTRACT(EPOCH FROM ("RateLimitBucket"."lastRefillAt")) * 1000)) )
-                 ) >= $3
-            THEN
-              -- Enough tokens: subtract cost
-              LEAST(EXCLUDED."capacity",
-                    "RateLimitBucket"."tokens" + FLOOR( EXCLUDED."refillPerMs" * GREATEST(0, ($5 - EXTRACT(EPOCH FROM ("RateLimitBucket"."lastRefillAt")) * 1000)) )
-               ) - $3
-            ELSE
-              -- Not enough: do not subtract
-              LEAST(EXCLUDED."capacity",
-                    "RateLimitBucket"."tokens" + FLOOR( EXCLUDED."refillPerMs" * GREATEST(0, ($5 - EXTRACT(EPOCH FROM ("RateLimitBucket"."lastRefillAt")) * 1000)) )
-               )
-          END
-        )
-      RETURNING
-        "capacity",
-        "refillPerMs",
-        -- tokens AFTER the update above
-        "tokens" as tokens_after
-    )
-    SELECT
-      CASE
-        WHEN (upserted."tokens_after" + $3) <= upserted."capacity" THEN true
-        ELSE false
-      END AS allowed,
-      CASE
-        WHEN (upserted."tokens_after" + $3) <= upserted."capacity" THEN 0
-        ELSE
-          CASE
-            WHEN upserted."refillPerMs" <= 0 THEN 3600 -- 1 hour fallback
-            ELSE CEIL( ($3 - upserted."tokens_after") / upserted."refillPerMs" / 1000.0 )
-          END
-      END AS retry_after_s
-    FROM upserted
-  `, key, capacity, cost, refillPerMs, nowParam);
-
-  const row = result?.[0];
-  const allowed = !!row?.allowed;
-  const retryAfterSeconds = Math.max(0, Number(row?.retry_after_s ?? 0));
-  return { allowed, retryAfterSeconds };
+}: BucketConsumeParams): Promise<boolean> {
+  const now = Math.floor(nowMs ?? Date.now());
+  const rows = await prisma.$queryRawUnsafe<{ ok: number }[]>(
+    `
+    INSERT INTO "RateLimitBucket" ("key", "tokens", "capacity", "refillPerMs", "lastRefillAt", "updatedAt")
+    VALUES ($1::text, GREATEST(0, $2::int - $3::int), $2::int, $4::float8,
+            to_timestamp($5::float8 / 1000.0), to_timestamp($5::float8 / 1000.0))
+    ON CONFLICT ("key") DO UPDATE SET
+      "capacity" = EXCLUDED."capacity",
+      "refillPerMs" = EXCLUDED."refillPerMs",
+      "updatedAt" = to_timestamp($5::float8 / 1000.0),
+      "tokens" = (LEAST(EXCLUDED."capacity"::float8, "RateLimitBucket"."tokens" + ${ACCRUED_SQL}) - $3::int)::int,
+      "lastRefillAt" = CASE
+        WHEN "RateLimitBucket"."tokens" + ${ACCRUED_SQL} >= EXCLUDED."capacity" THEN to_timestamp($5::float8 / 1000.0)
+        WHEN EXCLUDED."refillPerMs" > 0 THEN to_timestamp(
+          (EXTRACT(EPOCH FROM "RateLimitBucket"."lastRefillAt")::float8 * 1000 + ${ACCRUED_SQL} / EXCLUDED."refillPerMs") / 1000.0)
+        ELSE "RateLimitBucket"."lastRefillAt"
+      END
+    WHERE LEAST(EXCLUDED."capacity"::float8, "RateLimitBucket"."tokens" + ${ACCRUED_SQL}) >= $3::int
+    RETURNING 1 AS ok
+    `,
+    key,
+    capacity,
+    cost,
+    refillPerMs,
+    now
+  );
+  return rows.length > 0;
 }
 
-export async function withAdvisorySingleFlight<T>(name: string, fn: () => Promise<T>): Promise<T> {
-  // Use pg advisory locks to prevent duplicate in-flight work per process across instances.
-  // We scope by a stable hash of the name; hashtextextended is available in SQL but for portability use application-side murmur via a simple hash.
-  // We execute SELECT pg_try_advisory_lock(hash) and unlock after.
-  const hashKeySql = `SELECT hashtextextended($1, 0) AS key`;
-  const [{ key }] = await prisma.$queryRawUnsafe<{ key: string }[]>(hashKeySql, name);
+/** Seconds until `cost` tokens are available, from the stored (un-credited) state. */
+async function secondsUntilAvailable(
+  { key, cost, nowMs }: BucketConsumeParams
+): Promise<number> {
+  const now = Math.floor(nowMs ?? Date.now());
+  const rows = await prisma.$queryRawUnsafe<
+    { tokens: number; refillPerMs: number; lastMs: number }[]
+  >(
+    `SELECT "tokens", "refillPerMs", (EXTRACT(EPOCH FROM "lastRefillAt")::float8 * 1000) AS "lastMs"
+       FROM "RateLimitBucket" WHERE "key" = $1::text`,
+    key
+  );
+  const row = rows[0];
+  if (!row || !(Number(row.refillPerMs) > 0)) return 3600;
+  const missing = Math.max(1, cost - Number(row.tokens));
+  const readyAtMs = Number(row.lastMs) + Math.ceil(missing / Number(row.refillPerMs));
+  return Math.max(1, Math.ceil((readyAtMs - now) / 1000));
+}
+
+async function refundTokens({ key, cost }: BucketConsumeParams) {
+  await prisma.$queryRawUnsafe(
+    `UPDATE "RateLimitBucket"
+        SET "tokens" = LEAST("capacity", "tokens" + $2::int)
+      WHERE "key" = $1::text
+      RETURNING 1 AS ok`,
+    key,
+    cost
+  );
+}
+
+// --- Single-flight leases -------------------------------------------------
+// A lease is a row in "RateLimitBucket" whose "lastRefillAt" is the expiry.
+// Unlike session-level advisory locks (which are bound to one pooled
+// connection and leak if the unlock lands on another one), a lease is plain
+// data: it needs no connection affinity and expires by itself after the TTL.
+
+export type SingleFlightResult<T> =
+  | { ran: true; value: T }
+  | { ran: false };
+
+export async function withSingleFlight<T>(
+  name: string,
+  fn: () => Promise<T>,
+  options: { ttlMs?: number } = {}
+): Promise<SingleFlightResult<T>> {
+  const key = `lease:${name}`;
+  const ttlMs = Math.max(1_000, Math.floor(options.ttlMs ?? RATE_LIMITS.pdfExtract.leaseTtlMs));
+  let lease: string | null = null;
   try {
-    const lockRow = await prisma.$queryRawUnsafe<{ ok: boolean }[]>(
-      `SELECT pg_try_advisory_lock($1) AS ok`,
-      key
+    const rows = await withTimeout(
+      prisma.$queryRawUnsafe<{ lease: string }[]>(
+        `
+        INSERT INTO "RateLimitBucket" ("key", "tokens", "capacity", "refillPerMs", "lastRefillAt", "updatedAt")
+        VALUES ($1::text, 1, 1, 0, clock_timestamp() + ($2::int * interval '1 millisecond'), now())
+        ON CONFLICT ("key") DO UPDATE SET
+          "tokens" = 1,
+          "lastRefillAt" = clock_timestamp() + ($2::int * interval '1 millisecond'),
+          "updatedAt" = now()
+        WHERE "RateLimitBucket"."lastRefillAt" <= clock_timestamp()
+        RETURNING (EXTRACT(EPOCH FROM "lastRefillAt") * 1000000)::bigint::text AS lease
+        `,
+        key,
+        ttlMs
+      ),
+      LIMITER_TIMEOUT_MS
     );
-    if (!lockRow?.[0]?.ok) {
-      throw new Error('CONCURRENCY: another request is in-flight');
-    }
-    return await fn();
+    if (rows.length === 0) return { ran: false };
+    lease = rows[0]!.lease;
+  } catch (error) {
+    // Fail open: the lease is a cost guard, not a correctness requirement.
+    console.warn('single_flight_failed_open', { name, error });
+  }
+
+  try {
+    return { ran: true, value: await fn() };
   } finally {
-    await prisma.$queryRawUnsafe(`SELECT pg_advisory_unlock($1)`, key).catch(() => {});
+    if (lease) {
+      await prisma
+        .$queryRawUnsafe(
+          `DELETE FROM "RateLimitBucket"
+            WHERE "key" = $1::text
+              AND (EXTRACT(EPOCH FROM "lastRefillAt") * 1000000)::bigint::text = $2::text
+            RETURNING 1 AS ok`,
+          key,
+          lease
+        )
+        .catch(() => {
+          // The lease expires on its own after the TTL.
+        });
+    }
   }
 }
 
@@ -152,7 +263,7 @@ async function logDecision(params: {
         decision: params.decision,
         subjectKey: params.subjectKey,
         retryAfterSeconds: params.retryAfterSeconds ?? null,
-        metadata: params.metadata ?? {},
+        metadata: (params.metadata ?? {}) as Prisma.InputJsonObject,
       },
     });
   } catch (error) {
@@ -161,56 +272,99 @@ async function logDecision(params: {
   }
 }
 
-// Helper to test a set of buckets and return the worst-case retryAfter if any denies.
-async function consumeAll(buckets: Array<BucketConsumeParams & { scope: LimitScope; subjectKey: string; route: string; feature?: string }>): Promise<LimitResult> {
+/**
+ * Takes one cost from each bucket in order (put per-user buckets before shared
+ * ones). The first bucket that cannot pay stops the walk and every bucket
+ * already charged for this request is refunded, so a denied request never uses
+ * up daily or platform-wide capacity. Any limiter fault fails open.
+ */
+async function consumeAll(buckets: BucketSpec[]): Promise<LimitResult> {
+  const charged: BucketSpec[] = [];
   try {
-    let worst: { scope: LimitScope; retryAfterSeconds: number } | null = null;
-    for (const b of buckets) {
-      const { allowed, retryAfterSeconds } = await consumeBucket(b);
-      if (!allowed) {
-        if (!worst || retryAfterSeconds > worst.retryAfterSeconds) {
-          worst = { scope: b.scope, retryAfterSeconds };
+    return await withTimeout(
+      (async (): Promise<LimitResult> => {
+        for (const bucket of buckets) {
+          if (await tryTakeTokens(bucket)) {
+            charged.push(bucket);
+            continue;
+          }
+          const retryAfterSeconds = await secondsUntilAvailable(bucket);
+          for (const done of charged) {
+            await refundTokens(done).catch(() => {});
+          }
+          charged.length = 0;
+          // Denials are the only decisions logged: one row per rejected request,
+          // not one per request.
+          void logDecision({
+            route: bucket.route,
+            feature: bucket.feature,
+            scope: bucket.scope,
+            decision:
+              bucket.scope === 'user'
+                ? 'DENIED_USER'
+                : bucket.scope === 'org'
+                  ? 'DENIED_ORG'
+                  : bucket.scope === 'ip'
+                    ? 'DENIED_IP'
+                    : 'DENIED_GLOBAL',
+            subjectKey: bucket.subjectKey,
+            retryAfterSeconds,
+          });
+          return { allowed: false, scope: bucket.scope, retryAfterSeconds };
         }
-      }
-    }
-    if (worst) {
-      // Log first-denied scope
-      const firstDenied = buckets.find((b) => {
-        // Re-evaluate quickly for logging; avoid double SQL by trusting local 'worst' scope.
-        return b.scope === worst!.scope;
-      })!;
-      await logDecision({
-        route: firstDenied.route,
-        feature: firstDenied.feature,
-        scope: worst.scope,
-        decision:
-          worst.scope === 'user' ? 'DENIED_USER'
-          : worst.scope === 'org' ? 'DENIED_ORG'
-          : worst.scope === 'ip' ? 'DENIED_IP'
-          : 'DENIED_GLOBAL',
-        subjectKey: firstDenied.subjectKey,
-        retryAfterSeconds: worst.retryAfterSeconds,
-      });
-      return { allowed: false, scope: worst.scope, retryAfterSeconds: worst.retryAfterSeconds };
-    }
-    // Log an allow for the primary scope (user when present)
-    const primary = buckets.find((b) => b.scope === 'user') ?? buckets[0]!;
-    await logDecision({
-      route: primary.route,
-      feature: primary.feature,
-      scope: primary.scope,
-      decision: 'ALLOWED',
-      subjectKey: primary.subjectKey,
-    });
-    return { allowed: true };
+        return { allowed: true };
+      })(),
+      LIMITER_TIMEOUT_MS * 2
+    );
   } catch (error) {
-    // Fail open: allow the request but record the fault.
+    // Fail open: allow the request but record the fault. Undo partial charges
+    // best-effort so a mid-walk fault does not silently burn user capacity.
+    for (const done of charged) {
+      await refundTokens(done).catch(() => {});
+    }
     console.warn('rate_limit_failed_open', { error });
     return { allowed: true };
   }
 }
 
 // Public per-route helpers
+
+const MINUTE_MS = 60_000;
+const TEN_MINUTES_MS = 600_000;
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+
+type WindowSpec = {
+  key: string;
+  limit: number;
+  windowMs: number;
+  scope: LimitScope;
+  subjectKey: string;
+  route: string;
+  feature?: string;
+  nowMs?: number;
+};
+
+/**
+ * One independent bucket per window: it holds `limit` tokens and refills at
+ * `limit / windowMs`, so a caller can always do `limit` requests in that window
+ * regardless of how they spread the earlier windows. (Reusing a slower window's
+ * refill rate for a faster window's bucket makes the effective limit far lower
+ * than the measured one.)
+ */
+function windowBucket(spec: WindowSpec): BucketSpec {
+  return {
+    key: spec.key,
+    capacity: spec.limit,
+    refillPerMs: spec.limit / spec.windowMs,
+    cost: 1,
+    nowMs: spec.nowMs,
+    scope: spec.scope,
+    subjectKey: spec.subjectKey,
+    route: spec.route,
+    feature: spec.feature,
+  };
+}
 
 export async function enforceTutorLimits(params: {
   request: Request;
@@ -221,46 +375,16 @@ export async function enforceTutorLimits(params: {
   const { membershipId, route, nowMs } = params;
   const limits = RATE_LIMITS.tutor;
   const userKeyBase = `user:tutor:${membershipId}`;
-  const globalKeyBase = `global:tutor`;
-  const buckets: Array<BucketConsumeParams & { scope: LimitScope; subjectKey: string; route: string; feature?: string }> = [
-    // Per user (minute burst)
-    {
-      key: `${userKeyBase}:m`,
-      capacity: limits.perMinute,
-      refillPerMs: limits.perHour / 3_600_000, // sustained hourly
-      cost: 1,
-      nowMs,
-      scope: 'user',
-      subjectKey: userKeyBase,
-      route,
-      feature: 'tutor',
-    },
-    // Daily cap, continuous refill approximation
-    {
-      key: `${userKeyBase}:d`,
-      capacity: limits.perDay,
-      refillPerMs: limits.perDay / 86_400_000,
-      cost: 1,
-      nowMs,
-      scope: 'user',
-      subjectKey: userKeyBase,
-      route,
-      feature: 'tutor',
-    },
-    // Global ceilings
-    {
-      key: `${globalKeyBase}:m`,
-      capacity: limits.globalPerMinute,
-      refillPerMs: limits.globalPerHour / 3_600_000,
-      cost: 1,
-      nowMs,
-      scope: 'global',
-      subjectKey: globalKeyBase,
-      route,
-      feature: 'tutor',
-    },
-  ];
-  return consumeAll(buckets);
+  const base = { route, feature: 'tutor', nowMs };
+  // Per-student buckets first, shared platform buckets last, so a student who is
+  // already over their own limit never touches platform-wide capacity.
+  return consumeAll([
+    windowBucket({ ...base, key: `${userKeyBase}:m`, limit: limits.perMinute, windowMs: MINUTE_MS, scope: 'user', subjectKey: userKeyBase }),
+    windowBucket({ ...base, key: `${userKeyBase}:h`, limit: limits.perHour, windowMs: HOUR_MS, scope: 'user', subjectKey: userKeyBase }),
+    windowBucket({ ...base, key: `${userKeyBase}:d`, limit: limits.perDay, windowMs: DAY_MS, scope: 'user', subjectKey: userKeyBase }),
+    windowBucket({ ...base, key: 'global:tutor:m', limit: limits.globalPerMinute, windowMs: MINUTE_MS, scope: 'global', subjectKey: 'global:tutor' }),
+    windowBucket({ ...base, key: 'global:tutor:h', limit: limits.globalPerHour, windowMs: HOUR_MS, scope: 'global', subjectKey: 'global:tutor' }),
+  ]);
 }
 
 export async function enforceGradingLimits(params: {
@@ -272,58 +396,27 @@ export async function enforceGradingLimits(params: {
   const { membershipId, route, nowMs } = params;
   const limits = RATE_LIMITS.grading;
   const userKeyBase = `user:grading:${membershipId}`;
-  const globalKeyBase = `global:grading`;
-  const buckets: Array<BucketConsumeParams & { scope: LimitScope; subjectKey: string; route: string; feature?: string }> = [
-    // Minute burst
-    {
-      key: `${userKeyBase}:m`,
-      capacity: limits.perMinute,
-      refillPerMs: limits.perHour / 3_600_000, // hourly sustained
-      cost: 1,
-      nowMs,
-      scope: 'user',
-      subjectKey: userKeyBase,
-      route,
-      feature: 'grading',
-    },
-    // 10-minute window
-    {
-      key: `${userKeyBase}:10m`,
-      capacity: limits.perTenMinutes,
-      refillPerMs: limits.perTenMinutes / 600_000,
-      cost: 1,
-      nowMs,
-      scope: 'user',
-      subjectKey: userKeyBase,
-      route,
-      feature: 'grading',
-    },
-    // Daily cap
-    {
-      key: `${userKeyBase}:d`,
-      capacity: limits.perDay,
-      refillPerMs: limits.perDay / 86_400_000,
-      cost: 1,
-      nowMs,
-      scope: 'user',
-      subjectKey: userKeyBase,
-      route,
-      feature: 'grading',
-    },
-    // Global per-minute ceiling
-    {
-      key: `${globalKeyBase}:m`,
-      capacity: limits.globalPerMinute,
-      refillPerMs: limits.globalPerMinute / 60_000,
-      cost: 1,
-      nowMs,
-      scope: 'global',
-      subjectKey: globalKeyBase,
-      route,
-      feature: 'grading',
-    },
-  ];
-  return consumeAll(buckets);
+  const base = { route, feature: 'grading', nowMs };
+  return consumeAll([
+    windowBucket({ ...base, key: `${userKeyBase}:m`, limit: limits.perMinute, windowMs: MINUTE_MS, scope: 'user', subjectKey: userKeyBase }),
+    windowBucket({ ...base, key: `${userKeyBase}:10m`, limit: limits.perTenMinutes, windowMs: TEN_MINUTES_MS, scope: 'user', subjectKey: userKeyBase }),
+    windowBucket({ ...base, key: `${userKeyBase}:h`, limit: limits.perHour, windowMs: HOUR_MS, scope: 'user', subjectKey: userKeyBase }),
+    windowBucket({ ...base, key: `${userKeyBase}:d`, limit: limits.perDay, windowMs: DAY_MS, scope: 'user', subjectKey: userKeyBase }),
+    windowBucket({ ...base, key: 'global:grading:m', limit: limits.globalPerMinute, windowMs: MINUTE_MS, scope: 'global', subjectKey: 'global:grading' }),
+  ]);
+}
+
+function perTeacherThreeWindows(
+  limits: { perMinute: number; perHour: number; perDay: number },
+  params: { membershipId: string; route: string; feature: string; nowMs?: number }
+) {
+  const userKeyBase = `user:${params.feature}:${params.membershipId}`;
+  const base = { route: params.route, feature: params.feature, nowMs: params.nowMs, scope: 'user' as const, subjectKey: userKeyBase };
+  return consumeAll([
+    windowBucket({ ...base, key: `${userKeyBase}:m`, limit: limits.perMinute, windowMs: MINUTE_MS }),
+    windowBucket({ ...base, key: `${userKeyBase}:h`, limit: limits.perHour, windowMs: HOUR_MS }),
+    windowBucket({ ...base, key: `${userKeyBase}:d`, limit: limits.perDay, windowMs: DAY_MS }),
+  ]);
 }
 
 export async function enforceTeacherGeneratorLimits(params: {
@@ -332,34 +425,7 @@ export async function enforceTeacherGeneratorLimits(params: {
   feature: string;
   nowMs?: number;
 }): Promise<LimitResult> {
-  const { membershipId, route, feature, nowMs } = params;
-  const limits = RATE_LIMITS.promptGenerators;
-  const userKeyBase = `user:${feature}:${membershipId}`;
-  const buckets: Array<BucketConsumeParams & { scope: LimitScope; subjectKey: string; route: string; feature?: string }> = [
-    {
-      key: `${userKeyBase}:m`,
-      capacity: limits.perMinute,
-      refillPerMs: limits.perHour / 3_600_000,
-      cost: 1,
-      nowMs,
-      scope: 'user',
-      subjectKey: userKeyBase,
-      route,
-      feature,
-    },
-    {
-      key: `${userKeyBase}:d`,
-      capacity: limits.perDay,
-      refillPerMs: limits.perDay / 86_400_000,
-      cost: 1,
-      nowMs,
-      scope: 'user',
-      subjectKey: userKeyBase,
-      route,
-      feature,
-    },
-  ];
-  return consumeAll(buckets);
+  return perTeacherThreeWindows(RATE_LIMITS.promptGenerators, params);
 }
 
 export async function enforcePdfExtractorLimits(params: {
@@ -368,34 +434,7 @@ export async function enforcePdfExtractorLimits(params: {
   feature: string;
   nowMs?: number;
 }): Promise<LimitResult> {
-  const { membershipId, route, feature, nowMs } = params;
-  const limits = RATE_LIMITS.pdfExtract;
-  const userKeyBase = `user:${feature}:${membershipId}`;
-  const buckets: Array<BucketConsumeParams & { scope: LimitScope; subjectKey: string; route: string; feature?: string }> = [
-    {
-      key: `${userKeyBase}:m`,
-      capacity: limits.perMinute,
-      refillPerMs: limits.perHour / 3_600_000,
-      cost: 1,
-      nowMs,
-      scope: 'user',
-      subjectKey: userKeyBase,
-      route,
-      feature,
-    },
-    {
-      key: `${userKeyBase}:d`,
-      capacity: limits.perDay,
-      refillPerMs: limits.perDay / 86_400_000,
-      cost: 1,
-      nowMs,
-      scope: 'user',
-      subjectKey: userKeyBase,
-      route,
-      feature,
-    },
-  ];
-  return consumeAll(buckets);
+  return perTeacherThreeWindows(RATE_LIMITS.pdfExtract, params);
 }
 
 export async function enforceUnauthByIpAndTarget(params: {
@@ -410,32 +449,15 @@ export async function enforceUnauthByIpAndTarget(params: {
   const { request, route, targetKey, perIpPerMinute, perIpPerHour, perTargetPerHour, nowMs } = params;
   const ip = getClientIp(request);
   const ipKeyBase = `ip:${ipHash(ip)}:${route}`;
-  const targetBase = `target:${targetKey}:${route}`;
-  const buckets: Array<BucketConsumeParams & { scope: LimitScope; subjectKey: string; route: string; feature?: string }> = [
-    // Per-IP: burst + sustained hour
-    {
-      key: `${ipKeyBase}:m`,
-      capacity: perIpPerMinute,
-      refillPerMs: perIpPerHour / 3_600_000,
-      cost: 1,
-      nowMs,
-      scope: 'ip',
-      subjectKey: ipKeyBase,
-      route,
-    },
-    // Per-target (email), sustained hour
-    {
-      key: `${targetBase}:h`,
-      capacity: perTargetPerHour,
-      refillPerMs: perTargetPerHour / 3_600_000,
-      cost: 1,
-      nowMs,
-      scope: 'ip', // treat as ip-level in messaging
-      subjectKey: targetBase,
-      route,
-    },
-  ];
-  return consumeAll(buckets);
+  // Hash the target so emails never land in bucket keys or the decision log.
+  const targetBase = `target:${hashTarget(targetKey)}:${route}`;
+  const base = { route, nowMs };
+  return consumeAll([
+    windowBucket({ ...base, key: `${ipKeyBase}:m`, limit: perIpPerMinute, windowMs: MINUTE_MS, scope: 'ip', subjectKey: ipKeyBase }),
+    windowBucket({ ...base, key: `${ipKeyBase}:h`, limit: perIpPerHour, windowMs: HOUR_MS, scope: 'ip', subjectKey: ipKeyBase }),
+    // Per-target (email): the budget that stops mail-bombing one address.
+    windowBucket({ ...base, key: `${targetBase}:h`, limit: perTargetPerHour, windowMs: HOUR_MS, scope: 'ip', subjectKey: targetBase }),
+  ]);
 }
 
 // Utilities for tutor input controls
