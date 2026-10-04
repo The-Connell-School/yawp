@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
 import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
-import { seedDailyPagesSampleEntries } from './seed-daily-pages-samples';
+import {
+  seedDailyPagesAnalyzeSamples,
+  seedDailyPagesSampleEntries,
+} from './seed-daily-pages-samples';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_PERSONAS,
@@ -316,7 +319,7 @@ export async function seedSyntheticLocalDevData(
     // legible once you can open four entries on one prompt and see where the
     // assistant put them. Also points the seeded type at the short-form
     // rubric — see seed-daily-pages-samples.ts.
-    await seedDailyPagesSampleEntries(prisma, {
+    const dailyPagesSampleTargets = {
       assignmentTypeId: dailyPagesAssignmentTypeId,
       classId: primaryClass.id,
       teacherMembershipId: primaryTeacher.membershipId,
@@ -327,7 +330,11 @@ export async function seedSyntheticLocalDevData(
         'student-unreleased':
           personaRecords['student-unreleased'].membershipId,
       },
-    });
+    };
+    await seedDailyPagesSampleEntries(prisma, dailyPagesSampleTargets);
+    // And the same class set run as an Analyze paragraph, with a draft left
+    // open for the live tutor.
+    await seedDailyPagesAnalyzeSamples(prisma, dailyPagesSampleTargets);
   }
 
   // Add a ready-to-use Engagement preview assignment under the existing Daily Pages

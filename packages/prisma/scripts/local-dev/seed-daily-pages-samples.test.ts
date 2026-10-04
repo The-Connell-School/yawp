@@ -7,9 +7,15 @@ import {
   DAILY_PAGES_SAMPLE_ASSIGNMENT,
   DAILY_PAGES_SAMPLE_ENTRIES,
 } from '../../../../services/web-app/app/domain/assignment-types/daily-pages-sample-entries.ts';
+import {
+  DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT,
+  DAILY_PAGES_ANALYZE_SAMPLE_DRAFT,
+  DAILY_PAGES_ANALYZE_SAMPLE_ENTRIES,
+} from '../../../../services/web-app/app/domain/assignment-types/daily-pages-analyze-sample-entries.ts';
 import { DAILY_PAGES_SHORT_FORM_CATEGORY_KEYS } from '../../../../services/web-app/app/domain/assignment-types/daily-pages-short-form-rubric.ts';
 import {
   sampleEntryHtml,
+  seedDailyPagesAnalyzeSamples,
   seedDailyPagesSampleEntries,
 } from './seed-daily-pages-samples';
 
@@ -242,5 +248,83 @@ describe('seedDailyPagesSampleEntries', () => {
 
   test('wraps each paragraph for the editor', () => {
     expect(sampleEntryHtml('One.\n\nTwo.')).toBe('<p>One.</p><p>Two.</p>');
+  });
+});
+
+/**
+ * The Analyze class set: a Daily Pages assignment run as an analysis
+ * paragraph, three graded entries, and one draft left open for the live tutor.
+ */
+describe('seedDailyPagesAnalyzeSamples', () => {
+  test('creates an Analyze assignment, timed, on the library prompt', async () => {
+    const { prisma, calls } = fakePrisma();
+
+    await seedDailyPagesAnalyzeSamples(prisma as never, options);
+
+    expect(calls.assignmentCreate).toHaveLength(1);
+    const { data } = calls.assignmentCreate[0].args;
+    expect(data.paragraphMode).toBe('analyze');
+    expect(data.writingTimeMinutes).toBe(15);
+    expect(data.tutorEnabled).toBe(true);
+    expect(data.prompt).toBe(DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.prompt);
+    expect(calls.classAssignmentCreate[0].args.data.classId).toBe('class-1');
+  });
+
+  test('grades the three entries and leaves the draft unsubmitted', async () => {
+    const { prisma, calls } = fakePrisma();
+
+    const result = await seedDailyPagesAnalyzeSamples(prisma as never, options);
+
+    expect(calls.documentCreate).toHaveLength(
+      DAILY_PAGES_ANALYZE_SAMPLE_ENTRIES.length + 1
+    );
+    expect(calls.submissionCreate).toHaveLength(
+      DAILY_PAGES_ANALYZE_SAMPLE_ENTRIES.length
+    );
+    expect(calls.runCreate).toHaveLength(
+      DAILY_PAGES_ANALYZE_SAMPLE_ENTRIES.length
+    );
+    expect(result.submissionIds).toHaveLength(
+      DAILY_PAGES_ANALYZE_SAMPLE_ENTRIES.length
+    );
+
+    const draft = calls.documentCreate.find(
+      (call) => call.args.data.text === DAILY_PAGES_ANALYZE_SAMPLE_DRAFT.text
+    );
+    expect(draft?.args.data.membershipId).toBe('student-1');
+    // Opening the draft needs a tutor session, or the tutor has nowhere to run.
+    expect(draft?.args.data.assignmentModuleSessions.create).toHaveLength(1);
+  });
+
+  test('releases two grades and holds one back', async () => {
+    const { prisma, calls } = fakePrisma();
+
+    await seedDailyPagesAnalyzeSamples(prisma as never, options);
+
+    const released = calls.submissionCreate.filter(
+      (call) => call.args.data.releasedAt !== null
+    );
+    expect(released).toHaveLength(2);
+  });
+
+  test('leaves the type’s rubric and tutor to the first sample set', async () => {
+    const { prisma, calls } = fakePrisma();
+
+    await seedDailyPagesAnalyzeSamples(prisma as never, options);
+
+    expect(calls.assignmentTypeUpdate).toHaveLength(0);
+    expect(calls.moduleUpdateMany).toHaveLength(0);
+  });
+
+  test('creates nothing on a second run', async () => {
+    const { prisma, calls } = fakePrisma({
+      existingAssignmentId: 'existing-analyze',
+    });
+
+    const result = await seedDailyPagesAnalyzeSamples(prisma as never, options);
+
+    expect(result.alreadySeeded).toBe(true);
+    expect(calls.assignmentCreate).toHaveLength(0);
+    expect(calls.documentCreate).toHaveLength(0);
   });
 });

@@ -9,6 +9,7 @@ import {
 } from './local-dev/import-prod-fidelity-fixtures';
 import {
   resolveDailyPagesSampleTargets,
+  seedDailyPagesAnalyzeSamples,
   seedDailyPagesSampleEntries,
 } from './local-dev/seed-daily-pages-samples';
 import {
@@ -61,6 +62,15 @@ try {
       samples.alreadySeeded
         ? 'Daily Pages sample entries already present.'
         : `Seeded ${samples.submissionIds.length} graded Daily Pages entries.`
+    );
+    const analyzeSamples = await seedDailyPagesAnalyzeSamples(
+      prisma,
+      sampleTargets
+    );
+    console.log(
+      analyzeSamples.alreadySeeded
+        ? 'Daily Pages Analyze samples already present.'
+        : `Seeded ${analyzeSamples.submissionIds.length} graded Daily Pages Analyze entries and one draft.`
     );
   }
 } catch (error) {
