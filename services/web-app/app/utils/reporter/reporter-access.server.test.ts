@@ -54,7 +54,7 @@ describe('reporter access gate', () => {
     expect(access.allowed).toBe(false);
     await expect(
       requireReporterAccess(new Request('http://localhost/'))
-    ).rejects.toMatchObject({ status: 404 });
+    ).rejects.toMatchObject({ init: { status: 404 } });
   });
 });
 
