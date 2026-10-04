@@ -84,13 +84,14 @@ const TUTOR_POINTS = [
     detail: 'Off-topic questions get a friendly nudge back to the writing.',
   },
   {
-    title: 'Reviews before they submit',
+    title: 'Keeps them thinking',
     detail:
-      'The last step checks content, organization, syntax and grammar. It doesn’t give a grade.',
+      'Its questions and next steps leave the thinking to the student, from the first idea to the final draft.',
   },
   {
-    title: 'Steps aside for cold writes',
-    detail: 'Turn it off and students see only the prompt.',
+    title: 'Support for every student',
+    detail:
+      'Every student gets feedback on their own draft while they write. One teacher at the front of the room can’t reach every desk at once.',
   },
 ];
 
