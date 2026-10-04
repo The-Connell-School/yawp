@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { applicationsSearch, tokensCreate, releaseBatchHttp, exportCsv } from './internal-free-tier-http.server';
+import { applicationsSearch, tokensCreate, releaseBatchHttp, exportCsv, csv } from './internal-free-tier-http.server';
 
 const key = 'k'.repeat(43);
 
@@ -22,3 +22,37 @@ test('internal endpoints enforce management key and methods', async () => {
   }
 });
 
+
+test('csv neutralises spreadsheet formulas and quotes separators', () => {
+  expect(csv('=HYPERLINK("http://evil")')).toBe(`"'=HYPERLINK(""http://evil"")"`);
+  expect(csv('+1')).toBe("'+1");
+  expect(csv('-2')).toBe("'-2");
+  expect(csv('@SUM(A1)')).toBe("'@SUM(A1)");
+  expect(csv('plain')).toBe('plain');
+  expect(csv('a,b')).toBe('"a,b"');
+  expect(csv('line\nbreak')).toBe('"line\nbreak"');
+  expect(csv('cr\rhere')).toBe('"cr\rhere"');
+});
+
+test('every internal endpoint rejects a missing, short or wrong bearer before touching the database', async () => {
+  const old = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
+  try {
+    const bad = [undefined, 'Bearer', `Bearer ${key}x`, `bearer ${key}`, key];
+    for (const header of bad) {
+      const headers: Record<string, string> = header === undefined ? {} : { authorization: header };
+      const make = (path: string, method: string) => new Request(`https://yawp.test/api/internal/v1/free-tier/${path}`, { method, headers });
+      expect((await applicationsSearch(make('applications', 'GET'))).status).toBe(401);
+      expect((await tokensCreate(make('tokens', 'POST'))).status).toBe(401);
+      expect((await releaseBatchHttp(make('release', 'POST'))).status).toBe(401);
+      expect((await exportCsv(make('export', 'GET'))).status).toBe(401);
+    }
+    const tooLong = new Request('https://yawp.test/x', { headers: { authorization: `Bearer ${key}${'a'.repeat(600)}` } });
+    expect((await applicationsSearch(tooLong)).status).toBe(401);
+    process.env.YAWP_MANAGEMENT_SERVICE_KEY = 'short';
+    expect((await applicationsSearch(new Request('https://yawp.test/x', { headers: { authorization: 'Bearer short' } }))).status).toBe(503);
+  } finally {
+    if (old === undefined) delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+    else process.env.YAWP_MANAGEMENT_SERVICE_KEY = old;
+  }
+});

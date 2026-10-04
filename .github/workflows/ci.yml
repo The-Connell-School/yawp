@@ -172,6 +172,27 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma migrate deploy
 
+      # CI names every test file it runs, and nothing ran services/web-app/app/**
+      # unit tests: the rate limiter, client-IP and free-tier tests were present but
+      # never executed. These need the migrated database above (real SQL), so they
+      # live in this job. Add new web-app test files here.
+      - name: 🧪 Web app unit + DB tests (rate limits, client IP, free tier)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          RATE_LIMIT_DB_TESTS: '1'
+          FREE_TIER_DB_TESTS: '1'
+        run: >-
+          bun test
+          ./services/web-app/app/utils/ip.server.test.ts
+          ./services/web-app/app/utils/rate-limit.server.test.ts
+          ./services/web-app/app/utils/rate-limit.false-positive.test.ts
+          ./services/web-app/app/utils/rate-limit.responses.test.ts
+          ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
+          ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
+          ./services/web-app/app/domain/free-tier/
+          ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
+
       - name: 🎨 Backfill class artwork keys
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:

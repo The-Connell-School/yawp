@@ -1,7 +1,8 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
-import { createAcquisitionTokens, releaseBatch, tokenCreateSchema } from '~/domain/free-tier/service.server';
+import { createAcquisitionTokens, releaseBatch, releaseBatchSchema, tokenCreateSchema } from '~/domain/free-tier/service.server';
+import { readBoundedText } from '~/utils/bounded-body.server';
 
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
   Response.json(value, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', ...(headers || {}) } });
@@ -108,20 +109,8 @@ export async function tokensCreate(request: Request) {
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   if (new URL(request.url).search) return response({ error: 'Invalid request' }, 400);
   if (!request.headers.get('content-type')?.startsWith('application/json')) return response({ error: 'Invalid content type' }, 400);
-  const reader = request.body?.getReader(); if (!reader) return response({ error: 'Invalid request' }, 400);
-  let text = '';
-  try {
-    let size = 0;
-    while (true) {
-      const part = await reader.read();
-      if (part.done) break;
-      size += part.value.byteLength;
-      if (size > 32768) throw new Error();
-      text += Buffer.from(part.value).toString('utf8');
-    }
-  } catch {
-    return response({ error: 'Payload too large' }, 413);
-  } finally { reader.releaseLock(); }
+  const text = await readBoundedText(request, 32768);
+  if (text === null) return response({ error: 'Payload too large' }, 413);
   let parsed: z.infer<typeof tokenCreateSchema>;
   try {
     parsed = tokenCreateSchema.parse(JSON.parse(text));
@@ -135,11 +124,11 @@ export async function releaseBatchHttp(request: Request) {
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   if (!request.headers.get('content-type')?.startsWith('application/json')) return response({ error: 'Invalid content type' }, 400);
-  const text = await request.text();
-  if (text.length > 32768) return response({ error: 'Payload too large' }, 413);
+  const text = await readBoundedText(request, 32768);
+  if (text === null) return response({ error: 'Payload too large' }, 413);
   let body: any; try { body = JSON.parse(text); } catch { return response({ error: 'Malformed JSON' }, 400); }
   try {
-    const result = await releaseBatch(z.object({ applicationIds: z.array(z.string().min(1).max(200)).min(1).max(1000) }).strict().parse(body));
+    const result = await releaseBatch(releaseBatchSchema.parse(body));
     return response(result);
   } catch { return response({ error: 'Invalid input' }, 400); }
 }
@@ -166,10 +155,14 @@ export async function exportCsv(request: Request) {
       { location: { contains: input.q, mode: 'insensitive' } },
     ];
   }
+  // Bounded: one more row than the cap tells us the export was truncated.
   const rows = await prisma.freeTierApplication.findMany({
     where,
-    orderBy: { createdAt: 'asc' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: EXPORT_MAX_ROWS + 1,
   });
+  const truncated = rows.length > EXPORT_MAX_ROWS;
+  if (truncated) rows.length = EXPORT_MAX_ROWS;
   const header = ['id', 'createdAt', 'status', 'name', 'email', 'schoolName', 'location', 'gradeLevel', 'releasedAt', 'acquisitionTokenId'];
   const lines = [header.join(',')];
   for (const r of rows) {
@@ -192,13 +185,21 @@ export async function exportCsv(request: Request) {
       'cache-control': 'no-store',
       'referrer-policy': 'no-referrer',
       'content-disposition': 'attachment; filename="free-tier-applications.csv"',
+      ...(truncated ? { 'x-export-truncated': 'true' } : {}),
     },
   });
 }
 
-function csv(value: string) {
-  const v = value ?? '';
-  if (/[",\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+export const EXPORT_MAX_ROWS = 10000;
+
+/**
+ * Quote for CSV and neutralise spreadsheet formulas: applicants control these
+ * fields, and a cell starting with = + - @ (or tab/CR) executes when the file
+ * is opened in Excel/Sheets.
+ */
+export function csv(value: string) {
+  let v = value ?? '';
+  if (/^[=+\-@\t\r]/.test(v)) v = `'${v}`;
+  if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
   return v;
 }
-
