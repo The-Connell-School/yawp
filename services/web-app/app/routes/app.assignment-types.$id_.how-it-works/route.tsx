@@ -191,11 +191,12 @@ export default function ThesisEssayHowItWorksRoute() {
         >
           <GuideCopy>
             The goal is for students to write better without the Tutor. Turn
-            it off for an in-class essay to see what they can do on their own.
+            it off for an in-class essay and use it as a diagnostic, as an
+            assessment or to track whether skills transfer.
           </GuideCopy>
           <GuideCopy>
             Reporter keeps cold writes separate from work done with the Tutor,
-            so you can see whether those skills are growing over the year.
+            so you can see that growth over the year.
           </GuideCopy>
         </GuideRow>
       </GuideSection>
