@@ -33,6 +33,13 @@ test.describe('Thesis-Driven Essay: See how it works', () => {
       'src',
       /^\/img\/thesis-essay-guide\/.+\.mp4$/
     );
+    // Grading gets the same treatment: what it is, what it isn't and why.
+    const grading = page.getByRole('region', {
+      name: 'How the Grading Assistant helps you grade',
+    });
+    await expect(grading).toBeVisible();
+    await expect(grading).toContainText(/what it isn’t/i);
+    await expect(grading).toContainText(/until you release it/i);
     // The section a school approving the Tutor reads first.
     const wont = page.getByTestId('guide-wont');
     await expect(wont).toContainText(/write the essay for a student/i);
