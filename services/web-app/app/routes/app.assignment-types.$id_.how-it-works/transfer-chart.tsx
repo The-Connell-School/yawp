@@ -86,7 +86,9 @@ export function TransferChart() {
   return (
     <figure className="flex w-full max-w-3xl flex-col gap-3 self-center rounded-xl border bg-background p-4 shadow-sm md:p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-[15px] font-semibold">One student over a school year</p>
+        <p className="text-[15px] font-semibold">
+          One student over a school year
+        </p>
         <span className="rounded-full border px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           Illustration
         </span>
@@ -95,13 +97,28 @@ export function TransferChart() {
       <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
         <span className="inline-flex items-center gap-2">
           <svg width="18" height="10" aria-hidden="true">
-            <line x1="0" x2="18" y1="5" y2="5" strokeWidth="2" className={WARM_STROKE} />
+            <line
+              x1="0"
+              x2="18"
+              y1="5"
+              y2="5"
+              strokeWidth="2"
+              className={WARM_STROKE}
+            />
           </svg>
           Warm writes, Tutor on
         </span>
         <span className="inline-flex items-center gap-2">
           <svg width="18" height="10" aria-hidden="true">
-            <line x1="0" x2="18" y1="5" y2="5" strokeWidth="2" strokeDasharray="4 3" className={COLD_STROKE} />
+            <line
+              x1="0"
+              x2="18"
+              y1="5"
+              y2="5"
+              strokeWidth="2"
+              strokeDasharray="4 3"
+              className={COLD_STROKE}
+            />
             <circle cx="9" cy="5" r="4" className={COLD_FILL} />
           </svg>
           Cold writes, Tutor off
@@ -149,24 +166,58 @@ export function TransferChart() {
         <Gap month={0.5} from={62} to={78} side="right" />
         <Gap month={7.5} from={80} to={86} side="left" />
 
-        <path d={path(WARM)} fill="none" strokeWidth={2} strokeLinejoin="round" className={WARM_STROKE} />
+        <path
+          d={path(WARM)}
+          fill="none"
+          strokeWidth={2}
+          strokeLinejoin="round"
+          className={WARM_STROKE}
+        />
         {WARM.map((p) => (
-          <circle key={p.month} cx={x(p.month)} cy={y(p.score)} r={4} strokeWidth={2} className={`${WARM_FILL} stroke-background`}>
+          <circle
+            key={p.month}
+            cx={x(p.month)}
+            cy={y(p.score)}
+            r={4}
+            strokeWidth={2}
+            className={`${WARM_FILL} stroke-background`}
+          >
             <title>{`${MONTHS[p.month]} warm write: ${p.score}`}</title>
           </circle>
         ))}
 
-        <path d={path(COLD)} fill="none" strokeWidth={2} strokeDasharray="5 4" className={COLD_STROKE} />
+        <path
+          d={path(COLD)}
+          fill="none"
+          strokeWidth={2}
+          strokeDasharray="5 4"
+          className={COLD_STROKE}
+        />
         {COLD.map((p) => (
-          <circle key={p.month} cx={x(p.month)} cy={y(p.score)} r={6} strokeWidth={2} className={`${COLD_FILL} stroke-background`}>
+          <circle
+            key={p.month}
+            cx={x(p.month)}
+            cy={y(p.score)}
+            r={6}
+            strokeWidth={2}
+            className={`${COLD_FILL} stroke-background`}
+          >
             <title>{`${p.label} (cold write): ${p.score}`}</title>
           </circle>
         ))}
 
-        <text x={x(8) + 12} y={y(86) + 4} className="fill-foreground text-[13px] font-medium">
+        <text
+          x={x(8) + 12}
+          y={y(86) + 4}
+          className="fill-foreground text-[13px] font-medium"
+        >
           Warm writes
         </text>
-        <text x={x(8) + 12} y={y(80) + 4} className="fill-foreground text-[13px] font-medium">
+        <text
+          x={x(8) + 12}
+          y={y(80) + 4}
+          className="fill-foreground text-[13px] font-medium"
+        >
           Cold writes
         </text>
       </svg>
