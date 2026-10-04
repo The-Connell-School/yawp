@@ -28,8 +28,10 @@ import {
   readTutorInstructionVariant,
   resolveTutorInstructions,
 } from '~/domain/tutor/tutor-instructions-source';
-import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
-import { normalizeModuleRubricAlignment } from '~/domain/assignment-types/assignment-type-rubric-config';
+import {
+  normalizeModuleRubricAlignment,
+  parseAssignmentTypeRubricConfig,
+} from '~/domain/assignment-types/assignment-type-rubric-config';
 import {
   buildAiContextAuditMetadata,
   buildAiTextContextAudit,
@@ -139,6 +141,7 @@ export async function action({ request }: ActionFunctionArgs) {
 	            assignmentType: {
 	              select: {
 	                id: true,
+	                kind: true,
 	                gradingAssistantVersion: true,
 	                rubricJson: true,
 	                // The assignment-level General Tutor Instructions, edited in
@@ -206,9 +209,13 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    const moduleRubric = parseRubric(
-      cms.assignmentModule.assignmentType?.rubricJson
-    );
+    // The rubric the type is graded on: its saved one, or the built-in
+    // rubric for its kind when it saved none. Reading only the saved rubric
+    // left the guidance empty for a type graded on its default.
+    const moduleRubric = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: cms.assignmentModule.assignmentType?.kind ?? null,
+      rubricJson: cms.assignmentModule.assignmentType?.rubricJson,
+    }).rubric;
     const moduleRubricGuidance = buildModuleRubricGuidance({
       categories: moduleRubric.categories,
       alignment: cms.assignmentModule.rubricAlignmentJson,

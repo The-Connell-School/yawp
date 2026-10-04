@@ -12,7 +12,11 @@ import {
   DAILY_PAGES_ANALYZE_SAMPLE_DRAFT,
   DAILY_PAGES_ANALYZE_SAMPLE_ENTRIES,
 } from '../../../../services/web-app/app/domain/assignment-types/daily-pages-analyze-sample-entries.ts';
-import { DAILY_PAGES_SHORT_FORM_CATEGORY_KEYS } from '../../../../services/web-app/app/domain/assignment-types/daily-pages-short-form-rubric.ts';
+import {
+  DAILY_PAGES_SHORT_FORM_CATEGORY_KEYS,
+  DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS,
+  DAILY_PAGES_SHORT_FORM_WELCOME,
+} from '../../../../services/web-app/app/domain/assignment-types/daily-pages-short-form-rubric.ts';
 import {
   sampleEntryHtml,
   seedDailyPagesAnalyzeSamples,
@@ -28,6 +32,8 @@ function fakePrisma({
   const calls: Record<string, Call[]> = {
     assignmentTypeUpdate: [],
     moduleUpdateMany: [],
+    instructionUpdateMany: [],
+    messageUpdateMany: [],
     assignmentCreate: [],
     classAssignmentCreate: [],
     documentCreate: [],
@@ -54,6 +60,18 @@ function fakePrisma({
           id: `module-${index + 1}`,
           instructions: [{ id: `instruction-${index + 1}`, prompt: 'Write.' }],
         })),
+    },
+    assignmentModuleInstruction: {
+      updateMany: async (args: unknown) => {
+        calls.instructionUpdateMany.push({ args });
+        return { count: modules };
+      },
+    },
+    assignmentModuleSessionMessage: {
+      updateMany: async (args: unknown) => {
+        calls.messageUpdateMany.push({ args });
+        return { count: 0 };
+      },
     },
     assignment: {
       findFirst: async () =>
@@ -244,6 +262,50 @@ describe('seedDailyPagesSampleEntries', () => {
     // Without an alignment, no rubric language reaches the tutor at all.
     expect(data.rubricAlignmentJson.depth_of_thought).toBe('primary');
     expect(data.rubricAlignmentJson.voice_and_style).toBe('supporting');
+  });
+
+  /**
+   * The step joined after the module text was still the freewrite tutor, so
+   * the tutor was told both to coach one deliberate move and to encourage
+   * exploring. Seeded environments get the paragraph-practice step instead.
+   */
+  test('replaces the freewrite step instructions and welcome', async () => {
+    const { prisma, calls } = fakePrisma();
+
+    await seedDailyPagesSampleEntries(prisma as never, options);
+
+    expect(calls.instructionUpdateMany).toHaveLength(1);
+    const { where, data } = calls.instructionUpdateMany[0].args;
+    expect(where.assignmentModule.assignmentTypeId).toBe(
+      options.assignmentTypeId
+    );
+    expect(data.tutorInstructions).toBe(
+      DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS
+    );
+    expect(data.prompt).toBe(DAILY_PAGES_SHORT_FORM_WELCOME);
+  });
+
+  /**
+   * A document stores the welcome as its first tutor message when it is
+   * created, so documents seeded before this change would keep showing the
+   * old one. Only that exact message is rewritten; nothing a student or the
+   * tutor actually said is touched.
+   */
+  test('rewrites only the stored copies of the old welcome', async () => {
+    const { prisma, calls } = fakePrisma();
+
+    await seedDailyPagesSampleEntries(prisma as never, options);
+
+    expect(calls.messageUpdateMany).toHaveLength(1);
+    const { where, data } = calls.messageUpdateMany[0].args;
+    expect(where.agent).toBe('assistant');
+    expect(where.content.contains).toContain(
+      'You may not need or want feedback'
+    );
+    expect(
+      where.assignmentModuleSession.assignmentModule.assignmentTypeId
+    ).toBe(options.assignmentTypeId);
+    expect(data.content).toBe(DAILY_PAGES_SHORT_FORM_WELCOME);
   });
 
   test('wraps each paragraph for the editor', () => {

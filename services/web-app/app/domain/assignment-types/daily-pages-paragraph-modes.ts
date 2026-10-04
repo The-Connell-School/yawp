@@ -167,6 +167,18 @@ export function getParagraphMode(
   );
 }
 
+/**
+ * The label for any stored type, switched on or not. For showing a teacher
+ * what an existing assignment was set to; choosing a type still goes through
+ * `getParagraphMode`, which only returns switched-on ones.
+ */
+export function paragraphModeLabel(
+  key: string | null | undefined
+): string | null {
+  if (!key) return null;
+  return DAILY_PAGES_PARAGRAPH_MODES.find((mode) => mode.key === key)?.label ?? null;
+}
+
 export type ParseParagraphModeResult =
   | { success: true; value: ParagraphModeKey | null }
   | { success: false; message: string };

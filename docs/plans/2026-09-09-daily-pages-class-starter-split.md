@@ -298,6 +298,19 @@ what ships:
 - The seed sets both for seeded environments, so a preview shows the real
   behaviour. Doing the same for a customer is a deliberate content change, like
   the rubric reset beside it.
+- The tutor's one step ("Today's Writing") carries instructions of its own,
+  joined after the module's, and the shipped step was the freewrite tutor
+  (brainstorming, journaling, big praise). Left alone, the tutor was told both
+  to coach one deliberate move and to encourage exploring. The seed replaces
+  it with `DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS` (how a feedback
+  round runs, with the safety boundaries kept word for word) and replaces the
+  welcome, which told students they "may not need or want feedback", with
+  `DAILY_PAGES_SHORT_FORM_WELCOME`. Stored copies of the old welcome in seeded
+  documents are rewritten too. Seeded environments only, like the rest.
+- The tutor's rubric guidance reads the rubric the type is graded on: its
+  saved rubric, or the built-in one for its kind. It used to read only the
+  saved rubric, so the seeded type, which clears its saved rubric on purpose,
+  sent the tutor no rubric guidance at all.
 
 ## Calibrating strictness
 

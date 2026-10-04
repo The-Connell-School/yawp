@@ -723,6 +723,8 @@ export default function AssignmentDetailRoute() {
     documentCount: assignment.documentCount,
     gradedCount: assignment.gradedCount,
     insight: assignment.insight,
+    paragraphMode: assignment.paragraphMode,
+    writingTimeMinutes: assignment.writingTimeMinutes,
   };
 
   const handleViewDocuments = () => {

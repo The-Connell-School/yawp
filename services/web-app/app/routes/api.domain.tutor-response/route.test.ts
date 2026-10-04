@@ -58,7 +58,8 @@ describe('api.domain.tutor-response read-only impersonation', () => {
   });
 
   function mockCms(
-    documentOverrides: Record<string, unknown> = {}
+    documentOverrides: Record<string, unknown> = {},
+    moduleOverrides: Record<string, unknown> = {}
   ) {
     prisma.assignmentModuleSession.findFirst.mockResolvedValueOnce({
       id: 'cms-1',
@@ -95,6 +96,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
             tutorInstructions: 'Focus on thesis clarity.',
           },
         ],
+        ...moduleOverrides,
       },
       messages: [],
       document: {
@@ -146,10 +148,11 @@ describe('api.domain.tutor-response read-only impersonation', () => {
 
   async function tutorSystemTextFor(
     assignment: Record<string, unknown> | null,
-    documentOverrides: Record<string, unknown> = {}
+    documentOverrides: Record<string, unknown> = {},
+    moduleOverrides: Record<string, unknown> = {}
   ) {
     getLLMCompletion.mockResolvedValue('What is your claim about the text?');
-    mockCms({ assignment, ...documentOverrides });
+    mockCms({ assignment, ...documentOverrides }, moduleOverrides);
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       id: 'cms-1',
       messages: [],
@@ -214,6 +217,80 @@ describe('api.domain.tutor-response read-only impersonation', () => {
 
     expect(systemText).toContain('PARAGRAPH TYPE: Analyze');
     expect(systemText).not.toContain('PARAGRAPH TYPE: Argue a position');
+  });
+
+  /**
+   * A type that saved no rubric of its own is graded on the built-in rubric
+   * for its kind — the seeded Daily Pages row clears its saved rubric for
+   * exactly that reason. The tutor's rubric guidance has to read the same
+   * rubric, or a module's rubric alignment never reaches the tutor.
+   */
+  test('reads the built-in rubric for its kind when the type saved none', async () => {
+    const systemText = await tutorSystemTextFor(
+      null,
+      {},
+      {
+        rubricAlignmentJson: {
+          depth_of_thought: 'primary',
+          voice_and_style: 'supporting',
+        },
+        assignmentType: {
+          id: 'daily-pages-type',
+          kind: 'daily_pages',
+          gradingAssistantVersion: 1,
+          rubricJson: null,
+        },
+      }
+    );
+
+    expect(systemText).toContain('Module rubric guidance');
+    expect(systemText).toContain('Depth of Thought');
+    expect(systemText).toContain('Voice/Style');
+  });
+
+  test('a saved rubric still wins over the built-in one', async () => {
+    const systemText = await tutorSystemTextFor(
+      null,
+      {},
+      {
+        assignmentType: {
+          id: 'daily-pages-type',
+          kind: 'daily_pages',
+          gradingAssistantVersion: 1,
+          rubricJson: {
+            categories: [
+              {
+                key: 'thesis_and_content',
+                label: 'Thesis/Content',
+                description: 'Original, defensible thesis.',
+                weight: 1,
+              },
+            ],
+          },
+        },
+      }
+    );
+
+    expect(systemText).toContain('Thesis/Content');
+    expect(systemText).not.toContain('Depth of Thought');
+  });
+
+  test('a module with no rubric alignment adds no guidance', async () => {
+    const systemText = await tutorSystemTextFor(
+      null,
+      {},
+      {
+        rubricAlignmentJson: null,
+        assignmentType: {
+          id: 'daily-pages-type',
+          kind: 'daily_pages',
+          gradingAssistantVersion: 1,
+          rubricJson: null,
+        },
+      }
+    );
+
+    expect(systemText).not.toContain('Module rubric guidance');
   });
 
   test('adds no paragraph-type layer when none was chosen', async () => {

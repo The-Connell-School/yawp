@@ -28,7 +28,9 @@ import {
   DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
   DAILY_PAGES_SHORT_FORM_RUBRIC,
   DAILY_PAGES_SHORT_FORM_SCORING_SCALE,
+  DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS,
   DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS,
+  DAILY_PAGES_SHORT_FORM_WELCOME,
 } from '../../../../services/web-app/app/domain/assignment-types/daily-pages-short-form-rubric.ts';
 
 /**
@@ -176,7 +178,35 @@ export async function adoptShortFormTutorForSeededDailyPages(
       } as unknown as Prisma.InputJsonValue,
     },
   });
+
+  // The step is joined after the module text, and the one that shipped is the
+  // freewrite tutor: left in place, the tutor is told both to coach one
+  // deliberate move and to encourage exploring. Its welcome tells students
+  // they may not need feedback at all.
+  await prisma.assignmentModuleInstruction.updateMany({
+    where: { assignmentModule: { assignmentTypeId, deletedAt: null } },
+    data: {
+      tutorInstructions: DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS,
+      prompt: DAILY_PAGES_SHORT_FORM_WELCOME,
+    },
+  });
+
+  // Each document stores the welcome as its first tutor message when it is
+  // created, so documents already seeded would keep the old one. Only that
+  // exact opening message is rewritten; nothing anyone said is touched.
+  await prisma.assignmentModuleSessionMessage.updateMany({
+    where: {
+      agent: 'assistant',
+      content: { contains: OLD_DAILY_PAGES_WELCOME_SENTENCE },
+      assignmentModuleSession: { assignmentModule: { assignmentTypeId } },
+    },
+    data: { content: DAILY_PAGES_SHORT_FORM_WELCOME },
+  });
 }
+
+/** The sentence that identifies the freewrite-era welcome message. */
+const OLD_DAILY_PAGES_WELCOME_SENTENCE =
+  'You may not need or want feedback for this type of writing';
 
 /**
  * One session per module in the type, opened on its first instruction.

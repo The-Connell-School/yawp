@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { paragraphModeLabel } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import {
   Sheet,
   SheetContent,
@@ -25,6 +26,10 @@ export type AssignmentSummarySheetAssignment = {
   documentCount: number;
   gradedCount: number;
   insight: ClassInsight | null;
+  /** Daily Pages: the paragraph type it practices. Null or absent is none. */
+  paragraphMode?: string | null;
+  /** How long students have to write. Null or absent is untimed. */
+  writingTimeMinutes?: number | null;
 };
 
 export type AssignmentSummarySheetContentProps = {
@@ -117,6 +122,16 @@ function AssignmentMetadataSection({
         <MetadataRow label="Submit for grade">
           {metadataYesNo(assignment.submitForGrade)}
         </MetadataRow>
+        {paragraphModeLabel(assignment.paragraphMode) ? (
+          <MetadataRow label="Paragraph type">
+            {paragraphModeLabel(assignment.paragraphMode)}
+          </MetadataRow>
+        ) : null}
+        {assignment.writingTimeMinutes ? (
+          <MetadataRow label="Time to write">
+            {assignment.writingTimeMinutes} minutes
+          </MetadataRow>
+        ) : null}
         {assignment.submitForGrade ? (
           <MetadataRow label="Point value">{assignment.pointValue ?? 100}</MetadataRow>
         ) : null}

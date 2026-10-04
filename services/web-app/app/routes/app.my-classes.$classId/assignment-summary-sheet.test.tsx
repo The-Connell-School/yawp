@@ -127,6 +127,56 @@ describe('AssignmentSummarySheetContent', () => {
     expect(el.textContent).not.toContain('Docs');
   });
 
+  /**
+   * A Daily Pages assignment's paragraph type and writing time change how it
+   * is tutored and graded, so the teacher sees them alongside the other
+   * settings rather than only in the title.
+   */
+  it('shows the paragraph type and time to write when they are set', () => {
+    const el = render(
+      <AssignmentSummarySheetContent
+        renderSheet={false}
+        assignment={{
+          ...ASSIGNMENT,
+          assignmentType: { title: 'Daily Pages' },
+          paragraphMode: 'analyze',
+          writingTimeMinutes: 15,
+        }}
+        classInsightsEnabled={false}
+        onViewDocuments={() => {}}
+      />
+    );
+    expect(el.textContent).toContain('Paragraph type');
+    expect(el.textContent).toContain('Analyze');
+    expect(el.textContent).toContain('Time to write');
+    expect(el.textContent).toContain('15 minutes');
+  });
+
+  it('omits both rows for an assignment that set neither', () => {
+    const el = render(
+      <AssignmentSummarySheetContent
+        renderSheet={false}
+        assignment={{ ...ASSIGNMENT, paragraphMode: null, writingTimeMinutes: null }}
+        classInsightsEnabled={false}
+        onViewDocuments={() => {}}
+      />
+    );
+    expect(el.textContent).not.toContain('Paragraph type');
+    expect(el.textContent).not.toContain('Time to write');
+  });
+
+  it('still names a stored type that has since been switched off', () => {
+    const el = render(
+      <AssignmentSummarySheetContent
+        renderSheet={false}
+        assignment={{ ...ASSIGNMENT, paragraphMode: 'compare' }}
+        classInsightsEnabled={false}
+        onViewDocuments={() => {}}
+      />
+    );
+    expect(el.textContent).toContain('Compare');
+  });
+
   it('shows the attached PDF beside the text prompt', () => {
     const el = render(
       <AssignmentSummarySheetContent

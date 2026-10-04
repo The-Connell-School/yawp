@@ -8,6 +8,7 @@ import {
   enabledParagraphModes,
   getParagraphMode,
   offersParagraphModesForKind,
+  paragraphModeLabel,
   parseParagraphMode,
 } from './daily-pages-paragraph-modes';
 
@@ -218,5 +219,17 @@ describe('offersParagraphModesForKind', () => {
     expect(offersParagraphModesForKind('class_starter')).toBe(false);
     expect(offersParagraphModesForKind(null)).toBe(false);
     expect(offersParagraphModesForKind(undefined)).toBe(false);
+  });
+});
+
+describe('paragraphModeLabel', () => {
+  test('names any stored type, switched on or not', () => {
+    expect(paragraphModeLabel('analyze')).toBe('Analyze');
+    expect(paragraphModeLabel('compare')).toBe('Compare');
+  });
+
+  test('is null for no type or an unknown one', () => {
+    expect(paragraphModeLabel(null)).toBeNull();
+    expect(paragraphModeLabel('freewrite')).toBeNull();
   });
 });
