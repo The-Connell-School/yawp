@@ -194,9 +194,19 @@ export default function ThesisEssayHowItWorksRoute() {
             it off for an in-class essay and use it as a diagnostic, as an
             assessment or to track whether skills transfer.
           </GuideCopy>
+        </GuideRow>
+
+        <GuideRow
+          media={clip(
+            'reporter',
+            'The teacher asks Reporter how one student’s cold writes and warm writes are changing. Reporter answers with a table of six essays: Tutor-off scores rose from 58% to 74%, Tutor-on scores from 79% to 86%, and the gap narrowed from 21 points to 12.'
+          )}
+        >
+          <GuideH3>Track the growth in Reporter</GuideH3>
           <GuideCopy>
             Reporter keeps cold writes separate from work done with the Tutor,
-            so you can see that growth over the year.
+            so you can see whether a student’s writing on their own is catching
+            up.
           </GuideCopy>
         </GuideRow>
       </GuideSection>
@@ -204,7 +214,7 @@ export default function ThesisEssayHowItWorksRoute() {
       <WillWont will={WILL} wont={WONT} />
 
       <GuideFooter
-        note="Clips use demo classes. The Tutor’s reply and the Grading Assistant’s suggestions in them were scripted for the recording."
+        note="Clips use demo classes. The Tutor’s reply, the Grading Assistant’s suggestions and Reporter’s answer in them were scripted for the recording. Reporter’s numbers are the demo class’s grades."
         startTo={pagePath}
         startLabel="Create an assignment"
       />
