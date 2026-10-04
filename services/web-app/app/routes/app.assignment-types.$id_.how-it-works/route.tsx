@@ -95,6 +95,24 @@ const TUTOR_POINTS = [
   },
 ];
 
+const GRADING_POINTS = [
+  {
+    title: 'What it is',
+    detail:
+      'A first read of every essay against the rubric, at the level you set for the assignment: beginner, intermediate or advanced.',
+  },
+  {
+    title: 'What it isn’t',
+    detail:
+      'The final grade. Students see nothing until you release it, and it never accuses a student of cheating or of using AI.',
+  },
+  {
+    title: 'Why we use it',
+    detail:
+      'Detailed feedback on every essay takes hours. The Grading Assistant does the first pass so your time goes to the feedback and conferences only you can give.',
+  },
+];
+
 const WILL = [
   'Walk students through the essay one step at a time.',
   'Ask questions and give feedback on the student’s own draft.',
@@ -253,20 +271,55 @@ export default function ThesisEssayHowItWorksRoute() {
         </ul>
       </section>
 
-      <GuideRow
-        media={clip(
-          'grade',
-          'The teacher opens a submitted essay and clicks Grading Assistant Suggestions. Scores and feedback fill in, the teacher reads one rubric comment, then releases the grade.'
-        )}
+      <section
+        aria-labelledby="guide-grading"
+        className="flex flex-col gap-10 rounded-2xl bg-secondary p-6 md:p-10"
       >
-        <GuideStep n={3}>Grade and release</GuideStep>
-        <GuideH3>A suggested grade you can change</GuideH3>
-        <GuideCopy>
-          The Grading Assistant scores thesis, organization, evidence, voice and
-          grammar and drafts feedback. Students see it only after you release
-          it.
-        </GuideCopy>
-      </GuideRow>
+        <div className="flex flex-col gap-3">
+          <GuideStep n={3}>Grade and release</GuideStep>
+          <h2
+            id="guide-grading"
+            className="text-2xl font-semibold leading-tight md:text-3xl"
+          >
+            How the Grading Assistant helps you grade
+          </h2>
+          <p className="max-w-prose text-lg leading-relaxed text-muted-foreground">
+            The Grading Assistant reads each essay against the rubric and drafts
+            scores and feedback. You read it, change what you disagree with and
+            decide when students see it. Every grade is yours.
+          </p>
+        </div>
+
+        <GuideRow
+          media={clip(
+            'grade',
+            'The teacher opens a submitted essay and clicks Grading Assistant Suggestions. Scores and feedback fill in, the teacher reads one rubric comment, then releases the grade.'
+          )}
+        >
+          <GuideH3>A first draft of the grade</GuideH3>
+          <GuideCopy>
+            Click{' '}
+            <strong className="text-foreground">
+              Grading Assistant Suggestions
+            </strong>{' '}
+            and it scores thesis, organization, evidence, voice and grammar,
+            with a comment for each. Change any score or comment, then release
+            the grade when you are ready.
+          </GuideCopy>
+        </GuideRow>
+
+        <ul className="grid gap-4 md:grid-cols-3">
+          {GRADING_POINTS.map((point) => (
+            <li
+              key={point.title}
+              className="flex flex-col gap-2 rounded-xl border bg-background p-5"
+            >
+              <GuideH3>{point.title}</GuideH3>
+              <GuideCopy>{point.detail}</GuideCopy>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <GuideSection id="guide-cold" eyebrow="Also" title="Give a cold write">
         <GuideRow
