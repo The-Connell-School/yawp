@@ -109,10 +109,10 @@ export default function ThesisEssayHowItWorksRoute() {
         lede="Students write a full critical essay with the YAWP! Tutor beside them, from first ideas to a title. You choose the prompt and release the grade."
         image={{
           src: `${MEDIA}/hero.jpg`,
-          alt: 'A student’s essay draft beside the YAWP! Tutor, which is asking a question about the student’s thesis.',
+          alt: 'A student’s Macbeth essay beside the YAWP! Tutor. The student has asked the Tutor to write the rest of a paragraph, and the Tutor answers that the paragraph is theirs to write and asks what Banquo notices about Macbeth.',
           width: 1120,
           height: 700,
-          caption: 'A student drafting a thesis with the Tutor',
+          caption: 'The Tutor on a body paragraph about Macbeth',
         }}
       />
 
@@ -138,7 +138,7 @@ export default function ThesisEssayHowItWorksRoute() {
         <GuideRow
           media={clip(
             'prompts',
-            'The teacher searches the prompt library, filters by category and picks a prompt. It opens in the Create Assignment sheet.'
+            'The teacher opens the Prompt Library, searches for Macbeth and picks the prompt. It opens in the New Assignment sheet, where the teacher chooses English 10, adds a title and creates the assignment.'
           )}
         >
           <GuideStep n={1}>Pick a prompt</GuideStep>
@@ -154,7 +154,7 @@ export default function ThesisEssayHowItWorksRoute() {
           flip
           media={clip(
             'tutor',
-            'A student writes a body paragraph. The Tutor answers a question about the draft with a question of its own.'
+            'A student adds a sentence to a body paragraph and asks the Tutor to write the rest. The Tutor says that part is theirs to write and asks what Banquo notices about Macbeth.'
           )}
         >
           <GuideStep n={2}>Students write with the Tutor</GuideStep>
@@ -168,7 +168,7 @@ export default function ThesisEssayHowItWorksRoute() {
         <GuideRow
           media={clip(
             'grade',
-            'The teacher opens a submitted essay, runs the Grading Assistant, reads the suggested scores and feedback, then releases the grade.'
+            'The teacher opens a submitted essay and clicks Grading Assistant Suggestions. Scores and feedback fill in, the teacher reads one rubric comment, then releases the grade.'
           )}
         >
           <GuideStep n={3}>Grade and release</GuideStep>
@@ -186,12 +186,16 @@ export default function ThesisEssayHowItWorksRoute() {
           flip
           media={clip(
             'cold',
-            'A student writes with the Tutor turned off. Beside the draft is only the assignment prompt, marked as a cold write.'
+            'A student opens an in-class essay and starts writing. Beside the draft is only the prompt, marked as a cold write.'
           )}
         >
           <GuideCopy>
-            Turn the Tutor off for an in-class essay. Students see only the
-            prompt.
+            The goal is for students to write better without the Tutor. Turn
+            it off for an in-class essay to see what they can do on their own.
+          </GuideCopy>
+          <GuideCopy>
+            Reporter keeps cold writes separate from work done with the Tutor,
+            so you can see whether those skills are growing over the year.
           </GuideCopy>
         </GuideRow>
       </GuideSection>
@@ -199,7 +203,7 @@ export default function ThesisEssayHowItWorksRoute() {
       <WillWont will={WILL} wont={WONT} />
 
       <GuideFooter
-        note="Clips use demo classes."
+        note="Clips use demo classes. The Tutor’s reply and the Grading Assistant’s suggestions in them were scripted for the recording."
         startTo={pagePath}
         startLabel="Create an assignment"
       />
