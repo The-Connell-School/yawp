@@ -55,6 +55,7 @@ const membershipFixture = {
   organization: {
     id: 'org-1',
     name: 'Yawp Org',
+    plan: 'SCHOOL',
     reporterEnabled: false,
     classInsightsEnabled: false,
     writingPracticeEnabled: false,
@@ -105,6 +106,7 @@ describe('membership auth helpers', () => {
           select: {
             id: true,
             name: true,
+            plan: true,
             reporterEnabled: true,
             classInsightsEnabled: true,
             writingPracticeEnabled: true,
@@ -138,6 +140,7 @@ describe('membership auth helpers', () => {
           select: {
             id: true,
             name: true,
+            plan: true,
             reporterEnabled: true,
             classInsightsEnabled: true,
             writingPracticeEnabled: true,

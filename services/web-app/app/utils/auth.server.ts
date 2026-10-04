@@ -26,6 +26,7 @@ const membershipSelect = {
     select: {
       id: true,
       name: true,
+      plan: true,
       reporterEnabled: true,
       classInsightsEnabled: true,
       writingPracticeEnabled: true,
