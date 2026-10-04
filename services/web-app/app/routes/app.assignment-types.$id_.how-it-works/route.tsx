@@ -28,6 +28,7 @@ import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-drive
 import { isAssignmentTypeAvailableForAnyScope } from '~/utils/assignment-type-access.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { TransferChart } from './transfer-chart';
 
 const MEDIA = '/img/thesis-essay-guide';
 
@@ -195,6 +196,8 @@ export default function ThesisEssayHowItWorksRoute() {
             assessment or to track whether skills transfer.
           </GuideCopy>
         </GuideRow>
+
+        <TransferChart />
 
         <GuideRow
           media={clip(
