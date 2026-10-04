@@ -321,7 +321,11 @@ export default function ThesisEssayHowItWorksRoute() {
         </ul>
       </section>
 
-      <GuideSection id="guide-cold" eyebrow="Also" title="Give a cold write">
+      <GuideSection
+        id="guide-cold"
+        eyebrow="Also"
+        title="Track student progress over time"
+      >
         <GuideRow
           flip
           media={clip(
@@ -329,6 +333,7 @@ export default function ThesisEssayHowItWorksRoute() {
             'A student opens an in-class essay and starts writing. Beside the draft is only the prompt, marked as a cold write.'
           )}
         >
+          <GuideH3>Give a cold write</GuideH3>
           <GuideCopy>
             The goal is for students to write better without the Tutor. Turn it
             off for an in-class essay and use it as a diagnostic, as an
@@ -344,7 +349,7 @@ export default function ThesisEssayHowItWorksRoute() {
             'The teacher asks Reporter how one student’s cold writes and warm writes are changing. Reporter answers with a table of six essays: Tutor-off scores rose from 58% to 74%, Tutor-on scores from 79% to 86%, and the gap narrowed from 21 points to 12.'
           )}
         >
-          <GuideH3>Track the growth in Reporter</GuideH3>
+          <GuideH3>See the growth in Reporter</GuideH3>
           <GuideCopy>
             Reporter keeps cold writes separate from work done with the Tutor,
             so you can see whether a student’s writing on their own is catching
