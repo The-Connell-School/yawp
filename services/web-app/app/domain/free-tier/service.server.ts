@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
-import type { FreeTierApplicationStatus } from '@app/prisma/generated/prisma/index';
+import type { FreeTierApplicationStatus } from '@app/prisma';
 import { assertTransition } from './state';
 
 export const FREE_TIER_RELEASE_CAP =
@@ -38,11 +38,11 @@ export function canRedeemToken(record: {
   maxUses: number | null;
   expiresAt: Date | null;
   bypassWaitlist: boolean;
-}) {
+}): { ok: true; reason: null } | { ok: false; reason: 'expired' | 'exhausted' } {
   const now = Date.now();
-  if (record.expiresAt && record.expiresAt.getTime() <= now) return { ok: false, reason: 'expired' as const };
-  if (record.maxUses != null && record.uses >= record.maxUses) return { ok: false, reason: 'exhausted' as const };
-  return { ok: true as const, reason: null as const };
+  if (record.expiresAt && record.expiresAt.getTime() <= now) return { ok: false, reason: 'expired' };
+  if (record.maxUses != null && record.uses >= record.maxUses) return { ok: false, reason: 'exhausted' };
+  return { ok: true, reason: null };
 }
 
 export async function submitWaitlist(input: WaitlistInput) {
