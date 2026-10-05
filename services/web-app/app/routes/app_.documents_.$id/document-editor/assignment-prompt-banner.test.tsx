@@ -22,7 +22,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-function render(paragraphMode: string | null) {
+function render(paragraphModes: string[]) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -34,7 +34,7 @@ function render(paragraphMode: string | null) {
           id: 'assignment-1',
           title: 'Phones',
           prompt: 'Should phones be banned?',
-          paragraphMode,
+          paragraphModes,
         }}
       />
     );
@@ -45,7 +45,7 @@ function render(paragraphMode: string | null) {
 /** With the tutor on, the prompt is a banner over the editor; the guide sits in it. */
 describe('AssignmentPromptBanner paragraph-type guide', () => {
   it('offers the guide for an Argue assignment', () => {
-    const container = render('argue');
+    const container = render(['argue']);
 
     const button = container.querySelector(
       '[data-testid="paragraph-guide-open"]'
@@ -54,7 +54,7 @@ describe('AssignmentPromptBanner paragraph-type guide', () => {
   });
 
   it('offers nothing without a paragraph type', () => {
-    const container = render(null);
+    const container = render([]);
 
     expect(
       container.querySelector('[data-testid="paragraph-guide-open"]')

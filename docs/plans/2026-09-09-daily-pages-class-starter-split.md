@@ -381,9 +381,28 @@ and the about page names each:
 
 ## Paragraph types
 
-A teacher can name the move a Daily Pages entry practices — the **Paragraph
-type** on the assignment sheet, stored as `Assignment.paragraphMode`. The
-registry is `app/domain/assignment-types/daily-pages-paragraph-modes.ts`.
+A teacher can name the moves a Daily Pages entry practices — the **Paragraph
+types** checkboxes on the assignment sheet, stored as
+`Assignment.paragraphModes`. The registry is
+`app/domain/assignment-types/daily-pages-paragraph-modes.ts`.
+
+- **Several types, one paragraph.** A prompt can ask for more than one move
+  ("take a position, and ground it in her words" is Argue and Analyze), so
+  each switched-on type is a checkbox. With several ticked, the grader and
+  tutor get every type's layer, in registry order, under one line saying the
+  paragraph combines them: the grader reads for each, and the tutor coaches
+  whichever the draft needs most first, never asking for two paragraphs. One
+  type ticked gives exactly the single-type text.
+- **Prefilled from the library.** Picking a library prompt ticks its
+  switched-on Cognitive mode tags; the teacher can untick them.
+- **Dual-write.** `paragraphModes String[]` (migration
+  `20261005120000_paragraph_modes_list`) is written beside the old
+  single `paragraphMode`, which keeps the first ticked type. Readers use
+  `effectiveParagraphModes`: the list when it has entries, otherwise the old
+  column, so assignments made before the list read the same. The old column
+  can go once nothing reads it.
+- **Students see each guide.** "What you're aiming for" opens every chosen
+  type's guide, each under its own heading.
 
 - **Layers, not new assistants.** A type adds guidance beside the writing time
   in the grading prompt, and coaching after the module's own tutor
@@ -397,8 +416,8 @@ registry is `app/domain/assignment-types/daily-pages-paragraph-modes.ts`.
   tests it. Before switching the next one on: write its grading and tutor
   text, add calibration cases for it, run the calibration script, then flip
   `enabled`.
-- **No type is the default** ("Any kind of paragraph"), stored as null, which
-  grades and tutors exactly as before. Frozen after creation, like the grammar
+- **No type is the default** (all unticked: any kind of paragraph), stored as
+  an empty list and null, which grades and tutors exactly as before. Frozen after creation, like the grammar
   toggle.
 - **Argue a position** reads the position in Depth of Thought and the reason
   and its test in Development of Thought. A straddle ("both sides have a
@@ -415,14 +434,16 @@ registry is `app/domain/assignment-types/daily-pages-paragraph-modes.ts`.
   never hidden. Switching a type on brings its prompts back with it.
 - **A teacher can test one type end to end.** On Daily Pages, New → Document
   asks which type the document practices (any kind of paragraph, or each
-  switched-on type). The choice is stored on `Document.paragraphMode`, which
+  switched-on type). The choice is stored on `Document.paragraphMode` and
+  `Document.paragraphModes`, which
   the tutor and the grader read when the document has no assignment; an
   assignment's own type always wins. A typed document is titled after its
   type so test documents are easy to tell apart. Null changes nothing.
 - Calibration cases can name a `paragraphMode`, and the live runner grades
   them with that type's guidance in the prompt. The three Argue cases
   (`dp-argue-*`) do; the Analyze-tagged cases predate this and are still
-  graded with no type chosen.
+  graded with no type chosen. The tutor evaluation has one combined case
+  (`combined-argue-from-text`, Analyze and Argue together).
 - The universal tutor persona is still copied into each module row's
   `tutorInstructions`; there is no shared tutor prompt in code. The type layer
   sits on top of whatever the module carries.

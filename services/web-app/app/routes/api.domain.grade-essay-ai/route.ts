@@ -1,3 +1,4 @@
+import { effectiveParagraphModes } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { teacherNotesEnabled as hasTeacherNotes, normalizeTeacherNote, TEACHER_NOTES_EVIDENCE_RULE } from '~/domain/grading/teacher-notes';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import type { Prisma } from '@app/prisma';
@@ -609,6 +610,7 @@ export async function action({ request }: ActionFunctionArgs) {
         membershipId: true,
         assignmentTypeId: true,
         paragraphMode: true,
+        paragraphModes: true,
         // Only to tell a group brief from a solo essay when deciding who the
         // feedback is addressed to; see `gradingAddressee`.
         group: { select: { label: true, members: { where: { removedAt: null }, select: { membershipId: true, membership: { select: { userId: true } } } } } },
@@ -628,6 +630,7 @@ export async function action({ request }: ActionFunctionArgs) {
             writingTimeMinutes: true,
             tutorEnabled: true,
             paragraphMode: true,
+            paragraphModes: true,
             apHistorySnapshot: true,
             prompt: true,
             pointValue: true,
@@ -1112,10 +1115,11 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     assignmentPrompt: submission.document.assignment?.prompt,
     writingTimeMinutes: submission.document.assignment?.writingTimeMinutes,
     coldWrite: submission.document.assignment?.tutorEnabled === false,
-    // A teacher's standalone Daily Pages document records its own type.
-    paragraphMode:
-      submission.document.assignment?.paragraphMode ??
-      submission.document.paragraphMode,
+    // The assignment's types; a teacher's standalone Daily Pages document
+    // records its own.
+    paragraphMode: submission.document.assignment
+      ? effectiveParagraphModes(submission.document.assignment)
+      : effectiveParagraphModes(submission.document),
   });
   const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(

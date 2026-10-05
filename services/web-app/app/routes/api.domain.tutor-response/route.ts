@@ -1,7 +1,10 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
-import { buildParagraphModeTutorInstructions } from '~/domain/assignment-types/daily-pages-paragraph-modes';
+import {
+  buildParagraphModeTutorInstructions,
+  effectiveParagraphModes,
+} from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
@@ -139,6 +142,7 @@ export async function action({ request }: ActionFunctionArgs) {
 	            id: true,
 	            text: true,
 	            paragraphMode: true,
+	            paragraphModes: true,
 	            assignment: {
 	              select: {
 	                id: true,
@@ -147,6 +151,7 @@ export async function action({ request }: ActionFunctionArgs) {
 	                tutorEnabled: true,
 	                apHistorySnapshot: true,
 	                paragraphMode: true,
+	                paragraphModes: true,
 	              },
 	            },
 	          },
@@ -254,10 +259,12 @@ export async function action({ request }: ActionFunctionArgs) {
             cms.assignmentModule.assignmentType?.tutorInstructions,
           tutorInstructions: cms.assignmentModule.tutorInstructions,
           instructionTutorInstructions: instruction.tutorInstructions,
+          // The assignment's types; a teacher's standalone Daily Pages
+          // document records its own.
           paragraphModeInstructions: buildParagraphModeTutorInstructions(
-            cms.document?.assignment?.paragraphMode ??
-              cms.document?.paragraphMode ??
-              null
+            cms.document?.assignment
+              ? effectiveParagraphModes(cms.document.assignment)
+              : effectiveParagraphModes(cms.document)
           ),
           moduleRubricGuidance,
         });

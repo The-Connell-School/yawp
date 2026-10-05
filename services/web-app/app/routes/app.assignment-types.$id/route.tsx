@@ -82,6 +82,7 @@ import {
   readFilters as readShortFormFilters,
   savedPromptToLibraryEntry as savedShortFormPromptToLibraryEntry,
   onlySwitchedOnMoves,
+  paragraphModesForMoves,
   toLibraryEntries as toShortFormLibraryEntries,
   type ShortFormPrompt,
 } from './short-form-prompts-library/data';
@@ -718,6 +719,10 @@ export default function AppAssignmentTypesIdRoute() {
   const [customEssayType, setCustomEssayType] =
     useState<CustomEssayType | null>(null);
   const [libraryPrompt, setLibraryPrompt] = useState('');
+  // A picked short-form prompt arrives with its paragraph types ticked.
+  const [libraryParagraphModes, setLibraryParagraphModes] = useState<
+    string[]
+  >([]);
   const [apHistoryEntry, setApHistoryEntry] = useState<{
     externalKey: string;
     title: string;
@@ -813,6 +818,7 @@ export default function AppAssignmentTypesIdRoute() {
                         disabled={data.teacherClasses.length === 0}
                         onSelect={() => {
                           setLibraryPrompt('');
+                          setLibraryParagraphModes([]);
                           setApHistoryEntry(null);
                           setIsAssignmentSheetOpen(true);
                         }}
@@ -875,6 +881,7 @@ export default function AppAssignmentTypesIdRoute() {
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
+                initialParagraphModes={libraryParagraphModes}
                 titleRequired={showThesisLibrary}
                 apHistoryEntry={apHistoryEntry}
               />
@@ -998,9 +1005,12 @@ export default function AppAssignmentTypesIdRoute() {
               facets={data.shortFormPromptLibrary.facets}
               optionCounts={data.shortFormPromptLibrary.optionCounts}
               totalCount={data.shortFormPromptLibrary.totalCount}
-              onSelectPrompt={(prompt) => {
+              onSelectPrompt={(prompt, entry) => {
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
+                setLibraryParagraphModes(
+                  paragraphModesForMoves(entry.cognitiveMoves)
+                );
                 setIsAssignmentSheetOpen(true);
               }}
             />

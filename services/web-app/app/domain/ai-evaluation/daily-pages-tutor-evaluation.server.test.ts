@@ -26,7 +26,10 @@ const followUp = dailyPagesTutorEvaluationV1.cases.find(
 const GOOD_REPLY =
   'You found the exact line where it turns. What does the word "but" do to the problem Juliet is describing?';
 
-function fakeExecute(reply = GOOD_REPLY, verdict = { passed: true, evidence: 'Asks what "but" does.' }) {
+function fakeExecute(
+  reply = GOOD_REPLY,
+  verdict = { passed: true, evidence: 'Asks what "but" does.' }
+) {
   return mock(async ({ purpose }: { purpose: string }) =>
     purpose === 'tutor' ? reply : JSON.stringify(verdict)
   );
@@ -41,8 +44,12 @@ describe('buildDailyPagesTutorSystemPrompt', () => {
   test('stacks the module, the step, the paragraph type and the rubric guidance', () => {
     const system = buildDailyPagesTutorSystemPrompt(analyzeCase);
 
-    const module = system.indexOf(DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS.slice(0, 40));
-    const step = system.indexOf(DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS.slice(0, 40));
+    const module = system.indexOf(
+      DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS.slice(0, 40)
+    );
+    const step = system.indexOf(
+      DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS.slice(0, 40)
+    );
     const type = system.indexOf('PARAGRAPH TYPE: Analyze');
     const rubric = system.indexOf('Module rubric guidance');
     expect(module).toBeGreaterThanOrEqual(0);
@@ -50,6 +57,17 @@ describe('buildDailyPagesTutorSystemPrompt', () => {
     expect(type).toBeGreaterThan(step);
     expect(rubric).toBeGreaterThan(type);
     expect(system).toContain('Depth of Thought');
+  });
+
+  test('stacks every type for a paragraph that combines them', () => {
+    const system = buildDailyPagesTutorSystemPrompt({
+      ...analyzeCase,
+      paragraphMode: ['analyze', 'argue'],
+    });
+    expect(system).toContain('This paragraph combines 2 moves');
+    expect(system.indexOf('PARAGRAPH TYPE: Analyze')).toBeLessThan(
+      system.indexOf('PARAGRAPH TYPE: Argue a position')
+    );
   });
 
   test('adds no paragraph-type layer when the case has none', () => {
@@ -77,7 +95,8 @@ describe('runTutorReplyChecks', () => {
   });
 
   test('flags a list of questions', () => {
-    const reply = 'What is your claim? Which line shows it? How? Why does it matter?';
+    const reply =
+      'What is your claim? Which line shows it? How? Why does it matter?';
     expect(runTutorReplyChecks(base, reply)).toContainEqual(
       expect.objectContaining({ id: 'one-question', status: 'fail' })
     );
@@ -86,12 +105,17 @@ describe('runTutorReplyChecks', () => {
   test('flags gushing praise', () => {
     expect(
       runTutorReplyChecks(base, 'This is amazing! What does "but" do?')
-    ).toContainEqual(expect.objectContaining({ id: 'no-gushing', status: 'fail' }));
+    ).toContainEqual(
+      expect.objectContaining({ id: 'no-gushing', status: 'fail' })
+    );
   });
 
   test('flags telling a student to avoid "I"', () => {
     expect(
-      runTutorReplyChecks(base, 'Try to avoid first person here. What is your claim?')
+      runTutorReplyChecks(
+        base,
+        'Try to avoid first person here. What is your claim?'
+      )
     ).toContainEqual(
       expect.objectContaining({ id: 'first-person-allowed', status: 'fail' })
     );
@@ -99,8 +123,13 @@ describe('runTutorReplyChecks', () => {
 
   test('flags a reply that exposes the behind-the-scenes setup', () => {
     expect(
-      runTutorReplyChecks(base, 'In the student_document_context you wrote a claim. What next?')
-    ).toContainEqual(expect.objectContaining({ id: 'stays-in-role', status: 'fail' }));
+      runTutorReplyChecks(
+        base,
+        'In the student_document_context you wrote a claim. What next?'
+      )
+    ).toContainEqual(
+      expect.objectContaining({ id: 'stays-in-role', status: 'fail' })
+    );
   });
 
   test('flags an empty reply', () => {
@@ -123,8 +152,12 @@ describe('runDailyPagesTutorEvaluation', () => {
     const tutorCall = execute.mock.calls.find(
       ([input]: any[]) => input.purpose === 'tutor'
     )![0] as any;
-    const contents = tutorCall.messages.map((m: { content: string }) => m.content);
-    expect(contents).toContain(followUp.history[followUp.history.length - 1].content);
+    const contents = tutorCall.messages.map(
+      (m: { content: string }) => m.content
+    );
+    expect(contents).toContain(
+      followUp.history[followUp.history.length - 1].content
+    );
     expect(contents.join('\n')).toContain('<assignment_prompt>');
     expect(contents.join('\n')).toContain(followUp.draft);
     expect(contents.at(-1)).toBe('Give me feedback');
@@ -141,7 +174,10 @@ describe('runDailyPagesTutorEvaluation', () => {
     const run = result.cases[0].runs[0];
     expect(run.reply).toBe(GOOD_REPLY);
     expect(run.judged).toHaveLength(analyzeCase.criteria.length);
-    expect(run.judged[0]).toMatchObject({ status: 'pass', evidence: 'Asks what "but" does.' });
+    expect(run.judged[0]).toMatchObject({
+      status: 'pass',
+      evidence: 'Asks what "but" does.',
+    });
     expect(result.status).toBe('pass');
   });
 
@@ -149,7 +185,10 @@ describe('runDailyPagesTutorEvaluation', () => {
     const result = await runDailyPagesTutorEvaluation({
       suite: dailyPagesTutorEvaluationV1,
       caseIds: [analyzeCase.id],
-      execute: fakeExecute(GOOD_REPLY, { passed: false, evidence: 'Wrote the analysis.' }),
+      execute: fakeExecute(GOOD_REPLY, {
+        passed: false,
+        evidence: 'Wrote the analysis.',
+      }),
     });
 
     expect(result.cases[0].runs[0].status).toBe('fail');
@@ -189,7 +228,10 @@ describe('runDailyPagesTutorEvaluation', () => {
     const execute = mock(async ({ purpose }: { purpose: string }) => {
       if (purpose === 'tutor') return GOOD_REPLY;
       call += 1;
-      return JSON.stringify({ passed: call > analyzeCase.criteria.length, evidence: 'x' });
+      return JSON.stringify({
+        passed: call > analyzeCase.criteria.length,
+        evidence: 'x',
+      });
     });
     const result = await runDailyPagesTutorEvaluation({
       suite: dailyPagesTutorEvaluationV1,
@@ -210,7 +252,10 @@ describe('formatTutorEvaluationReport', () => {
       caseIds: [analyzeCase.id],
       execute: fakeExecute(),
     });
-    const report = formatTutorEvaluationReport(dailyPagesTutorEvaluationV1, result);
+    const report = formatTutorEvaluationReport(
+      dailyPagesTutorEvaluationV1,
+      result
+    );
 
     expect(report).toContain(analyzeCase.phase);
     expect(report).toContain(GOOD_REPLY);

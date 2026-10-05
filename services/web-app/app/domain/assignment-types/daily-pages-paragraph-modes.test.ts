@@ -8,8 +8,11 @@ import {
   enabledParagraphModes,
   getParagraphMode,
   offersParagraphModesForKind,
+  effectiveParagraphModes,
   paragraphModeLabel,
+  paragraphModeLabels,
   parseParagraphMode,
+  parseParagraphModes,
 } from './daily-pages-paragraph-modes';
 
 function form(entries: Record<string, string>) {
@@ -231,5 +234,102 @@ describe('paragraphModeLabel', () => {
   test('is null for no type or an unknown one', () => {
     expect(paragraphModeLabel(null)).toBeNull();
     expect(paragraphModeLabel('freewrite')).toBeNull();
+  });
+});
+
+function formWith(values: string[]) {
+  const data = new FormData();
+  for (const value of values) data.append(PARAGRAPH_MODE_FIELD, value);
+  return data;
+}
+
+/**
+ * Most prompts ask for more than one move — "Honest and kind at once" is
+ * argue and evaluate — so an assignment can name several paragraph types.
+ * None chosen is any kind of paragraph, exactly as before.
+ */
+describe('parseParagraphModes', () => {
+  test('nothing ticked means any kind of paragraph', () => {
+    expect(parseParagraphModes(formWith([]))).toEqual({ success: true, value: [] });
+    expect(parseParagraphModes(formWith(['']))).toEqual({ success: true, value: [] });
+  });
+
+  test('accepts several switched-on types, in the registry’s order, once each', () => {
+    expect(parseParagraphModes(formWith(['argue', 'analyze', 'argue']))).toEqual({
+      success: true,
+      value: ['analyze', 'argue'],
+    });
+  });
+
+  test('refuses the whole choice when any type is not switched on', () => {
+    expect(parseParagraphModes(formWith(['analyze', 'compare'])).success).toBe(false);
+  });
+});
+
+/**
+ * Assignments written before the list existed store one type in the old
+ * column. They read as that one type; a list, when present, wins.
+ */
+describe('effectiveParagraphModes', () => {
+  test('reads the list when there is one', () => {
+    expect(
+      effectiveParagraphModes({ paragraphModes: ['analyze', 'argue'], paragraphMode: 'analyze' })
+    ).toEqual(['analyze', 'argue']);
+  });
+
+  test('falls back to the single stored type', () => {
+    expect(effectiveParagraphModes({ paragraphModes: [], paragraphMode: 'argue' })).toEqual([
+      'argue',
+    ]);
+    expect(effectiveParagraphModes({ paragraphMode: 'analyze' })).toEqual(['analyze']);
+  });
+
+  test('is empty when neither is set', () => {
+    expect(effectiveParagraphModes({ paragraphModes: [], paragraphMode: null })).toEqual([]);
+    expect(effectiveParagraphModes(null)).toEqual([]);
+  });
+
+  test('keeps a stored type that has since been switched off, for labels', () => {
+    expect(effectiveParagraphModes({ paragraphModes: ['compare'] })).toEqual(['compare']);
+  });
+});
+
+describe('several types in the prompt layers', () => {
+  test('one type reads exactly as before', () => {
+    expect(buildParagraphModeGradingBlock(['analyze'])).toBe(
+      buildParagraphModeGradingBlock('analyze')
+    );
+    expect(buildParagraphModeTutorInstructions(['analyze'])).toBe(
+      buildParagraphModeTutorInstructions('analyze')
+    );
+  });
+
+  test('two types carry both blocks, and say the paragraph combines them', () => {
+    const grading = buildParagraphModeGradingBlock(['analyze', 'argue']);
+    expect(grading).toContain('Paragraph type: Analyze');
+    expect(grading).toContain('Paragraph type: Argue a position');
+    expect(grading.toLowerCase()).toContain('combines');
+
+    const tutor = buildParagraphModeTutorInstructions(['analyze', 'argue']);
+    expect(tutor).toContain(getParagraphMode('analyze')!.tutorInstructions!);
+    expect(tutor).toContain(getParagraphMode('argue')!.tutorInstructions!);
+    expect(tutor.toLowerCase()).toContain('combines');
+  });
+
+  test('switched-off types drop out of the layers', () => {
+    expect(buildParagraphModeGradingBlock(['compare'])).toBe('');
+    expect(buildParagraphModeGradingBlock(['analyze', 'compare'])).toBe(
+      buildParagraphModeGradingBlock('analyze')
+    );
+  });
+});
+
+describe('paragraphModeLabels', () => {
+  test('names every stored type', () => {
+    expect(paragraphModeLabels(['analyze', 'argue'])).toEqual([
+      'Analyze',
+      'Argue a position',
+    ]);
+    expect(paragraphModeLabels([])).toEqual([]);
   });
 });

@@ -104,7 +104,8 @@ export function buildDailyPagesTutorSystemPrompt(
   return buildTutorSystemPrompt({
     generalTutorInstructions: null,
     tutorInstructions: DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS,
-    instructionTutorInstructions: DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS,
+    instructionTutorInstructions:
+      DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS,
     paragraphModeInstructions: buildParagraphModeTutorInstructions(
       evaluationCase.paragraphMode
     ),
@@ -115,7 +116,9 @@ export function buildDailyPagesTutorSystemPrompt(
   });
 }
 
-function buildCaseMessages(evaluationCase: TutorEvaluationCase): TutorMessage[] {
+function buildCaseMessages(
+  evaluationCase: TutorEvaluationCase
+): TutorMessage[] {
   const audit = buildAiTextContextAudit({
     documentSource: 'client-content',
     documentId: `evaluation-${evaluationCase.id}`,
@@ -142,7 +145,9 @@ export function runTutorReplyChecks(
   const maxWords = evaluationCase.limits?.maxWords ?? DEFAULT_MAX_WORDS;
   const maxQuestions =
     evaluationCase.limits?.maxQuestions ?? DEFAULT_MAX_QUESTIONS;
-  const gushing = GUSHING.filter((phrase) => text.toLowerCase().includes(phrase));
+  const gushing = GUSHING.filter((phrase) =>
+    text.toLowerCase().includes(phrase)
+  );
   const check = (id: string, passed: boolean, evidence: string) => ({
     id,
     status: passed ? ('pass' as const) : ('fail' as const),
@@ -150,7 +155,11 @@ export function runTutorReplyChecks(
   });
 
   return [
-    check('replied', text.length > 0, text ? 'Replied.' : 'The reply was empty.'),
+    check(
+      'replied',
+      text.length > 0,
+      text ? 'Replied.' : 'The reply was empty.'
+    ),
     check('brief', words <= maxWords, `${words} words (limit ${maxWords}).`),
     check(
       'one-question',
@@ -280,7 +289,9 @@ export async function runDailyPagesTutorEvaluation({
   execute: (input: TutorEvaluationExecution) => Promise<string>;
 }): Promise<TutorEvaluationResult> {
   const selected = caseIds?.length
-    ? suite.cases.filter((evaluationCase) => caseIds.includes(evaluationCase.id))
+    ? suite.cases.filter((evaluationCase) =>
+        caseIds.includes(evaluationCase.id)
+      )
     : suite.cases;
 
   const cases: TutorEvaluationResult['cases'] = [];
@@ -323,7 +334,13 @@ export function formatTutorEvaluationReport(
         lines.push(`Tutor call failed: ${run.error}`);
         return;
       }
-      lines.push('Tutor:', ...run.reply.trim().split('\n').map((l) => `  ${l}`));
+      lines.push(
+        'Tutor:',
+        ...run.reply
+          .trim()
+          .split('\n')
+          .map((l) => `  ${l}`)
+      );
       for (const check of [...run.checks, ...run.judged]) {
         lines.push(`  [${MARK[check.status]}] ${check.id}: ${check.evidence}`);
       }

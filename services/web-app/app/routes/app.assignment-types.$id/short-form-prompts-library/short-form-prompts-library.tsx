@@ -39,7 +39,8 @@ type Props = {
   facets: FacetValues;
   optionCounts: OptionCounts;
   totalCount: number;
-  onSelectPrompt: (prompt: string) => void;
+  /** The prompt text, and the entry it came from (for its paragraph types). */
+  onSelectPrompt: (prompt: string, entry: ShortFormLibraryEntry) => void;
 };
 
 type FacetSpec = {
@@ -279,7 +280,7 @@ export function ShortFormPromptsLibrary({
                     <PromptCard
                       key={p.id}
                       prompt={p}
-                      onSelect={() => onSelectPrompt(p.prompt)}
+                      onSelect={() => onSelectPrompt(p.prompt, p)}
                     />
                   ))}
                 </ul>

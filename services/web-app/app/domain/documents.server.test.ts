@@ -181,7 +181,10 @@ describe('createDocumentForAssignmentType', () => {
 
     expect(prisma.document.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ paragraphMode: 'argue' }),
+        data: expect.objectContaining({
+          paragraphMode: 'argue',
+          paragraphModes: ['argue'],
+        }),
       })
     );
   });
@@ -217,6 +220,7 @@ describe('createDocumentForAssignmentType', () => {
 
     const data = (prisma.document.create.mock.calls[0]?.[0] as any).data;
     expect('paragraphMode' in data).toBe(false);
+    expect('paragraphModes' in data).toBe(false);
     expect(data.title).toBe('');
   });
 

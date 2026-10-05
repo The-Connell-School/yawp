@@ -326,6 +326,7 @@ describe('seedDailyPagesAnalyzeSamples', () => {
     expect(calls.assignmentCreate).toHaveLength(1);
     const { data } = calls.assignmentCreate[0].args;
     expect(data.paragraphMode).toBe('analyze');
+    expect(data.paragraphModes).toEqual(['analyze']);
     expect(data.writingTimeMinutes).toBe(15);
     expect(data.tutorEnabled).toBe(true);
     expect(data.prompt).toBe(DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.prompt);

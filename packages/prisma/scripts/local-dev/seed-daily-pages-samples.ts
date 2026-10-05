@@ -386,6 +386,7 @@ export async function seedDailyPagesAnalyzeSamples(
       title: DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.title,
       prompt: DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.prompt,
       paragraphMode: DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.paragraphMode,
+      paragraphModes: [DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.paragraphMode],
       writingTimeMinutes: DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.writingTimeMinutes,
       tutorEnabled: true,
       submitForGrade: true,

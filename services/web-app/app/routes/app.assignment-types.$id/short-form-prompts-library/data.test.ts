@@ -17,6 +17,7 @@ import {
   deriveTitleFromPrompt,
   buildOptionCounts,
   onlySwitchedOnMoves,
+  paragraphModesForMoves,
   readFilters,
   savedPromptToLibraryEntry,
   toLibraryEntries,
@@ -279,6 +280,24 @@ describe('the library shows only switched-on paragraph types', () => {
       savedAt: new Date().toISOString(),
     });
     expect(onlySwitchedOnMoves([saved, ...entries])).toContain(saved);
+  });
+});
+
+/** A picked library prompt arrives in the sheet with its types ticked. */
+describe('paragraphModesForMoves', () => {
+  test('maps a prompt’s modes to the switched-on paragraph types', () => {
+    expect(paragraphModesForMoves(['argue-a-position', 'evaluate'])).toEqual([
+      'argue',
+    ]);
+    expect(paragraphModesForMoves(['analyze', 'argue-a-position'])).toEqual([
+      'analyze',
+      'argue',
+    ]);
+  });
+
+  test('is empty for a prompt with no switched-on mode, or none at all', () => {
+    expect(paragraphModesForMoves(['interpret', 'compare'])).toEqual([]);
+    expect(paragraphModesForMoves([])).toEqual([]);
   });
 });
 

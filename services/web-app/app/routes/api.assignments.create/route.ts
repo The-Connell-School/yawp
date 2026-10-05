@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { z } from 'zod';
 import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/daily-pages-rubric';
-import { parseParagraphMode } from '~/domain/assignment-types/daily-pages-paragraph-modes';
+import { parseParagraphModes } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import {
   buildAssignmentCreateInputFromApHistoryEntry,
   buildAssignmentCreateInputFromCustomApHistory,
@@ -133,7 +133,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   const writingTimeMinutes = writingTimeResult.value;
 
-  const paragraphModeResult = parseParagraphMode(formData);
+  const paragraphModeResult = parseParagraphModes(formData);
   if (!paragraphModeResult.success) {
     return dataResponse(
       { success: false, message: paragraphModeResult.message },
@@ -251,10 +251,13 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // A paragraph type only means something on Daily Pages; anything sent for
   // another type is dropped rather than stored where nothing reads it.
-  const paragraphMode =
+  // Several can be ticked; the list is stored, and the first type still goes
+  // in the single column for readers that have not moved over yet.
+  const paragraphModes =
     assignmentType.kind === DAILY_PAGES_ASSIGNMENT_TYPE_KIND
       ? paragraphModeResult.value
-      : null;
+      : [];
+  const paragraphMode = paragraphModes[0] ?? null;
 
   const collaboration = collaborationResult.value;
 
@@ -334,6 +337,7 @@ export async function action({ request }: ActionFunctionArgs) {
         grammarGradingEnabled,
         writingTimeMinutes,
         paragraphMode,
+        paragraphModes,
         ...rubricOverrideData,
         ...collaboration,
       },
@@ -410,6 +414,7 @@ export async function action({ request }: ActionFunctionArgs) {
         grammarGradingEnabled,
         writingTimeMinutes,
         paragraphMode,
+        paragraphModes,
         ...collaboration,
         ...promptAttachmentData,
         ...(gradingIntent?.success

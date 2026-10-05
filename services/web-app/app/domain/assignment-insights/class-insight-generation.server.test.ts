@@ -242,6 +242,39 @@ describe('generateClassAssignmentInsight rubric scoping', () => {
     });
   });
 
+  test('names every paragraph type the class wrote under', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue({
+      id: 'ca-1',
+      assignment: {
+        title: 'Loyalty',
+        tutorEnabled: true,
+        writingTimeMinutes: 15,
+        paragraphMode: 'analyze',
+        paragraphModes: ['analyze', 'argue'],
+        grammarGradingEnabled: true,
+        assignmentType: { title: 'Daily Pages' },
+      },
+      class: {
+        grade: '9',
+        period: '1',
+        school: {
+          organizationId: 'org-1',
+          organization: { classInsightsEnabled: true },
+        },
+      },
+    });
+
+    await generateClassAssignmentInsight({
+      classAssignmentId: 'ca-1',
+      organizationId: 'org-1',
+      generatedByMembershipId: 'teacher-1',
+    });
+
+    expect(generateClassInsight.mock.calls[0]?.[0]?.context).toMatchObject({
+      paragraphModeLabel: 'Analyze and Argue a position',
+    });
+  });
+
   test('leaves the conditions empty for an assignment that set none', async () => {
     await generateClassAssignmentInsight({
       classAssignmentId: 'ca-1',

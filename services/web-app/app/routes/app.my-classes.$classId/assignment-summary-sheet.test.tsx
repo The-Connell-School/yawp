@@ -152,6 +152,23 @@ describe('AssignmentSummarySheetContent', () => {
     expect(el.textContent).toContain('15 minutes');
   });
 
+  it('names every paragraph type the assignment practices', () => {
+    const el = render(
+      <AssignmentSummarySheetContent
+        renderSheet={false}
+        assignment={{
+          ...ASSIGNMENT,
+          paragraphMode: 'analyze',
+          paragraphModes: ['analyze', 'argue'],
+        }}
+        classInsightsEnabled={false}
+        onViewDocuments={() => {}}
+      />
+    );
+    expect(el.textContent).toContain('Paragraph types');
+    expect(el.textContent).toContain('Analyze, Argue a position');
+  });
+
   it('omits both rows for an assignment that set neither', () => {
     const el = render(
       <AssignmentSummarySheetContent

@@ -191,6 +191,20 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     );
   });
 
+  test('layers every paragraph type in the assignment’s list', async () => {
+    const systemText = await tutorSystemTextFor({
+      id: 'assignment-1',
+      title: 'Daily Pages',
+      prompt: 'Is loyalty a virtue?',
+      tutorEnabled: true,
+      paragraphMode: 'analyze',
+      paragraphModes: ['analyze', 'argue'],
+    });
+
+    expect(systemText).toContain('PARAGRAPH TYPE: Analyze');
+    expect(systemText).toContain('PARAGRAPH TYPE: Argue a position');
+  });
+
   /**
    * A teacher's standalone Daily Pages document has no assignment, so the
    * type it practices is recorded on the document itself.

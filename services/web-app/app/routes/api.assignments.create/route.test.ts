@@ -412,7 +412,7 @@ describe('api.assignments.create', () => {
   });
 
   describe('paragraph type', () => {
-    function createWith(fields: Record<string, string>) {
+    function createWith(fields: Record<string, string | string[]>) {
       return action({
         request: requestFor({
           intent: 'create-assignment',
@@ -452,6 +452,53 @@ describe('api.assignments.create', () => {
       );
     });
 
+    /**
+     * A prompt often asks for more than one move, so several types can be
+     * ticked. The list is stored, and the first type still goes in the
+     * single column for readers that have not moved over yet.
+     */
+    test('records several types, and the first in the single column', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      const body = await readBody(
+        await createWith({ paragraphMode: ['argue', 'analyze'] })
+      );
+
+      expect(body).toMatchObject({ success: true });
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            paragraphModes: ['analyze', 'argue'],
+            paragraphMode: 'analyze',
+          }),
+        })
+      );
+    });
+
+    test('records one type in both columns', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      await createWith({ paragraphMode: 'argue' });
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            paragraphModes: ['argue'],
+            paragraphMode: 'argue',
+          }),
+        })
+      );
+    });
+
+    test('refuses the choice when one ticked type is not switched on', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      const response = await createWith({ paragraphMode: ['analyze', 'compare'] });
+
+      expect(responseStatus(response)).toBe(400);
+      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
+
     test('records none when no type is chosen (preserves current behavior)', async () => {
       mockAssignmentTypeAvailable({ kind: 'daily_pages' });
 
@@ -459,7 +506,10 @@ describe('api.assignments.create', () => {
 
       expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ paragraphMode: null }),
+          data: expect.objectContaining({
+            paragraphMode: null,
+            paragraphModes: [],
+          }),
         })
       );
     });

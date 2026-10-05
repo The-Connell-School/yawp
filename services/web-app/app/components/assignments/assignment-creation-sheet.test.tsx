@@ -904,11 +904,12 @@ describe('AssignmentCreationSheetContent writing time', () => {
 });
 
 /**
- * The kind of paragraph a Daily Pages entry practices. Offered only for types
- * that take one, and only the types switched on (Analyze, then Argue a position). No choice is
- * the default, which grades and tutors exactly as before.
+ * The kinds of paragraph a Daily Pages entry practices. Most prompts ask for
+ * more than one move, so the types are checkboxes: offered only for types
+ * that take them, only the ones switched on, and none ticked by default —
+ * which grades and tutors exactly as before.
  */
-describe('AssignmentCreationSheetContent paragraph type', () => {
+describe('AssignmentCreationSheetContent paragraph types', () => {
   let root: Root | null = null;
 
   afterEach(() => {
@@ -932,56 +933,64 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
     },
   ];
 
-  function paragraphSelect() {
-    return document.querySelector<HTMLSelectElement>(
-      'select[name="paragraphMode"]'
+  function boxes() {
+    return Array.from(
+      document.querySelectorAll<HTMLInputElement>(
+        'input[type="checkbox"][name="paragraphMode"]'
+      )
     );
   }
 
-  it('offers the switched-on types for Daily Pages, defaulting to none', () => {
+  function tick(value: string) {
+    act(() => {
+      boxes()
+        .find((box) => box.value === value)!
+        .click();
+    });
+  }
+
+  it('offers a checkbox per switched-on type, none ticked', () => {
     ({ root } = renderSheet({
       assignmentTypes: types,
       fixedAssignmentTypeId: 'daily-pages',
     }));
 
-    expectText('Paragraph type');
-    const select = paragraphSelect();
-    expect(select).not.toBeNull();
-    expect(select!.value).toBe('');
-    const options = Array.from(select!.options).map((option) => option.value);
-    expect(options).toEqual(['', 'analyze', 'argue']);
+    expectText('Paragraph types');
+    expect(boxes().map((box) => box.value)).toEqual(['analyze', 'argue']);
+    expect(boxes().every((box) => !box.checked)).toBe(true);
+    expectText('any kind of paragraph');
   });
 
-  it('describes the chosen type', () => {
+  it('describes each ticked type', () => {
     ({ root } = renderSheet({
       assignmentTypes: types,
       fixedAssignmentTypeId: 'daily-pages',
     }));
 
-    act(() => {
-      const select = paragraphSelect()!;
-      select.value = 'analyze';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-
-    expect(paragraphSelect()!.value).toBe('analyze');
+    tick('analyze');
     expectText('Claim-Evidence-Analysis');
+    expectNoText('Position-Reason-Test');
+
+    tick('argue');
+    expect(boxes().filter((box) => box.checked).map((box) => box.value)).toEqual([
+      'analyze',
+      'argue',
+    ]);
+    expectText('Claim-Evidence-Analysis');
+    expectText('Position-Reason-Test');
   });
 
-  it('describes Argue a position when it is chosen', () => {
+  /** Picking a library prompt ticks the types it is tagged with. */
+  it('starts with the types a library prompt was tagged with', () => {
     ({ root } = renderSheet({
       assignmentTypes: types,
       fixedAssignmentTypeId: 'daily-pages',
+      initialParagraphModes: ['argue'],
     }));
 
-    act(() => {
-      const select = paragraphSelect()!;
-      select.value = 'argue';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-
-    expect(paragraphSelect()!.value).toBe('argue');
-    expectText('Position-Reason-Test');
+    expect(boxes().filter((box) => box.checked).map((box) => box.value)).toEqual([
+      'argue',
+    ]);
   });
 
   it('is absent for a type that takes no paragraph type', () => {
@@ -990,8 +999,8 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
       fixedAssignmentTypeId: 'essay',
     }));
 
-    expect(paragraphSelect()).toBeNull();
-    expectNoText('Paragraph type');
+    expect(boxes()).toHaveLength(0);
+    expectNoText('Paragraph types');
   });
 
   it('is shown read-only when editing, and not submitted', () => {
@@ -999,12 +1008,19 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
       assignmentTypes: types,
       fixedAssignmentTypeId: 'daily-pages',
       editingAssignment: { id: 'assignment-1' },
-      initialParagraphMode: 'analyze',
+      initialParagraphModes: ['analyze', 'argue'],
     }));
 
-    expect(paragraphSelect()).toBeNull();
-    const shown = controlById('assignment-create-paragraph-mode') as HTMLSelectElement;
-    expect(shown.value).toBe('analyze');
-    expect(shown.disabled).toBe(true);
+    expect(boxes()).toHaveLength(0);
+    const shown = Array.from(
+      document.querySelectorAll<HTMLInputElement>(
+        '[data-testid="assignment-create-paragraph-modes"] input[type="checkbox"]'
+      )
+    );
+    expect(shown.filter((box) => box.checked).map((box) => box.value)).toEqual([
+      'analyze',
+      'argue',
+    ]);
+    expect(shown.every((box) => box.disabled)).toBe(true);
   });
 });

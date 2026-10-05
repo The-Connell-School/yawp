@@ -48,6 +48,8 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialPrompt?: string;
+  /** Paragraph types to start ticked, from a picked library prompt. */
+  initialParagraphModes?: readonly string[];
   titleRequired?: boolean;
   apHistoryEntry?: {
     externalKey: string;
@@ -74,6 +76,7 @@ export function CreateAssignmentSheet({
   open,
   onOpenChange,
   initialPrompt = '',
+  initialParagraphModes,
   titleRequired = false,
   apHistoryEntry = null,
 }: Props) {
@@ -126,6 +129,7 @@ export function CreateAssignmentSheet({
         ]}
         teacherClasses={teacherClasses}
         initialPrompt={initialPrompt}
+        initialParagraphModes={initialParagraphModes}
         titleRequired={titleRequired}
       />
     );

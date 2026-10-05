@@ -14,7 +14,10 @@ import {
 } from '~/domain/assignment-insights/differentiate-students';
 import type { ClassInsightSummary } from '~/domain/assignment-insights/class-insight-synthesis';
 import { readInsightRubric } from '~/domain/assignment-insights/insight-rubric.server';
-import { getParagraphMode } from '~/domain/assignment-types/daily-pages-paragraph-modes';
+import {
+  effectiveParagraphModes,
+  paragraphModeLabels,
+} from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { prisma } from '~/utils/db.server';
 import {
   AiRateLimitError,
@@ -146,12 +149,15 @@ function writingConditions(assignment: {
   tutorEnabled?: boolean | null;
   writingTimeMinutes?: number | null;
   paragraphMode?: string | null;
+  paragraphModes?: string[] | null;
   grammarGradingEnabled?: boolean | null;
   assignmentType?: { title?: string | null } | null;
 }) {
   return {
     assignmentTypeTitle: assignment.assignmentType?.title ?? null,
-    paragraphModeLabel: getParagraphMode(assignment.paragraphMode)?.label ?? null,
+    paragraphModeLabel:
+      paragraphModeLabels(effectiveParagraphModes(assignment)).join(' and ') ||
+      null,
     writingTimeMinutes: assignment.writingTimeMinutes ?? null,
     coldWrite: assignment.tutorEnabled === false,
     grammarGraded: assignment.grammarGradingEnabled ?? null,
@@ -181,6 +187,7 @@ export async function generateClassAssignmentInsight(input: {
           tutorEnabled: true,
           writingTimeMinutes: true,
           paragraphMode: true,
+          paragraphModes: true,
           grammarGradingEnabled: true,
           assignmentType: { select: { title: true } },
         },

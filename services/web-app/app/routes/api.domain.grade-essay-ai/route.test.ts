@@ -2164,6 +2164,60 @@ describe('api.domain.grade-essay-ai', () => {
       expect(grading.messages[0].content).toContain('Paragraph type: Analyze');
     });
 
+    /** An assignment can practice several types; the grader reads for each. */
+    test('reads every paragraph type in the assignment’s list', async () => {
+      prisma.assignmentType.findUnique.mockResolvedValue(
+        mockAssignmentType({
+          gradingPromptConfigJson: { gradingInstructions: 'Grade against this rubric.' },
+          rubricJson: { categories: [customRubricCategory()] },
+        })
+      );
+      const base = mockCustomRubricSubmission('sub-two-types');
+      prisma.submission.findFirst.mockResolvedValue({
+        ...base,
+        document: {
+          ...base.document,
+          assignment: {
+            id: 'assignment-two-types',
+            prompt: 'Is loyalty a virtue?',
+            writingTimeMinutes: 15,
+            tutorEnabled: true,
+            paragraphMode: 'analyze',
+            paragraphModes: ['analyze', 'argue'],
+          },
+        },
+      });
+      prisma.assignment.findUnique.mockResolvedValue({
+        assignmentTypeId: 'assignment-type-legacy',
+        rubricRevision: null,
+      });
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: [{ key: 'daily_habit', score: 5, comment: 'Clear.' }],
+            overallComment: 'Jordan, this lands.',
+          })
+        )
+        .mockResolvedValue(JSON.stringify({ issues: [] }));
+      const form = new FormData();
+      form.append('submissionId', 'sub-two-types');
+      await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      const grading = getLLMCompletion.mock.calls.find(
+        (call: any[]) => call[0]?.metadata?.kind === 'rubric-evaluation'
+      )?.[0] as any;
+
+      expect(grading.messages[0].content).toContain('Paragraph type: Analyze');
+      expect(grading.messages[0].content).toContain(
+        'Paragraph type: Argue a position'
+      );
+    });
+
     /** A teacher's standalone Daily Pages document records its own type. */
     test('reads the paragraph type of a document with no assignment', async () => {
       const { grading } = await gradeTimed(

@@ -150,7 +150,8 @@ export function compileGradingAssistantInvocation({
   /** True when the tutor was off: a cold write. Absent or false changes nothing. */
   coldWrite?: boolean | null;
   /** The Daily Pages paragraph type the teacher chose; absent changes nothing. */
-  paragraphMode?: string | null;
+  /** One type or several; Daily Pages paragraph types to read for. */
+  paragraphMode?: string | readonly string[] | null;
 }): CompiledGradingAssistantInvocation {
   const { minScore, maxScore } = gradingConfig;
   const promptShape = buildGradingPromptShape({

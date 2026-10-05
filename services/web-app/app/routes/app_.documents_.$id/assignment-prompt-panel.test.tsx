@@ -22,7 +22,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-function render(prompt: string, paragraphMode: string | null = null) {
+function render(prompt: string, paragraphModes: string[] = []) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -34,7 +34,7 @@ function render(prompt: string, paragraphMode: string | null = null) {
             id: 'assignment-1',
             title: 'Juliet argues with a name',
             prompt,
-            paragraphMode,
+            paragraphModes,
           } as never
         }
       />
@@ -71,7 +71,9 @@ describe('AssignmentPromptPanel', () => {
  */
 describe('AssignmentPromptPanel paragraph-type guide', () => {
   it('offers the guide for an assignment with a paragraph type', () => {
-    const container = render('Quote the line where her argument turns.', 'analyze');
+    const container = render('Quote the line where her argument turns.', [
+      'analyze',
+    ]);
 
     const button = container.querySelector(
       '[data-testid="paragraph-guide-open"]'

@@ -168,19 +168,59 @@ export function ParagraphTypeGuide({
   );
 }
 
+function chosenGuides(paragraphModes: readonly string[]): ParagraphGuide[] {
+  return paragraphModes
+    .map((key) => getParagraphGuide(key))
+    .filter((guide): guide is ParagraphGuide => guide !== null);
+}
+
+/**
+ * The guides for an assignment's paragraph types. One type shows its guide
+ * as is; when an assignment combines types, each guide gets its own heading
+ * so a student can tell which move each part belongs to.
+ */
+export function ParagraphTypeGuideList({
+  paragraphModes,
+}: {
+  paragraphModes: readonly string[];
+}) {
+  const guides = chosenGuides(paragraphModes);
+  if (guides.length === 0) return null;
+  if (guides.length === 1) {
+    return <ParagraphTypeGuide paragraphMode={guides[0].key} />;
+  }
+
+  return (
+    <div className="space-y-8">
+      {guides.map((guide) => (
+        <section key={guide.key} aria-labelledby={`guide-${guide.key}`}>
+          <h3
+            id={`guide-${guide.key}`}
+            className="mb-3 border-b pb-1 text-base font-semibold"
+          >
+            {guide.label}
+          </h3>
+          <ParagraphTypeGuide paragraphMode={guide.key} />
+        </section>
+      ))}
+    </div>
+  );
+}
+
 /**
  * The student's way into the guide from inside an assignment: a button by
- * the prompt that opens the guide for the assignment's paragraph type.
- * Nothing renders when the assignment has no paragraph type.
+ * the prompt that opens the guide for each of the assignment's paragraph
+ * types. Nothing renders when the assignment has none.
  */
 export function ParagraphTypeGuideButton({
-  paragraphMode,
+  paragraphModes,
 }: {
-  paragraphMode: string | null | undefined;
+  paragraphModes: readonly string[];
 }) {
   const [open, setOpen] = useState(false);
-  const guide = getParagraphGuide(paragraphMode);
-  if (!guide) return null;
+  const guides = chosenGuides(paragraphModes);
+  if (guides.length === 0) return null;
+  const title = guides.map((guide) => guide.label).join(' and ');
 
   // Opened from a plain button rather than DialogTrigger, so the button does
   // not depend on the dialog's context to render, and the dialog is mounted
@@ -204,13 +244,16 @@ export function ParagraphTypeGuideButton({
         <Dialog open onOpenChange={setOpen}>
           <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{guide.label}: what you’re aiming for</DialogTitle>
+              <DialogTitle>{title}: what you’re aiming for</DialogTitle>
               <DialogDescription>
-                How this kind of paragraph works, and what a strong one looks
-                like.
+                {guides.length > 1
+                  ? 'This paragraph combines more than one move. Here is how each works, and what a strong one looks like.'
+                  : 'How this kind of paragraph works, and what a strong one looks like.'}
               </DialogDescription>
             </DialogHeader>
-            <ParagraphTypeGuide paragraphMode={guide.key} />
+            <ParagraphTypeGuideList
+              paragraphModes={guides.map((guide) => guide.key)}
+            />
           </DialogContent>
         </Dialog>
       ) : null}

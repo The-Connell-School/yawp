@@ -1,12 +1,13 @@
 import { test, expect } from '../test-setup';
 
 /**
- * The kind of paragraph a Daily Pages entry practices. Offered only for Daily
- * Pages, and only the types switched on — Analyze, then Argue a position.
- * "Any kind of paragraph" is the default, which grades and tutors as before.
+ * The kinds of paragraph a Daily Pages entry practices. Offered only for Daily
+ * Pages, and only the types switched on — Analyze, then Argue a position. A
+ * paragraph can combine moves, so each type is a checkbox; with none ticked,
+ * the entry grades and tutors as any kind of paragraph, as before.
  */
 test.describe.serial('Paragraph type at assignment creation', () => {
-  test('Daily Pages offers Analyze and Argue a position, defaulting to any kind of paragraph', async ({
+  test('Daily Pages offers Analyze and Argue a position as checkboxes, none ticked by default', async ({
     page,
     e2eContext,
     signIn,
@@ -18,24 +19,55 @@ test.describe.serial('Paragraph type at assignment creation', () => {
 
     await page.getByRole('button', { name: /^New/ }).click();
     await page.getByRole('menuitem', { name: 'Assignment' }).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
 
-    const select = page.getByLabel('Paragraph type');
-    await expect(select).toBeVisible();
-    await expect(select).toHaveValue('');
-    await expect(select.locator('option')).toHaveText([
-      'Any kind of paragraph',
-      'Analyze',
-      'Argue a position',
-    ]);
+    const types = dialog.getByRole('group', { name: 'Paragraph types' });
+    await expect(types.getByRole('checkbox')).toHaveCount(2);
+    const analyze = types.getByRole('checkbox', { name: 'Analyze' });
+    const argue = types.getByRole('checkbox', { name: 'Argue a position' });
+    await expect(analyze).not.toBeChecked();
+    await expect(argue).not.toBeChecked();
+    await expect(types.getByText(/any kind of paragraph/)).toBeVisible();
 
-    await select.selectOption('analyze');
+    await analyze.check();
+    await expect(types.getByText(/Claim-Evidence-Analysis/)).toBeVisible();
+
+    // Both can be ticked: the paragraph combines the two moves.
+    await argue.check();
+    await expect(types.getByText(/Claim-Evidence-Analysis/)).toBeVisible();
+    await expect(types.getByText(/Position-Reason-Test/)).toBeVisible();
+  });
+
+  /**
+   * A library prompt is tagged with the moves it asks for; picking one ticks
+   * the switched-on types among them, and the teacher can change it.
+   */
+  test('picking a library prompt ticks its paragraph types', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+    );
+
+    await page.getByRole('button', { name: /Prompt Library/i }).click();
+    await page.getByPlaceholder('Search prompts').fill('Juliet');
+    await page.keyboard.press('Enter');
+    await page.getByText('Juliet argues with a name').first().click();
+
+    const types = page
+      .getByRole('dialog')
+      .getByRole('group', { name: 'Paragraph types' });
     await expect(
-      page.getByText(/Claim-Evidence-Analysis/).first()
-    ).toBeVisible();
-
-    await select.selectOption('argue');
-    await expect(page.getByText(/Position-Reason-Test/).first()).toBeVisible();
+      types.getByRole('checkbox', { name: 'Analyze' })
+    ).toBeChecked();
+    await expect(
+      types.getByRole('checkbox', { name: 'Argue a position' })
+    ).not.toBeChecked();
+    await page.getByRole('button', { name: 'Cancel' }).click();
   });
 
   /**
@@ -109,6 +141,8 @@ test.describe.serial('Paragraph type at assignment creation', () => {
     await page.getByRole('menuitem', { name: 'Assignment' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
 
-    await expect(page.getByLabel('Paragraph type')).toHaveCount(0);
+    await expect(
+      page.getByRole('group', { name: 'Paragraph types' })
+    ).toHaveCount(0);
   });
 });

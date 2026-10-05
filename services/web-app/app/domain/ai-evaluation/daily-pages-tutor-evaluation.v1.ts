@@ -30,8 +30,11 @@ export type TutorEvaluationCase = {
   id: string;
   /** The phase of the draft, as a teacher would name it. */
   phase: string;
-  /** Daily Pages paragraph type, or null for any kind of paragraph. */
-  paragraphMode: string | null;
+  /**
+   * Daily Pages paragraph type, several when the paragraph combines them, or
+   * null for any kind of paragraph.
+   */
+  paragraphMode: string | readonly string[] | null;
   assignment: { title: string; prompt: string } | null;
   /** The student's current draft. */
   draft: string;
@@ -58,7 +61,9 @@ const entry = (key: string) =>
   DAILY_PAGES_ANALYZE_SAMPLE_ENTRIES.find((sample) => sample.key === key)!.text;
 
 /** The opening every Daily Pages session starts from. */
-const OPENING = [{ agent: 'assistant' as const, content: DAILY_PAGES_SHORT_FORM_WELCOME }];
+const OPENING = [
+  { agent: 'assistant' as const, content: DAILY_PAGES_SHORT_FORM_WELCOME },
+];
 
 const QUESTION_ABOUT_BUT =
   'You found the line where her argument turns: "\'Tis but thy name that is my enemy." Now look at one small word in it. What does "but" do to the problem Juliet is describing?';
@@ -76,7 +81,7 @@ const cases: TutorEvaluationCase[] = [
       {
         id: 'asks-for-a-claim',
         requirement:
-          'Asks the student what Juliet\'s argument does or where it turns — a claim about how the speech works — rather than asking for more events from the scene.',
+          "Asks the student what Juliet's argument does or where it turns — a claim about how the speech works — rather than asking for more events from the scene.",
       },
       {
         id: 'does-not-supply-it',
@@ -200,7 +205,7 @@ const cases: TutorEvaluationCase[] = [
     paragraphMode: 'analyze',
     assignment: ANALYZE_ASSIGNMENT,
     draft:
-      "I think that Juliet's argument kind of turns when she says \"'Tis but thy name that is my enemy,\" because I feel like that is where she stops blaming Romeo himself and starts blaming the name he was born with.",
+      'I think that Juliet\'s argument kind of turns when she says "\'Tis but thy name that is my enemy," because I feel like that is where she stops blaming Romeo himself and starts blaming the name he was born with.',
     history: OPENING,
     studentMessage: 'Give me feedback',
     criteria: [
@@ -262,8 +267,38 @@ const cases: TutorEvaluationCase[] = [
       },
       {
         id: 'does-not-supply-the-case',
+        requirement: 'Does not hand the student a specific example to use.',
+      },
+    ],
+  },
+  {
+    id: 'combined-argue-from-text',
+    phase: 'Analyze + Argue: a position and a quote, nothing explained',
+    paragraphMode: ['analyze', 'argue'],
+    assignment: {
+      title: 'Daily Pages — Is a name no part of you?',
+      prompt:
+        'Juliet says a name is "no part of thee." Is she right? Take a position, ground it in her own words from the balcony scene, and test it against one moment where it might not hold. One paragraph.',
+    },
+    draft:
+      'Juliet is wrong that a name is no part of you. She says "\'Tis but thy name that is my enemy," but the name is the whole reason the families fight. Names matter.',
+    history: OPENING,
+    studentMessage: 'Give me feedback',
+    criteria: [
+      {
+        id: 'one-thing-at-a-time',
         requirement:
-          'Does not hand the student a specific example to use.',
+          'Coaches one thing: either how the quoted words show the position, or a moment that tests it. Does not ask for both in the same reply.',
+      },
+      {
+        id: 'one-paragraph',
+        requirement:
+          'Treats this as one paragraph to build on. Does not ask the student to write separate paragraphs for the argument and the analysis.',
+      },
+      {
+        id: 'does-not-supply-it',
+        requirement:
+          'Does not explain the quotation for the student or hand them a moment from the play to use.',
       },
     ],
   },

@@ -34,6 +34,17 @@ describe('the Daily Pages tutor evaluation', () => {
     expect(byId('argue-untested').paragraphMode).toBe('argue');
   });
 
+  /**
+   * A teacher can tick more than one paragraph type; the tutor then has two
+   * models in play and must still coach one part at a time.
+   */
+  test('covers a paragraph that combines Analyze and Argue', () => {
+    expect(byId('combined-argue-from-text').paragraphMode).toEqual([
+      'analyze',
+      'argue',
+    ]);
+  });
+
   test('gives every case a unique id, a phase, a message and something to judge', () => {
     const ids = suite.cases.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -49,7 +60,8 @@ describe('the Daily Pages tutor evaluation', () => {
 
   test('uses only paragraph types that are switched on', () => {
     for (const c of suite.cases) {
-      if (c.paragraphMode) expect(getParagraphMode(c.paragraphMode)).not.toBeNull();
+      const keys = c.paragraphMode === null ? [] : [c.paragraphMode].flat();
+      for (const key of keys) expect(getParagraphMode(key)).not.toBeNull();
     }
   });
 

@@ -35,7 +35,7 @@ describe('ParagraphTypeGuideButton', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     act(() =>
-      root!.render(<ParagraphTypeGuideButton paragraphMode="analyze" />)
+      root!.render(<ParagraphTypeGuideButton paragraphModes={['analyze']} />)
     );
 
     const button = container.querySelector(

@@ -17,6 +17,7 @@
 // sitting. A test enforces both.
 
 import {
+  enabledParagraphModes,
   getParagraphMode,
   type ParagraphModeKey,
 } from '~/domain/assignment-types/daily-pages-paragraph-modes';
@@ -300,6 +301,21 @@ export const PARAGRAPH_MODE_FOR_MOVE: Record<
 
 function isSwitchedOnMove(move: ShortFormCognitiveMove): boolean {
   return getParagraphMode(PARAGRAPH_MODE_FOR_MOVE[move]) !== null;
+}
+
+/**
+ * The paragraph types to tick when a teacher picks a prompt: its cognitive
+ * modes that are switched on, in the registry's order.
+ */
+export function paragraphModesForMoves(
+  moves: readonly ShortFormCognitiveMove[]
+): ParagraphModeKey[] {
+  const keys = new Set(
+    moves.filter(isSwitchedOnMove).map((move) => PARAGRAPH_MODE_FOR_MOVE[move])
+  );
+  return enabledParagraphModes()
+    .map((mode) => mode.key)
+    .filter((key) => keys.has(key));
 }
 
 /**

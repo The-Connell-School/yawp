@@ -1,3 +1,4 @@
+import { effectiveParagraphModes } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 import { useState, type MouseEvent, type ReactNode } from 'react';
@@ -137,6 +138,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           tutorEnabled: true,
           writingTimeMinutes: true,
           paragraphMode: true,
+          paragraphModes: true,
           collaborationEnabled: true,
           collaborationGroupMode: true,
           collaborationGroupSize: true,
@@ -272,6 +274,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       tutorEnabled: active.assignment.tutorEnabled,
       writingTimeMinutes: active.assignment.writingTimeMinutes,
       paragraphMode: active.assignment.paragraphMode,
+      paragraphModes: active.assignment.paragraphModes,
       collaborationGroupMode: active.assignment.collaborationGroupMode,
       collaborationGroupSize: active.assignment.collaborationGroupSize,
       gradingAssistantStrictnessLevel: active.assignment
@@ -724,6 +727,7 @@ export default function AssignmentDetailRoute() {
     gradedCount: assignment.gradedCount,
     insight: assignment.insight,
     paragraphMode: assignment.paragraphMode,
+    paragraphModes: assignment.paragraphModes,
     writingTimeMinutes: assignment.writingTimeMinutes,
   };
 
@@ -881,7 +885,7 @@ export default function AssignmentDetailRoute() {
           initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
           initialTutorEnabled={assignment.tutorEnabled}
           initialWritingTimeMinutes={assignment.writingTimeMinutes ?? null}
-          initialParagraphMode={assignment.paragraphMode ?? null}
+          initialParagraphModes={effectiveParagraphModes(assignment)}
           initialCollaborationEnabled={Boolean(data.collaboration)}
           initialCollaborationGroupMode={toCollaborationGroupMode(
             assignment.collaborationGroupMode
@@ -907,7 +911,7 @@ export default function AssignmentDetailRoute() {
           initialPrompt={assignment.prompt}
           initialRubricTotalPoints={assignment.rubricTotalPoints}
           initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
-          initialParagraphMode={assignment.paragraphMode ?? null}
+          initialParagraphModes={effectiveParagraphModes(assignment)}
         />
       </div>
     </PageShell>

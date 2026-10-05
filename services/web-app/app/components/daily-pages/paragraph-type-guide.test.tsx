@@ -17,6 +17,7 @@ import { getParagraphGuide } from '~/domain/assignment-types/daily-pages-paragra
 import {
   ParagraphTypeGuide,
   ParagraphTypeGuideButton,
+  ParagraphTypeGuideList,
   ParagraphTypeGuides,
 } from './paragraph-type-guide';
 
@@ -62,15 +63,45 @@ describe('ParagraphTypeGuide', () => {
 describe('ParagraphTypeGuideButton', () => {
   test('offers the guide on an assignment with a paragraph type', () => {
     const html = renderToStaticMarkup(
-      <ParagraphTypeGuideButton paragraphMode="argue" />
+      <ParagraphTypeGuideButton paragraphModes={['argue']} />
     );
     expect(html).toContain('What you’re aiming for');
   });
 
   test('is absent when the assignment has no paragraph type', () => {
     expect(
-      renderToStaticMarkup(<ParagraphTypeGuideButton paragraphMode={null} />)
+      renderToStaticMarkup(<ParagraphTypeGuideButton paragraphModes={[]} />)
     ).toBe('');
+  });
+
+  test('is absent when every type is switched off or unknown', () => {
+    expect(
+      renderToStaticMarkup(
+        <ParagraphTypeGuideButton paragraphModes={['compare', 'nonsense']} />
+      )
+    ).toBe('');
+  });
+});
+
+/** An assignment can combine types; the dialog shows each one in turn. */
+describe('ParagraphTypeGuideList', () => {
+  test('shows one guide, untitled, for a single type', () => {
+    const html = renderToStaticMarkup(
+      <ParagraphTypeGuideList paragraphModes={['analyze']} />
+    );
+    expect(html).toContain('data-testid="paragraph-guide-analyze"');
+    expect(html).not.toContain('<h3');
+  });
+
+  test('shows every chosen type under its own heading', () => {
+    const html = renderToStaticMarkup(
+      <ParagraphTypeGuideList paragraphModes={['analyze', 'argue']} />
+    );
+    expect(html).toContain('data-testid="paragraph-guide-analyze"');
+    expect(html).toContain('data-testid="paragraph-guide-argue"');
+    expect(textOf(html)).toContain('Analyze');
+    expect(textOf(html)).toContain('Argue a position');
+    expect(html.match(/<h3/g)?.length).toBe(2);
   });
 });
 

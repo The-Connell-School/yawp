@@ -196,20 +196,99 @@ export function parseParagraphMode(
   return { success: true, value: mode.key };
 }
 
-/** The grading layer. Empty when no switched-on type is chosen. */
-export function buildParagraphModeGradingBlock(
-  key: string | null | undefined
-): string {
-  const mode = getParagraphMode(key);
-  if (!mode?.gradingInstructions) return '';
-  return `Paragraph type: ${mode.label}\n${mode.gradingInstructions}`;
+/**
+ * Several types, read from a form's checkboxes (one value per ticked box).
+ * None ticked is any kind of paragraph. Any type that is not switched on
+ * refuses the whole choice rather than quietly dropping it.
+ */
+export type ParseParagraphModesResult =
+  | { success: true; value: ParagraphModeKey[] }
+  | { success: false; message: string };
+
+export function parseParagraphModes(
+  formData: FormData
+): ParseParagraphModesResult {
+  const raw = formData
+    .getAll(PARAGRAPH_MODE_FIELD)
+    .map((value) => value.toString().trim())
+    .filter(Boolean);
+  if (raw.some((key) => !getParagraphMode(key))) {
+    return { success: false, message: 'Paragraph type is not available.' };
+  }
+  return { success: true, value: switchedOnModes(raw).map((mode) => mode.key) };
 }
 
-/** The tutor layer. Empty when no switched-on type is chosen. */
-export function buildParagraphModeTutorInstructions(
-  key: string | null | undefined
+/**
+ * The types a stored assignment or document practices. The list column wins;
+ * rows written before it existed carry one type in the single column, and
+ * read as that one type. Stored types are kept even if since switched off, so
+ * a teacher still sees what was chosen; the prompt layers skip them.
+ */
+export function effectiveParagraphModes(
+  row:
+    | {
+        paragraphModes?: readonly string[] | null;
+        paragraphMode?: string | null;
+      }
+    | null
+    | undefined
+): string[] {
+  if (row?.paragraphModes?.length) return [...row.paragraphModes];
+  return row?.paragraphMode ? [row.paragraphMode] : [];
+}
+
+/** Labels for stored types, switched on or not. */
+export function paragraphModeLabels(keys: readonly string[]): string[] {
+  return keys
+    .map((key) => paragraphModeLabel(key))
+    .filter((label): label is string => label !== null);
+}
+
+/** Switched-on types among `keys`, in the registry's order, once each. */
+function switchedOnModes(
+  keys: string | readonly string[] | null | undefined
+): ParagraphMode[] {
+  const wanted = new Set(
+    typeof keys === 'string' ? [keys] : (keys ?? [])
+  );
+  return DAILY_PAGES_PARAGRAPH_MODES.filter(
+    (mode) => mode.enabled && wanted.has(mode.key)
+  );
+}
+
+function joinLabels(modes: ParagraphMode[]) {
+  return modes.map((mode) => mode.label).join(' and ');
+}
+
+/**
+ * The grading layer: one block per chosen type. Empty when none is chosen.
+ * One type reads exactly as it always has.
+ */
+export function buildParagraphModeGradingBlock(
+  keys: string | readonly string[] | null | undefined
 ): string {
-  const mode = getParagraphMode(key);
-  if (!mode?.tutorInstructions) return '';
-  return `PARAGRAPH TYPE: ${mode.label}\n${mode.tutorInstructions}`;
+  const modes = switchedOnModes(keys).filter((mode) => mode.gradingInstructions);
+  const blocks = modes.map(
+    (mode) => `Paragraph type: ${mode.label}\n${mode.gradingInstructions}`
+  );
+  if (blocks.length <= 1) return blocks[0] ?? '';
+  return [
+    `This paragraph combines ${modes.length} moves: ${joinLabels(modes)}. Read for each. One paragraph can do both, and it need not do them in a set order.`,
+    ...blocks,
+  ].join('\n\n');
+}
+
+/** The tutor layer: one block per chosen type. Empty when none is chosen. */
+export function buildParagraphModeTutorInstructions(
+  keys: string | readonly string[] | null | undefined
+): string {
+  const modes = switchedOnModes(keys).filter((mode) => mode.tutorInstructions);
+  const blocks = modes.map(
+    (mode) => `PARAGRAPH TYPE: ${mode.label}\n${mode.tutorInstructions}`
+  );
+  if (blocks.length <= 1) return blocks[0] ?? '';
+  return [
+    `This paragraph combines ${modes.length} moves: ${joinLabels(modes)}. Coach whichever the draft needs most first, one part at a time, and do not make the student write two paragraphs.`,
+    ...blocks,
+  ].join('\n\n');
 }

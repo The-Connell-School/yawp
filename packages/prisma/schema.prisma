@@ -302,6 +302,12 @@ model Assignment {
   /// that predates this column, and then nothing changes. A string rather than
   /// an enum so a type can be switched on without a migration.
   paragraphMode                   String?
+  /// Every Daily Pages paragraph type the assignment practices — a prompt
+  /// often asks for more than one move (argue and evaluate, say). Empty is
+  /// any kind of paragraph. Supersedes `paragraphMode`, which is still written
+  /// (the first type, or null) while readers move over; readers prefer this
+  /// list and fall back to `paragraphMode` for rows written before it.
+  paragraphModes                  String[]          @default([])
   /// The teacher's per-assignment toggle: are students writing one shared
   /// draft per group. Gated at runtime by Organization.collaborativeDraftsEnabled.
   collaborationEnabled            Boolean           @default(false)
@@ -829,6 +835,8 @@ model Document {
   /// read it as they would an assignment of that type. A document written for
   /// an assignment takes the assignment's type instead. Null means no type.
   paragraphMode            String?
+  /// The list form of `paragraphMode`, as on Assignment. Both are written.
+  paragraphModes           String[]                  @default([])
   assignmentModuleSessions AssignmentModuleSession[]
   comments                 DocumentComment[]
   writeJournals            DocumentWriteJournal[]

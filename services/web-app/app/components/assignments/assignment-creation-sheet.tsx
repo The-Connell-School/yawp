@@ -16,7 +16,6 @@ import {
 } from '~/domain/assignments/collaboration';
 import {
   enabledParagraphModes,
-  getParagraphMode,
 } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import {
   Select,
@@ -167,6 +166,9 @@ export type AssignmentCreationClassOption = {
   period?: string | null;
 };
 
+
+const NO_PARAGRAPH_MODES: readonly string[] = [];
+
 type CreateFetcherData = {
   success?: boolean;
   message?: string;
@@ -235,8 +237,11 @@ export type AssignmentCreationSheetProps = {
    * the assignment has no writing time, and the field stays blank.
    */
   initialWritingTimeMinutes?: number | null;
-  /** The assignment's saved paragraph type, shown read-only when editing. */
-  initialParagraphMode?: string | null;
+  /**
+   * The paragraph types to start ticked: a library prompt's tags when
+   * creating, or the assignment's saved types (shown read-only) when editing.
+   */
+  initialParagraphModes?: readonly string[];
   /** The rubric's authored total, shown before an assignment override is used. */
 };
 
@@ -328,7 +333,7 @@ export function AssignmentCreationSheetContent({
   initialRubricTotalPoints = null,
   initialGradingMode = DEFAULT_ASSIGNMENT_GRADING_MODE,
   initialWritingTimeMinutes,
-  initialParagraphMode = null,
+  initialParagraphModes = NO_PARAGRAPH_MODES,
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -359,7 +364,9 @@ export function AssignmentCreationSheetContent({
   const [dueAt, setDueAt] = useState<string>('');
   const [tutorEnabled, setTutorEnabled] = useState(initialTutorEnabled);
   const [grammarGradingEnabled, setGrammarGradingEnabled] = useState(true);
-  const [paragraphMode, setParagraphMode] = useState(initialParagraphMode ?? '');
+  const [paragraphModes, setParagraphModes] = useState<string[]>([
+    ...initialParagraphModes,
+  ]);
   const initialWritingTimeValue = () =>
     writingTimeFieldValue(
       editingAssignment || initialWritingTimeMinutes !== undefined
@@ -419,7 +426,15 @@ export function AssignmentCreationSheetContent({
       ?.offersParagraphModes
   );
   const paragraphModeOptions = enabledParagraphModes();
-  const selectedParagraphMode = getParagraphMode(paragraphMode);
+  const selectedParagraphModes = paragraphModeOptions.filter((mode) =>
+    paragraphModes.includes(mode.key)
+  );
+  const toggleParagraphMode = (key: string) =>
+    setParagraphModes((current) =>
+      current.includes(key)
+        ? current.filter((value) => value !== key)
+        : [...current, key]
+    );
   const hasFixedClass = Boolean(fixedClassId);
   // Every creation entry point uses the same server workflow. In particular,
   // the class page must not silently drop collaboration fields by posting to
@@ -489,7 +504,7 @@ export function AssignmentCreationSheetContent({
     setPostAt(toDateInputValue(initialPostAt));
     setDueAt(toDateInputValue(initialDueAt));
     setTutorEnabled(initialTutorEnabled);
-    setParagraphMode(initialParagraphMode ?? '');
+    setParagraphModes([...initialParagraphModes]);
     setWritingTime(initialWritingTimeValue());
     writingTimeTouchedRef.current = false;
     setCollaborationEnabled(initialCollaborationEnabled);
@@ -522,7 +537,7 @@ export function AssignmentCreationSheetContent({
     initialGradingAssistantStrictnessLevel,
     initialGradingMode,
     initialWritingTimeMinutes,
-    initialParagraphMode,
+    initialParagraphModes,
     initialPostAt,
     initialDueAt,
     open,
@@ -1125,41 +1140,68 @@ export function AssignmentCreationSheetContent({
           </div>
         ) : null}
 
-        {/* The kind of paragraph a Daily Pages entry practices. Only the types
-            switched on are offered, so teachers see Analyze first and the rest
-            as they are ready. Frozen after creation like the grammar toggle:
-            work may already be graded and tutored against it. */}
+        {/* The kinds of paragraph a Daily Pages entry practices. Most prompts
+            ask for more than one move, so several can be ticked; a library
+            prompt arrives with its own types ticked. Only switched-on types
+            are offered. Frozen after creation like the grammar toggle: work
+            may already be graded and tutored against them. */}
         {selectedTypeOffersParagraphModes && paragraphModeOptions.length > 0 ? (
-          <div className="pt-6">
-            <Label
-              htmlFor="assignment-create-paragraph-mode"
-              className="font-normal"
-            >
-              Paragraph type
-            </Label>
-            <select
-              id="assignment-create-paragraph-mode"
-              name={isEditing ? undefined : 'paragraphMode'}
-              value={paragraphMode}
-              onChange={(event) => setParagraphMode(event.target.value)}
-              disabled={isSaving || isEditing}
-              className="mt-2 block rounded border px-2 py-1 text-sm"
-            >
-              <option value="">Any kind of paragraph</option>
+          <fieldset
+            className="pt-6"
+            data-testid="assignment-create-paragraph-modes"
+          >
+            <legend className="text-sm">Paragraph types</legend>
+            <div className="mt-2 space-y-1.5">
               {paragraphModeOptions.map((mode) => (
-                <option key={mode.key} value={mode.key}>
+                <label
+                  key={mode.key}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    name={isEditing ? undefined : 'paragraphMode'}
+                    value={mode.key}
+                    checked={paragraphModes.includes(mode.key)}
+                    onChange={() => toggleParagraphMode(mode.key)}
+                    disabled={isSaving || isEditing}
+                    className="h-4 w-4"
+                  />
                   {mode.label}
-                </option>
+                </label>
               ))}
-            </select>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {isEditing
-                ? 'The paragraph type cannot be changed after an assignment is created — work may already be graded against it.'
-                : selectedParagraphMode
-                  ? `${selectedParagraphMode.description} The tutor coaches toward it and the grading assistant reads for it.`
-                  : 'Choose the move students are practicing, and the tutor and grading assistant will focus on it. Leave it on any kind to grade the paragraph on its own terms.'}
-            </p>
-          </div>
+            </div>
+            <div className="mt-1 space-y-1 text-sm text-muted-foreground">
+              {isEditing ? (
+                <p>
+                  Paragraph types cannot be changed after an assignment is
+                  created — work may already be graded against them.
+                </p>
+              ) : selectedParagraphModes.length > 0 ? (
+                <>
+                  {selectedParagraphModes.map((mode) => (
+                    <p key={mode.key}>
+                      <span className="font-medium text-foreground/80">
+                        {mode.label}:
+                      </span>{' '}
+                      {mode.description}
+                    </p>
+                  ))}
+                  <p>
+                    The tutor coaches toward{' '}
+                    {selectedParagraphModes.length > 1 ? 'each' : 'it'}, and the
+                    grading assistant reads for{' '}
+                    {selectedParagraphModes.length > 1 ? 'each' : 'it'}.
+                  </p>
+                </>
+              ) : (
+                <p>
+                  Tick the moves students are practicing, and the tutor and
+                  grading assistant will focus on them. Leave all unticked for
+                  any kind of paragraph, graded on its own terms.
+                </p>
+              )}
+            </div>
+          </fieldset>
         ) : null}
 
         {/* How long students have to write. Read by the grading assistant and

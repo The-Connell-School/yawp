@@ -249,7 +249,9 @@ export async function createDocumentForAssignmentType(
             apHistorySnapshot: input.apHistorySnapshot as Prisma.InputJsonValue,
           }
         : {}),
-      ...(paragraphMode ? { paragraphMode: paragraphMode.key } : {}),
+      ...(paragraphMode
+        ? { paragraphMode: paragraphMode.key, paragraphModes: [paragraphMode.key] }
+        : {}),
       assignmentModuleSessions: {
         create: buildAssignmentModuleSessionCreateData(assignmentModules),
       },

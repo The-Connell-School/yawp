@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
-import { paragraphModeLabel } from '~/domain/assignment-types/daily-pages-paragraph-modes';
+import {
+  effectiveParagraphModes,
+  paragraphModeLabels,
+} from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import {
   Sheet,
   SheetContent,
@@ -28,6 +31,8 @@ export type AssignmentSummarySheetAssignment = {
   insight: ClassInsight | null;
   /** Daily Pages: the paragraph type it practices. Null or absent is none. */
   paragraphMode?: string | null;
+  /** Daily Pages: every paragraph type it practices; wins over the above. */
+  paragraphModes?: string[] | null;
   /** How long students have to write. Null or absent is untimed. */
   writingTimeMinutes?: number | null;
 };
@@ -100,6 +105,9 @@ function AssignmentMetadataSection({
 }) {
   const title = assignment.title ?? 'Assignment';
   const isViewOnly = !assignment.submitForGrade;
+  const paragraphTypeLabels = paragraphModeLabels(
+    effectiveParagraphModes(assignment)
+  );
 
   return (
     <section
@@ -122,9 +130,13 @@ function AssignmentMetadataSection({
         <MetadataRow label="Submit for grade">
           {metadataYesNo(assignment.submitForGrade)}
         </MetadataRow>
-        {paragraphModeLabel(assignment.paragraphMode) ? (
-          <MetadataRow label="Paragraph type">
-            {paragraphModeLabel(assignment.paragraphMode)}
+        {paragraphTypeLabels.length > 0 ? (
+          <MetadataRow
+            label={
+              paragraphTypeLabels.length > 1 ? 'Paragraph types' : 'Paragraph type'
+            }
+          >
+            {paragraphTypeLabels.join(', ')}
           </MetadataRow>
         ) : null}
         {assignment.writingTimeMinutes ? (
