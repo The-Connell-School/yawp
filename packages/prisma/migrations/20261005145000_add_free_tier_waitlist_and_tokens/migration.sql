@@ -3,7 +3,7 @@ SET lock_timeout = '5s';
 -- Additive migration: free-tier waitlist applications and acquisition tokens
 -- Runbook (lock_timeout recovery):
 -- If migrate deploy fails due to lock_timeout during this migration:
--- 1) prisma migrate resolve --rolled-back 20261004031500_add_free_tier_waitlist_and_tokens
+-- 1) prisma migrate resolve --rolled-back 20261005145000_add_free_tier_waitlist_and_tokens
 -- 2) prisma migrate deploy
 
 DO $$ BEGIN
