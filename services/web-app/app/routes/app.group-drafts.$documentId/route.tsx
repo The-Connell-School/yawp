@@ -7,6 +7,7 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
+import crypto from 'node:crypto';
 import { Button } from '~/components/ui/button';
 import {
   DraftCommentError,
@@ -288,6 +289,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         breakdown,
         groupGrade,
         assignmentPrompt: doc.assignment?.prompt ?? null,
+        attribution: {
+          organizationId: profile.organization.id,
+          membershipId: profile.id,
+          route: 'routes/app.group-drafts.$documentId',
+        },
       });
       return dataResponse({ success: true, suggestions });
     } catch {

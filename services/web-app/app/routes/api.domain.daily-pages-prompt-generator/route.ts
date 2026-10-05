@@ -1,6 +1,8 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
+import crypto from 'node:crypto';
+import { computeIpHash } from '~/utils/ai-usage-log.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import {
   buildGeneratorSystemPrompt,
@@ -109,9 +111,14 @@ export async function action({ request }: ActionFunctionArgs) {
       temperature: 0.7,
       maxTokens: MAX_GENERATOR_OUTPUT_TOKENS,
       metadata: {
-        route: '/api/domain/daily-pages-prompt-generator',
-        membershipId: profile.id,
         turnCount: messages.length,
+      },
+      attribution: {
+        organizationId: profile.organization.id,
+        membershipId: profile.id,
+        route: 'routes/api.domain.daily-pages-prompt-generator',
+        requestId: crypto.randomUUID(),
+        ipHash: computeIpHash(request),
       },
     });
   } catch {

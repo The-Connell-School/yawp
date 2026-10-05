@@ -84,6 +84,12 @@ export async function generateActPracticeQuestions(input: {
   rule: string;
   exampleSentences: string[];
   count: number;
+}, attribution?: {
+  organizationId?: string;
+  membershipId?: string;
+  classId?: string;
+  route?: string;
+  requestId?: string;
 }): Promise<ActPracticeQuestion[]> {
   if (input.count <= 0) return [];
 
@@ -98,6 +104,15 @@ export async function generateActPracticeQuestions(input: {
         feature: 'writing-practice-act-generation',
         skill: input.skill,
         count: input.count,
+      },
+      attribution: {
+        organizationId: attribution?.organizationId ?? null,
+        membershipId: attribution?.membershipId ?? null,
+        classId: attribution?.classId,
+        route:
+          attribution?.route ??
+          'utils/writing-lessons/act-practice-generation',
+        requestId: attribution?.requestId ?? `${Date.now()}-${Math.random()}`,
       },
     });
 

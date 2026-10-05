@@ -51,6 +51,12 @@ async function main() {
           benchmarkCaseId,
           ...(criterionId ? { criterionId } : {}),
         },
+        attribution: {
+          organizationId: null,
+          membershipId: null,
+          route: 'scripts/run-daily-pages-calibration',
+          requestId: `${Date.now()}-${Math.random()}`,
+        },
       }),
   });
 

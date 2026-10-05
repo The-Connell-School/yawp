@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { buildParagraphModeTutorInstructions } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
+import crypto from 'node:crypto';
+import { computeIpHash } from '~/utils/ai-usage-log.server';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import {
   requireMembership,
@@ -397,6 +399,13 @@ export async function action({ request }: ActionFunctionArgs) {
           instructionId: instruction.id,
           ...aiContextMetadata,
           moduleRubricRelationships,
+        },
+        attribution: {
+          organizationId: profile.organization.id,
+          membershipId: profile.id,
+          route: 'routes/api.domain.tutor-response',
+          requestId: crypto.randomUUID(),
+          ipHash: computeIpHash(request),
         },
       });
     } catch (error) {

@@ -1746,6 +1746,30 @@ model LlmLog {
   @@index([provider])
 }
 
+/// Append-only AI usage and admission decision log. No prompts or bodies stored.
+model AiUsageDecisionLog {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  route           String
+  feature         String?
+  /// 'ALLOWED' | 'DENIED_USER' | 'DENIED_ORG' | 'DENIED_IP' | 'DENIED_GLOBAL' | 'DENIED_PAYLOAD' | 'DENIED_CONCURRENCY'
+  decision        String
+  membershipId    String?
+  organizationId  String?
+  classId         String?
+  /// HMAC of the client IP with a server secret. Never store raw IPs.
+  ipHash          String?
+  requestId       String
+  units           Int
+  inputTokens     Int?
+  outputTokens    Int?
+  latencyMs       Int?
+  providerStatus  String?
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([route, createdAt(sort: Desc)])
+}
+
 /// Token-bucket state for rate limiting. One row per (subject scope + policy key).
 model RateLimitBucket {
   key           String   @id

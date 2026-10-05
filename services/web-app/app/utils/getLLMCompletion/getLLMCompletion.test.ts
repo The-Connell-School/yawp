@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const anthropicCreate = mock();
 const openAiCreate = mock();
 const llmLogCreate = mock();
+const usageLogCreate = mock();
 
 mock.module('~/services/anthropic', () => ({
   anthropic: {
@@ -26,6 +27,9 @@ mock.module('~/utils/db.server', () => ({
   prisma: {
     llmLog: {
       create: llmLogCreate,
+    },
+    aiUsageDecisionLog: {
+      create: usageLogCreate,
     },
   },
 }));
@@ -60,11 +64,19 @@ function openAiTextResponse(content: string) {
   };
 }
 
+const testAttribution = {
+  organizationId: 'org-1',
+  membershipId: 'mem-1',
+  route: 'routes/test',
+  requestId: 'req-test',
+};
+
 describe('getLLMCompletion', () => {
   beforeEach(() => {
     anthropicCreate.mockReset();
     openAiCreate.mockReset();
     llmLogCreate.mockReset();
+    usageLogCreate.mockReset();
     resetAnthropicOutageForTest();
     process.env.OPENAI_FALLBACK_MODEL = 'gpt-4o-mini';
     delete process.env.ANTHROPIC_OUTAGE_FALLBACK_ENABLED;
@@ -82,6 +94,13 @@ describe('getLLMCompletion', () => {
       metadata: {
         feature: 'tutor',
         kind: 'assignment-module-tutor',
+      },
+      attribution: {
+        organizationId: 'org-1',
+        membershipId: 'mem-1',
+        classId: 'class-1',
+        route: 'routes/api.domain.tutor-response',
+        requestId: 'req-1',
       },
     });
 
@@ -111,6 +130,11 @@ describe('getLLMCompletion', () => {
         metadata: {
           feature: 'tutor',
           kind: 'assignment-module-tutor',
+          organizationId: 'org-1',
+          membershipId: 'mem-1',
+          classId: 'class-1',
+          route: 'routes/api.domain.tutor-response',
+          requestId: 'req-1',
           messageCount: 2,
           messageTextLengths: [12, 10],
           hasTools: false,
@@ -120,10 +144,24 @@ describe('getLLMCompletion', () => {
         },
       }),
     });
+    // Writes an allowed usage row with token counts and latency
+    expect(usageLogCreate).toHaveBeenCalledTimes(1);
+    const allowed = usageLogCreate.mock.calls[0][0].data;
+    expect(allowed.decision).toBe('ALLOWED');
+    expect(allowed.organizationId).toBe('org-1');
+    expect(allowed.membershipId).toBe('mem-1');
+    expect(allowed.classId).toBe('class-1');
+    expect(allowed.route).toBe('routes/api.domain.tutor-response');
+    expect(allowed.requestId).toBe('req-1');
+    expect(allowed.units).toBe(1);
+    expect(allowed.inputTokens).toBe(11);
+    expect(allowed.outputTokens).toBe(7);
+    expect(typeof allowed.latencyMs).toBe('number');
   });
 
   test('passes structured system blocks with cache_control straight through to Anthropic, tab-stripped', async () => {
     await getLLMCompletion({
+      attribution: testAttribution,
       model: 'claude-sonnet-4-6',
       system: [
         {
@@ -164,6 +202,7 @@ describe('getLLMCompletion', () => {
     );
 
     await getLLMCompletion({
+      attribution: testAttribution,
       model: 'claude-sonnet-4-6',
       system: [
         {
@@ -189,6 +228,7 @@ describe('getLLMCompletion', () => {
     );
 
     await getLLMCompletion({
+      attribution: testAttribution,
       model: 'claude-sonnet-4-6',
       system: [
         {
@@ -233,6 +273,7 @@ describe('getLLMCompletion', () => {
       );
 
     await getLLMCompletion({
+      attribution: testAttribution,
       model: 'claude-sonnet-4-6',
       system: [
         {
@@ -292,6 +333,12 @@ describe('getLLMCompletion', () => {
       ),
       logPayload: 'metadata-only',
       metadata: { feature: 'reporter' },
+      attribution: {
+        organizationId: 'org-1',
+        membershipId: 'mem-1',
+        route: 'routes/api.domain.reporter',
+        requestId: 'req-2',
+      },
     });
 
     const log = llmLogCreate.mock.calls[0][0].data;
@@ -306,9 +353,14 @@ describe('getLLMCompletion', () => {
     expect(log.metadata).toMatchObject({
       feature: 'reporter',
       payloadLogging: 'metadata-only',
+      organizationId: 'org-1',
+      membershipId: 'mem-1',
+      route: 'routes/api.domain.reporter',
+      requestId: 'req-2',
       messageCount: 3,
       toolRoundCount: 1,
     });
+    expect(usageLogCreate).toHaveBeenCalledTimes(1);
   });
 
   test('falls back to gpt-4o-mini and opens the circuit after Anthropic 529', async () => {
@@ -326,6 +378,12 @@ describe('getLLMCompletion', () => {
       maxTokens: 100,
       metadata: { feature: 'tutor' },
       signal: controller.signal,
+      attribution: {
+        organizationId: 'org-1',
+        membershipId: 'mem-1',
+        route: 'routes/api.domain.tutor-response',
+        requestId: 'req-3',
+      },
     });
 
     expect(result).toBe('Fallback reply.');
@@ -352,7 +410,12 @@ describe('getLLMCompletion', () => {
       messageCount: 2,
       hasTools: false,
       toolRoundCount: 0,
+      organizationId: 'org-1',
+      membershipId: 'mem-1',
+      route: 'routes/api.domain.tutor-response',
+      requestId: 'req-3',
     });
+    expect(usageLogCreate).toHaveBeenCalledTimes(1);
   });
 
   test('never transfers a sensitive workload to the fallback provider', async () => {
@@ -363,6 +426,7 @@ describe('getLLMCompletion', () => {
 
     await expect(
       getLLMCompletion({
+        attribution: testAttribution,
         model: 'claude-sonnet-4-6',
         messages: [{ role: 'user', content: 'Analyze this student record.' }],
         allowFallbackProvider: false,
@@ -375,6 +439,7 @@ describe('getLLMCompletion', () => {
 
   test('ignores a forced fallback request when fallback is forbidden', async () => {
     await getLLMCompletion({
+      attribution: testAttribution,
       model: 'claude-sonnet-4-6',
       messages: [{ role: 'user', content: 'Analyze this student record.' }],
       forceFallback: true,
@@ -393,6 +458,7 @@ describe('getLLMCompletion', () => {
     openAiCreate.mockResolvedValueOnce(openAiTextResponse('Still working.'));
 
     const result = await getLLMCompletion({
+      attribution: testAttribution,
       model: 'claude-sonnet-4-6',
       messages: [{ role: 'user', content: 'Can you review this?' }],
     });
@@ -418,6 +484,7 @@ describe('getLLMCompletion', () => {
     let thrown: unknown;
     try {
       await getLLMCompletion({
+        attribution: testAttribution,
         model: 'claude-sonnet-4-6',
         messages: [{ role: 'user', content: 'Retry this.' }],
         signalFallbackRetry: true,
@@ -479,6 +546,12 @@ describe('getLLMCompletion', () => {
         },
       ],
       handleToolCall,
+      attribution: {
+        organizationId: 'org-1',
+        membershipId: 'mem-1',
+        route: 'routes/api.domain.tutor-response',
+        requestId: 'req-4',
+      },
     });
 
     expect(result).toBe('Use a more specific thesis.');
@@ -503,6 +576,25 @@ describe('getLLMCompletion', () => {
       fallbackTriggered: true,
       toolRoundCount: 1,
       hasTools: true,
+      organizationId: 'org-1',
+      membershipId: 'mem-1',
+      route: 'routes/api.domain.tutor-response',
+      requestId: 'req-4',
     });
+  });
+
+  test('swallows usage logging failures and still returns a response', async () => {
+    usageLogCreate.mockRejectedValueOnce(new Error('db down'));
+    const response = await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'Hello' }],
+      attribution: {
+        organizationId: 'org-1',
+        membershipId: 'mem-1',
+        route: 'routes/api.domain.tutor-response',
+        requestId: 'req-5',
+      },
+    });
+    expect(response).toBe('Logged response');
   });
 });

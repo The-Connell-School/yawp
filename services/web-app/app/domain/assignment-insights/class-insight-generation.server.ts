@@ -175,6 +175,7 @@ export async function generateClassAssignmentInsight(input: {
     },
     select: {
       id: true,
+      classId: true,
       assignment: {
         select: {
           title: true,
@@ -307,6 +308,11 @@ export async function generateClassAssignmentInsight(input: {
       },
       rubric,
       metadata: { classAssignmentId: classAssignment.id },
+      attribution: {
+        organizationId: input.organizationId,
+        membershipId: input.generatedByMembershipId ?? undefined,
+        classId: classAssignment.classId,
+      },
     });
   } catch {
     await recordClassInsightFailure({

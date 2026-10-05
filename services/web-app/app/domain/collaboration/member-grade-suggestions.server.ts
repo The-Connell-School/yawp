@@ -1,4 +1,5 @@
 import { getLLMCompletion } from '~/utils/getLLMCompletion/getLLMCompletion';
+import crypto from 'node:crypto';
 import type { ContributionBreakdown } from './contribution.server';
 import type { GroupGrade } from './grading';
 import {
@@ -30,12 +31,20 @@ export async function suggestMemberGrades({
   assignmentPrompt,
   model = process.env.AI_MODEL ?? 'claude-sonnet-4-6',
   metadata,
+  attribution,
 }: {
   breakdown: ContributionBreakdown;
   groupGrade: GroupGrade | null;
   assignmentPrompt?: string | null;
   model?: string;
   metadata?: Record<string, unknown>;
+  attribution?: {
+    organizationId?: string;
+    membershipId?: string;
+    classId?: string;
+    route?: string;
+    requestId?: string;
+  };
 }): Promise<SuggestMemberGradesResult> {
   const members = collectMemberWriting({
     members: breakdown.members,
@@ -71,6 +80,15 @@ export async function suggestMemberGrades({
       feature: 'group-member-grade-suggestions',
       memberCount: members.length,
       ...metadata,
+    },
+    attribution: {
+      organizationId: attribution?.organizationId ?? null,
+      membershipId: attribution?.membershipId ?? null,
+      classId: attribution?.classId,
+      route:
+        attribution?.route ??
+        'domain/collaboration/member-grade-suggestions.server',
+      requestId: attribution?.requestId ?? crypto.randomUUID(),
     },
   });
 

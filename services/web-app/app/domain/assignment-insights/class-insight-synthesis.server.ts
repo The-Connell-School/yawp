@@ -1,4 +1,5 @@
 import { getLLMCompletion } from '~/utils/getLLMCompletion/getLLMCompletion';
+import crypto from 'node:crypto';
 import type { ClassRubricAggregate } from './aggregate-rubric-performance';
 import { resolveClassInsightMockMode } from './class-insight-mock-mode';
 import {
@@ -75,6 +76,7 @@ export async function generateClassInsight({
   rubric = DEFAULT_INSIGHT_RUBRIC,
   model = process.env.AI_MODEL ?? 'claude-sonnet-4-6',
   metadata,
+  attribution,
 }: {
   aggregate: ClassRubricAggregate;
   context: InsightPromptContext;
@@ -82,6 +84,11 @@ export async function generateClassInsight({
   rubric?: InsightRubric;
   model?: string;
   metadata?: Record<string, unknown>;
+  attribution?: {
+    organizationId?: string;
+    membershipId?: string;
+    classId?: string;
+  };
 }): Promise<GenerateClassInsightResult> {
   if (resolveClassInsightMockMode().usesFixture) {
     return {
@@ -106,6 +113,13 @@ export async function generateClassInsight({
       feature: 'assignment-level-feedback',
       submissionCount: aggregate.submissionCount,
       ...metadata,
+    },
+    attribution: {
+      organizationId: attribution?.organizationId ?? null,
+      membershipId: attribution?.membershipId ?? null,
+      classId: attribution?.classId,
+      route: 'domain/assignment-insights/class-insight-synthesis.server',
+      requestId: crypto.randomUUID(),
     },
   });
 
