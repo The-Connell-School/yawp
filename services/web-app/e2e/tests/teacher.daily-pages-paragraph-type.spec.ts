@@ -66,6 +66,35 @@ test.describe.serial('Paragraph type at assignment creation', () => {
     );
   });
 
+  /**
+   * Under the About section, each switched-on type explains itself: the same
+   * explanation a student opens from inside an assignment of that type.
+   */
+  test('the Daily Pages page explains each kind of paragraph', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+    );
+
+    const guides = page.getByTestId('paragraph-guides');
+    await expect(
+      guides.getByRole('heading', { name: 'The kinds of paragraphs' })
+    ).toBeVisible();
+
+    await guides.getByRole('button', { name: /^Analyze/ }).click();
+    await expect(guides.getByTestId('paragraph-guide-analyze')).toBeVisible();
+    await expect(
+      guides.getByText('The part students skip most').first()
+    ).toBeVisible();
+
+    await guides.getByRole('button', { name: /^Argue a position/ }).click();
+    await expect(guides.getByTestId('paragraph-guide-argue')).toBeVisible();
+  });
+
   test('Class Starter does not offer it', async ({
     page,
     e2eContext,

@@ -53,6 +53,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { AboutDailyPages } from './about-daily-pages/about-daily-pages';
+import { ParagraphTypeGuides } from '~/components/daily-pages/paragraph-type-guide';
 import { ApHistoryLibrary } from './ap-history-library';
 import { ApPromptsLibrary } from './ap-history/ap-prompts-library';
 import { ApHistoryGradingBreakdown } from './ap-history/grading-breakdown';
@@ -935,6 +936,7 @@ export default function AppAssignmentTypesIdRoute() {
           <TeacherDirections variant={data.promptLibrary.variant} />
         ) : null}
         {showShortFormLibrary ? <AboutDailyPages /> : null}
+        {showShortFormLibrary ? <ParagraphTypeGuides /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {data.apHistoryLibrary?.mode === 'teacher' ? (
           <ApHistoryTeacherDirections />

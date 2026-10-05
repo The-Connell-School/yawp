@@ -300,6 +300,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           promptAttachmentName: true,
           apHistorySnapshot: true,
           tutorEnabled: true,
+          paragraphMode: true,
         },
       },
       classAssignment: {

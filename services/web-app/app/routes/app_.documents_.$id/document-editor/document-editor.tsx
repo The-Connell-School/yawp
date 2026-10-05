@@ -1,3 +1,4 @@
+import { ParagraphTypeGuideButton } from '~/components/daily-pages/paragraph-type-guide';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
@@ -17,6 +18,8 @@ export type AssignmentPrompt = {
   prompt: string | null;
   promptAttachmentName?: string | null;
   dueDate?: string | Date | null;
+  /** Daily Pages paragraph type; offers "What you're aiming for" when set. */
+  paragraphMode?: string | null;
 };
 
 type Props = {
@@ -107,7 +110,7 @@ export function DocumentEditor({
   );
 }
 
-function AssignmentPromptBanner({
+export function AssignmentPromptBanner({
   docId,
   assignment,
 }: {
@@ -140,6 +143,7 @@ function AssignmentPromptBanner({
             </span>
           </div>
         </div>
+        <ParagraphTypeGuideButton paragraphMode={assignment.paragraphMode} />
         <Button
           type="button"
           variant="secondary"

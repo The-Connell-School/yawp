@@ -1,4 +1,5 @@
 import { AssignmentPromptAttachment } from '~/components/assignments/assignment-prompt-attachment';
+import { ParagraphTypeGuideButton } from '~/components/daily-pages/paragraph-type-guide';
 import type { AssignmentPrompt } from './document-editor/document-editor';
 
 /**
@@ -34,6 +35,7 @@ export function AssignmentPromptPanel({
             {assignment?.title?.trim() || 'Untitled Assignment'}
           </span>
         </div>
+        <ParagraphTypeGuideButton paragraphMode={assignment?.paragraphMode} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pb-4 pl-4 pr-4 pt-3">
         <p className="mb-3 text-xs text-muted-foreground">

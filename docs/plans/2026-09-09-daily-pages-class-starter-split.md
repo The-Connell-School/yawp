@@ -328,6 +328,25 @@ outside its band as lenient or strict. Run it after any rubric or instruction
 change, and before a new paragraph type is switched on. The cases are drafts
 until product and an educator approve them.
 
+## What students are aiming for
+
+Each switched-on paragraph type has a guide
+(`app/domain/assignment-types/daily-pages-paragraph-guides.ts`): the three
+parts in plain words, the part students skip most, a model with each part
+marked, a typical miss with the one change that fixes it, and the questions
+the tutor will ask. Teachers read every guide under "The kinds of paragraphs"
+on the Daily Pages page; students open their assignment's guide from "What
+you're aiming for" beside the prompt. One component renders both, so a teacher
+and a student read the same words.
+
+- The guide names the same three parts, in the same order, as the type's
+  tutor coaching, and a test holds that.
+- Its models answer prompts that are not in the library, since a student
+  reads the guide while writing; each miss answers the same prompt as its
+  model so the two can be compared.
+- Switching a type on needs its guide too: a test fails if a switched-on
+  type has none.
+
 ## Assessing the tutor
 
 The calibration suite asks whether the grader puts a finished entry in the
