@@ -203,6 +203,20 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma seed-local-dev
 
+      # Entitlements/reporter-gate tests were never run by CI. Each file mocks
+      # different modules, so they run in separate bun processes. The DB test
+      # runs against the freshly migrated database.
+      - name: 🧪 Entitlements + reporter gate tests
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          bun test app/utils/entitlements.server.test.ts
+          bun test app/utils/reporter/reporter-access.server.test.ts
+          bun test app/utils/auth.server.test.ts
+          bun test app/utils/entitlements.db.test.ts
+
   typecheck-web-app:
     needs: [paths]
     name: ʦ TypeScript
