@@ -1,8 +1,9 @@
 /**
  * "See how it works": a short, teacher-facing tour of The Thesis-Driven Essay.
  *
- * It says what the essay does in a line or two per step and lets a clip show
- * the rest. The will / won't section is written for the reader deciding
+ * The cadence leads: the teacher teaches a step from the course, then students
+ * write that step with the Tutor, which reinforces the lesson. It says what
+ * the essay does in a line or two per step and lets a clip show the rest. The will / won't section is written for the reader deciding
  * whether to allow it, so every line there has to hold in the code: the
  * Tutor's module instructions, api.domain.tutor-response, the grade release
  * route and the paste report. See docs/how-to-guides.md.
@@ -10,8 +11,9 @@
  * The clips were recorded in YAWP! with demo classes and live in
  * public/img/thesis-essay-guide, so the page reaches no outside site.
  */
-import { redirect, type LoaderFunctionArgs } from 'react-router';
+import { Link, redirect, type LoaderFunctionArgs } from 'react-router';
 import { useLoaderData } from 'react-router';
+import { FileText, Presentation } from 'lucide-react';
 import {
   Eyebrow,
   GuideClip,
@@ -75,10 +77,49 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw redirect(pagePath);
   }
 
-  return { pagePath };
+  // The course that teaches teachers the process. It is linked only when this
+  // teacher can open it, by the same rule as the Teacher Training page.
+  const assigned = await prisma.orgMembership.findUnique({
+    where: { id: profile.id, role: 'TEACHER' },
+    select: { _count: { select: { assignedTeacherTrainings: true } } },
+  });
+  const course = await prisma.teacherTraining.findFirst({
+    where: {
+      title: { equals: COURSE_TITLE, mode: 'insensitive' },
+      ...((assigned?._count.assignedTeacherTrainings ?? 0) > 0
+        ? { assignedTeachers: { some: { id: profile.id } } }
+        : {}),
+    },
+    select: { id: true },
+  });
+
+  return {
+    pagePath,
+    coursePath: course ? `/app/teacher-trainings/${course.id}` : null,
+  };
 }
 
+const COURSE_TITLE = 'The Thesis-Driven Essay';
+
+// The course's lessons, in order, with the materials each one comes with.
+// The Tutor's steps follow the same order.
+const LESSONS = [
+  { title: 'Introduce students to YAWP!', plan: true, deck: true },
+  { title: 'Pre-writing', plan: true, deck: true },
+  { title: 'Developing a thesis statement', plan: true, deck: true },
+  { title: 'Introduction paragraph', plan: true, deck: true },
+  { title: 'Body paragraphs', plan: true, deck: true },
+  { title: 'The conclusion', plan: true, deck: true },
+  { title: 'Titling your essay', plan: false, deck: true },
+  { title: 'Review my essay', plan: false, deck: false },
+];
+
 const TUTOR_POINTS = [
+  {
+    title: 'Support for every student',
+    detail:
+      'Every student gets immediate feedback on their own draft while they write. It’s like having a TA on every document: a level of feedback one teacher could never give a whole class alone.',
+  },
   {
     title: 'Keeps them on the essay',
     detail: 'Off-topic questions get a friendly nudge back to the writing.',
@@ -88,18 +129,13 @@ const TUTOR_POINTS = [
     detail:
       'Its questions and next steps leave the thinking to the student, from the first idea to the final draft.',
   },
-  {
-    title: 'Support for every student',
-    detail:
-      'Every student gets feedback on their own draft while they write. One teacher at the front of the room can’t reach every desk at once.',
-  },
 ];
 
 const GRADING_POINTS = [
   {
     title: 'What it is',
     detail:
-      'A first read of every essay against the rubric, at the level you set for the assignment: beginner, intermediate or advanced.',
+      'A first read of every essay against the same rubric, at the level you set for the assignment: beginner, intermediate or advanced. Every essay is held to the same standard, so grading stays fair and consistent.',
   },
   {
     title: 'What it isn’t',
@@ -109,15 +145,15 @@ const GRADING_POINTS = [
   {
     title: 'Why we use it',
     detail:
-      'Detailed feedback on every essay takes hours. The Grading Assistant does the first pass so your time goes to the feedback and conferences only you can give.',
+      'It cuts grading time from weeks to a day. Students get feedback while the essay is still fresh, which keeps their momentum and makes them want to revise.',
   },
 ];
 
 const WILL = [
-  'Walk students through the essay one step at a time.',
+  'Support students through each step of the essay-writing process.',
   'Ask questions and give feedback on the student’s own draft.',
   'Suggest a score and feedback for you to review.',
-  'Show you any text pasted in from outside YAWP!',
+  'Show you a copy-paste alert for any text pasted from outside of YAWP!',
   'Let you give a cold write with the Tutor off.',
 ];
 
@@ -141,14 +177,14 @@ function clip(name: string, label: string) {
 }
 
 export default function ThesisEssayHowItWorksRoute() {
-  const { pagePath } = useLoaderData<typeof loader>();
+  const { pagePath, coursePath } = useLoaderData<typeof loader>();
 
   return (
     <GuidePage backTo={pagePath} backLabel="Back to The Thesis-Driven Essay">
       <GuideHero
         title="Teach the thesis-driven essay"
         highlight="one step at a time."
-        lede="Students write a full critical essay with the YAWP! Tutor beside them, from first ideas to a title. You choose the prompt and release the grade."
+        lede="A full curriculum for teaching the critical essay, in a process students enjoy. You teach each step. Then students write that step with the YAWP! Tutor, which reinforces the day’s lesson."
         image={{
           src: `${MEDIA}/hero.jpg`,
           alt: 'A student’s Macbeth essay beside the YAWP! Tutor. The student has asked the Tutor to write the rest of a paragraph, and the Tutor answers that the paragraph is theirs to write and asks what Banquo notices about Macbeth.',
@@ -159,52 +195,63 @@ export default function ThesisEssayHowItWorksRoute() {
       />
 
       <GuideSection
-        id="guide-start"
-        eyebrow="Where it lives"
-        title="On The Thesis-Driven Essay page"
+        id="guide-how"
+        eyebrow="How it works"
+        title="Teach it, step by step"
       >
         <GuideCopy>
-          Open{' '}
-          <strong className="text-foreground">The Thesis-Driven Essay</strong>{' '}
-          and choose <strong className="text-foreground">New</strong>, then{' '}
-          <strong className="text-foreground">Assignment</strong>. When you
-          assign it you set the due date, the points, the time limit and whether
-          the Tutor and grammar grading are on.
+          This isn’t an online course students work through on their own. You
+          teach the thesis-driven essay one step at a time, and the Tutor
+          reinforces what you taught.
         </GuideCopy>
-      </GuideSection>
 
-      <GuideSection
-        id="guide-how"
-        eyebrow="For teachers"
-        title="Thinking and feedback at every step"
-      >
         <GuideRow
           media={clip(
             'prompts',
             'The teacher opens the Prompt Library, searches for Macbeth and picks the prompt. It opens in the New Assignment sheet, where the teacher chooses English 10, adds a title and creates the assignment.'
           )}
         >
-          <GuideStep n={1}>Pick a prompt</GuideStep>
-          <GuideH3>100 essay prompts ready to assign</GuideH3>
+          <GuideStep n={1}>The teacher creates the assignment</GuideStep>
+          <GuideH3>Pick a prompt or assign your own</GuideH3>
           <GuideCopy>
-            Search by subject, text or grade. You can also generate your own and
-            save it to <strong className="text-foreground">My prompts</strong>.
+            Choose from 100 essay prompts, searchable by subject, text or grade,
+            or write your own. When you assign it you set the due date, the
+            points, the time limit and whether the Tutor and grammar grading are
+            on.
           </GuideCopy>
         </GuideRow>
 
+        <GuideRow flip media={<LessonList />}>
+          <GuideStep n={2}>You teach the process</GuideStep>
+          <GuideH3>A full curriculum, ready to teach</GuideH3>
+          <GuideCopy>
+            Eight lessons with lesson plans, slide decks, handouts and sample
+            essays walk your class through pre-writing, a strong thesis
+            statement and how to organize the essay. A short video for you comes
+            with each one, so you learn how to teach it, too.
+          </GuideCopy>
+          {coursePath ? (
+            <Link
+              to={coursePath}
+              className="text-[15px] font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Open the course
+            </Link>
+          ) : null}
+        </GuideRow>
+
         <GuideRow
-          flip
           media={clip(
             'steps',
             'A student moves through the Tutor’s steps beside their draft: Pre-writing, Thesis Statement, Introduction Paragraph, Body Paragraphs, Conclusion Paragraph, Title Your Essay and Review my Essay. Each opens with a short lesson.'
           )}
         >
-          <GuideStep n={2}>Students write with the Tutor</GuideStep>
-          <GuideH3>Seven steps from pre-writing to a title</GuideH3>
+          <GuideStep n={3}>Students write alongside the Tutor</GuideStep>
+          <GuideH3>Each day’s lesson, put to work</GuideH3>
           <GuideCopy>
-            Pre-writing, thesis, introduction, body paragraphs, conclusion,
-            title and a final review. Each step starts with a short lesson from
-            the Tutor.
+            After the lesson, students open their essay and write that part of
+            it with the Tutor beside them. The Tutor’s steps follow the same
+            order as the lessons.
           </GuideCopy>
         </GuideRow>
       </GuideSection>
@@ -222,9 +269,10 @@ export default function ThesisEssayHowItWorksRoute() {
             How the Tutor works with students
           </h2>
           <p className="max-w-prose text-lg leading-relaxed text-muted-foreground">
-            The Tutor reads the student’s draft and coaches them through it one
-            step at a time. It asks questions, says what is working and gives
-            one or two things to try next. The writing stays the student’s.
+            The Tutor gives feedback aligned to the curriculum, designed to
+            deepen students’ thinking so they develop their own ideas. Its first
+            rule: it won’t write for the student, even when a student asks it
+            to.
           </p>
         </div>
 
@@ -276,12 +324,12 @@ export default function ThesisEssayHowItWorksRoute() {
         className="flex flex-col gap-10 rounded-2xl bg-secondary p-6 md:p-10"
       >
         <div className="flex flex-col gap-3">
-          <GuideStep n={3}>Grade and release</GuideStep>
+          <Eyebrow>Grade and release</Eyebrow>
           <h2
             id="guide-grading"
             className="text-2xl font-semibold leading-tight md:text-3xl"
           >
-            How the Grading Assistant helps you grade
+            Students submit, and the Grading Assistant helps you grade
           </h2>
           <p className="max-w-prose text-lg leading-relaxed text-muted-foreground">
             The Grading Assistant reads each essay against the rubric and drafts
@@ -374,5 +422,45 @@ export default function ThesisEssayHowItWorksRoute() {
         startLabel="Create an assignment"
       />
     </GuidePage>
+  );
+}
+
+/** The course's lessons, standing in for a clip on the "you teach" step. */
+function LessonList() {
+  return (
+    <div className="rounded-xl border bg-background p-5 shadow-sm">
+      <p className="mb-3 text-[15px] font-semibold">
+        The Thesis-Driven Essay course
+      </p>
+      <ol className="flex flex-col divide-y">
+        {LESSONS.map((lesson, i) => (
+          <li
+            key={lesson.title}
+            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sm"
+          >
+            <span>
+              <span className="mr-2 tabular-nums text-muted-foreground">
+                {i + 1}
+              </span>
+              {lesson.title}
+            </span>
+            <span className="inline-flex gap-3 text-xs text-muted-foreground">
+              {lesson.plan ? (
+                <span className="inline-flex items-center gap-1">
+                  <FileText size={12} aria-hidden="true" />
+                  Lesson plan
+                </span>
+              ) : null}
+              {lesson.deck ? (
+                <span className="inline-flex items-center gap-1">
+                  <Presentation size={12} aria-hidden="true" />
+                  Slide deck
+                </span>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
