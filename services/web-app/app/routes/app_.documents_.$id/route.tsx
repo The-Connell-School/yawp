@@ -374,24 +374,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isOwner = ownerMembership.id === profile.id;
   const navigationScope =
     !isOwner && profile.role === 'TEACHER'
-      ? (parseGradingQueueScope(
+      ? parseGradingQueueScope(
           sanitizeExitTarget(url.searchParams.get('exitTo'))
-        ) ?? parseGradingQueueScope('/app/documents'))
+        ) ?? parseGradingQueueScope('/app/documents')
       : null;
-  const documentNavigation =
-    navigationScope && profile.organization?.id
-      ? await loadDocumentNavigationNeighbors({
-          request,
-          membershipId: profile.id,
-          organizationId: profile.organization.id,
-          userId,
-          documentId: doc.id,
-          scope: navigationScope,
-          sort: parseGradingQueueSort(
-            url.searchParams.get(GRADING_QUEUE_SORT_PARAM)
-          ),
-        })
-      : null;
+  const documentNavigation = navigationScope && profile.organization?.id
+    ? await loadDocumentNavigationNeighbors({
+        request,
+        membershipId: profile.id,
+        organizationId: profile.organization.id,
+        userId,
+        documentId: doc.id,
+        scope: navigationScope,
+        sort: parseGradingQueueSort(url.searchParams.get(GRADING_QUEUE_SORT_PARAM)),
+      })
+    : null;
   const wantsDraftEditor =
     url.searchParams.get('revise') === '1' ||
     url.searchParams.get('spa') === '1';
@@ -922,8 +919,7 @@ export default function Route() {
   useEffect(() => {
     if (submissionUnsubmitFetcher.state !== 'idle') return;
     const body = submissionUnsubmitFetcher.data as
-      | { success?: boolean }
-      | undefined;
+      { success?: boolean } | undefined;
     if (body?.success && submissionToUnsubmit) {
       // The loader's shouldRevalidate never reruns for this fetcher (see
       // below), so update local state directly instead of relying on
@@ -1296,9 +1292,7 @@ export default function Route() {
                       }
                     />
                   ) : (
-                    <AssignmentPromptPanel
-                      assignment={editorAssignmentPrompt}
-                    />
+                    <AssignmentPromptPanel assignment={editorAssignmentPrompt} />
                   )
                 }
                 editor={
@@ -1334,9 +1328,7 @@ export default function Route() {
                       readOnly={!isDocumentEditable}
                       onCommentRemoved={commentsState.removeComment}
                       onResponseAdded={commentsState.addResponse}
-                      autoFocusReplyCommentId={
-                        commentsState.pendingFocusCommentId
-                      }
+                      autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
                     />
                   </TeacherPasteReport>
                 }
@@ -1345,107 +1337,93 @@ export default function Route() {
           </>
         ) : (
           <>
-            <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
-              <TabsList className="w-full rounded-none border-b px-3">
-                {tutorEnabled ? (
-                  <TabsTrigger value="tutor" className="w-full">
-                    Tutor
-                  </TabsTrigger>
-                ) : null}
-                <TabsTrigger value="editor" className="w-full">
-                  Editor
-                </TabsTrigger>
-                <TabsTrigger value="comments" className="w-full">
-                  Comments
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <CommentsSelectionProvider>
-              <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
-                {!tutorEnabled && !(isMobile && tab !== 'editor') ? (
-                  <AssignmentPromptPanel assignment={editorAssignmentPrompt} />
-                ) : null}
-                {!tutorEnabled || (isMobile && tab !== 'tutor') ? null : (
-                  <Tutor
-                    docId={data.doc.id}
-                    cms={(tutor.cms ?? data.currentCms) as any}
-                    cmsIdx={cmsIdx}
-                    nextCmId={data.nextCmId}
-                    hasPreviousCms={tutorHasPreviousCms}
-                    isSessionLocked={auth.isLocked}
-                    beforeRespond={handleTutorBeforeRespond}
-                    onCmsUpdate={tutor.updateCms}
-                    getCurrentDocumentText={() =>
-                      editorBridgeRef.current?.getContent().text ??
-                      data.doc.text ??
-                      ''
-                    }
-                  />
-                )}
-                {isMobile && tab !== 'editor' && !isViewingAsTeacher ? null : (
-                  <div
-                    className={
-                      isMobile && tab !== 'editor'
-                        ? 'hidden'
-                        : 'flex h-full min-w-0 w-full flex-col'
-                    }
-                  >
-                    <DocumentEditor
-                      docId={data.doc.id}
-                      // With the tutor off the prompt has its own column, so the
-                      // banner over the document would only repeat it.
-                      assignment={tutorEnabled ? editorAssignmentPrompt : null}
-                      serverHtml={editorServerHtml}
-                      serverText={editorServerText}
-                      serverUpdatedAt={data.doc.updatedAt}
-                      initialRevision={data.doc.revision}
-                      isEditable={isEditorEditable}
-                      canUploadImages={data.canUploadImages}
-                      onBridgeReady={handleEditorBridgeReady}
-                      onSyncStatusChange={setSyncStatus}
-                      onSubmittableContentChange={
-                        handleSubmittableContentChange
-                      }
-                      onCommentCreated={(c) =>
-                        commentsState.addComment(c as any)
-                      }
-                    />
-                  </div>
-                )}
-                {isMobile &&
-                tab !== 'comments' &&
-                !isViewingAsTeacher ? null : (
-                  <div
-                    className={
-                      isMobile && tab !== 'comments'
-                        ? 'hidden'
-                        : 'h-full min-w-0 w-full md:w-3/5'
-                    }
-                  >
-                    <TeacherPasteReport
-                      key={data.doc.id}
-                      enabled={isViewingAsTeacher}
-                      documentId={data.doc.id}
-                      contentRoot={editorRoot}
-                      onSelectEvent={() => {
-                        if (isMobile) changeTab('editor');
-                      }}
-                    >
-                      <Comments
-                        showCollapsibleHeader={!isViewingAsTeacher}
-                        comments={visibleComments as any}
-                        readOnly={!isDocumentEditable}
-                        onCommentRemoved={commentsState.removeComment}
-                        onResponseAdded={commentsState.addResponse}
-                        autoFocusReplyCommentId={
-                          commentsState.pendingFocusCommentId
-                        }
-                      />
-                    </TeacherPasteReport>
-                  </div>
-                )}
+        <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
+          <TabsList className="w-full rounded-none border-b px-3">
+            {tutorEnabled ? (
+              <TabsTrigger value="tutor" className="w-full">
+                Tutor
+              </TabsTrigger>
+            ) : null}
+            <TabsTrigger value="editor" className="w-full">
+              Editor
+            </TabsTrigger>
+            <TabsTrigger value="comments" className="w-full">
+              Comments
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <CommentsSelectionProvider>
+          <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
+            {!tutorEnabled && !(isMobile && tab !== 'editor') ? (
+              <AssignmentPromptPanel assignment={editorAssignmentPrompt} />
+            ) : null}
+            {!tutorEnabled || (isMobile && tab !== 'tutor') ? null : (
+              <Tutor
+                docId={data.doc.id}
+                cms={(tutor.cms ?? data.currentCms) as any}
+                cmsIdx={cmsIdx}
+                nextCmId={data.nextCmId}
+                hasPreviousCms={tutorHasPreviousCms}
+                isSessionLocked={auth.isLocked}
+                beforeRespond={handleTutorBeforeRespond}
+                onCmsUpdate={tutor.updateCms}
+                getCurrentDocumentText={() =>
+                  editorBridgeRef.current?.getContent().text ??
+                  data.doc.text ??
+                  ''
+                }
+              />
+            )}
+            {isMobile && tab !== 'editor' && !isViewingAsTeacher ? null : (
+              <div
+                className={isMobile && tab !== 'editor'
+                  ? 'hidden'
+                  : 'flex h-full min-w-0 w-full flex-col'}
+              >
+                <DocumentEditor
+                  docId={data.doc.id}
+                  // With the tutor off the prompt has its own column, so the
+                  // banner over the document would only repeat it.
+                  assignment={tutorEnabled ? editorAssignmentPrompt : null}
+                  serverHtml={editorServerHtml}
+                  serverText={editorServerText}
+                  serverUpdatedAt={data.doc.updatedAt}
+                  initialRevision={data.doc.revision}
+                  isEditable={isEditorEditable}
+                  canUploadImages={data.canUploadImages}
+                  onBridgeReady={handleEditorBridgeReady}
+                  onSyncStatusChange={setSyncStatus}
+                  onSubmittableContentChange={handleSubmittableContentChange}
+                  onCommentCreated={(c) => commentsState.addComment(c as any)}
+                />
               </div>
-            </CommentsSelectionProvider>
+            )}
+            {isMobile && tab !== 'comments' && !isViewingAsTeacher ? null : (
+              <div
+                className={isMobile && tab !== 'comments'
+                  ? 'hidden'
+                  : 'h-full min-w-0 w-full md:w-3/5'}
+              >
+                <TeacherPasteReport
+                  key={data.doc.id}
+                  enabled={isViewingAsTeacher}
+                  documentId={data.doc.id}
+                  contentRoot={editorRoot}
+                  onSelectEvent={() => { if (isMobile) changeTab('editor'); }}
+                >
+                  <Comments
+                    showCollapsibleHeader={!isViewingAsTeacher}
+                    comments={visibleComments as any}
+                    readOnly={!isDocumentEditable}
+                    onCommentRemoved={commentsState.removeComment}
+                    onResponseAdded={commentsState.addResponse}
+                    autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
+                  />
+                </TeacherPasteReport>
+              </div>
+            )}
+          </div>
+        </CommentsSelectionProvider>
           </>
         )}
       </main>
@@ -1591,8 +1569,7 @@ export default function Route() {
           </DialogHeader>
           {(
             submissionUnsubmitFetcher.data as
-              | { success?: boolean; message?: string }
-              | undefined
+              { success?: boolean; message?: string } | undefined
           )?.success === false ? (
             <p role="alert" className="text-sm text-destructive">
               {(submissionUnsubmitFetcher.data as { message?: string }).message}
