@@ -100,9 +100,22 @@ test.describe('Yawp Reporter', () => {
     await expect(
       page.getByRole('heading', { level: 1, name: /ask about your classes/i })
     ).toBeVisible();
+    // The starter cards come first, so a reader sees what Reporter can run.
+    const reports = page.getByTestId('guide-reports');
+    await expect(reports).toContainText(/growth report for a student/i);
+    await expect(reports).toContainText(/who needs attention/i);
+    await expect(
+      page.getByRole('heading', {
+        level: 2,
+        name: /track student growth over time/i,
+      })
+    ).toBeVisible();
+    await expect(page.getByTestId('guide-uses')).toContainText(
+      /parent-teacher conferences/i
+    );
     // The section a school approving Reporter reads first.
     const wont = page.getByTestId('guide-wont');
-    await expect(wont).toContainText(/change, give or release grades/i);
+    await expect(wont).toContainText(/change, give, or release grades/i);
     await expect(wont).toContainText(/other teachers’ classes/i);
     // The clips are served from the app, not an outside site.
     await expect(page.locator('video source').first()).toHaveAttribute(

@@ -15,10 +15,10 @@ The thinking behind a feature is ours. Teachers feel it the moment they use the 
 ## Rules
 
 1. **Less is more.** Give a teacher only what they need to jump in. One or two sentences per section, then a clip.
-2. **Say what it does, in simple terms.** Don't describe what they'll experience: progress bars, what appears where, which screen comes next. They'll see it for themselves.
+2. **Say what it does, in simple terms.** Don't describe what they'll experience: progress bars, what appears where, or which screen comes next. They'll see it for themselves.
 3. **Name the controls that matter, once.** "Answers are one tap: suggested replies, a slider for the period length, and a checklist of activity types" is the model. It tells a teacher what's possible without walking them through it.
-4. **No secret sauce.** Don't explain how it works inside: prompts, rules it follows, what it searches, how it decides. Leave room for "I don't know how they did this, but you have to try it."
-5. **Always include "What it will do / What it won't do."** Teachers get language to describe it to others. Schools, districts and regulators get what they need to approve it. The "won't" column matters most:
+4. **No secret sauce.** Don't explain how it works inside: prompts, rules it follows, what it searches, or how it decides. Leave room for "I don't know how they did this, but you have to try it."
+5. **Always include "What it will do / What it won't do."** Teachers get language to describe it to others. Schools, districts, and regulators get what they need to approve it. The "won't" column matters most:
    - Lead with student safety and data: what it never does to or with students.
    - Every line has to be true in the code. Check it before you write it. If something is not true, leave it out rather than soften it. (Example: don't write "it never sends student data anywhere" if the AI model receives class scores.)
 6. **Cut AI-sounding copy.** No "the notes carry the talking", "what came with this one", em-dash asides, "not X, but Y", or clever headings. Plain and direct: "Speaker notes included."
@@ -26,20 +26,25 @@ The thinking behind a feature is ours. Teachers feel it the moment they use the 
 8. **Show, with real clips.** Record in the working app with demo classes. Each clip shows one thing and loops. Keep the files small (1120px wide H.264, about 3 MB for a whole guide).
 9. **Be honest about the demo.** One short footer line says the clips use demo classes, and that any AI replies shown were scripted for the recording if they were.
 10. **No help chat on the guide.** Questions would mostly be answered by the page itself.
+11. **Always use the Oxford comma.** "Class reports, student growth reports, and growth plans", not "class reports, student growth reports and growth plans". This holds for every line: copy, alt text, and the will/won't lists.
+12. **Show the range first.** Before walking through one workflow, show everything the feature can make: a screenshot of its starter options, plus a short bulleted list of the same in case a reader skims past the picture.
+13. **Say where it's useful.** For the main workflow, name the real moments a teacher would use it (parent-teacher conferences, the end of a marking period, a department meeting). Do the thinking for them.
 
 ## Shape
 
 1. **Hero:** one headline, one or two sentences, one still image.
-2. **Where it lives:** where to find it, and one line on how to start. Add a second entry point only if teachers really use it.
-3. **How it works:** 3 numbered steps at most, each a clip plus a short heading and one or two lines.
+2. **What it can do:** the big umbrella. A screenshot of the starter options and a bulleted list of what each one makes.
+3. **The main workflow:** a heading that says what it's for ("Track student growth over time"), 3 numbered steps at most, each a clip plus a short heading and one or two lines, then a short list of where teachers use it.
 4. **Extras:** the other big things it makes (slides, printing, units). One clip and one line each.
 5. **What it will do / What it won't do.**
 6. **Footer:** the demo note and a button to start using it.
 
+Skip a "Where it lives" section. A teacher reads the guide after opening the feature, and the first clip shows where it is.
+
 ## Where it lives in the app
 
 - Route: `/app/<feature>/how-it-works`, behind the same access check as the feature.
-- Build it from `app/components/how-it-works/guide.tsx` (`GuidePage`, `GuideHero`, `GuideRow`, `GuideClip`, `WillWont`, `GuideFooter`, `SeeHowItWorksLink`). Reporter's guide is the example: `app/routes/app.reporter_.how-it-works/route.tsx`.
+- Build it from `app/components/how-it-works/guide.tsx` (`GuidePage`, `GuideHero`, `GuideRow`, `GuideClip`, `GuideImage`, `GuideList`, `WillWont`, `GuideFooter`, `SeeHowItWorksLink`). Reporter's guide is the example: `app/routes/app.reporter_.how-it-works/route.tsx`.
 - Media: `public/img/<feature>-guide/`.
 - Button: **See how it works**, in the feature's page header. Icon only on a phone, with an `aria-label`.
 - Test: an E2E test that opens the guide from the button, checks the "won't" section and checks phone width.

@@ -168,6 +168,51 @@ export function GuideClip({
   );
 }
 
+/** A still screenshot, framed to match the clips. */
+export function GuideImage({
+  src,
+  alt,
+  width,
+  height,
+}: {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border bg-background shadow-sm">
+      <img
+        src={src}
+        alt={alt}
+        width={width}
+        height={height}
+        className="block h-auto w-full"
+      />
+    </div>
+  );
+}
+
+/** A short bulleted list inside a guide row or section. */
+export function GuideList({
+  items,
+  testId,
+}: {
+  items: React.ReactNode[];
+  testId?: string;
+}) {
+  return (
+    <ul
+      data-testid={testId}
+      className="flex max-w-prose list-disc flex-col gap-1.5 pl-5 text-[15px] leading-relaxed text-muted-foreground marker:text-primary"
+    >
+      {items.map((item, i) => (
+        <li key={i}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
 export function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
