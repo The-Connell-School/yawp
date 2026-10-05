@@ -7,6 +7,56 @@ datasource db {
   provider = "postgresql"
 }
 
+enum FreeTierApplicationStatus {
+  LEAD
+  INVITED
+  ACCOUNT_CREATED
+  ADMIN_SUBMITTED
+  SENT
+  MANUAL_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+model FreeTierApplication {
+  id               String                    @id @default(cuid())
+  createdAt        DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
+  status           FreeTierApplicationStatus @default(LEAD)
+  name             String
+  email            String                    @unique
+  schoolName       String
+  location         String
+  gradeLevel       String
+  acquisitionTokenId String?
+  userId           String?
+  organizationId   String?
+  releasedAt       DateTime?                 @db.Timestamptz(6)
+  notes            String?
+}
+
+model AcquisitionToken {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  tokenHash   String    @unique
+  label       String
+  bypassWaitlist Boolean @default(false)
+  maxUses     Int?
+  uses        Int       @default(0)
+  expiresAt   DateTime? @db.Timestamptz(6)
+  createdBy   String?
+}
+
+/// Organization subscription/entitlement plan. SCHOOL is the default for all
+/// existing orgs and short-circuits all free-tier checks.
+enum OrganizationPlan {
+  SCHOOL
+  FREE_CLASSROOM
+  FOUNDING_FACULTY
+  CLASSROOM_LICENSE
+}
+
 enum MembershipRole {
   TEACHER
   STUDENT
@@ -1061,6 +1111,10 @@ model Organization {
   createdAt                     DateTime                     @default(now()) @db.Timestamptz(6)
   updatedAt                     DateTime                     @default(now()) @db.Timestamptz(6)
   name                          String
+  /// Free-tier rollout primitive. Defaults to SCHOOL for all existing orgs.
+  plan                          OrganizationPlan             @default(SCHOOL)
+  planActivatedAt               DateTime?                    @db.Timestamptz(6)
+  planExpiresAt                 DateTime?                    @db.Timestamptz(6)
   accessExpiresAt               DateTime?                    @db.Timestamptz(6)
   numOfStudentSeats             Int                          @default(10)
   numOfTeacherSeats             Int                          @default(10)

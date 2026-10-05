@@ -82,6 +82,19 @@ export const RATE_LIMITS = {
       perIpPerHour: 600,
       perEmailPerHour: 20,
     },
+    // Free-tier waitlist / QR token redemption. A conference QR (NCTE) is
+    // scanned by hundreds of teachers on one venue network, so per-IP budgets
+    // are generous; the per-email budget stops hammering one address.
+    freeTierWaitlist: {
+      perIpPerMinute: 60,
+      perIpPerHour: 600,
+      perEmailPerHour: 6,
+    },
+    freeTierToken: {
+      perIpPerMinute: 60,
+      perIpPerHour: 600,
+      perEmailPerHour: 6,
+    },
   },
 } as const;
 
