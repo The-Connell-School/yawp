@@ -43,6 +43,12 @@ variable "session_secret" {
   description = "Secret used for session encryption"
 }
 
+variable "ai_usage_ip_hmac_secret" {
+  type        = string
+  sensitive   = true
+  description = "HMAC key for AiUsageDecisionLog.ipHash; never store raw client IPs"
+}
+
 variable "internal_command_token" {
   type        = string
   description = "Token for internal commands"
