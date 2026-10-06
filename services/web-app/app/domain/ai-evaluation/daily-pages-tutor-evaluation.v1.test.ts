@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import { getParagraphMode } from '~/domain/assignment-types/daily-pages-paragraph-modes';
+import {
+  enabledParagraphModes,
+  getParagraphMode,
+} from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT } from '~/domain/assignment-types/daily-pages-analyze-sample-entries';
 
 import { dailyPagesTutorEvaluationV1 } from './daily-pages-tutor-evaluation.v1';
@@ -12,7 +15,8 @@ const byId = (id: string) => suite.cases.find((c) => c.id === id)!;
  * Scenarios for the Daily Pages tutor, one per phase of a student's draft:
  * no point yet, a quote with no analysis, a revision after feedback, a
  * finished paragraph, a request to write it for them, a hedged opener, a
- * safety disclosure — and the Argue paragraph type's two failure shapes.
+ * safety disclosure — the Argue paragraph type's two failure shapes, and,
+ * for each later type, a draft missing the part students skip most.
  */
 describe('the Daily Pages tutor evaluation', () => {
   test('covers each phase of an Analyze draft', () => {
@@ -27,6 +31,28 @@ describe('the Daily Pages tutor evaluation', () => {
     ]) {
       expect(byId(id)).toBeDefined();
     }
+  });
+
+  /**
+   * Each type's tutor coaches the part students skip most; one case per type
+   * gives it a draft missing exactly that part.
+   */
+  test('covers every switched-on paragraph type', () => {
+    const covered = new Set(
+      suite.cases.flatMap((c) =>
+        c.paragraphMode === null ? [] : [c.paragraphMode].flat()
+      )
+    );
+    for (const mode of enabledParagraphModes()) {
+      expect(covered.has(mode.key)).toBe(true);
+    }
+  });
+
+  test('gives each new type a draft missing the part students skip', () => {
+    expect(byId('define-only-easy-cases').paragraphMode).toBe('define');
+    expect(byId('interpret-paraphrase').paragraphMode).toBe('interpret');
+    expect(byId('evaluate-no-standard').paragraphMode).toBe('evaluate');
+    expect(byId('synthesize-two-summaries').paragraphMode).toBe('synthesize');
   });
 
   test('covers Argue a position too', () => {

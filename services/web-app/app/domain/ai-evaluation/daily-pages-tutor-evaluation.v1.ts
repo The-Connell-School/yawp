@@ -303,6 +303,118 @@ const cases: TutorEvaluationCase[] = [
     ],
   },
   {
+    id: 'define-only-easy-cases',
+    phase: 'Define: a boundary, tested only by easy cases',
+    paragraphMode: 'define',
+    assignment: {
+      title: 'Daily Pages — Hero or good person',
+      prompt:
+        'What makes someone a hero rather than just a good person? Draw the line in a sentence, then test it against one case that sits close to it. One paragraph.',
+    },
+    draft:
+      'A hero is someone who puts themselves at real risk to help another person, which is what separates a hero from someone who is simply kind. A firefighter who runs into a burning building to carry out a child is a hero, because she could die doing it. A soldier who throws himself on a grenade to save his unit is a hero for the same reason.',
+    history: OPENING,
+    studentMessage: 'Give me feedback',
+    criteria: [
+      {
+        id: 'credits-the-boundary',
+        requirement:
+          'Credits the boundary (risk to oneself) specifically, rather than asking the student to redefine the term.',
+      },
+      {
+        id: 'asks-for-a-hard-case',
+        requirement:
+          'Asks for one case near the line, one that almost counts or almost does not, rather than for another clear example.',
+      },
+      {
+        id: 'does-not-supply-the-case',
+        requirement: 'Does not hand the student a hard case to use.',
+      },
+    ],
+  },
+  {
+    id: 'interpret-paraphrase',
+    phase: 'Interpret: a paraphrase offered as the meaning',
+    paragraphMode: 'interpret',
+    assignment: {
+      title: 'Daily Pages — A rose by any other word',
+      prompt:
+        'Juliet says, "What\'s in a name? That which we call a rose / By any other word would smell as sweet." What does she mean by it, beyond what she says? Defend your reading from her words. One paragraph.',
+    },
+    draft:
+      "Juliet says, \"What's in a name? That which we call a rose / By any other word would smell as sweet.\" She means that if you called a rose by a different name, it would still smell the same. In the same way, Romeo would still be Romeo even if he wasn't called Montague. This shows that names don't really matter.",
+    history: OPENING,
+    studentMessage: 'Give me feedback',
+    criteria: [
+      {
+        id: 'names-the-paraphrase',
+        requirement:
+          'Points out, kindly, that the draft says what Juliet says rather than what she means.',
+      },
+      {
+        id: 'asks-for-a-reading',
+        requirement:
+          'Asks what Juliet means that her words do not say outright, rather than asking for more quotation.',
+      },
+      {
+        id: 'does-not-supply-a-reading',
+        requirement: 'Does not offer the student a reading of the lines.',
+      },
+    ],
+  },
+  {
+    id: 'evaluate-no-standard',
+    phase: 'Evaluate: a verdict with no standard',
+    paragraphMode: 'evaluate',
+    assignment: {
+      title: 'Daily Pages — The later start',
+      prompt:
+        'Our school moved the start of the day from 7:45 to 8:30 this year. Judge the decision. Name the standard you are judging by, then measure the decision against it. One paragraph.',
+    },
+    draft:
+      'Moving the start of school to 8:30 was a great decision. I used to have to wake up at 6:15, and now I can sleep until 7, which is so much better. Everyone in my classes seems happier in the morning too. It was definitely the right call.',
+    history: OPENING,
+    studentMessage: 'Give me feedback',
+    criteria: [
+      {
+        id: 'asks-for-a-standard',
+        requirement:
+          'Asks what the student is judging the decision by, rather than for more reasons they like it.',
+      },
+      {
+        id: 'does-not-supply-the-standard',
+        requirement:
+          'Does not name a standard for the student (learning, health, fairness) as the one to use.',
+      },
+    ],
+  },
+  {
+    id: 'synthesize-two-summaries',
+    phase: 'Synthesize: one summary, then another',
+    paragraphMode: 'synthesize',
+    assignment: {
+      title: 'Daily Pages — Phones at lunch',
+      prompt:
+        'Source A, a school librarian: "The year we banned phones at lunch, we checked out more print books than in the three years before it combined." Source B, a student survey at the same school: 61% said lunch is "the only time I get to really talk to my friends." Bring the two sources together into one point neither makes alone. One paragraph.',
+    },
+    draft:
+      'Source A is a librarian who says that the year the school banned phones at lunch, students checked out more print books than in the three years before. This shows that the phone ban made students read more. Source B is a survey where 61% of students said that lunch is the only time they really get to talk to their friends. This shows that lunch is very important to students.',
+    history: OPENING,
+    studentMessage: 'Give me feedback',
+    criteria: [
+      {
+        id: 'asks-how-they-connect',
+        requirement:
+          'Asks what one source changes about the other, or what the two show together that neither shows alone.',
+      },
+      {
+        id: 'does-not-supply-the-point',
+        requirement:
+          'Does not state a synthesized point for the student to adopt.',
+      },
+    ],
+  },
+  {
     id: 'safety-disclosure',
     phase: 'Chat: a safety disclosure',
     paragraphMode: 'analyze',

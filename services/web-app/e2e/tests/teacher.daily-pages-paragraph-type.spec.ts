@@ -2,12 +2,12 @@ import { test, expect } from '../test-setup';
 
 /**
  * The kinds of paragraph a Daily Pages entry practices. Offered only for Daily
- * Pages, and only the types switched on — Analyze, then Argue a position. A
+ * Pages, and only the types switched on — every type but Compare. A
  * paragraph can combine moves, so each type is a checkbox; with none ticked,
  * the entry grades and tutors as any kind of paragraph, as before.
  */
 test.describe.serial('Paragraph type at assignment creation', () => {
-  test('Daily Pages offers Analyze and Argue a position as checkboxes, none ticked by default', async ({
+  test('Daily Pages offers each switched-on type as a checkbox, none ticked by default', async ({
     page,
     e2eContext,
     signIn,
@@ -23,7 +23,18 @@ test.describe.serial('Paragraph type at assignment creation', () => {
     await expect(dialog).toBeVisible();
 
     const types = dialog.getByRole('group', { name: 'Paragraph types' });
-    await expect(types.getByRole('checkbox')).toHaveCount(2);
+    await expect(types.getByRole('checkbox')).toHaveCount(6);
+    for (const name of [
+      'Define a term',
+      'Interpret',
+      'Evaluate',
+      'Synthesize',
+    ]) {
+      await expect(types.getByRole('checkbox', { name })).not.toBeChecked();
+    }
+    await expect(types.getByRole('checkbox', { name: 'Compare' })).toHaveCount(
+      0
+    );
     const analyze = types.getByRole('checkbox', { name: 'Analyze' });
     const argue = types.getByRole('checkbox', { name: 'Argue a position' });
     await expect(analyze).not.toBeChecked();
@@ -37,6 +48,9 @@ test.describe.serial('Paragraph type at assignment creation', () => {
     await argue.check();
     await expect(types.getByText(/Claim-Evidence-Analysis/)).toBeVisible();
     await expect(types.getByText(/Position-Reason-Test/)).toBeVisible();
+
+    await types.getByRole('checkbox', { name: 'Evaluate' }).check();
+    await expect(types.getByText(/Judgment-Standard-Evidence/)).toBeVisible();
   });
 
   /**
@@ -63,6 +77,10 @@ test.describe.serial('Paragraph type at assignment creation', () => {
       .getByRole('group', { name: 'Paragraph types' });
     await expect(
       types.getByRole('checkbox', { name: 'Analyze' })
+    ).toBeChecked();
+    // The Juliet prompt is tagged Analyze and Interpret, and asks for no argument.
+    await expect(
+      types.getByRole('checkbox', { name: 'Interpret' })
     ).toBeChecked();
     await expect(
       types.getByRole('checkbox', { name: 'Argue a position' })
@@ -125,6 +143,11 @@ test.describe.serial('Paragraph type at assignment creation', () => {
 
     await guides.getByRole('button', { name: /^Argue a position/ }).click();
     await expect(guides.getByTestId('paragraph-guide-argue')).toBeVisible();
+
+    await guides.getByRole('button', { name: /^Synthesize/ }).click();
+    await expect(
+      guides.getByTestId('paragraph-guide-synthesize')
+    ).toBeVisible();
   });
 
   test('Class Starter does not offer it', async ({

@@ -245,10 +245,10 @@ describe('the library shows only switched-on paragraph types', () => {
 
   test('the Cognitive mode filter lists exactly the switched-on types', () => {
     expect(
-      buildFacets(shown).cognitiveMoves.map(
-        (move) => PARAGRAPH_MODE_FOR_MOVE[move]
-      )
-    ).toEqual(switchedOnKeys);
+      buildFacets(shown)
+        .cognitiveMoves.map((move) => PARAGRAPH_MODE_FOR_MOVE[move])
+        .sort()
+    ).toEqual([...switchedOnKeys].sort());
   });
 
   test('a prompt keeps only its switched-on modes', () => {
@@ -269,7 +269,18 @@ describe('the library shows only switched-on paragraph types', () => {
     expect(shown.map((entry) => entry.id)).toEqual(
       expected.map((entry) => entry.id)
     );
-    expect(shown.length).toBeLessThan(entries.length);
+  });
+
+  /**
+   * Every library prompt today carries at least one switched-on mode, so a
+   * prompt tagged only with a switched-off one (Compare) stands in for the
+   * prompts a future library could add before their type is ready.
+   */
+  test('hides a prompt whose only mode is switched off', () => {
+    const compareOnly = { ...entries[0], id: 'compare-only', cognitiveMoves: ['compare' as const] };
+    expect(onlySwitchedOnMoves([compareOnly, ...entries])).not.toContainEqual(
+      expect.objectContaining({ id: 'compare-only' })
+    );
   });
 
   test('never hides a prompt the teacher saved', () => {
@@ -288,6 +299,10 @@ describe('paragraphModesForMoves', () => {
   test('maps a prompt’s modes to the switched-on paragraph types', () => {
     expect(paragraphModesForMoves(['argue-a-position', 'evaluate'])).toEqual([
       'argue',
+      'evaluate',
+    ]);
+    expect(paragraphModesForMoves(['define-a-term', 'compare'])).toEqual([
+      'define',
     ]);
     expect(paragraphModesForMoves(['analyze', 'argue-a-position'])).toEqual([
       'analyze',
@@ -296,7 +311,7 @@ describe('paragraphModesForMoves', () => {
   });
 
   test('is empty for a prompt with no switched-on mode, or none at all', () => {
-    expect(paragraphModesForMoves(['interpret', 'compare'])).toEqual([]);
+    expect(paragraphModesForMoves(['compare'])).toEqual([]);
     expect(paragraphModesForMoves([])).toEqual([]);
   });
 });

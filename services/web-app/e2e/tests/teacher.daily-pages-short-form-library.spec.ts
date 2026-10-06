@@ -82,17 +82,14 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
     await expect(
       page.getByRole('checkbox', { name: /^Argue a position/ })
     ).toBeVisible();
-    for (const hidden of [
-      'Compare',
-      'Define a term',
-      'Evaluate',
-      'Interpret',
-      'Synthesize',
-    ]) {
+    for (const shown of ['Define a term', 'Evaluate', 'Interpret', 'Synthesize']) {
       await expect(
-        page.getByRole('checkbox', { name: new RegExp(`^${hidden}`) })
-      ).toHaveCount(0);
+        page.getByRole('checkbox', { name: new RegExp(`^${shown}`) })
+      ).toBeVisible();
     }
+    await expect(
+      page.getByRole('checkbox', { name: /^Compare/ })
+    ).toHaveCount(0);
   });
 
   test('student does not see the teacher-only Daily Pages library', async ({

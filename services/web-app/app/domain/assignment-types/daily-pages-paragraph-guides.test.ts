@@ -92,5 +92,23 @@ describe('the paragraph-type guides', () => {
     expect(getParagraphGuide('argue')!.oftenSkipped.toLowerCase()).toContain(
       'test'
     );
+    expect(getParagraphGuide('define')!.oftenSkipped.toLowerCase()).toContain(
+      'hard case'
+    );
+    expect(getParagraphGuide('interpret')!.oftenSkipped.toLowerCase()).toContain(
+      'defense'
+    );
+    expect(getParagraphGuide('evaluate')!.oftenSkipped.toLowerCase()).toContain(
+      'standard'
+    );
+    expect(getParagraphGuide('synthesize')!.oftenSkipped.toLowerCase()).toContain(
+      'connection'
+    );
+  });
+
+  /** Two guides on one prompt would let a student read one model as another's. */
+  test('gives every type its own model prompt', () => {
+    const prompts = enabledParagraphGuides().map((guide) => guide.model.prompt);
+    expect(new Set(prompts).size).toBe(prompts.length);
   });
 });

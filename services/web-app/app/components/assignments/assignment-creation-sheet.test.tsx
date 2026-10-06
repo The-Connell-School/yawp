@@ -956,7 +956,14 @@ describe('AssignmentCreationSheetContent paragraph types', () => {
     }));
 
     expectText('Paragraph types');
-    expect(boxes().map((box) => box.value)).toEqual(['analyze', 'argue']);
+    expect(boxes().map((box) => box.value)).toEqual([
+      'analyze',
+      'argue',
+      'define',
+      'interpret',
+      'evaluate',
+      'synthesize',
+    ]);
     expect(boxes().every((box) => !box.checked)).toBe(true);
     expectText('any kind of paragraph');
   });

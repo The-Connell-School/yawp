@@ -36,13 +36,17 @@ describe('the paragraph types a teacher can choose', () => {
 
   /**
    * Rollout: Analyze was built and quality-checked first, then Argue a
-   * position. Teachers see only the types that are switched on, and the
-   * others follow one at a time.
+   * position, then Define a term, Interpret, Evaluate and Synthesize.
+   * Teachers see only the types that are switched on; Compare follows.
    */
-  test('ships with Analyze and Argue a position switched on', () => {
+  test('ships with every type but Compare switched on', () => {
     expect(enabledParagraphModes().map((mode) => mode.key)).toEqual([
       'analyze',
       'argue',
+      'define',
+      'interpret',
+      'evaluate',
+      'synthesize',
     ]);
   });
 
@@ -57,6 +61,8 @@ describe('the paragraph types a teacher can choose', () => {
   test('looks a type up by key, and only a switched-on one', () => {
     expect(getParagraphMode('analyze')?.label).toBe('Analyze');
     expect(getParagraphMode('argue')?.label).toBe('Argue a position');
+    expect(getParagraphMode('define')?.label).toBe('Define a term');
+    expect(getParagraphMode('synthesize')?.label).toBe('Synthesize');
     expect(getParagraphMode('compare')).toBeNull();
     expect(getParagraphMode('nonsense')).toBeNull();
     expect(getParagraphMode(null)).toBeNull();
@@ -147,6 +153,79 @@ describe('Argue a position: position, reason, test', () => {
   });
 });
 
+/**
+ * Each type names its three parts, coaches them in order, and holds the
+ * paragraph down where its most-skipped part is missing. The model is a guide
+ * to what a reader needs, never the only acceptable form.
+ */
+describe.each([
+  {
+    key: 'define',
+    model: 'boundary-example-hard case',
+    parts: ['boundary.', 'example.', 'hard case.'],
+    depthMiss: 'dictionary definition',
+    developmentMiss: 'never tested against a hard case',
+  },
+  {
+    key: 'interpret',
+    model: 'reading-evidence-defense',
+    parts: ['reading.', 'evidence.', 'defense.'],
+    depthMiss: 'paraphras',
+    developmentMiss: "without the passage's own words",
+  },
+  {
+    key: 'evaluate',
+    model: 'judgment-standard-evidence',
+    parts: ['judgment.', 'standard.', 'evidence.'],
+    depthMiss: 'standard is never named',
+    developmentMiss: 'no specific case measured',
+  },
+  {
+    key: 'synthesize',
+    model: 'point-sources-connection',
+    parts: ['point.', 'sources.', 'connection.'],
+    depthMiss: 'summarizes one source and then the other',
+    developmentMiss: 'only decorates',
+  },
+])('$key: $model', ({ key, model, parts, depthMiss, developmentMiss }) => {
+  const mode = () => getParagraphMode(key)!;
+
+  test('the description names the model', () => {
+    expect(mode().description.toLowerCase()).toContain(model);
+  });
+
+  test('the tutor coaches the three parts in order, and never writes them', () => {
+    const tutor = mode().tutorInstructions!.toLowerCase();
+    expect(tutor).toContain(model);
+    const positions = parts.map((part) => tutor.indexOf(part));
+    for (const position of positions) expect(position).toBeGreaterThan(-1);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    expect(tutor).toContain('never write');
+    expect(tutor).toContain('the part students skip');
+  });
+
+  test('the grader holds the depth miss down in Depth of Thought', () => {
+    const grading = mode().gradingInstructions!.toLowerCase();
+    expect(grading).toContain(model);
+    expect(grading).toContain(depthMiss);
+    expect(grading).toContain('depth of thought');
+  });
+
+  test('the grader holds the development miss down in Development of Thought', () => {
+    const grading = mode().gradingInstructions!.toLowerCase();
+    expect(grading).toContain(developmentMiss);
+    expect(grading).toContain('development of thought');
+    expect(grading).toContain('does not rise above developing');
+  });
+
+  test('offers the model without making it the only acceptable form', () => {
+    expect(mode().gradingInstructions!.toLowerCase()).toContain(
+      'not the only acceptable form'
+    );
+    expect(mode().tutorInstructions!.toLowerCase()).toContain('not a template');
+  });
+});
+
 describe('parseParagraphMode', () => {
   test('absent or blank means no type chosen', () => {
     expect(parseParagraphMode(form({}))).toEqual({
@@ -166,6 +245,9 @@ describe('parseParagraphMode', () => {
     expect(
       parseParagraphMode(form({ [PARAGRAPH_MODE_FIELD]: 'argue' }))
     ).toEqual({ success: true, value: 'argue' });
+    expect(
+      parseParagraphMode(form({ [PARAGRAPH_MODE_FIELD]: 'evaluate' }))
+    ).toEqual({ success: true, value: 'evaluate' });
   });
 
   test('rejects a type that is not switched on yet, and nonsense', () => {

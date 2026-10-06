@@ -175,6 +175,10 @@ describe('the per-assignment switches', () => {
     expect(text).toContain('Paragraph type');
     expect(text).toContain('Analyze');
     expect(text).toContain('Argue a position');
+    expect(text).toContain('Define a term');
+    expect(text).toContain('Interpret');
+    expect(text).toContain('Evaluate');
+    expect(text).toContain('Synthesize');
   });
 
   test('names the writing time', () => {

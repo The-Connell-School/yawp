@@ -50,7 +50,7 @@ describe('the Daily Pages calibration suite', () => {
    */
   test('is big enough to see drift across the scale', () => {
     expect(suite.cases.length).toBeGreaterThanOrEqual(8);
-    expect(suite.cases.length).toBeLessThanOrEqual(18);
+    expect(suite.cases.length).toBeLessThanOrEqual(30);
   });
 
   test('gives every case a band for every category, inside the scale', () => {
@@ -222,6 +222,66 @@ describe('the paragraph types the suite grades under', () => {
     expect(untested.length).toBeGreaterThanOrEqual(1);
     for (const benchmarkCase of untested) {
       expect(benchmarkCase.input.paragraphMode).toBe('argue');
+      expect(
+        benchmarkCase.expectations.scoreBands.development_of_thought.max
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+});
+
+/**
+ * Define a term, Interpret, Evaluate and Synthesize each get a strong
+ * paragraph that reaches the top, and a miss for each of the two ways the
+ * type most often goes wrong: one held down on Depth of Thought, the other on
+ * Development of Thought.
+ */
+describe.each([
+  { key: 'define', depthMiss: 'define-dictionary', developmentMiss: 'define-untested' },
+  { key: 'interpret', depthMiss: 'interpret-paraphrase', developmentMiss: 'interpret-unsupported' },
+  { key: 'evaluate', depthMiss: 'evaluate-no-standard', developmentMiss: 'evaluate-unapplied' },
+  { key: 'synthesize', depthMiss: 'synthesize-summaries', developmentMiss: 'synthesize-one-source' },
+])('calibrating $key', ({ key, depthMiss, developmentMiss }) => {
+  const gradedUnder = suite.cases.filter(
+    (benchmarkCase) => benchmarkCase.input.paragraphMode === key
+  );
+
+  test('grades it across the scale', () => {
+    expect(gradedUnder.length).toBeGreaterThanOrEqual(3);
+    expect(
+      new Set(gradedUnder.map((c) => c.input.assignmentPrompt)).size
+    ).toBe(gradedUnder.length);
+  });
+
+  test('reaches the top for a paragraph with all three parts', () => {
+    const strong = gradedUnder.filter((c) => c.tags.includes('strong'));
+    expect(strong.length).toBeGreaterThanOrEqual(1);
+    for (const benchmarkCase of strong) {
+      expect(composite(benchmarkCase, 'min')).toBeGreaterThanOrEqual(80);
+      expect(
+        benchmarkCase.expectations.scoreBands.depth_of_thought.min
+      ).toBeGreaterThanOrEqual(4);
+      expect(
+        benchmarkCase.expectations.scoreBands.development_of_thought.min
+      ).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  test(`${depthMiss} stays low on Depth of Thought`, () => {
+    const misses = caseTagged(depthMiss);
+    expect(misses.length).toBeGreaterThanOrEqual(1);
+    for (const benchmarkCase of misses) {
+      expect(benchmarkCase.input.paragraphMode).toBe(key);
+      expect(
+        benchmarkCase.expectations.scoreBands.depth_of_thought.max
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+
+  test(`${developmentMiss} stays low on Development of Thought`, () => {
+    const misses = caseTagged(developmentMiss);
+    expect(misses.length).toBeGreaterThanOrEqual(1);
+    for (const benchmarkCase of misses) {
+      expect(benchmarkCase.input.paragraphMode).toBe(key);
       expect(
         benchmarkCase.expectations.scoreBands.development_of_thought.max
       ).toBeLessThanOrEqual(2);

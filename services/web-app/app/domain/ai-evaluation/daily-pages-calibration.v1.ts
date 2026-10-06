@@ -29,6 +29,16 @@ import type {
  * - Under Argue a position, a straddle stays low on Depth of Thought
  *   (`argue-straddle`), and reasons never tested against a specific case stay
  *   low on Development of Thought (`argue-untested`).
+ * - Define a term, Interpret, Evaluate and Synthesize each have a strong
+ *   paragraph and the two ways the type most often goes wrong: a dictionary
+ *   definition and a boundary tested only by easy cases
+ *   (`define-dictionary`, `define-untested`); a paraphrase and a reading with
+ *   none of the passage's words (`interpret-paraphrase`,
+ *   `interpret-unsupported`); a verdict with no standard and a standard never
+ *   measured against (`evaluate-no-standard`, `evaluate-unapplied`); two
+ *   summaries and a second source that only decorates
+ *   (`synthesize-summaries`, `synthesize-one-source`). The first of each pair
+ *   stays low on Depth of Thought, the second on Development of Thought.
  *
  * A case that names a `paragraphMode` is graded with that type's guidance in
  * the prompt, as an assignment with that type would be. Cases without one are
@@ -510,6 +520,294 @@ const cases: GradingBenchmarkCase[] = [
         evaluatorId: 'feedback-grounding',
         requirement:
           'Name the juice-box situation and the chips contrast specifically when crediting the paragraph.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-define-mistake-or-failure',
+    title: 'A boundary that a hard case moves',
+    description:
+      'A strong definition paragraph: a boundary that separates the term from its nearest neighbor, a clear example, and a hard case that sharpens where the line sits.',
+    tags: ['strong', 'define-a-term'],
+    paragraphMode: 'define',
+    assignmentPrompt:
+      'What is the difference between a mistake and a failure? Define both, then give one example that could plausibly be either and say which it is.',
+    essayText: `A mistake is a wrong move; a failure is a wrong move you refuse to learn from. The difference is not in what happens but in what comes after. Misspelling "necessary" on a spelling test is a mistake: one wrong answer, fixed the moment you see the red mark. The hard case is a student who fails the same chemistry test twice. It looks like failure, and the grade even says so, but if the second attempt went wrong in a different place than the first, she learned something between them, and by my line that is two mistakes, not a failure. It only becomes a failure if she misses the same problem the same way a third time. That case is why the line has to sit after the event and not inside it: you can't tell a mistake from a failure by looking at the grade, only by looking at what the person did next.`,
+    bands: scoreBands([4, 5], [4, 5], [4, 5], [4, 5], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Credit the chemistry test as a hard case that sharpens the boundary (the line sits after the event), not as a second example.',
+      },
+      {
+        evaluatorId: 'feedback-grounding',
+        requirement:
+          'Name the boundary the paragraph draws ("a wrong move you refuse to learn from") when crediting Depth of Thought.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-define-dictionary-definitions',
+    title: 'Dictionary definitions, no line drawn',
+    description:
+      'Two accurate dictionary definitions and easy examples. Nothing separates the terms, and no case tests the line the prompt asks for.',
+    tags: ['define-dictionary', 'define-a-term'],
+    paragraphMode: 'define',
+    assignmentPrompt:
+      'What separates a friend from an ally? Give the distinction in a sentence, then test it with one case that sits right on the line.',
+    essayText: `A friend is a person that you know well and like, and who likes you back. An ally is a person who supports you or helps you, especially in a fight or a conflict. Friends and allies are both important to have in life. For example, my best friend is someone I can talk to about anything. An ally could be a country that helps another country in a war. Both friends and allies are people who are on your side, but a friend is more personal. Everyone needs friends and allies.`,
+    bands: scoreBands([1, 2], [1, 2], [2, 3], [2, 3], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Do not credit accurate dictionary definitions as a boundary in Depth of Thought; "a friend is more personal" never says what an ally lacks.',
+      },
+      {
+        evaluatorId: 'priority-selection',
+        requirement:
+          'Make the one-sentence distinction the next step, then a case on the line, rather than better examples of each term.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-define-only-easy-cases',
+    title: 'A real boundary, tested only by easy cases',
+    description:
+      'A boundary worth drawing, then three examples that all sit comfortably inside it. The definition is illustrated, never tested.',
+    tags: ['define-untested', 'define-a-term'],
+    paragraphMode: 'define',
+    assignmentPrompt:
+      'What makes someone a hero rather than just a good person? Draw the line in a sentence, then test it against one case that sits close to it. One paragraph.',
+    essayText: `A hero is someone who puts themselves at real risk to help another person, which is what separates a hero from someone who is simply kind. A firefighter who runs into a burning building to carry out a child is a hero, because she could die doing it. A soldier who throws himself on a grenade to save his unit is a hero for the same reason. A lifeguard who swims out in a storm to pull in a drowning swimmer is a hero too. In all of these cases the person risked their own life, and that is what makes them a hero and not just a good person.`,
+    bands: scoreBands([2, 3], [1, 2], [2, 3], [2, 3], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Credit the boundary (risk to oneself) in Depth of Thought, but do not credit three easy examples as development; none sits near the line.',
+      },
+      {
+        evaluatorId: 'priority-selection',
+        requirement:
+          'Make one hard case the next step (someone who helps at a cost that is not physical risk, say) rather than more examples.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-interpret-mercutio-houses',
+    title: 'A reading defended against the obvious one',
+    description:
+      'A strong interpretation: a reading another reader could dispute, the exact word that supports it, and a defense against the plainer reading.',
+    tags: ['strong', 'interpret'],
+    paragraphMode: 'interpret',
+    assignmentPrompt:
+      'Quote Mercutio\'s curse, "A plague o\' both your houses," and explain why it matters that the curse comes from a character who belongs to neither house. One paragraph.',
+    essayText: `Mercutio's curse turns the feud from a private quarrel into a public crime. He is the Prince's kinsman, a Montague only by friendship, and he dies anyway: "A plague o' both your houses! / They have made worms' meat of me." The obvious reading is that he is lashing out at the two men in front of him, and he does blame Romeo: "Why the devil came you between us?" But the curse he keeps repeating is aimed at "houses," not at men, and that word makes the families, not Tybalt and Romeo, answerable for his death. Because he belongs to neither house, his death is the first proof that the feud kills people who never chose a side, and his curse names who owes for it. The rest of the play collects.`,
+    bands: scoreBands([4, 5], [4, 5], [4, 5], [4, 5], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Credit the turn on "houses" as the defense of the reading against the obvious one (that Mercutio is angry at Romeo and Tybalt).',
+      },
+      {
+        evaluatorId: 'false-positive-resistance',
+        requirement:
+          'Do not treat "The rest of the play collects." as an unsupported leap or a fragment; it is a deliberate close that follows from the reading.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-interpret-paraphrase',
+    title: 'Paraphrase offered as a reading',
+    description:
+      'The passage restated in plain words, then a theme that would fit any love story. Accurate, and not an interpretation.',
+    tags: ['interpret-paraphrase', 'interpret'],
+    paragraphMode: 'interpret',
+    assignmentPrompt:
+      'Juliet says, "What\'s in a name? That which we call a rose / By any other word would smell as sweet." What does she mean by it, beyond what she says? Defend your reading from her words. One paragraph.',
+    essayText: `In this passage Juliet says, "What's in a name? That which we call a rose / By any other word would smell as sweet." She means that if you called a rose by a different name, it would still smell the same. In the same way, Romeo would still be Romeo even if he wasn't called Montague. This shows that names don't really matter and that what matters is who a person is on the inside. Shakespeare is showing that love is more important than family names.`,
+    bands: scoreBands([1, 2], [2, 3], [2, 3], [2, 3], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Do not credit the paraphrase of the rose lines as a reading in Depth of Thought; it restates what Juliet says, and the prompt asks for what she means beyond it.',
+      },
+      {
+        evaluatorId: 'priority-selection',
+        requirement:
+          'Make a reading the next step: what Juliet means that her words do not say, rather than more summary of the scene.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-interpret-green-light-unsupported',
+    title: 'A reading with none of the passage\'s words',
+    description:
+      'A familiar reading of the green light, held up by history and the color of money rather than by the passage the prompt names.',
+    tags: ['interpret-unsupported', 'interpret'],
+    paragraphMode: 'interpret',
+    assignmentPrompt:
+      'At the end of chapter 1 of The Great Gatsby, Nick sees Gatsby stretch his arms toward "a single green light, minute and far away." What does the green light mean? Defend your reading from the words of the passage. One paragraph.',
+    essayText: `The green light stands for money. Green is the color of money, and Gatsby has spent his whole life trying to become rich so that he can be accepted by people like Daisy. The light is far away because money can never really make you happy, which is something the 1920s had to learn the hard way when the stock market crashed. In this way the green light represents the American Dream, which Fitzgerald believed was corrupted by greed. Gatsby reaching for it shows that everyone in America was reaching for wealth.`,
+    bands: scoreBands([2, 3], [1, 2], [2, 3], [2, 3], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Do not credit the color of money or the stock market crash as evidence; the paragraph quotes none of the passage it was asked to defend its reading from.',
+      },
+      {
+        evaluatorId: 'priority-selection',
+        requirement:
+          'Make the passage\'s own words the next step ("minute and far away", or Gatsby\'s outstretched arms) rather than more history.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-evaluate-friar-by-his-own-rule',
+    title: 'A plan judged by the standard its maker set',
+    description:
+      'A strong evaluation: a verdict, a named and justified standard, the strongest defense of the other side, and the moment in the play measured against the standard.',
+    tags: ['strong', 'evaluate'],
+    paragraphMode: 'evaluate',
+    assignmentPrompt:
+      "Judge Friar Laurence's plan with the potion. Name the standard you are judging him by, then point to the moment in the play that most supports your verdict. One paragraph.",
+    essayText: `Friar Laurence's plan fails by the one standard he taught Romeo himself: "Wisely and slow. They stumble that run fast." A plan made by the only adult the lovers trust should be judged by whether it can survive one thing going wrong, and his cannot. Everything rests on a single letter reaching Romeo in Mantua before Juliet wakes, and when Friar John is shut in a house the town fears is infected, there is no second messenger and no second plan. The Friar's defense is that he had hours, not weeks, to stop a forced marriage, and that is real. But speed is exactly what his own rule warns against, and the moment that most supports the verdict is his last in the tomb: "I dare no longer stay." A plan that leaves a thirteen-year-old alone with her dead husband when it breaks was never wise.`,
+    bands: scoreBands([4, 5], [4, 5], [4, 5], [4, 5], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Credit the named standard (whether the plan survives one thing going wrong) in Depth of Thought, and the tomb line as the case measured against it in Development of Thought.',
+      },
+      {
+        evaluatorId: 'false-positive-resistance',
+        requirement:
+          'Do not treat the concession about the Friar\'s lack of time as weakening the verdict; it is weighed and answered.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-evaluate-no-standard',
+    title: 'A verdict with no standard',
+    description:
+      'A confident, pleasant verdict built on personal preference. Nothing names what the decision is being measured against.',
+    tags: ['evaluate-no-standard', 'evaluate'],
+    paragraphMode: 'evaluate',
+    assignmentPrompt:
+      'Our school moved the start of the day from 7:45 to 8:30 this year. Judge the decision. Name the standard you are judging by, then measure the decision against it. One paragraph.',
+    essayText: `Moving the start of school to 8:30 was a great decision. I used to have to wake up at 6:15, and now I can sleep until 7, which is so much better. Everyone in my classes seems happier in the morning too. Some people complain that school gets out later now, but I think that is a small price to pay. It was definitely the right call and I hope they never change it back.`,
+    bands: scoreBands([1, 2], [2, 3], [2, 3], [2, 3], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Do not credit the verdict as an evaluation in Depth of Thought: the paragraph never names the standard the prompt asks for.',
+      },
+      {
+        evaluatorId: 'priority-selection',
+        requirement:
+          'Make naming one standard the next step (what a start time should be judged by), rather than more reasons to like the change.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-evaluate-standard-never-applied',
+    title: 'A standard named, then never measured against',
+    description:
+      'A clear standard in the first sentence, then generalities and a switch to a second standard. No specific consequence is ever held up to the first.',
+    tags: ['evaluate-unapplied', 'evaluate'],
+    paragraphMode: 'evaluate',
+    assignmentPrompt:
+      'Next year our school will require uniforms. Judge the decision. Name the standard you judge it by, and measure the decision against one specific consequence. One paragraph.',
+    essayText: `The uniform rule is a bad decision, because a school rule should be judged by whether it helps students learn. Uniforms do not help students learn. Learning comes from good teachers and hard work, not from what you are wearing. Also, students should have the freedom to express themselves, and taking away their clothes takes away part of who they are. Many people believe uniforms reduce bullying, but bullying will happen no matter what. Overall, uniforms do not meet the standard and should not be required.`,
+    bands: scoreBands([2, 3], [1, 2], [2, 3], [2, 3], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Credit the named standard in Depth of Thought, but do not credit "uniforms do not help students learn" as measuring the decision against it; no specific consequence is examined, and the freedom argument is a second standard.',
+      },
+      {
+        evaluatorId: 'priority-selection',
+        requirement:
+          'Make one specific consequence of the rule, held up to the learning standard, the next step.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-synthesize-sleep-as-trade',
+    title: 'Two sources that become one point',
+    description:
+      'A strong synthesis: a point only the two sources together make, one specific contribution from each, and the connection that turns them into a trade.',
+    tags: ['strong', 'synthesize'],
+    paragraphMode: 'synthesize',
+    assignmentPrompt:
+      'Source A, a survey of 500 high school students: those who slept fewer than seven hours on school nights said they felt "unable to focus" in first period twice as often as those who slept eight or more. Source B, a junior interviewed for the school paper: "I stay up late because it\'s the only time all day that nobody needs anything from me." Bring the two sources together into one point neither makes alone. One paragraph.',
+    essayText: `Telling students to go to bed earlier will not work, because the late night is not wasted time to them; it is the only time they have. The survey shows the cost: students who slept under seven hours were twice as likely to feel "unable to focus" in first period. The junior shows the reason: she stays up because it's "the only time all day that nobody needs anything from me." Read alone, the survey makes short sleep sound like a bad habit, and the interview makes staying up sound like a free choice. Together they show a trade: students are giving up focus in the morning to buy an hour that belongs to them. If a school wants that hour back for sleep, it has to give the hour back somewhere in the day.`,
+    bands: scoreBands([4, 5], [4, 5], [4, 5], [4, 5], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Credit the trade as a point neither source makes alone (Depth of Thought), and the "read alone … together" turn as the connection (Development of Thought).',
+      },
+      {
+        evaluatorId: 'feedback-grounding',
+        requirement:
+          'Name the specific contribution the paragraph takes from each source when crediting it.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-synthesize-two-summaries',
+    title: 'Two summaries and a point either source makes',
+    description:
+      'Source A summarized, then Source B, then a conclusion that needs neither. Accurate and organized, and not a synthesis.',
+    tags: ['synthesize-summaries', 'synthesize'],
+    paragraphMode: 'synthesize',
+    assignmentPrompt:
+      'Source A, a school librarian: "The year we banned phones at lunch, we checked out more print books than in the three years before it combined." Source B, a student survey at the same school: 61% said lunch is "the only time I get to really talk to my friends." Bring the two sources together into one point neither makes alone. One paragraph.',
+    essayText: `Source A is a librarian who says that the year the school banned phones at lunch, students checked out more print books than in the three years before. This shows that the phone ban made students read more. Source B is a survey where 61% of students said that lunch is the only time they really get to talk to their friends. This shows that lunch is very important to students. Both sources show that lunch is an important time of the day for students and that schools should think carefully about it.`,
+    bands: scoreBands([1, 2], [2, 3], [2, 3], [2, 3], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Do not credit "both sources show that lunch is important" as synthesis in Depth of Thought; the survey says it alone.',
+      },
+      {
+        evaluatorId: 'priority-selection',
+        requirement:
+          'Make the connection the next step: what the survey changes about the librarian\'s numbers (who is in the library, and what they gave up to be there).',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-synthesize-second-source-decorates',
+    title: 'One source does the work, the other decorates',
+    description:
+      'A sound point built entirely from Source A, with Source B mentioned in a sentence that connects to nothing.',
+    tags: ['synthesize-one-source', 'synthesize'],
+    paragraphMode: 'synthesize',
+    assignmentPrompt:
+      'Source A, a ninth-grade teacher: "When I stopped grading homework for completion, fewer students turned it in, but the ones who did had clearly tried." Source B, a district report: students here spend an average of 2.5 hours a night on homework across all their classes. Bring the two sources together into one point neither makes alone. One paragraph.',
+    essayText: `Grading homework for completion rewards the wrong thing. The teacher in Source A found that when she stopped grading for completion, fewer students turned homework in, but the ones who did had actually tried. That means completion grades were mostly measuring whether students wrote something down, not whether they learned it. If the point of homework is learning, then a grade for completion gets in the way of that point, because it tells students that turning something in matters more than thinking about it. Also, Source B says students spend 2.5 hours a night on homework. Teachers should grade homework on understanding instead of completion.`,
+    bands: scoreBands([2, 3], [1, 2], [2, 3], [2, 3], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Do not credit the Source B sentence as synthesis; it is mentioned, not connected, and the point comes from Source A alone.',
+      },
+      {
+        evaluatorId: 'priority-selection',
+        requirement:
+          'Make the connection the next step: what 2.5 hours a night across all classes changes about why students stopped turning in ungraded work.',
       },
     ],
   }),

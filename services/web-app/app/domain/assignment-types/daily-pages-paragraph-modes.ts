@@ -18,7 +18,8 @@
  * Rollout is one type at a time. A type is `enabled` only once its guidance is
  * written and checked against the calibration suite; until then a teacher does
  * not see it and the server refuses it. Analyze shipped first, then Argue a
- * position.
+ * position, then Define a term, Interpret, Evaluate and Synthesize. Compare
+ * is the one still to come.
  *
  * The choice lives on the Assignment (`paragraphMode`), not the assignment
  * type, so the same teacher can run an analysis on Monday and an argument on
@@ -88,6 +89,82 @@ const ARGUE_TUTOR_INSTRUCTIONS = [
   'If the student already has a shape that holds all three — opening on the case, say — do not make them rebuild it into this order. The model is a guide to what a reader needs, not a template.',
 ].join('\n');
 
+const DEFINE_GRADING_INSTRUCTIONS = [
+  'The teacher asked the student to define a term. The student should draw a boundary around the term — say what it takes in and what it leaves out — give one case that plainly falls inside it, and test the boundary against a hard case: one that sits near the line, looks like it belongs and does not, or does not look like it belongs and does.',
+  'The model the student has been taught is Boundary-Example-Hard Case: the boundary, the example that clearly fits it, and the hard case that tests where it falls. It is not the only acceptable form — a paragraph may open on the hard case and build the boundary from it, or define the term against its nearest neighbor — but a reader should find all three.',
+  'Depth of Thought reads the boundary. A dictionary definition, or one so broad that nothing falls outside it, has not drawn a boundary: it does not rise above Developing there, however accurate. A boundary that separates the term from its nearest neighbor (courage from recklessness, a mistake from a failure) scores higher than one that only lists what the term is like.',
+  'Development of Thought reads the example and the hard case. Examples that fit easily illustrate a definition; they do not test it. A definition never tested against a hard case does not rise above Developing there, however many easy examples it gives. A hard case that makes the student sharpen the boundary is the strongest development, not a weakness.',
+].join('\n');
+
+const DEFINE_TUTOR_INSTRUCTIONS = [
+  'Today the student is defining a term. Guide them toward the Boundary-Example-Hard Case model, one part at a time, and never write any part of it for them:',
+  '',
+  '1. Boundary. Ask what the term takes in and what it leaves out. If they have given a dictionary definition, ask what would almost count and not quite. The term\'s nearest neighbor helps: what separates courage from recklessness?',
+  '',
+  '2. Example. Ask for one case that clearly falls inside the boundary — a specific one, not "when someone is brave".',
+  '',
+  '3. Hard case. This is the part students skip. Ask for a case near the line: one that looks like it belongs and does not, or the other way round. Which side does their boundary put it on? If the case makes the boundary move, help them see that the sharper definition is the stronger one.',
+  '',
+  'If the student already has a shape that holds all three — opening on the hard case, say — do not make them rebuild it into this order. The model is a guide to what a reader needs, not a template.',
+].join('\n');
+
+const INTERPRET_GRADING_INSTRUCTIONS = [
+  'The teacher asked for an interpretation. The student should offer a reading of what the passage means — beyond what it literally says — point to the words that support it, and defend the reading: show why those words point to this meaning rather than the obvious one, or another a careful reader might reach.',
+  'The model the student has been taught is Reading-Evidence-Defense: the reading, the words that support it, and the defense of it against the obvious reading. It is not the only acceptable form — a paragraph may start from the plain reading and turn against it, or let the defense come first — but a reader should find all three.',
+  'Depth of Thought reads the reading. Paraphrasing what the passage says, or naming a theme that would fit any text ("it shows that love is powerful"), is not an interpretation: it does not rise above Developing there. A reading that another careful reader could dispute, and that the passage still supports, scores higher than one any reader would reach first.',
+  'Development of Thought reads the evidence and the defense. A reading asserted without the passage\'s own words does not rise above Developing there, however interesting. Weigh whether the student shows how the words support this reading over the obvious one: evidence that would fit any reading equally well has not defended it.',
+].join('\n');
+
+const INTERPRET_TUTOR_INSTRUCTIONS = [
+  'Today the student is interpreting a passage. Guide them toward the Reading-Evidence-Defense model, one part at a time, and never write any part of it for them:',
+  '',
+  '1. Reading. Ask what the passage means, not what it says. If they have paraphrased it, ask what a reader comes to understand that the words never state outright. A theme that would fit any book ("love is powerful") is not yet a reading of this passage.',
+  '',
+  '2. Evidence. Ask for the exact words that support the reading: a short quotation, or the precise moment. If the words they chose would fit any reading, ask which words only make sense under theirs.',
+  '',
+  '3. Defense. This is the part students skip. Ask what the obvious reading is, and why the words point to theirs instead. If they cannot say, the reading may need to change; help them see that.',
+  '',
+  'If the student already has a shape that holds all three — starting from the obvious reading and turning against it, say — do not make them rebuild it into this order. The model is a guide to what a reader needs, not a template.',
+].join('\n');
+
+const EVALUATE_GRADING_INSTRUCTIONS = [
+  'The teacher asked for an evaluation. The student should deliver a judgment — right or wrong, worth it or not, earned or unearned — name the standard it judges by, and measure a specific case against that standard: a decision, a moment, or a result held up to the standard and shown to meet it or fall short.',
+  'The model the student has been taught is Judgment-Standard-Evidence: the verdict, the measure it is reached by, and the case measured against it. It is not the only acceptable form — a paragraph may name the standard before it delivers the verdict, or let the evidence lead — but a reader should find all three.',
+  'Depth of Thought reads the judgment and its standard. A verdict whose standard is never named ("it was a bad decision") is an opinion, not an evaluation: it does not rise above Developing there, however confident. A standard the student chooses and justifies — why this measure and not another — scores higher than one assumed without thought, and a judgment that weighs a real cost against a real gain scores higher than one that finds nothing on the other side.',
+  'Development of Thought reads the evidence. A judgment that has no specific case measured against its standard does not rise above Developing there. Weigh whether the student actually holds the case up to the standard they named; switching to a different standard partway through is a lapse in development, not a second reason.',
+].join('\n');
+
+const EVALUATE_TUTOR_INSTRUCTIONS = [
+  'Today the student is evaluating. Guide them toward the Judgment-Standard-Evidence model, one part at a time, and never write any part of it for them:',
+  '',
+  '1. Judgment. Ask for the verdict: was it right, was it worth it, did it work? If they are hedging, ask which way they lean, and how far.',
+  '',
+  '2. Standard. This is the part students skip. Ask what they are judging by — right by what measure? A choice can be loyal and still unwise. If they cannot name a standard, ask what would have to be true for them to reach the opposite verdict.',
+  '',
+  '3. Evidence. Ask for the specific decision, moment, or result they are holding up to the standard, and how it measures up. If they switch to a different standard partway through, point that out.',
+  '',
+  'If the student already has a shape that holds all three — naming the standard before the verdict, say — do not make them rebuild it into this order. The model is a guide to what a reader needs, not a template.',
+].join('\n');
+
+const SYNTHESIZE_GRADING_INSTRUCTIONS = [
+  'The teacher asked for a synthesis. The student should bring two or more sources together into one point that neither makes alone, show the specific thing each source contributes, and explain how the pieces connect to produce the point: where one source explains, limits, or answers the other, or shows what the other cannot.',
+  'The model the student has been taught is Point-Sources-Connection: the point, what each source contributes to it, and how they connect. It is not the only acceptable form — a paragraph may set the sources side by side before naming the point it draws from them — but a reader should find all three.',
+  'Depth of Thought reads the point. A paragraph that summarizes one source and then the other, or ends on "both sources show" something either source already says alone, has not synthesized: it does not rise above Developing there. A point that only appears when the sources are read together scores higher than one either source hands over.',
+  'Development of Thought reads the sources and the connection. Each source should contribute something specific — a finding, a detail, a quotation — not a general mention. A second source that only decorates a point the first already makes does not rise above Developing there. The connection is where this paragraph is won: saying how one source changes what the other means.',
+].join('\n');
+
+const SYNTHESIZE_TUTOR_INSTRUCTIONS = [
+  'Today the student is writing a synthesis paragraph. Guide them toward the Point-Sources-Connection model, one part at a time, and never write any part of it for them:',
+  '',
+  '1. Point. Ask what they see when they put the sources together that neither says alone. If one source already says it, it is a summary of that source, not yet a synthesis.',
+  '',
+  '2. Sources. Ask what each source contributes: one specific finding, detail, or quotation from each, not a summary of the whole thing.',
+  '',
+  '3. Connection. This is the part students skip. Ask how the pieces fit: does one explain, limit, or contradict the other? If they have written one summary and then another, ask what the second source changes about the first.',
+  '',
+  'If the student already has a shape that holds all three — setting the sources side by side before the point, say — do not make them rebuild it into this order. The model is a guide to what a reader needs, not a template.',
+].join('\n');
+
 export const DAILY_PAGES_PARAGRAPH_MODES: readonly ParagraphMode[] = [
   {
     key: 'analyze',
@@ -117,27 +194,38 @@ export const DAILY_PAGES_PARAGRAPH_MODES: readonly ParagraphMode[] = [
   {
     key: 'define',
     label: 'Define a term',
-    description: 'A boundary drawn around a term, then tested with a hard case.',
-    enabled: false,
+    description:
+      'A boundary drawn around a term, one case that clearly fits it, and a hard case that tests where the line falls (Boundary-Example-Hard Case).',
+    enabled: true,
+    gradingInstructions: DEFINE_GRADING_INSTRUCTIONS,
+    tutorInstructions: DEFINE_TUTOR_INSTRUCTIONS,
   },
   {
     key: 'interpret',
     label: 'Interpret',
-    description: 'A reading of what a passage means, defended from its words.',
-    enabled: false,
+    description:
+      'A reading of what a passage means beyond what it says, the words that support it, and a defense of it against the obvious reading (Reading-Evidence-Defense).',
+    enabled: true,
+    gradingInstructions: INTERPRET_GRADING_INSTRUCTIONS,
+    tutorInstructions: INTERPRET_TUTOR_INSTRUCTIONS,
   },
   {
     key: 'evaluate',
     label: 'Evaluate',
-    description: 'A judgment that names the standard it judges by.',
-    enabled: false,
+    description:
+      'A judgment, the standard it judges by, and a specific case measured against that standard (Judgment-Standard-Evidence).',
+    enabled: true,
+    gradingInstructions: EVALUATE_GRADING_INSTRUCTIONS,
+    tutorInstructions: EVALUATE_TUTOR_INSTRUCTIONS,
   },
   {
     key: 'synthesize',
     label: 'Synthesize',
     description:
-      'Two or more sources brought together into one point neither makes alone.',
-    enabled: false,
+      'One point that two or more sources make together and neither makes alone, what each contributes, and how they connect (Point-Sources-Connection).',
+    enabled: true,
+    gradingInstructions: SYNTHESIZE_GRADING_INSTRUCTIONS,
+    tutorInstructions: SYNTHESIZE_TUTOR_INSTRUCTIONS,
   },
 ];
 
