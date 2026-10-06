@@ -959,6 +959,7 @@ describe('AssignmentCreationSheetContent paragraph types', () => {
     expect(boxes().map((box) => box.value)).toEqual([
       'analyze',
       'argue',
+      'compare',
       'define',
       'interpret',
       'evaluate',

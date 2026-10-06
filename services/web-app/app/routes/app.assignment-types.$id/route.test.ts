@@ -272,7 +272,7 @@ describe('app.assignment-types.$id action', () => {
     test('refuses a type that is not switched on', async () => {
       mockActionAssignmentTypeAvailable({ kind: 'daily_pages' });
 
-      const response = await postDocument({ paragraphMode: 'compare' });
+      const response = await postDocument({ paragraphMode: 'retired' });
 
       expect(response as unknown).toEqual({
         redirectedTo: '/app/assignment-types/at-1',
@@ -620,6 +620,7 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     ).toEqual([
       'analyze',
       'argue-a-position',
+      'compare',
       'define-a-term',
       'evaluate',
       'interpret',

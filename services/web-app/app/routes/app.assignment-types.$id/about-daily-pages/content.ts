@@ -129,7 +129,7 @@ export const REGISTER_NOTE =
 export const HOW_TO_USE_HEADING = 'Using it with a class';
 
 export const HOW_TO_USE: string[] = [
-  'Pick a Paragraph type on the assignment sheet to name the move the class is practicing. The tutor coaches toward it and the grading assistant reads for it. Six are available now, each with a three-part model: Analyze (Claim-Evidence-Analysis), Argue a position (Position-Reason-Test), Define a term (Boundary-Example-Hard Case), Interpret (Reading-Evidence-Defense), Evaluate (Judgment-Standard-Evidence) and Synthesize (Point-Sources-Connection). Tick more than one when a prompt asks for more than one move. Compare follows when it is ready.',
+  'Tick the Paragraph types on the assignment sheet to name the moves the class is practicing; a library prompt arrives with its types already ticked. The tutor coaches toward each and the grading assistant reads for each. All seven are available, each with a three-part model: Analyze (Claim-Evidence-Analysis), Argue a position (Position-Reason-Test), Compare (Basis-Difference-Significance), Define a term (Boundary-Example-Hard Case), Interpret (Reading-Evidence-Defense), Evaluate (Judgment-Standard-Evidence) and Synthesize (Point-Sources-Connection). Tick more than one when a prompt asks for more than one move.',
   'Give them a rhythm students can feel — the same day each week, or the last ten minutes of every reading day. Scores climb once a class recognizes what the rubric is asking for.',
   'Put the prompt and the target length where students can see them. They cannot aim at a finish line nobody named.',
   'Read for the trend rather than the single score. Depth and Development are where movement shows up first.',

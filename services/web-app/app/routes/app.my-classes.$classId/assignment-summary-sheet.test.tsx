@@ -186,12 +186,12 @@ describe('AssignmentSummarySheetContent', () => {
     const el = render(
       <AssignmentSummarySheetContent
         renderSheet={false}
-        assignment={{ ...ASSIGNMENT, paragraphMode: 'compare' }}
+        assignment={{ ...ASSIGNMENT, paragraphMode: 'define' }}
         classInsightsEnabled={false}
         onViewDocuments={() => {}}
       />
     );
-    expect(el.textContent).toContain('Compare');
+    expect(el.textContent).toContain('Define a term');
   });
 
   it('shows the attached PDF beside the text prompt', () => {

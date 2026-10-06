@@ -50,7 +50,7 @@ describe('the Daily Pages calibration suite', () => {
    */
   test('is big enough to see drift across the scale', () => {
     expect(suite.cases.length).toBeGreaterThanOrEqual(8);
-    expect(suite.cases.length).toBeLessThanOrEqual(30);
+    expect(suite.cases.length).toBeLessThanOrEqual(34);
   });
 
   test('gives every case a band for every category, inside the scale', () => {
@@ -190,9 +190,9 @@ describe('the paragraph types the suite grades under', () => {
       benchmarkCase.tags.includes('strong')
     );
     expect(exemplars.length).toBeGreaterThanOrEqual(3);
-    expect(
-      new Set(exemplars.map((c) => c.input.assignmentPrompt)).size
-    ).toBe(exemplars.length);
+    expect(new Set(exemplars.map((c) => c.input.assignmentPrompt)).size).toBe(
+      exemplars.length
+    );
     for (const benchmarkCase of exemplars) {
       expect(composite(benchmarkCase, 'min')).toBeGreaterThanOrEqual(80);
       expect(
@@ -227,6 +227,62 @@ describe('the paragraph types the suite grades under', () => {
       ).toBeLessThanOrEqual(2);
     }
   });
+
+  test('grades Compare across the scale', () => {
+    const compared = gradedUnder('compare');
+    expect(compared.length).toBeGreaterThanOrEqual(4);
+    expect(
+      compared.some((benchmarkCase) => composite(benchmarkCase, 'min') >= 80)
+    ).toBe(true);
+  });
+
+  /**
+   * A top comparison names one difference, shows it in both things, and
+   * says what it reveals. Two such paragraphs, on different prompts, keep
+   * the top band from resting on a single example.
+   */
+  test('reaches the top for comparisons narrowed to one difference that matters', () => {
+    const exemplars = gradedUnder('compare').filter((benchmarkCase) =>
+      benchmarkCase.tags.includes('strong')
+    );
+    expect(exemplars.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(exemplars.map((c) => c.input.assignmentPrompt)).size).toBe(
+      exemplars.length
+    );
+    for (const benchmarkCase of exemplars) {
+      expect(composite(benchmarkCase, 'min')).toBeGreaterThanOrEqual(80);
+      expect(
+        benchmarkCase.expectations.scoreBands.depth_of_thought.min
+      ).toBeGreaterThanOrEqual(4);
+      expect(
+        benchmarkCase.expectations.scoreBands.development_of_thought.min
+      ).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  /** Likenesses, then differences, then nothing: a Venn diagram in prose. */
+  test('a list of likenesses and differences stays low on Depth of Thought', () => {
+    const lists = caseTagged('compare-list');
+    expect(lists.length).toBeGreaterThanOrEqual(1);
+    for (const benchmarkCase of lists) {
+      expect(benchmarkCase.input.paragraphMode).toBe('compare');
+      expect(
+        benchmarkCase.expectations.scoreBands.depth_of_thought.max
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+
+  /** A difference shown in only one of the two has not been compared. */
+  test('a comparison with evidence from only one side stays low on Development', () => {
+    const oneSided = caseTagged('compare-one-sided');
+    expect(oneSided.length).toBeGreaterThanOrEqual(1);
+    for (const benchmarkCase of oneSided) {
+      expect(benchmarkCase.input.paragraphMode).toBe('compare');
+      expect(
+        benchmarkCase.expectations.scoreBands.development_of_thought.max
+      ).toBeLessThanOrEqual(2);
+    }
+  });
 });
 
 /**
@@ -236,10 +292,26 @@ describe('the paragraph types the suite grades under', () => {
  * Development of Thought.
  */
 describe.each([
-  { key: 'define', depthMiss: 'define-dictionary', developmentMiss: 'define-untested' },
-  { key: 'interpret', depthMiss: 'interpret-paraphrase', developmentMiss: 'interpret-unsupported' },
-  { key: 'evaluate', depthMiss: 'evaluate-no-standard', developmentMiss: 'evaluate-unapplied' },
-  { key: 'synthesize', depthMiss: 'synthesize-summaries', developmentMiss: 'synthesize-one-source' },
+  {
+    key: 'define',
+    depthMiss: 'define-dictionary',
+    developmentMiss: 'define-untested',
+  },
+  {
+    key: 'interpret',
+    depthMiss: 'interpret-paraphrase',
+    developmentMiss: 'interpret-unsupported',
+  },
+  {
+    key: 'evaluate',
+    depthMiss: 'evaluate-no-standard',
+    developmentMiss: 'evaluate-unapplied',
+  },
+  {
+    key: 'synthesize',
+    depthMiss: 'synthesize-summaries',
+    developmentMiss: 'synthesize-one-source',
+  },
 ])('calibrating $key', ({ key, depthMiss, developmentMiss }) => {
   const gradedUnder = suite.cases.filter(
     (benchmarkCase) => benchmarkCase.input.paragraphMode === key
@@ -247,9 +319,9 @@ describe.each([
 
   test('grades it across the scale', () => {
     expect(gradedUnder.length).toBeGreaterThanOrEqual(3);
-    expect(
-      new Set(gradedUnder.map((c) => c.input.assignmentPrompt)).size
-    ).toBe(gradedUnder.length);
+    expect(new Set(gradedUnder.map((c) => c.input.assignmentPrompt)).size).toBe(
+      gradedUnder.length
+    );
   });
 
   test('reaches the top for a paragraph with all three parts', () => {

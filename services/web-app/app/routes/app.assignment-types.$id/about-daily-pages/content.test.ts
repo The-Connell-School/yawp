@@ -171,10 +171,13 @@ describe('the per-assignment switches', () => {
     expect(text.toLowerCase()).toContain('grammar grading off');
   });
 
-  test('names the paragraph type', () => {
-    expect(text).toContain('Paragraph type');
+  test('names the paragraph types, and that they can be combined', () => {
+    expect(text).toContain('Paragraph types');
     expect(text).toContain('Analyze');
     expect(text).toContain('Argue a position');
+    expect(text).toContain('Compare');
+    expect(text).toContain('Basis-Difference-Significance');
+    expect(text).toContain('more than one');
     expect(text).toContain('Define a term');
     expect(text).toContain('Interpret');
     expect(text).toContain('Evaluate');

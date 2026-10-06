@@ -271,16 +271,11 @@ describe('the library shows only switched-on paragraph types', () => {
     );
   });
 
-  /**
-   * Every library prompt today carries at least one switched-on mode, so a
-   * prompt tagged only with a switched-off one (Compare) stands in for the
-   * prompts a future library could add before their type is ready.
-   */
-  test('hides a prompt whose only mode is switched off', () => {
-    const compareOnly = { ...entries[0], id: 'compare-only', cognitiveMoves: ['compare' as const] };
-    expect(onlySwitchedOnMoves([compareOnly, ...entries])).not.toContainEqual(
-      expect.objectContaining({ id: 'compare-only' })
-    );
+  /** With every type on, all 31 show; a prompt left with no mode still hides. */
+  test('shows every library prompt now that every type is on', () => {
+    expect(shown).toHaveLength(entries.length);
+    const untagged = { ...entries[0], id: 'untagged', cognitiveMoves: [] };
+    expect(onlySwitchedOnMoves([untagged])).toEqual([]);
   });
 
   test('never hides a prompt the teacher saved', () => {
@@ -302,6 +297,7 @@ describe('paragraphModesForMoves', () => {
       'evaluate',
     ]);
     expect(paragraphModesForMoves(['define-a-term', 'compare'])).toEqual([
+      'compare',
       'define',
     ]);
     expect(paragraphModesForMoves(['analyze', 'argue-a-position'])).toEqual([
@@ -310,8 +306,7 @@ describe('paragraphModesForMoves', () => {
     ]);
   });
 
-  test('is empty for a prompt with no switched-on mode, or none at all', () => {
-    expect(paragraphModesForMoves(['compare'])).toEqual([]);
+  test('is empty for a prompt with no mode', () => {
     expect(paragraphModesForMoves([])).toEqual([]);
   });
 });
