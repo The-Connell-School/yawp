@@ -48,6 +48,9 @@ const GATSBY_PROMPT =
 const PHONES_PROMPT =
   'Should phones be banned during the school day? Take a position, give your strongest reason, and test it against one specific situation where your position might fail. One paragraph.';
 
+const FRANKENSTEIN_PROMPT =
+  'Victor Frankenstein and his creature both end the novel alone. Name the one difference in how each of them got there, show it in both, and say why the novel needs that difference. One paragraph.';
+
 const GUIDES: Record<string, Omit<ParagraphGuide, 'key' | 'label'>> = {
   analyze: {
     summary:
@@ -101,7 +104,7 @@ const GUIDES: Record<string, Omit<ParagraphGuide, 'key' | 'label'>> = {
     tutorAsks: [
       'What are you saying about how the text works, not just what happens in it?',
       'Which exact words show that? If you quoted a lot, which few words are doing the work?',
-      'What does that word do that another word wouldn\'t?',
+      "What does that word do that another word wouldn't?",
     ],
   },
   argue: {
@@ -148,7 +151,7 @@ const GUIDES: Record<string, Omit<ParagraphGuide, 'key' | 'label'>> = {
       ],
     },
     miss: {
-      text: 'Phones have good and bad sides. On one hand, phones can distract students during class and make it hard to focus. On the other hand, students need phones for emergencies and to contact their parents. Some people think phones should be banned and some people think they shouldn\'t. It really depends on the school and the situation.',
+      text: "Phones have good and bad sides. On one hand, phones can distract students during class and make it hard to focus. On the other hand, students need phones for emergencies and to contact their parents. Some people think phones should be banned and some people think they shouldn't. It really depends on the school and the situation.",
       whatsMissing:
         'It never takes a side. "It depends" lists both sides without choosing, so there is no position for a reason to support or a case to test.',
       fix: 'Choose a side, and say when it applies. Then give the one reason you would keep if you could keep only one.',
@@ -157,6 +160,60 @@ const GUIDES: Record<string, Omit<ParagraphGuide, 'key' | 'label'>> = {
       'What would you say to someone who disagrees with you?',
       'If you could keep only one reason, which one, and why that one?',
       'Where could your position fail, and does it still hold there?',
+    ],
+  },
+  compare: {
+    summary:
+      'What two things share, the one difference between them that matters, shown in both, and what that difference reveals.',
+    parts: [
+      {
+        name: 'Basis',
+        explanation:
+          'What the two have in common that makes comparing them worth doing: the same want, the same situation, the same kind of moment.',
+      },
+      {
+        name: 'Difference',
+        explanation:
+          'The one difference that matters most, shown in both. Evidence from each side, held side by side, not one described and then the other.',
+      },
+      {
+        name: 'Significance',
+        explanation:
+          'What the difference reveals: what a reader sees by holding the two together that neither shows alone. This is where the paragraph is won.',
+      },
+    ],
+    oftenSkipped:
+      'Saying why the difference matters. A list of likenesses and differences is a Venn diagram, not a comparison. Choose one difference, then say what it changes.',
+    model: {
+      prompt: FRANKENSTEIN_PROMPT,
+      text: 'Victor and his creature both end the novel alone, but they arrive there from opposite directions. Victor chooses his isolation: while he works he admits, "I shunned my fellow creatures as if I had been guilty of a crime," and he hides what he has made even from the people who love him. The creature asks for company and is refused it, and he tells Victor exactly what the refusal did: "I am malicious because I am miserable." For Victor, the loneliness comes before the harm; for the creature, the loneliness causes it. That difference is the novel\'s case against its maker. The one who could have had company threw it away, and the one who begged for it was turned into the monster everyone assumed he already was.',
+      marks: [
+        {
+          part: 'Basis',
+          excerpt: 'Victor and his creature both end the novel alone,',
+        },
+        {
+          part: 'Difference',
+          excerpt:
+            'but they arrive there from opposite directions. Victor chooses his isolation: while he works he admits, "I shunned my fellow creatures as if I had been guilty of a crime," and he hides what he has made even from the people who love him. The creature asks for company and is refused it, and he tells Victor exactly what the refusal did: "I am malicious because I am miserable." For Victor, the loneliness comes before the harm; for the creature, the loneliness causes it.',
+        },
+        {
+          part: 'Significance',
+          excerpt:
+            "That difference is the novel's case against its maker. The one who could have had company threw it away, and the one who begged for it was turned into the monster everyone assumed he already was.",
+        },
+      ],
+    },
+    miss: {
+      text: 'Victor and the creature are alike in some ways and different in others. They are alike because they are both lonely and they both suffer a lot. They are different because Victor is a human and the creature is not. Also Victor is a scientist and the creature was made by him. Another difference is that the creature is very big and scary. So they have similarities and differences.',
+      whatsMissing:
+        "A list: two likenesses, three differences, and no point. The differences are ones any reader sees first, none is shown in both with the text's words, and nothing says why any of it matters.",
+      fix: 'Keep the likeness "both lonely", and find the one difference in how each became lonely. Show it in a line from each, then say what that difference changes about the novel.',
+    },
+    tutorAsks: [
+      'What do these two have in common that makes comparing them worth doing?',
+      'Of all the differences, which one matters most? Where does it show up in each of them?',
+      'What can a reader see by holding the two together that neither shows alone?',
     ],
   },
 };

@@ -493,7 +493,7 @@ describe('api.assignments.create', () => {
     test('refuses the choice when one ticked type is not switched on', async () => {
       mockAssignmentTypeAvailable({ kind: 'daily_pages' });
 
-      const response = await createWith({ paragraphMode: ['analyze', 'compare'] });
+      const response = await createWith({ paragraphMode: ['analyze', 'define'] });
 
       expect(responseStatus(response)).toBe(400);
       expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
@@ -529,7 +529,7 @@ describe('api.assignments.create', () => {
     test('rejects a type that is not switched on yet', async () => {
       mockAssignmentTypeAvailable({ kind: 'daily_pages' });
 
-      const response = await createWith({ paragraphMode: 'compare' });
+      const response = await createWith({ paragraphMode: 'define' });
 
       expect(responseStatus(response)).toBe(400);
       expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();

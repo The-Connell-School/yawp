@@ -34,6 +34,12 @@ describe('the Daily Pages tutor evaluation', () => {
     expect(byId('argue-untested').paragraphMode).toBe('argue');
   });
 
+  /** Compare's two misses: a list with no point, and a point with no "so what". */
+  test('covers Compare too', () => {
+    expect(byId('compare-list').paragraphMode).toBe('compare');
+    expect(byId('compare-no-significance').paragraphMode).toBe('compare');
+  });
+
   /**
    * A teacher can tick more than one paragraph type; the tutor then has two
    * models in play and must still coach one part at a time.

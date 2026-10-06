@@ -31,7 +31,7 @@ describe('the paragraph-type guides', () => {
 
   test('looks a guide up by key, and only for a switched-on type', () => {
     expect(getParagraphGuide('analyze')?.key).toBe('analyze');
-    expect(getParagraphGuide('compare')).toBeNull();
+    expect(getParagraphGuide('define')).toBeNull();
     expect(getParagraphGuide(null)).toBeNull();
   });
 

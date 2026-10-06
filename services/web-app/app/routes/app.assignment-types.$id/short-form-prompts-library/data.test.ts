@@ -296,7 +296,7 @@ describe('paragraphModesForMoves', () => {
   });
 
   test('is empty for a prompt with no switched-on mode, or none at all', () => {
-    expect(paragraphModesForMoves(['interpret', 'compare'])).toEqual([]);
+    expect(paragraphModesForMoves(['interpret', 'define-a-term'])).toEqual([]);
     expect(paragraphModesForMoves([])).toEqual([]);
   });
 });

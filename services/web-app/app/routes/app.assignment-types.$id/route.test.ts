@@ -272,7 +272,7 @@ describe('app.assignment-types.$id action', () => {
     test('refuses a type that is not switched on', async () => {
       mockActionAssignmentTypeAvailable({ kind: 'daily_pages' });
 
-      const response = await postDocument({ paragraphMode: 'compare' });
+      const response = await postDocument({ paragraphMode: 'define' });
 
       expect(response as unknown).toEqual({
         redirectedTo: '/app/assignment-types/at-1',
@@ -617,7 +617,7 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     // The library offers only the paragraph types that are switched on.
     expect(
       dailyPages.data.shortFormPromptLibrary.facets.cognitiveMoves
-    ).toEqual(['analyze', 'argue-a-position']);
+    ).toEqual(['analyze', 'argue-a-position', 'compare']);
     expect(dailyPages.data.promptLibrary).toBeNull();
 
     getAvailableAssignmentTypesForScopes.mockResolvedValueOnce([

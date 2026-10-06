@@ -18,7 +18,7 @@
  * Rollout is one type at a time. A type is `enabled` only once its guidance is
  * written and checked against the calibration suite; until then a teacher does
  * not see it and the server refuses it. Analyze shipped first, then Argue a
- * position.
+ * position, then Compare.
  *
  * The choice lives on the Assignment (`paragraphMode`), not the assignment
  * type, so the same teacher can run an analysis on Monday and an argument on
@@ -88,6 +88,25 @@ const ARGUE_TUTOR_INSTRUCTIONS = [
   'If the student already has a shape that holds all three — opening on the case, say — do not make them rebuild it into this order. The model is a guide to what a reader needs, not a template.',
 ].join('\n');
 
+const COMPARE_GRADING_INSTRUCTIONS = [
+  'The teacher asked for a comparison paragraph. The student should name what the two things share that makes comparing them worth doing, narrow to the one difference that matters most, show that difference in both of them, and say what it reveals that neither shows alone.',
+  'The model the student has been taught is Basis-Difference-Significance: the basis of the comparison, the difference, and its significance. It is not the only acceptable form — a paragraph may open on the difference, or let the significance arrive in the last sentence — but a reader should find all three. A comparison may turn on a likeness instead of a difference when the prompt allows it; what matters is that it narrows to one point and says why that point matters.',
+  'Depth of Thought reads the difference chosen and its significance. A paragraph that lists likenesses and then differences without choosing one to matter is a list, not a comparison: it does not rise above Developing there, however many points it collects. A difference any reader would notice first — one is older, one is a woman — scores lower than one that changes how the two are read, and a difference whose significance is never stated has not been compared yet.',
+  'Development of Thought reads the evidence on both sides. The difference should be shown in each of the two things, with a quotation, a precise moment, or a concrete detail from each, and the two held side by side rather than described in turn. Two separate summaries, one for each thing, joined by "similarly" or "on the other hand", are not a comparison; a paragraph whose evidence comes from only one side does not rise above Developing there.',
+].join('\n');
+
+const COMPARE_TUTOR_INSTRUCTIONS = [
+  'Today the student is writing a comparison paragraph. Guide them toward the Basis-Difference-Significance model, one part at a time, and never write any part of it for them:',
+  '',
+  '1. Basis. Ask what the two things have in common that makes comparing them worthwhile — the same want, the same situation, the same kind of moment. Without that ground, the difference has nothing to stand out against.',
+  '',
+  '2. Difference. Ask for the one difference that matters most, not every difference they can find. If they have listed several, ask which one they would keep if they could only keep one. Then ask them to show it in both: where in each does that difference appear?',
+  '',
+  '3. Significance. This is the part students skip. Ask what the difference reveals: what can a reader see by holding the two together that they could not see in either alone? If the student says the two are "different but similar", ask them what the difference changes.',
+  '',
+  'If the student already has a shape that holds all three — opening on the difference, say — do not make them rebuild it into this order. The model is a guide to what a reader needs, not a template.',
+].join('\n');
+
 export const DAILY_PAGES_PARAGRAPH_MODES: readonly ParagraphMode[] = [
   {
     key: 'analyze',
@@ -111,13 +130,16 @@ export const DAILY_PAGES_PARAGRAPH_MODES: readonly ParagraphMode[] = [
     key: 'compare',
     label: 'Compare',
     description:
-      'Two things, narrowed to the one difference that matters, and why.',
-    enabled: false,
+      'What two things share, the one difference that matters, shown in both, and what it reveals (Basis-Difference-Significance).',
+    enabled: true,
+    gradingInstructions: COMPARE_GRADING_INSTRUCTIONS,
+    tutorInstructions: COMPARE_TUTOR_INSTRUCTIONS,
   },
   {
     key: 'define',
     label: 'Define a term',
-    description: 'A boundary drawn around a term, then tested with a hard case.',
+    description:
+      'A boundary drawn around a term, then tested with a hard case.',
     enabled: false,
   },
   {
@@ -176,7 +198,9 @@ export function paragraphModeLabel(
   key: string | null | undefined
 ): string | null {
   if (!key) return null;
-  return DAILY_PAGES_PARAGRAPH_MODES.find((mode) => mode.key === key)?.label ?? null;
+  return (
+    DAILY_PAGES_PARAGRAPH_MODES.find((mode) => mode.key === key)?.label ?? null
+  );
 }
 
 export type ParseParagraphModeResult =
@@ -248,9 +272,7 @@ export function paragraphModeLabels(keys: readonly string[]): string[] {
 function switchedOnModes(
   keys: string | readonly string[] | null | undefined
 ): ParagraphMode[] {
-  const wanted = new Set(
-    typeof keys === 'string' ? [keys] : (keys ?? [])
-  );
+  const wanted = new Set(typeof keys === 'string' ? [keys] : (keys ?? []));
   return DAILY_PAGES_PARAGRAPH_MODES.filter(
     (mode) => mode.enabled && wanted.has(mode.key)
   );
@@ -267,7 +289,9 @@ function joinLabels(modes: ParagraphMode[]) {
 export function buildParagraphModeGradingBlock(
   keys: string | readonly string[] | null | undefined
 ): string {
-  const modes = switchedOnModes(keys).filter((mode) => mode.gradingInstructions);
+  const modes = switchedOnModes(keys).filter(
+    (mode) => mode.gradingInstructions
+  );
   const blocks = modes.map(
     (mode) => `Paragraph type: ${mode.label}\n${mode.gradingInstructions}`
   );

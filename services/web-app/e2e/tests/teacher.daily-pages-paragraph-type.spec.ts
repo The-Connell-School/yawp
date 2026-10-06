@@ -2,12 +2,13 @@ import { test, expect } from '../test-setup';
 
 /**
  * The kinds of paragraph a Daily Pages entry practices. Offered only for Daily
- * Pages, and only the types switched on — Analyze, then Argue a position. A
+ * Pages, and only the types switched on — Analyze, Argue a position, then
+ * Compare. A
  * paragraph can combine moves, so each type is a checkbox; with none ticked,
  * the entry grades and tutors as any kind of paragraph, as before.
  */
 test.describe.serial('Paragraph type at assignment creation', () => {
-  test('Daily Pages offers Analyze and Argue a position as checkboxes, none ticked by default', async ({
+  test('Daily Pages offers Analyze, Argue a position and Compare as checkboxes, none ticked by default', async ({
     page,
     e2eContext,
     signIn,
@@ -23,11 +24,13 @@ test.describe.serial('Paragraph type at assignment creation', () => {
     await expect(dialog).toBeVisible();
 
     const types = dialog.getByRole('group', { name: 'Paragraph types' });
-    await expect(types.getByRole('checkbox')).toHaveCount(2);
+    await expect(types.getByRole('checkbox')).toHaveCount(3);
     const analyze = types.getByRole('checkbox', { name: 'Analyze' });
     const argue = types.getByRole('checkbox', { name: 'Argue a position' });
     await expect(analyze).not.toBeChecked();
     await expect(argue).not.toBeChecked();
+    const compare = types.getByRole('checkbox', { name: 'Compare' });
+    await expect(compare).not.toBeChecked();
     await expect(types.getByText(/any kind of paragraph/)).toBeVisible();
 
     await analyze.check();
@@ -37,6 +40,11 @@ test.describe.serial('Paragraph type at assignment creation', () => {
     await argue.check();
     await expect(types.getByText(/Claim-Evidence-Analysis/)).toBeVisible();
     await expect(types.getByText(/Position-Reason-Test/)).toBeVisible();
+
+    await compare.check();
+    await expect(
+      types.getByText(/Basis-Difference-Significance/)
+    ).toBeVisible();
   });
 
   /**
@@ -70,6 +78,34 @@ test.describe.serial('Paragraph type at assignment creation', () => {
     await page.getByRole('button', { name: 'Cancel' }).click();
   });
 
+  /** A prompt that was hidden until Compare switched on now shows, and ticks it. */
+  test('a Compare library prompt ticks Compare', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+    );
+
+    await page.getByRole('button', { name: /Prompt Library/i }).click();
+    await page.getByPlaceholder('Search prompts').fill('different reasons');
+    await page.keyboard.press('Enter');
+    await page.getByText('Same want, different reason').first().click();
+
+    const types = page
+      .getByRole('dialog')
+      .getByRole('group', { name: 'Paragraph types' });
+    await expect(
+      types.getByRole('checkbox', { name: 'Compare' })
+    ).toBeChecked();
+    await expect(
+      types.getByRole('checkbox', { name: 'Analyze' })
+    ).not.toBeChecked();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+  });
+
   /**
    * A teacher testing one type end to end starts a document that practices
    * it: New → Document asks which type, and the document is named for it.
@@ -90,6 +126,7 @@ test.describe.serial('Paragraph type at assignment creation', () => {
       page.getByRole('menuitem', { name: 'Any kind of paragraph' })
     ).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Analyze' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Compare' })).toBeVisible();
     await page.getByRole('menuitem', { name: 'Argue a position' }).click();
 
     await page.waitForURL(/\/app\/documents\//);
@@ -125,6 +162,9 @@ test.describe.serial('Paragraph type at assignment creation', () => {
 
     await guides.getByRole('button', { name: /^Argue a position/ }).click();
     await expect(guides.getByTestId('paragraph-guide-argue')).toBeVisible();
+
+    await guides.getByRole('button', { name: /^Compare/ }).click();
+    await expect(guides.getByTestId('paragraph-guide-compare')).toBeVisible();
   });
 
   test('Class Starter does not offer it', async ({

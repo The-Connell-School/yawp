@@ -36,13 +36,14 @@ describe('the paragraph types a teacher can choose', () => {
 
   /**
    * Rollout: Analyze was built and quality-checked first, then Argue a
-   * position. Teachers see only the types that are switched on, and the
-   * others follow one at a time.
+   * position, then Compare. Teachers see only the types that are switched
+   * on, and the others follow one at a time.
    */
-  test('ships with Analyze and Argue a position switched on', () => {
+  test('ships with Analyze, Argue a position and Compare switched on', () => {
     expect(enabledParagraphModes().map((mode) => mode.key)).toEqual([
       'analyze',
       'argue',
+      'compare',
     ]);
   });
 
@@ -57,7 +58,8 @@ describe('the paragraph types a teacher can choose', () => {
   test('looks a type up by key, and only a switched-on one', () => {
     expect(getParagraphMode('analyze')?.label).toBe('Analyze');
     expect(getParagraphMode('argue')?.label).toBe('Argue a position');
-    expect(getParagraphMode('compare')).toBeNull();
+    expect(getParagraphMode('compare')?.label).toBe('Compare');
+    expect(getParagraphMode('define')).toBeNull();
     expect(getParagraphMode('nonsense')).toBeNull();
     expect(getParagraphMode(null)).toBeNull();
   });
@@ -147,6 +149,56 @@ describe('Argue a position: position, reason, test', () => {
   });
 });
 
+/**
+ * Compare asks for the ground two things share, the one difference that
+ * matters, and what that difference shows. The failure it guards against is
+ * the Venn diagram in prose: likenesses, then differences, then nothing.
+ */
+describe('Compare: basis, difference, significance', () => {
+  const compare = getParagraphMode('compare')!;
+
+  test('the tutor coaches the basis, then the difference, then why it matters', () => {
+    const tutor = compare.tutorInstructions!.toLowerCase();
+    expect(tutor).toContain('basis-difference-significance');
+    expect(tutor.indexOf('basis.')).toBeLessThan(tutor.indexOf('difference.'));
+    expect(tutor.indexOf('difference.')).toBeLessThan(
+      tutor.indexOf('significance.')
+    );
+    expect(tutor).toContain('never write');
+  });
+
+  test('the tutor narrows a list of differences to the one that matters', () => {
+    const tutor = compare.tutorInstructions!.toLowerCase();
+    expect(tutor).toContain('one difference');
+    expect(tutor).toContain('both');
+  });
+
+  test('the grader holds a list of likenesses and differences down in Depth of Thought', () => {
+    const grading = compare.gradingInstructions!.toLowerCase();
+    expect(grading).toContain('basis-difference-significance');
+    expect(grading).toContain('list');
+    expect(grading).toContain('depth of thought');
+    expect(grading).toContain('does not rise above developing');
+  });
+
+  test('the grader wants evidence from both sides, read in Development of Thought', () => {
+    const grading = compare.gradingInstructions!.toLowerCase();
+    expect(grading).toContain('both');
+    expect(grading).toContain('development of thought');
+  });
+
+  /** Two summaries side by side is the other common miss. */
+  test('the grader does not credit two separate summaries as a comparison', () => {
+    expect(compare.gradingInstructions!.toLowerCase()).toContain('summar');
+  });
+
+  test('offers the model without making it the only acceptable form', () => {
+    expect(compare.gradingInstructions!.toLowerCase()).toContain(
+      'not the only acceptable form'
+    );
+  });
+});
+
 describe('parseParagraphMode', () => {
   test('absent or blank means no type chosen', () => {
     expect(parseParagraphMode(form({}))).toEqual({
@@ -170,7 +222,7 @@ describe('parseParagraphMode', () => {
 
   test('rejects a type that is not switched on yet, and nonsense', () => {
     expect(
-      parseParagraphMode(form({ [PARAGRAPH_MODE_FIELD]: 'compare' })).success
+      parseParagraphMode(form({ [PARAGRAPH_MODE_FIELD]: 'define' })).success
     ).toBe(false);
     expect(
       parseParagraphMode(form({ [PARAGRAPH_MODE_FIELD]: 'freewrite' })).success
@@ -190,8 +242,8 @@ describe('the prompt layers', () => {
   });
 
   test('are empty for a stored type that has since been switched off', () => {
-    expect(buildParagraphModeGradingBlock('compare')).toBe('');
-    expect(buildParagraphModeTutorInstructions('compare')).toBe('');
+    expect(buildParagraphModeGradingBlock('define')).toBe('');
+    expect(buildParagraphModeTutorInstructions('define')).toBe('');
   });
 
   test('name the type and carry its guidance when one is chosen', () => {
@@ -228,7 +280,7 @@ describe('offersParagraphModesForKind', () => {
 describe('paragraphModeLabel', () => {
   test('names any stored type, switched on or not', () => {
     expect(paragraphModeLabel('analyze')).toBe('Analyze');
-    expect(paragraphModeLabel('compare')).toBe('Compare');
+    expect(paragraphModeLabel('define')).toBe('Define a term');
   });
 
   test('is null for no type or an unknown one', () => {
@@ -262,7 +314,7 @@ describe('parseParagraphModes', () => {
   });
 
   test('refuses the whole choice when any type is not switched on', () => {
-    expect(parseParagraphModes(formWith(['analyze', 'compare'])).success).toBe(false);
+    expect(parseParagraphModes(formWith(['analyze', 'define'])).success).toBe(false);
   });
 });
 
@@ -290,7 +342,7 @@ describe('effectiveParagraphModes', () => {
   });
 
   test('keeps a stored type that has since been switched off, for labels', () => {
-    expect(effectiveParagraphModes({ paragraphModes: ['compare'] })).toEqual(['compare']);
+    expect(effectiveParagraphModes({ paragraphModes: ['define'] })).toEqual(['define']);
   });
 });
 
@@ -317,8 +369,8 @@ describe('several types in the prompt layers', () => {
   });
 
   test('switched-off types drop out of the layers', () => {
-    expect(buildParagraphModeGradingBlock(['compare'])).toBe('');
-    expect(buildParagraphModeGradingBlock(['analyze', 'compare'])).toBe(
+    expect(buildParagraphModeGradingBlock(['define'])).toBe('');
+    expect(buildParagraphModeGradingBlock(['analyze', 'define'])).toBe(
       buildParagraphModeGradingBlock('analyze')
     );
   });

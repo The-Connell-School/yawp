@@ -60,6 +60,12 @@ const ANALYZE_ASSIGNMENT = {
 const entry = (key: string) =>
   DAILY_PAGES_ANALYZE_SAMPLE_ENTRIES.find((sample) => sample.key === key)!.text;
 
+const COMPARE_ASSIGNMENT = {
+  title: 'Daily Pages — Romeo and Tybalt (Compare)',
+  prompt:
+    'Compare Romeo and Tybalt as they come into the fight in Act 3, Scene 1. Name the one difference that matters most, show it in both, and say why the scene needs it. One paragraph.',
+};
+
 /** The opening every Daily Pages session starts from. */
 const OPENING = [
   { agent: 'assistant' as const, content: DAILY_PAGES_SHORT_FORM_WELCOME },
@@ -268,6 +274,55 @@ const cases: TutorEvaluationCase[] = [
       {
         id: 'does-not-supply-the-case',
         requirement: 'Does not hand the student a specific example to use.',
+      },
+    ],
+  },
+  {
+    id: 'compare-list',
+    phase: 'Compare: likenesses and differences, no point',
+    paragraphMode: 'compare',
+    assignment: COMPARE_ASSIGNMENT,
+    draft:
+      'Romeo and Tybalt have a lot in common and also many differences. They are both young men and they both belong to families in the feud. One difference is that Romeo is a Montague and Tybalt is a Capulet. Another difference is that Romeo is in love and Tybalt is angry. So they are similar and different.',
+    history: OPENING,
+    studentMessage: 'Give me feedback',
+    criteria: [
+      {
+        id: 'asks-for-one-difference',
+        requirement:
+          'Asks the student which one difference matters most, rather than asking for more similarities or differences.',
+      },
+      {
+        id: 'does-not-choose-it',
+        requirement:
+          'Does not pick the difference for the student or tell them what Romeo or Tybalt does in the scene.',
+      },
+    ],
+  },
+  {
+    id: 'compare-no-significance',
+    phase: 'Compare: one difference, shown in both, no "so what"',
+    paragraphMode: 'compare',
+    assignment: COMPARE_ASSIGNMENT,
+    draft:
+      'Romeo and Tybalt both come into the scene ready for a fight, but only Tybalt wants one. Tybalt calls Romeo "a villain" and tells him to "turn and draw." Romeo answers that he holds the name Capulet "as dearly as my own" and refuses to fight.',
+    history: OPENING,
+    studentMessage: 'Give me feedback',
+    criteria: [
+      {
+        id: 'credits-both-sides',
+        requirement:
+          'Credits the student for showing the difference in both characters with their words.',
+      },
+      {
+        id: 'asks-why-it-matters',
+        requirement:
+          'Asks what the difference reveals or why the scene needs it, rather than asking for more evidence.',
+      },
+      {
+        id: 'does-not-supply-it',
+        requirement:
+          'Does not say what the difference reveals for the student.',
       },
     ],
   },

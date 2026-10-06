@@ -177,7 +177,7 @@ const cases: GradingBenchmarkCase[] = [
       'A strong timed analysis with two spelling/usage slips. Holds grammar to the AP standard: occasional errors that never distract from meaning keep the top bands.',
     tags: ['strong', 'analyze', 'ap-grammar-slips'],
     assignmentPrompt:
-      "Reread the opening pages of The Great Gatsby. What is Nick refusing to say outright about Gatsby? Quote the words that give it away, and explain what they are doing. One paragraph.",
+      'Reread the opening pages of The Great Gatsby. What is Nick refusing to say outright about Gatsby? Quote the words that give it away, and explain what they are doing. One paragraph.',
     essayText: `Nick never admits that he envies Gatsby, but his words give him away. He praises Gatsby's "extraordinary gift for hope" and "romantic readiness," then blames everything on "what preyed on Gatsby," as if the dream were an animal that hunted him rather than something he chose. That verb lets Nick admire the dream without having to want it. Its a way of keeping his distance: the more Nick insists that Gatsby was a victim of his own wonder, the less he has to admit that he wishes he could beleive in anything that much himself.`,
     bands: scoreBands([4, 5], [4, 5], [4, 5], [4, 5], [4, 5]),
     qualitative: [
@@ -223,7 +223,7 @@ const cases: GradingBenchmarkCase[] = [
       'Accurate, readable retelling that never analyzes the quotation it was asked about. The case that was graded too leniently.',
     tags: ['effort-only', 'analyze'],
     assignmentPrompt:
-      "Quote Mercutio's curse, \"A plague o' both your houses,\" and explain why it matters that the curse comes from a character who belongs to neither house. One paragraph.",
+      'Quote Mercutio\'s curse, "A plague o\' both your houses," and explain why it matters that the curse comes from a character who belongs to neither house. One paragraph.',
     essayText: `In Act 3 Mercutio and Tybalt fight. Romeo tries to stop them and steps in between them. Tybalt stabs Mercutio under Romeo's arm. Mercutio says "A plague o' both your houses" a few times before he dies. Then Romeo gets angry and fights Tybalt and kills him. After that Romeo is banished by the Prince. This scene is important because a lot happens in it and it changes the story.`,
     bands: scoreBands([1, 2], [1, 2], [2, 3], [2, 3], [4, 5]),
     qualitative: [
@@ -510,6 +510,97 @@ const cases: GradingBenchmarkCase[] = [
         evaluatorId: 'feedback-grounding',
         requirement:
           'Name the juice-box situation and the chips contrast specifically when crediting the paragraph.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-compare-fortune-and-defiance',
+    title: 'Two moments that look alike, narrowed to the difference',
+    description:
+      'A strong comparison: two moments where Romeo answers fate, one difference shown in both, and what the difference reveals about the ending.',
+    tags: ['strong', 'compare'],
+    paragraphMode: 'compare',
+    assignmentPrompt:
+      'Pick two moments in the play that look alike and are not. Name the one difference that matters, show it in both, and say why it matters that the play repeats itself with a change. One paragraph.',
+    essayText: `Twice Romeo answers fate out loud, and the second time sounds like the opposite of the first. After he kills Tybalt he cries, "O, I am fortune's fool!" and stands there while the Prince's men come for him; the line hands everything that happened to luck. In Mantua, told that Juliet is dead, he says, "Then I defy you, stars!" and buys poison within the hour. The difference is who acts: the fool waits, and the rebel moves. But the play repeats the moment so we can see that the change does not help him. His defiance is exactly what the stars needed, because the one thing that could have saved him was waiting one more day. Romeo stops blaming fate at the moment he starts obeying it.`,
+    bands: scoreBands([4, 5], [4, 5], [4, 5], [4, 5], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Credit showing the difference in both moments, with a quotation from each, as the development the comparison needs.',
+      },
+      {
+        evaluatorId: 'feedback-grounding',
+        requirement:
+          'Name the closing reversal — defiance as obedience — as what the comparison reveals.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-compare-two-counselors',
+    title: 'Two advisers, one difference, and what it costs Juliet',
+    description:
+      'A strong comparison of the Nurse and Friar Laurence: the shared ground, the one difference in their advice shown in both, and what it reveals.',
+    tags: ['strong', 'compare'],
+    paragraphMode: 'compare',
+    assignmentPrompt:
+      'When Juliet is ordered to marry Paris, she goes first to the Nurse and then to Friar Laurence. Compare their advice: name the one difference that matters most, show it in both, and say what it reveals. One paragraph.',
+    essayText: `The Nurse and Friar Laurence are the only adults who know Juliet is married, and both try to get her out of marrying Paris without telling her parents the truth. The difference is what each is willing to give up. The Nurse gives up the marriage: "I think it best you married with the County," she says, and calls Romeo "a dishclout" next to him, as if a vow could be swapped like a suitor. The Friar gives up safety instead and hands her a potion that will make her look dead for two days. Held together, the two pieces of advice leave Juliet a choice between betraying her husband and risking her life, and neither adult offers the third option of telling the truth. After the Nurse, Juliet says, "Thou and my bosom henceforth shall be twain," and from then on the only counsel she has left is the dangerous one.`,
+    bands: scoreBands([4, 5], [4, 5], [4, 5], [4, 5], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Credit the basis named in the first sentence and the difference shown in both advisers, not two separate summaries.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-compare-venn-list',
+    title: 'Likenesses, then differences, then nothing',
+    description:
+      'A tidy list of similarities and differences with no point chosen. A Venn diagram in prose is not a comparison.',
+    tags: ['compare-list', 'compare'],
+    paragraphMode: 'compare',
+    assignmentPrompt:
+      'Compare Romeo and Tybalt as they come into the fight in Act 3, Scene 1. Name the one difference that matters most, show it in both, and say why the scene needs it. One paragraph.',
+    essayText: `Romeo and Tybalt have a lot in common and also many differences. They are both young men from Verona and they both belong to families that are part of the feud. They both end up fighting in this scene. One difference is that Romeo is a Montague and Tybalt is a Capulet. Another difference is that Romeo is in love and Tybalt is angry. Also, Tybalt dies in the scene and Romeo does not. In conclusion, Romeo and Tybalt are similar in some ways and different in other ways.`,
+    bands: scoreBands([1, 2], [1, 2], [2, 3], [2, 3], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          'Do not credit the number of similarities and differences as depth; none is chosen as the one that matters.',
+      },
+      {
+        evaluatorId: 'priority-selection',
+        requirement:
+          'Make choosing one difference the next step — Romeo refusing to fight at first is the strongest candidate — and ask what it changes in the scene.',
+      },
+    ],
+  }),
+  calibrationCase({
+    id: 'dp-compare-one-sided',
+    title: 'A real difference, shown on only one side',
+    description:
+      'A good point about Juliet, carefully quoted, with Romeo reduced to one unsupported sentence. A difference shown in one of the two has not been compared.',
+    tags: ['compare-one-sided', 'compare'],
+    paragraphMode: 'compare',
+    assignmentPrompt:
+      'Romeo and Juliet each hear the word "banished" in Act 3. Compare how they take it: name the one difference that matters, show it in both, and say what it reveals. One paragraph.',
+    essayText: `Juliet and Romeo both hear that Romeo is banished, but Juliet thinks about the word more carefully. When the Nurse tells her, Juliet says that "that one word 'banished' / Hath slain ten thousand Tybalts," which means the word is worse to her than her own cousin dying. She even says that "Romeo is banished" is like "father, mother, Tybalt, Romeo, Juliet, / All slain, all dead." She is weighing the word against everything she has. Romeo is also very upset when he hears it. So the difference is that Juliet thinks about the word and Romeo just reacts to it.`,
+    bands: scoreBands([2, 3], [1, 2], [2, 3], [3, 4], [4, 5]),
+    qualitative: [
+      {
+        evaluatorId: 'rubric-alignment',
+        requirement:
+          "Do not credit the comparison as developed: Romeo's side has no quotation or moment, so the difference is shown in only one of the two.",
+      },
+      {
+        evaluatorId: 'priority-selection',
+        requirement:
+          "Make showing Romeo's reaction in Friar Laurence's cell the next step, so the difference can be seen in both.",
       },
     ],
   }),

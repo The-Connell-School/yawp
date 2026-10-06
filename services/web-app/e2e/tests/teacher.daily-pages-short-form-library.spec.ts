@@ -78,12 +78,16 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
     await page.getByRole('button', { name: /Prompt Library/i }).click();
     await page.getByRole('button', { name: /Cognitive mode/i }).click();
 
-    await expect(page.getByRole('checkbox', { name: /^Analyze/ })).toBeVisible();
+    await expect(
+      page.getByRole('checkbox', { name: /^Analyze/ })
+    ).toBeVisible();
     await expect(
       page.getByRole('checkbox', { name: /^Argue a position/ })
     ).toBeVisible();
+    await expect(
+      page.getByRole('checkbox', { name: /^Compare/ })
+    ).toBeVisible();
     for (const hidden of [
-      'Compare',
       'Define a term',
       'Evaluate',
       'Interpret',

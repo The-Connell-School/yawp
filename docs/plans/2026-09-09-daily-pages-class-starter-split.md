@@ -413,12 +413,28 @@ types** checkboxes on the assignment sheet, stored as
   built on Claim-Evidence-Analysis (offered as a guide, not the only form).
   **Argue a position** is second, built on Position-Reason-Test: a position a
   reader could disagree with, its strongest reason, and a specific case that
-  tests it. Before switching the next one on: write its grading and tutor
-  text, add calibration cases for it, run the calibration script, then flip
-  `enabled`.
+  tests it. **Compare** is third, built on Basis-Difference-Significance:
+  what two things share, the one difference that matters, shown in both,
+  and what it reveals. Before switching the next one on: write its grading
+  and tutor text, its guide, calibration and tutor-evaluation cases, run the
+  calibration script, then flip `enabled`.
+- **Why Compare third.** Of the types still off, it unlocked the most
+  library prompts that were hidden (4 of the 9, taking the library from 22
+  to 26 of 31), and it is the most distinct from the two already on.
+  Interpret has more tags (12) but every one is paired with Analyze, so it
+  unlocks almost nothing new and would be hard to tell apart from Analyze
+  in the tutor's coaching. Define a term and Evaluate are the likely next
+  two.
 - **No type is the default** (all unticked: any kind of paragraph), stored as
   an empty list and null, which grades and tutors exactly as before. Frozen after creation, like the grammar
   toggle.
+- **Compare** reads the difference chosen and its significance in Depth of
+  Thought: a list of likenesses and differences with none chosen to matter
+  is a Venn diagram, not a comparison, and does not rise above Developing.
+  Development of Thought reads the evidence on both sides: two summaries
+  joined by "similarly" are not a comparison, and evidence from only one of
+  the two does not rise above Developing. A comparison that turns on a
+  likeness, where the prompt allows it, is credited the same way.
 - **Argue a position** reads the position in Depth of Thought and the reason
   and its test in Development of Thought. A straddle ("both sides have a
   point") does not rise above Developing on Depth; a position held up only by
@@ -440,9 +456,11 @@ types** checkboxes on the assignment sheet, stored as
   assignment's own type always wins. A typed document is titled after its
   type so test documents are easy to tell apart. Null changes nothing.
 - Calibration cases can name a `paragraphMode`, and the live runner grades
-  them with that type's guidance in the prompt. The three Argue cases
-  (`dp-argue-*`) do; the Analyze-tagged cases predate this and are still
-  graded with no type chosen. The tutor evaluation has one combined case
+  them with that type's guidance in the prompt. The five Argue cases
+  (`dp-argue-*`) and the four Compare cases (`dp-compare-*`) do. The
+  Analyze-tagged cases and the older `dp-comparison-one-difference` predate
+  this and are still graded with no type chosen. The tutor evaluation has
+  two Compare cases and one combined case
   (`combined-argue-from-text`, Analyze and Argue together).
 - The universal tutor persona is still copied into each module row's
   `tutorInstructions`; there is no shared tutor prompt in code. The type layer

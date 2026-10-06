@@ -77,7 +77,7 @@ describe('ParagraphTypeGuideButton', () => {
   test('is absent when every type is switched off or unknown', () => {
     expect(
       renderToStaticMarkup(
-        <ParagraphTypeGuideButton paragraphModes={['compare', 'nonsense']} />
+        <ParagraphTypeGuideButton paragraphModes={['define', 'nonsense']} />
       )
     ).toBe('');
   });
