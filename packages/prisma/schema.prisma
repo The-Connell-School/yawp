@@ -34,6 +34,7 @@ model FreeTierApplication {
   organizationId   String?
   releasedAt       DateTime?                 @db.Timestamptz(6)
   notes            String?
+  approvalDecisions FreeTierApprovalDecision[]
 }
 
 model AcquisitionToken {
@@ -46,6 +47,28 @@ model AcquisitionToken {
   uses        Int       @default(0)
   expiresAt   DateTime? @db.Timestamptz(6)
   createdBy   String?
+}
+
+/// Audit log of operator decisions on free-tier applications.
+enum FreeTierApprovalDecisionType {
+  APPROVED
+  REJECTED
+  MANUAL_REVIEW
+  REOPENED
+}
+
+model FreeTierApprovalDecision {
+  id              String                        @id @default(cuid())
+  createdAt       DateTime                      @default(now()) @db.Timestamptz(6)
+  applicationId   String
+  application     FreeTierApplication           @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  decision        FreeTierApprovalDecisionType
+  /// Required for REJECTED; validated in application code.
+  reason          String?
+  /// Internal operator's email address (validated as an email in application code).
+  decidedByEmail  String
+
+  @@index([applicationId, createdAt(sort: Desc)])
 }
 
 /// Organization subscription/entitlement plan. SCHOOL is the default for all
