@@ -1,6 +1,6 @@
 -- Safe additive migration for Free Tier approval audit table
 -- Keep deploys resilient to transient locks.
-SET LOCAL lock_timeout = '5s';
+SET lock_timeout = '5s';
 
 -- CreateEnum
 DO $$

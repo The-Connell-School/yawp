@@ -211,10 +211,14 @@ export function csv(value: string) {
 const operatorEmail = z.string().trim().toLowerCase().email().max(320);
 const rejectReason = z.string().trim().min(1).max(2000);
 
+// Every state an operator can act on. SENT = email went to the school admin and
+// is still awaiting their response; staff may override (spec 6.5, audited).
+const QUEUE_STATUSES = ['ADMIN_SUBMITTED', 'MANUAL_REVIEW', 'SENT'] as const;
+
 const queueQuery = z
   .object({
     q: z.string().trim().max(200).default(''),
-    status: z.enum(['ADMIN_SUBMITTED', 'MANUAL_REVIEW']).optional(),
+    status: z.enum(QUEUE_STATUSES).optional(),
     cursor: z.string().max(500).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
@@ -242,7 +246,7 @@ export async function approvalQueue(request: Request) {
       return response({ error: 'Invalid cursor' }, 400);
     }
   }
-  const where: any = { status: input.status ? input.status : { in: ['ADMIN_SUBMITTED', 'MANUAL_REVIEW'] } };
+  const where: any = { status: input.status ? input.status : { in: [...QUEUE_STATUSES] } };
   if (input.q) {
     where.OR = [
       { email: { contains: input.q, mode: 'insensitive' } },
@@ -277,11 +281,14 @@ export async function approvalQueue(request: Request) {
   const page = rows.slice(0, input.limit);
   const nextCursor =
     rows.length > input.limit ? Buffer.from(JSON.stringify({ id: page[page.length - 1]!.id, binding })).toString('base64url') : null;
-  const [adminSubmitted, manualReview] = await Promise.all([
-    prisma.freeTierApplication.count({ where: { status: 'ADMIN_SUBMITTED' } }),
-    prisma.freeTierApplication.count({ where: { status: 'MANUAL_REVIEW' } }),
-  ]);
-  return response({ applications: page, counts: { ADMIN_SUBMITTED: adminSubmitted, MANUAL_REVIEW: manualReview }, nextCursor });
+  const grouped = await prisma.freeTierApplication.groupBy({
+    by: ['status'],
+    where: { status: { in: [...QUEUE_STATUSES] } },
+    _count: { _all: true },
+  });
+  const counts: Record<(typeof QUEUE_STATUSES)[number], number> = { ADMIN_SUBMITTED: 0, MANUAL_REVIEW: 0, SENT: 0 };
+  for (const g of grouped) counts[g.status as (typeof QUEUE_STATUSES)[number]] = g._count._all;
+  return response({ applications: page, counts, nextCursor });
 }
 
 export async function approvalDetail(request: Request) {
@@ -345,172 +352,187 @@ async function enforceHeadroomForActivation(tx: any) {
   return remaining > 0;
 }
 
+type HookApp = { id: string; email: string; name: string; schoolName: string };
+
+/**
+ * Hooks run after the transaction commits, so a slow or failing hook can never
+ * undo a recorded decision or hold row locks. Failures are logged, not thrown:
+ * F5 provisioning must be idempotent and retryable from the audit log.
+ */
+async function runHookSafely(name: string, fn: () => Promise<void> | void) {
+  try {
+    await fn();
+  } catch (error) {
+    console.error('free_tier_approval_hook_failed', { hook: name, error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+async function readActionBody(request: Request, limit: number, requireJson: boolean): Promise<{ body: any } | { error: Response }> {
+  if (requireJson && !request.headers.get('content-type')?.startsWith('application/json')) {
+    return { error: response({ error: 'Invalid content type' }, 400) };
+  }
+  const text = await readBoundedText(request, limit);
+  if (text === null) return { error: response({ error: 'Payload too large' }, 413) };
+  if (!text) return { body: {} };
+  if (!request.headers.get('content-type')?.startsWith('application/json')) return { body: {} };
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { error: response({ error: 'Invalid input' }, 400) };
+    return { body: parsed };
+  } catch {
+    return { error: response({ error: 'Malformed JSON' }, 400) };
+  }
+}
+
+function actionId(request: Request) {
+  // /api/internal/v1/free-tier/approval/:id/<action>
+  const id = new URL(request.url).pathname.split('/').filter(Boolean).slice(-2, -1)[0];
+  return id ? decodeURIComponent(id) : null;
+}
+
+/**
+ * One conditional transition: from one of `from` to `to`, with an audit row.
+ * Already in `to` returns 200 { idempotent: true } with no new audit row and no
+ * hook call, so retries and double-clicks are harmless. A concurrent decision
+ * that wins the row first makes the loser's conditional update match zero rows
+ * and it gets 409.
+ */
+async function transition(args: {
+  id: string;
+  from: FreeTierApplicationStatus[];
+  to: FreeTierApplicationStatus;
+  decision: 'APPROVED' | 'REJECTED' | 'MANUAL_REVIEW';
+  decidedByEmail: string;
+  reason?: string;
+}): Promise<{ status: 200 | 404 | 409; payload: Record<string, unknown>; app?: HookApp; changed: boolean }> {
+  return prisma.$transaction(async (tx) => {
+    const app = await tx.freeTierApplication.findUnique({
+      where: { id: args.id },
+      select: { id: true, status: true, email: true, name: true, schoolName: true },
+    });
+    if (!app) return { status: 404 as const, payload: { error: 'Not found' }, changed: false };
+    if (app.status === args.to) return { status: 200 as const, payload: { ok: true, idempotent: true, status: app.status }, changed: false };
+    if (!args.from.includes(app.status)) {
+      return { status: 409 as const, payload: { error: 'Illegal state', status: app.status }, changed: false };
+    }
+    const updated = await tx.freeTierApplication.updateMany({ where: { id: args.id, status: app.status }, data: { status: args.to } });
+    if (updated.count === 0) return { status: 409 as const, payload: { error: 'Conflict' }, changed: false };
+    await tx.freeTierApprovalDecision.create({
+      data: { applicationId: args.id, decision: args.decision, reason: args.reason ?? null, decidedByEmail: args.decidedByEmail },
+    });
+    return {
+      status: 200 as const,
+      payload: { ok: true, status: args.to, previousStatus: app.status },
+      app: { id: app.id, email: app.email, name: app.name, schoolName: app.schoolName },
+      changed: true,
+    };
+  });
+}
+
+// Approval is required before a free account goes live (Bryant, Oct 6). Operators
+// approve from the yawp-internal queue, which shows ADMIN_SUBMITTED, MANUAL_REVIEW
+// and SENT; each of those is approvable so nothing in the queue is a dead end.
+export const APPROVABLE_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED', 'MANUAL_REVIEW', 'SENT'];
+export const REJECTABLE_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED', 'MANUAL_REVIEW', 'SENT'];
+export const MANUAL_REVIEW_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED', 'SENT'];
+
 export async function approveHttp(request: Request) {
   const denied = authenticate(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
-  const id = new URL(request.url).pathname.split('/').filter(Boolean).slice(-2, -1)[0];
+  const id = actionId(request);
   if (!id) return response({ error: 'Missing id' }, 400);
-  const text = await readBoundedText(request, 4096);
-  if (text === null) return response({ error: 'Payload too large' }, 413);
-  let body: any = {};
-  if (request.headers.get('content-type')?.startsWith('application/json') && text) {
-    try { body = JSON.parse(text); } catch { return response({ error: 'Malformed JSON' }, 400); }
-  }
-  const parsedEmail = parseOperatorEmail(request, body);
+  const read = await readActionBody(request, 4096, false);
+  if ('error' in read) return read.error;
+  const parsedEmail = parseOperatorEmail(request, read.body);
   if (typeof parsedEmail !== 'string') return parsedEmail.error;
-  const result = await prisma.$transaction(async (tx) => {
-    const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true, email: true, name: true, schoolName: true } });
-    if (!app) return { status: 404 as const, payload: { error: 'Not found' } };
-    if (app.status === 'APPROVED') {
-      await tx.freeTierApprovalDecision.create({
-        data: { applicationId: id, decision: 'APPROVED', decidedByEmail: parsedEmail },
-      });
-      await getApprovalHooks().onApplicationApproved(app);
-      return { status: 200 as const, payload: { ok: true, idempotent: true } };
-    }
-    if (!['MANUAL_REVIEW', 'SENT'].includes(app.status)) return { status: 409 as const, payload: { error: `Illegal state ${app.status}` } };
-    const updated = await tx.freeTierApplication.updateMany({
-      where: { id, status: app.status },
-      data: { status: 'APPROVED' },
-    });
-    if (updated.count === 0) return { status: 409 as const, payload: { error: 'Conflict' } };
-    await tx.freeTierApprovalDecision.create({
-      data: { applicationId: id, decision: 'APPROVED', decidedByEmail: parsedEmail },
-    });
-    await getApprovalHooks().onApplicationApproved(app);
-    return { status: 200 as const, payload: { ok: true } };
-  });
-  return response(result.payload as any, result.status);
+  const result = await transition({ id, from: APPROVABLE_FROM, to: 'APPROVED', decision: 'APPROVED', decidedByEmail: parsedEmail });
+  if (result.changed && result.app) {
+    const app = result.app;
+    await runHookSafely('onApplicationApproved', () => getApprovalHooks().onApplicationApproved(app));
+  }
+  return response(result.payload, result.status);
 }
 
 export async function rejectHttp(request: Request) {
   const denied = authenticate(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
-  const id = new URL(request.url).pathname.split('/').filter(Boolean).slice(-2, -1)[0];
+  const id = actionId(request);
   if (!id) return response({ error: 'Missing id' }, 400);
-  if (!request.headers.get('content-type')?.startsWith('application/json')) return response({ error: 'Invalid content type' }, 400);
-  const text = await readBoundedText(request, 4096);
-  if (text === null) return response({ error: 'Payload too large' }, 413);
-  let body: any; try { body = JSON.parse(text); } catch { return response({ error: 'Malformed JSON' }, 400); }
-  const parsedEmail = parseOperatorEmail(request, body);
+  const read = await readActionBody(request, 4096, true);
+  if ('error' in read) return read.error;
+  const parsedEmail = parseOperatorEmail(request, read.body);
   if (typeof parsedEmail !== 'string') return parsedEmail.error;
   let reason: string;
-  try { reason = rejectReason.parse(body.reason); } catch { return response({ error: 'Reason required' }, 400); }
-  const result = await prisma.$transaction(async (tx) => {
-    const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true, email: true, name: true, schoolName: true } });
-    if (!app) return { status: 404 as const, payload: { error: 'Not found' } };
-    if (app.status === 'REJECTED') {
-      await tx.freeTierApprovalDecision.create({
-        data: { applicationId: id, decision: 'REJECTED', reason, decidedByEmail: parsedEmail },
-      });
-      await getApprovalHooks().onApplicationRejected(app, reason);
-      return { status: 200 as const, payload: { ok: true, idempotent: true } };
-    }
-    if (!['MANUAL_REVIEW', 'SENT', 'ADMIN_SUBMITTED'].includes(app.status)) return { status: 409 as const, payload: { error: `Illegal state ${app.status}` } };
-    const updated = await tx.freeTierApplication.updateMany({
-      where: { id, status: app.status },
-      data: { status: 'REJECTED' },
-    });
-    if (updated.count === 0) return { status: 409 as const, payload: { error: 'Conflict' } };
-    await tx.freeTierApprovalDecision.create({
-      data: { applicationId: id, decision: 'REJECTED', reason, decidedByEmail: parsedEmail },
-    });
-    await getApprovalHooks().onApplicationRejected(app, reason);
-    return { status: 200 as const, payload: { ok: true } };
-  });
-  return response(result.payload as any, result.status);
+  try {
+    reason = rejectReason.parse(read.body.reason);
+  } catch {
+    return response({ error: 'Reason required' }, 400);
+  }
+  const result = await transition({ id, from: REJECTABLE_FROM, to: 'REJECTED', decision: 'REJECTED', decidedByEmail: parsedEmail, reason });
+  if (result.changed && result.app) {
+    const app = result.app;
+    await runHookSafely('onApplicationRejected', () => getApprovalHooks().onApplicationRejected(app, reason));
+  }
+  return response(result.payload, result.status);
 }
 
 export async function markManualReviewHttp(request: Request) {
   const denied = authenticate(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
-  const id = new URL(request.url).pathname.split('/').filter(Boolean).slice(-2, -1)[0];
+  const id = actionId(request);
   if (!id) return response({ error: 'Missing id' }, 400);
-  const text = await readBoundedText(request, 2048);
-  if (text === null) return response({ error: 'Payload too large' }, 413);
-  let body: any = {};
-  if (request.headers.get('content-type')?.startsWith('application/json') && text) {
-    try { body = JSON.parse(text); } catch { return response({ error: 'Malformed JSON' }, 400); }
-  }
-  const parsedEmail = parseOperatorEmail(request, body);
+  const read = await readActionBody(request, 2048, false);
+  if ('error' in read) return read.error;
+  const parsedEmail = parseOperatorEmail(request, read.body);
   if (typeof parsedEmail !== 'string') return parsedEmail.error;
-  const result = await prisma.$transaction(async (tx) => {
-    const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true } });
-    if (!app) return { status: 404 as const, payload: { error: 'Not found' } };
-    if (app.status === 'MANUAL_REVIEW') {
-      await tx.freeTierApprovalDecision.create({
-        data: { applicationId: id, decision: 'MANUAL_REVIEW', decidedByEmail: parsedEmail },
-      });
-      return { status: 200 as const, payload: { ok: true, idempotent: true } };
-    }
-    if (!['ADMIN_SUBMITTED', 'SENT'].includes(app.status)) return { status: 409 as const, payload: { error: `Illegal state ${app.status}` } };
-    const updated = await tx.freeTierApplication.updateMany({
-      where: { id, status: app.status },
-      data: { status: 'MANUAL_REVIEW' },
-    });
-    if (updated.count === 0) return { status: 409 as const, payload: { error: 'Conflict' } };
-    await tx.freeTierApprovalDecision.create({
-      data: { applicationId: id, decision: 'MANUAL_REVIEW', decidedByEmail: parsedEmail },
-    });
-    return { status: 200 as const, payload: { ok: true } };
-  });
-  return response(result.payload as any, result.status);
+  const result = await transition({ id, from: MANUAL_REVIEW_FROM, to: 'MANUAL_REVIEW', decision: 'MANUAL_REVIEW', decidedByEmail: parsedEmail });
+  return response(result.payload, result.status);
 }
 
 export async function reopenHttp(request: Request) {
   const denied = authenticate(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
-  const id = new URL(request.url).pathname.split('/').filter(Boolean).slice(-2, -1)[0];
+  const id = actionId(request);
   if (!id) return response({ error: 'Missing id' }, 400);
-  const text = await readBoundedText(request, 2048);
-  if (text === null) return response({ error: 'Payload too large' }, 413);
-  let body: any = {};
-  if (request.headers.get('content-type')?.startsWith('application/json') && text) {
-    try { body = JSON.parse(text); } catch { return response({ error: 'Malformed JSON' }, 400); }
-  }
-  const parsedEmail = parseOperatorEmail(request, body);
+  const read = await readActionBody(request, 2048, false);
+  if ('error' in read) return read.error;
+  const parsedEmail = parseOperatorEmail(request, read.body);
   if (typeof parsedEmail !== 'string') return parsedEmail.error;
   const result = await prisma.$transaction(async (tx) => {
-    const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true } });
+    const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true, releasedAt: true } });
     if (!app) return { status: 404 as const, payload: { error: 'Not found' } };
-    if (app.status === 'MANUAL_REVIEW') {
-      await tx.freeTierApprovalDecision.create({
-        data: { applicationId: id, decision: 'REOPENED', decidedByEmail: parsedEmail },
-      });
-      return { status: 200 as const, payload: { ok: true, idempotent: true } };
+    if (app.status === 'MANUAL_REVIEW') return { status: 200 as const, payload: { ok: true, idempotent: true, status: app.status } };
+    if (app.status !== 'REJECTED') return { status: 409 as const, payload: { error: 'Illegal state', status: app.status } };
+    // A released application already holds a slot under the F3 cap (released rows
+    // count whatever their status), so only unreleased ones need new headroom.
+    if (!app.releasedAt) {
+      const hasRoom = await enforceHeadroomForActivation(tx);
+      if (!hasRoom) return { status: 409 as const, payload: { error: 'Release cap reached' } };
     }
-    if (app.status !== 'REJECTED') return { status: 409 as const, payload: { error: `Illegal state ${app.status}` } };
-    const hasRoom = await enforceHeadroomForActivation(tx);
-    if (!hasRoom) return { status: 409 as const, payload: { error: 'Release cap reached' } };
-    const updated = await tx.freeTierApplication.updateMany({
-      where: { id, status: 'REJECTED' },
-      data: { status: 'MANUAL_REVIEW' },
-    });
+    const updated = await tx.freeTierApplication.updateMany({ where: { id, status: 'REJECTED' }, data: { status: 'MANUAL_REVIEW' } });
     if (updated.count === 0) return { status: 409 as const, payload: { error: 'Conflict' } };
-    await tx.freeTierApprovalDecision.create({
-      data: { applicationId: id, decision: 'REOPENED', decidedByEmail: parsedEmail },
-    });
-    return { status: 200 as const, payload: { ok: true } };
+    await tx.freeTierApprovalDecision.create({ data: { applicationId: id, decision: 'REOPENED', decidedByEmail: parsedEmail } });
+    return { status: 200 as const, payload: { ok: true, status: 'MANUAL_REVIEW', previousStatus: 'REJECTED' } };
   });
-  return response(result.payload as any, result.status);
+  return response(result.payload, result.status);
 }
 
 export async function submitAdminInfoHttp(request: Request) {
   const denied = authenticate(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
-  const id = new URL(request.url).pathname.split('/').filter(Boolean).slice(-2, -1)[0];
+  const id = actionId(request);
   if (!id) return response({ error: 'Missing id' }, 400);
   // No operator email required; this is a flow-step helper.
   const result = await prisma.$transaction(async (tx) => {
     const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true } });
     if (!app) return { status: 404 as const, payload: { error: 'Not found' } };
     if (app.status === 'ADMIN_SUBMITTED') return { status: 200 as const, payload: { ok: true, idempotent: true } };
-    if (app.status !== 'ACCOUNT_CREATED') return { status: 409 as const, payload: { error: `Illegal state ${app.status}` } };
+    if (app.status !== 'ACCOUNT_CREATED') return { status: 409 as const, payload: { error: 'Illegal state', status: app.status } };
     const updated = await tx.freeTierApplication.updateMany({
       where: { id, status: 'ACCOUNT_CREATED' },
       data: { status: 'ADMIN_SUBMITTED' },
@@ -518,5 +540,5 @@ export async function submitAdminInfoHttp(request: Request) {
     if (updated.count === 0) return { status: 409 as const, payload: { error: 'Conflict' } };
     return { status: 200 as const, payload: { ok: true } };
   });
-  return response(result.payload as any, result.status);
+  return response(result.payload, result.status);
 }

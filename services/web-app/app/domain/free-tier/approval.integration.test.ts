@@ -10,6 +10,7 @@ import {
   approvalDetail,
   submitAdminInfoHttp,
 } from '~/utils/internal-free-tier-http.server';
+import { setApprovalHooks } from '~/domain/free-tier/approval-hooks.server';
 
 const enabled = process.env.FREE_TIER_DB_TESTS === '1';
 const suite = enabled ? describe : describe.skip;
@@ -110,24 +111,121 @@ suite('approval queue and actions', () => {
     expect(audits[0]!.decision).toBe('REJECTED');
   });
 
-  test('approve transitions MANUAL_REVIEW -> APPROVED and appends audit; concurrent approves yield one 200 and one 409', async () => {
-    const a = await makeApp('approve', 'MANUAL_REVIEW');
-    const req = () =>
-      approveHttp(
-        new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/approve`, {
-          method: 'POST',
-          headers: { ...Object.fromEntries(auth), ...op, 'content-type': 'application/json' },
-          body: JSON.stringify({}),
-        }),
-      );
-    const [r1, r2] = await Promise.all([req(), req()]);
-    const statuses = [r1.status, r2.status].sort();
-    expect(statuses).toEqual([200, 409]);
-    const row = await prisma.freeTierApplication.findUnique({ where: { id: a.id } });
-    expect(row?.status).toBe('APPROVED');
-    const audits = await prisma.freeTierApprovalDecision.findMany({ where: { applicationId: a.id } });
-    expect(audits.length).toBe(1);
-    expect(audits[0]!.decision).toBe('APPROVED');
+  const post = (fn: (r: Request) => Promise<Response>, id: string, action: string, body: unknown = {}) =>
+    fn(
+      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${id}/${action}`, {
+        method: 'POST',
+        headers: { ...Object.fromEntries(auth), ...op, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+
+  test('approve works from every queue state an operator sees (ADMIN_SUBMITTED, MANUAL_REVIEW, SENT)', async () => {
+    for (const from of ['ADMIN_SUBMITTED', 'MANUAL_REVIEW', 'SENT'] as const) {
+      const a = await makeApp(`approve-${from}`, from);
+      const res = await post(approveHttp, a.id, 'approve');
+      expect(res.status).toBe(200);
+      expect((await res.json()).previousStatus).toBe(from);
+      const row = await prisma.freeTierApplication.findUnique({ where: { id: a.id } });
+      expect(row?.status).toBe('APPROVED');
+    }
+  });
+
+  test('approve is refused before the teacher submits admin info and after rejection', async () => {
+    for (const from of ['LEAD', 'INVITED', 'ACCOUNT_CREATED', 'REJECTED', 'EXPIRED'] as const) {
+      const a = await makeApp(`noapprove-${from}`, from);
+      const res = await post(approveHttp, a.id, 'approve');
+      expect(res.status).toBe(409);
+      const row = await prisma.freeTierApplication.findUnique({ where: { id: a.id } });
+      expect(row?.status).toBe(from);
+    }
+  });
+
+  test('concurrent approve and reject: exactly one decision wins, one audit row, one hook call', async () => {
+    let approvedCalls = 0;
+    let rejectedCalls = 0;
+    setApprovalHooks({ onApplicationApproved: () => void approvedCalls++, onApplicationRejected: () => void rejectedCalls++ });
+    try {
+      for (let i = 0; i < 5; i++) {
+        approvedCalls = 0;
+        rejectedCalls = 0;
+        const a = await makeApp(`race-${i}`, 'MANUAL_REVIEW');
+        const results = await Promise.all([
+          post(approveHttp, a.id, 'approve'),
+          post(rejectHttp, a.id, 'reject', { reason: 'race' }),
+          post(approveHttp, a.id, 'approve'),
+        ]);
+        const row = await prisma.freeTierApplication.findUnique({ where: { id: a.id } });
+        const audits = await prisma.freeTierApprovalDecision.findMany({ where: { applicationId: a.id } });
+        expect(audits.length).toBe(1);
+        expect(audits[0]!.decision).toBe(row?.status === 'APPROVED' ? 'APPROVED' : 'REJECTED');
+        expect(approvedCalls + rejectedCalls).toBe(1);
+        for (const r of results) expect([200, 409]).toContain(r.status);
+      }
+    } finally {
+      setApprovalHooks({ onApplicationApproved: () => {}, onApplicationRejected: () => {} });
+    }
+  });
+
+  test('repeat approve is idempotent: 200, no extra audit row, hook not re-run', async () => {
+    let calls = 0;
+    setApprovalHooks({ onApplicationApproved: () => void calls++ });
+    try {
+      const a = await makeApp('idem', 'MANUAL_REVIEW');
+      expect((await post(approveHttp, a.id, 'approve')).status).toBe(200);
+      const again = await post(approveHttp, a.id, 'approve');
+      expect(again.status).toBe(200);
+      expect((await again.json()).idempotent).toBe(true);
+      expect(await prisma.freeTierApprovalDecision.count({ where: { applicationId: a.id } })).toBe(1);
+      expect(calls).toBe(1);
+    } finally {
+      setApprovalHooks({ onApplicationApproved: () => {} });
+    }
+  });
+
+  test('a failing hook never undoes the recorded decision', async () => {
+    setApprovalHooks({
+      onApplicationApproved: () => {
+        throw new Error('provisioning down');
+      },
+    });
+    try {
+      const a = await makeApp('hookfail', 'MANUAL_REVIEW');
+      const res = await post(approveHttp, a.id, 'approve');
+      expect(res.status).toBe(200);
+      const row = await prisma.freeTierApplication.findUnique({ where: { id: a.id } });
+      expect(row?.status).toBe('APPROVED');
+      expect(await prisma.freeTierApprovalDecision.count({ where: { applicationId: a.id } })).toBe(1);
+    } finally {
+      setApprovalHooks({ onApplicationApproved: () => {} });
+    }
+  });
+
+  test('operator email is required and validated for decisions', async () => {
+    const a = await makeApp('noop', 'MANUAL_REVIEW');
+    const res = await approveHttp(
+      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/approve`, {
+        method: 'POST',
+        headers: { ...Object.fromEntries(auth), 'content-type': 'application/json' },
+        body: JSON.stringify({ decidedByEmail: 'not-an-email' }),
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = await post(approveHttp, a.id, 'approve', { decidedByEmail: 'Body.Op@Yawp.Local' });
+    expect(body.status).toBe(200);
+    const audit = await prisma.freeTierApprovalDecision.findFirst({ where: { applicationId: a.id } });
+    // header wins over body when both are present
+    expect(audit?.decidedByEmail).toBe('approver@yawp.local');
+  });
+
+  test('queue includes SENT and reports counts for every queue state', async () => {
+    const s = await makeApp('queue-sent', 'SENT');
+    const res = await approvalQueue(new Request('https://yawp.test/api/internal/v1/free-tier/approval/queue?status=SENT', { headers: auth }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.applications.map((r: any) => r.id)).toContain(s.id);
+    expect(body.applications.every((r: any) => r.status === 'SENT')).toBe(true);
+    expect(Object.keys(body.counts).sort()).toEqual(['ADMIN_SUBMITTED', 'MANUAL_REVIEW', 'SENT']);
   });
 
   test('mark-manual-review from SENT and idempotent', async () => {
@@ -165,6 +263,13 @@ suite('approval queue and actions', () => {
         }),
       );
       expect(denied.status).toBe(409);
+      const released = await makeApp('reopen-released', 'REJECTED');
+      await prisma.freeTierApplication.update({ where: { id: released.id }, data: { releasedAt: new Date() } });
+      const ok = await post(reopenHttp, released.id, 'reopen');
+      expect(ok.status).toBe(200);
+      const idem = await post(reopenHttp, released.id, 'reopen');
+      expect(idem.status).toBe(200);
+      expect(await prisma.freeTierApprovalDecision.count({ where: { applicationId: released.id } })).toBe(1);
     } finally {
       if (old === undefined) delete process.env.FREE_TIER_RELEASE_CAP;
       else process.env.FREE_TIER_RELEASE_CAP = old;
@@ -187,13 +292,14 @@ suite('approval queue and actions', () => {
       }),
     );
     expect(again.status).toBe(200);
+    const lead = await makeApp('submit-lead', 'LEAD');
     const bad = await submitAdminInfoHttp(
-      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/submit`, {
+      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${lead.id}/submit`, {
         method: 'POST',
         headers: { ...Object.fromEntries(auth) },
       }),
     );
-    expect(bad.status).toBe(200);
+    expect(bad.status).toBe(409);
   });
 });
 
