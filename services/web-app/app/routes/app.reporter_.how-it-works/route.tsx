@@ -74,9 +74,9 @@ export default function ReporterHowItWorksRoute() {
         lede="Reporter turns your released grades into class reports, student growth reports, and growth plans."
         image={{
           src: `${MEDIA}/hero.jpg`,
-          alt: 'A Reporter growth report for one student: a 55% average, a table of exit ticket scores, and the start of a section called The Writing.',
+          alt: 'A Reporter growth report for one student: an 89% average, a table of exit ticket scores that climb from a C to mostly As, and the start of a section called The Writing.',
           width: 1120,
-          height: 888,
+          height: 940,
           caption: 'A growth report for one student in English 10',
         }}
       />
