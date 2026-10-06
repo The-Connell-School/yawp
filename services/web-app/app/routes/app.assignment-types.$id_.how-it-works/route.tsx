@@ -135,7 +135,7 @@ const GRADING_POINTS = [
   {
     title: 'What it is',
     detail:
-      'A first read of every essay against the same rubric, at the level you set for the assignment: beginner, intermediate or advanced. Every essay is held to the same standard, so grading stays fair and consistent.',
+      'A consistent and fair evaluation of every essay against the same rubric, at the level you set for the assignment: beginner, intermediate or advanced.',
   },
   {
     title: 'What it isn’t',
@@ -152,9 +152,9 @@ const GRADING_POINTS = [
 const WILL = [
   'Support students through each step of the essay-writing process.',
   'Ask questions and give feedback on the student’s own draft.',
-  'Suggest a score and feedback for you to review.',
   'Show you a copy-paste alert for any text pasted from outside of YAWP!',
   'Let you give a cold write with the Tutor off.',
+  'Fully grade essays with a score and feedback for you to review.',
 ];
 
 const WONT = [
@@ -193,6 +193,20 @@ export default function ThesisEssayHowItWorksRoute() {
           caption: 'The Tutor on a body paragraph about Macbeth',
         }}
       />
+
+      <GuideSection
+        id="guide-what"
+        eyebrow="The assignment"
+        title="The essay that stands up in any high school or college classroom"
+      >
+        <GuideCopy>
+          The five-paragraph essay is where younger writers start. The
+          thesis-driven essay is what comes next: the more complex, grown-up
+          critical essay, and YAWP!’s flagship assignment. Whether you already
+          teach it or have only taught the five-paragraph essay, you get the
+          curriculum and the process to teach it well.
+        </GuideCopy>
+      </GuideSection>
 
       <GuideSection
         id="guide-how"
@@ -270,9 +284,9 @@ export default function ThesisEssayHowItWorksRoute() {
           </h2>
           <p className="max-w-prose text-lg leading-relaxed text-muted-foreground">
             The Tutor gives feedback aligned to the curriculum, designed to
-            deepen students’ thinking so they develop their own ideas. Its first
-            rule: it won’t write for the student, even when a student asks it
-            to.
+            deepen students’ thinking so they develop their own ideas. Its
+            cardinal rule: it won’t write for the student, even when a student
+            asks it to.
           </p>
         </div>
 
@@ -286,8 +300,9 @@ export default function ThesisEssayHowItWorksRoute() {
           <GuideCopy>
             Students tap{' '}
             <strong className="text-foreground">Give me feedback!</strong> or
-            ask a question whenever they want. The Tutor reads what they have
-            written, starts with what works and suggests one or two next steps.
+            ask a question whenever they want. The Tutor reads what they’ve
+            written and responds the way a great writing teacher would:
+            encouraging feedback and one or two next steps.
           </GuideCopy>
         </GuideRow>
 
@@ -298,11 +313,11 @@ export default function ThesisEssayHowItWorksRoute() {
             'A student adds a sentence to a body paragraph and asks the Tutor to write the rest. The Tutor says that part is theirs to write and asks what Banquo notices about Macbeth.'
           )}
         >
-          <GuideH3>Questions instead of answers</GuideH3>
+          <GuideH3>The refusal is the point</GuideH3>
           <GuideCopy>
-            When a student asks the Tutor to write for them, it asks a question,
-            offers an example on another topic or gives a sentence starter for
-            them to finish.
+            When a student asks the Tutor to write for them, it refuses.
+            Instead, it challenges them with questions designed to deepen their
+            thinking, so they can develop original ideas.
           </GuideCopy>
         </GuideRow>
 
@@ -344,7 +359,7 @@ export default function ThesisEssayHowItWorksRoute() {
             'The teacher opens a submitted essay and clicks Grading Assistant Suggestions. Scores and feedback fill in, the teacher reads one rubric comment, then releases the grade.'
           )}
         >
-          <GuideH3>A first draft of the grade</GuideH3>
+          <GuideH3>A fully graded essay you can edit</GuideH3>
           <GuideCopy>
             Click{' '}
             <strong className="text-foreground">
@@ -371,8 +386,8 @@ export default function ThesisEssayHowItWorksRoute() {
 
       <GuideSection
         id="guide-cold"
-        eyebrow="Also"
-        title="Track student progress over time"
+        eyebrow="Bonus tip"
+        title="Use the thesis-driven essay to track student progress"
       >
         <GuideRow
           flip
@@ -381,20 +396,23 @@ export default function ThesisEssayHowItWorksRoute() {
             'A student opens an in-class essay and starts writing. Beside the draft is only the prompt, marked as a cold write.'
           )}
         >
-          <GuideH3>Give a cold write</GuideH3>
+          <GuideStep n={1}>Start the year with a cold write</GuideStep>
+          <GuideH3>An in-class essay with the Tutor off</GuideH3>
           <GuideCopy>
-            The goal is for students to write better without the Tutor. Turn it
-            off for an in-class essay and use it as a diagnostic, as an
-            assessment or to track whether skills transfer.
+            The goal is for students to write better without the Tutor. Give an
+            in-class essay with the Tutor turned off at the start of the year
+            and use it as a diagnostic.
           </GuideCopy>
         </GuideRow>
 
         <GuideRow media={<TransferChart />}>
+          <GuideStep n={2}>Teach, then cold write again</GuideStep>
           <GuideH3>Watch the gap close</GuideH3>
           <GuideCopy>
-            Early in the year, a student’s cold writes sit well below their warm
-            writes. As the skills become their own, cold writes rise faster and
-            the gap narrows. That narrowing gap is the pattern to look for.
+            Teach the thesis-driven essay with the Tutor through the semester,
+            then give another cold write. As the skills become their own,
+            students’ cold writes rise toward their work with the Tutor and the
+            gap narrows.
           </GuideCopy>
         </GuideRow>
 
