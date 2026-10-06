@@ -1,5 +1,18 @@
 import { expect, test } from 'bun:test';
-import { applicationsSearch, tokensCreate, releaseBatchHttp, exportCsv, csv } from './internal-free-tier-http.server';
+import {
+  applicationsSearch,
+  tokensCreate,
+  releaseBatchHttp,
+  exportCsv,
+  csv,
+  approvalQueue,
+  approvalDetail,
+  approveHttp,
+  rejectHttp,
+  markManualReviewHttp,
+  reopenHttp,
+  submitAdminInfoHttp,
+} from './internal-free-tier-http.server';
 
 const key = 'k'.repeat(43);
 
@@ -16,6 +29,8 @@ test('internal endpoints enforce management key and methods', async () => {
     expect((await tokensCreate(new Request('https://yawp.test/api/internal/v1/free-tier/tokens', { method: 'GET', headers: goodAuth }))).status).toBe(405);
     expect((await releaseBatchHttp(new Request('https://yawp.test/api/internal/v1/free-tier/release', { method: 'GET', headers: goodAuth }))).status).toBe(405);
     expect((await exportCsv(new Request('https://yawp.test/api/internal/v1/free-tier/export?q=x', { method: 'POST', headers: goodAuth }))).status).toBe(405);
+    expect((await approvalQueue(new Request('https://yawp.test/api/internal/v1/free-tier/approval/queue', { method: 'POST', headers: goodAuth }))).status).toBe(405);
+    expect((await approvalDetail(new Request('https://yawp.test/api/internal/v1/free-tier/approval/applications/a', { method: 'POST', headers: goodAuth }))).status).toBe(405);
   } finally {
     if (old === undefined) delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
     else process.env.YAWP_MANAGEMENT_SERVICE_KEY = old;
@@ -46,6 +61,13 @@ test('every internal endpoint rejects a missing, short or wrong bearer before to
       expect((await tokensCreate(make('tokens', 'POST'))).status).toBe(401);
       expect((await releaseBatchHttp(make('release', 'POST'))).status).toBe(401);
       expect((await exportCsv(make('export', 'GET'))).status).toBe(401);
+      expect((await approvalQueue(make('approval/queue', 'GET'))).status).toBe(401);
+      expect((await approvalDetail(make('approval/applications/a', 'GET'))).status).toBe(401);
+      expect((await approveHttp(make('approval/a/approve', 'POST'))).status).toBe(401);
+      expect((await rejectHttp(make('approval/a/reject', 'POST'))).status).toBe(401);
+      expect((await markManualReviewHttp(make('approval/a/mark-manual-review', 'POST'))).status).toBe(401);
+      expect((await reopenHttp(make('approval/a/reopen', 'POST'))).status).toBe(401);
+      expect((await submitAdminInfoHttp(make('approval/a/submit', 'POST'))).status).toBe(401);
     }
     const tooLong = new Request('https://yawp.test/x', { headers: { authorization: `Bearer ${key}${'a'.repeat(600)}` } });
     expect((await applicationsSearch(tooLong)).status).toBe(401);
