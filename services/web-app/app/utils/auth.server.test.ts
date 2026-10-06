@@ -11,6 +11,7 @@ const prisma = {
   orgMembership: {
     findUnique: mock(),
     findFirst: mock(),
+    findMany: mock(),
   },
   session: {
     findUnique: mock(),
@@ -75,6 +76,7 @@ describe('membership auth helpers', () => {
     getUaStudentLicenseAccess.mockResolvedValue('BYPASS');
     prisma.orgMembership.findUnique.mockReset();
     prisma.orgMembership.findFirst.mockReset();
+    prisma.orgMembership.findMany.mockReset();
     prisma.user.findFirst.mockReset();
     prisma.session.findUnique.mockReset();
     setMembershipId.mockResolvedValue('membership-id=; Path=/');
@@ -122,16 +124,16 @@ describe('membership auth helpers', () => {
 
   test('requireMembership falls back to first membership when cookie is missing', async () => {
     getMembershipId.mockResolvedValue('');
-    prisma.orgMembership.findFirst.mockResolvedValue(membershipFixture);
+    prisma.orgMembership.findMany.mockResolvedValue([membershipFixture]);
 
     const membership = await requireMembership(
       new Request('https://example.com/app'),
       'user-1'
     );
 
-    expect(prisma.orgMembership.findFirst).toHaveBeenCalledWith({
+    expect(prisma.orgMembership.findMany).toHaveBeenCalledWith({
       where: { userId: 'user-1', isActive: true },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         role: true,
@@ -152,6 +154,40 @@ describe('membership auth helpers', () => {
       },
     });
     expect(membership).toEqual(membershipFixture);
+  });
+
+  test('requireMembership prefers a non-default-org membership over legacy default-org', async () => {
+    getMembershipId.mockResolvedValue('');
+    const legacyDefaultOrg = {
+      ...membershipFixture,
+      id: 'membership-legacy',
+      role: 'STUDENT' as const,
+      organization: {
+        ...membershipFixture.organization,
+        id: 'default-org',
+        name: 'Yawp!',
+      },
+    };
+    const schoolOrg = {
+      ...membershipFixture,
+      id: 'membership-school',
+      role: 'STUDENT' as const,
+      organization: {
+        ...membershipFixture.organization,
+        id: 'org-gear-up',
+        name: 'GEAR UP ASU',
+      },
+    };
+    // Newest first from the query; default-org still present and would win under
+    // the old createdAt-asc behavior if it were older.
+    prisma.orgMembership.findMany.mockResolvedValue([schoolOrg, legacyDefaultOrg]);
+
+    const membership = await requireMembership(
+      new Request('https://example.com/app'),
+      'user-1'
+    );
+
+    expect(membership).toEqual(schoolOrg);
   });
 
   test('requireMembership redirects an unpaid UA student to billing', async () => {
@@ -218,13 +254,13 @@ describe('membership auth helpers', () => {
 
   test('requireMembership never falls back to an inactive membership', async () => {
     getMembershipId.mockResolvedValue('');
-    prisma.orgMembership.findFirst.mockResolvedValue(null);
+    prisma.orgMembership.findMany.mockResolvedValue([]);
 
     await expect(
       requireMembership(new Request('https://example.com/app'), 'user-1')
     ).rejects.toMatchObject({ status: 302 });
 
-    expect(prisma.orgMembership.findFirst).toHaveBeenCalledWith(
+    expect(prisma.orgMembership.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 'user-1', isActive: true } })
     );
   });
