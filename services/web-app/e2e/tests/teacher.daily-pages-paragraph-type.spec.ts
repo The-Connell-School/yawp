@@ -151,7 +151,8 @@ test.describe.serial('Paragraph type at assignment creation', () => {
 
   /**
    * Under the About section, each switched-on type explains itself: the same
-   * explanation a student opens from inside an assignment of that type.
+   * explanation a student opens from inside an assignment of that type. The
+   * section is collapsed until a teacher opens it.
    */
   test('the Daily Pages page explains each kind of paragraph', async ({
     page,
@@ -165,8 +166,20 @@ test.describe.serial('Paragraph type at assignment creation', () => {
 
     const guides = page.getByTestId('paragraph-guides');
     await expect(
-      guides.getByRole('heading', { name: 'The kinds of paragraphs' })
+      guides.getByRole('heading', { name: /The kinds of paragraphs/ })
     ).toBeVisible();
+
+    // Collapsed until a teacher asks: the types are named but not listed.
+    const toggle = guides.getByRole('button', {
+      name: /The kinds of paragraphs/,
+    });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(guides.getByRole('button', { name: /^Analyze/ })).toHaveCount(
+      0
+    );
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 
     await guides.getByRole('button', { name: /^Analyze/ }).click();
     await expect(guides.getByTestId('paragraph-guide-analyze')).toBeVisible();

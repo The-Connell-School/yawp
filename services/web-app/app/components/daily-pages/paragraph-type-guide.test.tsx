@@ -12,7 +12,10 @@ try {
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { getParagraphGuide } from '~/domain/assignment-types/daily-pages-paragraph-guides';
+import {
+  enabledParagraphGuides,
+  getParagraphGuide,
+} from '~/domain/assignment-types/daily-pages-paragraph-guides';
 
 import {
   ParagraphTypeGuide,
@@ -105,11 +108,35 @@ describe('ParagraphTypeGuideList', () => {
   });
 });
 
+/**
+ * Seven guides open on the Daily Pages page would be a wall above the library,
+ * so the section starts collapsed: its heading says how many kinds there are
+ * and names them, and a teacher opens it to explore.
+ */
 describe('ParagraphTypeGuides', () => {
-  test('lists every switched-on type for the Daily Pages page', () => {
-    const html = renderToStaticMarkup(<ParagraphTypeGuides />);
-    expect(html).toContain('The kinds of paragraphs');
-    expect(html).toContain('Analyze');
-    expect(html).toContain('Argue a position');
+  const html = renderToStaticMarkup(<ParagraphTypeGuides />);
+  const text = textOf(html);
+
+  test('is collapsed until a teacher opens it', () => {
+    expect(html).toMatch(/<h2[^>]*><button[^>]*aria-expanded="false"/);
+    expect(html).not.toContain('data-testid="paragraph-guide-');
+  });
+
+  test('says how many kinds there are and names each switched-on type', () => {
+    expect(text).toContain('The kinds of paragraphs');
+    expect(text).toContain(`${enabledParagraphGuides().length} kinds`);
+    for (const guide of enabledParagraphGuides()) {
+      expect(text).toContain(guide.label);
+    }
+  });
+
+  test('opens to one collapsible guide per switched-on type', () => {
+    const open = renderToStaticMarkup(<ParagraphTypeGuides defaultOpen />);
+    expect(open).toMatch(/<h2[^>]*><button[^>]*aria-expanded="true"/);
+    for (const guide of enabledParagraphGuides()) {
+      expect(textOf(open)).toContain(
+        guide.parts.map((part) => part.name).join(' → ')
+      );
+    }
   });
 });

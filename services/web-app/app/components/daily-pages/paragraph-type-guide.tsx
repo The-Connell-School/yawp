@@ -1,4 +1,4 @@
-import { Target } from 'lucide-react';
+import { ChevronDown, Target } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
 import {
@@ -8,6 +8,11 @@ import {
   AccordionTrigger,
 } from '~/components/ui/accordion';
 import { Button } from '~/components/ui/button';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '~/components/ui/collapsible';
 import {
   Dialog,
   DialogContent,
@@ -266,46 +271,71 @@ export const PARAGRAPH_GUIDES_HEADING = 'The kinds of paragraphs';
 /**
  * Every switched-on paragraph type, for the Daily Pages page. A type appears
  * here the day it is switched on, like the library and the assignment sheet.
+ *
+ * Seven guides open at once would be a wall above the library, so the section
+ * starts collapsed, like the About sections above it. Its heading names every
+ * type, so a teacher knows what is inside before opening it; each type then
+ * opens on its own.
  */
-export function ParagraphTypeGuides() {
+export function ParagraphTypeGuides({
+  defaultOpen = false,
+}: {
+  defaultOpen?: boolean;
+}) {
   const guides = enabledParagraphGuides();
   if (guides.length === 0) return null;
 
   return (
-    <section
-      className="mb-6 rounded-lg border bg-muted/40 p-4"
-      aria-labelledby="paragraph-guides-heading"
-      data-testid="paragraph-guides"
-    >
-      <h2 id="paragraph-guides-heading" className="text-base font-semibold">
-        {PARAGRAPH_GUIDES_HEADING}
-      </h2>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Each paragraph type practices one move. Students see the same
-        explanation from inside an assignment of that type, under “What you’re
-        aiming for”.
-      </p>
-      <Accordion type="multiple" className="mt-3">
-        {guides.map((guide) => (
-          <AccordionItem
-            key={guide.key}
-            value={guide.key}
-            className="border-b last:border-b-0"
-          >
-            <AccordionTrigger className="py-3 text-left text-sm font-semibold">
-              <span>
-                {guide.label}
-                <span className="ml-2 font-normal text-muted-foreground">
-                  {guide.parts.map((part) => part.name).join(' → ')}
-                </span>
+    <Collapsible defaultOpen={defaultOpen} asChild>
+      <section
+        className="group/guides mb-6 rounded-lg border bg-muted/40 p-4"
+        aria-labelledby="paragraph-guides-heading"
+        data-testid="paragraph-guides"
+      >
+        <h2 id="paragraph-guides-heading" className="text-base font-semibold">
+          <CollapsibleTrigger className="flex w-full items-start justify-between gap-3 text-left">
+            <span>
+              {PARAGRAPH_GUIDES_HEADING}
+              <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                {guides.length} kinds:{' '}
+                {guides.map((guide) => guide.label).join(', ')}
               </span>
-            </AccordionTrigger>
-            <AccordionContent className="pb-4 pt-0">
-              <ParagraphTypeGuide paragraphMode={guide.key} />
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
-    </section>
+            </span>
+            <ChevronDown
+              aria-hidden="true"
+              className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]/guides:rotate-180"
+            />
+          </CollapsibleTrigger>
+        </h2>
+        <CollapsibleContent>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Each paragraph type practices one move. Students see the same
+            explanation from inside an assignment of that type, under “What
+            you’re aiming for”.
+          </p>
+          <Accordion type="multiple" className="mt-3">
+            {guides.map((guide) => (
+              <AccordionItem
+                key={guide.key}
+                value={guide.key}
+                className="border-b last:border-b-0"
+              >
+                <AccordionTrigger className="py-3 text-left text-sm font-semibold">
+                  <span>
+                    {guide.label}
+                    <span className="ml-2 font-normal text-muted-foreground">
+                      {guide.parts.map((part) => part.name).join(' → ')}
+                    </span>
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="pb-4 pt-0">
+                  <ParagraphTypeGuide paragraphMode={guide.key} />
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </CollapsibleContent>
+      </section>
+    </Collapsible>
   );
 }
