@@ -205,9 +205,14 @@ if (classId) {
   }
 }
 
+let schoolIdForCreate = '';
+const schoolSelect = page.locator('select[name="schoolId"] option').first();
+if (await schoolSelect.count()) {
+  schoolIdForCreate = (await schoolSelect.getAttribute('value')) ?? '';
+}
 const secondClassAttempt = await postForm('/app/my-classes', {
   intent: 'create-class',
-  schoolId: 'preview-free-classroom',
+  schoolId: schoolIdForCreate,
   schoolYear: '2026-2027',
   code: 'QA414B',
   grade: '10',
