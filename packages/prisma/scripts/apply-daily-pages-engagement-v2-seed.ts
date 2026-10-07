@@ -108,7 +108,6 @@ export async function seedDpConsolidationQaPreviewFixtures(
   const classWithStudent = await prisma.class.findFirst({
     where: {
       isArchived: false,
-      school: { organizationId: LOCAL_DEV_ORG_ID },
       students: { some: { user: { email: 'dev.student@yawp.local' } } },
     },
     orderBy: { createdAt: 'asc' },
