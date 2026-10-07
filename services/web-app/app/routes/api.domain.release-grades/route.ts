@@ -238,13 +238,32 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const releasedSubs = await prisma.submission.findMany({
       where: { id: { in: requestedSubmissionIds } },
-      select: { id: true, numericPercentage: true },
+      select: { id: true, numericPercentage: true, score: true },
     });
     for (const s of releasedSubs) {
-      if (typeof s.numericPercentage === 'number') {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        maybePostGradeToBlackboard({ numericPercentage: s.numericPercentage });
-      }
+      // Prefer stored percentage when present; otherwise derive one from X/Y points.
+      const pct =
+        typeof s.numericPercentage === 'number'
+          ? s.numericPercentage
+          : (() => {
+              const m =
+                typeof s.score === 'string'
+                  ? /^\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*$/.exec(
+                      s.score
+                    )
+                  : null;
+              if (!m) return null;
+              const earned = Number(m[1]);
+              const possible = Number(m[2]);
+              return Number.isFinite(earned) &&
+                Number.isFinite(possible) &&
+                possible > 0
+                ? Math.round((earned / possible) * 100)
+                : null;
+            })();
+      if (pct == null) continue;
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      maybePostGradeToBlackboard({ numericPercentage: pct });
     }
   } catch (err) {
     // eslint-disable-next-line no-console
