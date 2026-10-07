@@ -13,15 +13,15 @@ describe('resolvePromptLibraryVariant', () => {
     );
   });
 
-  test('Daily Pages shares the open-ended library after short-form retirement', () => {
+  test('Daily Pages reads the graded short-form corpus', () => {
     expect(resolvePromptLibraryVariant({ title: 'Daily Pages' })).toBe(
-      'class-starter'
+      'daily-pages-graded'
     );
   });
 
   test('matches the title the way the route always has: trimmed, case-insensitive', () => {
     expect(resolvePromptLibraryVariant({ title: '  DAILY pages  ' })).toBe(
-      'class-starter'
+      'daily-pages-graded'
     );
     expect(resolvePromptLibraryVariant({ title: 'CLASS STARTER' })).toBe(
       'class-starter'
@@ -41,7 +41,8 @@ describe('which library a variant gets', () => {
     expect(usesOpenEndedLibrary('class-starter')).toBe(true);
   });
 
-  test('short-form library is retired', () => {
+  test('Daily Pages graded library is separate from Class Starter', () => {
+    expect(usesShortFormLibrary('daily-pages-graded')).toBe(true);
     expect(usesShortFormLibrary('class-starter')).toBe(false);
     expect(usesShortFormLibrary(null)).toBe(false);
   });

@@ -96,7 +96,6 @@ export const HOW_TO_USE_HEADING = 'Using it with a class';
 export const HOW_TO_USE: string[] = [
   'Set a point total of at least 5 when students submit for a grade.',
   'Put the prompt where students can see it; the assistant anchors engagement to that prompt when it is available.',
-  'Tell teachers before scores shift: this scale is more generous than the old fixed 0 / 10 / 20 / 30 model for token effort.',
 ];
 
 export function howToUse(writingConditionsEnabled: boolean): string[] {

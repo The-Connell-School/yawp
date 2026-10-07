@@ -116,6 +116,31 @@ describe('Daily Pages assignment points', () => {
     }
   });
 
+  test('does not rescale a pinned legacy schema without v2 scaling', () => {
+    const original = config();
+    const legacy = {
+      ...original,
+      outputSchemaSnapshot: {
+        responseShape: 'categories_overall_comment',
+        schemaVersion: 1,
+      },
+      rubricCategories: [
+        {
+          ...original.rubricCategories[0],
+          bands: [
+            { min: 0, max: 0, label: 'Not Present' },
+            { min: 10, max: 10, label: 'Needs More' },
+            { min: 20, max: 20, label: 'Good' },
+            { min: 30, max: 30, label: 'Excellent' },
+          ],
+        },
+      ],
+      maxScore: 30,
+      step: 10,
+    } as ResolvedAssignmentTypeGradingConfig;
+    expect(scaleDailyPagesForAssignment(legacy, 90)).toBe(legacy);
+  });
+
   test('old pins, unrelated rubrics, and legacy fallbacks stay unchanged', () => {
     const noScalingOutput = { responseShape: 'categories_overall_comment' };
     const cases = [

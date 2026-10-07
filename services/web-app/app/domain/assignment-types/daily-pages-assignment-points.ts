@@ -17,10 +17,7 @@ export function scaleDailyPagesForAssignment(
   pointValue: number | null | undefined
 ): ResolvedAssignmentTypeGradingConfig {
   const category = config.rubricCategories[0];
-  if (
-    config.rubricName !== 'daily-pages-engagement' &&
-    !usesDailyPagesEngagementPointScaling(config.outputSchemaSnapshot)
-  ) {
+  if (!usesDailyPagesEngagementPointScaling(config.outputSchemaSnapshot)) {
     return config;
   }
   if (

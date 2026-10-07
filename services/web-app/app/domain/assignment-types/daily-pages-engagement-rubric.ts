@@ -34,7 +34,7 @@ const TIER_DESCRIPTIONS: Record<
   'Needs More':
     'Token effort: a line or two, a restated prompt, "I don\'t know," or off-task filler. Something was submitted, but no real attempt was made.\n\nWithin the band: upper end when there is a fragment of a real attempt buried in it — a student who started and gave up is further along than one who never started. Lower end for a restated prompt or pure filler.',
   'Not Present':
-    'Not enough on the page to evaluate against the tiers.\n\nThis band is wide because it does two jobs. Place within it by asking whether any attempt was made, never whether the work is good: top of the band when something was genuinely submitted and attempted but there is not enough there to evaluate; middle for a fragment; 0 for blank or nothing submitted.\n\nA student who wrote two honest sentences and stopped is meaningfully different from one who submitted an empty document. The band is wide enough to say so; use it.',
+    'Not enough on the page to evaluate against the tiers.\n\n• A few words, an unfinished sentence, an answer that stops.\n• Something genuinely submitted and attempted, but not enough there to evaluate against Needs More or higher.\n• Blank or nothing submitted.\n\nThis band is wide because it does two jobs. Place within it by asking whether any attempt was made, never whether the work is good: top of the band when something was genuinely submitted and attempted but there is not enough there to evaluate; middle for a fragment; 0 for blank or nothing submitted.\n\nA student who wrote two honest sentences and stopped is meaningfully different from one who submitted an empty document. The band is wide enough to say so; use it.',
 };
 
 export const DAILY_PAGES_ENGAGEMENT_GRADING_INSTRUCTIONS = [
