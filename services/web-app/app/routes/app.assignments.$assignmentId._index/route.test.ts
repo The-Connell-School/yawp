@@ -13,7 +13,10 @@ const prisma = {
   setting: { findUnique: mock() },
 };
 
+const actualAssignmentDeployment =
+  globalThis.__realModules['~/utils/assignment-deployment.server'];
 mock.module('~/utils/assignment-deployment.server', () => ({
+  ...actualAssignmentDeployment,
   createAssignmentDeployedToClasses,
   updateAssignmentInClassDeployment,
 }));
@@ -45,6 +48,10 @@ afterAll(() => {
   mock.module(
     '~/utils/assignment-type-access.server',
     () => actualAssignmentTypeAccess
+  );
+  mock.module(
+    '~/utils/assignment-deployment.server',
+    () => actualAssignmentDeployment
   );
 });
 

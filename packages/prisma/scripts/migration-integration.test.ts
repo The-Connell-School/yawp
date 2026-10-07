@@ -839,6 +839,9 @@ describe('migration integration (real Postgres)', () => {
       )
     `);
     expect(usageGone.exists).toBe(false);
+
+    // Leave the shared CI database fully migrated for free-tier-real-db tests.
+    prismaDeploy(PRISMA_DIR);
   }, 120000);
 });
 
