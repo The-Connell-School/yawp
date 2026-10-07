@@ -362,6 +362,179 @@ export async function seedCollaborationDemoForSeat(
   } catch (error) {
     console.error('Engagement preview assignment top-up failed:', error);
   }
+
+  // Top-up: Cristo Rey holistic tier assignment type + 20-point demo submission.
+  try {
+    const teacherEmail = seat.personas.find((p) => p.key === 'teacher')?.email;
+    const studentEmail = seat.personas.find((p) => p.key === 'student')?.email;
+    if (!teacherEmail || !studentEmail) return;
+    const teacher = await prisma.orgMembership.findFirst({
+      where: {
+        organizationId: seat.organizationId,
+        user: { email: teacherEmail },
+      },
+      select: { id: true },
+    });
+    const student = await prisma.orgMembership.findFirst({
+      where: {
+        organizationId: seat.organizationId,
+        user: { email: studentEmail },
+      },
+      select: { id: true },
+    });
+    if (!teacher || !student) return;
+    const klass = await prisma.class.findFirst({
+      where: {
+        isArchived: false,
+        teachers: { some: { id: teacher.id } },
+        students: { some: { id: student.id } },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (!klass) return;
+
+    const cristoModule = (await import(
+      '../../../services/web-app/app/domain/rubrics/library/cristo-rey-hornbuckle-five-paragraph-essay.json',
+      { with: { type: 'json' } }
+    )) as { default?: Record<string, unknown> };
+    const cristo = (cristoModule.default ?? cristoModule) as Record<
+      string,
+      unknown
+    >;
+    const holisticTitle = 'In-class Essay/Analysis (Cristo Rey)';
+    let holisticType = await prisma.assignmentType.findFirst({
+      where: {
+        title: holisticTitle,
+        ownerOrgId: seat.organizationId,
+        archivedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!holisticType) {
+      holisticType = await prisma.assignmentType.create({
+        data: {
+          title: holisticTitle,
+          description:
+            'Holy Family Cristo Rey five-paragraph essay with holistic tier scoring.',
+          position: 99,
+          ownerOrgId: seat.organizationId,
+          scoringScaleJson: cristo.scoringScale as Prisma.InputJsonValue,
+          rubricJson: cristo.rubric as Prisma.InputJsonValue,
+          gradingPromptConfigJson: cristo.promptConfig as Prisma.InputJsonValue,
+          gradingOutputSchemaJson: {
+            ...(cristo.outputSchema as Record<string, unknown>),
+            scoringMode: 'holistic_tier',
+            teacherNotesEnabled: true,
+          } as Prisma.InputJsonValue,
+          gradingCalibrationNotes: String(cristo.calibrationNotes ?? ''),
+          organizationAssignments: {
+            create: { organizationId: seat.organizationId },
+          },
+          assignmentModules: {
+            create: [
+              {
+                title: holisticTitle,
+                position: 1,
+                instructions: {
+                  create: [
+                    {
+                      title: 'Draft',
+                      prompt:
+                        'Write a five-paragraph essay that answers the prompt with a clear thesis and evidence.',
+                      position: 1,
+                      showChatButton: true,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      console.log(
+        `Holistic Cristo Rey assignment type created for ${seat.label} (${seat.organizationId}).`
+      );
+    }
+
+    const demoTitle = 'Holistic Tier Demo (Preview)';
+    const existingAssignment = await prisma.assignment.findFirst({
+      where: {
+        title: demoTitle,
+        assignmentTypeId: holisticType.id,
+        classAssignments: { some: { classId: klass.id } },
+      },
+      select: { id: true, classAssignments: { select: { id: true } } },
+    });
+    let assignmentId = existingAssignment?.id;
+    let classAssignmentId = existingAssignment?.classAssignments[0]?.id;
+    if (!assignmentId || !classAssignmentId) {
+      const assignment = await prisma.assignment.create({
+        data: {
+          assignmentTypeId: holisticType.id,
+          title: demoTitle,
+          prompt:
+            'Analyze how the author uses a symbol to develop a theme in the assigned text.',
+          submitForGrade: true,
+          pointValue: 20,
+        },
+        select: { id: true },
+      });
+      const classAssignment = await prisma.classAssignment.create({
+        data: { assignmentId: assignment.id, classId: klass.id },
+        select: { id: true },
+      });
+      assignmentId = assignment.id;
+      classAssignmentId = classAssignment.id;
+      console.log(
+        `Holistic preview assignment created for ${seat.label} (${seat.organizationId}).`
+      );
+    }
+
+    const existingSubmission = await prisma.submission.findFirst({
+      where: {
+        document: {
+          assignmentId,
+          membershipId: student.id,
+          artifactKind: 'STUDENT',
+        },
+        submittedAt: { not: null },
+        archivedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!existingSubmission) {
+      const essayText =
+        'In the novel, the green light symbolizes longing. The author repeats the image at the dock to show how hope outlasts loss.';
+      const document = await prisma.document.create({
+        data: {
+          title: demoTitle,
+          text: essayText,
+          html: `<p>${essayText}</p>`,
+          membershipId: student.id,
+          assignmentTypeId: holisticType.id,
+          assignmentId,
+          classAssignmentId,
+          artifactKind: 'STUDENT',
+        },
+      });
+      await prisma.submission.create({
+        data: {
+          documentId: document.id,
+          title: demoTitle,
+          text: essayText,
+          html: `<p>${essayText}</p>`,
+          submittedAt: new Date(),
+        },
+      });
+      console.log(
+        `Holistic preview submission created for ${seat.label} (${seat.organizationId}).`
+      );
+    }
+  } catch (error) {
+    console.error('Holistic preview top-up failed:', error);
+  }
 }
 
 export async function ensurePreviewSeats(
