@@ -12,6 +12,7 @@ import {
 } from './preview-seats';
 import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { attachApHistorySourceImages } from './local-dev/seed-ap-history';
+import { ensurePreviewFreeClassroomFixture } from './local-dev/seed-free-classroom-preview';
 
 assertLocalSeedTarget();
 
@@ -34,6 +35,8 @@ try {
   // idempotent AP catalog on every seed-mode deploy, including existing seats.
   await seedApHistoryLibrary(prisma, seats[0].organizationId);
   await attachApHistorySourceImages(prisma);
+  const freeClassroom = await ensurePreviewFreeClassroomFixture(prisma);
+  console.log(`Preview free-classroom fixture: ${freeClassroom.status}`);
   for (const seat of seats) {
     const result = results.find(
       ({ organizationId }) => organizationId === seat.organizationId
