@@ -35,6 +35,13 @@ function encodeToken(payload: SignedLinkPayload, secret: string) {
   return `${body}.${sig}`;
 }
 
+export function applicationIdFromSignedToken(token: string): string | null {
+  const segments = token.split('.');
+  if (segments.length !== 3) return null;
+  const decoded = decodeToken(`${segments[0]}.${segments[1]}`);
+  return decoded?.payload.applicationId ?? null;
+}
+
 function decodeToken(token: string): { payload: SignedLinkPayload; secret: string } | null {
   const parts = token.split('.');
   if (parts.length !== 2) return null;

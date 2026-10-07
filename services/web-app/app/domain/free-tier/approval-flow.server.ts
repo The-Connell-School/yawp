@@ -172,12 +172,11 @@ export async function completeSchoolAdminApproval(args: {
   requestBaseUrl: string;
 }) {
   if (!args.authorized) return { ok: false as const, reason: 'unauthorized' as const };
-  const peek = await import('./signed-link.server').then((m) =>
-    m.peekSignedLink({ token: args.token, expectedPurpose: 'ADMIN_APPROVE' })
-  );
-  if (peek.ok) {
+  const { applicationIdFromSignedToken } = await import('./signed-link.server');
+  const earlyAppId = applicationIdFromSignedToken(args.token);
+  if (earlyAppId) {
     const already = await prisma.freeTierApplication.findUnique({
-      where: { id: peek.applicationId },
+      where: { id: earlyAppId },
       select: { status: true },
     });
     if (already?.status === 'APPROVED') return { ok: true as const, idempotent: true as const };
