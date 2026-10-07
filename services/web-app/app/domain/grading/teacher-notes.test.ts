@@ -4,6 +4,7 @@ import {
   gradingRepairPrivateObservationRules,
   normalizeTeacherNote,
   overallCommentWriterRules,
+  staffTeacherNoteLoaderField,
 } from './teacher-notes';
 
 const dailyPagesOnlyPhrases = [
@@ -44,6 +45,40 @@ describe('teacher-notes', () => {
     expect(
       normalizeTeacherNote('a'.repeat(2000)),
     ).toBe('a'.repeat(2000));
+  });
+
+  test('staffTeacherNoteLoaderField respects the output toggle and staff role', () => {
+    const run = {
+      status: 'succeeded',
+      metadata: { teacherNote: 'PRIVATE: vocabulary shift.' },
+    };
+    expect(
+      staffTeacherNoteLoaderField({
+        isOwner: false,
+        isTeacher: true,
+        isAdmin: false,
+        outputSchemaSnapshot: { teacherNotesEnabled: true },
+        run,
+      })
+    ).toEqual({ teacherNote: 'PRIVATE: vocabulary shift.' });
+    expect(
+      staffTeacherNoteLoaderField({
+        isOwner: false,
+        isTeacher: true,
+        isAdmin: false,
+        outputSchemaSnapshot: { teacherNotesEnabled: false },
+        run,
+      })
+    ).toEqual({});
+    expect(
+      staffTeacherNoteLoaderField({
+        isOwner: true,
+        isTeacher: false,
+        isAdmin: false,
+        outputSchemaSnapshot: { teacherNotesEnabled: true },
+        run,
+      })
+    ).toEqual({});
   });
 });
 

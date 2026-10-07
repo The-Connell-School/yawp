@@ -60,3 +60,16 @@ export function readTeacherNote(run: { status?: string | null; metadata?: unknow
   if (!run || run.status !== 'succeeded' || !run.metadata || typeof run.metadata !== 'object') return null;
   return normalizeTeacherNote((run.metadata as Record<string, unknown>).teacherNote);
 }
+
+/** Loader field for staff-only teacher notes, gated on the rubric output toggle. */
+export function staffTeacherNoteLoaderField(options: {
+  isOwner: boolean;
+  isTeacher: boolean;
+  isAdmin: boolean;
+  outputSchemaSnapshot: unknown;
+  run: { status?: string | null; metadata?: unknown } | null;
+}): { teacherNote: string | null } | Record<string, never> {
+  if (options.isOwner || (!options.isTeacher && !options.isAdmin)) return {};
+  if (!teacherNotesEnabled(options.outputSchemaSnapshot)) return {};
+  return { teacherNote: readTeacherNote(options.run) };
+}

@@ -1,4 +1,5 @@
-import { readTeacherNote } from '~/domain/grading/teacher-notes';
+import { staffTeacherNoteLoaderField } from '~/domain/grading/teacher-notes';
+import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { TeacherNotes } from './teacher-grading/teacher-notes';
 import { invariant } from '@epic-web/invariant';
 import {
@@ -353,19 +354,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw redirect(`${next.pathname}${next.search}${next.hash}`);
   }
 
-  const [rubricConfig, grammarHighlightingEnabled] = await Promise.all([
-    resolveRubricConfigForSubmission({
-      assignmentTypeId: submission.document.assignmentTypeId,
-      pointValue: submission.document.assignment?.pointValue,
-      assignmentId: submission.document.assignment?.id,
-      latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
-      rubricScores: submission.rubricScores,
-    }),
-    resolveGrammarHighlightingForAssignmentType(
-      submission.document.assignmentTypeId,
-      submission.document.assignment?.grammarGradingEnabled
-    ),
-  ]);
+  const assignmentTypeId = submission.document.assignmentTypeId;
+  const [rubricConfig, grammarHighlightingEnabled, gradingConfig] =
+    await Promise.all([
+      resolveRubricConfigForSubmission({
+        assignmentTypeId,
+        pointValue: submission.document.assignment?.pointValue,
+        assignmentId: submission.document.assignment?.id,
+        latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
+        rubricScores: submission.rubricScores,
+      }),
+      resolveGrammarHighlightingForAssignmentType(
+        assignmentTypeId,
+        submission.document.assignment?.grammarGradingEnabled
+      ),
+      assignmentTypeId
+        ? resolveAssignmentTypeGradingConfig(assignmentTypeId)
+        : Promise.resolve(null),
+    ]);
 
   const activityPage =
     !isOwner && (isTeacher || isAdmin)
@@ -482,9 +488,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         submission.gradingAssistantRuns[0] ?? null
       ),
     },
-    ...(!isOwner && (isTeacher || isAdmin)
-      ? { teacherNote: readTeacherNote(gradingAssistantRuns[0] ?? null) }
-      : {}),
+    ...staffTeacherNoteLoaderField({
+      isOwner,
+      isTeacher,
+      isAdmin,
+      outputSchemaSnapshot: gradingConfig?.outputSchemaSnapshot,
+      run: gradingAssistantRuns[0] ?? null,
+    }),
     isOwner,
     isTeacher: isTeacher || isAdmin,
     submissionActivityEnabled,
