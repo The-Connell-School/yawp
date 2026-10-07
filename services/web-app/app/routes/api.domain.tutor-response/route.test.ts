@@ -12,6 +12,7 @@ const requireUserId = mock();
 const requireMembership = mock();
 const prisma = {
   user: { findUnique: mock() },
+  setting: { findUnique: mock() },
   assignmentModuleSession: {
     findFirst: mock(),
     findUnique: mock(),
@@ -49,9 +50,12 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });
+    // The AI usage log (#404) attributes every call to the caller's organization.
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT', organization: { id: 'org-1' } });
     prisma.user.findUnique.mockReset();
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
+    // Paragraph type is behind a flag; these tests describe it on.
+    prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
     prisma.assignmentModuleSession.findFirst.mockReset();
     prisma.assignmentModuleSession.findUnique.mockReset();
     prisma.assignmentModuleSession.update.mockReset();
@@ -194,6 +198,20 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       paragraphMode: null,
     });
 
+    expect(systemText).not.toContain('PARAGRAPH TYPE');
+  });
+
+  test('with the writing-conditions flag off, ignores a stored paragraph type', async () => {
+    prisma.setting.findUnique.mockReset().mockResolvedValue(null);
+    const systemText = await tutorSystemTextFor({
+      id: 'assignment-1',
+      title: 'Daily Pages',
+      prompt: 'Quote the line where her argument turns.',
+      tutorEnabled: true,
+      paragraphMode: 'analyze',
+    });
+
+    expect(systemText).toContain('Coach the student.');
     expect(systemText).not.toContain('PARAGRAPH TYPE');
   });
 

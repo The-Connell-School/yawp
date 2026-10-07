@@ -1,3 +1,4 @@
+import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 import {
@@ -486,7 +487,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    const writingTimeResult = parseWritingTimeMinutes(formData);
+    // Behind the writing-conditions flag: off, a sent writing time is ignored
+    // and the stored one is left exactly as it is.
+    const writingTimeResult = (await isDailyPagesWritingConditionsEnabled())
+      ? parseWritingTimeMinutes(formData)
+      : ({ success: true, sent: false, value: null } as const);
     if (!writingTimeResult.success) {
       return dataResponse(
         { success: false, message: writingTimeResult.message },
@@ -1289,12 +1294,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     creationTypeRows.map((assignmentType) => assignmentType.id)
   );
 
+  // Paragraph type and writing time are behind a global flag (off by
+  // default); off, the form offers neither.
+  const writingConditionsEnabled =
+    await isDailyPagesWritingConditionsEnabled();
   const creationTypeDefaults = await getCreationTypeDefaultsById(
-    creationTypeRows.map((assignmentType) => assignmentType.id)
+    creationTypeRows.map((assignmentType) => assignmentType.id),
+    { writingConditionsEnabled }
   );
 
   return dataResponse({
     role: 'TEACHER' as const,
+    writingConditionsEnabled,
     klass,
     submissions,
     inProgressDocuments,
@@ -2139,6 +2150,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           }}
           assignments={managedAssignments}
           assignmentTypes={data.assignmentTypes}
+          writingConditionsEnabled={data.writingConditionsEnabled}
           apHistoryAssignmentTypeId={data.apHistoryAssignmentTypeId}
           classInsightsEnabled={classInsightsEnabled}
           onViewDocuments={handleViewAssignmentDocuments}

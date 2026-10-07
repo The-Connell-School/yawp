@@ -1,3 +1,5 @@
+import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { readableWritingConditions } from '~/domain/feature-flags/feature-flags';
 import { teacherNotesEnabled as hasTeacherNotes, normalizeTeacherNote, TEACHER_NOTES_EVIDENCE_RULE } from '~/domain/grading/teacher-notes';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import type { Prisma } from '@app/prisma';
@@ -1115,15 +1117,27 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
+  // Paragraph type and writing time are behind a global flag that starts
+  // off. Off, both read as unset for the grading assistant and the grammar
+  // checker (the prompts that ran before either existed), while the values
+  // stored on the assignment are left alone.
+  const writingConditions = readableWritingConditions(
+    {
+      writingTimeMinutes:
+        submission.document.assignment?.writingTimeMinutes ?? null,
+      paragraphMode: submission.document.assignment?.paragraphMode ?? null,
+    },
+    await isDailyPagesWritingConditionsEnabled()
+  );
   const compiledInvocation = compileGradingAssistantInvocation({
     gradingConfig: resolvedGradingConfig,
     studentFirstName,
     strictnessLevel: gradingAssistantStrictnessLevel,
     documentText: submission.text,
     assignmentPrompt: submission.document.assignment?.prompt,
-    writingTimeMinutes: submission.document.assignment?.writingTimeMinutes,
+    writingTimeMinutes: writingConditions.writingTimeMinutes,
     coldWrite: submission.document.assignment?.tutorEnabled === false,
-    paragraphMode: submission.document.assignment?.paragraphMode,
+    paragraphMode: writingConditions.paragraphMode,
   });
   const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
@@ -1389,8 +1403,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     );
   } else {
     try {
-      const writingTimeMinutes =
-        submission.document.assignment?.writingTimeMinutes ?? null;
+      const writingTimeMinutes = writingConditions.writingTimeMinutes ?? null;
       const grammarSystem = buildGrammarCheckerSystemPrompt(writingTimeMinutes);
 
       const grammarUserPrompt = buildGrammarCheckerUserPrompt(

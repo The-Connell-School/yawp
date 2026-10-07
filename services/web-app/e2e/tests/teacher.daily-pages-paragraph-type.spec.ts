@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { setWritingConditionsFlag } from '../feature-flags';
 
 /**
  * The kind of paragraph a Daily Pages entry practices. Offered only for Daily
@@ -6,6 +7,15 @@ import { test, expect } from '../test-setup';
  * paragraph" is the default, which grades and tutors as before.
  */
 test.describe.serial('Paragraph type at assignment creation', () => {
+  // The e2eContext fixture loads E2E_DATABASE_URL into the worker.
+  test.beforeEach(async ({ e2eContext }) => {
+    void e2eContext;
+    await setWritingConditionsFlag(true);
+  });
+  test.afterAll(async () => {
+    await setWritingConditionsFlag(false);
+  });
+
   test('Daily Pages offers Analyze, defaulting to any kind of paragraph', async ({
     page,
     e2eContext,

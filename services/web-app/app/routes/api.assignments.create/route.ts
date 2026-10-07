@@ -1,3 +1,4 @@
+import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { randomUUID } from 'node:crypto';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { z } from 'zod';
@@ -124,7 +125,13 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   const grammarGradingEnabled = grammarGradingResult.value;
 
-  const writingTimeResult = parseWritingTimeMinutes(formData);
+  // Paragraph type and writing time are behind a global flag that starts
+  // off. Off, anything sent for either is ignored (not rejected, so a form
+  // opened before the flag was switched off still saves) and stored as unset.
+  const writingConditionsEnabled = await isDailyPagesWritingConditionsEnabled();
+  const writingTimeResult = writingConditionsEnabled
+    ? parseWritingTimeMinutes(formData)
+    : ({ success: true, sent: false, value: null } as const);
   if (!writingTimeResult.success) {
     return dataResponse(
       { success: false, message: writingTimeResult.message },
@@ -133,7 +140,9 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   const writingTimeMinutes = writingTimeResult.value;
 
-  const paragraphModeResult = parseParagraphMode(formData);
+  const paragraphModeResult = writingConditionsEnabled
+    ? parseParagraphMode(formData)
+    : ({ success: true, value: null } as const);
   if (!paragraphModeResult.success) {
     return dataResponse(
       { success: false, message: paragraphModeResult.message },
