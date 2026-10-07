@@ -6,6 +6,9 @@ import {
   FREE_CLASSROOM_TEACHER_SEAT_CAP,
 } from '~/utils/entitlements.server';
 import { FREE_CLASSROOM_ASSIGNMENT_KINDS } from '~/utils/entitlements.server';
+import { isConsumerEmailDomain } from '~/domain/free-tier/consumer-email-domains';
+import { currentSchoolYear } from '~/utils/school-year';
+import { generateClassCode } from '~/utils/class';
 
 export type ProvisionFreeClassroomResult =
   | { status: 'provisioned'; organizationId: string }
@@ -111,14 +114,18 @@ export async function provisionFreeClassroom(
     }
 
     const domain = emailDomain(application.email);
-    if (domain && (await teacherEmailDomainMatchesSchoolOrg(domain))) {
+    if (
+      domain &&
+      !isConsumerEmailDomain(domain) &&
+      (await teacherEmailDomainMatchesSchoolOrg(domain))
+    ) {
       return { status: 'routed_to_school_onboarding' };
     }
 
     const existingSchoolMembership = await tx.orgMembership.findFirst({
       where: {
         userId: application.userId,
-        organization: { plan: 'SCHOOL' },
+        organization: { plan: 'SCHOOL', id: { not: 'default-org' } },
       },
       select: { id: true },
     });
@@ -142,20 +149,33 @@ export async function provisionFreeClassroom(
     });
 
     const schoolCode = schoolCodeFromName(application.schoolName, application.id);
-    await tx.school.create({
+    const school = await tx.school.create({
       data: {
         organizationId: org.id,
         name: application.schoolName,
         code: schoolCode,
       },
+      select: { id: true },
     });
 
-    await tx.orgMembership.create({
+    const membership = await tx.orgMembership.create({
       data: {
         userId: application.userId,
         organizationId: org.id,
         role: 'TEACHER',
         isOrgOwner: true,
+        schools: { connect: { id: school.id } },
+      },
+      select: { id: true },
+    });
+
+    await tx.class.create({
+      data: {
+        schoolId: school.id,
+        schoolYear: currentSchoolYear(),
+        title: 'My Class',
+        code: generateClassCode(),
+        teachers: { connect: { id: membership.id } },
       },
     });
 

@@ -26,7 +26,7 @@ import {
 import { StudentClassCard } from '~/components/student-class-card';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
-import { assertCanCreateClassForOrganization } from '~/utils/assignment-quota.server';
+import { assertCanCreateClassInTransaction } from '~/utils/assignment-quota.server';
 import { getEntitlements } from '~/utils/entitlements.server';
 import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
@@ -200,21 +200,24 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!code) code = generateClassCode();
 
     try {
-      await assertCanCreateClassForOrganization(profile.organization);
-      await prisma.class.create({
-        data: {
-          schoolId,
-          schoolYear,
-          grade,
-          period,
-          title,
-          code,
-          cardGradientKey: generateClassCardGradientKey(code),
-          classArtKey: await pickClassArtKeyForOrganization(
-            profile.organization.id
-          ),
-          teachers: { connect: [{ id: profile.id }] },
-        },
+      const classArtKey = await pickClassArtKeyForOrganization(
+        profile.organization.id
+      );
+      await prisma.$transaction(async (tx) => {
+        await assertCanCreateClassInTransaction(tx, profile.organization);
+        await tx.class.create({
+          data: {
+            schoolId,
+            schoolYear,
+            grade,
+            period,
+            title,
+            code,
+            cardGradientKey: generateClassCardGradientKey(code),
+            classArtKey,
+            teachers: { connect: [{ id: profile.id }] },
+          },
+        });
       });
       return dataResponse({ success: true });
     } catch (error: any) {

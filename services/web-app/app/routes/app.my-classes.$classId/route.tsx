@@ -34,7 +34,9 @@ import {
   AssignmentHasCollaborativeWorkError,
   createAssignmentDeployedToClasses,
   deleteClassAssignmentDeployment,
+  updateAssignmentInClassDeployment,
 } from '~/utils/assignment-deployment.server';
+import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
 import {
   AssignmentPromptAttachmentError,
   assignmentPromptAttachmentRequestTooLarge,
@@ -604,6 +606,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
             promptAttachmentData.promptAttachmentKey
           ).catch(() => {});
         }
+        if (error instanceof FreeClassroomAssignmentQuotaError) {
+          return dataResponse(
+            { success: false, message: error.message },
+            { status: 403 }
+          );
+        }
         throw error;
       }
 
@@ -614,8 +622,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     try {
-      await prisma.assignment.update({
-        where: { id: existingAssignment!.id },
+      await updateAssignmentInClassDeployment({
+        assignmentId: existingAssignment!.id,
+        classId,
         data: {
           assignmentTypeId,
           title,
@@ -660,6 +669,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
         await deleteAssignmentPromptAttachment(
           promptAttachmentData.promptAttachmentKey
         ).catch(() => {});
+      }
+      if (error instanceof FreeClassroomAssignmentQuotaError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 403 }
+        );
       }
       throw error;
     }

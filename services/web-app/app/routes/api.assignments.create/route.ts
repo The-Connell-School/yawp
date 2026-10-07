@@ -41,20 +41,6 @@ import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.se
 import { parseAssignmentGrammarGrading } from '~/utils/assignment-grammar-grading.server';
 import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 
-function freeClassroomDeployOptions(
-  organization: { id: string; plan: string },
-  assignmentTypeKind: string | null
-) {
-  if (organization.plan !== 'FREE_CLASSROOM') return {};
-  return {
-    quotaOrganization: {
-      id: organization.id,
-      plan: organization.plan as 'FREE_CLASSROOM',
-    },
-    assignmentTypeKind,
-  };
-}
-
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
@@ -320,10 +306,6 @@ export async function action({ request }: ActionFunctionArgs) {
           custom: { key: `custom-${randomUUID()}`, ...parsed.data },
         }),
         classIds: deployClassIds,
-        ...freeClassroomDeployOptions(
-          profile.organization,
-          assignmentType.kind
-        ),
       });
 
       return dataResponse({
@@ -366,10 +348,6 @@ export async function action({ request }: ActionFunctionArgs) {
         ...collaboration,
       },
       classIds: deployClassIds,
-      ...freeClassroomDeployOptions(
-        profile.organization,
-        assignmentType.kind
-      ),
       deployment: { postAt, dueAt },
     });
 
@@ -452,10 +430,6 @@ export async function action({ request }: ActionFunctionArgs) {
           : {}),
       },
       classIds: deployClassIds,
-      ...freeClassroomDeployOptions(
-        profile.organization,
-        assignmentType.kind
-      ),
       deployment: { postAt, dueAt },
     });
 

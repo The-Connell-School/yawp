@@ -299,6 +299,10 @@ jobs:
             app/domain/feature-flags/feature-flags.server.test.ts \
             app/utils/internal-feature-flags-http.server.test.ts \
             app/routes/api.assignments.create/route.test.ts \
+            app/routes/app.assignments._index/route.test.ts \
+            app/routes/app.my-classes._index/route.test.ts \
+            app/utils/assignment-quota.server.test.ts \
+            app/domain/free-tier/provision-free-classroom.server.test.ts \
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/routes/api.domain.grade-essay-ai/route.test.ts \
             app/domain/assignment-insights/class-insight-generation.server.test.ts \

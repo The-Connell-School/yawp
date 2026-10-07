@@ -111,6 +111,16 @@ export function getEntitlementsForPlan(plan: OrganizationPlan): PlanEntitlements
   };
 }
 
+export function canAddStudentForOrganization(
+  organization: Pick<Organization, 'plan' | 'numOfStudentSeats'>,
+  params: { currentStudents: number; pendingInvites?: number }
+) {
+  return getEntitlements(organization).canAddStudent({
+    ...params,
+    organization,
+  });
+}
+
 export function getEntitlements(
   orgOrPlan: Pick<Organization, 'plan'> | OrganizationPlan
 ): PlanEntitlements {

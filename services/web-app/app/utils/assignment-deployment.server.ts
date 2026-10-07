@@ -1,7 +1,10 @@
-import type { Organization, Prisma } from '@app/prisma';
+import type { Prisma } from '@app/prisma';
 import { deleteAssignmentPromptAttachment } from '~/domain/assignments/assignment-prompt-attachment.server';
 import { lockClassAssignmentCollaboration } from '~/domain/collaboration/class-assignment-lock.server';
-import { assertCanCreateAssignmentOfKindInTransaction } from '~/utils/assignment-quota.server';
+import {
+  enforceFreeClassroomAssignmentCreateInTransaction,
+  enforceFreeClassroomAssignmentRetypeInTransaction,
+} from '~/utils/assignment-quota.server';
 import { prisma } from '~/utils/db.server';
 
 export class AssignmentHasCollaborativeWorkError extends Error {}
@@ -12,27 +15,17 @@ export async function createAssignmentDeployedToClasses(params: {
     'id' | 'createdAt' | 'updatedAt'
   >;
   classIds: string[];
-  /**
-   * Optional deployment fields applied to every created ClassAssignment row.
-   * When provided, these values are set identically for each target class.
-   */
   deployment?: {
     postAt?: Date | null;
     dueAt?: Date | null;
   };
-  /** When set, enforces free-classroom assignment bundle quotas inside the create transaction. */
-  quotaOrganization?: Pick<Organization, 'id' | 'plan'> | null;
-  assignmentTypeKind?: string | null;
 }) {
   const uniqueClassIds = [...new Set(params.classIds)];
   return prisma.$transaction(async (tx) => {
-    if (params.quotaOrganization) {
-      await assertCanCreateAssignmentOfKindInTransaction(
-        tx,
-        params.quotaOrganization,
-        params.assignmentTypeKind ?? null
-      );
-    }
+    await enforceFreeClassroomAssignmentCreateInTransaction(tx, {
+      classIds: uniqueClassIds,
+      assignmentTypeId: String(params.data.assignmentTypeId),
+    });
     const assignment = await tx.assignment.create({
       data: params.data,
     });
@@ -49,6 +42,40 @@ export async function createAssignmentDeployedToClasses(params: {
     }
 
     return assignment;
+  });
+}
+
+export async function updateAssignmentInClassDeployment(params: {
+  assignmentId: string;
+  classId: string;
+  data: Prisma.AssignmentUncheckedUpdateInput;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.assignment.findFirst({
+      where: {
+        id: params.assignmentId,
+        classAssignments: { some: { classId: params.classId } },
+      },
+      select: { id: true, assignmentTypeId: true },
+    });
+    if (!existing) {
+      throw new Error('assignment_not_found_for_class');
+    }
+    const nextAssignmentTypeId = params.data.assignmentTypeId;
+    if (
+      nextAssignmentTypeId &&
+      nextAssignmentTypeId !== existing.assignmentTypeId
+    ) {
+      await enforceFreeClassroomAssignmentRetypeInTransaction(tx, {
+        classIds: [params.classId],
+        previousAssignmentTypeId: existing.assignmentTypeId,
+        nextAssignmentTypeId: String(nextAssignmentTypeId),
+      });
+    }
+    return tx.assignment.update({
+      where: { id: existing.id },
+      data: params.data,
+    });
   });
 }
 

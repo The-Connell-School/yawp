@@ -41,9 +41,9 @@ const teacher = (user: User) =>
 const student = (user: User) => user.selectedMembership?.role === 'STUDENT';
 const owner = (user: User) => user.selectedMembership?.isOrgOwner;
 const admin = (user: User) => user.isAdmin;
-// Reporter and Writing Practice are now always on for all orgs.
-// Keep role-based visibility (Reporter is teacher-only; Writing Practice is for teachers and students).
-const reporterEnabled = (user: User) => teacher(user);
+const reporterEnabled = (user: User) =>
+  teacher(user) &&
+  user.selectedMembership?.organization?.reporterEnabled !== false;
 const writingPracticeEnabled = (user: User) => teacher(user) || student(user);
 
 const icons = {

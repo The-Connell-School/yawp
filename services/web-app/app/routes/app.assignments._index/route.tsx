@@ -46,7 +46,10 @@ import {
   AssignmentHasCollaborativeWorkError,
   deleteClassAssignmentDeployment,
 } from '~/utils/assignment-deployment.server';
-import { loadAssignmentCreationQuotasForTypes } from '~/utils/assignment-quota.server';
+import {
+  filterAssignmentTypesForOrganizationPlan,
+  loadAssignmentCreationQuotasForTypes,
+} from '~/utils/assignment-quota.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -199,8 +202,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // AP History assignments are built from their own library rather than a
   // free-text prompt, so they are not offered here.
-  const creationTypeRows = availableAssignmentTypes.filter(
-    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+  const creationTypeRows = filterAssignmentTypesForOrganizationPlan<
+    (typeof availableAssignmentTypes)[number]
+  >(
+    profile.organization,
+    availableAssignmentTypes.filter(
+      (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+    )
   );
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)

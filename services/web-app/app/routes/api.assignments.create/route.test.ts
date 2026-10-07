@@ -1375,7 +1375,7 @@ describe('api.assignments.create', () => {
       mockAssignmentTypeAvailable({ kind: 'class_starter' });
     });
 
-    test('passes quota options when creating for a free classroom org', async () => {
+    test('creates through the shared deployment helper for a free classroom org', async () => {
       await action({
         request: requestFor({
           intent: 'create-assignment',
@@ -1389,8 +1389,8 @@ describe('api.assignments.create', () => {
 
       expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
         expect.objectContaining({
-          quotaOrganization: { id: 'org-free', plan: 'FREE_CLASSROOM' },
-          assignmentTypeKind: 'class_starter',
+          classIds: ['class-1'],
+          data: expect.objectContaining({ assignmentTypeId: 'at-1' }),
         })
       );
     });

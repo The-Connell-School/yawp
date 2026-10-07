@@ -19,7 +19,10 @@ import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
-import { loadAssignmentCreationQuotasForTypes } from '~/utils/assignment-quota.server';
+import {
+  filterAssignmentTypesForOrganizationPlan,
+  loadAssignmentCreationQuotasForTypes,
+} from '~/utils/assignment-quota.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import type { TeacherClassCardData } from '~/components/teacher-class-card';
@@ -270,9 +273,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const enabledTeacherClasses =
     !useStudentExperience && assignmentsEnabled ? teacherClassesOrdered : [];
   const assignmentCreationClasses = enabledTeacherClasses;
-  const creationTypeRows = teacherAssignmentTypes.filter(
-    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+  const creationTypeRows = filterAssignmentTypesForOrganizationPlan<AssignmentTypeRow>(
+    profile.organization,
+    teacherAssignmentTypes.filter(
+      (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+    )
   );
+  const teacherAssignmentTypesForGlance =
+    filterAssignmentTypesForOrganizationPlan<AssignmentTypeRow>(
+      profile.organization,
+      teacherAssignmentTypes
+    );
   // One query for the whole list, so the creation sheet knows which types can
   // offer the teacher's grammar-grading toggle.
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
@@ -354,7 +365,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherClassCards,
     totalTeacherClassCount: teacherClasses.length,
     teacherWorkspaceClassStats,
-    teacherAssignmentTypes,
+    teacherAssignmentTypes: teacherAssignmentTypesForGlance,
     assignmentCreationClasses: assignmentCreationClasses.map((klass) => ({
       id: klass.id,
       name: formatClassLabel(klass),

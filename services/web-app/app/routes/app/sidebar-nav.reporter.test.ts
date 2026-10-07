@@ -45,10 +45,10 @@ describe('Reporter sidebar gating', () => {
     ).toBe(true);
   });
 
-  test('still visible for a teacher when the org flag is off', () => {
+  test('hidden for a teacher when the org flag is off', () => {
     expect(
       reporterVisible(userWith({ role: 'TEACHER', reporterEnabled: false }))
-    ).toBe(true);
+    ).toBe(false);
   });
 
   test('hidden for a student even if the org flag is on', () => {

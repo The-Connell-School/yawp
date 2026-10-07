@@ -280,12 +280,14 @@ function initialAssignmentTypeSelection(
   fixedAssignmentTypeId?: string,
   initialAssignmentTypeId?: string
 ) {
-  return (
-    fixedAssignmentTypeId ??
-    initialAssignmentTypeId ??
-    assignmentTypes[0]?.id ??
-    ''
-  );
+  const preferredId =
+    fixedAssignmentTypeId ?? initialAssignmentTypeId ?? undefined;
+  if (preferredId) {
+    const preferred = assignmentTypes.find((type) => type.id === preferredId);
+    if (preferred && !preferred.quotaExhausted) return preferredId;
+  }
+  const firstAvailable = assignmentTypes.find((type) => !type.quotaExhausted);
+  return firstAvailable?.id ?? preferredId ?? assignmentTypes[0]?.id ?? '';
 }
 
 function initialClassIds(fixedClassId?: string) {
