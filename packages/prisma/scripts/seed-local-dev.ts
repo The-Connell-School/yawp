@@ -26,6 +26,7 @@ import {
   UA_PREVIEW_ORG_ID,
   UA_PREVIEW_ORG_NAME,
 } from './local-dev/dev-personas';
+import { seedFreeTierShipReview } from './local-dev/seed-free-tier-ship-review';
 
 assertLocalSeedTarget();
 
@@ -104,6 +105,10 @@ try {
     personas: LOCAL_DEV_PERSONAS,
   });
   console.timeEnd('collaboration');
+
+  console.time('free-tier-ship-review');
+  await seedFreeTierShipReview(prisma);
+  console.timeEnd('free-tier-ship-review');
 
   console.log('🌱 Local dev seed complete.');
   console.log(

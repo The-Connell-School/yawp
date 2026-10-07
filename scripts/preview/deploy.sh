@@ -679,6 +679,10 @@ run_tooling_if_needed() {
       echo "Running AP History library seed on existing preview database (skip path)."
       "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && bun run seed-ap-history-library'
     fi
+    if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-ship-review.ts" ]]; then
+      echo "Running free-tier ship-review fixture seed on existing preview database (skip path)."
+      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && bun run seed-free-tier-ship-review'
+    fi
     return 0
   fi
 
@@ -721,6 +725,9 @@ run_tooling_if_needed() {
   # previews backed by an existing database pick up newly added prompts/sections.
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
     tooling_command+=' && bun run seed-ap-history-library'
+  fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-ship-review.ts" ]]; then
+    tooling_command+=' && bun run seed-free-tier-ship-review'
   fi
 
   "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"

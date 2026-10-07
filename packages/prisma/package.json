@@ -29,6 +29,7 @@
     "seed-class-starter-assignment-type": "bun run scripts/seed-class-starter-assignment-type.ts",
     "seed-free-tier-bundle-assignment-types": "bun run scripts/seed-free-tier-bundle-assignment-types.ts",
     "seed-local-dev": "bun run scripts/seed-local-dev.ts",
+    "seed-free-tier-ship-review": "bun run scripts/seed-free-tier-ship-review.ts",
     "seed-grading-evaluations": "bun run scripts/seed-grading-evaluations.ts",
     "sync-prod-fidelity-fixtures": "bun run scripts/sync-prod-fidelity-fixtures.ts",
     "seed-preview-seats": "bun run scripts/seed-preview-seats.ts",

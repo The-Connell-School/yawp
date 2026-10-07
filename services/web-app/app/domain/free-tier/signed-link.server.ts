@@ -9,8 +9,14 @@ export const RELEASE_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 function linkSecrets() {
   const raw = process.env.FREE_TIER_LINK_HMAC_SECRET?.trim();
-  if (!raw) return [];
-  return raw.split(',').map((s) => s.trim()).filter(Boolean);
+  if (raw) return raw.split(',').map((s) => s.trim()).filter(Boolean);
+  // PR previews share PREVIEW_ACCESS_SECRET across the stack; use it so signed
+  // free-tier links work without a separate secret rotation.
+  if (process.env.YAWP_ENVIRONMENT === 'preview') {
+    const preview = process.env.PREVIEW_ACCESS_SECRET?.trim();
+    if (preview) return [preview];
+  }
+  return [];
 }
 
 export function isFreeTierLinkSigningConfigured() {
