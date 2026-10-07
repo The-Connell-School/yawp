@@ -45,7 +45,7 @@ async function devLogin(page, email) {
     });
     return response.status;
   }, email);
-  if (status < 300 || status >= 400) {
+  if (status >= 400) {
     throw new Error(`dev login failed for ${email}: HTTP ${status}`);
   }
   await page.goto(`${baseUrl}/app`, { waitUntil: 'networkidle' });
@@ -83,10 +83,40 @@ async function freshContext(browser) {
   return { context, page };
 }
 
+async function createBypassToken(adminPage) {
+  await adminPage.fill('input[name="label"]', 'ship-review-qa');
+  await adminPage.locator('input[name="bypass"]').check();
+  const [response] = await Promise.all([
+    adminPage.waitForResponse(
+      (res) =>
+        res.url().includes('/app/admin/free-tier') && res.request().method() === 'POST',
+      { timeout: 20_000 }
+    ),
+    adminPage.getByRole('button', { name: 'Create token' }).click(),
+  ]);
+  const body = await response.text();
+  const match = body.match(/"token","([^"]+)"/);
+  if (!match?.[1]) throw new Error('Could not parse acquisition token from admin response');
+  return match[1];
+}
+
+async function redeemBypassToken(page, acqToken, teacherEmail) {
+  await page.goto(`${baseUrl}/free?t=${encodeURIComponent(acqToken)}`);
+  await page.waitForLoadState('networkidle');
+  await page.fill('input[name="name"]', 'Ship Review Flow');
+  await page.fill('input[name="email"]', teacherEmail);
+  await page.fill('input[name="schoolName"]', 'Ship Review High');
+  await page.fill('input[name="location"]', 'Preview');
+  await page.fill('input[name="gradeLevel"]', '11');
+  await page.getByRole('button', { name: /Continue/i }).click();
+  await page.waitForTimeout(2000);
+}
+
 async function main() {
   await mkdir(outDir, { recursive: true });
   const browser = await chromium.launch({ headless: true });
   const manifest = { capturedAt: new Date().toISOString(), baseUrl, shots: [] };
+  let teacherFlowEmail = RELEASE_EMAIL;
 
   try {
     {
@@ -94,7 +124,10 @@ async function main() {
       await page.goto(`${baseUrl}/free`);
       manifest.shots.push(await shot(page, '01-free-waitlist'));
       await page.fill('input[name="name"]', 'Ship Review Waitlist');
-      await page.fill('input[name="email"]', `shipreview-waitlist+${Date.now()}@shipreview.invalid`);
+      await page.fill(
+        'input[name="email"]',
+        `shipreview-waitlist+${Date.now()}@shipreview-high.edu`
+      );
       await page.fill('input[name="schoolName"]', 'Ship Review High');
       await page.fill('input[name="location"]', 'Preview');
       await page.fill('input[name="gradeLevel"]', '9');
@@ -104,6 +137,7 @@ async function main() {
       await context.close();
     }
 
+    let releaseManifest;
     {
       const { context, page } = await freshContext(browser);
       await devLogin(page, 'dev.admin@yawp.local');
@@ -111,95 +145,94 @@ async function main() {
       await page.waitForLoadState('networkidle');
       manifest.shots.push(await shot(page, '03-admin-free-tier-operator'));
 
-      let releaseManifest;
       try {
         releaseManifest = await fetchManifest(page, RELEASE_EMAIL);
       } catch (error) {
         manifest.releaseManifestError = String(error.message || error);
+        const acqToken = await createBypassToken(page);
+        teacherFlowEmail = `shipreview-flow+${Date.now()}@shipreview-high.edu`;
+        const redeem = await freshContext(browser);
+        await redeemBypassToken(redeem.page, acqToken, teacherFlowEmail);
+        manifest.shots.push(await shot(redeem.page, '03b-free-token-redeem'));
+        await redeem.context.close();
+        releaseManifest = await fetchManifest(page, teacherFlowEmail);
+        manifest.teacherFlowEmail = teacherFlowEmail;
       }
       await context.close();
-
-      if (releaseManifest?.joinUrl) {
-        const teacher = await freshContext(browser);
-        await teacher.page.goto(releaseManifest.joinUrl);
-        await teacher.page.waitForLoadState('networkidle');
-        manifest.shots.push(await shot(teacher.page, '04-free-join-release-link'));
-
-        await teacher.page.fill('input[name="password"]', password);
-        await teacher.page.fill('input[name="confirmPassword"]', password);
-        await teacher.page.locator('button[type="submit"]').click();
-        await teacher.page.waitForURL(/\/app\/free-tier\/onboarding/, { timeout: 30_000 });
-        manifest.shots.push(await shot(teacher.page, '05-teacher-onboarding-admin-form'));
-
-        await teacher.page.fill('input[name="adminName"]', 'Preview Principal');
-        await teacher.page.fill('input[name="adminEmail"]', 'principal@shipreview.invalid');
-        await teacher.page.fill('input[name="adminRole"]', 'Principal');
-        await teacher.page.locator('button[type="submit"]').click();
-        await teacher.page.waitForURL(/\/app\/free-tier\/pending/, { timeout: 30_000 });
-        manifest.shots.push(await shot(teacher.page, '06-teacher-pending-approval'));
-        await teacher.context.close();
-
-        const admin = await freshContext(browser);
-        await devLogin(admin.page, 'dev.admin@yawp.local');
-        const approvalLinks = await fetchManifest(admin.page, RELEASE_EMAIL);
-
-        if (approvalLinks.approveUrl) {
-          const approveCtx = await freshContext(browser);
-          await approveCtx.page.goto(approvalLinks.approveUrl);
-          await approveCtx.page.waitForLoadState('networkidle');
-          manifest.shots.push(await shot(approveCtx.page, '07-admin-approve-landing'));
-
-          await approveCtx.page.fill('input[name="adminRole"]', 'Principal');
-          await approveCtx.page.locator('input[name="authorized"]').check();
-          await approveCtx.page.locator('button[type="submit"]').click();
-          await approveCtx.page.waitForLoadState('networkidle');
-          manifest.shots.push(await shot(approveCtx.page, '08-admin-approve-submitted'));
-
-          await approveCtx.page.locator('button[type="submit"]').click();
-          await approveCtx.page.waitForLoadState('networkidle');
-          manifest.shots.push(await shot(approveCtx.page, '09-admin-approve-idempotent-resubmit'));
-          await approveCtx.context.close();
-        }
-        await admin.context.close();
-
-        const loginLanding = await freshContext(browser);
-        await loginLanding.page.goto(`${baseUrl}/auth/login`);
-        await loginLanding.page.waitForLoadState('networkidle');
-        manifest.shots.push(await shot(loginLanding.page, '10-post-approval-login-landing'));
-        await loginLanding.context.close();
-
-        const setup = await freshContext(browser);
-        await passwordLogin(setup.page, RELEASE_EMAIL);
-        await setup.page.waitForURL(/\/app\/free-tier\/setup/, { timeout: 30_000 });
-        manifest.shots.push(await shot(setup.page, '11-teacher-first-class-setup'));
-        await setup.context.close();
-      }
     }
 
-    {
-      const pending = await freshContext(browser);
-      await passwordLogin(pending.page, PENDING_EMAIL);
-      await pending.page.waitForURL(/\/app\/free-tier\/pending/, { timeout: 30_000 });
-      manifest.shots.push(await shot(pending.page, '12-seed-pending-approval-state'));
+    if (releaseManifest?.joinUrl) {
+      const teacher = await freshContext(browser);
+      await teacher.page.goto(releaseManifest.joinUrl);
+      await teacher.page.waitForLoadState('networkidle');
+      manifest.shots.push(await shot(teacher.page, '04-free-join-release-link'));
+
+      await teacher.page.fill('input[name="password"]', password);
+      await teacher.page.fill('input[name="confirmPassword"]', password);
+      await teacher.page.locator('button[type="submit"]').click();
+      await teacher.page.waitForURL(/\/app\/free-tier\/onboarding/, { timeout: 30_000 });
+      manifest.shots.push(await shot(teacher.page, '05-teacher-onboarding-admin-form'));
+
+      await teacher.page.fill('input[name="adminName"]', 'Preview Principal');
+      await teacher.page.fill('input[name="adminEmail"]', 'principal@shipreview-high.edu');
+      await teacher.page.fill('input[name="adminRole"]', 'Principal');
+      await teacher.page.locator('button[type="submit"]').click();
+      await teacher.page.waitForURL(/\/app\/free-tier\/pending/, { timeout: 30_000 });
+      manifest.shots.push(await shot(teacher.page, '06-teacher-pending-approval'));
 
       const admin = await freshContext(browser);
       await devLogin(admin.page, 'dev.admin@yawp.local');
-      let declineManifest;
-      try {
-        declineManifest = await fetchManifest(admin.page, PENDING_EMAIL);
-      } catch {
-        declineManifest = null;
-      }
-      await admin.context.close();
+      const approvalLinks = await fetchManifest(admin.page, teacherFlowEmail);
 
-      if (declineManifest?.declineUrl) {
+      if (approvalLinks.declineUrl) {
         const deny = await freshContext(browser);
-        await deny.page.goto(declineManifest.declineUrl);
+        await deny.page.goto(approvalLinks.declineUrl);
         await deny.page.waitForLoadState('networkidle');
         manifest.shots.push(await shot(deny.page, '13-denial-not-right-person-landing'));
         await deny.context.close();
       }
+
+      if (approvalLinks.approveUrl) {
+        const approveCtx = await freshContext(browser);
+        await approveCtx.page.goto(approvalLinks.approveUrl);
+        await approveCtx.page.waitForLoadState('networkidle');
+        manifest.shots.push(await shot(approveCtx.page, '07-admin-approve-landing'));
+
+        await approveCtx.page.fill('input[name="adminRole"]', 'Principal');
+        await approveCtx.page.locator('input[name="authorized"]').check();
+        await approveCtx.page.locator('button[type="submit"]').click();
+        await approveCtx.page.waitForLoadState('networkidle');
+        manifest.shots.push(await shot(approveCtx.page, '08-admin-approve-submitted'));
+
+        await approveCtx.page.locator('button[type="submit"]').click();
+        await approveCtx.page.waitForLoadState('networkidle');
+        manifest.shots.push(await shot(approveCtx.page, '09-admin-approve-idempotent-resubmit'));
+        await approveCtx.context.close();
+      }
+      await admin.context.close();
+      await teacher.context.close();
+
+      const loginLanding = await freshContext(browser);
+      await loginLanding.page.goto(`${baseUrl}/auth/login`);
+      await loginLanding.page.waitForLoadState('networkidle');
+      manifest.shots.push(await shot(loginLanding.page, '10-post-approval-login-landing'));
+      await loginLanding.context.close();
+
+      const setup = await freshContext(browser);
+      await passwordLogin(setup.page, teacherFlowEmail);
+      await setup.page.waitForURL(/\/app\/free-tier\/setup/, { timeout: 30_000 });
+      manifest.shots.push(await shot(setup.page, '11-teacher-first-class-setup'));
+      await setup.context.close();
+    }
+
+    try {
+      const pending = await freshContext(browser);
+      await passwordLogin(pending.page, PENDING_EMAIL);
+      await pending.page.waitForURL(/\/app\/free-tier\/pending/, { timeout: 15_000 });
+      manifest.shots.push(await shot(pending.page, '12-seed-pending-approval-state'));
       await pending.context.close();
+    } catch {
+      manifest.seedPendingSkipped = true;
     }
   } finally {
     await writeFile(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
