@@ -73,6 +73,11 @@ export type ResolvedAssignmentTypeGradingConfig = {
     systemMessage: string;
     userMessage: string;
   } | null;
+  /**
+   * Overall scoring mode: weighted category average (default) or rubric-level holistic tier.
+   * Comes from the rubric schema (library or per-type outputSchema override).
+   */
+  scoringMode?: 'weighted_categories' | 'holistic_tier';
 };
 
 export type AssignmentTypeGradingRow = {
@@ -388,6 +393,35 @@ export function buildResolvedAssignmentTypeGradingConfig({
     gradingMode
   );
 
+  // Resolve scoringMode from a library rubric's top-level schema JSON when present,
+  // falling back to any per-type outputSchema override, and defaulting to weighted.
+  const resolveScoringMode = (): 'weighted_categories' | 'holistic_tier' => {
+    // When a library rubric is in use, the original schema JSON may carry a top-level scoringMode.
+    const librarySchema =
+      (row as any)?.rubric?.schemaJson &&
+      typeof (row as any).rubric.schemaJson === 'object'
+        ? ((row as any).rubric.schemaJson as Record<string, unknown>)
+        : null;
+    const libMode =
+      librarySchema &&
+      typeof librarySchema.scoringMode === 'string' &&
+      (librarySchema.scoringMode === 'holistic_tier' ||
+        librarySchema.scoringMode === 'weighted_categories')
+        ? (librarySchema.scoringMode as 'weighted_categories' | 'holistic_tier')
+        : null;
+    if (libMode) return libMode;
+    const outSchema =
+      (parsedConfig.outputSchema as Record<string, unknown>) ?? {};
+    const outMode =
+      typeof outSchema.scoringMode === 'string' &&
+      (outSchema.scoringMode === 'holistic_tier' ||
+        outSchema.scoringMode === 'weighted_categories')
+        ? (outSchema.scoringMode as 'weighted_categories' | 'holistic_tier')
+        : null;
+    return outMode ?? 'weighted_categories';
+  };
+  const scoringMode = resolveScoringMode();
+
   return {
     source: parsedConfig.source,
     rubricName: row?.selectedRubricName ?? null,
@@ -420,6 +454,7 @@ export function buildResolvedAssignmentTypeGradingConfig({
       maxScore,
       ...(rubricTotalPoints === null ? {} : { rubricTotalPoints }),
       ...(gradingMode ? { gradingMode } : {}),
+      ...(scoringMode ? { scoringMode } : {}),
       step,
       scoringType,
     },
@@ -435,6 +470,7 @@ export function buildResolvedAssignmentTypeGradingConfig({
         ? (row?.gradingAssistantSourceTemplateSlug ?? null)
         : null,
     promptTemplate: getManagedPromptTemplate(promptConfigSnapshot),
+    scoringMode,
   };
 }
 

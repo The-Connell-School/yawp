@@ -2732,4 +2732,141 @@ describe('api.domain.grade-essay-ai', () => {
     });
   });
 
+  describe('holistic tier scoring mode', () => {
+    function mockHolisticAssignment(overrides: Record<string, unknown> = {}) {
+      return mockSubmission({
+        id: 'sub-holistic',
+        document: {
+          id: 'doc-holistic',
+          membershipId: 'student-profile-1',
+          assignmentTypeId: 'assignment-type-holistic',
+          assignmentType: {
+            id: 'assignment-type-holistic',
+            kind: null,
+            title: 'In-class Essay/Analysis (Cristo Rey)',
+          },
+          assignment: {
+            id: 'assignment-holistic',
+            prompt: 'Analyze how the author uses a symbol to develop a theme.',
+            pointValue: 20,
+          },
+          classAssignment: { class: { schoolId: 'school-1' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
+        },
+        ...overrides,
+      });
+    }
+
+    beforeEach(() => {
+      prisma.assignmentType.findUnique.mockResolvedValue(
+        mockAssignmentType({
+          id: 'assignment-type-holistic',
+          title: 'In-class Essay/Analysis (Cristo Rey)',
+          gradingOutputSchemaJson: { schemaVersion: 1, scoringMode: 'holistic_tier' },
+          rubricJson: {
+            categories: [
+              { key: 'thesis_and_content', label: 'Thesis/Content', description: 'Clear defensible claim', weight: 0.2 },
+              { key: 'evidence_and_support', label: 'Evidence/Support', description: 'Uses text as evidence', weight: 0.2 },
+              { key: 'analysis_and_reasoning', label: 'Analysis & Reasoning', description: 'Explains how evidence supports the claim', weight: 0.25 },
+              { key: 'organization', label: 'Organization', description: 'Logical progression', weight: 0.15 },
+              { key: 'style_and_voice', label: 'Style & Voice', description: 'Effective language', weight: 0.1 },
+              { key: 'style_and_conventions', label: 'Style & Conventions', description: 'Grammar and mechanics', weight: 0.1 },
+            ],
+          },
+          gradingPromptConfigJson: { gradingInstructions: 'Use rubric language exactly.' },
+        })
+      );
+    });
+
+    test('stores points-only grade using the model tier decision', async () => {
+      prisma.submission.findFirst.mockResolvedValue(mockHolisticAssignment());
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: [
+              { key: 'thesis_and_content', score: 3, comment: 'Clear claim.' },
+              { key: 'evidence_and_support', score: 3, comment: 'Two quotations used.' },
+              { key: 'analysis_and_reasoning', score: 3, comment: 'Explains meaning.' },
+              { key: 'organization', score: 3, comment: 'All elements in order.' },
+              { key: 'style_and_voice', score: 3, comment: 'Direct and readable.' },
+              { key: 'style_and_conventions', score: 3, comment: 'Minor surface errors only.' },
+            ],
+            overallTier: 'excellent',
+            overallPoints: 18,
+            overallComment: 'Jordan, this lands — both quotations are explained and connected.',
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      const form = new FormData();
+      form.append('submissionId', 'sub-holistic');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      const payload = (response as { data: Record<string, unknown> }).data;
+      expect(payload.success).toBe(true);
+      expect(payload.numericPercentage).toBeNull();
+      expect(payload.letterGrade).toBeNull();
+      expect(payload.overallScore).toBe(18);
+      expect(payload.score).toBe('18/20');
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.numericPercentage).toBeNull();
+      expect(stored.letterGrade).toBeNull();
+      expect(stored.overallScore).toBe(18);
+      expect(stored.score).toBe('18/20');
+      expect(stored.aiMeta.scoringMode).toBe('holistic_tier');
+    });
+
+    test('clamps points to the chosen tier band and records meta', async () => {
+      prisma.submission.findFirst.mockResolvedValue(mockHolisticAssignment());
+      getLLMCompletion.mockReset();
+      // "good" on a 20-point assignment allows 16–17; request 20 to trigger clamp
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: [
+              { key: 'thesis_and_content', score: 3, comment: 'Clear claim.' },
+              { key: 'evidence_and_support', score: 3, comment: 'Two quotations used.' },
+              { key: 'analysis_and_reasoning', score: 3, comment: 'Explains meaning.' },
+              { key: 'organization', score: 3, comment: 'All elements in order.' },
+              { key: 'style_and_voice', score: 3, comment: 'Direct and readable.' },
+              { key: 'style_and_conventions', score: 3, comment: 'Minor surface errors only.' },
+            ],
+            overallTier: 'good',
+            overallPoints: 20,
+            overallComment: 'Jordan, mostly there, with one element thinly done.',
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      const form = new FormData();
+      form.append('submissionId', 'sub-holistic');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      const payload = (response as { data: Record<string, unknown> }).data;
+      expect(payload.success).toBe(true);
+      expect(payload.score).toBe('17/20'); // clamped to the band top
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.score).toBe('17/20');
+      expect(stored.aiMeta.holistic).toMatchObject({
+        requestedPoints: 20,
+        storedPoints: 17,
+        totalPoints: 20,
+      });
+    });
+  });
+
 });

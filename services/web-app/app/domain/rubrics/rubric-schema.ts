@@ -25,6 +25,12 @@ export type RubricSchema = {
   promptConfig: PromptConfigData;
   outputSchema: Record<string, unknown>;
   calibrationNotes: string | null;
+  /**
+   * How the overall score is computed and displayed.
+   * - weighted_categories (default): today's behavior; overall comes from weighted category scores
+   * - holistic_tier: the model picks a tier and points out of the assignment total; categories explain only
+   */
+  scoringMode?: 'weighted_categories' | 'holistic_tier';
 };
 
 export type RubricSchemaParseResult =
@@ -113,6 +119,11 @@ export function parseRubricSchema(raw: unknown): RubricSchemaParseResult {
         ? raw.outputSchema
         : { ...DEFAULT_OUTPUT_SCHEMA_JSON },
       calibrationNotes: readString(raw.calibrationNotes) || null,
+      scoringMode:
+        readString((raw as Record<string, unknown>).scoringMode) ===
+        'holistic_tier'
+          ? 'holistic_tier'
+          : 'weighted_categories',
     },
   };
 }
@@ -128,6 +139,9 @@ export function formatRubricSchema(schema: RubricSchema) {
       promptConfig: schema.promptConfig,
       outputSchema: schema.outputSchema,
       calibrationNotes: schema.calibrationNotes,
+      ...(schema.scoringMode
+        ? { scoringMode: schema.scoringMode }
+        : {}),
     },
     null,
     2

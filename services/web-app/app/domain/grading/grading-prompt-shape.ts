@@ -27,6 +27,8 @@ export type GradingPromptShape = {
   systemPrompt: string;
   /** The rubric block dropped into the user prompt. */
   rubricText: string;
+  /** Whether the overall score comes from a holistic tier + points. */
+  holisticScoring: boolean;
 };
 
 /**
@@ -48,17 +50,30 @@ export function buildGradingResponseSchemaText({
   maxScore,
   categoryFeedbackEnabled,
   teacherNotesEnabled = false,
+  scoringMode = 'weighted_categories',
+  assignmentPointTotal = null,
 }: {
   minScore: number;
   maxScore: number;
   categoryFeedbackEnabled: boolean;
   teacherNotesEnabled?: boolean;
+  scoringMode?: 'weighted_categories' | 'holistic_tier';
+  assignmentPointTotal?: number | null;
 }) {
   const categoryFields = categoryFeedbackEnabled
     ? `{"key": string, "score": ${minScore}-${maxScore}, "comment": string}`
     : `{"key": string, "score": ${minScore}-${maxScore}}`;
-
-  return `{\n  "categories": [${categoryFields}],\n  "overallComment": string${teacherNotesEnabled ? ',\n  "teacherNote": string | null' : ''}\n}`;
+  const holisticFields =
+    scoringMode === 'holistic_tier'
+      ? `,\n  "overallTier": "excellent" | "good" | "needs_more" | "not_present",\n  "overallPoints": integer${
+          assignmentPointTotal != null
+            ? ` (0..${Math.max(0, Math.round(assignmentPointTotal))})`
+            : ''
+        }`
+      : '';
+  return `{\n  "categories": [${categoryFields}],\n  "overallComment": string${
+    teacherNotesEnabled ? ',\n  "teacherNote": string | null' : ''
+  }${holisticFields}\n}`;
 }
 
 /**
@@ -113,6 +128,8 @@ export function buildGradingPromptShape({
   studentFirstName,
   teacherNotesEnabled = false,
   gradingMode,
+  scoringMode = 'weighted_categories',
+  assignmentPointTotal = null,
 }: {
   categories: GradingPromptCategory[];
   minScore: number;
@@ -120,6 +137,8 @@ export function buildGradingPromptShape({
   studentFirstName: string;
   teacherNotesEnabled?: boolean;
   gradingMode?: 'step' | 'bands';
+  scoringMode?: 'weighted_categories' | 'holistic_tier';
+  assignmentPointTotal?: number | null;
 }): GradingPromptShape {
   const categoryFeedbackEnabled = resolveCategoryFeedbackEnabled(categories);
   const bandScored = isBandScoredRubric(categories);
@@ -128,6 +147,8 @@ export function buildGradingPromptShape({
     maxScore,
     categoryFeedbackEnabled,
     teacherNotesEnabled,
+    scoringMode,
+    assignmentPointTotal: scoringMode === 'holistic_tier' ? assignmentPointTotal : null,
   });
 
   const feedbackRule = categoryFeedbackEnabled
@@ -154,6 +175,16 @@ export function buildGradingPromptShape({
     scoringRule,
     judgmentRule,
     feedbackRule,
+    ...(scoringMode === 'holistic_tier'
+      ? [
+          // Holistic scoring instructions reflect the GA specification.
+          'Set the overall grade holistically by choosing a tier and points out of the assignment total.',
+          'Tiers: excellent (90–100%), good (80–89%), needs_more (70–79%), not_present (0–69%).',
+          'Pick the tier based only on the assignment\'s required elements and depth of analysis. Categories explain the decision; they do not move the paper across tiers.',
+          'Points must be a whole number inside the chosen tier\'s band. Compute the tier bands from the assignment\'s total as: lower = round(pct × total), upper = (next tier\'s lower) − 1; excellent upper is total.',
+          'Report points only; do not report a percentage.',
+        ]
+      : []),
     ...(teacherNotesEnabled ? [
       TEACHER_NOTES_EVIDENCE_RULE,
       'teacherNote is private to the teacher. Use only observations explicitly requested in the grading instructions; return null when there is no observation.',
@@ -169,5 +200,6 @@ export function buildGradingPromptShape({
     bandScored,
     systemPrompt,
     rubricText: buildGradingRubricText(categories),
+    holisticScoring: scoringMode === 'holistic_tier',
   };
 }

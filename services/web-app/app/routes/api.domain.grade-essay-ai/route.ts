@@ -1138,6 +1138,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     writingTimeMinutes: writingConditions.writingTimeMinutes,
     coldWrite: submission.document.assignment?.tutorEnabled === false,
     paragraphMode: writingConditions.paragraphMode,
+    assignmentPointTotal: submission.document.assignment?.pointValue ?? null,
   });
   const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
@@ -1252,8 +1253,43 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   const parseAiResponse = async (rawResponseText: string) => {
     const parsedJson = parseFirstJsonValue(rawResponseText);
     const parsed = tryParseAiResponse(parsedJson);
-    if (parsed?.overallComment) return parsed;
+    if (parsed?.overallComment) {
+      if (isRecord(parsedJson)) {
+        const maybePoints = (parsedJson as any).overallPoints;
+        const maybeTier = (parsedJson as any).overallTier;
+        if (
+          (typeof maybePoints === 'number' || typeof maybePoints === 'string') &&
+          typeof maybeTier === 'string'
+        ) {
+          return {
+            ...parsed,
+            // @ts-expect-error carry through extra fields when present
+            overallPoints: Number(maybePoints),
+            // @ts-expect-error carry through extra fields when present
+            overallTier: maybeTier,
+          } as any;
+        }
+      }
+      return parsed;
+    }
     if (parsed?.categories) {
+      // If the model already returned holistic fields, preserve them regardless of mode.
+      if (isRecord(parsedJson)) {
+        const maybePoints = (parsedJson as any).overallPoints;
+        const maybeTier = (parsedJson as any).overallTier;
+        if (
+          (typeof maybePoints === 'number' || typeof maybePoints === 'string') &&
+          typeof maybeTier === 'string'
+        ) {
+          return {
+            ...parsed,
+            // @ts-expect-error carry through extra fields when present
+            overallPoints: Number(maybePoints),
+            // @ts-expect-error carry through extra fields when present
+            overallTier: maybeTier,
+          } as any;
+        }
+      }
       return buildAiResponseFromCategories(parsed.categories, parsed.teacherNote);
     }
 
@@ -1316,20 +1352,87 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   }, {});
 
   const overallComment = parsed.overallComment;
-  const baseGradeFields = buildDynamicGradeFields({
-    categories: parsed.categories,
-    rubricScores,
-    scoringType,
-    maxScore,
-    rubricCategories,
-    bandScored: promptShape.bandScored,
-  });
-  const { overallScore, numericPercentage, letterGrade, score } =
-    applyStrictnessToGradeFields({
+  // Compute overall grading fields, honoring holistic mode when selected.
+  let overallScore: number;
+  let numericPercentage: number | null;
+  let letterGrade: string | null;
+  let score: string;
+  const holisticSelected =
+    (resolvedGradingConfig.scoringMode ?? 'weighted_categories') ===
+      'holistic_tier' ||
+    (parsed as any)?.overallTier != null ||
+    (parsed as any)?.overallPoints != null;
+  if (holisticSelected) {
+    const totalRaw =
+      submission.document.assignment?.pointValue == null
+        ? null
+        : Number(submission.document.assignment?.pointValue);
+    const assignmentTotal =
+      totalRaw == null || !Number.isFinite(totalRaw) || totalRaw <= 0
+        ? 10
+        : totalRaw;
+    const round = (n: number) => Math.round(n);
+    const lowerExcellent = round(0.9 * assignmentTotal);
+    const lowerGood = round(0.8 * assignmentTotal);
+    const lowerNeedsMore = round(0.7 * assignmentTotal);
+    const bandByTier = {
+      excellent: { min: lowerExcellent, max: assignmentTotal },
+      good: { min: lowerGood, max: lowerExcellent - 1 },
+      needs_more: { min: lowerNeedsMore, max: lowerGood - 1 },
+      not_present: { min: 0, max: lowerNeedsMore - 1 },
+    } as const;
+    const tier =
+      (((parsed as any).overallTier as
+        | 'excellent'
+        | 'good'
+        | 'needs_more'
+        | 'not_present') ?? 'not_present');
+    const reqPointsAny = (parsed as any).overallPoints;
+    const requestedPoints =
+      typeof reqPointsAny === 'number'
+        ? reqPointsAny
+        : typeof reqPointsAny === 'string'
+          ? Number.parseInt(reqPointsAny, 10)
+          : Number.NaN;
+    const band = bandByTier[tier] ?? bandByTier.not_present;
+    const clamped =
+      requestedPoints < band.min
+        ? band.min
+        : requestedPoints > band.max
+          ? band.max
+          : requestedPoints;
+    if (requestedPoints !== clamped) {
+      console.warn('Holistic grading points adjusted to band', {
+        requestedPoints,
+        adjustedPoints: clamped,
+        tier,
+        band,
+        assignmentTotal,
+      });
+    }
+    overallScore = clamped;
+    numericPercentage = null;
+    letterGrade = null;
+    score = `${overallScore}/${assignmentTotal}`;
+  } else {
+    const baseGradeFields = buildDynamicGradeFields({
+      categories: parsed.categories,
+      rubricScores,
+      scoringType,
+      maxScore,
+      rubricCategories,
+      bandScored: promptShape.bandScored,
+    });
+    const adjusted = applyStrictnessToGradeFields({
       ...baseGradeFields,
       scoringType,
       gradingAssistantStrictnessLevel,
     });
+    overallScore = adjusted.overallScore;
+    numericPercentage = adjusted.numericPercentage;
+    letterGrade = adjusted.letterGrade;
+    score = adjusted.score ?? '';
+  }
 
   // Grammar/syntax highlighting has always run for every non-AP-History
   // rubric, so a rubric whose categories say nothing about it keeps running it.
@@ -1497,6 +1600,22 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
       rubricCategoryKeys: rubricKeys,
       documentContext,
+      scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
+      ...(holisticSelected
+        ? {
+            holistic: {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+              tier: (parsed as any).overallTier ?? null,
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+              requestedPoints:
+                typeof (parsed as any).overallPoints === 'number'
+                  ? (parsed as any).overallPoints
+                  : null,
+              storedPoints: overallScore,
+              totalPoints: submission.document.assignment?.pointValue ?? null,
+            },
+          }
+        : {}),
     } satisfies Prisma.InputJsonValue,
     ...(!submission.gradedAt
       ? { gradedAt: now, gradedByMembershipId: gradeActorMembershipId }
@@ -1572,6 +1691,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
               rubricCategoryKeys: rubricKeys,
               gradedAt: now.toISOString(),
               documentContext,
+              scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
             } satisfies Prisma.InputJsonValue,
           },
           select: { id: true },
