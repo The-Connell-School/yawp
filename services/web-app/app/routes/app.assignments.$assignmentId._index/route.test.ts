@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   class: { findFirst: mock() },
   assignment: { findFirst: mock(), update: mock() },
+  assignmentType: { findFirst: mock(), findMany: mock() },
   documentGroup: { findFirst: mock() },
   classAssignment: { findMany: mock() },
   classAssignmentInsight: { findUnique: mock() },
@@ -99,6 +100,10 @@ describe('app.assignments.$assignmentId loader', () => {
     prisma.class.findFirst.mockReset();
     prisma.assignment.findFirst.mockReset();
     prisma.assignment.update.mockReset();
+    prisma.assignmentType.findFirst
+      .mockReset()
+      .mockResolvedValue({ kind: null, rubric: null });
+    prisma.assignmentType.findMany.mockReset().mockResolvedValue([]);
     prisma.documentGroup.findFirst.mockReset();
     prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
   });
