@@ -28,19 +28,24 @@ export function RubricTeacherNotesToggle({
   }, [state?.catalogKey, state?.fingerprint, state?.teacherNotesEnabled]);
 
   useEffect(() => {
-    if (fetcher.data && 'status' in fetcher.data && fetcher.data.status === 'success') {
+    const data = fetcher.data;
+    if (!data) return;
+    if ('status' in data && data.status === 'success') {
+      const success = data;
       setLocal((current) =>
         current
           ? {
               ...current,
-              teacherNotesEnabled: fetcher.data.teacherNotesEnabled,
-              fingerprint: fetcher.data.fingerprint,
+              teacherNotesEnabled: success.teacherNotesEnabled,
+              fingerprint: success.fingerprint,
             }
           : current
       );
       setError(null);
-    } else if (fetcher.data && 'error' in fetcher.data) {
-      setError(fetcher.data.error);
+      return;
+    }
+    if ('error' in data) {
+      setError(data.error);
     }
   }, [fetcher.data]);
 
@@ -57,7 +62,7 @@ export function RubricTeacherNotesToggle({
   const checked = local.teacherNotesEnabled;
 
   function handleChange(enabled: boolean) {
-    if (!canEdit || pending) return;
+    if (!canEdit || pending || !local) return;
     setError(null);
     fetcher.submit(
       JSON.stringify({

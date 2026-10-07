@@ -102,8 +102,8 @@ test.describe.serial('Admin teacher notes output toggle', () => {
           id: document.id,
           documentId: document.id,
           title: document.title,
-          text: document.text,
-          html: document.html,
+          text: document.text ?? '',
+          html: document.html ?? '',
           submittedAt: new Date(),
         },
       });
