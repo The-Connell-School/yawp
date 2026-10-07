@@ -1353,6 +1353,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   let numericPercentage: number | null;
   let letterGrade: string | null;
   let score: string;
+  // Blackboard/LTI needs a percent even when holistic mode stores points-only.
+  let ltiPassbackPercentage: number | null = null;
   const holisticSelected =
     (resolvedGradingConfig.scoringMode ?? 'weighted_categories') ===
     'holistic_tier';
@@ -1491,6 +1493,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       numericPercentage = null;
       letterGrade = null;
       score = `${overallScore}/${assignmentTotal}`;
+      ltiPassbackPercentage =
+        assignmentTotal > 0 ? Math.round((overallScore / assignmentTotal) * 100) : null;
     } else {
       // Holistic configured, but invalid. Fall back to weighted without crashing.
       holisticFallbackReason = holisticFallbackReason ?? 'invalid_output';
@@ -1511,6 +1515,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       numericPercentage = adjusted.numericPercentage;
       letterGrade = adjusted.letterGrade;
       score = adjusted.score ?? '';
+      ltiPassbackPercentage = adjusted.numericPercentage;
     }
   } else {
     const baseGradeFields = buildDynamicGradeFields({
@@ -1530,6 +1535,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     numericPercentage = adjusted.numericPercentage;
     letterGrade = adjusted.letterGrade;
     score = adjusted.score ?? '';
+    ltiPassbackPercentage = adjusted.numericPercentage;
   }
 
   // Grammar/syntax highlighting has always run for every non-AP-History
@@ -1834,7 +1840,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
   // Dev-only: attempt Blackboard mock AGS passback when configured
   try {
-    await maybePostGradeToBlackboard({ numericPercentage });
+    await maybePostGradeToBlackboard({ numericPercentage: ltiPassbackPercentage });
   } catch (error) {
     console.warn('Blackboard AGS passback (mock) failed', { error });
   }
