@@ -41,8 +41,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
     app.status === 'MANUAL_REVIEW' ||
     email === SHIP_REVIEW_PENDING_EMAIL
   ) {
+    const pendingApproval = await prisma.freeTierAdminApproval.findFirst({
+      where: { applicationId: app.id, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
     const approve = await mintSignedLink({ applicationId: app.id, purpose: 'ADMIN_APPROVE' });
     const decline = await mintSignedLink({ applicationId: app.id, purpose: 'ADMIN_NOT_RIGHT_PERSON' });
+    if (pendingApproval) {
+      await prisma.freeTierAdminApproval.update({
+        where: { id: pendingApproval.id },
+        data: { signedLinkId: approve.linkId },
+      });
+    }
     out.approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(approve.token)}`;
     out.declineUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`;
   }

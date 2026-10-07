@@ -242,8 +242,16 @@ async function main() {
 
         await approveCtx.page.fill('input[name="adminRole"]', 'Principal');
         await approveCtx.page.locator('input[name="authorized"]').check();
-        await approveCtx.page.locator('button[type="submit"]').click();
+        await Promise.all([
+          approveCtx.page.waitForResponse(
+            (res) =>
+              res.url().includes('/free/admin/approve') && res.request().method() === 'POST',
+            { timeout: 45_000 }
+          ),
+          approveCtx.page.locator('button[type="submit"]').click(),
+        ]);
         await approveCtx.page.waitForLoadState('networkidle');
+        await approveCtx.page.reload({ waitUntil: 'networkidle' });
         manifest.shots.push(await shot(approveCtx.page, '08-admin-approve-submitted'));
 
         try {
