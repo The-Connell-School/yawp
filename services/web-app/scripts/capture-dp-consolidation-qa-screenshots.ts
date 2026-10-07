@@ -70,36 +70,47 @@ async function openQaClass(page: Page) {
   await page.waitForLoadState('networkidle');
 }
 
-async function openAssignmentDetail(page: Page, assignmentTitle: string) {
+async function openDocumentsTab(page: Page) {
   await openQaClass(page);
-  const assignmentsTab = page.getByRole('tab', { name: /Assignments/i });
-  if (await assignmentsTab.isVisible().catch(() => false)) {
-    await assignmentsTab.click();
-  }
-  await page.getByText(assignmentTitle, { exact: false }).first().click({
-    timeout: 60_000,
-  });
+  const documentsTab = page.getByRole('tab', { name: /^Documents$/i });
+  await documentsTab.click({ timeout: 60_000 });
   await page.waitForLoadState('networkidle');
 }
 
-async function openSubmissionForAssignment(page: Page, assignmentTitle: string) {
-  await openAssignmentDetail(page, assignmentTitle);
-  const submissionLink = page.locator('a[href*="/app/submissions/"]').first();
-  await submissionLink.click({ timeout: 60_000 });
+/** Teacher class documents rows navigate straight to the submission when one exists. */
+async function openSubmissionViaDocumentTitle(page: Page, documentTitle: string) {
+  await openDocumentsTab(page);
+  const row = page.getByRole('row').filter({ hasText: documentTitle }).first();
+  await row.click({ timeout: 60_000 });
+  await page.waitForURL(/\/app\/submissions\//, { timeout: 60_000 });
+  await page.waitForLoadState('networkidle');
+}
+
+async function openAssignmentFromClassTab(page: Page, assignmentTitle: string) {
+  await openQaClass(page);
+  const assignmentsTab = page.getByRole('tab', { name: /^Assignments$/i });
+  await assignmentsTab.click({ timeout: 60_000 });
+  const row = page.getByRole('row').filter({ hasText: assignmentTitle }).first();
+  await row.click({ timeout: 60_000 });
+  await page.waitForURL(/\/app\/assignments\//, { timeout: 60_000 });
   await page.waitForLoadState('networkidle');
 }
 
 async function openPinnedLegacyEdit(page: Page) {
-  await openAssignmentDetail(page, 'DP QA Pinned Legacy (Preview)');
-  const assignmentUrl = page.url();
-  const assignmentId = assignmentUrl.match(/assignments\/([^/?]+)/)?.[1];
-  if (!assignmentId) {
-    await page.getByRole('button', { name: /^Edit/i }).click();
-  } else {
-    await page.goto(`${baseUrl}/app/assignments/${assignmentId}`);
-    await page.getByRole('button', { name: /^Edit/i }).click();
-  }
+  await openAssignmentFromClassTab(page, 'DP QA Pinned Legacy (Preview)');
+  await page.getByRole('button', { name: /^Edit/i }).click({ timeout: 60_000 });
   await page.getByRole('dialog').waitFor({ timeout: 60_000 });
+}
+
+async function openSwapPersistenceSpecG(page: Page) {
+  await openDocumentsTab(page);
+  await page.getByText('DP QA Swap Persistence (Preview)', { exact: false }).first().waitFor({
+    timeout: 60_000,
+  });
+  await page.getByText('DP QA swap persistence doc', { exact: false }).first().waitFor({
+    timeout: 60_000,
+  });
+  await page.getByText(/10\s*\/\s*12/).first().waitFor({ timeout: 60_000 });
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -141,16 +152,13 @@ try {
   await shot(page, 'c-create-12pt');
   await page.getByRole('button', { name: 'Cancel' }).click();
 
-  await openSubmissionForAssignment(
-    page,
-    'DP QA Class Starter Grading (Preview)'
-  );
+  await openSubmissionViaDocumentTitle(page, 'DP QA class starter doc');
   await page
     .getByTestId('grading-rubric-score-engagement_with_prompt')
     .waitFor({ timeout: 60_000 });
   await shot(page, 'd-class-starter-grading');
 
-  await openSubmissionForAssignment(page, 'DP QA Teacher Notes (Preview)');
+  await openSubmissionViaDocumentTitle(page, 'DP QA teacher notes doc');
   await page
     .getByRole('region', { name: 'Teacher Context' })
     .waitFor({ timeout: 60_000 });
@@ -160,11 +168,7 @@ try {
   await shot(page, 'f-pinned-legacy-tiers');
   await page.getByRole('button', { name: 'Cancel' }).click();
 
-  await openQaClass(page);
-  await page.getByText('DP QA Swap Persistence (Preview)').waitFor({
-    timeout: 60_000,
-  });
-  await page.getByText('10/12').waitFor();
+  await openSwapPersistenceSpecG(page);
   await shot(page, 'g-spec-g-persistence');
 
   console.log(JSON.stringify({ status: 'ok', outputDir, baseUrl }, null, 2));
