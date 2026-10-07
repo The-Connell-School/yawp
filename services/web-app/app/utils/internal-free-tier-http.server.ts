@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { createAcquisitionTokens, getFreeTierReleaseCap, releaseBatch, releaseBatchSchema, tokenCreateSchema } from '~/domain/free-tier/service.server';
 import { readBoundedText } from '~/utils/bounded-body.server';
-import { getApprovalHooks } from '~/domain/free-tier/approval-hooks.server';
+import {
+  ensureFreeTierProductionApprovalHooks,
+  getApprovalHooks,
+} from '~/domain/free-tier/approval-hooks.server';
 import type { FreeTierApplicationStatus } from '@app/prisma';
 
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
@@ -463,6 +466,7 @@ export const REJECTABLE_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED', 
 export const MANUAL_REVIEW_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED', 'SENT'];
 
 export async function approveHttp(request: Request) {
+  ensureFreeTierProductionApprovalHooks();
   const denied = authenticate(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
