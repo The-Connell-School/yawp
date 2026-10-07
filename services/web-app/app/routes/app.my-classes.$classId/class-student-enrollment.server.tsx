@@ -9,6 +9,7 @@ import {
   lockClassCollaborationDeployments,
   lockStudentRosters,
 } from '~/domain/collaboration/class-assignment-lock.server';
+import { assertFreeClassSeatAvailableInTx } from '~/domain/free-tier/class-seat-cap.server';
 
 export type StudentEmailLookupResult =
   | { status: 'existing'; email: string }
@@ -173,14 +174,33 @@ export async function enrollExistingStudentInClass({
     };
   }
 
-  await prisma.$transaction(async (tx) => {
-    await lockStudentRosters(tx, [orgMembership.id]);
-    await lockClassCollaborationDeployments(tx, classId);
-    await tx.orgMembership.update({
-      where: { id: orgMembership.id },
-      data: { classesAsStudent: { connect: { id: classId } } },
+  try {
+    await prisma.$transaction(async (tx) => {
+      const seat = await assertFreeClassSeatAvailableInTx(tx, {
+        classId,
+        organizationId,
+      });
+      if (!seat.ok) {
+        throw Object.assign(new Error(seat.error), { code: seat.code });
+      }
+      await lockStudentRosters(tx, [orgMembership.id]);
+      await lockClassCollaborationDeployments(tx, classId);
+      await tx.orgMembership.update({
+        where: { id: orgMembership.id },
+        data: { classesAsStudent: { connect: { id: classId } } },
+      });
     });
-  });
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: string }).code === 'class_full'
+    ) {
+      return { status: 'error', error: (error as Error).message };
+    }
+    throw error;
+  }
 
   return { status: 'enrolled' };
 }
@@ -296,12 +316,31 @@ export async function sendStudentClassInvite({
     metadata: JSON.stringify({ klassId: classId }),
   };
 
-  await prisma.$transaction([
-    ...(existingInvitation
-      ? [prisma.invitation.delete({ where: { id: existingInvitation.id } })]
-      : []),
-    prisma.invitation.create({ data: verificationData }),
-  ]);
+  try {
+    await prisma.$transaction(async (tx) => {
+      const seat = await assertFreeClassSeatAvailableInTx(tx, {
+        classId,
+        organizationId,
+      });
+      if (!seat.ok) {
+        throw Object.assign(new Error(seat.error), { code: seat.code });
+      }
+      if (existingInvitation) {
+        await tx.invitation.delete({ where: { id: existingInvitation.id } });
+      }
+      await tx.invitation.create({ data: verificationData });
+    });
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: string }).code === 'class_full'
+    ) {
+      return { status: 'error', error: (error as Error).message };
+    }
+    throw error;
+  }
 
   const response = await sendEmail({
     to: email,

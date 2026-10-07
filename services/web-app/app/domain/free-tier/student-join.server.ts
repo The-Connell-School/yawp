@@ -1,10 +1,10 @@
 import { prisma } from '~/utils/db.server';
 import { getPasswordHash } from '~/utils/auth.server';
-import { getEntitlements } from '~/utils/entitlements.server';
 import {
   suggestAvailableUsernames,
   validateUsername,
 } from '~/utils/username.server';
+import { assertFreeClassSeatAvailableInTx } from './class-seat-cap.server';
 import { getSessionExpirationDateForUser } from '~/utils/auth.server';
 import {
   isPrismaUniqueViolation,
@@ -102,26 +102,6 @@ export async function ensureClassStudentJoinToken(classId: string) {
   throw new Error('Could not allocate student join token.');
 }
 
-async function assertClassHasSeat(classId: string, organizationId: string) {
-  const entitlements = getEntitlements('FREE_CLASSROOM');
-  const classRow = await prisma.class.findFirst({
-    where: { id: classId, school: { organizationId } },
-    select: { _count: { select: { students: true } } },
-  });
-  if (!classRow) {
-    return { ok: false as const, error: 'Class not found.' };
-  }
-  if (
-    !entitlements.canAddStudent({ currentStudents: classRow._count.students })
-  ) {
-    return {
-      ok: false as const,
-      error: 'This class is full. Ask your teacher for help.',
-    };
-  }
-  return { ok: true as const };
-}
-
 export async function registerFreeTierStudent({
   name,
   username: rawUsername,
@@ -168,18 +148,6 @@ export async function registerFreeTierStudent({
     };
   }
 
-  const seat = await assertClassHasSeat(
-    klass.id,
-    klass.school.organizationId
-  );
-  if (!seat.ok) {
-    return {
-      status: 'error' as const,
-      field: 'classId' as const,
-      error: seat.error,
-    };
-  }
-
   const taken = await prisma.user.findFirst({
     where: { username: usernameResult.username },
     select: { id: true },
@@ -196,20 +164,32 @@ export async function registerFreeTierStudent({
 
   const hashedPassword = await getPasswordHash(password);
   try {
-    const membership = await prisma.orgMembership.create({
-      data: {
-        user: {
-          create: {
-            name: name.trim(),
-            username: usernameResult.username,
-            password: { create: { hash: hashedPassword } },
+    const membership = await prisma.$transaction(async (tx) => {
+      const seat = await assertFreeClassSeatAvailableInTx(tx, {
+        classId: klass.id,
+        organizationId: klass.school.organizationId,
+      });
+      if (!seat.ok) {
+        throw Object.assign(new Error(seat.error), {
+          code: seat.code,
+        });
+      }
+
+      return tx.orgMembership.create({
+        data: {
+          user: {
+            create: {
+              name: name.trim(),
+              username: usernameResult.username,
+              password: { create: { hash: hashedPassword } },
+            },
           },
+          organization: { connect: { id: klass.school.organizationId } },
+          role: 'STUDENT',
+          classesAsStudent: { connect: { id: klass.id } },
         },
-        organization: { connect: { id: klass.school.organizationId } },
-        role: 'STUDENT',
-        classesAsStudent: { connect: { id: klass.id } },
-      },
-      select: { id: true, userId: true },
+        select: { id: true, userId: true },
+      });
     });
 
     const session = await prisma.session.create({
@@ -227,6 +207,18 @@ export async function registerFreeTierStudent({
       userId: membership.userId,
     };
   } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: string }).code === 'class_full'
+    ) {
+      return {
+        status: 'error' as const,
+        field: 'classId' as const,
+        error: (error as Error).message,
+      };
+    }
     if (isUsernameUniqueViolation(error)) {
       const suggestions = await suggestAvailableUsernames(usernameResult.username);
       return {
