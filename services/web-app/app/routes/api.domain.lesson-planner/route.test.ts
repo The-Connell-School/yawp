@@ -6,9 +6,26 @@ const requireLessonPlannerAccess = mock();
 const handleLessonPlannerToolCall = mock();
 const reserveAiRequest = mock();
 class AiRateLimitError extends Error {
-  constructor(readonly retryAfterSeconds: number) {
+  constructor(
+    readonly retryAfterSeconds: number,
+    readonly scope: 'membership' | 'organization' = 'membership'
+  ) {
     super('rate limited');
   }
+}
+
+function systemText(system: unknown): string {
+  if (typeof system === 'string') return system;
+  if (Array.isArray(system)) {
+    return system
+      .map((block) =>
+        block && typeof block === 'object' && 'text' in block
+          ? String((block as { text: string }).text)
+          : ''
+      )
+      .join('\n');
+  }
+  return '';
 }
 
 const prisma = {
@@ -217,9 +234,7 @@ describe('api.domain.lesson-planner action', () => {
         writingPracticeEnabled: true,
       }
     );
-    // Writing Practice is on for every school, whatever the retired
-    // organization flag still says, so practice is always taught.
-    expect(llmArgs.system as string).toContain('yawp-practice');
+    expect(systemText(llmArgs.system)).toContain('yawp-practice');
   });
 
   test('lets a school with Writing Practice assign practice from a lesson', async () => {
@@ -243,7 +258,7 @@ describe('api.domain.lesson-planner action', () => {
     await action({ request: formRequest({ message: 'hi' }) } as any);
 
     const llmArgs = getLLMCompletion.mock.calls[0][0];
-    expect(llmArgs.system as string).toContain('yawp-practice');
+    expect(systemText(llmArgs.system)).toContain('yawp-practice');
     llmArgs.handleToolCall('list_writing_lessons', {});
     expect(handleLessonPlannerToolCall).toHaveBeenCalledWith(
       'list_writing_lessons',
@@ -722,7 +737,7 @@ describe('api.domain.lesson-planner action — building one day of a unit', () =
       }),
     } as any);
 
-    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    const system = systemText(getLLMCompletion.mock.calls[0][0].system);
     const lower = system.toLowerCase();
     expect(lower).toContain('day 2 of 2');
     expect(lower).toContain('choose the quote that proves the claim');
@@ -787,7 +802,7 @@ describe('api.domain.lesson-planner action — building one day of a unit', () =
       }),
     } as any);
 
-    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    const system = systemText(getLLMCompletion.mock.calls[0][0].system);
     expect(system.toLowerCase()).not.toContain(
       'building one day out of a unit'
     );
