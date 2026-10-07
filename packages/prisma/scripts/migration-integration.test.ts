@@ -55,6 +55,10 @@ function jsonQuery(sql: string) {
   return JSON.parse(line);
 }
 
+// Migrations that redefine the #383/#386 trigger functions. They must never be applied
+// before those two in the "up to before" copies, or they create the functions early.
+const DEPENDS_ON_PIN_MIGRATIONS = ['20261007160000_rubric_revision_actor'];
+
 function setupTempCopy(excludeMigrations: string[] = []) {
   const dir = mkdtempSync(join(tmpdir(), 'yawp-prisma-'));
   cpSync(PRISMA_DIR, dir, { recursive: true });
@@ -90,6 +94,7 @@ describe('migration integration (real Postgres)', () => {
     const pre = setupTempCopy([
       '20260928182000_pin_assignments_to_current_rubric_revision',
       '20260929034000_assignment_rubric_baseline_capture',
+      ...DEPENDS_ON_PIN_MIGRATIONS,
     ]);
     prismaDeploy(pre);
 
@@ -200,6 +205,7 @@ describe('migration integration (real Postgres)', () => {
     // Apply migration 1 only, then assert a-lib-1 appears in audit with a selected revision id
     const onlyM1 = setupTempCopy([
       '20260929034000_assignment_rubric_baseline_capture',
+      ...DEPENDS_ON_PIN_MIGRATIONS,
     ]);
     prismaDeploy(onlyM1);
     const aLib1AuditAfterM1 = jsonQuery(`
@@ -546,6 +552,7 @@ describe('migration integration (real Postgres)', () => {
     const pre = setupTempCopy([
       '20260928182000_pin_assignments_to_current_rubric_revision',
       '20260929034000_assignment_rubric_baseline_capture',
+      ...DEPENDS_ON_PIN_MIGRATIONS,
     ]);
     prismaDeploy(pre);
     // Seed just enough to reach the DROP TRIGGER point, including one library-linked assignment to exercise library path
@@ -561,6 +568,7 @@ describe('migration integration (real Postgres)', () => {
     // Apply migration 1 first so migration 2 is the one that times out (matches production)
     const onlyM1 = setupTempCopy([
       '20260929034000_assignment_rubric_baseline_capture',
+      ...DEPENDS_ON_PIN_MIGRATIONS,
     ]);
     prismaDeploy(onlyM1);
     // Hold lock on Assignment to block migration 2's DISABLE TRIGGER
