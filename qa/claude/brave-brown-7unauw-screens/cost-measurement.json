@@ -1,0 +1,22 @@
+{
+  "preview": "https://pr-374.preview.yawp.school",
+  "capturedAt": "2026-10-07T23:48:00Z",
+  "feature": "lesson-planner",
+  "calls": [
+    { "inputTokens": 4372, "outputTokens": 3269 },
+    { "inputTokens": 4484, "outputTokens": 3718 },
+    { "inputTokens": 4372, "outputTokens": 3172 },
+    { "inputTokens": 7705, "outputTokens": 2475 },
+    { "inputTokens": 7705, "outputTokens": 3114 },
+    { "inputTokens": 7705, "outputTokens": 2966 },
+    { "inputTokens": 7705, "outputTokens": 2748 }
+  ],
+  "totals": {
+    "inputTokens": 44048,
+    "outputTokens": 21462,
+    "cacheReadInputTokens": 329042,
+    "cacheCreationInputTokens": 34636
+  },
+  "measuredLessonCostUsd": 0.6827,
+  "pricingNote": "Claude Sonnet 4.6 list: $3/M input, $15/M output, $0.30/M cache read, $3.75/M cache write"
+}
