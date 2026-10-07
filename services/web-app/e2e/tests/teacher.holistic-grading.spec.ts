@@ -19,13 +19,14 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     submitForGrade: true,
     pointValue: 20,
   });
+  const essayText =
+    'In the novel, the green light symbolizes Gatsby’s longing. The author repeats the image at the dock and in the closing lines to show how hope outlasts loss.';
+  const essayHtml = `<p>${essayText}</p>`;
   const document = await prisma.document.create({
     data: {
       title,
-      text:
-        'In the novel, the green light symbolizes Gatsby’s longing. The author repeats the image at the dock and in the closing lines to show how hope outlasts loss.',
-      html:
-        '<p>In the novel, the green light symbolizes Gatsby’s longing. The author repeats the image at the dock and in the closing lines to show how hope outlasts loss.</p>',
+      text: essayText,
+      html: essayHtml,
       membershipId: e2eContext.membershipId,
       assignmentTypeId: e2eContext.holisticEssayAssignmentTypeId,
       assignmentId: assignment.id,
@@ -36,8 +37,8 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     data: {
       documentId: document.id,
       title,
-      text: document.text,
-      html: document.html,
+      text: essayText,
+      html: essayHtml,
       submittedAt: new Date(),
     },
   });
