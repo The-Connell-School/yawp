@@ -8,7 +8,7 @@ describe('seed-preview-teacher-notes-qa', () => {
       join(import.meta.dir, 'seed-preview-teacher-notes-qa.ts'),
       'utf8'
     );
-    expect(script).toContain("PREVIEW_DATA_MODE !== 'seed'");
+    expect(script).toContain('shouldRunPreviewTeacherNotesQaSeed');
     expect(script).toContain('assertLocalSeedTarget');
     expect(script).not.toContain('production-qa-profile-remote');
     expect(script).not.toContain('MANAGEMENT');
