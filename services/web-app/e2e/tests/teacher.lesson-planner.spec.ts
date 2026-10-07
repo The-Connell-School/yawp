@@ -10,6 +10,21 @@ const SELECT_ALL_SHORTCUT =
 
 /** Org flag removed: planner is teacher-only and always on. */
 
+async function setWritingPracticeEnabled(
+  organizationId: string,
+  enabled: boolean
+) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.organization.update({
+      where: { id: organizationId },
+      data: { writingPracticeEnabled: enabled },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 /**
  * A lesson that teaches a writing fundamental and ends on practice students do
  * in Yawp. The second block names a lesson Yawp does not have, which must never
