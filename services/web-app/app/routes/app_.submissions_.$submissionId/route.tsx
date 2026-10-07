@@ -1258,12 +1258,14 @@ function SubmissionDetail({
               {submissionVersions.map((version, index) => {
                 const versionNumber = submissionVersions.length - index;
                 const isCurrent = version.id === submission.id;
-                const gradeLabel =
-                  version.numericPercentage != null
-                    ? `${version.numericPercentage}%${
-                        version.letterGrade ? ` (${version.letterGrade})` : ''
-                      }`
-                    : version.score?.trim() || null;
+                const gradeLabel = formatAssignmentGrade({
+                  submitForGrade:
+                    submission.document.assignment?.submitForGrade,
+                  numericPercentage: version.numericPercentage,
+                  letterGrade: version.letterGrade,
+                  pointValue: submission.document.assignment?.pointValue,
+                  score: version.score,
+                });
                 const lifecycleLabel = version.releasedAt
                   ? gradeLabel
                     ? `Graded · ${gradeLabel}`
