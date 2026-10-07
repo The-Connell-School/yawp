@@ -6,6 +6,11 @@ import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { requireMutableRequest } from '~/utils/auth.server';
 import { requireLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import {
+  LessonPlanQuotaExceededError,
+  assertCanCreateLessonPlan,
+  lessonPlanQuotaMessage,
+} from '~/utils/lesson-planner/lesson-planner-quota.server';
+import {
   handleLessonPlannerToolCall,
   LESSON_PLANNER_TOOLS,
 } from '~/domain/lesson-planner/lesson-planner-tools.server';
@@ -243,34 +248,6 @@ export async function action({ request }: ActionFunctionArgs) {
     originClassAssignmentId = owned?.id ?? null;
   }
 
-  try {
-    await reserveAiRequest({
-      membershipId: ctx.membershipId,
-      organizationId: ctx.organizationId,
-      feature: 'lesson-planner',
-      policy: PLANNER_ADMISSION_POLICY,
-    });
-  } catch (error) {
-    if (!(error instanceof AiRateLimitError)) {
-      return dataResponse({ error: PLANNER_FAILED }, { status: 503 });
-    }
-    return dataResponse(
-      {
-        error:
-          'Too many lesson planner requests. Please wait a moment and try again.',
-      },
-      {
-        status: 429,
-        headers: { 'Retry-After': String(error.retryAfterSeconds) },
-      }
-    );
-  }
-
-  // "Build this day" writes into that day's OWN conversation, not the map's.
-  // A day is a whole lesson, and appending eight of them to the thread that
-  // wrote the map is what made a unit's packet unteachable. Resolved read-only
-  // here — the row is created at persist time, so a failed model call does not
-  // leave an empty day the board would advertise as built.
   const dayTarget =
     turn.unitDay !== undefined && conversation
       ? await resolveUnitDay({
@@ -281,8 +258,6 @@ export async function action({ request }: ActionFunctionArgs) {
         })
       : null;
 
-  // An existing day carries the turns already spent on it; a new one carries
-  // none. Neither inherits the map conversation's transcript.
   const dayConversation = dayTarget?.conversationId
     ? await prisma.lessonPlanConversation.findFirst({
         where: { id: dayTarget.conversationId, deletedAt: null },
@@ -299,8 +274,55 @@ export async function action({ request }: ActionFunctionArgs) {
       })
     : null;
 
-  const activeConversation =
+  const activeConversationForQuota =
     dayConversation ?? (dayTarget ? null : conversation);
+
+  if (!activeConversationForQuota) {
+    try {
+      await assertCanCreateLessonPlan({
+        organizationId: ctx.organizationId,
+        plan: access.membership.organization.plan,
+      });
+    } catch (quotaError) {
+      if (quotaError instanceof LessonPlanQuotaExceededError) {
+        return dataResponse(
+          { error: lessonPlanQuotaMessage(quotaError.quota) },
+          { status: 403 }
+        );
+      }
+      throw quotaError;
+    }
+  }
+
+  async function reservePlannerAi(units = 1) {
+    await reserveAiRequest({
+      membershipId: ctx.membershipId,
+      organizationId: ctx.organizationId,
+      feature: 'lesson-planner',
+      policy: PLANNER_ADMISSION_POLICY,
+      units,
+    });
+  }
+
+  try {
+    await reservePlannerAi();
+  } catch (error) {
+    if (!(error instanceof AiRateLimitError)) {
+      return dataResponse({ error: PLANNER_FAILED }, { status: 503 });
+    }
+    return dataResponse(
+      {
+        error:
+          'Too many lesson planner requests. Please wait a moment and try again.',
+      },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(error.retryAfterSeconds) },
+      }
+    );
+  }
+
+  const activeConversation = activeConversationForQuota;
   const priorMessages = boundedHistory(
     [...(activeConversation?.messages ?? [])].reverse()
   );
@@ -415,8 +437,16 @@ export async function action({ request }: ActionFunctionArgs) {
     // the teacher ever sees the reply; a failed repair changes nothing.
     const repaired = await repairSlideDeck({
       reply,
-      repair: ({ instruction, reason }) =>
-        getLLMCompletion({
+      repair: async ({ instruction, reason }) => {
+        try {
+          await reservePlannerAi();
+        } catch (admissionError) {
+          if (admissionError instanceof AiRateLimitError) {
+            throw admissionError;
+          }
+          throw new Error(PLANNER_FAILED);
+        }
+        return getLLMCompletion({
           model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
           system: DECK_REPAIR_SYSTEM,
           messages: [{ role: AgentType.User, content: instruction }],
@@ -426,8 +456,9 @@ export async function action({ request }: ActionFunctionArgs) {
           logPayload: 'metadata-only',
           // Schema vocabulary only — field paths and rules, never the teacher's
           // words — so it survives redaction and makes the failure observable.
-          metadata: { feature: 'lesson-planner', deckFailure: reason },
-        }),
+          metadata: { feature: 'lesson-planner-deck-repair', deckFailure: reason },
+        });
+      },
     });
     reply = repaired.reply;
 

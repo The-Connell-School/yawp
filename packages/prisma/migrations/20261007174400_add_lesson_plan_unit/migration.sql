@@ -1,3 +1,5 @@
+SET lock_timeout = '5s';
+
 -- A multi-day unit owns one map conversation and one lesson per day built out
 -- of it. Days are whole lessons — plan, packet, deck, handouts — so stacking
 -- them into the conversation that wrote the map produced a packet nobody could

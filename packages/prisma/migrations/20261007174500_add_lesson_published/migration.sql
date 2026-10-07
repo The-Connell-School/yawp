@@ -1,3 +1,5 @@
+SET lock_timeout = '5s';
+
 -- A teacher's lessons split in two: drafts they are still working on, and the
 -- ones they have published to their library. Starring tried to do this job and
 -- could not — it ranked one list rather than dividing it, so a half-finished

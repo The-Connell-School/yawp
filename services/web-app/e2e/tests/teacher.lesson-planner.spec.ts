@@ -7,20 +7,11 @@ const TEACHER_PASSWORD = 'teacher-e2e-password';
 const SELECT_ALL_SHORTCUT =
   process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
 
+/** Org flag removed: planner is teacher-only and always on. */
 async function setLessonPlannerEnabled(
-  organizationId: string,
-  enabled: boolean
-) {
-  const prisma = createE2EPrismaClient();
-  try {
-    await prisma.organization.update({
-      where: { id: organizationId },
-      data: { lessonPlannerEnabled: enabled },
-    });
-  } finally {
-    await prisma.$disconnect();
-  }
-}
+  _organizationId: string,
+  _enabled: boolean
+) {}
 
 async function setWritingPracticeEnabled(
   organizationId: string,
@@ -904,27 +895,22 @@ async function seedBareLessonPlan(e2eContext: {
 
 test.describe('YAWP! Lesson Planner', () => {
   test.afterEach(async ({ e2eContext }) => {
-    // Leave the org in its default (disabled) state for other specs.
-    await setLessonPlannerEnabled(e2eContext.organizationId, false);
     // Seeded lessons would otherwise pile up across tests and retries, and the
     // library legitimately shows every one of them.
     await clearLessonPlans(e2eContext.teacherMembershipId);
   });
 
-  test('is hidden and unreachable when the org flag is off', async ({
+  test('is teacher-only: students get a 404', async ({
     page,
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, false);
-    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await signIn(e2eContext.studentEmail, TEACHER_PASSWORD);
 
-    // No sidebar entry.
     await expect(
       page.getByRole('link', { name: 'Lesson Planner' })
     ).toHaveCount(0);
 
-    // Direct navigation redirects back into the app, away from the planner.
     await page.goto('/app/lesson-planner');
     await expect(page).toHaveURL(/\/app(?!\/lesson-planner)/);
   });

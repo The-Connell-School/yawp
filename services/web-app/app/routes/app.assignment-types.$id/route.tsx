@@ -59,10 +59,7 @@ import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
 import { AboutExitTicket } from './about-exit-ticket/about-exit-ticket';
-import {
-  EXIT_TICKETS_ENABLED,
-  isExitTicketAssignmentType,
-} from '~/domain/assignment-types/exit-ticket';
+import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
 import {
   resolvePromptLibraryVariant,
   usesOpenEndedLibrary,
@@ -606,7 +603,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     // assignment types' directions do.
     showAboutExitTicket:
       profile.role === 'TEACHER' &&
-      EXIT_TICKETS_ENABLED &&
       isExitTicketAssignmentType(assignmentType),
   });
 }

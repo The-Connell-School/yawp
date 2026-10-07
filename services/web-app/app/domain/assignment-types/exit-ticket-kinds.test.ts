@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
   DEFAULT_EXIT_TICKET_KIND,
-  EXIT_TICKET_BUILDER_V2_ENABLED,
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_KIND_OPTIONS,
   EXIT_TICKET_KINDS,
@@ -40,9 +39,6 @@ describe('exit ticket kinds', () => {
     expect(exitTicketKindForMode('specific')).toBe('check');
   });
 
-  test('the new builder sits behind its own flag', () => {
-    expect(typeof EXIT_TICKET_BUILDER_V2_ENABLED).toBe('boolean');
-  });
 });
 
 describe('parseExitTicketConfigInput with a kind', () => {

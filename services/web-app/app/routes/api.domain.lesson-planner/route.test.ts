@@ -92,10 +92,9 @@ const access = {
     id: 'teacher-1',
     role: 'TEACHER',
     isOrgOwner: false,
-    organization: { id: 'org-1', name: 'Test Org' },
+    organization: { id: 'org-1', name: 'Test Org', plan: 'SCHOOL' },
   },
   isTeacher: true,
-  enabled: true,
   allowed: true,
 };
 

@@ -1,3 +1,5 @@
+SET lock_timeout = '5s';
+
 -- Key an artifact by what it IS, not by which reply produced it, so a revised
 -- handout takes the old one's place in the packet instead of piling up beside
 -- it. Existing rows are backfilled from their own id, which is unique and

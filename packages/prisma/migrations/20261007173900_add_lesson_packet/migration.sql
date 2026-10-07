@@ -1,3 +1,5 @@
+SET lock_timeout = '5s';
+
 -- The teacher-facing name of the printable lesson packet. Null falls back to
 -- the conversation title, so existing rows keep working untouched.
 ALTER TABLE "LessonPlanConversation"

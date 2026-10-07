@@ -139,7 +139,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               organization: {
                 select: {
                   classInsightsEnabled: true,
-                  lessonPlannerEnabled: true,
                 },
               },
             },
@@ -269,9 +268,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           config: exitTicketConfig,
         })
       : null;
-  const lessonPlannerEnabled =
-    active.class.school.organization.lessonPlannerEnabled === true;
-
   const insight =
     insightRow && insightRow.status === 'ready' && insightRow.summaryJson
       ? {
@@ -337,10 +333,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       exitTicketClassRead,
       // Only where the planner is on; the step is not an index, so it can
       // never be read as a Class Summary next step.
-      exitTicketPlanHref:
-        exitTicketClassRead && lessonPlannerEnabled
-          ? `/app/lesson-planner?from=${active.id}&step=${EXIT_TICKET_SEED_STEP}`
-          : null,
+      exitTicketPlanHref: exitTicketClassRead
+        ? `/app/lesson-planner?from=${active.id}&step=${EXIT_TICKET_SEED_STEP}`
+        : null,
     },
   };
 }

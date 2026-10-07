@@ -7,7 +7,6 @@ import {
   AccordionTrigger,
 } from '~/components/ui/accordion';
 import {
-  EXIT_TICKET_BUILDER_V2_ENABLED,
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_REFLECTION_PROMPT_OPTIONS,
 } from '~/domain/assignment-types/exit-ticket';
@@ -85,13 +84,8 @@ function AboutSection({
  * bands and the form's questions want to be open at the same time, and the
  * notes section is the one people reread while filling the form in.
  */
-export function AboutExitTicket({
-  builder = EXIT_TICKET_BUILDER_V2_ENABLED ? 'v2' : 'v1',
-}: {
-  /** Which builder the copy describes; the flag decides by default. */
-  builder?: 'v1' | 'v2';
-} = {}) {
-  const quick = builder === 'v2';
+export function AboutExitTicket() {
+  const quick = true;
   const twoWaysIntro = quick ? QUICK_BUILDER_COPY.twoWaysIntro : TWO_WAYS_INTRO;
   const twoWays = quick ? QUICK_BUILDER_COPY.twoWays : TWO_WAYS;
   const focusIntro = quick ? QUICK_BUILDER_COPY.focusIntro : FOCUS_INTRO;

@@ -273,10 +273,6 @@ test.describe.serial('Exit tickets', () => {
     const prisma = createE2EPrismaClient();
     let assignmentId: string;
     try {
-      await prisma.organization.update({
-        where: { id: e2eContext.organizationId },
-        data: { lessonPlannerEnabled: true },
-      });
       const classAssignment = await prisma.classAssignment.findFirstOrThrow({
         where: {
           classId: e2eContext.classId,

@@ -1,3 +1,5 @@
+SET lock_timeout = '5s';
+
 -- One piece of teaching material lifted out of a planner reply into the lesson
 -- packet, so a teacher can keep the handout without keeping the whole plan
 -- around it. Purely additive: existing kept replies are untouched.

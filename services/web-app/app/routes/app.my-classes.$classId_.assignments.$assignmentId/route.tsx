@@ -92,7 +92,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignment = classAssignment.assignment;
 
   const classInsightsEnabled = profile.organization.classInsightsEnabled;
-  const lessonPlannerEnabled = profile.organization.lessonPlannerEnabled;
   const insightRow = classInsightsEnabled
     ? await prisma.classAssignmentInsight.findUnique({
         where: { classAssignmentId: classAssignment.id },
@@ -206,7 +205,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classAssignmentId: classAssignment.id,
     insight,
     classInsightsEnabled,
-    lessonPlannerEnabled,
     gradedCount,
     status,
     isDocumentSubmissionEnabled,
@@ -228,7 +226,6 @@ export default function AssignmentSubmissionsRoute() {
     classAssignmentId,
     insight,
     classInsightsEnabled,
-    lessonPlannerEnabled,
     gradedCount,
     status,
     isDocumentSubmissionEnabled,
@@ -454,7 +451,6 @@ export default function AssignmentSubmissionsRoute() {
               classAssignmentId={classAssignmentId}
               initialInsight={insight}
               gradedCount={gradedCount}
-              lessonPlannerEnabled={lessonPlannerEnabled}
             />
           ) : null}
         </div>

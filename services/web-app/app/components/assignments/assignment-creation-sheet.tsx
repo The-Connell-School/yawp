@@ -28,8 +28,6 @@ import {
 } from '~/components/ui/select';
 import {
   DEFAULT_EXIT_TICKET_MODE,
-  EXIT_TICKETS_ENABLED,
-  EXIT_TICKET_BUILDER_V2_ENABLED,
   DEFAULT_EXIT_TICKET_REFLECTION_PROMPT,
   DEFAULT_EXIT_TICKET_GRADING_BASIS,
   exitTicketCriteriaNoteKeys,
@@ -338,11 +336,6 @@ export type AssignmentCreationSheetProps = {
   initialExitTicketGrading?: ExitTicketGrading | null;
   /** The reflection question a stored ticket asks; null for the default. */
   initialExitTicketReflectionPrompt?: ExitTicketReflectionPrompt | null;
-  /**
-   * Which exit ticket builder to render. Defaults to the feature flag; tests
-   * pin one explicitly so both stay covered while the flag exists.
-   */
-  exitTicketBuilder?: 'v1' | 'v2';
   initialExitTicketFocus?: ExitTicketFocus;
   initialExitTicketTopic?: string;
   /** Absent leaves the question unanswered, which is what blocks submission. */
@@ -409,17 +402,11 @@ function gradingDraftFor(
   };
 }
 
-/**
- * Whether the lesson notes start open. The quick builder keeps them closed
- * unless there is something in them; the original opens them for specific.
- */
+/** Whether the lesson notes start open — only when there is already content. */
 function initialLessonNotesEnabled(
-  builder: 'v1' | 'v2',
-  notes: ExitTicketLessonNotes | null | undefined,
-  mode: ExitTicketMode
+  notes: ExitTicketLessonNotes | null | undefined
 ) {
-  if (notes) return true;
-  return builder === 'v2' ? false : defaultExitTicketLessonNotesEnabled(mode);
+  return Boolean(notes);
 }
 
 const EMPTY_LESSON_NOTES: ExitTicketLessonNotes = {
@@ -432,11 +419,8 @@ function isExitTicketTypeId(
   assignmentTypes: AssignmentCreationAssignmentType[],
   assignmentTypeId: string
 ) {
-  return (
-    EXIT_TICKETS_ENABLED &&
-    isExitTicketAssignmentType(
-      assignmentTypes.find((type) => type.id === assignmentTypeId)
-    )
+  return isExitTicketAssignmentType(
+    assignmentTypes.find((type) => type.id === assignmentTypeId)
   );
 }
 
@@ -541,7 +525,6 @@ export function AssignmentCreationSheetContent({
   initialRubricTotalPoints = null,
   initialGradingMode = DEFAULT_ASSIGNMENT_GRADING_MODE,
   initialExitTicketMode = DEFAULT_EXIT_TICKET_MODE,
-  exitTicketBuilder = EXIT_TICKET_BUILDER_V2_ENABLED ? 'v2' : 'v1',
   initialExitTicketReflectionPrompt = null,
   initialExitTicketGrading = null,
   initialExitTicketGradebook = null,
@@ -660,11 +643,7 @@ export function AssignmentCreationSheetContent({
     initialExitTicketAnswerType ?? ''
   );
   const [lessonNotesEnabled, setLessonNotesEnabled] = useState(
-    initialLessonNotesEnabled(
-      exitTicketBuilder,
-      initialExitTicketLessonNotes,
-      initialExitTicketMode
-    )
+    initialLessonNotesEnabled(initialExitTicketLessonNotes)
   );
   // Opens itself when there is something in it worth seeing: notes the
   // planner already filled in, for one.
@@ -715,10 +694,8 @@ export function AssignmentCreationSheetContent({
   // An exit ticket has no prompt box: the teacher answers the form and the
   // prompt is composed from the answers. With the feature off it falls back to
   // the ordinary prompt box, so an exit ticket type can exist before this does.
-  const isExitTicket =
-    EXIT_TICKETS_ENABLED && isExitTicketAssignmentType(selectedType);
-  // The quick builder asks for points itself, beside the criteria they need.
-  const isQuickExitTicket = isExitTicket && exitTicketBuilder === 'v2';
+  const isExitTicket = isExitTicketAssignmentType(selectedType);
+  const isQuickExitTicket = isExitTicket;
   // Bands, never steps, for the quick builder: the exit ticket rubric is one
   // category with four bands, and a short response is not stepped through.
   const effectiveGradingMode: AssignmentGradingMode = isQuickExitTicket
@@ -742,21 +719,18 @@ export function AssignmentCreationSheetContent({
     lessonNotesEnabled || criteriaNoteKeys.includes(key)
       ? lessonNotes[key]
       : undefined;
-  const quickBuilderInput =
-    exitTicketBuilder === 'v2'
-      ? {
-          reflectionPrompt: reflectionPromptId,
-          reflectionPromptText,
-          graded: submitForGrade,
-          gradingBasis: gradingDraft.basis,
-          minWords: gradingDraft.minWords,
-          minSentences: gradingDraft.minSentences,
-          assessFor: gradingDraft.assessFor,
-          lessonMainPoints: postedNote('mainPoints'),
-          lessonMustMention: postedNote('mustMention'),
-          lessonWatchFor: postedNote('watchFor'),
-        }
-      : {};
+  const quickBuilderInput = {
+    reflectionPrompt: reflectionPromptId,
+    reflectionPromptText,
+    graded: submitForGrade,
+    gradingBasis: gradingDraft.basis,
+    minWords: gradingDraft.minWords,
+    minSentences: gradingDraft.minSentences,
+    assessFor: gradingDraft.assessFor,
+    lessonMainPoints: postedNote('mainPoints'),
+    lessonMustMention: postedNote('mustMention'),
+    lessonWatchFor: postedNote('watchFor'),
+  };
   const exitTicketConfig = parseExitTicketConfigInput({
     mode: exitTicketMode,
     focus: exitTicketFocus,
@@ -894,11 +868,7 @@ export function AssignmentCreationSheetContent({
     setExitTicketTopic(initialExitTicketTopic);
     setExitTicketAnswerType(initialExitTicketAnswerType ?? '');
     setLessonNotesEnabled(
-      initialLessonNotesEnabled(
-        exitTicketBuilder,
-        initialExitTicketLessonNotes,
-        initialExitTicketMode
-      )
+      initialLessonNotesEnabled(initialExitTicketLessonNotes)
     );
     setGradingDraft(gradingDraftFor(initialExitTicketGrading));
     setMoreOptionsOpen(Boolean(initialExitTicketLessonNotes));
@@ -940,7 +910,6 @@ export function AssignmentCreationSheetContent({
     initialExitTicketReflectionPrompt,
     initialExitTicketGrading,
     initialExitTicketGradebook,
-    exitTicketBuilder,
     editingAssignment,
     initialWritingTimeMinutes,
     initialParagraphMode,
@@ -1344,7 +1313,7 @@ export function AssignmentCreationSheetContent({
           ) : null}
         </div>
 
-        {isExitTicket && exitTicketBuilder === 'v2' ? (
+        {isExitTicket ? (
           <div className="space-y-4">
             <ExitTicketBuilder
               mode={exitTicketMode}
@@ -1374,174 +1343,6 @@ export function AssignmentCreationSheetContent({
               preview={exitTicketPreview}
               disabled={isSaving}
             />
-            {exitTicketHiddenFields}
-          </div>
-        ) : isExitTicket ? (
-          <div className="space-y-4 rounded-md border p-3">
-            <div className="space-y-2">
-              <Label>Exit ticket</Label>
-              <p className="text-sm text-muted-foreground">
-                Students write their answer — there is nothing to pick from.
-                Choose the standard end-of-lesson check, or name exactly what
-                you want evidence of.
-              </p>
-              <RadioGroup
-                value={exitTicketMode}
-                onValueChange={(value) => {
-                  const nextMode = value as ExitTicketMode;
-                  setExitTicketMode(nextMode);
-                  // The notes default follows the shape: open for specific,
-                  // closed for basic. Anything already typed is kept either
-                  // way, so switching back and forth loses nothing.
-                  setLessonNotesEnabled(
-                    defaultExitTicketLessonNotesEnabled(nextMode)
-                  );
-                }}
-                disabled={isSaving}
-                className="gap-3 pt-1"
-              >
-                <div className="flex items-start gap-2.5">
-                  <RadioGroupItem
-                    id="assignment-create-exit-ticket-basic"
-                    value="basic"
-                    className="mt-1"
-                  />
-                  <Label
-                    htmlFor="assignment-create-exit-ticket-basic"
-                    className="cursor-pointer font-normal"
-                  >
-                    <span className="font-medium">Basic exit ticket</span>
-                    <span className="mt-0.5 block text-sm text-muted-foreground">
-                      The same prompt every time: what did you learn today, in
-                      your own words.
-                    </span>
-                  </Label>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <RadioGroupItem
-                    id="assignment-create-exit-ticket-specific"
-                    value="specific"
-                    className="mt-1"
-                  />
-                  <Label
-                    htmlFor="assignment-create-exit-ticket-specific"
-                    className="cursor-pointer font-normal"
-                  >
-                    <span className="font-medium">Specific exit ticket</span>
-                    <span className="mt-0.5 block text-sm text-muted-foreground">
-                      Check one thing from today&apos;s lesson.
-                    </span>
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            {exitTicketMode === 'specific' ? (
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="assignment-create-exit-ticket-focus">
-                    What are you checking for?
-                  </Label>
-                  <Select
-                    value={exitTicketFocus}
-                    onValueChange={(value) =>
-                      setExitTicketFocus(value as ExitTicketFocus)
-                    }
-                    disabled={isSaving}
-                  >
-                    <SelectTrigger id="assignment-create-exit-ticket-focus">
-                      <SelectValue placeholder="Choose what to check for" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {EXIT_TICKET_FOCUS_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedExitTicketFocus ? (
-                    <p className="text-sm text-muted-foreground">
-                      {selectedExitTicketFocus.helperText}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="assignment-create-exit-ticket-topic">
-                    What specifically?
-                  </Label>
-                  <Input
-                    id="assignment-create-exit-ticket-topic"
-                    value={exitTicketTopic}
-                    onChange={(event) => setExitTicketTopic(event.target.value)}
-                    maxLength={EXIT_TICKET_TOPIC_MAX_LENGTH}
-                    placeholder={selectedExitTicketFocus?.topicPlaceholder}
-                    disabled={isSaving}
-                  />
-                </div>
-
-                {/* Nothing is preselected. The grader cannot work out whether
-                    a wrong answer exists here, and guessing costs a student
-                    being told they are incorrect when they are not. */}
-                <div className="space-y-2">
-                  <Label>Is there a desired response?</Label>
-                  <RadioGroup
-                    value={exitTicketAnswerType}
-                    onValueChange={setExitTicketAnswerType}
-                    disabled={isSaving}
-                    className="gap-2"
-                  >
-                    {EXIT_TICKET_ANSWER_TYPE_OPTIONS.map((option) => (
-                      <div
-                        key={option.value}
-                        className="flex items-start gap-2.5"
-                      >
-                        <RadioGroupItem
-                          value={option.value}
-                          id={`assignment-create-exit-ticket-answer-${option.value}`}
-                          className="mt-0.5 size-4 shrink-0"
-                        />
-                        <Label
-                          htmlFor={`assignment-create-exit-ticket-answer-${option.value}`}
-                          className="cursor-pointer font-normal"
-                        >
-                          <span className="font-medium">{option.label}</span>
-                          <span className="mt-0.5 block text-sm text-muted-foreground">
-                            {option.helperText}
-                          </span>
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </div>
-              </div>
-            ) : null}
-
-            {exitTicketLessonNotesBlock}
-
-            <div className="space-y-2">
-              <Label htmlFor="assignment-create-exit-ticket-preview">
-                What students will see
-              </Label>
-              {exitTicketPreview ? (
-                <p
-                  id="assignment-create-exit-ticket-preview"
-                  className="whitespace-pre-line rounded-md bg-muted p-3 text-sm"
-                >
-                  {exitTicketPreview}
-                </p>
-              ) : (
-                <p
-                  id="assignment-create-exit-ticket-preview"
-                  className="rounded-md border border-dashed p-3 text-sm text-muted-foreground"
-                >
-                  Fill in what this exit ticket is about to see the prompt your
-                  students will get.
-                </p>
-              )}
-            </div>
-
             {exitTicketHiddenFields}
           </div>
         ) : (

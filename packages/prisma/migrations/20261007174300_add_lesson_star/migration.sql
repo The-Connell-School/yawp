@@ -1,3 +1,5 @@
+SET lock_timeout = '5s';
+
 -- Starring a lesson is the teacher's own decision about what is worth finding
 -- again, kept separate from whether a reply was kept in the printable packet.
 ALTER TABLE "LessonPlanConversation" ADD COLUMN "starredAt" TIMESTAMPTZ(6);

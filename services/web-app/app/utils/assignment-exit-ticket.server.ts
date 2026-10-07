@@ -1,5 +1,4 @@
 import {
-  EXIT_TICKETS_ENABLED,
   type ExitTicketConfig,
   composeExitTicketPrompt,
   isExitTicketAssignmentType,
@@ -111,10 +110,7 @@ export function resolveAssignmentPrompt({
   postedPrompt: string;
   formData: FormData;
 }): ResolveAssignmentPromptResult {
-  if (
-    !EXIT_TICKETS_ENABLED ||
-    !isExitTicketAssignmentType({ kind: assignmentTypeKind })
-  ) {
+  if (!isExitTicketAssignmentType({ kind: assignmentTypeKind })) {
     return {
       success: true,
       prompt: postedPrompt,
@@ -151,7 +147,6 @@ export function exitTicketGradingModeFor({
   gradingMode: AssignmentGradingMode;
 }): AssignmentGradingMode {
   if (
-    EXIT_TICKETS_ENABLED &&
     isExitTicketAssignmentType({ kind: assignmentTypeKind }) &&
     formData.has('exitTicketKind')
   ) {

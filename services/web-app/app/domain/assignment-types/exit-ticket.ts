@@ -17,22 +17,6 @@
 /** The `AssignmentType.kind` Exit Ticket rows carry. */
 export const EXIT_TICKET_ASSIGNMENT_TYPE_KIND = 'exit_ticket';
 
-/**
- * Single switch for the feature, matching `SAVED_ASSIGNMENTS_ENABLED`. Off
- * hides the exit ticket form everywhere and leaves an exit ticket assignment
- * type behaving like any other prompt-driven type, so the assignment type row
- * can ship ahead of the UI and nothing already created changes.
- */
-export const EXIT_TICKETS_ENABLED = true;
-
-/**
- * The quicker builder: reflection or check first, grading only when asked for,
- * explanations behind disclosures. Off renders the original form unchanged,
- * and either form reads what the other one stored — the new builder writes
- * `mode` exactly as the old one did and only adds optional fields beside it.
- */
-export const EXIT_TICKET_BUILDER_V2_ENABLED = true;
-
 /** Bumped only if a stored config ever has to be read two ways at once. */
 export const EXIT_TICKET_CONFIG_SCHEMA_VERSION = 1 as const;
 

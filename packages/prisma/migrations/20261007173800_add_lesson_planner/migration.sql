@@ -1,6 +1,4 @@
--- Organization-level gate for the YAWP! Lesson Planner (gradual rollout).
-ALTER TABLE "Organization"
-  ADD COLUMN "lessonPlannerEnabled" BOOLEAN NOT NULL DEFAULT false;
+SET lock_timeout = '5s';
 
 -- Lesson Planner conversations (teacher-owned planning sessions).
 CREATE TABLE "LessonPlanConversation" (
