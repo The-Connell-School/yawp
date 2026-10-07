@@ -67,6 +67,7 @@ function formatAssignmentDueDate(iso: string): string {
 export type AssignmentTypeRow = {
   id: string;
   title: string;
+  kind?: string | null;
   systemKey?: string | null;
   collaborationSupported?: boolean;
   image?: { id: string } | null;

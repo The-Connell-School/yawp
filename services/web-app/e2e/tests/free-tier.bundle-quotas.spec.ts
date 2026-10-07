@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { prisma } from '../db';
+import { createE2EPrismaClient } from '../prisma-client';
+
+const prisma = createE2EPrismaClient();
 
 /**
  * Requires a FREE_CLASSROOM org fixture with bundle assignment types linked.
