@@ -109,7 +109,6 @@ import type {
   EvaluationCopySourceCatalog,
 } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 import { resolveGrammarHighlightingEnabled } from '~/domain/assignment-types/rubric-category-options';
-import { RubricTeacherNotesToggle } from '~/components/admin/rubric-teacher-notes-toggle';
 import {
   DEFAULT_SCORE_STEP,
   buildScoreScaleValues,
@@ -1313,8 +1312,6 @@ export function RubricConfigurationEditor({
   excludeAssignmentTypeId = null,
   onScoringScaleChange,
   onRubricChange,
-  rubricOutputOptions = null,
-  canEditRubricOutputOptions = false,
 }: {
   initialScoringScale?: ScoringScaleData;
   initialRubric?: RubricData;
@@ -1323,8 +1320,6 @@ export function RubricConfigurationEditor({
   excludeAssignmentTypeId?: string | null;
   onScoringScaleChange?: (scale: ScoringScaleData) => void;
   onRubricChange?: (rubric: RubricData) => void;
-  rubricOutputOptions?: import('~/domain/rubrics/rubric-output-options.server').RubricOutputOptionsState | null;
-  canEditRubricOutputOptions?: boolean;
 }) {
   const [scoringScale, setScoringScale] =
     useState<ScoringScaleData>(initialScoringScale);
@@ -1385,10 +1380,6 @@ export function RubricConfigurationEditor({
         minScore={scoringScale.minScore}
         maxScore={scoringScale.maxScore}
         step={scoringScale.step}
-      />
-      <RubricTeacherNotesToggle
-        state={rubricOutputOptions}
-        canEdit={canEditRubricOutputOptions}
       />
     </div>
   );

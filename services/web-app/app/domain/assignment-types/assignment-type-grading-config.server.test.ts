@@ -413,6 +413,52 @@ describe('September 14 Daily Pages library revision', () => {
     expect(config.instructions).toMatchObject({ gradingInstructions: 'Prior teacher-approved instructions.' });
   });
 
+  test('honors library outputSchema.teacherNotesEnabled on thesis-driven essay rubrics', async () => {
+    const { THESIS_DRIVEN_ESSAY_RUBRIC_NAME } = await import(
+      '~/domain/rubrics/thesis-driven-essay'
+    );
+    const schema = {
+      name: THESIS_DRIVEN_ESSAY_RUBRIC_NAME,
+      title: 'Thesis-driven essay',
+      scoringScale: { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 },
+      rubric: {
+        categories: [
+          {
+            key: 'thesis_and_content',
+            label: 'Thesis/Content',
+            weight: 0.6,
+            description: 'Original thesis.',
+          },
+        ],
+      },
+      promptConfig: { instructionsPreset: 'legacy_thesis_driven_essay' },
+      outputSchema: { schemaVersion: 1, teacherNotesEnabled: true },
+    };
+    const config = buildResolvedAssignmentTypeGradingConfig({
+      assignmentTypeId: 'thesis-type',
+      assignmentTypeKind: 'essay',
+      assignmentTypeTitle: 'Essay',
+      row: {
+        id: 'thesis-type',
+        title: 'Essay',
+        kind: 'essay',
+        scoringScaleJson: schema.scoringScale,
+        rubricJson: schema.rubric,
+        gradingPromptConfigJson: schema.promptConfig,
+        gradingOutputSchemaJson: schema.outputSchema,
+        gradingCalibrationNotes: null,
+        gradingAssistantVersion: 1,
+        gradingAssistantSourceTemplateId: null,
+        gradingAssistantSourceTemplateSlug: null,
+        selectedRubricName: THESIS_DRIVEN_ESSAY_RUBRIC_NAME,
+      },
+    });
+    expect(
+      (config.outputSchemaSnapshot as { teacherNotesEnabled?: boolean })
+        .teacherNotesEnabled
+    ).toBe(true);
+  });
+
   test('preserves whole-number score resolution on a configured 90-point engagement rubric', async () => {
     const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
     const { rubricScaleGradeFieldsFromScores } = await import('~/domain/grading/recorded-grade');

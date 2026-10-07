@@ -5,7 +5,7 @@ import { createDeployedAssignment } from '../db-helpers';
 test.describe.serial('Admin teacher notes output toggle', () => {
   test.setTimeout(120_000);
 
-  test('superadmin enables private notes; teacher sees note and student does not', async ({
+  test('superadmin enables private notes; teacher sees persisted note and student does not', async ({
     page,
     signIn,
     e2eContext,
@@ -63,6 +63,7 @@ test.describe.serial('Admin teacher notes output toggle', () => {
       assignmentTypeId = page.url().split('/').pop() ?? null;
 
       const toggle = page.getByTestId('rubric-teacher-notes-toggle');
+      await expect(toggle).toBeVisible({ timeout: 15000 });
       await expect(toggle).not.toBeChecked();
       await toggle.click();
       await expect
@@ -108,29 +109,33 @@ test.describe.serial('Admin teacher notes output toggle', () => {
         },
       });
 
-      await page.route('**/api/domain/grade-essay-ai', async (route) => {
-        if (route.request().method() !== 'POST') {
-          await route.continue();
-          return;
-        }
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            score: '4/5',
-            overallComment: 'Jordan, your bread detail is vivid and personal.',
-            rubricScores: {
-              quality: { score: 4, comment: 'Strong voice.', isAi: true },
-            },
+      await prisma.submissionGradingAssistantRun.create({
+        data: {
+          submissionId,
+          source: 'assignment-type',
+          status: 'succeeded',
+          assignmentTypeRubricSnapshot: {
+            categories: schema.rubric.categories,
+            minScore: 1,
+            maxScore: 5,
+            step: 1,
+            scoringType: 'weighted_1_5',
+          },
+          metadata: {
             teacherNote: note,
-          }),
-        });
+            output: {
+              rubricScores: {
+                quality: { score: 4, comment: 'Strong voice.', isAi: true },
+              },
+              overallComment: 'Jordan, your bread detail is vivid and personal.',
+              score: '4/5',
+            },
+          },
+        },
       });
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/submissions/${submissionId}`);
-      await page.getByTestId('grading-assistant-generate').click();
-      await page.getByRole('button', { name: /^replace$/i }).click();
       await expect(page.getByTestId('teacher-private-notes')).toContainText(note, {
         timeout: 30000,
       });
@@ -139,8 +144,19 @@ test.describe.serial('Admin teacher notes output toggle', () => {
       await page.goto(`/app/submissions/${submissionId}`);
       await expect(page.getByTestId('teacher-private-notes')).toHaveCount(0);
       expect(await page.content()).not.toContain(note);
+
+      await prisma.user.update({
+        where: { id: e2eContext.adminUserId },
+        data: { isSuperAdmin: false },
+      });
+      await signIn(e2eContext.adminEmail, 'admin-e2e-password');
+      await page.goto(`/app/admin/assignment-types/${assignmentTypeId}`);
+      await expect(page.getByTestId('rubric-teacher-notes-toggle')).toBeDisabled();
     } finally {
       if (submissionId) {
+        await prisma.submissionGradingAssistantRun.deleteMany({
+          where: { submissionId },
+        });
         await prisma.submission.deleteMany({ where: { id: submissionId } });
         await prisma.document.deleteMany({ where: { id: submissionId } });
       }

@@ -5,7 +5,6 @@ import type { Prisma } from '@app/prisma';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
 import { requireAdmin, requireUserId } from '~/utils/auth.server';
-import { resolveRubricOutputOptionsForAssignmentType } from '~/domain/rubrics/rubric-output-options.server';
 import { prisma } from '~/utils/db.server';
 import {
   DEFAULT_OUTPUT_SCHEMA_JSON,
@@ -102,16 +101,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   await seedStarterRubrics();
   const rubrics = (await listRubrics()).map(({ id, name, title, json }) => ({ id, name, title, json }));
   const currentPromptLabel = await resolveCurrentPromptLabel(course.id);
-  const rubricOutputOptions = await resolveRubricOutputOptionsForAssignmentType(
-    prisma,
-    course.id
-  );
-
   if (course.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
     return dataResponse({
       course,
       rubrics,
-      rubricOutputOptions,
       canEditRubricOutputOptions: Boolean(superAdmin),
       gradingAssistantPromptPreview: null,
       gradingAssistantPromptPreviewUnavailableReason:
@@ -133,7 +126,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     course,
     rubrics,
-    rubricOutputOptions,
     canEditRubricOutputOptions: Boolean(superAdmin),
     gradingAssistantPromptPreview: {
       ...compiledInvocation,
@@ -382,7 +374,6 @@ export default function AssignmentTypeRoute() {
     course,
     rubrics,
     currentPromptLabel,
-    rubricOutputOptions,
     canEditRubricOutputOptions,
   } = useLoaderData<typeof loader>();
 
@@ -400,7 +391,6 @@ export default function AssignmentTypeRoute() {
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}
       currentPromptLabel={currentPromptLabel}
-      rubricOutputOptions={rubricOutputOptions}
       canEditRubricOutputOptions={canEditRubricOutputOptions}
     />
   );

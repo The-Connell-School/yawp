@@ -8,6 +8,7 @@ import {
 import { RubricCatalog } from '~/domain/rubrics/rubric-catalog.server';
 import { requireAdmin, requireSuperAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { rubricCatalogErrorResponse } from './catalog-errors.server';
 
 const toggleInput = z
   .object({
@@ -25,23 +26,47 @@ export async function loader({ request }: ActionFunctionArgs) {
   const catalogKey = url.searchParams.get('catalogKey');
 
   if (assignmentTypeId) {
-    const state = await resolveRubricOutputOptionsForAssignmentType(
-      prisma,
-      assignmentTypeId
-    );
-    return dataResponse({ state });
+    try {
+      const state = await resolveRubricOutputOptionsForAssignmentType(
+        prisma,
+        assignmentTypeId
+      );
+      return dataResponse({ state });
+    } catch (error) {
+      const failure = rubricCatalogErrorResponse(error);
+      return dataResponse(
+        {
+          error: failure.error,
+          httpStatus: failure.status,
+          ...(failure.issues ? { issues: failure.issues } : {}),
+        },
+        { status: failure.status }
+      );
+    }
   }
 
   if (catalogKey) {
-    const catalog = new RubricCatalog(prisma);
-    const detail = await catalog.get(catalogKey);
-    return dataResponse({
-      state: {
-        catalogKey,
-        teacherNotesEnabled: readOutputSchemaTeacherNotes(detail.live.content),
-        fingerprint: detail.live.fingerprint,
-      },
-    });
+    try {
+      const catalog = new RubricCatalog(prisma);
+      const detail = await catalog.get(catalogKey);
+      return dataResponse({
+        state: {
+          catalogKey,
+          teacherNotesEnabled: readOutputSchemaTeacherNotes(detail.live.content),
+          fingerprint: detail.live.fingerprint,
+        },
+      });
+    } catch (error) {
+      const failure = rubricCatalogErrorResponse(error);
+      return dataResponse(
+        {
+          error: failure.error,
+          httpStatus: failure.status,
+          ...(failure.issues ? { issues: failure.issues } : {}),
+        },
+        { status: failure.status }
+      );
+    }
   }
 
   return dataResponse({ error: 'Missing assignmentTypeId or catalogKey.' }, { status: 400 });
@@ -65,20 +90,32 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'Invalid request' }, { status: 400 });
   }
 
-  const result = await setRubricTeacherNotesEnabled({
-    db: prisma,
-    catalogKey: parsed.data.catalogKey,
-    enabled: parsed.data.enabled,
-    expectedFingerprint: parsed.data.expectedFingerprint,
-    actorEmail: user.email ?? user.id,
-    requestId: parsed.data.requestId,
-  });
+  try {
+    const result = await setRubricTeacherNotesEnabled({
+      db: prisma,
+      catalogKey: parsed.data.catalogKey,
+      enabled: parsed.data.enabled,
+      expectedFingerprint: parsed.data.expectedFingerprint,
+      actorEmail: user.email ?? user.id,
+      requestId: parsed.data.requestId,
+    });
 
-  return dataResponse({
-    status: 'success',
-    teacherNotesEnabled: result.teacherNotesEnabled,
-    fingerprint: result.fingerprint,
-    revision: result.revision,
-    replayed: result.replayed,
-  });
+    return dataResponse({
+      status: 'success',
+      teacherNotesEnabled: result.teacherNotesEnabled,
+      fingerprint: result.fingerprint,
+      revision: result.revision,
+      replayed: result.replayed,
+    });
+  } catch (error) {
+    const failure = rubricCatalogErrorResponse(error);
+    return dataResponse(
+      {
+        error: failure.error,
+        httpStatus: failure.status,
+        ...(failure.issues ? { issues: failure.issues } : {}),
+      },
+      { status: failure.status }
+    );
+  }
 }

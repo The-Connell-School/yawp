@@ -10,22 +10,41 @@ type ToggleResponse =
       teacherNotesEnabled: boolean;
       fingerprint: string;
     }
-  | { error: string };
+  | { error: string; httpStatus?: number };
 
 export function RubricTeacherNotesToggle({
-  state,
+  assignmentTypeId,
   canEdit,
+  disabled = false,
+  disabledReason,
 }: {
-  state: RubricOutputOptionsState | null;
+  assignmentTypeId?: string;
   canEdit: boolean;
+  disabled?: boolean;
+  disabledReason?: string | null;
 }) {
+  const loadFetcher = useFetcher<{ state?: RubricOutputOptionsState; error?: string }>();
   const fetcher = useFetcher<ToggleResponse>();
-  const [local, setLocal] = useState(state);
+  const [local, setLocal] = useState<RubricOutputOptionsState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [staleConflict, setStaleConflict] = useState(false);
 
   useEffect(() => {
-    setLocal(state);
-  }, [state?.catalogKey, state?.fingerprint, state?.teacherNotesEnabled]);
+    if (!assignmentTypeId) return;
+    if (loadFetcher.state !== 'idle' || loadFetcher.data) return;
+    loadFetcher.load(
+      `/api/admin/rubric-output-options?assignmentTypeId=${encodeURIComponent(assignmentTypeId)}`
+    );
+  }, [assignmentTypeId, loadFetcher]);
+
+  useEffect(() => {
+    if (loadFetcher.data?.state) {
+      setLocal(loadFetcher.data.state);
+      setError(loadFetcher.data.error ?? null);
+    } else if (loadFetcher.data?.error) {
+      setError(loadFetcher.data.error);
+    }
+  }, [loadFetcher.data]);
 
   useEffect(() => {
     const data = fetcher.data;
@@ -42,12 +61,20 @@ export function RubricTeacherNotesToggle({
           : current
       );
       setError(null);
+      setStaleConflict(false);
       return;
     }
     if ('error' in data) {
       setError(data.error);
+      setStaleConflict(data.httpStatus === 409);
     }
   }, [fetcher.data]);
+
+  if (!local && loadFetcher.state === 'loading') {
+    return (
+      <p className="text-sm text-muted-foreground">Loading private note settings…</p>
+    );
+  }
 
   if (!local) {
     return (
@@ -60,10 +87,12 @@ export function RubricTeacherNotesToggle({
 
   const pending = fetcher.state !== 'idle';
   const checked = local.teacherNotesEnabled;
+  const switchDisabled = !canEdit || pending || disabled;
 
   function handleChange(enabled: boolean) {
-    if (!canEdit || pending || !local) return;
+    if (switchDisabled || !local) return;
     setError(null);
+    setStaleConflict(false);
     fetcher.submit(
       JSON.stringify({
         catalogKey: local.catalogKey,
@@ -79,6 +108,15 @@ export function RubricTeacherNotesToggle({
     );
   }
 
+  function reloadOptions() {
+    if (!assignmentTypeId) return;
+    setStaleConflict(false);
+    setError(null);
+    loadFetcher.load(
+      `/api/admin/rubric-output-options?assignmentTypeId=${encodeURIComponent(assignmentTypeId)}`
+    );
+  }
+
   return (
     <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -88,24 +126,41 @@ export function RubricTeacherNotesToggle({
           </Label>
           <p className="mt-1 text-sm text-muted-foreground text-pretty">
             Lets the grading assistant flag observable writing shifts for you
-            only. Applies to new assignments after you save; existing
-            assignments stay on their pinned rubric revision.
+            only. Saves immediately when you flip the switch. Library rubrics
+            share one catalog revision, so this affects every school using that
+            rubric.
           </p>
           {!canEdit ? (
             <p className="mt-2 text-sm text-muted-foreground">
               Only a platform superadmin can change this setting.
             </p>
           ) : null}
+          {disabled && disabledReason ? (
+            <p className="mt-2 text-sm text-muted-foreground">{disabledReason}</p>
+          ) : null}
         </div>
         <Switch
           id="rubric-teacher-notes-enabled"
           data-testid="rubric-teacher-notes-toggle"
           checked={checked}
-          disabled={!canEdit || pending}
+          disabled={switchDisabled}
           onCheckedChange={handleChange}
         />
       </div>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? (
+        <div className="space-y-1">
+          <p className="text-sm text-destructive">{error}</p>
+          {staleConflict && assignmentTypeId ? (
+            <button
+              type="button"
+              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              onClick={reloadOptions}
+            >
+              Reload rubric settings
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,11 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  DAILY_PAGES_ONLY_TEACHER_NOTE_PHRASES,
   TEACHER_NOTES_EVIDENCE_RULE,
   gradingRepairPrivateObservationRules,
   normalizeTeacherNote,
   overallCommentWriterRules,
 } from './teacher-notes';
+
+const dailyPagesOnlyPhrases = [
+  'Never mention grammar, spelling, syntax, or organization as a grading judgment.',
+  'Never evaluate whether the content is correct; this is an engagement judgment, not a correctness judgment.',
+  'Feedback is 1–3 warm sentences; do not turn the private note into student-facing feedback.',
+];
 
 describe('teacher-notes', () => {
   test('TEACHER_NOTES_EVIDENCE_RULE uses real newlines, not literal backslash-n', () => {
@@ -17,7 +22,7 @@ describe('teacher-notes', () => {
   });
 
   test('TEACHER_NOTES_EVIDENCE_RULE omits Daily Pages grading-only lines', () => {
-    for (const phrase of DAILY_PAGES_ONLY_TEACHER_NOTE_PHRASES) {
+    for (const phrase of dailyPagesOnlyPhrases) {
       expect(TEACHER_NOTES_EVIDENCE_RULE).not.toContain(phrase);
     }
     expect(TEACHER_NOTES_EVIDENCE_RULE).toContain('Do not claim or suggest that AI');

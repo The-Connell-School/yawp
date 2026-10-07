@@ -30,7 +30,7 @@ async function libraryRubric(db: any, prodName: string) {
 run('teacher notes toggle writes outputSchema.teacherNotesEnabled as a new revision', async () => {
   const { db, catalog } = await setup();
   const { setRubricTeacherNotesEnabled } = await import('./rubric-output-options.server');
-  const { name, rubric } = await libraryRubric(db, 'thesis-driven-essay');
+  const { name, rubric, type } = await libraryRubric(db, 'thesis-driven-essay');
   const before = await catalog.get(name);
   expect(
     (before.live.content as { outputSchema?: { teacherNotesEnabled?: boolean } })
@@ -53,6 +53,11 @@ run('teacher notes toggle writes outputSchema.teacherNotesEnabled as a new revis
   expect(history.revisions.some((revision) => revision.version === saved.revision.version)).toBe(
     true
   );
+  const { resolve } = await setup();
+  const grading = await resolve({ assignmentTypeId: type.id });
+  expect(
+    (grading.outputSchemaSnapshot as { teacherNotesEnabled?: boolean }).teacherNotesEnabled
+  ).toBe(true);
   cleanup.push(() => db.assignment.deleteMany({ where: { assignmentType: { rubricId: rubric.id } } }));
 });
 

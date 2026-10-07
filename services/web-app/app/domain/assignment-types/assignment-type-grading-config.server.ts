@@ -336,6 +336,10 @@ export function buildResolvedAssignmentTypeGradingConfig({
 }): ResolvedAssignmentTypeGradingConfig {
   const usesProductionThesis =
     row?.selectedRubricName === THESIS_DRIVEN_ESSAY_RUBRIC_NAME;
+  const libraryOutputSchemaJson =
+    usesProductionThesis && isRecord(row?.gradingOutputSchemaJson)
+      ? row.gradingOutputSchemaJson
+      : null;
   const parsedConfig = parseAssignmentTypeRubricConfig({
     assignmentTypeKind: usesProductionThesis
       ? null
@@ -424,7 +428,9 @@ export function buildResolvedAssignmentTypeGradingConfig({
       scoringType,
     },
     promptConfigSnapshot,
-    outputSchemaSnapshot: parsedConfig.outputSchema,
+    outputSchemaSnapshot: libraryOutputSchemaJson
+      ? { ...parsedConfig.outputSchema, ...libraryOutputSchemaJson }
+      : parsedConfig.outputSchema,
     calibrationNotes: parsedConfig.calibrationNotes,
     sourceTemplateId:
       parsedConfig.source === 'assignment-type'

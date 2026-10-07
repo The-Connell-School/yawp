@@ -17,13 +17,6 @@ export const TEACHER_NOTES_EVIDENCE_RULE = [
   '- Return null when no clear, useful inconsistency is supported. Avoid vague warnings and overflagging.',
 ].join('\n');
 
-/** Lines that belong in rubric grading instructions, not the shared note contract. */
-export const DAILY_PAGES_ONLY_TEACHER_NOTE_PHRASES = [
-  'Never mention grammar, spelling, syntax, or organization as a grading judgment.',
-  'Never evaluate whether the content is correct; this is an engagement judgment, not a correctness judgment.',
-  'Feedback is 1–3 warm sentences; do not turn the private note into student-facing feedback.',
-] as const;
-
 export function overallCommentWriterRules(teacherNotesEnabled: boolean): string {
   const base =
     '- Do not include private observations, notes for the teacher, or speculation about authorship. Write only student feedback and obey the supplied grading constraints.';

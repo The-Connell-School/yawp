@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { CatalogError } from '~/domain/rubrics/rubric-catalog.server';
 
 const prisma = {} as never;
 const requireAdmin = mock();
@@ -96,6 +97,82 @@ describe('api.admin.rubric-output-options', () => {
       fingerprint: 'b'.repeat(64),
     });
     expect(setRubricTeacherNotesEnabled).toHaveBeenCalled();
+  });
+
+  test('maps catalog 403 errors from toggle saves', async () => {
+    setRubricTeacherNotesEnabled.mockRejectedValue(
+      new CatalogError('This rubric is read-only', 403)
+    );
+    const response = await action({
+      request: new Request('https://example.test/api/admin/rubric-output-options', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          catalogKey: 'class-starter-engagement',
+          enabled: true,
+          expectedFingerprint: 'a'.repeat(64),
+          requestId: '00000000-0000-4000-8000-000000000003',
+        }),
+      }),
+      params: {},
+      context: {} as never,
+    } as never);
+    expect((response as { init?: { status: number } }).init?.status).toBe(403);
+    expect((response as { data: { error: string } }).data.error).toContain(
+      'read-only'
+    );
+  });
+
+  test('maps catalog 409 stale fingerprint errors', async () => {
+    setRubricTeacherNotesEnabled.mockRejectedValue(
+      new CatalogError(
+        'This rubric changed since you opened it. Reload to see the latest version, then reapply your edit.',
+        409
+      )
+    );
+    const response = await action({
+      request: new Request('https://example.test/api/admin/rubric-output-options', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          catalogKey: 'daily-pages-engagement',
+          enabled: false,
+          expectedFingerprint: 'a'.repeat(64),
+          requestId: '00000000-0000-4000-8000-000000000004',
+        }),
+      }),
+      params: {},
+      context: {} as never,
+    } as never);
+    const body = (response as { data: { httpStatus?: number }; init?: { status: number } }).data;
+    expect(body.httpStatus).toBe(409);
+    expect((response as { init?: { status: number } }).init?.status).toBe(409);
+  });
+
+  test('maps catalog 422 validation errors', async () => {
+    setRubricTeacherNotesEnabled.mockRejectedValue(
+      new CatalogError('Rubric validation failed', 422, [
+        { path: '/rubric', message: 'Add at least one category.' },
+      ])
+    );
+    const response = await action({
+      request: new Request('https://example.test/api/admin/rubric-output-options', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          catalogKey: 'broken-rubric',
+          enabled: true,
+          expectedFingerprint: 'a'.repeat(64),
+          requestId: '00000000-0000-4000-8000-000000000005',
+        }),
+      }),
+      params: {},
+      context: {} as never,
+    } as never);
+    expect((response as { init?: { status: number } }).init?.status).toBe(422);
+    expect((response as { data: { issues: unknown[] } }).data.issues).toHaveLength(
+      1
+    );
   });
 
   test('loader resolves assignment-type output options for admins', async () => {
