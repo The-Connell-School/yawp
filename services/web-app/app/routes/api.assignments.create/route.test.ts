@@ -1419,7 +1419,10 @@ describe('api.assignments.create', () => {
       expect(data.gradingMode).toBe('bands');
     });
 
-    test('leaves the original builder on whatever mode it posted', async () => {
+    // Steps grading is gone (#410) along with the original builder, so a post
+    // without the quick builder's fields that still asks for steps lands on
+    // bands too.
+    test('lands a post without the quick builder fields on bands', async () => {
       mockExitTicketType();
 
       await action({
@@ -1436,7 +1439,7 @@ describe('api.assignments.create', () => {
       } as any);
 
       const data = createAssignmentDeployedToClasses.mock.calls.at(-1)![0].data;
-      expect(data.gradingMode).toBe('step');
+      expect(data.gradingMode).toBe('bands');
     });
 
     test('composes the focused prompt for a specific exit ticket', async () => {
