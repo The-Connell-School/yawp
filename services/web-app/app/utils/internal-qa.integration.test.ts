@@ -21,7 +21,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)('QA accounts are 
     await expect(service.create({ ...request, reason: 'changed' })).rejects.toThrow('Idempotency');
     const users = await db.user.findMany({ where: { id: { in: fixture.users.map(user => user.userId) } }, include: { memberships: true, password: true } });
     expect(users).toHaveLength(2);
-    expect(users.every(user => !user.isAdmin && !user.isSuperAdmin && !user.password && user.email.endsWith('@yawp.invalid'))).toBe(true);
+    expect(users.every(user => !user.isAdmin && !user.isSuperAdmin && !user.password && user.email?.endsWith('@yawp.invalid'))).toBe(true);
     expect(users.every(user => user.memberships.length === 1 && user.memberships[0]!.organizationId === organization.id && !user.memberships[0]!.isOrgOwner)).toBe(true);
     await expect(service.archive({ id: fixture.id, organizationId: 'outside', actorId: 'qa-operator' })).rejects.toThrow();
     await expect(Promise.resolve(db.$executeRaw`UPDATE "InternalQaFixture" SET "actorId"='tampered' WHERE id=${fixture.id}`)).rejects.toThrow();

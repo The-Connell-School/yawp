@@ -1350,7 +1350,7 @@ function BulkEditClassSheet({
   schools: { id: string; name: string }[];
   teachers: {
     id: string;
-    user: { name: string | null; email: string };
+    user: { name: string | null; email: string | null; username?: string | null };
   }[];
 }) {
   const fetcher = useFetcher({

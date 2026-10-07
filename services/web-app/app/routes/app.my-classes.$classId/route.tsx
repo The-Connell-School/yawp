@@ -147,6 +147,7 @@ import {
   lockStudentRosters,
 } from '~/domain/collaboration/class-assignment-lock.server';
 import { filterClassStudentsByQuery } from './class-students-search';
+import { formatUserContactLabel, formatUserDisplayName } from '~/utils/user-display';
 import {
   StudentGrowthPlansSheet,
   type StudentGrowthPlan,
@@ -744,6 +745,36 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
+  if (intent === 'reset-student-password') {
+    const studentMembershipId =
+      formData.get('studentMembershipId')?.toString() ?? '';
+    const temporaryPassword =
+      formData.get('temporaryPassword')?.toString() ?? '';
+    if (temporaryPassword.length < 6) {
+      return dataResponse(
+        { error: 'Temporary password must be at least 6 characters.' },
+        { status: 400 }
+      );
+    }
+    const { teacherResetStudentPassword } =
+      await import('~/domain/free-tier/student-join.server');
+    const result = await teacherResetStudentPassword({
+      studentMembershipId,
+      classId,
+      organizationId: classAccess.school.organizationId,
+      actorUserId: userId,
+      temporaryPassword,
+    });
+    if (result.status === 'error') {
+      return dataResponse({ error: result.error }, { status: 400 });
+    }
+    return dataResponse({
+      success: true,
+      message:
+        'Temporary password set. The student must change it at next login.',
+    });
+  }
+
   // Removes class enrollment only — student profiles and accounts stay intact.
   if (intent === 'remove-students') {
     const studentProfileIds = formData.getAll('studentProfileIds') as string[];
@@ -927,7 +958,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         students: {
           select: {
             id: true,
-            user: { select: { name: true, email: true } },
+            user: { select: { name: true, email: true, username: true } },
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -1037,7 +1068,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   membership: {
                     select: {
                       id: true,
-                      user: { select: { id: true, name: true, email: true } },
+                      user: {
+                        select: { id: true, name: true, email: true, username: true },
+                      },
                     },
                   },
                 },
@@ -1360,7 +1393,7 @@ type ClassDocumentRow = {
   updatedAt: Date;
   membership: {
     id: string;
-    user: { name: string | null; email: string };
+    user: { name: string | null; email: string | null; username?: string | null };
   };
   group: TeacherDocumentWorkRow['group'];
   assignment: {
@@ -1648,11 +1681,14 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const sortedStudents = useMemo(() => {
     const direction = studentNameSortDirection === 'asc' ? 1 : -1;
     return [...students].sort((a, b) => {
-      const aName = a.user.name || a.user.email;
-      const bName = b.user.name || b.user.email;
+      const aName = formatUserDisplayName(a.user);
+      const bName = formatUserDisplayName(b.user);
       const primary = collator.compare(aName, bName);
       if (primary !== 0) return primary * direction;
-      return collator.compare(a.user.email, b.user.email);
+      return collator.compare(
+        formatUserContactLabel(a.user),
+        formatUserContactLabel(b.user)
+      );
     });
   }, [collator, studentNameSortDirection, students]);
 
@@ -2075,7 +2111,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           statusCounts={documentWorkStatusCounts}
           students={sortedStudents.map((student) => ({
             id: student.id,
-            label: student.user.name || student.user.email,
+            label: formatUserDisplayName(student.user),
           }))}
           assignments={data.assignments.map((assignment) => ({
             id: assignment.id,
@@ -2490,7 +2526,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                         )}
                       </Button>
                     </TableHead>
-                    <TableHead className="whitespace-nowrap">Email</TableHead>
+                    <TableHead className="whitespace-nowrap">Login</TableHead>
                     <TableHead className="whitespace-nowrap pr-4">
                       Documents
                     </TableHead>
@@ -2552,7 +2588,36 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                           {s.user.name ?? 'Unnamed Student'}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {s.user.email}
+                          <div className="flex flex-col gap-1">
+                            <span>{formatUserContactLabel(s.user)}</span>
+                            {!s.user.email ? (
+                              <Form method="post" className="flex flex-wrap items-end gap-2">
+                                <input
+                                  type="hidden"
+                                  name="intent"
+                                  value="reset-student-password"
+                                />
+                                <input
+                                  type="hidden"
+                                  name="studentMembershipId"
+                                  value={s.id}
+                                />
+                                <div className="flex flex-col gap-1">
+                                  <Label className="text-xs">Temp password</Label>
+                                  <Input
+                                    name="temporaryPassword"
+                                    type="text"
+                                    className="h-8 w-36 text-xs"
+                                    minLength={6}
+                                    required
+                                  />
+                                </div>
+                                <Button type="submit" size="sm" variant="outline">
+                                  Reset login
+                                </Button>
+                              </Form>
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell className="pr-4">
                           <button

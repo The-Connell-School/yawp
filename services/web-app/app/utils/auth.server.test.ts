@@ -405,6 +405,8 @@ describe('auth email normalization', () => {
 
     prisma.user.findFirst.mockResolvedValue({
       id: 'user-1',
+      email: 'teacher.invited@example.com',
+      mustChangePassword: false,
       password: { hash },
     });
 
@@ -422,10 +424,16 @@ describe('auth email normalization', () => {
       },
       select: {
         id: true,
+        email: true,
+        mustChangePassword: true,
         password: { select: { hash: true } },
       },
     });
-    expect(result).toEqual({ id: 'user-1' });
+    expect(result).toEqual({
+      id: 'user-1',
+      email: 'teacher.invited@example.com',
+      mustChangePassword: false,
+    });
   });
 
   test('resetUserPassword updates password for mixed-case stored email', async () => {

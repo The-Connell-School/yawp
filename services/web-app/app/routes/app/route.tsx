@@ -71,6 +71,7 @@ import type { Route as RootRoute } from '../../+types/root';
 import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
 import { prisma } from '~/utils/db.server';
 import { shouldRedirectClasslessStudent } from '~/utils/classless-student-gate';
+import { formatUserContactLabel } from '~/utils/user-display';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -299,7 +300,9 @@ export default function Route() {
               <div className="flex justify-between p-3 border-b">
                 <div className="flex flex-col">
                   <p className="text-sm font-bold">{user.name}</p>
-                  <p className="text-sm text-muted-foreground">{user.email}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatUserContactLabel(user)}
+                  </p>
                 </div>
                 <Button
                   size="icon-sm"
