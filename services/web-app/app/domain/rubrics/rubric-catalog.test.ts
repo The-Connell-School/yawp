@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import fixture from './__fixtures__/prod-rubric-catalog.json';
 import { canonicalJson, contentFingerprint, parseCatalogKey, perTypeContent, toEditable, validateEditable } from './rubric-catalog.server';
 
-const STARTERS = new Set(['class-starter-engagement', 'daily-pages-short-form']);
 
 describe('rubric catalog with production rubric content', () => {
   test('every editable production library rubric opens in the editor and passes the save validator unchanged', () => {
@@ -14,7 +13,7 @@ describe('rubric catalog with production rubric content', () => {
       if (!result.ok) throw new Error(`${rubric.name}: ${JSON.stringify(result.issues)}`);
       // Nothing an operator did not touch is lost when the document round-trips.
       expect((editable.rubric as any).categories).toEqual((rubric.schemaJson as any).rubric.categories);
-      if (!STARTERS.has(rubric.name)) expect(editable.title).toBe((rubric.schemaJson as any).title);
+      expect(editable.title).toBe((rubric.schemaJson as any).title);
     }
   });
 

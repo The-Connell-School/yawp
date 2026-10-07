@@ -141,7 +141,7 @@ run('per-type rubric (production Daily Pages content) saves as a new revision, m
   cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
 });
 
-run('protected starters and library-linked types are read-only; list counts every library rubric', async () => {
+run('code-seeded starters are editable and flagged; library-linked types are read-only; list counts every library rubric', async () => {
   const { db, catalog } = await setup();
   const listed = await catalog.list();
   expect(listed.totals.libraryRubrics).toBe(await db.rubric.count());
@@ -156,8 +156,12 @@ run('protected starters and library-linked types are read-only; list counts ever
   }
   {
     const detail = await catalog.get('class-starter-engagement');
-    expect(detail.rubric.editable).toBe(false);
-    await expect(catalog.save({ key: 'class-starter-engagement', requestId: randomUUID(), actorEmail: actor, reason: 'Try', expectedFingerprint: detail.live.fingerprint, document: { ...(detail.live.editable as object), title: 'Changed' } })).rejects.toMatchObject({ statusCode: 403 });
+    expect(detail.rubric.editable).toBe(true);
+    expect(detail.rubric.seededFromCode).toBe(true);
+    const title = `Class Starter engagement ${suffix}`;
+    const saved = await catalog.save({ key: 'class-starter-engagement', requestId: randomUUID(), actorEmail: actor, reason: 'Rename starter', expectedFingerprint: detail.live.fingerprint, document: { ...(detail.live.editable as object), title } });
+    expect((await db.rubric.findUniqueOrThrow({ where: { name: 'class-starter-engagement' } })).title).toBe(title);
+    expect(saved.revision.createdBy).toBe(actor);
   }
   await expect(catalog.get('does-not-exist')).rejects.toMatchObject({ statusCode: 404 });
 });

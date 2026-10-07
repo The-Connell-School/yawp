@@ -130,8 +130,11 @@ export type SaveInput = {
 const revisionSelect = { id: true, rubricName: true, version: true, schemaJson: true, fingerprint: true, createdBy: true, reason: true, createdAt: true, requestId: true, requestHash: true } as const;
 type RevisionRow = { id: string; rubricName: string; version: number; schemaJson: unknown; fingerprint: string; createdBy: string; reason: string; createdAt: Date; requestId: string; requestHash: string };
 
-function readOnlyReason(source: 'library' | 'assignment-type', name: string, content: unknown, linkedLibrary?: string | null): string | null {
-  if (source === 'library' && STARTER_NAMES.has(name)) return 'Protected starter rubric: its definition ships with the app code, so it cannot be edited here.';
+// Code-seeded library rubrics are editable here: seedStarterRubrics only creates
+// missing rows and never overwrites an existing one, and every save is an
+// immutable revision. The catalog flags them so the operator knows the code
+// carries the original definition.
+function readOnlyReason(source: 'library' | 'assignment-type', _name: string, content: unknown, linkedLibrary?: string | null): string | null {
   if (source === 'assignment-type' && linkedLibrary) return `This assignment type grades with the library rubric "${linkedLibrary}"; edit that rubric instead.`;
   if (!categoriesOf(content).length) return 'No categories are stored, so this type grades with the built-in default rubric for its kind.';
   return null;
@@ -191,6 +194,7 @@ export class RubricCatalog {
       return {
         key: args.key, source: args.source, name: args.name, title: args.title,
         editable: reason === null, readOnlyReason: reason,
+        seededFromCode: args.source === 'library' && STARTER_NAMES.has(args.name),
         currentVersion: current?.version ?? null, versionCount: history.length,
         liveMatchesVersion: current !== null,
         lastEditedAt: (latest?.createdAt ?? args.fallbackEditedAt)?.toISOString() ?? null,
