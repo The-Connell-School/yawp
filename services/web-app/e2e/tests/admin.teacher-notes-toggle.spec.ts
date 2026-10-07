@@ -15,10 +15,7 @@ test.describe.serial('Admin teacher notes output toggle', () => {
     const rubricName = `teacher-notes-e2e-${suffix}`;
     const note =
       'The closing paragraph shifts into formal vocabulary unlike the rest.';
-    let rubricId: string | null = null;
-    let assignmentTypeId: string | null = null;
     let submissionId: string | null = null;
-    let assignmentId: string | null = null;
 
     const schema = {
       name: rubricName,
@@ -39,96 +36,94 @@ test.describe.serial('Admin teacher notes output toggle', () => {
       outputSchema: { schemaVersion: 1, responseShape: 'categories_overall_comment' },
     };
 
-    try {
-      const rubric = await prisma.rubric.create({
-        data: { name: rubricName, title: schema.title, schemaJson: schema },
-      });
-      rubricId = rubric.id;
+    const rubric = await prisma.rubric.create({
+      data: { name: rubricName, title: schema.title, schemaJson: schema },
+    });
 
+    const assignmentType = await prisma.assignmentType.create({
+      data: {
+        title: `Teacher notes type ${suffix}`,
+        position: 98000 + (suffix % 1000),
+        rubricId: rubric.id,
+        ownerOrgId: e2eContext.organizationId,
+      },
+    });
+
+    const { assignment, classAssignment } = await createDeployedAssignment({
+      prisma,
+      classId: e2eContext.classId,
+      assignmentTypeId: assignmentType.id,
+      prompt: 'Write about a place that matters to you.',
+      pointValue: 20,
+    });
+
+    const document = await prisma.document.create({
+      data: {
+        title: 'Teacher notes submission',
+        text: 'My kitchen smells like bread. Therefore one must conclude the ontological status of yeast is paramount.',
+        html: '<p>My kitchen smells like bread. Therefore one must conclude the ontological status of yeast is paramount.</p>',
+        membershipId: e2eContext.membershipId,
+        assignmentTypeId: assignmentType.id,
+        assignmentId: assignment.id,
+        classAssignmentId: classAssignment.id,
+      },
+    });
+    submissionId = document.id;
+    await prisma.submission.create({
+      data: {
+        id: document.id,
+        documentId: document.id,
+        title: document.title,
+        text: document.text ?? '',
+        html: document.html ?? '',
+        submittedAt: new Date(),
+      },
+    });
+
+    await prisma.submissionGradingAssistantRun.create({
+      data: {
+        submissionId,
+        source: 'assignment-type',
+        status: 'succeeded',
+        assignmentTypeRubricSnapshot: {
+          categories: schema.rubric.categories,
+          minScore: 1,
+          maxScore: 5,
+          step: 1,
+          scoringType: 'weighted_1_5',
+        },
+        metadata: {
+          teacherNote: note,
+          output: {
+            rubricScores: {
+              quality: { score: 4, comment: 'Strong voice.', isAi: true },
+            },
+            overallComment: 'Jordan, your bread detail is vivid and personal.',
+            score: '4/5',
+          },
+        },
+      },
+    });
+
+    try {
       await signIn(e2eContext.superAdminEmail, 'admin-e2e-password');
-      await page.goto('/app/admin/assignments');
-      await page.getByRole('link', { name: 'Create assignment type' }).click();
-      await page.getByLabel('Title').fill(`Teacher notes type ${suffix}`);
-      await page.getByTestId('rubric-library-select').click();
-      await page.getByRole('option', { name: schema.title, exact: true }).click();
-      await Promise.all([
-        page.waitForURL(/\/app\/admin\/assignment-types\/[^/]+$/),
-        page.getByRole('button', { name: 'Create' }).click(),
-      ]);
-      assignmentTypeId = page.url().split('/').pop() ?? null;
+      await page.goto(`/app/admin/assignment-types/${assignmentType.id}`);
 
       const toggle = page.getByTestId('rubric-teacher-notes-toggle');
-      await expect(toggle).toBeVisible({ timeout: 15000 });
+      await expect(toggle).toBeVisible({ timeout: 30000 });
       await expect(toggle).toBeEnabled();
       await expect(toggle).not.toBeChecked();
       await toggle.click();
       await expect
         .poll(async () => {
           const row = await prisma.rubric.findUnique({
-            where: { id: rubricId! },
+            where: { id: rubric.id },
             select: { schemaJson: true },
           });
           return (row?.schemaJson as { outputSchema?: { teacherNotesEnabled?: boolean } })
             ?.outputSchema?.teacherNotesEnabled;
         })
         .toBe(true);
-
-      const { assignment, classAssignment } = await createDeployedAssignment({
-        prisma,
-        classId: e2eContext.classId,
-        assignmentTypeId: assignmentTypeId!,
-        prompt: 'Write about a place that matters to you.',
-        pointValue: 20,
-      });
-      assignmentId = assignment.id;
-
-      const document = await prisma.document.create({
-        data: {
-          title: 'Teacher notes submission',
-          text: 'My kitchen smells like bread. Therefore one must conclude the ontological status of yeast is paramount.',
-          html: '<p>My kitchen smells like bread. Therefore one must conclude the ontological status of yeast is paramount.</p>',
-          membershipId: e2eContext.membershipId,
-          assignmentTypeId: assignmentTypeId!,
-          assignmentId: assignment.id,
-          classAssignmentId: classAssignment.id,
-        },
-      });
-      submissionId = document.id;
-      await prisma.submission.create({
-        data: {
-          id: document.id,
-          documentId: document.id,
-          title: document.title,
-          text: document.text ?? '',
-          html: document.html ?? '',
-          submittedAt: new Date(),
-        },
-      });
-
-      await prisma.submissionGradingAssistantRun.create({
-        data: {
-          submissionId,
-          source: 'assignment-type',
-          status: 'succeeded',
-          assignmentTypeRubricSnapshot: {
-            categories: schema.rubric.categories,
-            minScore: 1,
-            maxScore: 5,
-            step: 1,
-            scoringType: 'weighted_1_5',
-          },
-          metadata: {
-            teacherNote: note,
-            output: {
-              rubricScores: {
-                quality: { score: 4, comment: 'Strong voice.', isAi: true },
-              },
-              overallComment: 'Jordan, your bread detail is vivid and personal.',
-              score: '4/5',
-            },
-          },
-        },
-      });
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/submissions/${submissionId}`);
@@ -142,7 +137,7 @@ test.describe.serial('Admin teacher notes output toggle', () => {
       expect(await page.content()).not.toContain(note);
 
       await signIn(e2eContext.adminEmail, 'admin-e2e-password');
-      await page.goto(`/app/admin/assignment-types/${assignmentTypeId}`);
+      await page.goto(`/app/admin/assignment-types/${assignmentType.id}`);
       await expect(page.getByTestId('rubric-teacher-notes-toggle')).toBeDisabled();
     } finally {
       if (submissionId) {
@@ -151,25 +146,6 @@ test.describe.serial('Admin teacher notes output toggle', () => {
         });
         await prisma.submission.deleteMany({ where: { id: submissionId } });
         await prisma.document.deleteMany({ where: { id: submissionId } });
-      }
-      if (assignmentId) {
-        await prisma.classAssignment.deleteMany({
-          where: { assignmentId },
-        });
-        await prisma.assignment.deleteMany({ where: { id: assignmentId } });
-      }
-      if (assignmentTypeId) {
-        await prisma.assignmentModule.deleteMany({
-          where: { assignmentTypeId },
-        });
-        await prisma.organizationAssignmentType.deleteMany({
-          where: { assignmentTypeId },
-        });
-        await prisma.assignmentType.deleteMany({ where: { id: assignmentTypeId } });
-      }
-      if (rubricId) {
-        await prisma.rubricRevision.deleteMany({ where: { rubricName } });
-        await prisma.rubric.deleteMany({ where: { id: rubricId } });
       }
       await prisma.$disconnect();
     }
