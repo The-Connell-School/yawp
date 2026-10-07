@@ -46,6 +46,7 @@ import {
   AssignmentHasCollaborativeWorkError,
   deleteClassAssignmentDeployment,
 } from '~/utils/assignment-deployment.server';
+import { loadAssignmentCreationQuotasForTypes } from '~/utils/assignment-quota.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -172,6 +173,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ? await getAvailableAssignmentTypesForScopes<{
           id: string;
           title: string;
+          kind: string | null;
           systemKey: string | null;
           collaborationSupported: boolean;
         }>({
@@ -183,6 +185,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             title: true,
+            kind: true,
             systemKey: true,
             collaborationSupported: true,
           },
@@ -220,16 +223,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
       name: formatClassLabel(klass),
     })),
 
-    assignmentCreationTypes: creationTypeRows.map((type) => ({
-      id: type.id,
-      title: type.title,
-      collaborationSupported: type.collaborationSupported,
-      gradesGrammar: gradesGrammarIds.has(type.id),
-      defaultWritingTimeMinutes:
-        creationTypeDefaults.get(type.id)?.defaultWritingTimeMinutes ?? null,
-      offersParagraphModes:
-        creationTypeDefaults.get(type.id)?.offersParagraphModes ?? false,
-    })),
+    assignmentCreationTypes: await (async () => {
+      const quotaByTypeId = await loadAssignmentCreationQuotasForTypes(
+        profile.organization,
+        creationTypeRows.map((type) => ({
+          id: type.id,
+          kind: type.kind ?? null,
+        }))
+      );
+      return creationTypeRows.map((type) => ({
+        id: type.id,
+        title: type.title,
+        collaborationSupported: type.collaborationSupported,
+        gradesGrammar: gradesGrammarIds.has(type.id),
+        defaultWritingTimeMinutes:
+          creationTypeDefaults.get(type.id)?.defaultWritingTimeMinutes ?? null,
+        offersParagraphModes:
+          creationTypeDefaults.get(type.id)?.offersParagraphModes ?? false,
+        ...quotaByTypeId.get(type.id),
+      }));
+    })(),
   };
 }
 
