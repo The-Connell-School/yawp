@@ -19,6 +19,7 @@ const teacherEmail =
 const adminEmail = process.env.QA_ADMIN_EMAIL || 'dev.admin@yawp.local';
 const qaClassTitle =
   process.env.QA_CLASS_TITLE || 'English 10 - Period 3';
+const qaClassId = process.env.QA_CLASS_ID;
 
 mkdirSync(outputDir, { recursive: true });
 
@@ -56,6 +57,11 @@ async function shot(page: Page, name: string) {
 }
 
 async function openQaClass(page: Page) {
+  if (qaClassId) {
+    await page.goto(`${baseUrl}/app/my-classes/${qaClassId}`);
+    await page.waitForLoadState('networkidle');
+    return;
+  }
   await page.goto(`${baseUrl}/app/my-classes`);
   const classLink = page
     .locator('a[href*="/app/my-classes/"]')
@@ -114,7 +120,11 @@ async function openSwapPersistenceSpecG(page: Page) {
 }
 
 const browser = await chromium.launch({ headless: true });
-const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const context = await browser.newContext({
+  viewport: { width: 1440, height: 900 },
+});
+context.setDefaultNavigationTimeout(120_000);
+context.setDefaultTimeout(90_000);
 const page = await context.newPage();
 
 try {
