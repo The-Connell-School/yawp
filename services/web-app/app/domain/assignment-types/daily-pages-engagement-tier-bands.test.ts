@@ -66,6 +66,20 @@ describe('dailyPagesEngagementTierBands', () => {
     expect(formatDailyPagesEngagementBandRange(thirtySeven[3])).toBe('37');
   });
 
+  test('matches Brian’s 45- and 85-point rows (integer halves-up)', () => {
+    const fortyFive = dailyPagesEngagementTierBands(45);
+    expect(formatDailyPagesEngagementBandRange(fortyFive[0])).toBe('0–31');
+    expect(formatDailyPagesEngagementBandRange(fortyFive[1])).toBe('32–35');
+    expect(formatDailyPagesEngagementBandRange(fortyFive[2])).toBe('36–40');
+    expect(formatDailyPagesEngagementBandRange(fortyFive[3])).toBe('45');
+
+    const eightyFive = dailyPagesEngagementTierBands(85);
+    expect(formatDailyPagesEngagementBandRange(eightyFive[0])).toBe('0–59');
+    expect(formatDailyPagesEngagementBandRange(eightyFive[1])).toBe('60–67');
+    expect(formatDailyPagesEngagementBandRange(eightyFive[2])).toBe('68–76');
+    expect(formatDailyPagesEngagementBandRange(eightyFive[3])).toBe('85');
+  });
+
   test('never places 90–99 on a 100-point scale (gap above Good)', () => {
     const good = dailyPagesEngagementTierBands(100)[2];
     expect(good.max).toBe(89);

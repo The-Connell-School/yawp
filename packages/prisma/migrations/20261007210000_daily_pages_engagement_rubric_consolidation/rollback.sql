@@ -2,13 +2,18 @@
 DO $$
 DECLARE
   engagement_id TEXT := 'cmsvqo8lf002801l60o74x8wr';
+  daily_pages_type_id TEXT := 'cmlgtyo8j01em0qjs6knw7cni';
+  sjp_daily_pages_type_id TEXT := 'cmtk7cy2r017y01l8r5ix4kxf';
   short_form_id TEXT := 'cmumlbxru000001jn1cjqkham';
   reflection_id TEXT := 'cmtuonqfw000101l3ntnz78sj';
   prev JSONB;
   prev_rev TEXT;
+  dp_prev_rubric TEXT;
+  sjp_prev_rubric TEXT;
 BEGIN
-  SELECT "previousSchemaJson", "previousCurrentRevisionId"
-  INTO prev, prev_rev
+  SELECT "previousSchemaJson", "previousCurrentRevisionId",
+         "dailyPagesTypePreviousRubricId", "sjpTypePreviousRubricId"
+  INTO prev, prev_rev, dp_prev_rubric, sjp_prev_rubric
   FROM "InternalDpEngagementRubricRestore"
   WHERE "rubricId" = engagement_id;
 
@@ -20,6 +25,14 @@ BEGIN
   UPDATE "Rubric"
   SET "schemaJson" = prev, "currentRevisionId" = prev_rev, "updatedAt" = CURRENT_TIMESTAMP
   WHERE id = engagement_id;
+
+  UPDATE "AssignmentType"
+  SET "rubricId" = dp_prev_rubric, "updatedAt" = CURRENT_TIMESTAMP
+  WHERE id = daily_pages_type_id;
+
+  UPDATE "AssignmentType"
+  SET "rubricId" = sjp_prev_rubric, "updatedAt" = CURRENT_TIMESTAMP
+  WHERE id = sjp_daily_pages_type_id;
 
   UPDATE "Rubric"
   SET "archivedAt" = NULL, "updatedAt" = CURRENT_TIMESTAMP
