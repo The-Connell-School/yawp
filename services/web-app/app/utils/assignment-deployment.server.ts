@@ -1,6 +1,7 @@
-import type { Prisma } from '@app/prisma';
+import type { Organization, Prisma } from '@app/prisma';
 import { deleteAssignmentPromptAttachment } from '~/domain/assignments/assignment-prompt-attachment.server';
 import { lockClassAssignmentCollaboration } from '~/domain/collaboration/class-assignment-lock.server';
+import { assertCanCreateAssignmentOfKindInTransaction } from '~/utils/assignment-quota.server';
 import { prisma } from '~/utils/db.server';
 
 export class AssignmentHasCollaborativeWorkError extends Error {}
@@ -19,24 +20,36 @@ export async function createAssignmentDeployedToClasses(params: {
     postAt?: Date | null;
     dueAt?: Date | null;
   };
+  /** When set, enforces free-classroom assignment bundle quotas inside the create transaction. */
+  quotaOrganization?: Pick<Organization, 'id' | 'plan'> | null;
+  assignmentTypeKind?: string | null;
 }) {
   const uniqueClassIds = [...new Set(params.classIds)];
-  const assignment = await prisma.assignment.create({
-    data: params.data,
-  });
-
-  if (uniqueClassIds.length > 0) {
-    await prisma.classAssignment.createMany({
-      data: uniqueClassIds.map((classId) => ({
-        assignmentId: assignment.id,
-        classId,
-        postAt: params.deployment?.postAt ?? null,
-        dueAt: params.deployment?.dueAt ?? null,
-      })),
+  return prisma.$transaction(async (tx) => {
+    if (params.quotaOrganization) {
+      await assertCanCreateAssignmentOfKindInTransaction(
+        tx,
+        params.quotaOrganization,
+        params.assignmentTypeKind ?? null
+      );
+    }
+    const assignment = await tx.assignment.create({
+      data: params.data,
     });
-  }
 
-  return assignment;
+    if (uniqueClassIds.length > 0) {
+      await tx.classAssignment.createMany({
+        data: uniqueClassIds.map((classId) => ({
+          assignmentId: assignment.id,
+          classId,
+          postAt: params.deployment?.postAt ?? null,
+          dueAt: params.deployment?.dueAt ?? null,
+        })),
+      });
+    }
+
+    return assignment;
+  });
 }
 
 export async function deleteClassAssignmentDeployment(params: {

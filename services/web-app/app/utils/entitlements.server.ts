@@ -6,8 +6,20 @@ import type { Organization, OrganizationPlan } from '@app/prisma';
 export const FREE_CLASSROOM_STUDENT_SEAT_CAP = 35;
 export const FREE_CLASSROOM_TEACHER_SEAT_CAP = 1;
 export const FREE_CLASSROOM_ACTIVE_CLASS_CAP = 1;
-// TODO(spec 5.1): Brian said "around 3–4" lesson plans; start with 4 and confirm.
-export const FREE_CLASSROOM_LESSON_PLAN_QUOTA = 4;
+export const FREE_CLASSROOM_LESSON_PLAN_QUOTA = 5;
+
+export const FREE_CLASSROOM_ASSIGNMENT_QUOTAS = {
+  class_starter: 12,
+  prewriting: 3,
+  thesis_statement: 3,
+} as const;
+
+export type FreeClassroomAssignmentQuotaKind =
+  keyof typeof FREE_CLASSROOM_ASSIGNMENT_QUOTAS;
+
+export const FREE_CLASSROOM_ASSIGNMENT_KINDS = Object.keys(
+  FREE_CLASSROOM_ASSIGNMENT_QUOTAS
+) as FreeClassroomAssignmentQuotaKind[];
 
 export type PlanEntitlements = {
   plan: OrganizationPlan;
@@ -28,7 +40,33 @@ export type PlanEntitlements = {
     organization?: Pick<Organization, 'numOfStudentSeats'>;
   }) => boolean;
   canCreateClass: (params: { currentActiveClasses: number }) => boolean;
+  canCreateAssignmentOfKind: (params: {
+    kind: string | null | undefined;
+    createdCount: number;
+  }) => boolean;
+  assignmentQuotaForKind: (
+    kind: string | null | undefined
+  ) => number | null;
 };
+
+function assignmentQuotaForFreeKind(kind: string | null | undefined) {
+  if (!kind) return null;
+  return (
+    FREE_CLASSROOM_ASSIGNMENT_QUOTAS[
+      kind as FreeClassroomAssignmentQuotaKind
+    ] ?? null
+  );
+}
+
+export function canCreateAssignmentOfKindForPlan(
+  plan: OrganizationPlan,
+  params: { kind: string | null | undefined; createdCount: number }
+) {
+  if (plan !== 'FREE_CLASSROOM') return true;
+  const cap = assignmentQuotaForFreeKind(params.kind);
+  if (cap == null) return false;
+  return params.createdCount < cap;
+}
 
 export function getEntitlementsForPlan(plan: OrganizationPlan): PlanEntitlements {
   if (plan === 'FREE_CLASSROOM') {
@@ -46,6 +84,12 @@ export function getEntitlementsForPlan(plan: OrganizationPlan): PlanEntitlements
         currentStudents + pendingInvites < FREE_CLASSROOM_STUDENT_SEAT_CAP,
       canCreateClass: ({ currentActiveClasses }) =>
         currentActiveClasses < FREE_CLASSROOM_ACTIVE_CLASS_CAP,
+      canCreateAssignmentOfKind: ({ kind, createdCount }) =>
+        canCreateAssignmentOfKindForPlan('FREE_CLASSROOM', {
+          kind,
+          createdCount,
+        }),
+      assignmentQuotaForKind: (kind) => assignmentQuotaForFreeKind(kind),
     };
   }
 
@@ -62,6 +106,8 @@ export function getEntitlementsForPlan(plan: OrganizationPlan): PlanEntitlements
     },
     canAddStudent: () => true,
     canCreateClass: () => true,
+    canCreateAssignmentOfKind: () => true,
+    assignmentQuotaForKind: () => null,
   };
 }
 
