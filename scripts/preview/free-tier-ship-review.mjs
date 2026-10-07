@@ -26,12 +26,15 @@ if (!baseUrl || !accessCode) {
 }
 
 async function enterPreview(page) {
-  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  const wakeUrl = new URL(baseUrl);
+  wakeUrl.searchParams.set('code', accessCode);
+  await page.goto(wakeUrl.toString(), { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await page.waitForLoadState('networkidle', { timeout: 120_000 }).catch(() => {});
   if (page.url().includes('/auth/preview-access')) {
     await page.fill('input[name="code"]', accessCode);
     await page.locator('form[method="post"]').first().evaluate((form) => form.requestSubmit());
     await page.waitForURL((url) => !url.pathname.includes('/auth/preview-access'), {
-      timeout: 20_000,
+      timeout: 120_000,
     });
   }
 }
@@ -103,14 +106,18 @@ async function shot(page, name) {
 }
 
 async function fetchManifest(page, email) {
-  const res = await page.request.get(
-    `${baseUrl}/api/preview/qa/free-tier-manifest?email=${encodeURIComponent(email)}`
-  );
-  if (!res.ok()) {
+  const result = await page.evaluate(async (em) => {
+    const res = await fetch(
+      `/api/preview/qa/free-tier-manifest?email=${encodeURIComponent(em)}`,
+      { credentials: 'include' }
+    );
     const body = await res.text();
-    throw new Error(`manifest ${res.status()}: ${body.slice(0, 200)}`);
+    return { status: res.status, body };
+  }, email);
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`manifest ${result.status}: ${result.body.slice(0, 200)}`);
   }
-  return res.json();
+  return JSON.parse(result.body);
 }
 
 async function freshContext(browser) {
@@ -121,6 +128,7 @@ async function freshContext(browser) {
 }
 
 async function createBypassToken(adminPage) {
+  await adminPage.getByRole('button', { name: 'Create token' }).waitFor({ timeout: 60_000 });
   await adminPage.fill('input[name="label"]', 'ship-review-qa');
   await adminPage.locator('input[name="bypass"]').check();
   const [response] = await Promise.all([
