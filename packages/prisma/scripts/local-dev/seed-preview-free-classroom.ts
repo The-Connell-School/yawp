@@ -85,12 +85,13 @@ async function createPreviewFreeClassroomOrg(
     });
   }
 
-  await tx.school.create({
+  const school = await tx.school.create({
     data: {
       organizationId: PREVIEW_FREE_CLASSROOM_ORG_ID,
       name: 'Free Classroom Preview School',
       code: PREVIEW_FREE_CLASSROOM_SCHOOL_CODE,
     },
+    select: { id: true },
   });
 
   const teacher = await tx.user.create({
@@ -134,11 +135,12 @@ async function createPreviewFreeClassroomOrg(
 
   const klass = await tx.class.create({
     data: {
-      name: 'Free Classroom — Period 1',
+      code: 'FREE-CLASS-101',
+      schoolYear: '2025-2026',
+      title: 'Free Classroom — Period 1',
       grade: '11',
       period: '1',
-      schoolTeacher: teacher.name,
-      school: { connect: { code: PREVIEW_FREE_CLASSROOM_SCHOOL_CODE } },
+      schoolId: school.id,
       teachers: { connect: { id: teacherMembershipId } },
       students: { connect: { id: studentMembershipId } },
     },
