@@ -6,7 +6,7 @@
  *   PREVIEW_ACCESS_CODE=<free-classroom-seat-code> \
  *   node scripts/preview-qa-free-classroom.mjs
  */
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
 
 const PREVIEW_FREE_CLASSROOM_TEACHER_EMAIL = 'dev.teacher.free@yawp.local';
@@ -20,6 +20,14 @@ const code = process.env.PREVIEW_ACCESS_CODE?.trim();
 if (!base || !code) {
   console.error('Set PREVIEW_URL and PREVIEW_ACCESS_CODE');
   process.exit(1);
+}
+
+const results = [];
+
+function record(name, ok, detail = '') {
+  results.push({ name, ok, detail });
+  console.log(ok ? 'PASS' : 'FAIL', name, detail);
+  if (!ok) process.exitCode = 1;
 }
 
 await mkdir(OUT_DIR, { recursive: true });
@@ -38,9 +46,17 @@ async function shot(name) {
 }
 
 async function devLogin(email) {
-  await page.request.post(`${base}/auth/dev-login`, {
+  const response = await page.request.post(`${base}/auth/dev-login`, {
     form: { email },
+    maxRedirects: 0,
   });
+  record(`dev-login ${email}`, response.ok(), String(response.status()));
+}
+
+async function postForm(path, form) {
+  const response = await page.request.post(`${base}${path}`, { form });
+  const body = await response.json().catch(() => ({}));
+  return { response, body };
 }
 
 await page.goto(`${base}/?code=${encodeURIComponent(code)}`, {
@@ -51,6 +67,24 @@ await page.goto(`${base}/?code=${encodeURIComponent(code)}`, {
 await devLogin(PREVIEW_FREE_CLASSROOM_TEACHER_EMAIL);
 await page.goto(`${base}/app`, { waitUntil: 'networkidle', timeout: 120_000 });
 await shot('05-free-classroom-dashboard.png');
+
+const tileTitles = await page
+  .getByTestId('teacher-assignments-grid')
+  .locator('h3')
+  .allTextContents();
+const allowed = new Set(['Class Starter', 'Prewriting', 'Thesis Statement']);
+const unexpectedTiles = tileTitles.filter((title) => !allowed.has(title.trim()));
+record(
+  'dashboard shows only bundle assignment tiles',
+  unexpectedTiles.length === 0 && tileTitles.length === 3,
+  `tiles=${JSON.stringify(tileTitles)}`
+);
+
+const reporterLink = page.getByRole('link', { name: /^Reporter$/i });
+record(
+  'reporter nav hidden for free classroom',
+  (await reporterLink.count()) === 0
+);
 
 const newAssignment = page
   .getByRole('button', { name: /new assignment/i })
@@ -63,7 +97,7 @@ const quotaVisible = await page
   .getByText(/of 12 Class Starters left/i)
   .isVisible()
   .catch(() => false);
-console.log('quota_counter_visible', quotaVisible);
+record('quota counter visible in creation sheet', quotaVisible);
 
 const typeSelect = page.getByRole('combobox').first();
 if (await typeSelect.count()) {
@@ -72,13 +106,31 @@ if (await typeSelect.count()) {
   await shot('07-free-classroom-type-options.png');
 }
 
-await page.keyboard.press('Escape');
-await page.getByLabel(/title/i).fill('Quota preview final starter');
-await page.getByLabel(/prompt/i).fill('One more class starter for QA.');
-const classCheckbox = page.getByRole('checkbox').first();
-if (await classCheckbox.count()) {
-  await classCheckbox.check();
+for (const kind of ['Prewriting', 'Thesis Statement']) {
+  await page.goto(`${base}/app`, { waitUntil: 'networkidle' });
+  const tile = page.getByTestId('teacher-assignments-grid').getByRole('link', {
+    name: new RegExp(kind, 'i'),
+  });
+  if (await tile.count()) {
+    await tile.first().click();
+    await page.waitForLoadState('networkidle');
+    await shot(`11-${kind.toLowerCase().replace(/\s+/g, '-')}-type-page.png`);
+    const hasModule = await page
+      .getByText(/module|step|instruction|write/i)
+      .first()
+      .isVisible()
+      .catch(() => false);
+    record(`${kind} type page has module content`, hasModule);
+  }
 }
+
+await page.goto(`${base}/app`, { waitUntil: 'networkidle' });
+await newAssignment.first().click();
+await page.keyboard.press('Escape');
+await page.getByLabel(/title/i).fill('QA414 final quota starter');
+await page.getByLabel(/prompt/i).fill('Quota preview create attempt.');
+const classCheckbox = page.getByRole('checkbox').first();
+if (await classCheckbox.count()) await classCheckbox.check();
 const submit = page.getByRole('button', { name: /create|save/i }).last();
 if (await submit.isEnabled()) {
   await submit.click();
@@ -87,21 +139,94 @@ if (await submit.isEnabled()) {
 await newAssignment.first().click();
 await page.waitForTimeout(1000);
 await shot('08-free-classroom-exhausted-picker.png');
+const exhaustedCopy = await page
+  .getByText(/used all 12 free Class Starters/i)
+  .isVisible()
+  .catch(() => false);
+record('class starter exhaustion message visible', exhaustedCopy);
 
-await page.goto(`${base}/app/my-classes`, {
+const classPage = await page.goto(`${base}/app/my-classes`, {
   waitUntil: 'networkidle',
   timeout: 120_000,
 });
-const addClass = page.getByRole('button', { name: /add class|new class|create class/i });
+const classLink = page.locator('a[href*="/app/my-classes/"]').first();
+const classHref = await classLink.getAttribute('href');
+const classId = classHref?.split('/').filter(Boolean).pop();
+record('provisioned teacher has a class', Boolean(classId), classId ?? '');
+
+const addClass = page.getByRole('button', {
+  name: /add class|new class|create class/i,
+});
 if (await addClass.count()) {
   await addClass.first().click();
   await page.waitForTimeout(800);
 }
 await shot('09-free-classroom-one-class-limit.png');
 
+if (classId) {
+  const bypassCreate = await postForm(`/app/my-classes/${classId}`, {
+    intent: 'create-assignment',
+    assignmentTypeId: 'cfreeclassstarter00000001',
+    title: 'qa414 bypass create',
+    prompt: 'should be refused',
+    submitForGrade: 'true',
+    gradingAssistantStrictnessLevel: 'balanced',
+    tutorEnabled: 'true',
+  });
+  record(
+    'my-classes create route refuses exhausted quota',
+    bypassCreate.response.status() === 403 ||
+      bypassCreate.body?.message?.match(/used all 12/i),
+    JSON.stringify(bypassCreate.body)
+  );
+
+  const assignmentLink = page.locator(`a[href*="/app/assignments/"]`).first();
+  const assignmentHref = await assignmentLink.getAttribute('href');
+  const assignmentId = assignmentHref?.split('/').filter(Boolean).pop();
+  if (assignmentId) {
+    const bypassRetype = await postForm(
+      `/app/assignments/${assignmentId}`,
+      {
+        intent: 'update-assignment',
+        classId,
+        assignmentTypeId: 'cfreeprewriting000000001',
+        title: 'qa414 retype',
+        prompt: 'should be refused if quota exhausted',
+        submitForGrade: 'true',
+        gradingAssistantStrictnessLevel: 'balanced',
+      }
+    );
+    record(
+      'assignment update route enforces retype quota',
+      bypassRetype.response.status() === 403 ||
+        Boolean(bypassRetype.body?.message),
+      JSON.stringify(bypassRetype.body)
+    );
+  }
+}
+
+const secondClassAttempt = await postForm('/app/my-classes', {
+  intent: 'create-class',
+  schoolId: 'preview-free-classroom',
+  schoolYear: '2026-2027',
+  code: 'QA414B',
+  grade: '10',
+});
+record(
+  'second class create refused',
+  secondClassAttempt.response.status() === 403 ||
+    secondClassAttempt.body?.error?.includes('one class'),
+  JSON.stringify(secondClassAttempt.body)
+);
+
 await devLogin(PREVIEW_FREE_CLASSROOM_STUDENT_EMAIL);
 await page.goto(`${base}/app`, { waitUntil: 'networkidle', timeout: 120_000 });
 await shot('10-free-classroom-student-home.png');
 
+await writeFile(
+  `${OUT_DIR}/qa-results.json`,
+  JSON.stringify({ base, results }, null, 2)
+);
+
 await browser.close();
-console.log('preview_qa_complete');
+console.log('preview_qa_complete', JSON.stringify(results, null, 2));

@@ -16,7 +16,7 @@ function client() {
   return new PrismaClient({ adapter });
 }
 
-describe.skipIf(!process.env.FREE_TIER_DB_TESTS)('free classroom assignment quotas (db)', () => {
+describe.skipIf(!process.env.DATABASE_URL)('free classroom assignment quotas (db)', () => {
   const prisma = client();
 
   afterAll(async () => {

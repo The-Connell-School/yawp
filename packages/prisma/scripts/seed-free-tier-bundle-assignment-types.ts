@@ -176,15 +176,43 @@ async function applyBundleRubricDefaults(
   });
 }
 
-async function ensureClassStarterImage(
+function readBundleTileImage(filename: string, altText: string) {
+  return {
+    blob: readFileSync(join(import.meta.dir, 'assets', filename)),
+    contentType: 'image/jpeg',
+    altText,
+  };
+}
+
+const BUNDLE_TILE_IMAGES: Record<string, { file: string; altText: string }> = {
+  [CLASS_STARTER_KIND]: {
+    file: 'class-starter.jpg',
+    altText: readClassStarterImage().altText,
+  },
+  [PREWRITING_KIND]: {
+    file: 'prewriting.jpg',
+    altText:
+      'A scratchy ink drawing of brainstorming notes and a pencil on torn white paper, with the words Prewriting.',
+  },
+  [THESIS_STATEMENT_KIND]: {
+    file: 'thesis-statement.jpg',
+    altText:
+      'A scratchy ink drawing of a quill writing an underlined thesis sentence on torn white paper.',
+  },
+};
+
+async function ensureBundleTypeImage(
   prisma: PrismaClient,
-  assignmentTypeId: string
+  assignmentTypeId: string,
+  kind: string
 ) {
+  const spec = BUNDLE_TILE_IMAGES[kind];
+  if (!spec) return;
   await prisma.assignmentTypeImage.upsert({
     where: { assignmentTypeId },
     create: {
       assignmentTypeId,
-      ...readClassStarterImage(),
+      ...readBundleTileImage(spec.file, spec.altText),
     },
     update: {},
   });
@@ -209,6 +237,13 @@ export async function assertFreeTierBundleAssignmentTypeParity(
   for (const type of types) {
     if (!type.rubricJson || type.assignmentModules.length === 0) {
       throw new Error(`free_tier_bundle_type_incomplete:${type.kind}`);
+    }
+    const image = await prisma.assignmentTypeImage.findUnique({
+      where: { assignmentTypeId: type.id },
+      select: { id: true },
+    });
+    if (!image) {
+      throw new Error(`free_tier_bundle_type_missing_image:${type.kind}`);
     }
   }
 }
@@ -281,6 +316,7 @@ async function upsertStandaloneType(
     })),
   });
   await applyBundleRubricDefaults(prisma, assignmentType.id, args.kind);
+  await ensureBundleTypeImage(prisma, assignmentType.id, args.kind);
   return assignmentType;
 }
 
@@ -319,7 +355,7 @@ export async function seedFreeTierBundleAssignmentTypes(prisma: PrismaClient) {
     steps: [...CLASS_STARTER_MODULE.steps],
   });
   await applyBundleRubricDefaults(prisma, classStarter.id, CLASS_STARTER_KIND);
-  await ensureClassStarterImage(prisma, classStarter.id);
+  await ensureBundleTypeImage(prisma, classStarter.id, CLASS_STARTER_KIND);
 
   const prewriting = await upsertStandaloneType(prisma, {
     kind: PREWRITING_KIND,

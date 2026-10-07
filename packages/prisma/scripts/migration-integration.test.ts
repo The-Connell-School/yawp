@@ -705,5 +705,118 @@ describe('migration integration (real Postgres)', () => {
       expect(got).toBe(fp(value));
     }
   }, 20000);
+
+  test('free tier bundle + usage migrations: deploy, seed parity, re-run, rollback', () => {
+    try {
+      adminPsql('DROP DATABASE IF EXISTS yawp_migration_integration WITH (FORCE)');
+    } catch {}
+    adminPsql('CREATE DATABASE yawp_migration_integration');
+    prismaDeploy(PRISMA_DIR);
+
+    const bundleKinds = jsonQuery(`
+      SELECT COUNT(*)::int AS count
+      FROM "AssignmentType"
+      WHERE "kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+    `);
+    expect(bundleKinds.count).toBe(3);
+
+    const usageTable = jsonQuery(`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'FreeClassroomAssignmentKindUsage'
+      ) AS exists
+    `);
+    expect(usageTable.exists).toBe(true);
+
+    const seedOnce = run(
+      'bun',
+      ['run', 'seed-free-tier-bundle-assignment-types'],
+      PRISMA_DIR,
+      { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT }
+    );
+    expect(seedOnce.status).toBe(0);
+
+    const moduleCount = jsonQuery(`
+      SELECT COUNT(*)::int AS count
+      FROM "AssignmentModule" am
+      JOIN "AssignmentType" at ON at.id = am."assignmentTypeId"
+      WHERE at."kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+    `);
+    expect(moduleCount.count).toBeGreaterThanOrEqual(3);
+
+    const imageCount = jsonQuery(`
+      SELECT COUNT(*)::int AS count
+      FROM "AssignmentTypeImage" img
+      JOIN "AssignmentType" at ON at.id = img."assignmentTypeId"
+      WHERE at."kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+    `);
+    expect(imageCount.count).toBe(3);
+
+    const seedTwice = run(
+      'bun',
+      ['run', 'seed-free-tier-bundle-assignment-types'],
+      PRISMA_DIR,
+      { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT }
+    );
+    expect(seedTwice.status).toBe(0);
+
+    prismaDeploy(PRISMA_DIR);
+
+    psql(`
+      INSERT INTO "Organization" ("id","createdAt","updatedAt","name","plan")
+      VALUES ('org-legacy-starter', now(), now(), 'Legacy Starter Org', 'SCHOOL');
+      INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position")
+      VALUES ('legacy-class-starter-keep', now(), now(), 'Legacy Class Starter', 'class_starter', 99);
+      INSERT INTO "OrganizationAssignmentType" ("organizationId","assignmentTypeId")
+      VALUES ('org-legacy-starter', 'legacy-class-starter-keep');
+    `);
+
+    const bundleRollback = readFileSync(
+      join(
+        PRISMA_DIR,
+        'migrations',
+        '20261007220000_free_tier_bundle_assignment_types',
+        'rollback.sql'
+      ),
+      'utf8'
+    );
+    psql(bundleRollback);
+
+    const legacyKept = jsonQuery(`
+      SELECT EXISTS (
+        SELECT 1 FROM "AssignmentType" WHERE id = 'legacy-class-starter-keep'
+      ) AS exists
+    `);
+    expect(legacyKept.exists).toBe(true);
+
+    const fixedRemoved = jsonQuery(`
+      SELECT COUNT(*)::int AS count
+      FROM "AssignmentType"
+      WHERE id IN (
+        'cfreeclassstarter00000001',
+        'cfreeprewriting000000001',
+        'cfreethesisstatement00001'
+      )
+    `);
+    expect(fixedRemoved.count).toBe(0);
+
+    const usageRollback = readFileSync(
+      join(
+        PRISMA_DIR,
+        'migrations',
+        '20261007240000_free_classroom_assignment_kind_usage',
+        'rollback.sql'
+      ),
+      'utf8'
+    );
+    psql(usageRollback);
+    const usageGone = jsonQuery(`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'FreeClassroomAssignmentKindUsage'
+      ) AS exists
+    `);
+    expect(usageGone.exists).toBe(false);
+  }, 120000);
 });
 
