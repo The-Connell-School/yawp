@@ -12,6 +12,10 @@ import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { PasswordAndConfirmPasswordSchema, NameSchema } from '~/utils/schemas/user';
 import { z } from 'zod';
+import {
+  getPreviewAccessSeat,
+  isIsolatedPreviewSeatMode,
+} from '~/utils/preview-access.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = new URL(request.url).searchParams.get('t') ?? '';
@@ -42,6 +46,27 @@ export async function action({ request }: ActionFunctionArgs) {
   const hash = await getPasswordHash(parsed.data.password);
   const created = await createFreeTierTeacherAccount({ token, name: parsed.data.name, passwordHash: hash });
   if (!created.ok) return { ok: false as const, reason: created.reason };
+
+  if (isIsolatedPreviewSeatMode()) {
+    const seat = await getPreviewAccessSeat(request);
+    if (seat) {
+      await prisma.orgMembership.upsert({
+        where: {
+          userId_organizationId: {
+            userId: created.userId,
+            organizationId: seat.organizationId,
+          },
+        },
+        create: {
+          userId: created.userId,
+          organizationId: seat.organizationId,
+          role: 'TEACHER',
+          isActive: true,
+        },
+        update: { role: 'TEACHER', isActive: true },
+      });
+    }
+  }
 
   const session = await prisma.session.create({
     data: { expirationDate: getSessionExpirationDate(), userId: created.userId },
