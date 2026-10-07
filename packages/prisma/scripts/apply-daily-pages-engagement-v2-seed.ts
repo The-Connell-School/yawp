@@ -87,6 +87,8 @@ export async function applyDailyPagesEngagementV2Seed(
     });
   }
 
+  await seedDpConsolidationQaPreviewFixtures(prisma, engagement.id);
+
   return { applied: true, engagementRubricId: engagement.id };
 }
 
@@ -103,30 +105,41 @@ export async function seedDpConsolidationQaPreviewFixtures(
     },
     select: { id: true, organizationId: true },
   });
-  const student = await prisma.orgMembership.findFirst({
+  const classWithStudent = await prisma.class.findFirst({
     where: {
-      user: { email: 'dev.student@yawp.local' },
-      role: 'STUDENT',
-      organizationId: LOCAL_DEV_ORG_ID,
+      isArchived: false,
+      school: { organizationId: LOCAL_DEV_ORG_ID },
+      students: { some: { user: { email: 'dev.student@yawp.local' } } },
     },
-    select: { id: true },
-  });
-  const klass = teacher
-    ? await prisma.class.findFirst({
-        where: {
-          teachers: { some: { id: teacher.id } },
-          isArchived: false,
-        },
-        orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      students: {
+        where: { user: { email: 'dev.student@yawp.local' } },
+        take: 1,
         select: { id: true },
-      })
-    : null;
+      },
+    },
+  });
+  const klass = classWithStudent ? { id: classWithStudent.id } : null;
+  const student = classWithStudent?.students[0] ?? null;
   const dailyPagesType = await prisma.assignmentType.findFirst({
     where: { kind: 'daily_pages', archivedAt: null },
     orderBy: { position: 'asc' },
     select: { id: true },
   });
-  if (!teacher || !student || !klass || !dailyPagesType) return;
+  if (!teacher || !student || !klass || !dailyPagesType) {
+    console.warn(
+      'DP QA preview fixtures skipped:',
+      JSON.stringify({
+        teacher: Boolean(teacher),
+        student: Boolean(student),
+        klass: Boolean(klass),
+        dailyPagesType: Boolean(dailyPagesType),
+      })
+    );
+    return;
+  }
 
   const legacySchema = {
     name: 'daily-pages-engagement',
