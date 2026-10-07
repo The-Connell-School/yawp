@@ -11,7 +11,6 @@ import {
   pickNextStep,
 } from './lesson-seed';
 import {
-  EXIT_TICKET_CLASS_READ_ENABLED,
   buildExitTicketClassRead,
   buildExitTicketLessonSeed,
 } from '~/domain/assignment-types/exit-ticket-class-read';
@@ -68,10 +67,7 @@ export async function loadLessonSeed({
   // An exit ticket's class read seeds the planner straight from the tickets.
   // The text is rebuilt here from stored responses, never taken from the URL.
   if (stepIndex === EXIT_TICKET_SEED_STEP) {
-    if (
-      !EXIT_TICKET_CLASS_READ_ENABLED ||
-      !isExitTicketAssignmentType(classAssignment.assignment.assignmentType)
-    ) {
+    if (!isExitTicketAssignmentType(classAssignment.assignment.assignmentType)) {
       return null;
     }
     const responses = await loadExitTicketResponses(classAssignment.id);

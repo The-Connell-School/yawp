@@ -71,6 +71,11 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_deploy
         run: bun run --cwd packages/prisma backfill-class-art-key
 
+      - name: 🎫 Bootstrap Exit Ticket assignment type
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_deploy
+        run: bun run --cwd packages/prisma scripts/seed-exit-ticket-assignment-type.ts --all-orgs
+
       - name: 🧪 Assignment type release gate
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_deploy

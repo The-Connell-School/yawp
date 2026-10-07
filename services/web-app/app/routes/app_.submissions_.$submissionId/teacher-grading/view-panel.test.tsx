@@ -74,6 +74,16 @@ const feedbackOnlySubmission = {
 };
 
 describe('ViewPanel on work that is not for a grade', () => {
+  it('withholds assessment from students until the teacher releases it', () => {
+    render(
+      <ViewPanel submission={feedbackOnlySubmission} viewer="student" />
+    );
+
+    expect(document.body.textContent).toContain('Not yet graded');
+    expect(text()).not.toContain('Overall Feedback');
+    expect(text()).not.toContain('Explains it');
+  });
+
   it('still shows the feedback and the rubric it was assessed on', () => {
     // Feedback-only does not mean unassessed. The response was read and
     // scored; only the grade is withheld. Hiding the feedback as well left

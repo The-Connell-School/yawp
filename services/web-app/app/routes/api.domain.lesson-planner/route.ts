@@ -33,7 +33,11 @@ import {
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { shouldRenameLesson } from '~/domain/lesson-planner/lesson-name';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
-import { buildLessonPlannerSystemPrompt } from './build-system-prompt';
+import { buildLessonPlannerSystemPromptBlocks } from './build-system-prompt';
+import {
+  buildLessonPlannerAdmissionPolicy,
+  lessonPlannerRateLimitMessage,
+} from '~/utils/lesson-planner/lesson-planner-admission.server';
 import {
   describeProviderError,
   isProviderConfigurationError,
@@ -73,23 +77,15 @@ const PLANNER_REQUEST_DEADLINE_MS = 120_000;
 // A full lesson plan plus a ten-slide deck with speaker notes runs well past
 // 8k. Hitting the ceiling cuts the deck's JSON mid-object, and a cut-off deck
 // cannot be rendered at all — the teacher just loses it.
-const PLANNER_MAX_TOKENS = 16_000;
+const PLANNER_MAX_TOKENS = 12_000;
 // The repair pass rewrites one deck and nothing else.
-const DECK_REPAIR_MAX_TOKENS = 8_000;
+const DECK_REPAIR_MAX_TOKENS = 6_000;
 const DECK_REPAIR_DEADLINE_MS = 60_000;
 // Enough rounds to walk the catalog: class report, Daily Pages search, writing
 // lesson list plus lookup, the Lounge, and the assignable types.
 const PLANNER_MAX_TOOL_ROUNDS = 8;
-const PLANNER_REQUESTS_PER_MINUTE = 6;
-const PLANNER_REQUESTS_PER_HOUR_PER_ORG = 60;
 const DECK_REPAIR_SYSTEM =
   'You fix malformed slide-deck JSON. You output a single JSON object and nothing else — no prose, no code fence, no apology.';
-const PLANNER_ADMISSION_POLICY = {
-  membershipLimit: PLANNER_REQUESTS_PER_MINUTE,
-  membershipWindowMs: 60_000,
-  organizationLimit: PLANNER_REQUESTS_PER_HOUR_PER_ORG,
-  organizationWindowMs: 60 * 60_000,
-};
 
 const POST = z
   .object({
@@ -201,9 +197,13 @@ export async function action({ request }: ActionFunctionArgs) {
   const ctx = {
     membershipId: access.membership.id,
     organizationId: access.membership.organization.id,
-    // Writing Practice is on for every organization; the org flag is retired.
-    writingPracticeEnabled: true,
+    writingPracticeEnabled:
+      access.membership.organization.writingPracticeEnabled,
   };
+
+  const plannerAdmissionPolicy = buildLessonPlannerAdmissionPolicy(
+    access.membership.organization.numOfTeacherSeats
+  );
 
   // Load an existing conversation (scoped to this teacher) or start a new one.
   const conversation = turn.conversationId
@@ -300,7 +300,7 @@ export async function action({ request }: ActionFunctionArgs) {
       membershipId: ctx.membershipId,
       organizationId: ctx.organizationId,
       feature: 'lesson-planner',
-      policy: PLANNER_ADMISSION_POLICY,
+      policy: plannerAdmissionPolicy,
       units,
     });
   }
@@ -313,8 +313,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
     return dataResponse(
       {
-        error:
-          'Too many lesson planner requests. Please wait a moment and try again.',
+        error: lessonPlannerRateLimitMessage(error),
       },
       {
         status: 429,
@@ -349,7 +348,7 @@ export async function action({ request }: ActionFunctionArgs) {
     (await findWritingExerciseTypeIds(ctx)).exitTicket
   );
 
-  const system = buildLessonPlannerSystemPrompt({
+  const system = buildLessonPlannerSystemPromptBlocks({
     teacherName: null,
     organizationName: access.membership.organization.name,
     lessonInventory: conversation?.materials ?? [],

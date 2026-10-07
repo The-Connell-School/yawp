@@ -729,7 +729,19 @@ run_tooling_if_needed() {
     tooling_command+=' && bun run seed-ap-history-library'
   fi
 
-  "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
+  local tooling_log
+  tooling_log="$(mktemp)"
+  if ! "${compose[@]}" run --rm toolbox bash -lc "$tooling_command" 2>&1 | tee "$tooling_log"; then
+    if [[ "$SLUG" != demo ]] && grep -qE 'LessonPlanConversation.*already exists|relation "LessonPlanConversation" already exists' "$tooling_log"; then
+      echo "Lesson planner migration renumber collision detected; resetting preview database $DATABASE_NAME and retrying tooling." >&2
+      reset_seed_preview_database
+      "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
+    else
+      rm -f "$tooling_log"
+      exit 1
+    fi
+  fi
+  rm -f "$tooling_log"
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
 }
 

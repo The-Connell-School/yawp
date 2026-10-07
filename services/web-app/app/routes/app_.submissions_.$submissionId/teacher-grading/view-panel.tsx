@@ -11,6 +11,8 @@ import { getCategoryScoreBand } from '~/domain/assignment-types/rubric-category-
 import type { RubricScoreBand } from '~/domain/assignment-types/assignment-type-rubric.shared';
 
 export type ViewPanelSubmission = {
+  /** When set, students only see assessment after the teacher releases it. */
+  releasedAt?: string | Date | null;
   numericPercentage: number | null;
   letterGrade: string | null;
   overallScore?: number | null;
@@ -40,7 +42,14 @@ export type ViewPanelSubmission = {
 };
 
 /** Read-only grade fields for student view / teacher view mode. */
-export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
+export function ViewPanel({
+  submission,
+  viewer = 'teacher',
+}: {
+  submission: ViewPanelSubmission;
+  /** Teachers always see assessment; students only after release. */
+  viewer?: 'teacher' | 'student';
+}) {
   const minScore = submission.rubricConfig?.minScore ?? 1;
   const maxScore = submission.rubricConfig?.maxScore ?? 5;
   const rawRubric = (submission.rubricScores ?? {}) as Record<
@@ -85,7 +94,15 @@ export function ViewPanel({ submission }: { submission: ViewPanelSubmission }) {
    * common case -- and folding the two together hid the feedback and the rubric
    * along with the grade, leaving the submission looking untouched.
    */
-  const hasAssessment = hasRecordedGrade(submission);
+  const isReleased =
+    submission.releasedAt != null && String(submission.releasedAt).length > 0;
+  const hasAssessment =
+    viewer === 'teacher'
+      ? hasRecordedGrade(submission) ||
+        rubricEntries.some((entry) => isScored(entry.score, minScore))
+      : isReleased &&
+        (hasRecordedGrade(submission) ||
+          rubricEntries.some((entry) => isScored(entry.score, minScore)));
   /** Only work submitted for a grade shows one. */
   const showsGrade = isSubmittedForGrade && hasAssessment;
   const overallGradeDisplay = formatAssignmentGrade({

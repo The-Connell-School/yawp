@@ -9,25 +9,6 @@ const SELECT_ALL_SHORTCUT =
   process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
 
 /** Org flag removed: planner is teacher-only and always on. */
-async function setLessonPlannerEnabled(
-  _organizationId: string,
-  _enabled: boolean
-) {}
-
-async function setWritingPracticeEnabled(
-  organizationId: string,
-  enabled: boolean
-) {
-  const prisma = createE2EPrismaClient();
-  try {
-    await prisma.organization.update({
-      where: { id: organizationId },
-      data: { writingPracticeEnabled: enabled },
-    });
-  } finally {
-    await prisma.$disconnect();
-  }
-}
 
 /**
  * A lesson that teaches a writing fundamental and ends on practice students do
@@ -921,7 +902,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
     // The planner appears in the sidebar and opens.
@@ -952,7 +932,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lesson-planner');
 
@@ -972,7 +951,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     await seedClassInsight(e2eContext.classAssignmentId);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
@@ -1008,7 +986,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lesson-planner');
 
@@ -1049,7 +1026,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.setViewportSize({ width: 390, height: 844 });
 
@@ -1079,7 +1055,6 @@ test.describe('YAWP! Lesson Planner', () => {
     });
     page.on('pageerror', (error) => pageErrors.push(error.message));
 
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
     for (const viewport of [
@@ -1132,7 +1107,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
     // The turn is held open and never answered, which is exactly the state a
@@ -1176,7 +1150,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
     await page.route('**/api/domain/lesson-planner', async (route) => {
@@ -1233,7 +1206,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const draft = await seedLessonPlan(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lesson-planner');
@@ -1271,7 +1243,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const toPublish = await seedLessonPlan(e2eContext, { keepFirst: true });
     await seedLessonPlan(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
@@ -1312,7 +1283,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonPlan(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
@@ -1388,7 +1358,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
     });
@@ -1418,7 +1387,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const kept = await seedLessonPlan(e2eContext, { keepFirst: true });
     const draft = await seedLessonPlan(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
@@ -1453,7 +1421,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const older = await seedLessonPlan(e2eContext, { keepFirst: true });
     // Seeded second, so while both are drafts it sorts above the first.
     await seedLessonPlan(e2eContext, { keepFirst: true });
@@ -1504,7 +1471,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const doomed = await seedLessonPlan(e2eContext, { keepFirst: true });
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lesson-planner/library');
@@ -1533,7 +1499,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
     });
@@ -1571,7 +1536,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
       keepLongHandout: true,
@@ -1610,7 +1574,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
       keepLongHandout: true,
@@ -1648,7 +1611,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
     });
@@ -1679,7 +1641,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
     });
@@ -1716,7 +1677,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedSlideDeck(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
@@ -1736,7 +1696,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId, messageId } = await seedSlideDeck(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
@@ -1773,7 +1732,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId, messageId } = await seedUnreadableDeck(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
@@ -1800,7 +1758,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonWithMaterials(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -1826,7 +1783,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonWithMaterials(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -1860,7 +1816,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonWithMaterials(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -1897,7 +1852,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonWithMaterials(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -1928,7 +1882,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonWithMaterials(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -1960,7 +1913,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonWithMaterials(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2012,7 +1964,6 @@ test.describe('YAWP! Lesson Planner', () => {
     // A teacher wants their handouts kept separate far more often than they
     // want them merged into one long document — this is that path, reachable
     // from the same checklist the combined handout uses.
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonWithMaterials(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2055,7 +2006,6 @@ test.describe('YAWP! Lesson Planner', () => {
     // The map is worth having because it is the way into the lessons, not
     // because it summarises them — so the JSON must become a board with a
     // button per day, never a wall of braces.
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedUnitPlan(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2078,7 +2028,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedUnitPlan(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2101,7 +2050,6 @@ test.describe('YAWP! Lesson Planner', () => {
     // A day is a whole lesson — plan, packet, deck, handouts — so it lives in
     // its own conversation rather than stacked onto the map's thread. The map
     // is where a teacher comes back to reach it.
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId, dayConversationId } = await seedUnitPlan(
       e2eContext,
       { buildDay: 2 }
@@ -2140,7 +2088,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedUnitPlan(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2172,7 +2119,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonWithMaterials(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2207,7 +2153,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
       keepLongHandout: true,
@@ -2233,7 +2178,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
       keepLongHandout: true,
@@ -2270,7 +2214,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedSlideDeck(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
@@ -2299,7 +2242,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedSlideDeck(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2320,7 +2262,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
     });
@@ -2336,7 +2277,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
       keepLongHandout: true,
@@ -2361,7 +2301,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedBareLessonPlan(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2385,7 +2324,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedRevisedHandout(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2422,7 +2360,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonWithMaterials(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2480,7 +2417,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedRevisedHandout(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2555,7 +2491,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedSlideDeck(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2582,7 +2517,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedAskTurn(e2eContext, 'minutes: 50');
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2612,7 +2546,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     // The planner drew the slider on its opening turn, so tapping "Look at my
     // classes and tell me what they need work on" sent "…what they need work
     // on. 50 minutes." — a period length on a request to read the gradebook.
@@ -2667,7 +2600,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedAskTurn(
       e2eContext,
       'minutes: 45\nactivities'
@@ -2699,7 +2631,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedAskTurn(e2eContext, 'activities');
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2735,7 +2666,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedAskTurn(
       e2eContext,
       'minutes: 50',
@@ -2779,7 +2709,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedWrittenWarmUp(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2825,7 +2754,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedThreeWarmUpOptions(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2874,7 +2802,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedClassStarterAndReflection(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -2939,7 +2866,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     await setWritingPracticeEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedPlannedPractice(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
@@ -2997,7 +2923,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     await setWritingPracticeEnabled(e2eContext.organizationId, false);
     const { conversationId } = await seedPlannedPractice(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
@@ -3016,7 +2941,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedPlannedExitTicket(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -3065,7 +2989,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedPlannedGradedReflection(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
@@ -3096,7 +3019,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
     });
@@ -3113,7 +3035,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const prisma = createE2EPrismaClient();
     let conversationId: string;
     try {
@@ -3175,7 +3096,6 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const prisma = createE2EPrismaClient();
     let conversationId: string;
     try {

@@ -19,9 +19,6 @@ import {
   EXIT_TICKET_UNDERSTANDING_CATEGORY_KEY,
 } from './exit-ticket-rubric';
 
-/** Single switch for the panel, alongside the builder's. */
-export const EXIT_TICKET_CLASS_READ_ENABLED = true;
-
 /** A short list is one a teacher acts on tonight. */
 const FOLLOW_UP_CAP = 5;
 const OPEN_QUESTION_CAP = 8;

@@ -1,6 +1,5 @@
 import { ExitTicketClassReadPanel } from '~/components/assignments/exit-ticket-class-read-panel';
 import {
-  EXIT_TICKET_CLASS_READ_ENABLED,
   buildExitTicketClassRead,
 } from '~/domain/assignment-types/exit-ticket-class-read';
 import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-class-read.server';
@@ -260,9 +259,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const exitTicketConfig = parseStoredExitTicketConfig(
     active.assignment.exitTicketConfigJson
   );
-  const exitTicketClassRead =
-    EXIT_TICKET_CLASS_READ_ENABLED &&
-    isExitTicketAssignmentType(active.assignment.assignmentType)
+  const exitTicketClassRead = isExitTicketAssignmentType(
+    active.assignment.assignmentType
+  )
       ? buildExitTicketClassRead({
           responses: await loadExitTicketResponses(active.id),
           config: exitTicketConfig,

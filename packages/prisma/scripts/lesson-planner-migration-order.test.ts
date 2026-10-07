@@ -16,6 +16,7 @@ const LESSON_PLANNER_MIGRATIONS = [
   '20261007174500_add_lesson_published',
   '20261007174600_add_lesson_material_edited_at',
   '20261007174700_add_exit_ticket_config',
+  '20261007174800_bootstrap_exit_ticket_assignment_type',
 ];
 
 describe('lesson planner migration order', () => {

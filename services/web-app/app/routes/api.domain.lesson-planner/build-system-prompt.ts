@@ -1,4 +1,5 @@
 import { rubricCategories } from '~/domain/grading/rubric';
+import type { CacheableSystemBlock } from '~/utils/getLLMCompletion/getLLMCompletion';
 import type { UnitContext } from '~/domain/lesson-planner/unit-plan';
 import { EXIT_TICKET_FENCE } from '~/domain/lesson-planner/exit-ticket-block';
 import {
@@ -517,6 +518,79 @@ export function buildLessonPlannerSystemPrompt({
     ...buildInventorySection(lessonInventory),
     ...buildUnitContextSection(unitContext),
   ].join('\n');
+}
+
+/** Bump when the cacheable instruction body changes materially. */
+export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-07-cache-v1';
+
+/**
+ * The fixed instruction body — identical for every turn except inventory and
+ * the personalized intro. Cached across tool rounds within a lesson.
+ */
+export function buildLessonPlannerInstructionCore({
+  exitTicketsAvailable = false,
+  writingPracticeAvailable = false,
+}: {
+  exitTicketsAvailable?: boolean;
+  writingPracticeAvailable?: boolean;
+}): string {
+  const stub = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: '',
+    lessonInventory: [],
+    unitContext: null,
+    exitTicketsAvailable,
+    writingPracticeAvailable,
+  });
+  const marker = '\nWho you are:';
+  const index = stub.indexOf(marker);
+  if (index === -1) {
+    throw new Error('Lesson planner cache split marker missing');
+  }
+  return stub.slice(index + 1);
+}
+
+/**
+ * System prompt blocks for Anthropic prompt caching. The large stable prefix
+ * is cached; the short personalized intro and per-lesson inventory sit after
+ * the breakpoint.
+ */
+export function buildLessonPlannerSystemPromptBlocks({
+  teacherName,
+  organizationName,
+  lessonInventory = [],
+  unitContext = null,
+  exitTicketsAvailable = false,
+  writingPracticeAvailable = false,
+}: {
+  teacherName: string | null;
+  organizationName: string;
+  lessonInventory?: LessonInventoryEntry[];
+  unitContext?: UnitContext | null;
+  exitTicketsAvailable?: boolean;
+  writingPracticeAvailable?: boolean;
+}): CacheableSystemBlock[] {
+  const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
+  const intro = `You are the YAWP! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
+  const tail = [
+    ...buildInventorySection(lessonInventory),
+    ...buildUnitContextSection(unitContext),
+  ].join('\n');
+  const variable = tail ? `${intro}\n${tail}` : intro;
+
+  return [
+    {
+      type: 'text',
+      text: `<!-- ${LESSON_PLANNER_PROMPT_VERSION} -->\n${buildLessonPlannerInstructionCore(
+        {
+          exitTicketsAvailable,
+          writingPracticeAvailable,
+        }
+      )}`,
+      cache_control: { type: 'ephemeral' },
+    },
+    { type: 'text', text: variable },
+  ];
 }
 
 /**

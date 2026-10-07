@@ -27,6 +27,7 @@ const membershipSelect = {
       id: true,
       name: true,
       plan: true,
+      numOfTeacherSeats: true,
       reporterEnabled: true,
       classInsightsEnabled: true,
       writingPracticeEnabled: true,
