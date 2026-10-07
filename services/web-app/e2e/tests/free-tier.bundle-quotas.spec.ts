@@ -1,7 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { createE2EPrismaClient } from '../prisma-client';
-
-const prisma = createE2EPrismaClient();
+import { expect, test } from '../test-setup';
 
 test.describe('Free classroom bundle quotas', () => {
   test('teacher sees assignment type counters in the creation sheet', async ({
@@ -18,12 +15,14 @@ test.describe('Free classroom bundle quotas', () => {
     await page.goto('/app');
     await page.getByRole('button', { name: /create assignment/i }).click();
     await expect(page.getByText(/of 12 Class Starters left/i)).toBeVisible();
-    const types = await prisma.assignmentType.findMany({
-      where: {
-        kind: { in: ['class_starter', 'prewriting', 'thesis_statement'] },
-      },
-      select: { id: true },
-    });
-    expect(types.length).toBe(3);
+    const tileTitles = await page
+      .getByTestId('teacher-assignments-grid')
+      .locator('h3')
+      .allTextContents();
+    expect(tileTitles.map((title) => title.trim()).sort()).toEqual([
+      'Class Starter',
+      'Prewriting',
+      'Thesis Statement',
+    ]);
   });
 });
