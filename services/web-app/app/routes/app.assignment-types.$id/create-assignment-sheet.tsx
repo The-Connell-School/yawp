@@ -43,6 +43,8 @@ type Props = {
   assignmentTypeDefaultWritingTimeMinutes?: number | null;
   /** Whether this type takes a paragraph type (Daily Pages). */
   assignmentTypeOffersParagraphModes?: boolean;
+  /** The Daily Pages writing-conditions flag; off hides paragraph type and writing time. */
+  writingConditionsEnabled?: boolean;
   teacherClasses: TeacherClass[];
   initialClassId?: string;
   open: boolean;
@@ -69,6 +71,7 @@ export function CreateAssignmentSheet({
   assignmentTypeGradesGrammar = false,
   assignmentTypeDefaultWritingTimeMinutes = null,
   assignmentTypeOffersParagraphModes = false,
+  writingConditionsEnabled = false,
   teacherClasses,
   initialClassId,
   open,
@@ -124,6 +127,7 @@ export function CreateAssignmentSheet({
             offersParagraphModes: assignmentTypeOffersParagraphModes,
           },
         ]}
+        writingConditionsEnabled={writingConditionsEnabled}
         teacherClasses={teacherClasses}
         initialPrompt={initialPrompt}
         titleRequired={titleRequired}
