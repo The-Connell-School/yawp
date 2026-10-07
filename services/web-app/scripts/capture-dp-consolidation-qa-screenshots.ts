@@ -63,9 +63,24 @@ async function openClassWorkspace(page: Page) {
 
 async function openSubmissionByTitle(page: Page, title: string) {
   await openClassWorkspace(page);
-  const row = page.getByText(title, { exact: false }).first();
-  await row.waitFor({ timeout: 60_000 });
-  await row.click();
+  const assignmentTab = page.getByRole('tab', { name: /Assignments/i });
+  if (await assignmentTab.isVisible().catch(() => false)) {
+    await assignmentTab.click();
+  }
+  const assignmentRow = page.getByText(title, { exact: false }).first();
+  await assignmentRow.waitFor({ timeout: 60_000 });
+  await assignmentRow.click();
+  const submissionLink = page
+    .locator('a[href*="/app/submissions/"]')
+    .filter({ hasText: /submission|graded|needs grading/i })
+    .first();
+  if (await submissionLink.isVisible().catch(() => false)) {
+    await submissionLink.click();
+    return;
+  }
+  await page.locator('a[href*="/app/submissions/"]').first().click({
+    timeout: 30_000,
+  });
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -107,13 +122,16 @@ try {
   await shot(page, 'c-create-12pt');
   await page.getByRole('button', { name: 'Cancel' }).click();
 
-  await openSubmissionByTitle(page, 'DP QA class starter submission');
+  await openSubmissionByTitle(
+    page,
+    'DP QA Class Starter Grading (Preview)'
+  );
   await page
     .getByTestId('grading-rubric-score-engagement_with_prompt')
     .waitFor({ timeout: 60_000 });
   await shot(page, 'd-class-starter-grading');
 
-  await openSubmissionByTitle(page, 'DP QA teacher notes submission');
+  await openSubmissionByTitle(page, 'DP QA Teacher Notes (Preview)');
   await page
     .getByRole('region', { name: 'Teacher Context' })
     .waitFor({ timeout: 60_000 });
