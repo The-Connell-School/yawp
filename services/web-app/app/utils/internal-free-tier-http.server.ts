@@ -466,7 +466,7 @@ export const REJECTABLE_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED', 
 export const MANUAL_REVIEW_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED', 'SENT'];
 
 export async function approveHttp(request: Request) {
-  ensureFreeTierProductionApprovalHooks();
+  await ensureFreeTierProductionApprovalHooks();
   const denied = authenticate(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);

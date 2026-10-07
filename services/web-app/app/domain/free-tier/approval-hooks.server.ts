@@ -1,5 +1,4 @@
 import type { FreeTierApplication } from '@app/prisma';
-import { provisionFreeClassroomFromApproval } from './provision-free-classroom.server';
 
 export type ApprovalHooks = {
   onApplicationApproved(
@@ -27,17 +26,22 @@ export function setApprovalHooks(overrides: Partial<ApprovalHooks>) {
   currentHooks = { ...currentHooks, ...overrides };
 }
 
-let productionHooksInstalled = false;
+let productionHooksInstall: Promise<void> | null = null;
 
 /** Installs provisioning on approve; safe to call repeatedly. */
-export function ensureFreeTierProductionApprovalHooks() {
-  if (productionHooksInstalled) return;
-  productionHooksInstalled = true;
-  setApprovalHooks({
-    onApplicationApproved: async (application) => {
-      await provisionFreeClassroomFromApproval(application.id);
-    },
-  });
+export function ensureFreeTierProductionApprovalHooks(): Promise<void> {
+  if (!productionHooksInstall) {
+    productionHooksInstall = import('./provision-free-classroom.server').then(
+      ({ provisionFreeClassroomFromApproval }) => {
+        setApprovalHooks({
+          onApplicationApproved: async (application) => {
+            await provisionFreeClassroomFromApproval(application.id);
+          },
+        });
+      }
+    );
+  }
+  return productionHooksInstall;
 }
 
 export function getApprovalHooks(): ApprovalHooks {

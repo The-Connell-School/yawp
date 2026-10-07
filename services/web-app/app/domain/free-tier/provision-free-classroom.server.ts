@@ -19,9 +19,14 @@ function emailDomain(email: string) {
   return email.slice(at + 1).trim().toLowerCase();
 }
 
-export async function teacherEmailDomainMatchesSchoolOrg(domain: string) {
+type SchoolDomainLookupClient = Pick<typeof prisma, '$queryRaw'>;
+
+export async function teacherEmailDomainMatchesSchoolOrg(
+  domain: string,
+  client: SchoolDomainLookupClient = prisma
+) {
   if (!domain) return false;
-  const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+  const rows = await client.$queryRaw<Array<{ exists: boolean }>>`
     SELECT EXISTS (
       SELECT 1
       FROM "OrgMembership" om
