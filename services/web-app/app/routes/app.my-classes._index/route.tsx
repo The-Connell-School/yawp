@@ -29,7 +29,6 @@ import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { assertCanCreateClassForOrganization } from '~/utils/assignment-quota.server';
 import { getEntitlements } from '~/utils/entitlements.server';
 import { prisma } from '~/utils/db.server.js';
-import { assertCanCreateClassForOrganization } from '~/utils/assignment-quota.server';
 import { generateClassCode } from '~/utils/class';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
