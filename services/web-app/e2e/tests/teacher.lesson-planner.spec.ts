@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { EDITOR_SELECTOR } from '../test-helpers';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
+const STUDENT_PASSWORD = 'johndoe';
 const SELECT_ALL_SHORTCUT =
   process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
 
@@ -905,7 +906,7 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    await signIn(e2eContext.studentEmail, TEACHER_PASSWORD);
+    await signIn(e2eContext.userEmail, STUDENT_PASSWORD);
 
     await expect(
       page.getByRole('link', { name: 'Lesson Planner' })

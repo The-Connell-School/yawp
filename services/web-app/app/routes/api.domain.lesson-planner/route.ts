@@ -42,6 +42,7 @@ import {
   AiRateLimitError,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
+import { computeIpHash } from '~/utils/ai-usage-log.server';
 import {
   PLANNING_PROGRESS_START,
   planningProgressForTool,
@@ -389,6 +390,13 @@ export async function action({ request }: ActionFunctionArgs) {
         system,
         messages,
         maxTokens: PLANNER_MAX_TOKENS,
+        attribution: {
+          organizationId: ctx.organizationId,
+          membershipId: ctx.membershipId,
+          route: 'routes/api.domain.lesson-planner',
+          requestId: crypto.randomUUID(),
+          ipHash: computeIpHash(request),
+        },
         maxToolRounds: PLANNER_MAX_TOOL_ROUNDS,
         tools: LESSON_PLANNER_TOOLS,
         handleToolCall: async (name, input) => {
@@ -451,12 +459,22 @@ export async function action({ request }: ActionFunctionArgs) {
           system: DECK_REPAIR_SYSTEM,
           messages: [{ role: AgentType.User, content: instruction }],
           maxTokens: DECK_REPAIR_MAX_TOKENS,
+          attribution: {
+            organizationId: ctx.organizationId,
+            membershipId: ctx.membershipId,
+            route: 'routes/api.domain.lesson-planner',
+            requestId: crypto.randomUUID(),
+            ipHash: computeIpHash(request),
+          },
           allowFallbackProvider: false,
           signal: AbortSignal.timeout(DECK_REPAIR_DEADLINE_MS),
           logPayload: 'metadata-only',
           // Schema vocabulary only — field paths and rules, never the teacher's
           // words — so it survives redaction and makes the failure observable.
-          metadata: { feature: 'lesson-planner-deck-repair', deckFailure: reason },
+          metadata: {
+            feature: 'lesson-planner-deck-repair',
+            deckFailure: reason,
+          },
         });
       },
     });
