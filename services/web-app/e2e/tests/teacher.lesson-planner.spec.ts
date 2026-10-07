@@ -1033,13 +1033,12 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page).toHaveURL(/\/app\/lesson-planner$/);
   });
 
-  test('keeps the how-it-works guide behind the planner flag', async ({
+  test('keeps the how-it-works guide teacher-only', async ({
     page,
     signIn,
     e2eContext,
   }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, false);
-    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await signIn(e2eContext.userEmail, STUDENT_PASSWORD);
 
     await page.goto('/app/lesson-planner/how-it-works');
     await expect(page).toHaveURL(/\/app(?!\/lesson-planner)/);
