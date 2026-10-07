@@ -499,8 +499,8 @@ export async function seedCollaborationDemoForSeat(
           membershipId: student.id,
           artifactKind: 'STUDENT',
         },
-        submittedAt: { not: null },
         archivedAt: null,
+        unsubmittedAt: null,
       },
       select: { id: true },
     });
