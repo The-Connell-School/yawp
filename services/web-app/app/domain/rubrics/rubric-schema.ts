@@ -119,11 +119,10 @@ export function parseRubricSchema(raw: unknown): RubricSchemaParseResult {
         ? raw.outputSchema
         : { ...DEFAULT_OUTPUT_SCHEMA_JSON },
       calibrationNotes: readString(raw.calibrationNotes) || null,
-      scoringMode:
-        readString((raw as Record<string, unknown>).scoringMode) ===
-        'holistic_tier'
-          ? 'holistic_tier'
-          : 'weighted_categories',
+      ...(readString((raw as Record<string, unknown>).scoringMode) ===
+      'holistic_tier'
+        ? { scoringMode: 'holistic_tier' as const }
+        : {}),
     },
   };
 }

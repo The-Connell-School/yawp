@@ -1309,7 +1309,15 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     const repairedResponseText = await getGradingLlmCompletion({
       model,
       system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n${buildGradingResponseSchemaText(
-        { minScore, maxScore, categoryFeedbackEnabled, teacherNotesEnabled }
+        {
+          minScore,
+          maxScore,
+          categoryFeedbackEnabled,
+          teacherNotesEnabled,
+          scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
+          assignmentPointTotal:
+            submission.document.assignment?.pointValue ?? null,
+        }
       )}\nCategory-specific score bands:\n${promptShape.rubricText}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Every score must fall inside one declared band for its category.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Private observations belong only in teacherNote when the schema permits it. Never put them in overallComment or category comments. Do not infer AI authorship or penalize suspicion.\n- ${TEACHER_NOTES_EVIDENCE_RULE}\n- Do not include markdown or explanation.`,
       messages: [
         {

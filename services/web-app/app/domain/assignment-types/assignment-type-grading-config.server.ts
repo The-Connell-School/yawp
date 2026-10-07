@@ -395,30 +395,25 @@ export function buildResolvedAssignmentTypeGradingConfig({
 
   // Resolve scoringMode from a library rubric's top-level schema JSON when present,
   // falling back to any per-type outputSchema override, and defaulting to weighted.
-  const resolveScoringMode = (): 'weighted_categories' | 'holistic_tier' => {
+  const resolveScoringMode = (): 'holistic_tier' | undefined => {
     // When a library rubric is in use, the original schema JSON may carry a top-level scoringMode.
     const librarySchema =
       (row as any)?.rubric?.schemaJson &&
       typeof (row as any).rubric.schemaJson === 'object'
         ? ((row as any).rubric.schemaJson as Record<string, unknown>)
         : null;
-    const libMode =
+    if (
       librarySchema &&
-      typeof librarySchema.scoringMode === 'string' &&
-      (librarySchema.scoringMode === 'holistic_tier' ||
-        librarySchema.scoringMode === 'weighted_categories')
-        ? (librarySchema.scoringMode as 'weighted_categories' | 'holistic_tier')
-        : null;
-    if (libMode) return libMode;
+      librarySchema.scoringMode === 'holistic_tier'
+    ) {
+      return 'holistic_tier';
+    }
     const outSchema =
       (parsedConfig.outputSchema as Record<string, unknown>) ?? {};
-    const outMode =
-      typeof outSchema.scoringMode === 'string' &&
-      (outSchema.scoringMode === 'holistic_tier' ||
-        outSchema.scoringMode === 'weighted_categories')
-        ? (outSchema.scoringMode as 'weighted_categories' | 'holistic_tier')
-        : null;
-    return outMode ?? 'weighted_categories';
+    if (outSchema.scoringMode === 'holistic_tier') {
+      return 'holistic_tier';
+    }
+    return undefined;
   };
   const scoringMode = resolveScoringMode();
 
