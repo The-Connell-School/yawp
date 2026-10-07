@@ -13,7 +13,8 @@ const scale = z.object({
 const category = z.object({
   key: text, label: text, description: text, weight: number.min(0),
   scoreLabels: z.array(z.object({ value: number, label: text }).strict()).optional(),
-  bands: z.array(z.object({ min: number, max: number, label: text, description: text }).strict()).optional(),
+  // Band descriptions may be blank: production rubrics store bands whose wording lives in the label.
+  bands: z.array(z.object({ min: number, max: number, label: text, description: z.string() }).strict()).optional(),
   feedbackEnabled: z.boolean().optional(), grammarHighlighting: z.boolean().optional(),
 }).strict();
 const input = z.object({

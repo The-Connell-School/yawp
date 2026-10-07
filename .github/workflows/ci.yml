@@ -182,8 +182,12 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
           RATE_LIMIT_DB_TESTS: '1'
           FREE_TIER_DB_TESTS: '1'
+          RUBRIC_CATALOG_DB_TESTS: '1'
         run: >-
           bun test
+          ./services/web-app/app/domain/rubrics/rubric-catalog.test.ts
+          ./services/web-app/app/domain/rubrics/rubric-catalog.integration.test.ts
+          ./services/web-app/app/utils/internal-rubric-catalog-http.server.test.ts
           ./services/web-app/app/utils/ip.server.test.ts
           ./services/web-app/app/utils/rate-limit.server.test.ts
           ./services/web-app/app/utils/rate-limit.false-positive.test.ts
