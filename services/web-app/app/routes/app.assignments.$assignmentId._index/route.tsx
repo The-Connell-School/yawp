@@ -6,6 +6,7 @@ import {
 import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-class-read.server';
 import { EXIT_TICKET_SEED_STEP } from '~/domain/lesson-planner/lesson-seed';
 import { Prisma } from '@app/prisma';
+import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 import { useState, type MouseEvent, type ReactNode } from 'react';
@@ -235,8 +236,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     assignmentTypes.map((assignmentType) => assignmentType.id)
   );
+  // Paragraph type and writing time are behind a global flag (off by
+  // default); off, the form offers neither.
+  const writingConditionsEnabled =
+    await isDailyPagesWritingConditionsEnabled();
   const creationTypeDefaults = await getCreationTypeDefaultsById(
-    assignmentTypes.map((assignmentType) => assignmentType.id)
+    assignmentTypes.map((assignmentType) => assignmentType.id),
+    { writingConditionsEnabled }
   );
   const assignmentTypeOptions = assignmentTypes.map((assignmentType) => ({
     ...assignmentType,
@@ -280,6 +286,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return {
     found: true as const,
+    writingConditionsEnabled,
     classInsightsEnabled,
     assignmentTypes: assignmentTypeOptions,
     activeClassId: active.classId,
@@ -485,7 +492,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    const writingTimeResult = parseWritingTimeMinutes(formData);
+    // Behind the writing-conditions flag: off, a sent writing time is ignored
+    // and the stored one is left exactly as it is.
+    const writingTimeResult = (await isDailyPagesWritingConditionsEnabled())
+      ? parseWritingTimeMinutes(formData)
+      : ({ success: true, sent: false, value: null } as const);
     if (!writingTimeResult.success) {
       return dataResponse(
         { success: false, message: writingTimeResult.message },
@@ -956,6 +967,7 @@ export default function AssignmentDetailRoute() {
           entryPoint="class"
           fixedClassId={activeClassId}
           assignmentTypes={data.assignmentTypes}
+          writingConditionsEnabled={data.writingConditionsEnabled}
           teacherClasses={[activeClassOption]}
           editingAssignment={{
             id: assignment.id,
@@ -1020,6 +1032,7 @@ export default function AssignmentDetailRoute() {
           entryPoint="class"
           fixedClassId={activeClassId}
           assignmentTypes={data.assignmentTypes}
+          writingConditionsEnabled={data.writingConditionsEnabled}
           teacherClasses={[activeClassOption]}
           initialAssignmentTypeId={assignment.assignmentTypeId}
           initialTitle={`Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`}

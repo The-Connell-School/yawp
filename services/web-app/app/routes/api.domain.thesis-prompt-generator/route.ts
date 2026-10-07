@@ -1,6 +1,8 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
+import crypto from 'node:crypto';
+import { computeIpHash } from '~/utils/ai-usage-log.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import {
   buildGeneratorSystemPrompt,
@@ -13,6 +15,7 @@ import {
 } from '../app.assignment-types.$id/thesis-prompts-library/prompt-generator';
 import type { ThesisPrompt } from '../app.assignment-types.$id/thesis-prompts-library/data';
 import thesisPromptsRaw from '../app.assignment-types.$id/thesis-prompts-library/prompts.json';
+import { enforceTeacherGeneratorLimits, rateLimitedJson } from '~/utils/rate-limit.server';
 
 const ALL_THESIS_PROMPTS = thesisPromptsRaw as ThesisPrompt[];
 const SYSTEM_PROMPT = buildGeneratorSystemPrompt(ALL_THESIS_PROMPTS);
@@ -65,6 +68,17 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  {
+    const decision = await enforceTeacherGeneratorLimits({
+      membershipId: profile.id,
+      route: '/api/domain/thesis-prompt-generator',
+      feature: 'thesis-prompt-generator',
+    });
+    if (!decision.allowed) {
+      return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Please wait before generating more prompts.');
+    }
+  }
+
   const formData = await request.formData();
   const messages = parseMessages(formData.get('messages'));
 
@@ -92,9 +106,14 @@ export async function action({ request }: ActionFunctionArgs) {
       temperature: 0.7,
       maxTokens: MAX_GENERATOR_OUTPUT_TOKENS,
       metadata: {
-        route: '/api/domain/thesis-prompt-generator',
-        membershipId: profile.id,
         turnCount: messages.length,
+      },
+      attribution: {
+        organizationId: profile.organization.id,
+        membershipId: profile.id,
+        route: 'routes/api.domain.thesis-prompt-generator',
+        requestId: crypto.randomUUID(),
+        ipHash: computeIpHash(request),
       },
     });
   } catch {

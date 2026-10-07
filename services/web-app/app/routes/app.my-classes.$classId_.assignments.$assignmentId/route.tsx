@@ -241,6 +241,7 @@ export default function AssignmentSubmissionsRoute() {
     Record<string, GradingState>
   >({});
   const [isGrading, setIsGrading] = useState(false);
+  const [gradingNotice, setGradingNotice] = useState<string | null>(null);
   const [releasedIds, setReleasedIds] = useState<Set<string>>(new Set());
   const [isReleasing, setIsReleasing] = useState(false);
   const hasRetryingSubmission = Object.values(gradingProgress).some(
@@ -297,21 +298,64 @@ export default function AssignmentSubmissionsRoute() {
     if (ids.length === 0) return;
 
     setIsGrading(true);
-    for (const submissionId of ids) {
+    setGradingNotice(null);
+    // The server paces AI grading per teacher. A short wait (per-minute window)
+    // is absorbed here so a normal class batch just takes a little longer; a long
+    // wait (hour/day ceiling) stops the batch with an explicit message instead of
+    // marking every remaining essay as failed.
+    const MAX_AUTO_WAIT_SECONDS = 90;
+    const MAX_PACING_ATTEMPTS = 6;
+    let stoppedMessage: string | null = null;
+    for (let index = 0; index < ids.length; index += 1) {
+      const submissionId = ids[index]!;
       setGradingProgress((prev) => ({ ...prev, [submissionId]: 'grading' }));
       try {
-        const form = new FormData();
-        form.append('submissionId', submissionId);
-        const { response } = await postFormWithFallbackRetry({
-          action: '/api/domain/grade-essay-ai',
-          formData: form,
-          onRetry: () =>
-            setGradingProgress((prev) => ({
-              ...prev,
-              [submissionId]: 'retrying',
-            })),
-        });
-        if (response.ok) {
+        let attempt = 0;
+        let outcome: Response | null = null;
+        for (;;) {
+          const form = new FormData();
+          form.append('submissionId', submissionId);
+          const { response } = await postFormWithFallbackRetry({
+            action: '/api/domain/grade-essay-ai',
+            formData: form,
+            onRetry: () =>
+              setGradingProgress((prev) => ({
+                ...prev,
+                [submissionId]: 'retrying',
+              })),
+          });
+          if (response.status !== 429) {
+            outcome = response;
+            break;
+          }
+          const retryAfter = Number(response.headers.get('Retry-After')) || 10;
+          attempt += 1;
+          if (retryAfter > MAX_AUTO_WAIT_SECONDS || attempt >= MAX_PACING_ATTEMPTS) {
+            const minutes = Math.ceil(retryAfter / 60);
+            const remaining = ids.length - index;
+            stoppedMessage = `AI grading is paused by the usage limit. ${remaining} essay${remaining === 1 ? ' was' : 's were'} not graded and still selected. Try again in about ${
+              retryAfter > 90 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : `${retryAfter} seconds`
+            }.`;
+            break;
+          }
+          setGradingNotice(
+            `Pacing AI grading to stay within the usage limit. Resuming in ${retryAfter} seconds…`
+          );
+          await new Promise((resolve) =>
+            setTimeout(resolve, (retryAfter + 1) * 1000)
+          );
+          setGradingNotice(null);
+        }
+        if (stoppedMessage) {
+          // Leave this and every later essay untouched and selected.
+          setGradingProgress((prev) => {
+            const next = { ...prev };
+            delete next[submissionId];
+            return next;
+          });
+          break;
+        }
+        if (outcome?.ok) {
           setGradingProgress((prev) => ({ ...prev, [submissionId]: 'done' }));
           setSelected((prev) => {
             const next = new Set(prev);
@@ -325,6 +369,7 @@ export default function AssignmentSubmissionsRoute() {
         setGradingProgress((prev) => ({ ...prev, [submissionId]: 'error' }));
       }
     }
+    setGradingNotice(stoppedMessage);
     setIsGrading(false);
   }, [selected]);
 
@@ -455,6 +500,11 @@ export default function AssignmentSubmissionsRoute() {
                 {selected.size} selected
               </span>
             )}
+            {gradingNotice ? (
+              <span role="status" className="text-sm text-amber-700">
+                {gradingNotice}
+              </span>
+            ) : null}
           </div>
         )}
 

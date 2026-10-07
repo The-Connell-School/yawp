@@ -285,7 +285,7 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Extract from PDF');
       expectText('Submit for grade');
       expectText(
-        'Graded out of 100 points in steps, read at the intermediate level.'
+        'Graded out of 100 points in bands, read at the intermediate level.'
       );
       expectText('Tutor enabled');
       expectText(
@@ -377,7 +377,7 @@ describe('AssignmentCreationSheetContent', () => {
     root = renderSheet().root;
 
     expectText(
-      'Graded out of 100 points in steps, read at the intermediate level.'
+      'Graded out of 100 points in bands, read at the intermediate level.'
     );
     // The old block stated the same facts four times over three nested boxes.
     expectNoText('Grade Configuration');
@@ -389,7 +389,7 @@ describe('AssignmentCreationSheetContent', () => {
     expectNoText('Grading Total');
     expectNoText('AI');
     expect(inputByName('pointValue').value).toBe('100');
-    expect(inputByName('gradingMode').value).toBe('step');
+    expect(inputByName('gradingMode').value).toBe('bands');
     expect(inputByName('rubricTotalPoints').value).toBe('');
     expect(document.getElementById('assignment-create-point-value')).toBeNull();
   });
@@ -402,10 +402,7 @@ describe('AssignmentCreationSheetContent', () => {
     });
 
     expectText('Point value');
-    expectText('Scoring behavior');
     expectText('Grading assistance');
-    expectText('Steps');
-    expectText('Bands');
     expectNoText('Customize Grading');
     expect(controlById('assignment-create-point-value')).toHaveProperty(
       'readOnly',
@@ -428,37 +425,7 @@ describe('AssignmentCreationSheetContent', () => {
     expect(inputByName('gradingMode').value).toBe('bands');
   });
 
-  it('marks the chosen scoring behavior as the selected one', () => {
-    root = renderSheet({ initialGradingMode: 'bands' }).root;
-
-    act(() => {
-      controlById('assignment-create-change-grading').click();
-    });
-
-    const step = controlById('assignment-create-grading-mode-step');
-    const bands = controlById('assignment-create-grading-mode-bands');
-    expect(bands.getAttribute('aria-pressed')).toBe('true');
-    expect(step.getAttribute('aria-pressed')).toBe('false');
-    // The chosen segment is the one lifted out of the recessed track.
-    expect(bands.className).toContain('bg-popover');
-    expect(step.className).not.toContain('bg-popover');
-  });
-
-  it('lets a teacher opt into bands grading without a customize gate', () => {
-    root = renderSheet().root;
-
-    act(() => {
-      controlById('assignment-create-change-grading').click();
-    });
-    act(() => {
-      controlById('assignment-create-grading-mode-bands').click();
-    });
-
-    expect(inputByName('gradingMode').value).toBe('bands');
-    expectText(
-      'Graded out of 100 points in bands, read at the intermediate level.'
-    );
-  });
+  // Scoring behavior selector removed — always bands now
 
   // `rubricTotalPoints` rescales the rubric's own scale and the `max_score`
   // handed to the grading assistant. It is not the gradebook total, and
@@ -1646,6 +1613,7 @@ describe('AssignmentCreationSheetContent writing time', () => {
 
   it("prefills the assignment type's suggested writing time", () => {
     ({ root } = renderSheet({
+      writingConditionsEnabled: true,
       assignmentTypes: timedTypes,
       fixedAssignmentTypeId: 'daily-pages',
     }));
@@ -1656,6 +1624,7 @@ describe('AssignmentCreationSheetContent writing time', () => {
 
   it('is blank for a type with no suggested time', () => {
     ({ root } = renderSheet({
+      writingConditionsEnabled: true,
       assignmentTypes: timedTypes,
       fixedAssignmentTypeId: 'essay',
     }));
@@ -1665,6 +1634,7 @@ describe('AssignmentCreationSheetContent writing time', () => {
 
   it('shows the saved time when editing, and stays editable', () => {
     ({ root } = renderSheet({
+      writingConditionsEnabled: true,
       assignmentTypes: timedTypes,
       fixedAssignmentTypeId: 'daily-pages',
       editingAssignment: { id: 'assignment-1' },
@@ -1678,6 +1648,7 @@ describe('AssignmentCreationSheetContent writing time', () => {
 
   it('never invents a time for an existing assignment that had none', () => {
     ({ root } = renderSheet({
+      writingConditionsEnabled: true,
       assignmentTypes: timedTypes,
       fixedAssignmentTypeId: 'daily-pages',
       editingAssignment: { id: 'assignment-1' },
@@ -1727,6 +1698,7 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
 
   it('offers the switched-on types for Daily Pages, defaulting to none', () => {
     ({ root } = renderSheet({
+      writingConditionsEnabled: true,
       assignmentTypes: types,
       fixedAssignmentTypeId: 'daily-pages',
     }));
@@ -1741,6 +1713,7 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
 
   it('describes the chosen type', () => {
     ({ root } = renderSheet({
+      writingConditionsEnabled: true,
       assignmentTypes: types,
       fixedAssignmentTypeId: 'daily-pages',
     }));
@@ -1757,6 +1730,7 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
 
   it('is absent for a type that takes no paragraph type', () => {
     ({ root } = renderSheet({
+      writingConditionsEnabled: true,
       assignmentTypes: types,
       fixedAssignmentTypeId: 'essay',
     }));
@@ -1767,6 +1741,7 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
 
   it('is shown read-only when editing, and not submitted', () => {
     ({ root } = renderSheet({
+      writingConditionsEnabled: true,
       assignmentTypes: types,
       fixedAssignmentTypeId: 'daily-pages',
       editingAssignment: { id: 'assignment-1' },
@@ -1777,5 +1752,84 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
     const shown = controlById('assignment-create-paragraph-mode') as HTMLSelectElement;
     expect(shown.value).toBe('analyze');
     expect(shown.disabled).toBe(true);
+  });
+});
+
+/**
+ * Paragraph type and writing time sit behind a global flag that starts off.
+ * Off, the form shows neither and submits neither, on create or on edit, so a
+ * teacher sees the form as it was before either setting shipped.
+ */
+describe('AssignmentCreationSheetContent with the writing-conditions flag off', () => {
+  let root: Root | null = null;
+
+  afterEach(() => {
+    cleanup(root);
+    root = null;
+  });
+
+  const types = [
+    {
+      id: 'daily-pages',
+      title: 'Daily Pages',
+      collaborationSupported: true,
+      gradesGrammar: true,
+      defaultWritingTimeMinutes: 15,
+      offersParagraphModes: true,
+    },
+  ];
+
+  function expectNeitherField() {
+    expect(document.querySelector('[name="writingTimeMinutes"]')).toBeNull();
+    expect(document.querySelector('#assignment-create-writing-time')).toBeNull();
+    expect(document.querySelector('[name="paragraphMode"]')).toBeNull();
+    expect(document.querySelector('#assignment-create-paragraph-mode')).toBeNull();
+    expectNoText('Time students have to write');
+    expectNoText('Paragraph type');
+    expectNoText('Any kind of paragraph');
+  }
+
+  it('hides both settings when creating (the default)', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'daily-pages',
+    }));
+
+    expectNeitherField();
+  });
+
+  it('hides both settings when explicitly off', () => {
+    ({ root } = renderSheet({
+      writingConditionsEnabled: false,
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'daily-pages',
+    }));
+
+    expectNeitherField();
+  });
+
+  it('hides both settings when editing an assignment that has them stored', () => {
+    ({ root } = renderSheet({
+      writingConditionsEnabled: false,
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'daily-pages',
+      editingAssignment: { id: 'assignment-1' },
+      initialWritingTimeMinutes: 20,
+      initialParagraphMode: 'analyze',
+    }));
+
+    expectNeitherField();
+  });
+
+  it('shows both again when the flag is on', () => {
+    ({ root } = renderSheet({
+      writingConditionsEnabled: true,
+      assignmentTypes: types,
+      fixedAssignmentTypeId: 'daily-pages',
+    }));
+
+    expectText('Time students have to write');
+    expectText('Paragraph type');
+    expect(inputByName('writingTimeMinutes').value).toBe('15');
   });
 });

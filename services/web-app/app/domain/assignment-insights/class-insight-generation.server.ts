@@ -1,3 +1,5 @@
+import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { readableWritingConditions } from '~/domain/feature-flags/feature-flags';
 import { Prisma } from '@app/prisma';
 import {
   aggregateRubricPerformance,
@@ -142,13 +144,19 @@ async function loadDifferentiationInputs(classAssignmentId: string) {
  * against. Each is null or false when the assignment set none, which leaves the
  * summary prompt as it was.
  */
-function writingConditions(assignment: {
-  tutorEnabled?: boolean | null;
-  writingTimeMinutes?: number | null;
-  paragraphMode?: string | null;
-  grammarGradingEnabled?: boolean | null;
-  assignmentType?: { title?: string | null } | null;
-}) {
+function writingConditions(
+  stored: {
+    tutorEnabled?: boolean | null;
+    writingTimeMinutes?: number | null;
+    paragraphMode?: string | null;
+    grammarGradingEnabled?: boolean | null;
+    assignmentType?: { title?: string | null } | null;
+  },
+  writingConditionsEnabled: boolean
+) {
+  // Paragraph type and writing time are behind a global flag; off, the
+  // summary reads them as unset, as it did before either existed.
+  const assignment = readableWritingConditions(stored, writingConditionsEnabled);
   return {
     assignmentTypeTitle: assignment.assignmentType?.title ?? null,
     paragraphModeLabel: getParagraphMode(assignment.paragraphMode)?.label ?? null,
@@ -175,6 +183,7 @@ export async function generateClassAssignmentInsight(input: {
     },
     select: {
       id: true,
+      classId: true,
       assignment: {
         select: {
           title: true,
@@ -296,6 +305,7 @@ export async function generateClassAssignmentInsight(input: {
     }
   }
 
+  const writingConditionsEnabled = await isDailyPagesWritingConditionsEnabled();
   let generated: Awaited<ReturnType<typeof generateClassInsight>>;
   try {
     generated = await generateClassInsight({
@@ -303,10 +313,18 @@ export async function generateClassAssignmentInsight(input: {
       context: {
         assignmentTitle: classAssignment.assignment.title,
         className: classLabel(classAssignment.class),
-        ...writingConditions(classAssignment.assignment),
+        ...writingConditions(
+          classAssignment.assignment,
+          writingConditionsEnabled
+        ),
       },
       rubric,
       metadata: { classAssignmentId: classAssignment.id },
+      attribution: {
+        organizationId: input.organizationId,
+        membershipId: input.generatedByMembershipId ?? undefined,
+        classId: classAssignment.classId,
+      },
     });
   } catch {
     await recordClassInsightFailure({

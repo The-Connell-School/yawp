@@ -17,6 +17,7 @@ import {
   WHAT_IT_IS_NOT,
   HOW_TO_USE,
   REGISTER_NOTE,
+  howToUse,
 } from './content';
 
 const allCopy = () =>
@@ -210,5 +211,24 @@ describe('the prompt-writing guidance', () => {
 
   test('lists the ways a prompt fails so a teacher can check their own', () => {
     expect(PROMPT_WARNINGS.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+/**
+ * Paragraph type and writing time are behind a flag that starts off. Off, the
+ * guide must not tell a teacher to use settings the form does not show.
+ */
+describe('the guide with the writing-conditions flag', () => {
+  test('off: names neither setting, keeps everything else', () => {
+    const off = howToUse(false);
+    const text = off.join(' ');
+    expect(text).not.toContain('Paragraph type');
+    expect(text).not.toContain('Time students have to write');
+    expect(off).toHaveLength(HOW_TO_USE.length - 2);
+    expect(text.toLowerCase()).toContain('grammar grading off');
+  });
+
+  test('on: the full guide, unchanged', () => {
+    expect(howToUse(true)).toEqual(HOW_TO_USE);
   });
 });

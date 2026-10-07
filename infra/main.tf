@@ -310,6 +310,7 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
             aws_secretsmanager_secret.openai_key.arn,
             aws_secretsmanager_secret.anthropic_key.arn,
             aws_secretsmanager_secret.session.arn,
+            aws_secretsmanager_secret.ai_usage_ip_hmac.arn,
             aws_secretsmanager_secret.internal_token.arn,
             aws_secretsmanager_secret.sentry_dsn.arn,
             aws_secretsmanager_secret.resend_api_key.arn
@@ -406,6 +407,15 @@ resource "aws_secretsmanager_secret_version" "session" {
   secret_string = var.session_secret
 }
 
+resource "aws_secretsmanager_secret" "ai_usage_ip_hmac" {
+  name = "${var.app_name}-${var.env}-ai-usage-ip-hmac-secret"
+}
+
+resource "aws_secretsmanager_secret_version" "ai_usage_ip_hmac" {
+  secret_id     = aws_secretsmanager_secret.ai_usage_ip_hmac.id
+  secret_string = var.ai_usage_ip_hmac_secret
+}
+
 resource "aws_secretsmanager_secret" "internal_token" {
   name = "${var.app_name}-${var.env}-internal-token"
 }
@@ -499,6 +509,7 @@ resource "aws_apprunner_service" "web" {
           OPENAI_API_KEY = aws_secretsmanager_secret.openai_key.arn
           ANTHROPIC_API_KEY = aws_secretsmanager_secret.anthropic_key.arn
           SESSION_SECRET = aws_secretsmanager_secret.session.arn
+          AI_USAGE_IP_HMAC_SECRET = aws_secretsmanager_secret.ai_usage_ip_hmac.arn
           INTERNAL_COMMAND_TOKEN = aws_secretsmanager_secret.internal_token.arn
           DATABASE_URL = aws_secretsmanager_secret.db_url.arn
           RESEND_API_KEY = aws_secretsmanager_secret.resend_api_key.arn

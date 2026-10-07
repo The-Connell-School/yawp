@@ -26,6 +26,9 @@ const prisma = {
   classAssignment: {
     findMany: mock(),
   },
+  setting: {
+    findUnique: mock(),
+  },
 };
 
 const requireUserId = mock();
@@ -140,6 +143,10 @@ describe('api.assignments.create', () => {
     prisma.orgMembership.findMany.mockReset();
     prisma.apHistoryPromptLibraryEntry.findFirst.mockReset();
     createAssignmentDeployedToClasses.mockReset();
+    // Paragraph type and writing time are behind a flag. These tests describe
+    // the flag on (the behavior since they shipped); the flag-off block below
+    // describes the default.
+    prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
     isAssignmentTypeAvailableForEveryScope.mockReset();
     uploadAssignmentPromptAttachment.mockReset();
     deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
@@ -476,6 +483,92 @@ describe('api.assignments.create', () => {
 
       expect(responseStatus(response)).toBe(400);
       expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('with the writing-conditions flag off', () => {
+    beforeEach(() => {
+      prisma.setting.findUnique.mockReset().mockResolvedValue(null);
+    });
+
+    function createWith(fields: Record<string, string>) {
+      return action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          prompt: 'Quote the line where the argument turns.',
+          title: 'Daily Pages',
+          ...fields,
+        }),
+        params: {},
+      } as any);
+    }
+
+    test('reads the flag from its Setting row', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+      await createWith({});
+      expect(prisma.setting.findUnique).toHaveBeenCalledWith({
+        where: { name: 'feature_flag.daily_pages_paragraph_type_and_writing_time' },
+        select: { value: true },
+      });
+    });
+
+    test('ignores a paragraph type and a writing time sent anyway', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      const body = await readBody(
+        await createWith({ paragraphMode: 'analyze', writingTimeMinutes: '10' })
+      );
+
+      expect(body).toMatchObject({ success: true });
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            paragraphMode: null,
+            writingTimeMinutes: null,
+          }),
+        })
+      );
+    });
+
+    test('does not reject values it ignores (a form opened before the flag was switched off still saves)', async () => {
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+
+      const response = await createWith({
+        paragraphMode: 'argue',
+        writingTimeMinutes: 'ten',
+      });
+
+      expect(responseStatus(response)).not.toBe(400);
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            paragraphMode: null,
+            writingTimeMinutes: null,
+          }),
+        })
+      );
+    });
+
+    test('treats a failed flag read as off', async () => {
+      prisma.setting.findUnique.mockReset().mockRejectedValue(new Error('db down'));
+      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
+      const error = console.error;
+      console.error = () => {};
+      try {
+        await createWith({ paragraphMode: 'analyze', writingTimeMinutes: '10' });
+      } finally {
+        console.error = error;
+      }
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            paragraphMode: null,
+            writingTimeMinutes: null,
+          }),
+        })
+      );
     });
   });
 

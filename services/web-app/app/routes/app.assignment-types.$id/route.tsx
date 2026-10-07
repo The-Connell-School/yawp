@@ -1,3 +1,4 @@
+import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -574,8 +575,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentTypeGradesGrammar = (
     await getGrammarGradingAssignmentTypeIds([assignmentType.id])
   ).has(assignmentType.id);
+  // Paragraph type and writing time are behind a global flag (off by
+  // default); off, the form offers neither.
+  const writingConditionsEnabled =
+    await isDailyPagesWritingConditionsEnabled();
   const creationTypeDefaults = (
-    await getCreationTypeDefaultsById([assignmentType.id])
+    await getCreationTypeDefaultsById([assignmentType.id], {
+      writingConditionsEnabled,
+    })
   ).get(assignmentType.id);
   const assignmentTypeDefaultWritingTimeMinutes =
     creationTypeDefaults?.defaultWritingTimeMinutes ?? null;
@@ -583,6 +590,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     creationTypeDefaults?.offersParagraphModes ?? false;
 
   return dataResponse({
+    writingConditionsEnabled,
     assignmentType,
     assignmentTypeGradesGrammar,
     assignmentTypeDefaultWritingTimeMinutes,
@@ -906,6 +914,7 @@ export default function AppAssignmentTypesIdRoute() {
                 assignmentTypeDefaultWritingTimeMinutes={
                   data.assignmentTypeDefaultWritingTimeMinutes
                 }
+                writingConditionsEnabled={data.writingConditionsEnabled}
                 assignmentTypeOffersParagraphModes={
                   data.assignmentTypeOffersParagraphModes
                 }
@@ -976,7 +985,11 @@ export default function AppAssignmentTypesIdRoute() {
         {data.promptLibrary ? (
           <TeacherDirections variant={data.promptLibrary.variant} />
         ) : null}
-        {showShortFormLibrary ? <AboutDailyPages /> : null}
+        {showShortFormLibrary ? (
+          <AboutDailyPages
+            writingConditionsEnabled={data.writingConditionsEnabled}
+          />
+        ) : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {data.apHistoryLibrary?.mode === 'teacher' ? (
           <ApHistoryTeacherDirections />

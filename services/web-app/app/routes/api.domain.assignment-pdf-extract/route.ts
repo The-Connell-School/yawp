@@ -3,9 +3,13 @@ import { z } from 'zod';
 import { anthropic } from '~/services/anthropic';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import crypto from 'node:crypto';
+import { computeIpHash, logAllowedUsage } from '~/utils/ai-usage-log.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
+import { enforcePdfExtractorLimits, rateLimitedJson, withSingleFlight } from '~/utils/rate-limit.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
 
-const MAX_PDF_BYTES = 10 * 1024 * 1024;
+const MAX_PDF_BYTES = RATE_LIMITS.pdfExtract.maxBytes;
 
 const ExtractedAssignmentSchema = z.object({
   title: z.string().trim().max(200).optional(),
@@ -54,6 +58,17 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       { status: 403 }
     );
+  }
+
+  {
+    const decision = await enforcePdfExtractorLimits({
+      membershipId: profile.id,
+      route: '/api/domain/assignment-pdf-extract',
+      feature: 'assignment-pdf-extract',
+    });
+    if (!decision.allowed) {
+      return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Please wait before extracting another PDF.');
+    }
   }
 
   const contentLength = Number(request.headers.get('content-length'));
@@ -151,15 +166,21 @@ export async function action({ request }: ActionFunctionArgs) {
   ].join('\n');
 
   const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
   const metadata = {
-    route: '/api/domain/assignment-pdf-extract',
+    route: 'routes/api.domain.assignment-pdf-extract',
     classId,
+    organizationId: classAccess.school.organizationId,
+    membershipId: profile.id,
+    requestId,
     fileName: file.name,
     fileSize: file.size,
   };
 
   try {
-    const message = await anthropic.messages.create(
+    const flight = await withSingleFlight(
+      `pdf-extract:${profile.id}:assignment`,
+      () => anthropic.messages.create(
       {
         model,
         max_tokens: 1200,
@@ -190,7 +211,15 @@ export async function action({ request }: ActionFunctionArgs) {
         ],
       } as any,
       { signal: AbortSignal.timeout(30_000) }
-    );
+    ));
+    if (!flight.ran) {
+      return rateLimitedJson(
+        'user',
+        10,
+        'A PDF extraction is already running for you. Please wait for it to finish.'
+      );
+    }
+    const message = flight.value;
 
     const responseText = (message.content as any[])
       .map((part) => (part?.type === 'text' ? (part.text as string) : ''))
@@ -230,6 +259,19 @@ export async function action({ request }: ActionFunctionArgs) {
         durationMs: Date.now() - startedAt,
         metadata: { ...metadata, truncated },
       },
+    });
+    await logAllowedUsage({
+      route: metadata.route,
+      feature: 'assignment-pdf-extract',
+      membershipId: profile.id,
+      organizationId: classAccess.school.organizationId,
+      classId,
+      ipHash: computeIpHash(request),
+      requestId,
+      units: 1,
+      inputTokens: message.usage?.input_tokens ?? undefined,
+      outputTokens: message.usage?.output_tokens ?? undefined,
+      latencyMs: Date.now() - startedAt,
     });
 
     return dataResponse({

@@ -7,6 +7,79 @@ datasource db {
   provider = "postgresql"
 }
 
+enum FreeTierApplicationStatus {
+  LEAD
+  INVITED
+  ACCOUNT_CREATED
+  ADMIN_SUBMITTED
+  SENT
+  MANUAL_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+model FreeTierApplication {
+  id               String                    @id @default(cuid())
+  createdAt        DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
+  status           FreeTierApplicationStatus @default(LEAD)
+  name             String
+  email            String                    @unique
+  schoolName       String
+  location         String
+  gradeLevel       String
+  acquisitionTokenId String?
+  userId           String?
+  organizationId   String?
+  releasedAt       DateTime?                 @db.Timestamptz(6)
+  notes            String?
+  approvalDecisions FreeTierApprovalDecision[]
+}
+
+model AcquisitionToken {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  tokenHash   String    @unique
+  label       String
+  bypassWaitlist Boolean @default(false)
+  maxUses     Int?
+  uses        Int       @default(0)
+  expiresAt   DateTime? @db.Timestamptz(6)
+  createdBy   String?
+}
+
+/// Audit log of operator decisions on free-tier applications.
+enum FreeTierApprovalDecisionType {
+  APPROVED
+  REJECTED
+  MANUAL_REVIEW
+  REOPENED
+}
+
+model FreeTierApprovalDecision {
+  id              String                        @id @default(cuid())
+  createdAt       DateTime                      @default(now()) @db.Timestamptz(6)
+  applicationId   String
+  application     FreeTierApplication           @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  decision        FreeTierApprovalDecisionType
+  /// Required for REJECTED; validated in application code.
+  reason          String?
+  /// Internal operator's email address (validated as an email in application code).
+  decidedByEmail  String
+
+  @@index([applicationId, createdAt(sort: Desc)])
+}
+
+/// Organization subscription/entitlement plan. SCHOOL is the default for all
+/// existing orgs and short-circuits all free-tier checks.
+enum OrganizationPlan {
+  SCHOOL
+  FREE_CLASSROOM
+  FOUNDING_FACULTY
+  CLASSROOM_LICENSE
+}
+
 enum MembershipRole {
   TEACHER
   STUDENT
@@ -280,7 +353,7 @@ model Assignment {
   rubricTotalPoints               Int?
   /// `step` preserves the original discrete label behavior; `bands` allows
   /// whole-number scores inside each rubric label's declared range.
-  gradingMode                     String            @default("step")
+  gradingMode                     String            @default("bands")
   gradingAssistantStrictnessLevel String            @default("intermediate")
   tutorEnabled                    Boolean           @default(true)
   /// The teacher's per-assignment toggle: is this one graded for grammar and
@@ -1069,6 +1142,10 @@ model Organization {
   createdAt                     DateTime                     @default(now()) @db.Timestamptz(6)
   updatedAt                     DateTime                     @default(now()) @db.Timestamptz(6)
   name                          String
+  /// Free-tier rollout primitive. Defaults to SCHOOL for all existing orgs.
+  plan                          OrganizationPlan             @default(SCHOOL)
+  planActivatedAt               DateTime?                    @db.Timestamptz(6)
+  planExpiresAt                 DateTime?                    @db.Timestamptz(6)
   accessExpiresAt               DateTime?                    @db.Timestamptz(6)
   numOfStudentSeats             Int                          @default(10)
   numOfTeacherSeats             Int                          @default(10)
@@ -1836,6 +1913,55 @@ model LlmLog {
   @@index([createdAt(sort: Desc)])
   @@index([model])
   @@index([provider])
+}
+
+/// Append-only AI usage and admission decision log. No prompts or bodies stored.
+model AiUsageDecisionLog {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  route           String
+  feature         String?
+  /// 'ALLOWED' | 'DENIED_USER' | 'DENIED_ORG' | 'DENIED_IP' | 'DENIED_GLOBAL' | 'DENIED_PAYLOAD' | 'DENIED_CONCURRENCY'
+  decision        String
+  membershipId    String?
+  organizationId  String?
+  classId         String?
+  /// HMAC of the client IP with a server secret. Never store raw IPs.
+  ipHash          String?
+  requestId       String
+  units           Int
+  inputTokens     Int?
+  outputTokens    Int?
+  latencyMs       Int?
+  providerStatus  String?
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([route, createdAt(sort: Desc)])
+}
+
+/// Token-bucket state for rate limiting. One row per (subject scope + policy key).
+model RateLimitBucket {
+  key           String   @id
+  tokens        Int      @default(0)
+  capacity      Int
+  refillPerMs   Float    @default(0) // tokens per millisecond
+  lastRefillAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+}
+
+/// Append-only decision log for rate limit admissions/denials.
+model RateLimitDecision {
+  id                String   @id @default(cuid())
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  route             String
+  feature           String?
+  scope             String // 'user' | 'org' | 'ip' | 'global'
+  decision          String // 'ALLOWED' | 'DENIED_USER' | 'DENIED_ORG' | 'DENIED_IP' | 'DENIED_GLOBAL' | 'DENIED_PAYLOAD' | 'DENIED_CONCURRENCY'
+  subjectKey        String
+  retryAfterSeconds Int?
+  metadata          Json?
+  @@index([route, createdAt(sort: Desc)])
+  @@index([scope, createdAt(sort: Desc)])
 }
 
 /// A single student's persisted response to one practice prompt, with the

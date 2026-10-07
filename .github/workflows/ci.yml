@@ -172,6 +172,33 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma migrate deploy
 
+      # CI names every test file it runs, and nothing ran services/web-app/app/**
+      # unit tests: the rate limiter, client-IP and free-tier tests were present but
+      # never executed. These need the migrated database above (real SQL), so they
+      # live in this job. Add new web-app test files here.
+      - name: 🧪 Web app unit + DB tests (rate limits, client IP, free tier)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          RATE_LIMIT_DB_TESTS: '1'
+          FREE_TIER_DB_TESTS: '1'
+          RUBRIC_CATALOG_DB_TESTS: '1'
+          FEATURE_FLAG_DB_TESTS: '1'
+        run: >-
+          bun test
+          ./services/web-app/app/domain/rubrics/rubric-catalog.test.ts
+          ./services/web-app/app/domain/rubrics/rubric-catalog.integration.test.ts
+          ./services/web-app/app/utils/internal-rubric-catalog-http.server.test.ts
+          ./services/web-app/app/utils/ip.server.test.ts
+          ./services/web-app/app/utils/rate-limit.server.test.ts
+          ./services/web-app/app/utils/rate-limit.false-positive.test.ts
+          ./services/web-app/app/utils/rate-limit.responses.test.ts
+          ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
+          ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
+          ./services/web-app/app/domain/free-tier/
+          ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
+          ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
+
       - name: 🎨 Backfill class artwork keys
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
@@ -202,6 +229,20 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma seed-local-dev
+
+      # Entitlements/reporter-gate tests were never run by CI. Each file mocks
+      # different modules, so they run in separate bun processes. The DB test
+      # runs against the freshly migrated database.
+      - name: 🧪 Entitlements + reporter gate tests
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          bun test app/utils/entitlements.server.test.ts
+          bun test app/utils/reporter/reporter-access.server.test.ts
+          bun test app/utils/auth.server.test.ts
+          bun test app/utils/entitlements.db.test.ts
 
   typecheck-web-app:
     needs: [paths]
@@ -237,6 +278,36 @@ jobs:
       - name: 🔎 Type check
         if: ${{ needs.paths.outputs.code == 'true' }}
         run: bun web-app:typecheck
+
+      # CI did not run any web-app unit tests before; name the AI usage log
+      # suites here so a regression in attribution or IP hashing fails the PR.
+      - name: 🧪 AI usage log unit tests
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: bun test app/utils/ai-usage-log.server.test.ts app/utils/getLLMCompletion/getLLMCompletion.test.ts
+
+      # The Daily Pages paragraph-type / writing-time feature flag. These suites
+      # replace modules with mocks, which leak across files in one bun process,
+      # so each runs on its own.
+      - name: Feature flag unit tests
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: |
+          set -e
+          for f in \
+            app/domain/feature-flags/feature-flags.test.ts \
+            app/domain/feature-flags/feature-flags.server.test.ts \
+            app/utils/internal-feature-flags-http.server.test.ts \
+            app/routes/api.assignments.create/route.test.ts \
+            app/components/assignments/assignment-creation-sheet.test.tsx \
+            app/routes/api.domain.grade-essay-ai/route.test.ts \
+            app/domain/assignment-insights/class-insight-generation.server.test.ts \
+            'app/routes/app.assignments.$assignmentId._index/route.test.ts' \
+            'app/routes/app.my-classes.$classId/route.test.ts' \
+            'app/routes/app.assignment-types.$id/about-daily-pages/content.test.ts'
+          do
+            bun test "$f"
+          done
 
   e2e-web-app:
     needs: [typecheck-web-app, validate-prisma-migrations, paths]

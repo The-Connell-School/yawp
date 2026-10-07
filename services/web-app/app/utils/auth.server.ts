@@ -26,6 +26,7 @@ const membershipSelect = {
     select: {
       id: true,
       name: true,
+      plan: true,
       reporterEnabled: true,
       classInsightsEnabled: true,
       lessonPlannerEnabled: true,
@@ -169,11 +170,19 @@ export async function requireMembership(
     return requireLicensedMembership(request, membership, allowPaymentRequired);
   }
 
-  const membership = await prisma.orgMembership.findFirst({
+  // Prefer a real school/org membership over the legacy `default-org` shell.
+  // Students who were seeded into default-org and later joined a school org
+  // otherwise land in an empty org (createdAt asc) and look "locked out"
+  // even though their password and class membership are fine.
+  const memberships = await prisma.orgMembership.findMany({
     where: { userId, isActive: true },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
     select: membershipSelect,
   });
+
+  const membership =
+    memberships.find((m) => m.organization.id !== 'default-org') ??
+    memberships[0];
 
   if (!membership) {
     throw redirect('/no-membership');

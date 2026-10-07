@@ -16,6 +16,7 @@ const prisma = {
     create: mock(),
   },
   submissionActivity: { create: mock() },
+  setting: { findUnique: mock() },
 };
 
 const getLLMCompletion = mock();
@@ -2090,6 +2091,12 @@ describe('api.domain.grade-essay-ai', () => {
       } as any);
     }
 
+    beforeEach(() => {
+      // Paragraph type and writing time are behind a flag; these tests
+      // describe it on. The flag-off tests below switch it off.
+      prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
+    });
+
     async function gradeTimed(
       id: string,
       writingTimeMinutes: number | null,
@@ -2190,6 +2197,37 @@ describe('api.domain.grade-essay-ai', () => {
       expect(grammar.messages[0].content).toMatch(
         /^Essay:\n[\s\S]*\n\nReturn up to 15 issues\.$/
       );
+    });
+
+    describe('with the writing-conditions flag off', () => {
+      beforeEach(() => {
+        prisma.setting.findUnique.mockReset().mockResolvedValue(null);
+      });
+
+      test('the grading assistant ignores a stored paragraph type and writing time', async () => {
+        const { grading } = await gradeTimed('sub-flag-off', 10, true, 'analyze');
+
+        expect(grading.messages[0].content).not.toContain('Paragraph type');
+        expect(grading.messages[0].content).not.toContain('Writing time');
+      });
+
+      test('the grammar checker reads the work as untimed, exactly as before the setting', async () => {
+        const { buildGrammarCheckerSystemPrompt } = await import(
+          '~/domain/grading/writing-time'
+        );
+        const { grammar } = await gradeTimed('sub-flag-off-grammar', 10);
+
+        expect(grammar.system).toBe(buildGrammarCheckerSystemPrompt(null));
+        expect(grammar.messages[0].content).toMatch(
+          /^Essay:\n[\s\S]*\n\nReturn up to 15 issues\.$/
+        );
+      });
+
+      test('a cold write is still a cold write (not part of the flag)', async () => {
+        const { grading } = await gradeTimed('sub-flag-off-cold', 10, false);
+
+        expect(grading.messages[0].content).toContain('Cold write:');
+      });
     });
 
     function grammarCallCount() {

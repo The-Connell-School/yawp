@@ -141,6 +141,20 @@ export const HOW_TO_USE: string[] = [
   'Name the move out loud the first few times: today we are analyzing, or defining, or comparing. Most of the early score movement comes from students who stop warming up and start doing the move the prompt asked for.',
 ];
 
+/**
+ * The guide as a teacher should see it. Paragraph type and writing time are
+ * behind a flag that starts off; off, the guide does not point at settings the
+ * form does not show.
+ */
+export function howToUse(writingConditionsEnabled: boolean): string[] {
+  if (writingConditionsEnabled) return HOW_TO_USE;
+  return HOW_TO_USE.filter(
+    (item) =>
+      !item.includes('Paragraph type') &&
+      !item.includes('Time students have to write')
+  );
+}
+
 export const WRITE_YOUR_OWN_HEADING = 'Writing your own prompt';
 
 export const WRITE_YOUR_OWN_INTRO =

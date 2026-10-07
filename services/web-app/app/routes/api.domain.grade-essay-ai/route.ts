@@ -1,3 +1,5 @@
+import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { readableWritingConditions } from '~/domain/feature-flags/feature-flags';
 import { teacherNotesEnabled as hasTeacherNotes, normalizeTeacherNote, TEACHER_NOTES_EVIDENCE_RULE } from '~/domain/grading/teacher-notes';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import type { Prisma } from '@app/prisma';
@@ -9,6 +11,7 @@ import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import { parseStoredExitTicketConfig } from '~/domain/assignment-types/exit-ticket';
 import { buildExitTicketGradingContext } from '~/domain/assignment-types/exit-ticket-rubric';
+import { computeIpHash } from '~/utils/ai-usage-log.server';
 import {
   computeWeightedBandPercentage,
   formatGrade,
@@ -82,6 +85,8 @@ import {
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
+import { enforceGradingLimits, rateLimitedJson } from '~/utils/rate-limit.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
 import type {
   ApHistoryDbqPointKey,
   ApHistoryLeqPointKey,
@@ -534,6 +539,7 @@ function applyStrictnessToGradeFields({
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  // Per-teacher throttle (minute, 10-min, hour/day, global)
   const gradingDeadlineSignal = createGradingRequestDeadlineSignal();
   const gradingDeadlineResponse = () =>
     dataResponse(
@@ -569,6 +575,16 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: 'Only teachers can grade essays.' },
       { status: 403 }
     );
+  }
+  {
+    const decision = await enforceGradingLimits({
+      request,
+      membershipId: actor.membershipId,
+      route: '/api/domain/grade-essay-ai',
+    });
+    if (!decision.allowed) {
+      return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Please wait before grading more submissions.');
+    }
   }
 
   const teacherClassWhere = buildTeacherClassWhere(actor);
@@ -851,18 +867,50 @@ export async function action({ request }: ActionFunctionArgs) {
   );
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
+  // llmRetry=fallback is the client half of the provider-failover handshake
+  // (the server answers 202 {retrying:true}, the client re-posts with it). It
+  // only selects the fallback model, and every request is rate limited above, so
+  // it stays honoured; ignoring it makes failover unreachable during an outage.
   const forceFallback = data.llmRetry === 'fallback';
   const llmRetryOptions = {
     forceFallback,
     signalFallbackRetry: !forceFallback,
   };
   const retryResponse = () => dataResponse({ retrying: true }, { status: 202 });
+  // Cap total LLM calls per submission processing
+  let llmCallCount = 0;
   const getGradingLlmCompletion = (
-    params: Parameters<typeof getLLMCompletion>[0]
+    params: Omit<Parameters<typeof getLLMCompletion>[0], 'attribution'>
   ) =>
-    runWithGradingRequestDeadline(gradingDeadlineSignal, (signal) =>
-      getLLMCompletion({ ...params, ...llmRetryOptions, signal })
-    );
+    runWithGradingRequestDeadline(gradingDeadlineSignal, async (signal) => {
+      llmCallCount += 1;
+      if (llmCallCount > RATE_LIMITS.grading.maxLlmCallsPerSubmission) {
+        // 429 with Retry-After 60s default
+        throw new Response(
+          JSON.stringify({
+            error: {
+              code: 'RATE_LIMITED',
+              scope: 'user',
+              retryAfterSeconds: 60,
+              message: 'This grading request used too many model calls. Please try again.',
+            },
+          }),
+          { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '60' } }
+        );
+      }
+      return getLLMCompletion({
+        ...params,
+        ...llmRetryOptions,
+        signal,
+        attribution: {
+          organizationId,
+          membershipId: actor.membershipId,
+          route: 'routes/api.domain.grade-essay-ai',
+          requestId: crypto.randomUUID(),
+          ipHash: computeIpHash(request),
+        },
+      });
+    });
   const useE2EFixture = shouldUseE2EGradingFixture();
   const documentContext = buildAiTextContextAudit({
     documentSource: 'submission-snapshot',
@@ -1082,6 +1130,18 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
+  // Paragraph type and writing time are behind a global flag that starts
+  // off. Off, both read as unset for the grading assistant and the grammar
+  // checker (the prompts that ran before either existed), while the values
+  // stored on the assignment are left alone.
+  const writingConditions = readableWritingConditions(
+    {
+      writingTimeMinutes:
+        submission.document.assignment?.writingTimeMinutes ?? null,
+      paragraphMode: submission.document.assignment?.paragraphMode ?? null,
+    },
+    await isDailyPagesWritingConditionsEnabled()
+  );
   const compiledInvocation = compileGradingAssistantInvocation({
     gradingConfig: resolvedGradingConfig,
     studentFirstName,
@@ -1089,9 +1149,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     documentText: submission.text,
     assignmentPrompt,
     gradingContext,
-    writingTimeMinutes: submission.document.assignment?.writingTimeMinutes,
+    writingTimeMinutes: writingConditions.writingTimeMinutes,
     coldWrite: submission.document.assignment?.tutorEnabled === false,
-    paragraphMode: submission.document.assignment?.paragraphMode,
+    paragraphMode: writingConditions.paragraphMode,
   });
   const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
@@ -1133,6 +1193,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       if (isGradingRequestDeadlineError(error)) {
         return gradingDeadlineResponse();
       }
+      if (error instanceof Response && error.status === 429) return error;
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
       throw error;
     }
@@ -1356,8 +1417,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     );
   } else {
     try {
-      const writingTimeMinutes =
-        submission.document.assignment?.writingTimeMinutes ?? null;
+      const writingTimeMinutes = writingConditions.writingTimeMinutes ?? null;
       const grammarSystem = buildGrammarCheckerSystemPrompt(writingTimeMinutes);
 
       const grammarUserPrompt = buildGrammarCheckerUserPrompt(
@@ -1415,6 +1475,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       if (isGradingRequestDeadlineError(error)) {
         return gradingDeadlineResponse();
       }
+      if (error instanceof Response && error.status === 429) return error;
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
       grammarIssues = null;
     }

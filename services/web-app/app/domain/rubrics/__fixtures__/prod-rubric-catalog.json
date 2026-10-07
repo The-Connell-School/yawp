@@ -1,0 +1,2120 @@
+{
+ "libraryRubrics": [
+  {
+   "name": "class-starter-engagement",
+   "schemaJson": {
+    "calibrationNotes": "Soft, effort-based. Checks that the student wrote and reflected; honest effort earns full credit.",
+    "name": "class-starter-engagement",
+    "outputSchema": {
+     "responseShape": "categories_overall_comment",
+     "schemaVersion": 1
+    },
+    "promptConfig": {
+     "gradingInstructions": "You are reading a Class Starter entry: a short, open-ended piece of writing done to begin class. It is low-stakes, exploratory, and effort-based.\n\nJudge one thing: engagement. Engagement is whether the student actually wrote and actually reflected. Read for whether they took the prompt somewhere of their own, stayed with a thought long enough to develop it, and gave the entry real effort \u2014 not for whether the writing is polished, and not for whether the thinking is sophisticated.\n\nWeigh substance over length. A short entry that follows one idea honestly is more engaged than a long one that circles the prompt without committing to anything.\n\nDo not grade grammar, spelling, punctuation, or formatting, and do not comment on them. Rough edges are expected here and never lower the score.\n\nThis is not a formally graded writing assignment. Do not ask the entry to be organized, to support its claims, or to build past a first response, and do not mark it up. Honest effort earns full credit.\n\nScore engagement using these words exactly:\n- 3, All in: took the prompt somewhere of their own and stayed with it; the thinking develops.\n- 2, Showed up: engaged with the prompt and did the work, without pushing past the obvious.\n- 1, Hardly there: touched the prompt but did not invest; the entry stops before it starts.\n- 0, Absent: nothing to read, or nothing that responds to the prompt.\n\nWrite the overall feedback to the student about their engagement: what they reached for, and the one thing that would take the next entry further. Keep it warm and brief."
+    },
+    "rubric": {
+     "categories": [
+      {
+       "description": "How fully the student showed up to the writing: whether they took the prompt somewhere, stayed with their own thinking, and gave the entry real effort rather than filling the space.",
+       "feedbackEnabled": false,
+       "grammarHighlighting": false,
+       "key": "engagement",
+       "label": "Engagement",
+       "scoreLabels": [
+        {
+         "label": "Absent",
+         "value": 0
+        },
+        {
+         "label": "Hardly there",
+         "value": 1
+        },
+        {
+         "label": "Showed up",
+         "value": 2
+        },
+        {
+         "label": "All in",
+         "value": 3
+        }
+       ],
+       "weight": 1
+      }
+     ]
+    },
+    "scoringScale": {
+     "maxScore": 3,
+     "minScore": 0,
+     "type": "points_scale"
+    },
+    "title": "Class Starter engagement"
+   },
+   "title": "Class Starter engagement"
+  },
+  {
+   "name": "cristo-rey-hornbuckle-five-paragraph-essay",
+   "schemaJson": {
+    "calibrationNotes": "Cristo Rey English 9 and English 12 universal five-paragraph essay rubric supplied by David Hornbuckle through Brian Connell. Six weighted categories; whole-number 1\u20134 category scores; Reasoning for argument/synthesis essays and Analysis for literary essays; Advanced Evidence requires two relevant pieces per body paragraph.",
+    "name": "cristo-rey-hornbuckle-five-paragraph-essay",
+    "outputSchema": {
+     "responseShape": "categories_overall_comment",
+     "schemaVersion": 1
+    },
+    "promptConfig": {
+     "gradingInstructions": "# Cristo Rey \u2014 Hornbuckle Five-Paragraph Essay: Grading Assistant Instructions\n\nROLE: Back-end instructions for grading David Hornbuckle's five-paragraph essays at Holy Family Cristo Rey. Students never see these instructions. The rubric categories, weights, and band descriptors govern scoring; where these instructions conflict with the rubric, the rubric wins.\n\n## Core behavior\nEvaluate the essay against all six rubric categories. For each category, assign the earned band (Advanced, Proficient, Developing, or Beginning), assign its whole-number score from 1\u20134, and write feedback that names what earned it. The runtime computes the weighted final grade from the six category scores. Suggestions and marked corrections on specific errors are produced by a separate specific-corrections pass. The instructor can adjust any score, comment, or section. Nothing is final until Mr. Hornbuckle reviews it. Write as an assessment, never as a verdict.\n\n## Tone of evaluation\nModel your evaluative tone on the judges of the Great British Baking Show, but never mention this reference to students. Hold high, explicit standards and never inflate. Say shortfalls plainly and specifically; kindness lives in delivery, not score inflation. Critique the work, never the writer. Be genuinely delighted when work is good. Reserve superlatives for truly exemplary work. Maintain warmth, especially when naming what went wrong. Convert every critique into the specific next move that fixes it.\n\nSome Holy Family Cristo Rey students are new to this kind of academic writing. This does not change the standard; it changes the delivery. Score the submitted draft honestly against the descriptors. Lead the holistic comment with something genuinely difficult the student did well, named specifically. Frame gaps as not-yet. Give one singular, highest-leverage next step; do not repeat a six-category deficit audit in the holistic comment.\n\n## Determine essay type\nRead the assignment prompt first. If it does not name the type, infer it from the essay:\n- LITERARY ANALYSIS: interpretive claim about a story, novel, play, or poem; quotations from the text; body paragraphs organized around literary elements; no outside sources. Score category 3 as Analysis.\n- ONE-TEXT ARGUMENT: position on one author's argument; evidence from that article; body paragraphs organized around reasons. Score category 3 as Reasoning.\n- TWO-TEXT SYNTHESIS: two named authors; introduction establishes their relationship or tension. Score category 3 as Reasoning. Under Organization, check that the introduction names that relationship rather than summarizing the authors side by side.\nIf you genuinely cannot tell, grade it as an argument essay and include a brief, student-readable \"Instructor note: essay type inferred as argument\" clause in the second sentence of overallComment. Never ask the student. Use Reasoning vocabulary for argument essays and Analysis vocabulary for literary essays in all student feedback.\n\n## Scoring\nBands: Advanced 4; Proficient 3; Developing 2; Beginning 1. Evaluate categories independently. Use whole numbers only and never assign a category score outside 1\u20134. Apply weights exactly: Thesis & Purpose 20%; Evidence 20%; Reasoning / Analysis 25%; Organization 15%; Style & Conventions 10%; Assignment Requirements 10%. The runtime computes the weighted overall result from the six 1\u20134 category scores; do not invent or return a separate weighted grade.\n\n## Terminology and judgment\nUse these terms consistently: Thesis is the essay's central argument or position answering the prompt. Claim is the main idea of one body paragraph that advances the thesis. Evidence is facts, quotations, paraphrases, statistics, examples, or other support justifying a claim. Reasoning / Analysis is the writer's explanation of how evidence supports a paragraph's claim and how that claim strengthens the thesis.\n\nPrioritize reasoning over correctness alone. Quotations without explanation do not earn a high Reasoning or Analysis score. Evaluate reasoning quality, not agreement with the student's position. Minor grammar or formatting errors must not substantially reduce unrelated category scores.\n\n## Assignment-specific checks\nAdvanced Evidence requires at least two pieces of evidence in every body paragraph. Each piece must be relevant to the thesis and support the claim in that paragraph's topic sentence. A body paragraph resting on one quotation cannot earn Advanced Evidence. A second piece that merely restates the first does not add sufficient support. Name this gap plainly when present.\n\nThe fourth-paragraph requirement and the counterargument requirement are separate. A fourth paragraph is required for one-text and two-text arguments, but require a counterargument only when the assignment explicitly asks for one. For literary analysis, require neither a fourth paragraph nor a counterargument or alternative interpretation unless the assignment explicitly says so. When literary instructions are silent, do not deduct anywhere for its absence\u2014not under Analysis, Organization, or Assignment Requirements. If a student includes an unrequired counterargument, treat it as a strength that can only help. A literary essay may instead use that paragraph for a third reason or additional development; score it on its merits. The tutor may still teach counterargument as a standard writing move; that does not make it a scored requirement.\n\nWhen a counterargument is required or voluntarily included, watch for straw men. If the objection is a version nobody would reasonably hold, say that the objection is too weak to be worth answering. In literary analysis, distinguish summary from interpretation at every band.\n\n## Output mapping\nUse the fixed grading response schema exactly. For each categories[] entry, put the whole-number score in score and format categories[].comment as \"{Band} \u2014 {what earned it}. Next: {one useful improvement}.\" Put the holistic response in overallComment as exactly three sentences: the essay's strongest feature first, concise holistic context second, and \"Next step: {one singular highest-leverage revision}\" third. When essay type is genuinely uncertain or another material grading-context observation is essential, include a brief, student-readable \"Instructor note: ...\" clause in the second sentence. Specific errors and corrections are handled by the separate specific-corrections pass; do not invent another JSON field.\n\n## Boundaries\nNever rewrite the student's essay. Name what is weak and point the way; do not supply finished prose the student could paste in. Never accuse a student of dishonesty. Never invent a requirement absent from the assignment or rubric. Never present a score as final.\n\nIf a passage sounds unlike the rest of the essay, do not guess why. Abrupt shifts can come from imitation, unmarked quotation, over-editing, writing on another day, or genuine improvement. Treat improvement as the most likely explanation. You may name voice inconsistency as a craft issue and suggest reading the essay aloud, but discuss voice only, never origin. Never write or imply that text sounds AI-generated, that it does not sound like the student's writing, that the student must explain who wrote it, or any accusation about authorship.",
+     "instructionsPreset": ""
+    },
+    "rubric": {
+     "categories": [
+      {
+       "bands": [
+        {
+         "description": "Thesis is missing, unclear, or does not respond to the prompt. Essay lacks a consistent argumentative or analytical purpose.",
+         "label": "Beginning",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "Thesis is present but may be vague, overly broad, or only partially address the prompt. Focus on the thesis becomes inconsistent or shifts during the essay.",
+         "label": "Developing",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "Presents a clear thesis that responds to the prompt. Maintains focus on the thesis with only minor lapses. Demonstrates a solid understanding of the issue or text.",
+         "label": "Proficient",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Presents a clear, specific, and arguable thesis that directly addresses the prompt. Maintains a consistent focus on the thesis throughout the essay. Argument: demonstrates a nuanced understanding of the issue and establishes a clear line of reasoning from beginning to end. Literary analysis: maintains a consistent analytical focus and demonstrates a sophisticated understanding of the work and its central ideas.",
+         "label": "Advanced",
+         "max": 4,
+         "min": 4
+        }
+       ],
+       "description": "The essay's central argument or position, whether it answers the prompt, and whether the essay sustains that purpose.",
+       "grammarHighlighting": false,
+       "key": "thesis_and_purpose",
+       "label": "Thesis & Purpose",
+       "weight": 0.2
+      },
+      {
+       "bands": [
+        {
+         "description": "Provides little or no relevant evidence. Evidence is inaccurate, unrelated, or unsupported. Sources may be missing when required.",
+         "label": "Beginning",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "Uses some evidence, but it may be limited, weak, or only loosely connected to the argument. Body paragraphs generally rest on a single piece of evidence. Quotations may be poorly integrated or insufficient.",
+         "label": "Developing",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "Uses relevant and generally credible evidence. Most quotations and evidence are integrated appropriately. Provides sufficient support for most major claims. Most body paragraphs include two pieces of evidence, or a second is present but does not add much to the first.",
+         "label": "Proficient",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Selects relevant, accurate, and convincing evidence. Integrates quotations, paraphrases, statistics, or examples smoothly into the writing. Includes at least two pieces of evidence in every body paragraph. Each piece is relevant to the thesis and supports the claim in that paragraph's topic sentence. Cites evidence according to assignment expectations.",
+         "label": "Advanced",
+         "max": 4,
+         "min": 4
+        }
+       ],
+       "description": "The relevance, accuracy, credibility, integration, and sufficiency of the evidence used to support each body-paragraph claim and the thesis.",
+       "grammarHighlighting": false,
+       "key": "evidence",
+       "label": "Evidence",
+       "weight": 0.2
+      },
+      {
+       "bands": [
+        {
+         "description": "Argument: body paragraphs lack clear claims or fail to support the thesis; assertions are not explained or supported; writing relies primarily on opinion rather than evidence. Literary analysis: writing primarily summarizes the text or makes unsupported assertions; little or no explanation connects evidence to the thesis; interpretation is minimal or inaccurate.",
+         "label": "Beginning",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "Argument: some paragraphs lack clear claims, or include claims that do not clearly support the thesis; explanation of evidence is limited or repetitive; writing relies on unsupported opinions or generalizations. Literary analysis: analysis is limited or inconsistent; writing relies heavily on summary; connections between evidence and the thesis are only partially explained.",
+         "label": "Developing",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "Argument: most body paragraphs begin with clear claims that support the thesis; the essay explains how evidence supports each claim and connects most claims to the thesis; a required counterargument is addressed, although it may be brief or underdeveloped. Literary analysis: explains how evidence supports the thesis, goes beyond summary although some ideas may be underdeveloped, and demonstrates an accurate understanding of the text.",
+         "label": "Proficient",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Argument: each body paragraph begins with a clear claim that supports the thesis; the essay clearly explains how each piece of evidence supports the paragraph's claim and how each claim advances the thesis; reasoning is logical and avoids fallacies or unsupported assertions; when the assignment requires a counterargument, it fairly addresses at least one significant counterclaim before explaining why the thesis remains more convincing. Literary analysis: clearly explains how each piece of evidence supports the thesis; examines literary elements such as characterization, symbolism, imagery, diction, tone, irony, or structure to develop insight; moves beyond summary to thoughtful interpretation; demonstrates original thinking and meaningful connections.",
+         "label": "Advanced",
+         "max": 4,
+         "min": 4
+        }
+       ],
+       "description": "Argument essays use Reasoning: how evidence supports each paragraph's claim and how each claim advances the thesis. Literary essays use Analysis: how evidence and literary elements support an interpretation beyond summary.",
+       "grammarHighlighting": false,
+       "key": "reasoning_or_analysis",
+       "label": "Reasoning / Analysis",
+       "weight": 0.25
+      },
+      {
+       "bands": [
+        {
+         "description": "Essay lacks a clear organizational structure. Paragraphs lack focus or are difficult to follow. Ideas appear disconnected.",
+         "label": "Beginning",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "Organization is uneven. Some paragraphs lack a clear claim or focus. Transitions are limited or ineffective.",
+         "label": "Developing",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "Essay follows a logical organizational structure. Paragraphs are generally focused around clear claims. Transitions help readers follow the argument.",
+         "label": "Proficient",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Includes an engaging introduction, logically ordered body paragraphs, and an effective conclusion. Each paragraph develops one focused claim or idea that contributes to the whole. Transitions create strong connections among ideas and paragraphs. The progression of ideas builds the argument effectively. For two-text synthesis, the introduction establishes the relationship or tension between the two authors rather than summarizing them side by side.",
+         "label": "Advanced",
+         "max": 4,
+         "min": 4
+        }
+       ],
+       "description": "The essay's introduction, body-paragraph order and focus, transitions, conclusion, and progression of ideas.",
+       "grammarHighlighting": false,
+       "key": "organization",
+       "label": "Organization",
+       "weight": 0.15
+      },
+      {
+       "bands": [
+        {
+         "description": "Frequent grammar, spelling, punctuation, or usage errors interfere with understanding. Tone or language is inappropriate for academic writing.",
+         "label": "Beginning",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "Language is sometimes informal, repetitive, or imprecise. Grammar and mechanics errors occasionally distract, but meaning generally remains clear.",
+         "label": "Developing",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "Uses appropriate academic language. Sentence variety is generally effective. Minor grammar or mechanics errors do not interfere with understanding.",
+         "label": "Proficient",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Uses precise academic language appropriate to the assignment. Sentence structure is varied and effective. Grammar, spelling, and punctuation errors are minimal and do not interfere with meaning. Argument: maintains an objective, respectful, and persuasive tone. Literary analysis: maintains an appropriate academic tone.",
+         "label": "Advanced",
+         "max": 4,
+         "min": 4
+        }
+       ],
+       "description": "Academic language, sentence effectiveness and variety, tone, grammar, spelling, punctuation, and usage.",
+       "grammarHighlighting": true,
+       "key": "style_and_conventions",
+       "label": "Style & Conventions",
+       "weight": 0.1
+      },
+      {
+       "bands": [
+        {
+         "description": "Does not complete major components of the assignment. Fails to meet required formatting, length, citation, or prompt expectations.",
+         "label": "Beginning",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "Meets some assignment expectations but omits important required elements.",
+         "label": "Developing",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "Meets all major assignment expectations. Minor formatting or citation errors may be present.",
+         "label": "Proficient",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Fully addresses every part of the prompt and follows all assignment directions. Meets length requirements. Includes required formatting and citations. Uses assigned sources appropriately, when applicable.",
+         "label": "Advanced",
+         "max": 4,
+         "min": 4
+        }
+       ],
+       "description": "Whether the essay addresses every part of the prompt and follows the assignment's length, formatting, citation, and source-use directions.",
+       "grammarHighlighting": false,
+       "key": "assignment_requirements",
+       "label": "Assignment Requirements",
+       "weight": 0.1
+      }
+     ]
+    },
+    "scoringScale": {
+     "compositeMax": 100,
+     "compositeMin": 0,
+     "maxScore": 4,
+     "minScore": 1,
+     "step": 1,
+     "type": "weighted_percent"
+    },
+    "title": "Cristo Rey: Hornbuckle Five-Paragraph Essay"
+   },
+   "title": "Cristo Rey: Hornbuckle Five-Paragraph Essay"
+  },
+  {
+   "name": "daily-pages-engagement",
+   "schemaJson": {
+    "calibrationNotes": null,
+    "name": "daily-pages-engagement",
+    "outputSchema": {
+     "assignmentPointScaling": "daily_pages_engagement_v1",
+     "responseShape": "categories_overall_comment",
+     "schemaVersion": 1,
+     "teacherNotesEnabled": true
+    },
+    "promptConfig": {
+     "gradingInstructions": "What this measures: engagement \u2014 the student\u2019s willingness to show up, put real thoughts on the page, and build a relationship with writing. What this never measures: grammar, spelling, syntax, organization, polish, or the correctness of the content. Daily Pages is low-stakes practice; messiness is welcome and expected.\n\nFour tiers, each with an anchor and a narrow band. Choose the tier first \u2014 the tier is the judgment \u2014 then place the score inside its band. On a 30-point assignment: ALL IN 28\u201330 (anchor 30) \u00b7 SHOWED UP 17\u201323 (anchor 20) \u00b7 HARDLY THERE 7\u201313 (anchor 10) \u00b7 NOT HANDED IN 0. For other point totals, scale proportionally: anchors at 100% / ~67% / ~33% / 0, with a band of roughly \u00b110% of the total.\n\n\u26a0\ufe0f Never let a score drift into the neighboring tier\u2019s range. The band adds resolution within a judgment; it does not blur the judgment.\n\nThe Tiers\n\n\u2b50 ALL IN \u2014 28\u201330 points (anchor 30)\n\nThe student genuinely engaged with the day\u2019s prompt. Real thoughts, specific details, a mind visibly at work on the page \u2014 they took the prompt somewhere. Depth beats length: a brief entry full of real thinking earns full credit, and a long one earns it too. Rough writing, typos, and rambling are completely irrelevant.\n\nWithin the band: 30 is the default \u2014 when a student is all in, say so. Drop to 28\u201329 only when the engagement is real but noticeably thinner than the student\u2019s own usual work.\n\n\u2714 SHOWED UP \u2014 17\u201323 points (anchor 20)\n\nThe student completed it, but at the surface: generic statements, minimal development, the motions without the mind. Also lands here: genuine writing that ignores the prompt \u2014 real engagement with the page, but not with the topic. (Feedback credits the writing warmly, then redirects: \u201cNext time, aim this energy at the prompt.\u201d)\n\nWithin the band: 22\u201323 when something genuine flickers through \u2014 one real specific, one honest sentence, a thought that starts to go somewhere before it stops. 20 for a clean, ordinary completion. 17\u201318 when it is motion only, or when the writing is real but lands nowhere near the prompt.\n\n\u25ab HARDLY THERE \u2014 7\u201313 points (anchor 10)\n\nToken effort: a line or two, a restated prompt, \u201cI don\u2019t know,\u201d or off-task filler. Something was submitted, but no real attempt was made.\n\nWithin the band: 12\u201313 when there is a fragment of a real attempt buried in it \u2014 a student who started and gave up is further along than one who never started. 10 for ordinary token effort. 7\u20138 for a restated prompt or pure filler.\n\n\u2014 NOT HANDED IN \u2014 0 points\n\nNothing submitted, or a blank/empty entry.\n\nGrading Assistant Instructions\n\nAnchor your read in the day\u2019s prompt. When the assignment\u2019s prompt is available to you, judge engagement with that prompt: did the student actually take it up, wrestle with it, respond to what it asked? The prompt is your reference point for the ALL IN vs. SHOWED UP line and for spotting off-prompt writing. If no prompt text is available, judge engagement with the act of writing itself.\n\nChoose the tier first, then the number. The tier is the real judgment; the band exists only so that a strong \u201cshowed up\u201d and a barely-there one don\u2019t receive an identical score. Use the Within the band guidance under each tier. Whole numbers only, and never outside the band \u2014 a score is either in this tier or it belongs in the next one.\n\nNever mention grammar, spelling, syntax, or organization \u2014 not in the score, not in the feedback. Not even as a gentle aside.\n\nNever evaluate whether the content is correct. You measure engagement only. If a teacher is looking for something specific in the responses, that is the teacher\u2019s read to make, not yours.\n\nFeedback is 1\u20133 warm sentences, in the producer\u2019s voice: name one real thing the student said and respond to it like a human who actually read it (\u201cThe detail about your grandmother\u2019s kitchen \u2014 that\u2019s the good stuff\u201d). At most one nudge. No audits, no checklists, no category breakdowns.\n\nIf an entry appears pasted or wildly unlike the student\u2019s own register, don\u2019t penalize on suspicion \u2014 score what\u2019s on the page and add a brief note for the teacher.\n\nThe teacher can adjust any tier, score, or comment. Nothing is final until the teacher reviews it."
+    },
+    "rubric": {
+     "categories": [
+      {
+       "bands": [
+        {
+         "description": "Nothing submitted, or a blank/empty entry.",
+         "label": "NOT HANDED IN",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "Token effort: a line or two, a restated prompt, \u201cI don\u2019t know,\u201d or off-task filler. Something was submitted, but no real attempt was made.\n\nWithin the band: 12\u201313 when there is a fragment of a real attempt buried in it \u2014 a student who started and gave up is further along than one who never started. 10 for ordinary token effort. 7\u20138 for a restated prompt or pure filler.",
+         "label": "HARDLY THERE",
+         "max": 13,
+         "min": 7
+        },
+        {
+         "description": "The student completed it, but at the surface: generic statements, minimal development, the motions without the mind. Also lands here: genuine writing that ignores the prompt \u2014 real engagement with the page, but not with the topic. (Feedback credits the writing warmly, then redirects: \u201cNext time, aim this energy at the prompt.\u201d)\n\nWithin the band: 22\u201323 when something genuine flickers through \u2014 one real specific, one honest sentence, a thought that starts to go somewhere before it stops. 20 for a clean, ordinary completion. 17\u201318 when it is motion only, or when the writing is real but lands nowhere near the prompt.",
+         "label": "SHOWED UP",
+         "max": 23,
+         "min": 17
+        },
+        {
+         "description": "The student genuinely engaged with the day\u2019s prompt. Real thoughts, specific details, a mind visibly at work on the page \u2014 they took the prompt somewhere. Depth beats length: a brief entry full of real thinking earns full credit, and a long one earns it too. Rough writing, typos, and rambling are completely irrelevant.\n\nWithin the band: 30 is the default \u2014 when a student is all in, say so. Drop to 28\u201329 only when the engagement is real but noticeably thinner than the student\u2019s own usual work.",
+         "label": "ALL IN",
+         "max": 30,
+         "min": 28
+        }
+       ],
+       "description": "Measures the student's genuine engagement with the day's prompt \u2014 real thoughts, specific details, a mind visibly at work. Does not measure grammar, spelling, syntax, organization, or correctness of content. Judge whether the student took up the prompt, wrestled with it, and responded to what it asked. If no prompt is available, judge engagement with the act of writing itself.",
+       "feedbackEnabled": false,
+       "grammarHighlighting": false,
+       "key": "engagement_with_prompt",
+       "label": "Engagement with Prompt",
+       "scoreLabels": [
+        {
+         "label": "NOT HANDED IN",
+         "value": 0
+        },
+        {
+         "label": "HARDLY THERE",
+         "value": 10
+        },
+        {
+         "label": "SHOWED UP",
+         "value": 20
+        },
+        {
+         "label": "ALL IN",
+         "value": 30
+        }
+       ],
+       "weight": 1
+      }
+     ]
+    },
+    "scoringScale": {
+     "compositeMax": 30,
+     "compositeMin": 0,
+     "maxScore": 30,
+     "minScore": 0,
+     "step": 1,
+     "type": "rubric_points"
+    },
+    "title": "Daily Pages engagement"
+   },
+   "title": "Daily Pages engagement"
+  },
+  {
+   "name": "daily-pages-reflection",
+   "schemaJson": {
+    "calibrationNotes": "A step up from Class Starter: the entry must be anchored in the assigned text or topic and get past a first reaction. Effort alone earns the middle of the scale.",
+    "name": "daily-pages-reflection",
+    "outputSchema": {
+     "responseShape": "categories_overall_comment",
+     "schemaVersion": 1
+    },
+    "promptConfig": {
+     "gradingInstructions": "You are reading a Daily Pages entry: a written reflection on an assigned text or topic. The prompt names what the student was asked to reflect on. Read the entry as a response to that.\n\nThis is a step up from a Class Starter. Effort alone earns the middle of the scale. The top of the scale is for a student who got past a first reaction and worked with something specific from the text or topic.\n\nJudge three things separately: Engagement with the Text or Topic, Depth of Reflection, and Clarity of Expression.\n\nDo not mark grammar, spelling, punctuation, or formatting, and do not comment on them. This is thinking prose, not a polished draft. Rough edges never lower any score.\n\nWeigh substance over length. A short entry that stays with one specific and takes it somewhere beats a long one that never lands on anything.\n\nUse the bands written on each category to choose a score, then write feedback for that category: name what the student did, and the one move that would take it up one band. Speak to the student."
+    },
+    "rubric": {
+     "categories": [
+      {
+       "bands": [
+        {
+         "description": "Nothing to read, or an entry with no relationship to the assigned text or topic.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "Names the text or topic but works from a vague impression of it; no specifics a reader could point to.",
+         "label": "Off the mark",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "Refers to the text or topic accurately and uses at least one specific, though the specifics sit next to the thinking rather than feeding it.",
+         "label": "Showed up",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "Works from real specifics and uses them: the details chosen are the ones the point needs.",
+         "label": "Thought it through",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Reads closely enough to notice a tension, omission, or word doing unexpected work.",
+         "label": "Went further",
+         "max": 4,
+         "min": 4
+        }
+       ],
+       "description": "Whether the reflection is actually about what it was assigned about: it holds onto specifics from the text or topic rather than writing around it in generalities.",
+       "feedbackEnabled": true,
+       "grammarHighlighting": false,
+       "key": "engagement_with_source",
+       "label": "Engagement with the Text or Topic",
+       "scoreLabels": [
+        {
+         "label": "Absent",
+         "value": 0
+        },
+        {
+         "label": "Off the mark",
+         "value": 1
+        },
+        {
+         "label": "Showed up",
+         "value": 2
+        },
+        {
+         "label": "Thought it through",
+         "value": 3
+        },
+        {
+         "label": "Went further",
+         "value": 4
+        }
+       ],
+       "weight": 0.35
+      },
+      {
+       "bands": [
+        {
+         "description": "Nothing to read, or no reflection of any kind.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "A reaction and no more: liked it, did not like it, agree, disagree, restated.",
+         "label": "Off the mark",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "A genuine response with a reason behind it, held at the level it started on.",
+         "label": "Showed up",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "Pushes past the first reaction \u2014 asks a real question, tests the idea, or follows a consequence.",
+         "label": "Thought it through",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Arrives somewhere the entry did not begin: an earned complication, connection, or position the student can see the cost of.",
+         "label": "Went further",
+         "max": 4,
+         "min": 4
+        }
+       ],
+       "description": "Whether the thinking goes past a first reaction: the student questions, complicates, connects, or changes their mind, and stays with the idea long enough for it to move.",
+       "feedbackEnabled": true,
+       "grammarHighlighting": false,
+       "key": "depth_of_reflection",
+       "label": "Depth of Reflection",
+       "scoreLabels": [
+        {
+         "label": "Absent",
+         "value": 0
+        },
+        {
+         "label": "Off the mark",
+         "value": 1
+        },
+        {
+         "label": "Showed up",
+         "value": 2
+        },
+        {
+         "label": "Thought it through",
+         "value": 3
+        },
+        {
+         "label": "Went further",
+         "value": 4
+        }
+       ],
+       "weight": 0.4
+      },
+      {
+       "bands": [
+        {
+         "description": "Nothing to read.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "A reader cannot follow it; the pieces do not connect.",
+         "label": "Off the mark",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "Followable, though the reader does some of the assembling.",
+         "label": "Showed up",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "Clear throughout: the thinking arrives in an order that makes sense.",
+         "label": "Thought it through",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Shaped with care \u2014 the order of the thinking is itself part of the point.",
+         "label": "Went further",
+         "max": 4,
+         "min": 4
+        }
+       ],
+       "description": "Whether the entry is shaped so a reader can follow the thinking: one idea leads to the next. Judges coherence, never correctness.",
+       "feedbackEnabled": true,
+       "grammarHighlighting": false,
+       "key": "clarity_of_expression",
+       "label": "Clarity of Expression",
+       "scoreLabels": [
+        {
+         "label": "Absent",
+         "value": 0
+        },
+        {
+         "label": "Off the mark",
+         "value": 1
+        },
+        {
+         "label": "Showed up",
+         "value": 2
+        },
+        {
+         "label": "Thought it through",
+         "value": 3
+        },
+        {
+         "label": "Went further",
+         "value": 4
+        }
+       ],
+       "weight": 0.25
+      }
+     ]
+    },
+    "scoringScale": {
+     "compositeMax": 4,
+     "compositeMin": 0,
+     "maxScore": 4,
+     "minScore": 0,
+     "step": 1,
+     "type": "points_scale"
+    },
+    "title": "Daily Pages reflection"
+   },
+   "title": "Daily Pages reflection"
+  },
+  {
+   "name": "daily-pages-short-form",
+   "schemaJson": {
+    "calibrationNotes": "A short piece graded like an essay: idea, support, structure, voice and grammar, on the essay 1-5 scale. Grammar and syntax are marked, unlike Class Starter. Effort alone earns the middle of the scale, and length is never rewarded or penalized on its own.",
+    "name": "daily-pages-short-form",
+    "outputSchema": {
+     "responseShape": "categories_overall_comment",
+     "schemaVersion": 1
+    },
+    "promptConfig": {
+     "gradingInstructions": "You are grading a Daily Pages entry: short academic paragraph practice, graded formally. It is usually one paragraph, sometimes up to a page, written in a short, set time. Grade it the way you would grade a body paragraph of an essay \u2014 not a whole essay, and not a journal entry.\n\nThe paragraph can be of more than one kind: an analysis, an argued position, a comparison, a definition, an interpretation, an evaluation, or a synthesis. Judge it against the kind of paragraph the prompt asks for. It does not have to open with a claim, and there is no single required form \u2014 but a reader should be able to find the point and see it held up.\n\nIt is not an exploration: writing to find out what you think, with the point arriving at the end or not at all, is what a Class Starter is for, and it is not what this assignment asks for.\n\nThis is not a Class Starter and it is not graded like one. On a Class Starter, honest effort earns full credit and the writing is never marked up. Here, effort alone earns the middle of the scale. Do not give credit for showing up to the page \u2014 the question is not whether the student wrote something, it is how good the point is, how well it is held up, and how well it is written.\n\nJudge five things, and score each one separately. The first two matter most.\n\n1. Depth of Thought \u2014 is the point worth making, and does the thinking behind it hold? Depending on the kind of paragraph, the point may be a claim, a reading of a passage, a distinction, or a judgment. Restating the prompt is not a point; neither is something nobody would dispute. A first reaction is not a point either. Look for a point that is precise and survives the objection a reader raises first.\n\n2. Development of Thought \u2014 is the point actually held up? Look for a reason, a specific, a quotation, or a case, explained well enough to do its work. One developed specific is enough at this length; a list of unexplained assertions is not. If the prompt names a text or an excerpt, the support should come from it.\n\n3. Organization/Structure \u2014 is the paragraph shaped the way its kind of paragraph should be? A reader should find the point without hunting for it, the support should come in an order that makes sense, and the close should land. Do not require any one form. Mark down throat-clearing: restating the prompt, announcing what the paragraph will do, or narrating the student's own process.\n\n4. Voice/Style \u2014 are the sentences crisp and direct, in a tone that suits the assignment?\n\n5. Grammar/Syntax/Mechanics \u2014 grade sentence construction, punctuation, usage, spelling, and formatting, and mark the errors. Grammar and syntax count in this assignment. Point to specific errors rather than describing them in general terms.\n\nScore grammar on the AP standard for timed writing. Some grammar and spelling errors are understandable in a piece written in a short, set time; they lower the score only when they are frequent enough to distract from meaning. An entry with a few scattered slips and controlled sentences can still score 5. Mark every error you find either way, so the student can see it \u2014 the standard governs the score, not what gets marked.\n\nOn first person: it is allowed, and writing \"I\" is never an error. Never mark a student down for it. First person done well belongs in a top entry \u2014 the student's own experience as the evidence, or a judgment that is theirs to own.\n\nWhat the top of the scale requires instead is refinement. An entry that reads as an unedited first draft \u2014 hedges in front of the point (\"I think that\", \"I feel like\", \"in my opinion\"), narration of its own process (\"what I thought was\", \"I'm pretty sure that\"), filler \u2014 scores no higher than 3 in Voice/Style, however good its ideas are. The top two bands are for prose that has been edited.\n\nCoach the difference rather than deducting for a phrase: show the student their own sentence with the hedge cut, so they can see the point underneath it. The habit being taught is stating the point outright, not avoiding the first person.\n\nWeigh thinking above craft. A clean, well-ordered entry with nothing in it is not a good Daily Pages entry, and an entry with a real point and some rough sentences is not a bad one.\n\nDo not reward or penalize length on its own. A short piece is what was assigned: judge what is on the page, and never mark an entry down for being brief or up for being long.\n\nUse the bands written on each category to choose a score, then write feedback for that category: name what the student did, and the one change that would move it up a band. Speak to the student, and be specific enough that they could act on it in the next entry."
+    },
+    "rubric": {
+     "categories": [
+      {
+       "bands": [
+        {
+         "description": "Nothing to read, or nothing that engages the prompt.",
+         "label": "Beginning",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "A reaction rather than a point: agreement, disagreement, or the prompt restated.",
+         "label": "Developing",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "A real point with a reason behind it, both at the level anyone would reach first.",
+         "label": "Proficient",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "A precise point, with reasoning that holds against the obvious objection.",
+         "label": "Strong",
+         "max": 4,
+         "min": 4
+        },
+        {
+         "description": "A point worth making \u2014 exact, not obvious, and held up where it is most likely to fail.",
+         "label": "Exemplary",
+         "max": 5,
+         "min": 5
+        }
+       ],
+       "description": "Whether the paragraph has a point worth making \u2014 a claim, a reading, a distinction, a judgment, depending on the kind of paragraph \u2014 and whether the thinking behind it holds up. Restating the prompt is not a point, and neither is something nobody would dispute. A point that is precise and survives the objection a reader would raise first is what this reads.",
+       "feedbackEnabled": true,
+       "grammarHighlighting": false,
+       "key": "depth_of_thought",
+       "label": "Depth of Thought",
+       "scoreLabels": [
+        {
+         "label": "Beginning",
+         "value": 1
+        },
+        {
+         "label": "Developing",
+         "value": 2
+        },
+        {
+         "label": "Proficient",
+         "value": 3
+        },
+        {
+         "label": "Strong",
+         "value": 4
+        },
+        {
+         "label": "Exemplary",
+         "value": 5
+        }
+       ],
+       "weight": 0.3
+      },
+      {
+       "bands": [
+        {
+         "description": "No support; a single assertion, or the same point restated.",
+         "label": "Beginning",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "Support named but never explained, or a paragraph that circles the point without backing it.",
+         "label": "Developing",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "One specific or reason, explained well enough to do its work.",
+         "label": "Proficient",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Support chosen for the point it carries, explained so the point is genuinely held up.",
+         "label": "Strong",
+         "max": 4,
+         "min": 4
+        },
+        {
+         "description": "Every sentence earns its place: the support is exact, the explanation tight, the point established in the space given.",
+         "label": "Exemplary",
+         "max": 5,
+         "min": 5
+        }
+       ],
+       "description": "Whether the point is actually held up: a reason, a specific, a quotation, a case \u2014 and whether it is explained rather than only named. At this length one well-chosen specific, fully explained, beats three mentioned in passing \u2014 the test is whether a reader finishes the paragraph persuaded rather than merely informed of an opinion.",
+       "feedbackEnabled": true,
+       "grammarHighlighting": false,
+       "key": "development_of_thought",
+       "label": "Development of Thought",
+       "scoreLabels": [
+        {
+         "label": "Beginning",
+         "value": 1
+        },
+        {
+         "label": "Developing",
+         "value": 2
+        },
+        {
+         "label": "Proficient",
+         "value": 3
+        },
+        {
+         "label": "Strong",
+         "value": 4
+        },
+        {
+         "label": "Exemplary",
+         "value": 5
+        }
+       ],
+       "weight": 0.25
+      },
+      {
+       "bands": [
+        {
+         "description": "No order a reader can follow.",
+         "label": "Beginning",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "The point has to be inferred; sentences come in the order they were thought of.",
+         "label": "Developing",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "A findable point, its support, and a close, in an order that works.",
+         "label": "Proficient",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Built deliberately for its kind of paragraph, each sentence handing off to the next.",
+         "label": "Strong",
+         "max": 4,
+         "min": 4
+        },
+        {
+         "description": "Shaped so the order itself carries the argument; nothing could be moved without cost.",
+         "label": "Exemplary",
+         "max": 5,
+         "min": 5
+        }
+       ],
+       "description": "Whether the paragraph is shaped the way its kind of paragraph should be: a point a reader can find, support in an order that makes sense, a close that lands. There is no one required form \u2014 an analysis, an argued position and a definition are built differently \u2014 but a reader should never have to hunt for what the paragraph is doing. Warm-up sentences that restate the prompt or announce what is coming are the most common way this score is lost.",
+       "feedbackEnabled": true,
+       "grammarHighlighting": false,
+       "key": "organization_and_structure",
+       "label": "Organization/Structure",
+       "scoreLabels": [
+        {
+         "label": "Beginning",
+         "value": 1
+        },
+        {
+         "label": "Developing",
+         "value": 2
+        },
+        {
+         "label": "Proficient",
+         "value": 3
+        },
+        {
+         "label": "Strong",
+         "value": 4
+        },
+        {
+         "label": "Exemplary",
+         "value": 5
+        }
+       ],
+       "weight": 0.12
+      },
+      {
+       "bands": [
+        {
+         "description": "Flat or garbled; word choice obscures the meaning.",
+         "label": "Beginning",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "Understandable but vague or padded, with hedges standing in for the point.",
+         "label": "Developing",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "Clear and readable, but unedited: hedges, process narration, or filler are still in it.",
+         "label": "Proficient",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Edited: the point is stated outright, the hedges are gone, and the words are chosen rather than reached for.",
+         "label": "Strong",
+         "max": 4,
+         "min": 4
+        },
+        {
+         "description": "Controlled and economical throughout \u2014 prose that holds up read aloud, where any first person is there because it does work.",
+         "label": "Exemplary",
+         "max": 5,
+         "min": 5
+        }
+       ],
+       "description": "Whether the prose has been edited. First person is allowed and is never an error here \u2014 first person doing work, where the student\u2019s own experience is the evidence or the judgment is theirs to own, belongs in a top entry. What costs is unrefined writing: the hedge in front of the point (\"I think that\", \"in my opinion\"), narrating one\u2019s own process (\"what I thought was\", \"I\u2019m pretty sure that\"), and filler. An entry that reads as an unedited first draft does not reach the top two bands, however good its ideas are.",
+       "feedbackEnabled": true,
+       "grammarHighlighting": false,
+       "key": "voice_and_style",
+       "label": "Voice/Style",
+       "scoreLabels": [
+        {
+         "label": "Beginning",
+         "value": 1
+        },
+        {
+         "label": "Developing",
+         "value": 2
+        },
+        {
+         "label": "Proficient",
+         "value": 3
+        },
+        {
+         "label": "Strong",
+         "value": 4
+        },
+        {
+         "label": "Exemplary",
+         "value": 5
+        }
+       ],
+       "weight": 0.2
+      },
+      {
+       "bands": [
+        {
+         "description": "Errors throughout that block the meaning.",
+         "label": "Beginning",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "Errors frequent enough that the reader has to work past them to get the meaning.",
+         "label": "Developing",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "Errors a reader notices, sometimes enough to slow them down, but the meaning comes through.",
+         "label": "Proficient",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Occasional errors that never distract from meaning.",
+         "label": "Strong",
+         "max": 4,
+         "min": 4
+        },
+        {
+         "description": "Controlled sentences, including the harder constructions it attempts; occasional slips of the kind timed writing produces do not keep it from this band.",
+         "label": "Exemplary",
+         "max": 5,
+         "min": 5
+        }
+       ],
+       "description": "Sentence construction, punctuation, usage, spelling, and formatting, held to the AP standard for timed writing: some errors are expected in a piece written this quickly, and they cost only when they are frequent enough to distract from meaning. Graded here \u2014 unlike a Class Starter, where it never is \u2014 and marked up, so the student can see the specific errors rather than a general note about them.",
+       "feedbackEnabled": true,
+       "grammarHighlighting": true,
+       "key": "grammar_and_mechanics",
+       "label": "Grammar/Syntax/Mechanics",
+       "scoreLabels": [
+        {
+         "label": "Beginning",
+         "value": 1
+        },
+        {
+         "label": "Developing",
+         "value": 2
+        },
+        {
+         "label": "Proficient",
+         "value": 3
+        },
+        {
+         "label": "Strong",
+         "value": 4
+        },
+        {
+         "label": "Exemplary",
+         "value": 5
+        }
+       ],
+       "weight": 0.13
+      }
+     ]
+    },
+    "scoringScale": {
+     "maxScore": 5,
+     "minScore": 1,
+     "step": 1,
+     "type": "weighted_1_5"
+    },
+    "title": "Daily Pages short-form writing"
+   },
+   "title": "Daily Pages short-form writing"
+  },
+  {
+   "name": "gba300-international-etiquette",
+   "schemaJson": {
+    "calibrationNotes": "Student-visible assignment framework plus grading-assistant instructions supplied for GBA 300. Deductions remains unscored and instructor-controlled.",
+    "name": "gba300-international-etiquette",
+    "outputSchema": {
+     "responseShape": "categories_overall_comment",
+     "schemaVersion": 1
+    },
+    "promptConfig": {
+     "gradingInstructions": "Course context: GBA 300, University of Alabama (Culverhouse College of Business). This is an individual comparative business-communication analysis worth 50 points. The student selects two unfamiliar countries and analyzes two interpersonal business-communication topics per country using only Global Road Warrior.\n\nGrade only the four scored categories against their declared raw-point bands and assign an integer inside the earned band. Their maxima are 5, 20, 20, and 5. Do not convert a section to a 0\u2013100 score. Deductions is an instructor-controlled, unscored block: the grading assistant never applies a deduction and must not return Deductions as a scored category. The instructor may adjust any score, comment, or note; nothing is final until instructor review. Be encouraging but honest, lead with what works, and give specific actionable improvements tied to the assignment.\n\nCardinal topic rule: topics must concern interpersonal business communication, such as eye contact/body language, workplace hierarchy, negotiation, entertaining clients, greetings/forms of address, meeting etiquette, directness, or business gift-giving. Hours of operation, economics, national history, geography, tourism, and politics are off-task. An affected topic belongs in the Struggling band regardless of prose quality, and the feedback must explain why.\n\nSource discipline: Global Road Warrior is the only permitted source. Paraphrasing it is expected and should not be penalized. One full Global Road Warrior citation per subsection/topic is required at the end even without direct quotation. In-text citations are required only for direct quotations. You cannot access Global Road Warrior, cannot confirm verbatim copying, and must never penalize a sourcing suspicion. Put sourcing concerns in Deductions as neutral observations for instructor verification. Flag no more than one or two apparently verbatim passages, only with high confidence.\n\nOverall feedback must contain: (1) an overall impression in 2\u20133 sentences, leading with what works; (2) sections 1\u20134 with band, raw points earned out of the section maximum, and the single most useful improvement; (3) a Deductions block that explicitly addresses all three areas every time, even when everything is in order: citation status, source check, and visible formatting notes; and (4) one highest-leverage next step.\n\nCitation status: when complete, say \"Citations appear complete and correct; no deduction indicated.\" When end citations are missing, fewer than one per subsection, or malformed, recommend the assignment's five-point deduction and state exactly what to fix. For a high-confidence potentially verbatim passage, quote the passage, condition the concern on verification, and recommend checking it against the cited Global Road Warrior section.\n\nSource check: neutrally identify claims that may fall outside Global Road Warrior's business-culture sections; never deduct. Formatting notes: check only what is visible for approved fonts (Calibri, Arial, Helvetica, Times New Roman), 12 pt single-spaced left-aligned black non-indented paragraphs with one blank line between, 14 pt bold headings, 12 pt bold subheadings, and one page preferred/two pages maximum. Phrase every Deductions observation calmly and actionably for a student to read while also serving the instructor's decision.",
+     "instructionsPreset": ""
+    },
+    "rubric": {
+     "categories": [
+      {
+       "bands": [
+        {
+         "description": "No introduction.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "A country is missing, the introduction is seriously over length, or it fails to establish the paper's purpose.",
+         "label": "Struggling",
+         "max": 2,
+         "min": 1
+        },
+        {
+         "description": "Present but generic, overlong, or missing a real reason for the pairing.",
+         "label": "Developing",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "No more than four sentences, names both countries, gives a plausible reason for interest, and reads clearly and professionally.",
+         "label": "Proficient",
+         "max": 4,
+         "min": 4
+        },
+        {
+         "description": "No more than four sentences, names both countries, and gives a genuine, specific reason\u2014usually the contrast that makes the pairing interesting. Purposeful setup, not a formality.",
+         "label": "Exemplary",
+         "max": 5,
+         "min": 5
+        }
+       ],
+       "description": "In no more than four sentences, name both countries and give a genuine, specific reason for the pairing that purposefully sets up the comparison.",
+       "grammarHighlighting": false,
+       "key": "introduction",
+       "label": "Introduction",
+       "weight": 0.1
+      },
+      {
+       "bands": [
+        {
+         "description": "Country section missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "A topic is off-task (economy, history, geography, tourism, politics, or similar), a required topic or subheading is missing, or content is inaccurate, judgmental, or stereotyping.",
+         "label": "Struggling",
+         "max": 13,
+         "min": 1
+        },
+        {
+         "description": "One topic drifts off-task, sections exceed the sentence cap, analysis stays surface-level, or subheadings are vague.",
+         "label": "Developing",
+         "max": 15,
+         "min": 14
+        },
+        {
+         "description": "Both topics are on-task and factual, sections stay within the cap, subheadings are clear, and description is solid with minor lapses in significance, specificity, or clarity.",
+         "label": "Proficient",
+         "max": 17,
+         "min": 16
+        },
+        {
+         "description": "Both topics are squarely interpersonal business communication. Each is specific, accurate, no more than six sentences, and explains what a businessperson should do or what a custom signals. Subheadings are descriptive; prose is natural and professional; cultural differences are framed respectfully.",
+         "label": "Exemplary",
+         "max": 20,
+         "min": 18
+        }
+       ],
+       "description": "Analyze two interpersonal business-communication topics for Country 1, each in no more than six sentences with descriptive subheadings, specific researched detail, professional prose, practical significance, and respectful framing.",
+       "grammarHighlighting": false,
+       "key": "country_1_its_two_topics",
+       "label": "Country 1 & Its Two Topics",
+       "weight": 0.4
+      },
+      {
+       "bands": [
+        {
+         "description": "Country section missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "A topic is off-task (economy, history, geography, tourism, politics, or similar), a required topic or subheading is missing, or content is inaccurate, judgmental, or stereotyping.",
+         "label": "Struggling",
+         "max": 13,
+         "min": 1
+        },
+        {
+         "description": "One topic drifts off-task, sections exceed the sentence cap, analysis stays surface-level, or subheadings are vague.",
+         "label": "Developing",
+         "max": 15,
+         "min": 14
+        },
+        {
+         "description": "Both topics are on-task and factual, sections stay within the cap, subheadings are clear, and description is solid with minor lapses in significance, specificity, or clarity.",
+         "label": "Proficient",
+         "max": 17,
+         "min": 16
+        },
+        {
+         "description": "Both topics meet the exemplary Country 1 standard and create a genuine parallel or contrast with Country 1, giving the conclusion something meaningful to compare.",
+         "label": "Exemplary",
+         "max": 20,
+         "min": 18
+        }
+       ],
+       "description": "Apply the Country 1 standards to two topics for Country 2. At the exemplary level, topic choices should also create a genuine parallel or contrast that the conclusion can synthesize.",
+       "grammarHighlighting": false,
+       "key": "country_2_its_two_topics",
+       "label": "Country 2 & Its Two Topics",
+       "weight": 0.4
+      },
+      {
+       "bands": [
+        {
+         "description": "No conclusion.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "No comparison; treats the countries separately or trails off without a takeaway.",
+         "label": "Struggling",
+         "max": 2,
+         "min": 1
+        },
+        {
+         "description": "Mostly restates the four topics without synthesis, or exceeds the sentence limit.",
+         "label": "Developing",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "No more than four sentences and accurately compares the countries, though the insight is modest or partly repeats earlier sections.",
+         "label": "Proficient",
+         "max": 4,
+         "min": 4
+        },
+        {
+         "description": "No more than four sentences and draws a real comparative insight\u2014what the differences reveal and why that matters for global business.",
+         "label": "Exemplary",
+         "max": 5,
+         "min": 5
+        }
+       ],
+       "description": "In no more than four sentences, synthesize a real comparison between the cultures and explain why the difference matters for global business.",
+       "grammarHighlighting": false,
+       "key": "conclusion",
+       "label": "Conclusion",
+       "weight": 0.1
+      }
+     ]
+    },
+    "scoringScale": {
+     "compositeMax": 50,
+     "compositeMin": 0,
+     "maxScore": 20,
+     "minScore": 0,
+     "step": 1,
+     "type": "weighted_percent"
+    },
+    "title": "GBA 300: International Etiquette"
+   },
+   "title": "GBA 300: International Etiquette"
+  },
+  {
+   "name": "gba300-international-expansion",
+   "schemaJson": {
+    "calibrationNotes": "Student rubric and department point values supplied for GBA 300. Mixed raw-point sections normalize to the assignment percentage only after every section is scored.",
+    "name": "gba300-international-expansion",
+    "outputSchema": {
+     "responseShape": "categories_overall_comment",
+     "schemaVersion": 1
+    },
+    "promptConfig": {
+     "gradingInstructions": "Course context: GBA 300, University of Alabama (Culverhouse College of Business). This is a team-written international expansion plan worth 100 points and addressed to a time-driven CEO. Never name a specific instructor; say \"your professor\" or \"your instructor.\"\n\nGrade each of the nine categories against its declared raw-point bands and assign an integer inside the earned band. The raw category maxima are 10, 10, 20, 20, 5, 5, 10, 10, and 10. Do not convert a section to a 0\u2013100 score. Lead with what works, hold high explicit standards, never inflate, critique the work rather than its writers, and turn every shortfall into a specific next move. The instructor may adjust every score and comment; nothing is final until instructor review.\n\nEvidence and sources: teams are directed to Business Source Ultimate, Mintel, Statista, IBIS World, Factiva, and reputable sites. You cannot access those sources. Evaluate whether claims are cited, plausible, and internally consistent; never call an unverified statistic false. Quote doubtful passages in Instructor Notes and recommend verification without accusation. In-text citations are required throughout, with one consistently APA or MLA References page.\n\nAudience standard: reward concision, clarity, purposeful organization, and graphics that communicate. Do not reward padding, bullet dumps where paragraph form is required, or detail that serves the writers rather than the CEO. Judge Advertising Strategy against Consumer Profile every time.\n\nOverall feedback must contain: (1) an overall impression in 2\u20133 sentences, leading with what works; (2) categories 1\u20139 with band, raw points earned out of that category's maximum, and the single most useful improvement; (3) an Instructor Notes block that explicitly addresses all four areas even when everything is in order: unpointed requirements (cover page with logo, target-country title, and team names at least 24 pt; Table of Contents with page numbers; each main section on a new page; paragraph form where required), citation/source observations, internal consistency across company size/budget/consumer/media/industry/recommendation, and anything else the professor should see; and (4) one highest-leverage next step. Phrase Instructor Notes so students can read them.\n\nNever accuse a team of dishonesty. Never invent a requirement. Never present a score as final.",
+     "instructionsPreset": ""
+    },
+    "rubric": {
+     "categories": [
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "Substantially incomplete, unformatted, or so generic it could sit atop any team's report.",
+         "label": "Struggling",
+         "max": 6,
+         "min": 1
+        },
+        {
+         "description": "Over one page, drifts from the Workplace Application format, or omits key findings such as a budget signal or real recommendation; reads as an introduction rather than a distillation.",
+         "label": "Developing",
+         "max": 7,
+         "min": 7
+        },
+        {
+         "description": "One page, correct format, and accurately covers the essentials. Solid but summarizes more than it persuades.",
+         "label": "Proficient",
+         "max": 8,
+         "min": 8
+        },
+        {
+         "description": "One page in the Workplace Application format. Stands entirely on its own for a CEO, with the firm, target country, key findings from every major section, and recommendation. Confident, concise, and free of filler.",
+         "label": "Exemplary",
+         "max": 10,
+         "min": 9
+        }
+       ],
+       "description": "A one-page, CEO-ready summary in the Workplace Application format taught in class. It must stand on its own and identify the firm, target country, key findings from every major section, and the recommendation.",
+       "grammarHighlighting": false,
+       "key": "executive_summary",
+       "label": "Executive Summary",
+       "weight": 0.1
+      },
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "Subsections are missing, or the company is so underdefined that later sections contradict it.",
+         "label": "Struggling",
+         "max": 6,
+         "min": 1
+        },
+        {
+         "description": "A subsection is thin or not doing its job, or the company concept is too fuzzy to ground later sections.",
+         "label": "Developing",
+         "max": 7,
+         "min": 7
+        },
+        {
+         "description": "All three subsections are present and clear; the company concept is adequate, though the mission may lean generic.",
+         "label": "Proficient",
+         "max": 8,
+         "min": 8
+        },
+        {
+         "description": "All three subsections are present and labeled. The company is specific, plausible, and strong enough to sustain the report; the mission feels authentic; the Statement of Opportunity cleanly frames the project.",
+         "label": "Exemplary",
+         "max": 10,
+         "min": 9
+        }
+       ],
+       "description": "Objectives, Mission, and Statement of Opportunity must all be present and labeled. The invented company must be specific and plausible enough to ground the full expansion plan.",
+       "grammarHighlighting": false,
+       "key": "company_overview",
+       "label": "Company Overview",
+       "weight": 0.1
+      },
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "Multiple required components are missing; claims are uncited; or the section offers generic industry talk with no target-market specificity. Use 11\u201313 when most components exist but are thin, 7\u201310 when several do not function, and 1\u20136 for a token attempt.",
+         "label": "Struggling",
+         "max": 13,
+         "min": 1
+        },
+        {
+         "description": "A required component is shorted, data is thin, the target market repeats the global industry, sales history is missing, or bullet lists replace required paragraphs.",
+         "label": "Developing",
+         "max": 15,
+         "min": 14
+        },
+        {
+         "description": "All components are present with real data and citations; analysis is mostly descriptive but accurate; graphics are present and relevant.",
+         "label": "Proficient",
+         "max": 17,
+         "min": 16
+        },
+        {
+         "description": "Worldwide description includes yearly revenue and ten-year stability shown in graphics plus at least three explained trends. Target-country market includes ten years of sales data. At least three real competitors receive concise analysis. At least two graphics communicate. Paragraph form and citations appear throughout, and the analysis explains why, not only what.",
+         "label": "Exemplary",
+         "max": 20,
+         "min": 18
+        }
+       ],
+       "description": "Analyze the global industry, the target country's market, and at least three real competitors with relevant data, citations, paragraph-form analysis, and at least two graphics that communicate.",
+       "grammarHighlighting": false,
+       "key": "industry_analysis",
+       "label": "Industry Analysis",
+       "weight": 0.2
+      },
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "Multiple dimensions are missing, or the content is generic, uncited, or disconnected from the expansion decision. Use 11\u201313 when most dimensions exist but are thin, 7\u201310 when several do not function, and 1\u20136 for a token attempt.",
+         "label": "Struggling",
+         "max": 13,
+         "min": 1
+        },
+        {
+         "description": "A dimension is missing or perfunctory, or the section reads as an encyclopedia entry about the country with the company forgotten.",
+         "label": "Developing",
+         "max": 15,
+         "min": 14
+        },
+        {
+         "description": "All six dimensions are accurate and mostly connected to the company, though some read more like country facts than expansion analysis.",
+         "label": "Proficient",
+         "max": 17,
+         "min": 16
+        },
+        {
+         "description": "The target location is described, all six PESTEL dimensions are analyzed, every dimension connects to this company's expansion, and dimensions interrelate where useful. Paragraph form, sensible visuals, and citations support the analysis.",
+         "label": "Exemplary",
+         "max": 20,
+         "min": 18
+        }
+       ],
+       "description": "Describe the target country, region, and city where possible, then analyze all six PESTEL dimensions in direct connection to this company's expansion decision.",
+       "grammarHighlighting": false,
+       "key": "international_location_profile",
+       "label": "International Location Profile",
+       "weight": 0.2
+      },
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "A component is missing, the profile contradicts the company or advertising sections, or it reads as a placeholder.",
+         "label": "Struggling",
+         "max": 2,
+         "min": 1
+        },
+        {
+         "description": "The target consumer is too broad, lacks the required demographic/psychographic or B2B equivalent detail, uses bullet lists where paragraphs are required, or asserts success factors without tying them to the consumer.",
+         "label": "Developing",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "The correct path and both components are present and reasonably specific; success factors follow from the consumer but remain somewhat generic.",
+         "label": "Proficient",
+         "max": 4,
+         "min": 4
+        },
+        {
+         "description": "The correct B2C or B2B path is genuinely specific and written in paragraph form. Unique Success Factors build directly from that consumer into a credible competitive edge. Claims are cited and the profile is consistent with Advertising Strategy.",
+         "label": "Exemplary",
+         "max": 5,
+         "min": 5
+        }
+       ],
+       "description": "Follow the correct B2C or B2B target-consumer path, then connect Unique Success Factors directly to that consumer and explain why this buyer would choose the firm.",
+       "grammarHighlighting": false,
+       "key": "consumer_profile",
+       "label": "Consumer Profile",
+       "weight": 0.05
+      },
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "Subsections are missing, data is absent, or visual promotions are absent.",
+         "label": "Struggling",
+         "max": 2,
+         "min": 1
+        },
+        {
+         "description": "Media selection lacks data, positioning conflicts with earlier sections, or only one visual is present.",
+         "label": "Developing",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "All three subsections are present; media choices are reasonable but lightly evidenced; promotions are present and on-brand.",
+         "label": "Proficient",
+         "max": 4,
+         "min": 4
+        },
+        {
+         "description": "Positioning clearly matches the offering and consumer. Media selection uses data and concrete channels. At least two visual promotions fit both positioning and market. A radio script does not substitute for a visual.",
+         "label": "Exemplary",
+         "max": 5,
+         "min": 5
+        }
+       ],
+       "description": "Brand Positioning, Media Selection, and at least two visual Sample Promotions must align with the company, target consumer, evidence about media use, and target market.",
+       "grammarHighlighting": false,
+       "key": "advertising_strategy",
+       "label": "Advertising Strategy",
+       "weight": 0.05
+      },
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "There is no real breakdown, numbers are arbitrary, or the budget contradicts the company's stated size.",
+         "label": "Struggling",
+         "max": 6,
+         "min": 1
+        },
+        {
+         "description": "The total is outside 7\u201310% or not anchored to gross profit, a focus area is missing, or itemization is too coarse.",
+         "label": "Developing",
+         "max": 7,
+         "min": 7
+        },
+        {
+         "description": "The total range and all four focus areas are correct with an itemized table, but some allocations are thinly justified.",
+         "label": "Proficient",
+         "max": 8,
+         "min": 8
+        },
+        {
+         "description": "The total equals 7\u201310% of stated gross profit and says so. Research is prioritized; all four focus areas are itemized; line items match the rest of the plan; every dollar has a rationale.",
+         "label": "Exemplary",
+         "max": 10,
+         "min": 9
+        }
+       ],
+       "description": "Build an itemized, justified budget totaling 7\u201310% of stated gross profit across research, marketing, operations, and contingency, consistent with company size and the plan.",
+       "grammarHighlighting": false,
+       "key": "budget",
+       "label": "Budget",
+       "weight": 0.1
+      },
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "There is no clear recommendation, or benefits and drawbacks are missing.",
+         "label": "Struggling",
+         "max": 6,
+         "min": 1
+        },
+        {
+         "description": "The section runs long, buries the recommendation, breaks parallel form, includes dollar figures, or omits the point person.",
+         "label": "Developing",
+         "max": 7,
+         "min": 7
+        },
+        {
+         "description": "Structure and content are correct and mostly parallel, though drawbacks are somewhat soft.",
+         "label": "Proficient",
+         "max": 8,
+         "min": 8
+        },
+        {
+         "description": "Concise and recommendation-first, with honest benefits and drawbacks in parallel bullets, no monetary figures, a named point person, and a conclusion earned by the preceding analysis.",
+         "label": "Exemplary",
+         "max": 10,
+         "min": 9
+        }
+       ],
+       "description": "Open with the recommendation, then present honest benefits and drawbacks in parallel-form bullets, omit monetary figures, and name a point person.",
+       "grammarHighlighting": false,
+       "key": "recommendation",
+       "label": "Recommendation",
+       "weight": 0.1
+      },
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "References are sparse or improperly formatted, with large uncited sections.",
+         "label": "Struggling",
+         "max": 6,
+         "min": 1
+        },
+        {
+         "description": "Formats are inconsistent, sources and in-text citations do not correspond, or noticeable stretches of data have no citations.",
+         "label": "Developing",
+         "max": 7,
+         "min": 7
+        },
+        {
+         "description": "The References page is complete and consistent; in-text citations are mostly present with scattered gaps.",
+         "label": "Proficient",
+         "max": 8,
+         "min": 8
+        },
+        {
+         "description": "The References page is complete and consistently APA or MLA, every source used is included, in-text citations support claims and data throughout, and sources match the caliber named by the assignment.",
+         "label": "Exemplary",
+         "max": 10,
+         "min": 9
+        }
+       ],
+       "description": "Use consistent APA or MLA for every source used, including sources that informed the analysis without being quoted, plus in-text citations wherever claims and data appear. Sources should match the assignment's named databases and reputable sites.",
+       "grammarHighlighting": false,
+       "key": "references",
+       "label": "References",
+       "weight": 0.1
+      }
+     ]
+    },
+    "scoringScale": {
+     "compositeMax": 100,
+     "compositeMin": 0,
+     "maxScore": 20,
+     "minScore": 0,
+     "step": 1,
+     "type": "weighted_percent"
+    },
+    "title": "GBA 300: International Expansion Plan"
+   },
+   "title": "GBA 300: International Expansion Plan"
+  },
+  {
+   "name": "gba300-nonverbal-rubric-STUDENT",
+   "schemaJson": {
+    "calibrationNotes": "Student rubric and GA instructions supplied for GBA 300 Nonverbal Communication Analysis. Whole-number scores; category maxima 6/6/5/3; total 20.",
+    "name": "gba300-nonverbal-rubric-STUDENT",
+    "outputSchema": {
+     "responseShape": "categories_overall_comment",
+     "schemaVersion": 1
+    },
+    "promptConfig": {
+     "gradingInstructions": "# GBA 300 \u2014 Nonverbal Communication Analysis: Grading Assistant Instructions\n\nROLE OF THIS FILE: Back-end instructions for the Grading Assistant. Students never see this file. It pairs with the student rubric above. This file governs behavior; the student rubric governs scoring. Where they conflict, the student rubric's point values win.\n\nCourse context: GBA 300, University of Alabama (Culverhouse College of Business). Several professors teach it \u2014 never name a specific instructor. Refer to \"your professor\" or \"your instructor.\"\n\nAssignment: individual, 20 points. Three scenes, ~200 words each, one document. Scenes from the instructor list of nine (The Godfather, The Wolf of Wall Street, Suits, Steve Jobs, Erin Brockovich, Mad Men, Moneyball, The Big Short, The Internship) OR any other business-oriented visual media.\n\nCore behavior: Grade against the four categories, assign a point value within the earned band, then complete the Instructor Notes block. Holistic feedback: name what worked, give specific next steps. Instructor can adjust anything; nothing is final until they review. Short assignment \u2014 tight feedback, not a page of commentary on a 600-word submission.\n\nTone: model on Great British Baking Show judges but NEVER mention that to students. High explicit standards, never inflate. Critique the work not the writer. Delight when work is good. Superlatives only when earned. Warmth especially in the sentence that names what went wrong. Every shortfall ends in a specific next move. Lead with what works; name the scene.\n\nCentral judgment: observation vs interpretation. Test: could a viewer point at it? \"He looked confident\" is interpretation. \"He leaned back and laced both hands behind his head\" is observation. Physical detail = Observation; meaning = Interpretation. Do not penalize the same slip twice.\n\nFour analysis questions are lenses not a checklist. Do not reward marching through all four. Mechanical coverage is Developing under Interpretation.\n\nCourse concepts: kinesics (adaptors, emblems, illustrators; posture, head, face, gestures, eye contact), haptics (four levels), proxemics (Hall zones), vocalics, chronemics, oculesics, repeat/modify/contradict framing, 7-second first impressions, Mehrabian 7/38/55 presented as 93% nonverbal. ACCEPT Mehrabian without qualification. Never correct the course. Other lecture frameworks also count.\n\nScoring: whole numbers only. Observation and Interpretation: 6/5/4/1\u20133/0 with struggling anchors 3/2/1. Concepts: 5/4/3/1\u20132/0. Craft: 3/2/1/0 \u2014 no Struggling band, 0 only if missing. Absent means missing not bad. Score three scenes as ONE submission; never average. Exemplary requires all three scenes. Fewer than three scenes: cap every category at Developing and flag in Instructor Notes. Two scenes from same title is allowed.\n\nWord count: 170\u2013230 per scene is in range. Length only affects Craft. Do not reward padding.\n\nDoes NOT require: citations, cover page, all four questions, scenes from the list, a min number of concepts beyond one per scene as the rubric names.\n\nInstructor Notes (unbanded, no deductions) every time: (1) requirements check (2) scene selection (3) authorship/anomaly observations \u2014 never accuse, verification language only (4) anything else. Absence of anomalies should be stated.\n\nFeedback structure: overall impression 2\u20133 sentences; four categories with band/points and one improvement each; Instructor Notes; one next step.\n\nBoundaries: never name a professor; never accuse dishonesty; never invent requirements; never present scores as final; never correct course content including Mehrabian; never rewrite the student's analysis.\n\nDone when: the new rubric is in the codebase following existing GA rubric patterns, is selectable but not assigned to any assignment type, is on production (main/yawp.school) and demo (demo.yawp.school), and you report URLs/status.",
+     "instructionsPreset": ""
+    },
+    "rubric": {
+     "categories": [
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "Mostly plot summary \u2014 what characters said and did as narrative, rather than how they communicated without words.",
+         "label": "Struggling",
+         "max": 3,
+         "min": 1
+        },
+        {
+         "description": "Observation leans on impression more than detail, or one scene is well observed and the others are thin. The reader can't reliably picture what happened.",
+         "label": "Developing",
+         "max": 4,
+         "min": 4
+        },
+        {
+         "description": "Observations are concrete in most places, with occasional slippage into impression (\"he looked confident\") where a specific detail was available and would have been stronger.",
+         "label": "Proficient",
+         "max": 5,
+         "min": 5
+        },
+        {
+         "description": "Across all three scenes, observations are specific and physical \u2014 things a viewer could point to. Gestures, posture, facial expression, use of space, and vocal delivery are described precisely enough that a reader who has never seen the scene can picture it. Nothing is presented as observed that is actually inferred.",
+         "label": "Exemplary",
+         "max": 6,
+         "min": 6
+        }
+       ],
+       "description": "What did you actually see and hear?",
+       "grammarHighlighting": false,
+       "key": "observation",
+       "label": "Observation",
+       "weight": 0.3
+      },
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "Little interpretation beyond restating what happened, or conclusions the described evidence doesn't support.",
+         "label": "Struggling",
+         "max": 3,
+         "min": 1
+        },
+        {
+         "description": "Interpretation is asserted rather than argued, or the same lens is applied mechanically to all three scenes regardless of fit. Reads as coverage rather than thinking.",
+         "label": "Developing",
+         "max": 4,
+         "min": 4
+        },
+        {
+         "description": "Interpretations are reasonable and generally supported, though some claims float free of the observation that would prove them. Lens choice is sensible if not always the sharpest available.",
+         "label": "Proficient",
+         "max": 5,
+         "min": 5
+        },
+        {
+         "description": "Every claim traces back to something observed. The analysis explains how the nonverbal cues shaped the verbal message or the storytelling \u2014 whether they repeated, modified, or contradicted what was said. The analysis questions are used as lenses, chosen because they fit the scene, and at least one is pursued with real depth.",
+         "label": "Exemplary",
+         "max": 6,
+         "min": 6
+        }
+       ],
+       "description": "What did those cues do, and how do you know?",
+       "grammarHighlighting": false,
+       "key": "interpretation_and_analysis",
+       "label": "Interpretation and Analysis",
+       "weight": 0.3
+      },
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "Concepts named without connection to what was observed, or absent from most of the submission.",
+         "label": "Struggling",
+         "max": 2,
+         "min": 1
+        },
+        {
+         "description": "Terms appear but are used loosely or imprecisely, or only one of the three scenes makes a genuine connection.",
+         "label": "Developing",
+         "max": 3,
+         "min": 3
+        },
+        {
+         "description": "Concepts are named correctly and connected to the scene, though the explanation stays general \u2014 the term is applied rather than demonstrated.",
+         "label": "Proficient",
+         "max": 4,
+         "min": 4
+        },
+        {
+         "description": "Each scene names at least one course concept correctly and explains how it operates in that specific moment \u2014 not merely labeled, but shown working. Where a neighboring concept might also have applied, the choice is defensible.",
+         "label": "Exemplary",
+         "max": 5,
+         "min": 5
+        }
+       ],
+       "description": "Name the concept, and show it working.",
+       "grammarHighlighting": false,
+       "key": "connection_to_course_concepts",
+       "label": "Connection to Course Concepts",
+       "weight": 0.25
+      },
+      {
+       "bands": [
+        {
+         "description": "Missing.",
+         "label": "Absent",
+         "max": 0,
+         "min": 0
+        },
+        {
+         "description": "Substantially over or under length, disorganized, scenes unlabeled, or errors that interfere with reading.",
+         "label": "Developing",
+         "max": 1,
+         "min": 1
+        },
+        {
+         "description": "Generally clear and within range, with some wordiness or padding, or scattered mechanical errors.",
+         "label": "Proficient",
+         "max": 2,
+         "min": 2
+        },
+        {
+         "description": "Each analysis lands close to 200 words and earns every one of them. Scenes are clearly labeled. The prose is professional, concise, and clean. Nothing is padded.",
+         "label": "Exemplary",
+         "max": 3,
+         "min": 3
+        }
+       ],
+       "description": "This is a business communication course. How you write it counts.",
+       "grammarHighlighting": false,
+       "key": "communication_and_craft",
+       "label": "Communication and Craft",
+       "weight": 0.15
+      }
+     ]
+    },
+    "scoringScale": {
+     "compositeMax": 20,
+     "compositeMin": 0,
+     "maxScore": 6,
+     "minScore": 0,
+     "step": 1,
+     "type": "weighted_percent"
+    },
+    "title": "GBA 300 \u2014 Nonverbal Assignment"
+   },
+   "title": "GBA 300 \u2014 Nonverbal Assignment"
+  },
+  {
+   "name": "strode-eng101-essay-1-description",
+   "schemaJson": {
+    "calibrationNotes": "Seven equal-weight categories; four anchored levels scored as percentages (4=95, 3=85, 2=72, 1=55). Final grade is the rounded mean of category anchors. Letter bands noted in instructions; platform letter display is A/B/C/D/F only. Grammar/syntax flagged separately and never scored.",
+    "name": "strode-eng101-essay-1-description",
+    "outputSchema": {
+     "responseShape": "categories_overall_comment",
+     "schemaVersion": 1
+    },
+    "promptConfig": {
+     "gradingInstructions": "You are grading Strode ENG 101, Essay 1: Description / Angle of Vision. Return ONLY valid JSON for the configured rubric.\n\nTone of evaluation \u2014 model your evaluative tone on the judges of the Great British Baking Show (never mention this reference to students):\n- Hold high, explicit standards and never inflate. Say shortfalls plainly and specifically; kindness lives in the delivery, not the score.\n- Critique the work, never the writer. The shortfall belongs to the draft, and drafts can be fixed.\n- Be genuinely delighted when work is good. Reserve superlatives for the truly exemplary.\n- Warmth throughout.\n- Always convert critique into the specific next move that fixes it.\n\nTHREE GUARDS \u2014 read before anything else:\n1 \u00b7 THERE IS NO THESIS IN THIS ASSIGNMENT. Do not look for one. Do not mark a paper down for not having one. Do not use the words thesis, claim, argument, evidence, counterargument, or support in feedback. This is open form writing and sits at the open end of the course's open\u2011to\u2011closed arc.\n2 \u00b7 THERE ARE NO TOPIC SENTENCES. Paragraphs here are governed by an ordering principle and an angle of vision, not by a controlling sentence. Do not evaluate paragraph unity the way you would in a closed\u2011form essay.\n3 \u00b7 ASSUME THE STUDENT VISITED THE SCENE. They were required to go in person, take notes, and photograph it. You cannot verify this and you must not try. Never imply doubt about whether the observation happened. Grade what is on the page.\n\nScoring method:\n- Seven categories. Four levels each. The four levels are anchored to percentages and used directly: 4 \u2192 95, 3 \u2192 85, 2 \u2192 72, 1 \u2192 55.\n- Put 95, 85, 72 or 55 in score, never the level number 1\u20134.\n- Final percentage = the mean of the seven category anchors, rounded to the nearest whole number. All seven categories carry equal weight.\n- Letter scale (Strode): A 90\u2013100; B+ 85\u201389; B 80\u201384; C+ 75\u201379; C 70\u201374; D+ 65\u201369; D 60\u201364; F <60. The platform displays letters as A/B/C/D/F; the percentage is authoritative. Do not state a letter grade in comments.\n\nCategory guidance and level descriptors (apply faithfully; do not quote verbatim to students):\n1 \u00b7 Scene selection\n\u2022 4 \u2014 The scene is tightly bounded and clearly the right size \u2014 a single room, a counter, one aisle, one corner of a larger place. Sensory variety is genuinely wide: more than sight, and the non\u2011visual details do real work. The specificity is of a kind only observation produces \u2014 particular, odd, unpretty, unguessable.\n\u2022 3 \u2014 Well chosen and appropriately sized. Sensory range is good but leans visual, or one or two details feel generic where the rest are observed.\n\u2022 2 \u2014 The scene is workable but loosely bounded, or the detail is thin enough that the paper describes a type of place more than a place. Sensory range is narrow.\n\u2022 1 \u2014 The scene is too big to describe (his example: all of Costco, without selecting units within it), or the writing reads as recollection rather than present observation \u2014 general, summarizing, unanchored in a particular visit.\n\n2 \u00b7 Detail as engine\n\u2022 4 \u2014 The method is genuinely inductive: details come first and the meaning rises out of them. Every detail has work to do \u2014 nothing is neutral or merely factual. The scene stays physically real; a reader could walk into it and recognize objects.\n\u2022 3 \u2014 Mostly detail\u2011driven, with occasional moments where an idea is laid over an object rather than drawn from it. One or two details sit inert on the page.\n\u2022 2 \u2014 The paper alternates between real observation and asserted impression. Several details are neutral placeholders \u2014 \u201cthere is a chair by the door\u201d \u2014 carrying no charge.\n\u2022 1 \u2014 Overly impressionistic. The angle of vision has been forced so hard that the actual objects disappear and only a feeling remains. Or the paper starts from an idea and hunts for details to prove it \u2014 the inductive method inverted.\n\n3 \u00b7 Angle of vision\n\u2022 4 \u2014 Each paragraph carries a discernible and nuanced angle of vision \u2014 not merely positive and negative but an imagined mood or theme, close to a controlling metaphor. (His examples: a bedroom as sanctuary versus prison; a laundromat as a spiritual experience.) The theme is never announced; it lives entirely in diction and figurative language.\n\u2022 3 \u2014 Both paragraphs have a clear angle, and at least one reaches for something more particular than pleasant/unpleasant.\n\u2022 2 \u2014 The minimum is met \u2014 one paragraph is recognizably positive, the other negative \u2014 but the effect stays at that level and never becomes a specific mood.\n\u2022 1 \u2014 The angle is inconsistent within a paragraph, or so faint that a reader could not name the intended effect. Or the theme is stated outright in the descriptions instead of being carried by word choice.\n\n4 \u00b7 Parallel structure\n\u2022 4 \u2014 Every detail in the first paragraph reappears in the second, in the same order, with the valence reversed and the physical conditions unchanged. The reversal happens through diction and figurative language, not by altering the scene.\n\u2022 3 \u2014 The sequence holds across nearly all details. One or two beats are missing or reordered, or a reversal leans on a flat antonym instead of a re\u2011seen image.\n\u2022 2 \u2014 Both paragraphs cover recognizably the same scene, but the detail sequence drifts and several beats appear in only one of the two.\n\u2022 1 \u2014 The second paragraph is a new description rather than the same scene re\u2011seen \u2014 or the physical conditions changed (a neat room became messy), which breaks the assignment\u2019s central constraint.\n\n5 \u00b7 Language and style\n\u2022 4 \u2014 Figurative language is original and precisely matched to the intended effect. The comparing image genuinely resembles the literal one and never overpowers the moment. A clear pattern of active voice throughout.\n\u2022 3 \u2014 Figures are fresh more often than not and generally fit. Occasional passive constructions, but active voice is the evident habit.\n\u2022 2 \u2014 Figurative language is present but relies on familiar comparisons, or a few figures strain past what the moment can carry. Passive voice appears often enough to slacken the prose.\n\u2022 1 \u2014 Over\u2011written \u2014 hyperbole so extreme it becomes cartoonish and destroys the effect. Or comparisons bear no real resemblance to what they describe. Or passive construction is the default.\n\n6 \u00b7 Focus and restraint\n\u2022 4 \u2014 The writer stays out of the way. The setting is unmistakably the subject; where people appear, the piece shows a genuine symbiosis between environment and person. The rhetorical work is done by open\u2011form tools rather than by the narrator explaining.\n\u2022 3 \u2014 Largely disciplined, with occasional intrusions of the writer\u2019s commentary or a passage where a person briefly takes the foreground.\n\u2022 2 \u2014 Too much you. The paper drifts toward personal narrative, or people become the subject and the setting recedes into backdrop.\n\u2022 1 \u2014 The scene is a stage for the writer\u2019s experience, or a character study with a setting attached. The assignment\u2019s subject has been displaced.\n\n7 \u00b7 Self\u2011reflection (Part B)\n\u2022 4 \u2014 The theme is finally stated explicitly and matches what the descriptions actually did. The student works through the five strategies \u2014 direct statement of meaning, selection and omission of detail, word choice, figurative language, sentence structure \u2014 and quotes paired passages from their own text to show each one operating in both valences. Discusses their use of open form rhetorical style with real understanding.\n\u2022 3 \u2014 Theme stated clearly and accurately. Most strategies addressed with quoted support, though one or two are named without being demonstrated.\n\u2022 2 \u2014 Theme stated. The reflection describes the writing process in general terms and quotes sparingly, so the analysis stays at the level of assertion.\n\u2022 1 \u2014 No explicit theme, or a theme that contradicts the descriptions. Strategies unaddressed or merely listed. No quotation from their own text.\n\nGrammar and syntax \u2014 flagged, never scored:\n- This is not an eighth category. It carries no level and no anchor. The seven\u2011category mean is the grade.\n- Mark every mechanical error in the text \u2014 spelling, comma errors, comma splices, run\u2011ons and fragments, subject\u2011verb and pronoun agreement, apostrophes, capitalization, tense slips. Quote the student\u2019s words; give the corrected version.\n- Group by pattern, not by instance. Add one plain line on scale: how many errors, which patterns recur, and whether they interfere with meaning. Never recommend a deduction.\n- Describe the effect on the reader, not on the grade. Never recommend a deduction.\n- Per\u2011error marks belong in the specific\u2011corrections pass (the separate essay markup). Do not invent new JSON fields.\n- In the two description paragraphs, do not correct a fragment or an unconventional sentence unless it is clearly accidental. When it\u2019s ambiguous, flag it as \u201cfragment \u2014 intentional?\u201d and move on. Hold Part B to standard academic expectations.\n- Never call a student\u2019s language or dialect wrong; the standard is clarity for a reader.\n- Never let a mechanics comment crowd out the substantive feedback. Mechanics come last.\n\nWhat you can and cannot check:\n- You can check directly: parallel structure (detail sequence across both paragraphs); active voice patterns; conditions consistency (is the neat place still neat?); whether the theme is announced vs. carried; whether details are neutral or working; whether Part B quotes their own text.\n- You cannot: whether the student went to the scene; what is in their photographs; whether their notes exist; whether the scene is real. When something is unverifiable, grade the writing and say nothing about the gap.\n\nFeedback notes specific to this assignment:\n- Name the beat, not the abstraction. Quote both sides when praising a reversal.\n- Never suggest adding a thesis, a topic sentence, or a transition word.\n- Over\u2011writing is the most common failure and the most delicate to name \u2014 critique the sentence, delight in the one that lands, and give the fix in the same breath."
+    },
+    "rubric": {
+     "categories": [
+      {
+       "bands": [
+        {
+         "description": "",
+         "label": "Full range",
+         "max": 100,
+         "min": 0
+        }
+       ],
+       "description": "How well-bounded and specifically observed the scene is; whether sensory range goes beyond sight and details feel particular to an in-person visit.",
+       "feedbackEnabled": true,
+       "key": "scene_selection",
+       "label": "Scene selection",
+       "scoreLabels": [
+        {
+         "label": "Misses",
+         "value": 55
+        },
+        {
+         "label": "Satisfactory",
+         "value": 72
+        },
+        {
+         "label": "Somewhat better than satisfactory",
+         "value": 85
+        },
+        {
+         "label": "Does them very well",
+         "value": 95
+        }
+       ],
+       "weight": 1
+      },
+      {
+       "bands": [
+        {
+         "description": "",
+         "label": "Full range",
+         "max": 100,
+         "min": 0
+        }
+       ],
+       "description": "Whether meaning rises from concrete details (induction) and every detail does work; stays physically real rather than impressionistic overlay.",
+       "feedbackEnabled": true,
+       "key": "detail_as_engine",
+       "label": "Detail as engine",
+       "scoreLabels": [
+        {
+         "label": "Misses",
+         "value": 55
+        },
+        {
+         "label": "Satisfactory",
+         "value": 72
+        },
+        {
+         "label": "Somewhat better than satisfactory",
+         "value": 85
+        },
+        {
+         "label": "Does them very well",
+         "value": 95
+        }
+       ],
+       "weight": 1
+      },
+      {
+       "bands": [
+        {
+         "description": "",
+         "label": "Full range",
+         "max": 100,
+         "min": 0
+        }
+       ],
+       "description": "Whether each paragraph carries a specific, discernible angle of vision beyond merely positive/negative; the effect lives in diction/figurative language, not announcement.",
+       "feedbackEnabled": true,
+       "key": "angle_of_vision",
+       "label": "Angle of vision",
+       "scoreLabels": [
+        {
+         "label": "Misses",
+         "value": 55
+        },
+        {
+         "label": "Satisfactory",
+         "value": 72
+        },
+        {
+         "label": "Somewhat better than satisfactory",
+         "value": 85
+        },
+        {
+         "label": "Does them very well",
+         "value": 95
+        }
+       ],
+       "weight": 1
+      },
+      {
+       "bands": [
+        {
+         "description": "",
+         "label": "Full range",
+         "max": 100,
+         "min": 0
+        }
+       ],
+       "description": "Degree to which the second paragraph re-sees the same beats in the same order, with reversed valence and unchanged physical conditions.",
+       "feedbackEnabled": true,
+       "key": "parallel_structure",
+       "label": "Parallel structure",
+       "scoreLabels": [
+        {
+         "label": "Misses",
+         "value": 55
+        },
+        {
+         "label": "Satisfactory",
+         "value": 72
+        },
+        {
+         "label": "Somewhat better than satisfactory",
+         "value": 85
+        },
+        {
+         "label": "Does them very well",
+         "value": 95
+        }
+       ],
+       "weight": 1
+      },
+      {
+       "bands": [
+        {
+         "description": "",
+         "label": "Full range",
+         "max": 100,
+         "min": 0
+        }
+       ],
+       "description": "Figurative language is original and precisely matched to the intended effect; the comparing image genuinely resembles the literal one and never overpowers the moment. Pattern of active voice.",
+       "feedbackEnabled": true,
+       "key": "language_and_style",
+       "label": "Language and style",
+       "scoreLabels": [
+        {
+         "label": "Misses",
+         "value": 55
+        },
+        {
+         "label": "Satisfactory",
+         "value": 72
+        },
+        {
+         "label": "Somewhat better than satisfactory",
+         "value": 85
+        },
+        {
+         "label": "Does them very well",
+         "value": 95
+        }
+       ],
+       "weight": 1
+      },
+      {
+       "bands": [
+        {
+         "description": "",
+         "label": "Full range",
+         "max": 100,
+         "min": 0
+        }
+       ],
+       "description": "The writer stays out of the way: the setting is unmistakably the subject; where people appear, the piece shows a genuine symbiosis between environment and person. The rhetorical work is done by open-form tools rather than by the narrator explaining.",
+       "feedbackEnabled": true,
+       "key": "focus_and_restraint",
+       "label": "Focus and restraint",
+       "scoreLabels": [
+        {
+         "label": "Misses",
+         "value": 55
+        },
+        {
+         "label": "Satisfactory",
+         "value": 72
+        },
+        {
+         "label": "Somewhat better than satisfactory",
+         "value": 85
+        },
+        {
+         "label": "Does them very well",
+         "value": 95
+        }
+       ],
+       "weight": 1
+      },
+      {
+       "bands": [
+        {
+         "description": "",
+         "label": "Full range",
+         "max": 100,
+         "min": 0
+        }
+       ],
+       "description": "Whether the theme is explicitly stated and matches the descriptions; discusses five strategies (selection/omission, word choice, figurative language, sentence structure, direct statement of meaning) with quoted pairs from the student's own text.",
+       "feedbackEnabled": true,
+       "key": "self_reflection_part_b",
+       "label": "Self-reflection (Part B)",
+       "scoreLabels": [
+        {
+         "label": "Misses",
+         "value": 55
+        },
+        {
+         "label": "Satisfactory",
+         "value": 72
+        },
+        {
+         "label": "Somewhat better than satisfactory",
+         "value": 85
+        },
+        {
+         "label": "Does them very well",
+         "value": 95
+        }
+       ],
+       "weight": 1
+      }
+     ]
+    },
+    "scoringScale": {
+     "maxScore": 100,
+     "minScore": 0,
+     "step": 1,
+     "type": "weighted_percent"
+    },
+    "title": "Strode ENG 101: Description / Angle of Vision"
+   },
+   "title": "Strode ENG 101: Description / Angle of Vision"
+  },
+  {
+   "name": "thesis-driven-essay",
+   "schemaJson": {
+    "calibrationNotes": "Represents the pre-existing Yawp thesis-driven essay grading assistant path.",
+    "name": "thesis-driven-essay",
+    "outputSchema": {
+     "responseShape": "categories_overall_comment",
+     "schemaVersion": 1
+    },
+    "promptConfig": {
+     "instructionsPreset": "legacy_thesis_driven_essay"
+    },
+    "rubric": {
+     "categories": [
+      {
+       "description": "Original, defensible thesis with sustained critical thinking and meaningful deductions.",
+       "key": "thesis_and_content",
+       "label": "Thesis/Content",
+       "weight": 0.25
+      },
+      {
+       "description": "Purposeful structure with strong progression, clear transitions, and a conclusion that extends thinking.",
+       "key": "organization_and_structure",
+       "label": "Organization/Structure",
+       "weight": 0.25
+      },
+      {
+       "description": "Precise, well-integrated evidence that deepens analysis and builds authority.",
+       "key": "evidence_and_support",
+       "label": "Evidence/Support",
+       "weight": 0.2
+      },
+      {
+       "description": "Authentic voice with engaging, precise language and consistent tone.",
+       "key": "voice_and_style",
+       "label": "Voice/Style",
+       "weight": 0.2
+      },
+      {
+       "description": "Technical correctness and polished presentation that support clarity.",
+       "key": "grammar_and_mechanics",
+       "label": "Grammar/Syntax/Formatting",
+       "weight": 0.1
+      }
+     ]
+    },
+    "scoringScale": {
+     "maxScore": 5,
+     "minScore": 1,
+     "step": 1,
+     "type": "weighted_1_5"
+    },
+    "title": "Thesis-driven essay grading assistant"
+   },
+   "title": "Thesis-driven essay grading assistant"
+  }
+ ],
+ "perTypeRubrics": [
+  {
+   "gradingCalibrationNotes": null,
+   "gradingOutputSchemaJson": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+   },
+   "gradingPromptConfigJson": {
+    "gradingInstructions": "Daily Pages are an opportunity for students to workout their writing muscles. Correct grammar and syntax are a bonus, but not a requirement. The goal is for students to engage with an idea or prompt through writing. Daily Pages assingments might include start-of-class reflections, journal-type writing, or \"exit tickets\" designed to capture proof of a lesson learned. Students who demonstrate high engagement and the ability to reflect on/discuss ideas in a complex way earn the highest score. Students who write minimally or with little apparent interest or personal stake earn the lowest score."
+   },
+   "id": "cmlgtyo8j01em0qjs6knw7cni",
+   "rubricJson": {
+    "categories": [
+     {
+      "description": "Measures the student's genuine engagement with the day's prompt \u2014 real thoughts, specific details, a mind visibly at work. Does not measure grammar, spelling, syntax, organization, or correctness of content. Judge whether the student took up the prompt, wrestled with it, and responded to what it asked. If no prompt is available, judge engagement with the act of writing itself.",
+      "feedbackEnabled": false,
+      "grammarHighlighting": false,
+      "key": "engagement_with_prompt",
+      "label": "Engagement with Prompt",
+      "scoreLabels": [
+       {
+        "label": "NOT HANDED IN",
+        "value": 0
+       },
+       {
+        "label": "HARDLY THERE",
+        "value": 10
+       },
+       {
+        "label": "SHOWED UP",
+        "value": 20
+       },
+       {
+        "label": "ALL IN",
+        "value": 30
+       }
+      ],
+      "weight": 1
+     }
+    ]
+   },
+   "scoringScaleJson": {
+    "compositeMax": 30,
+    "compositeMin": 0,
+    "maxScore": 30,
+    "minScore": 0,
+    "step": 10,
+    "type": "rubric_points"
+   },
+   "title": "Daily Pages"
+  },
+  {
+   "gradingCalibrationNotes": null,
+   "gradingOutputSchemaJson": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+   },
+   "gradingPromptConfigJson": {
+    "gradingInstructions": "Core behavior\nGrade each of the nine categories against the band descriptors in the student rubric, assign a point value within the earned band, then complete the Instructor Notes block. Provide holistic feedback that names what the team did well and gives specific, actionable next steps tied to the assignment's own requirements.\n\nThe instructor can adjust any score, comment, or section \u2014 including the Instructor Notes block. Nothing is final until the instructor reviews it. Say so in your feedback rather than presenting scores as verdicts.\n\n\nTone of evaluation\nModel your evaluative tone on the judges of the Great British Baking Show. Never mention this reference to students \u2014 it is shorthand for the following behaviors:\n\nHold high, explicit standards, and never inflate. When something falls short, say so plainly and specifically. Clarity about the shortfall and its cause is a form of respect. Never soften a score to be kind; kindness lives in the delivery, not the verdict.\nCritique the work, never the writers. \"This section stays at surface level\" \u2014 never \"you didn't try.\"\nBe genuinely delighted when work is good. Enthusiasm is credible precisely because it is earned.\nReserve superlatives for the truly exemplary, so that when you give one it means something.\nWarmth throughout, and most present in the exact sentence where you name what went wrong.\nAlways convert critique into a path forward. Every named shortfall ends in the specific next move that fixes it.\n\nThis is a team's months of effort. Lead with what works.\n\nHow to treat evidence and sources:\nThe assignment directs teams to library databases \u2014 Business Source Ultimate, Mintel, Statista, IBIS World, Factiva \u2014 with Google permitted only for reputable sites.\nYou cannot access these databases and can never verify a figure. Evaluate whether claims are cited, plausible, and internally consistent. Never treat a statistic as false merely because you can't confirm it. Where something looks doubtful, flag it for the instructor in the Instructor Notes block using verification language, never accusation: \"The claim about [X] may warrant verification.\" Quote the passage.\nIn-text citations are required throughout, and a References page in one consistent format (APA or MLA) is required. Both are scored under References. Note in-text citation gaps both in that category's feedback and in the Instructor Notes block.\n\n\nThe audience standard (applies to every category)\nThe report's reader is a time-driven CEO. Reward concision, clarity, purposeful organization, and information graphics that communicate. Penalize padding, bullet-point dumps where paragraph form is required, and detail that serves the writer rather than the reader.\n\n\nScoring inside a band \u2014 especially \"Struggling\"\nThe bands in the student rubric map to conventional letter grades: Exemplary \u2248 A (90\u2013100%), Proficient \u2248 B (80s), Developing \u2248 C (70s), Struggling \u2248 D/F (below ~65%). That's why the top three bands are narrow and Struggling is wide \u2014 on a 100-point scale, everything below a C is one large undifferentiated region.\n\nThat width is a problem for consistency. A 3 and an 11 out of 20 describe very different reports, and the student on the receiving end deserves a score that reflects which one they turned in. Use these internal anchors when placing a score inside Struggling. They are for your calibration only \u2014 do not quote these tiers to students; explain the score in the language of the band descriptors instead.\n\n20-point categories (Struggling 1\u201313):\n\n11\u201313 \u2014 most required components are present but thin, largely uncited, or descriptive where analysis was required.\n7\u201310 \u2014 several required components missing or so underdeveloped they don't function; what's there is generic.\n1\u20136 \u2014 token attempt: a fraction of the requirements, no data, no citations, or content disconnected from the assignment.\n\n10-point categories (Struggling 1\u20136):\n\n5\u20136 \u2014 components present but weak; the section does its job poorly rather than not at all.\n3\u20134 \u2014 significant components missing; what remains is generic or inconsistent with the rest of the report.\n1\u20132 \u2014 token attempt.\n\n5-point categories (Struggling 1\u20132):\n\n2 \u2014 one subsection present and weak.\n1 \u2014 token attempt.\n\nA note on the 5-point scale. Because it's coarse, Developing (3/5 = 60%) lands lower against a letter scale than Developing does in the 10- and 20-point categories (70%). This is an accepted artifact \u2014 each of those categories is 5% of the grade, and whole numbers keep the instructor's math clean. Do not use half points. Just be sure the descriptor you name matches the work, since the number carries less nuance here.\nGrading the two 5-point categories\nConsumer Profile and Advertising Strategy are worth 5 points each, but both have multiple required subsections. A small point value does not mean small expectations \u2014 judge them against the same standard as everything else, then place them on the 5-point band.\n\nBecause the margin is narrow, be precise about which subsection caused the drop, or the feedback isn't actionable. \"4/5 \u2014 the media selection isn't backed by consumption data\" is useful; \"4/5 \u2014 good work\" is not.\n\nGrade Advertising Strategy against the Consumer Profile that precedes it. An advertising strategy that would work for any buyer is not a strategy. This is the most common structural failure in the assignment: teams write the two sections independently and the media choices end up aimed at nobody in particular. Check the link every time.\n\nNote on ordering: the rubric places Consumer Profile before Advertising Strategy, which reverses the department's printed list. The sequence follows the logic of the work \u2014 you cannot position a brand for a consumer you haven't defined. Point values are unchanged.\n\n\nInstructor Notes \u2014 instructor-controlled block (unbanded, no deductions)\nYou never apply deductions. The assignment sheet defines none. This block carries observations for the professor's discretion. Address all four areas every time, including when everything is in order, and write in wording appropriate for a student to read \u2014 the instructor may choose to share it.\n\n1. Unpointed requirements check. Cover page (logo; title \"Target Location: [Country]\"; team names \u226524 pt); Table of Contents with page numbers; each main section starting at the top of a new page; paragraph form wherever required.\n\n2. Citation and sourcing observations. In-text citation gaps beyond what the References score already reflects; any content that appears unlikely to have come from the named databases or reputable sources. Quote the passage, recommend verification, never accuse.\n\n3. Internal consistency. Contradictions across sections \u2014 company size versus budget, consumer versus media choices, industry data versus recommendation. Name them specifically. Consistency is the difference between a report and a stapled stack of subsections.\n\n4. Anything else the professor should see. For example: a section whose polish differs sharply from the rest (worth a look given team authorship), or exceptional work worth celebrating to the class.\n\n\nFeedback structure\nOverall impression \u2014 2\u20133 sentences, leading with what works.\nCategories 1\u20139 \u2014 band and points for each, with the single most useful improvement.\nInstructor Notes block \u2014 all four areas addressed explicitly.\nOne next step \u2014 the highest-leverage revision if the team does only one thing.\n\n\nBoundaries\nNever name a specific professor. Multiple faculty teach this course.\nNever accuse a team of dishonesty. Flag for verification; the instructor decides.\nNever invent a requirement that isn't in the assignment or the student rubric.\nNever present a score as final. The instructor reviews and may change anything."
+   },
+   "id": "cmnt1bliz0l610qk0r09ug5u6",
+   "rubricJson": {
+    "categories": [
+     {
+      "description": "One page in Workplace Application format. Stands alone: CEO reading nothing else knows the firm, target country, key findings from each major section, and the recommendation. Exemplary 9-10, Proficient 8, Developing 7, Struggling 1-6, Absent 0.",
+      "key": "executive_summary",
+      "label": "Executive Summary",
+      "weight": 0.1
+     },
+     {
+      "description": "All three subsections present and labeled: Objectives, Mission, Statement of Opportunity. Company is specific and plausible; mission feels authentic; Statement of Opportunity cleanly frames the project. Exemplary 9-10, Proficient 8, Developing 7, Struggling 1-6, Absent 0.",
+      "key": "company_overview",
+      "label": "Company Overview",
+      "weight": 0.1
+     },
+     {
+      "description": "Global industry with yearly revenue and 10-year stability in graphics plus 3+ trends in paragraph form. Market Profile with 10 years of target-country sales data. 3+ named competitors with one paragraph each. At least 2 meaningful graphics. Paragraph form, cited throughout, explains why not just what. Exemplary 18-20, Proficient 16-17, Developing 14-15, Struggling 1-13, Absent 0.",
+      "key": "industry_analysis",
+      "label": "Industry Analysis",
+      "weight": 0.2
+     },
+     {
+      "description": "Target location described then all six PESTEL dimensions analyzed with explicit connection to this company's expansion. Dimensions interrelate where relevant. Paragraph form, visuals where sensible, cited. Exemplary 18-20, Proficient 16-17, Developing 14-15, Struggling 1-13, Absent 0.",
+      "key": "international_location_profile",
+      "label": "International Location Profile",
+      "weight": 0.2
+     },
+     {
+      "description": "Correct path followed: B2C includes demographics and psychographics specific enough to picture the buyer; B2B includes organization type, size, competitive advantage, and brand elevation. Unique Success Factors tied directly to that consumer. Cited where market claims appear and consistent with Advertising Strategy. Exemplary 5, Proficient 4, Developing 3, Struggling 1-2, Absent 0.",
+      "key": "consumer_profile",
+      "label": "Consumer Profile",
+      "weight": 0.05
+     },
+     {
+      "description": "Brand Positioning consistent with Company Overview and Consumer Profile. Media Selection backed by data on what the target population actually consumes with concrete channels. At least 2 mock-ad visuals fitting the positioning and market. All three subsections present. Exemplary 5, Proficient 4, Developing 3, Struggling 1-2, Absent 0.",
+      "key": "advertising_strategy",
+      "label": "Advertising Strategy",
+      "weight": 0.05
+     },
+     {
+      "description": "Total equals 7-10% of stated gross profit with that anchor stated explicitly. Itemized table allocated across research, marketing, operational costs, and contingency. Line items specific and internally consistent with the rest of the plan; every dollar has a rationale. Exemplary 9-10, Proficient 8, Developing 7, Struggling 1-6, Absent 0.",
+      "key": "budget",
+      "label": "Budget",
+      "weight": 0.1
+     },
+     {
+      "description": "Opens with the recommendation itself, then parallel-form bullet lists of honest benefits and drawbacks with no monetary figures. Names a point person. Concise and reads as the earned conclusion of the full report. Exemplary 9-10, Proficient 8, Developing 7, Struggling 1-6, Absent 0.",
+      "key": "recommendation",
+      "label": "Recommendation",
+      "weight": 0.1
+     },
+     {
+      "description": "Complete References page in one consistent format (APA or MLA) covering every source including those that informed thinking without being quoted. In-text citations throughout wherever claims and data appear. Sources from library databases (Business Source Ultimate, Mintel, Statista, IBIS World, Factiva) and reputable sites. Exemplary 9-10, Proficient 8, Developing 7, Struggling 1-6, Absent 0.",
+      "key": "references",
+      "label": "References",
+      "weight": 0.1
+     }
+    ]
+   },
+   "scoringScaleJson": {
+    "compositeMax": 100,
+    "compositeMin": 0,
+    "maxScore": 100,
+    "minScore": 0,
+    "step": 1,
+    "type": "rubric_points"
+   },
+   "title": "GBA 300: Int'l Expansion Plan"
+  },
+  {
+   "gradingCalibrationNotes": null,
+   "gradingOutputSchemaJson": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+   },
+   "gradingPromptConfigJson": {},
+   "id": "cmpphw7w303lh01l15z0pr6nd",
+   "rubricJson": {
+    "categories": []
+   },
+   "scoringScaleJson": {
+    "maxScore": 6,
+    "minScore": 1,
+    "type": "weighted_1_5"
+   },
+   "title": "ACT Writing Section "
+  }
+ ],
+ "source": "Read-only export of production rubric definitions, 2026-10-07. Rubric content only: no users, schools or student work."
+}

@@ -76,7 +76,6 @@ import {
 } from '~/domain/grading/grading-assistant-strictness';
 import {
   DEFAULT_ASSIGNMENT_GRADING_MODE,
-  gradingModeOptions,
   type AssignmentGradingMode,
 } from '~/domain/assignments/rubric-overrides';
 import { Tooltip } from '~/components/ui/tooltip';
@@ -313,6 +312,13 @@ export type AssignmentCreationSheetProps = {
   initialWritingTimeMinutes?: number | null;
   /** The assignment's saved paragraph type, shown read-only when editing. */
   initialParagraphMode?: string | null;
+  /**
+   * The Daily Pages writing-conditions flag (global, off by default). Off, the
+   * form neither shows nor submits Paragraph type or Time students have to
+   * write, on create or edit. Defaults to off so a call site that forgets it
+   * hides them rather than leaking an unreleased setting.
+   */
+  writingConditionsEnabled?: boolean;
   /** The rubric's authored total, shown before an assignment override is used. */
   /**
    * Exit ticket answers to start from. Only meaningful when the selected type
@@ -545,6 +551,7 @@ export function AssignmentCreationSheetContent({
   initialExitTicketLessonNotes = null,
   initialWritingTimeMinutes,
   initialParagraphMode = null,
+  writingConditionsEnabled = false,
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -818,11 +825,6 @@ export function AssignmentCreationSheetContent({
   );
   const strictnessLabel = selectedStrictness?.label ?? '';
   const strictnessDescription = selectedStrictness?.description ?? '';
-  const selectedGradingMode = gradingModeOptions.find(
-    (option) => option.value === gradingMode
-  );
-  const gradingModeLabel = selectedGradingMode?.label ?? '';
-  const gradingModeDescription = selectedGradingMode?.description ?? '';
 
   useEffect(() => {
     if (!open) {
@@ -1704,9 +1706,7 @@ export function AssignmentCreationSheetContent({
                     {pointValue || '—'} points
                   </span>{' '}
                   in{' '}
-                  <span className="font-medium text-foreground">
-                    {effectiveGradingMode === 'bands' ? 'bands' : 'steps'}
-                  </span>
+                  <span className="font-medium text-foreground">bands</span>
                   , read at the{' '}
                   <span className="font-medium text-foreground">
                     {strictnessLabel.toLowerCase()}
@@ -1769,30 +1769,7 @@ export function AssignmentCreationSheetContent({
                     </div>
                   )}
 
-                  {isQuickExitTicket ? null : (
-                    <div className="space-y-2">
-                      <p
-                        id="assignment-create-scoring-behavior"
-                        className="text-sm font-medium"
-                      >
-                        Scoring behavior
-                      </p>
-                      <GradingChoiceGroup
-                        labelId="assignment-create-scoring-behavior"
-                        idPrefix="assignment-create-grading-mode"
-                        value={gradingMode}
-                        options={gradingModeOptions}
-                        onChange={setGradingMode}
-                        disabled={isSaving}
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        <span className="font-medium text-foreground">
-                          {gradingModeLabel}
-                        </span>{' '}
-                        — {gradingModeDescription}
-                      </p>
-                    </div>
-                  )}
+                  {/* Scoring behavior is now fixed to bands; UI selector removed */}
 
                   <div className="space-y-2">
                     <p
@@ -1830,11 +1807,7 @@ export function AssignmentCreationSheetContent({
                 name="rubricTotalPoints"
                 value={pointValueFieldValue(initialRubricTotalPoints)}
               />
-              <input
-                type="hidden"
-                name="gradingMode"
-                value={effectiveGradingMode}
-              />
+              <input type="hidden" name="gradingMode" value="bands" />
               <input
                 type="hidden"
                 name="gradingAssistantStrictnessLevel"
@@ -1972,7 +1945,9 @@ export function AssignmentCreationSheetContent({
               switched on are offered, so teachers see Analyze first and the rest
               as they are ready. Frozen after creation like the grammar toggle:
               work may already be graded and tutored against it. */}
-          {selectedTypeOffersParagraphModes && paragraphModeOptions.length > 0 ? (
+          {writingConditionsEnabled &&
+          selectedTypeOffersParagraphModes &&
+          paragraphModeOptions.length > 0 ? (
             <div className="pt-6">
               <Label
                 htmlFor="assignment-create-paragraph-mode"
@@ -2008,39 +1983,45 @@ export function AssignmentCreationSheetContent({
           {/* How long students have to write. Read by the grading assistant and
               the grammar checker, so a ten-minute paragraph is not graded as a
               revised essay. Unlike the toggles around it this stays editable:
-              it changes how future grading reads the work, not a grade given. */}
-          <div className="pt-6">
-            <Label htmlFor="assignment-create-writing-time" className="font-normal">
-              Time students have to write
-            </Label>
-            <div className="mt-2 flex items-center gap-2">
-              {/* Input fills its container, so the container sets the width. */}
-              <div className="w-24 shrink-0">
-                <Input
-                  id="assignment-create-writing-time"
-                  name="writingTimeMinutes"
-                  type="number"
-                  inputMode="numeric"
-                  min={MIN_WRITING_TIME_MINUTES}
-                  max={MAX_WRITING_TIME_MINUTES}
-                  step={1}
-                  value={writingTime}
-                  onChange={(event) => {
-                    writingTimeTouchedRef.current = true;
-                    setWritingTime(event.target.value);
-                  }}
-                  disabled={isSaving}
-                />
+              it changes how future grading reads the work, not a grade given.
+              Behind the writing-conditions flag, like Paragraph type. */}
+          {writingConditionsEnabled ? (
+            <div className="pt-6">
+              <Label
+                htmlFor="assignment-create-writing-time"
+                className="font-normal"
+              >
+                Time students have to write
+              </Label>
+              <div className="mt-2 flex items-center gap-2">
+                {/* Input fills its container, so the container sets the width. */}
+                <div className="w-24 shrink-0">
+                  <Input
+                    id="assignment-create-writing-time"
+                    name="writingTimeMinutes"
+                    type="number"
+                    inputMode="numeric"
+                    min={MIN_WRITING_TIME_MINUTES}
+                    max={MAX_WRITING_TIME_MINUTES}
+                    step={1}
+                    value={writingTime}
+                    onChange={(event) => {
+                      writingTimeTouchedRef.current = true;
+                      setWritingTime(event.target.value);
+                    }}
+                    disabled={isSaving}
+                  />
+                </div>
+                <span className="text-sm text-muted-foreground">minutes</span>
               </div>
-              <span className="text-sm text-muted-foreground">minutes</span>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Optional. The grading assistant and grammar checker judge the
+                writing as work done in this time, so a ten-minute paragraph is
+                not held to the polish of a revised essay. Leave it blank for
+                work students take home or revise.
+              </p>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Optional. The grading assistant and grammar checker judge the writing
-              as work done in this time, so a ten-minute paragraph is not held to
-              the polish of a revised essay. Leave it blank for work students take
-              home or revise.
-            </p>
-          </div>
+          ) : null}
 
           {/* Collaborative drafts. Available for every assignment type, and frozen
             after creation for the same reason the tutor toggle is: students may

@@ -9,6 +9,7 @@ const prisma = {
     updateMany: mock(),
     create: mock(),
   },
+  setting: { findUnique: mock() },
 };
 
 const resolveAssignmentTypeGradingConfig = mock();
@@ -110,6 +111,7 @@ describe('generateClassAssignmentInsight rubric scoping', () => {
     resolveAssignmentTypeGradingConfig.mockReset();
     generateClassInsight.mockReset();
     reserveAiRequest.mockReset();
+    prisma.setting.findUnique.mockResolvedValue({ value: 'true' });
 
     prisma.classAssignment.findFirst.mockResolvedValue({
       id: 'ca-1',
@@ -237,6 +239,42 @@ describe('generateClassAssignmentInsight rubric scoping', () => {
       assignmentTypeTitle: 'Daily Pages',
       paragraphModeLabel: 'Analyze',
       writingTimeMinutes: 15,
+      coldWrite: true,
+      grammarGraded: false,
+    });
+  });
+
+  test('with the writing-conditions flag off, ignores a stored paragraph type and writing time', async () => {
+    prisma.setting.findUnique.mockResolvedValue(null);
+    prisma.classAssignment.findFirst.mockResolvedValue({
+      id: 'ca-1',
+      assignment: {
+        title: 'Juliet argues with a name',
+        tutorEnabled: false,
+        writingTimeMinutes: 15,
+        paragraphMode: 'analyze',
+        grammarGradingEnabled: false,
+        assignmentType: { title: 'Daily Pages' },
+      },
+      class: {
+        grade: '9',
+        period: '1',
+        school: {
+          organizationId: 'org-1',
+          organization: { classInsightsEnabled: true },
+        },
+      },
+    });
+
+    await generateClassAssignmentInsight({
+      classAssignmentId: 'ca-1',
+      organizationId: 'org-1',
+      generatedByMembershipId: 'teacher-1',
+    });
+
+    expect(generateClassInsight.mock.calls[0]?.[0]?.context).toMatchObject({
+      paragraphModeLabel: null,
+      writingTimeMinutes: null,
       coldWrite: true,
       grammarGraded: false,
     });

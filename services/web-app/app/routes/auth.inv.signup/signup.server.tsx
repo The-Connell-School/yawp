@@ -18,6 +18,8 @@ import {
   isValidUaPartnerCode,
   requireUaOrganizationId,
 } from '~/utils/ua-partner.server';
+import { enforceUnauthByIpAndTarget, rateLimitedFormResponse } from '~/utils/rate-limit.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
 
 export async function studentSignupAction(
   { request }: ActionFunctionArgs,
@@ -44,12 +46,28 @@ export async function studentSignupAction(
     );
   }
   const normalizedEmail = normalizeEmail(data.email);
+  {
+    const cfg = RATE_LIMITS.unauth.signup;
+    const decision = await enforceUnauthByIpAndTarget({
+      request,
+      route: '/auth/inv/signup',
+      targetKey: normalizedEmail,
+      perIpPerMinute: cfg.perIpPerMinute,
+      perIpPerHour: cfg.perIpPerHour,
+      perTargetPerHour: cfg.perEmailPerHour,
+    });
+    if (!decision.allowed) {
+      return rateLimitedFormResponse('email', decision.retryAfterSeconds, 'Too many sign-up attempts. Please wait and try again.');
+    }
+  }
 
+  // Teachers often paste class codes with trailing spaces; trim before lookup.
+  const accessCode = data.code?.trim() || undefined;
   const classes = isUa
     ? []
     : await prisma.class.findMany({
         where: {
-          code: { equals: data.code!, mode: 'insensitive' },
+          code: { equals: accessCode!, mode: 'insensitive' },
           isArchived: false,
         },
         select: { id: true },
@@ -68,8 +86,16 @@ export async function studentSignupAction(
   });
 
   if (existingUser) {
+    // Support often walks locked-out students through Sign up (asks for a class
+    // code). When the account already exists they report "class code rejected"
+    // even though the real issue is the wrong flow. Point them at login/reset.
     return validationError(
-      { fieldErrors: { email: 'An account with this email already exists.' } },
+      {
+        fieldErrors: {
+          email:
+            'An account with this email already exists. Use Log in, or Forgot password to reset it — you do not need a class code to reset your password.',
+        },
+      },
       data
     );
   }

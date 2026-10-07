@@ -7,7 +7,10 @@ import { EmailSchema } from '~/utils/schemas/user';
 
 export const GenericStudentSignupSchema = z.object({
   email: EmailSchema,
-  code: z.string().min(1, 'Code is required'),
+  code: z
+    .string()
+    .trim()
+    .min(1, 'Code is required'),
 });
 
 export const UaStudentSignupSchema = z.object({
