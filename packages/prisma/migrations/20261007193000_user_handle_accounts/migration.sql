@@ -32,3 +32,27 @@ DO $$ BEGIN
     CHECK ("email" IS NOT NULL OR "username" IS NOT NULL);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+UPDATE "User"
+SET "emailVerifiedAt" = "createdAt"
+WHERE "email" IS NOT NULL AND "emailVerifiedAt" IS NULL;
+
+ALTER TABLE "Class" ADD COLUMN IF NOT EXISTS "studentJoinToken" TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS "Class_studentJoinToken_key" ON "Class"("studentJoinToken");
+
+UPDATE "Class" c
+SET "studentJoinToken" = replace(
+  replace(
+    replace(encode(gen_random_bytes(18), 'base64'), '/', '_'),
+    '+',
+    '-'
+  ),
+  '=',
+  ''
+)
+FROM "School" s
+JOIN "Organization" o ON s."organizationId" = o.id
+WHERE c."schoolId" = s.id
+  AND o.plan = 'FREE_CLASSROOM'
+  AND c."studentJoinToken" IS NULL;

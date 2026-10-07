@@ -114,6 +114,8 @@ model Class {
   createdAt                       DateTime                         @default(now()) @db.Timestamptz(6)
   updatedAt                       DateTime                         @default(now()) @db.Timestamptz(6)
   code                            String
+  /// Globally unique token for free-tier student join links (cross-tenant safe).
+  studentJoinToken                String?                          @unique
   schoolYear                      String                           @default("2024-2025")
   period                          String?
   grade                           String?
