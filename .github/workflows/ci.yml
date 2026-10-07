@@ -298,6 +298,8 @@ jobs:
             app/domain/feature-flags/feature-flags.test.ts \
             app/domain/feature-flags/feature-flags.server.test.ts \
             app/utils/internal-feature-flags-http.server.test.ts \
+            app/domain/rubrics/rubric-promotion.test.ts \
+            app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
             app/routes/api.assignments.create/route.test.ts \
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/routes/api.domain.grade-essay-ai/route.test.ts \
