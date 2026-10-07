@@ -1355,18 +1355,44 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   let score: string;
   const holisticSelected =
     (resolvedGradingConfig.scoringMode ?? 'weighted_categories') ===
-      'holistic_tier' ||
-    (parsed as any)?.overallTier != null ||
-    (parsed as any)?.overallPoints != null;
+    'holistic_tier';
+  // Track when holistic mode was configured but we had to fall back to weighted.
+  let holisticFallbackReason:
+    | null
+    | 'missing_total'
+    | 'invalid_output' = null;
+
   if (holisticSelected) {
+    // Prefer the assignment's point total; if missing/invalid, fall back to the
+    // rubric's configured total points when available.
     const totalRaw =
       submission.document.assignment?.pointValue == null
         ? null
         : Number(submission.document.assignment?.pointValue);
-    const assignmentTotal =
-      totalRaw == null || !Number.isFinite(totalRaw) || totalRaw <= 0
-        ? 10
-        : totalRaw;
+    const rubricTotalRaw =
+      resolvedGradingConfig.rubricTotalPoints == null
+        ? null
+        : Number(resolvedGradingConfig.rubricTotalPoints);
+    const assignmentTotalCandidate =
+      totalRaw != null && Number.isFinite(totalRaw) && totalRaw > 0
+        ? totalRaw
+        : rubricTotalRaw != null &&
+            Number.isFinite(rubricTotalRaw) &&
+            rubricTotalRaw > 0
+          ? rubricTotalRaw
+          : null;
+    if (assignmentTotalCandidate == null) {
+      console.warn(
+        'Holistic grading fallback: missing/invalid assignment total and rubric total points',
+        {
+          assignmentPointValue: submission.document.assignment?.pointValue ??
+            null,
+          rubricTotalPoints: resolvedGradingConfig.rubricTotalPoints ?? null,
+        }
+      );
+      holisticFallbackReason = 'missing_total';
+    }
+    const assignmentTotal = assignmentTotalCandidate ?? 0;
     const round = (n: number) => Math.round(n);
     const lowerExcellent = round(0.9 * assignmentTotal);
     const lowerGood = round(0.8 * assignmentTotal);
@@ -1377,39 +1403,115 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       needs_more: { min: lowerNeedsMore, max: lowerGood - 1 },
       not_present: { min: 0, max: lowerNeedsMore - 1 },
     } as const;
-    const tier =
-      (((parsed as any).overallTier as
+    const parseHolisticTuple = (p: unknown) => {
+      const t =
+        (((p as any)?.overallTier as
         | 'excellent'
         | 'good'
         | 'needs_more'
-        | 'not_present') ?? 'not_present');
-    const reqPointsAny = (parsed as any).overallPoints;
-    const requestedPoints =
-      typeof reqPointsAny === 'number'
-        ? reqPointsAny
-        : typeof reqPointsAny === 'string'
-          ? Number.parseInt(reqPointsAny, 10)
-          : Number.NaN;
-    const band = bandByTier[tier] ?? bandByTier.not_present;
-    const clamped =
-      requestedPoints < band.min
-        ? band.min
-        : requestedPoints > band.max
-          ? band.max
-          : requestedPoints;
-    if (requestedPoints !== clamped) {
-      console.warn('Holistic grading points adjusted to band', {
-        requestedPoints,
-        adjustedPoints: clamped,
-        tier,
-        band,
-        assignmentTotal,
-      });
+        | 'not_present') ?? null);
+      const r = (p as any)?.overallPoints;
+      const pts =
+        typeof r === 'number'
+          ? r
+          : typeof r === 'string'
+            ? Number.parseInt(r, 10)
+            : Number.NaN;
+      return { tier: t, requestedPoints: pts };
+    };
+    const allowedTiers = new Set([
+      'excellent',
+      'good',
+      'needs_more',
+      'not_present',
+    ]);
+
+    const validateAndClamp = (p: unknown) => {
+      const { tier, requestedPoints } = parseHolisticTuple(p);
+      if (
+        !tier ||
+        !allowedTiers.has(tier as string) ||
+        !Number.isFinite(requestedPoints)
+      ) {
+        return { ok: false as const };
+      }
+      const band = bandByTier[tier as keyof typeof bandByTier] ??
+        bandByTier.not_present;
+      const clamped =
+        requestedPoints < band.min
+          ? band.min
+          : requestedPoints > band.max
+            ? band.max
+            : requestedPoints;
+      if (requestedPoints !== clamped) {
+        console.warn('Holistic grading points adjusted to band', {
+          requestedPoints,
+          adjustedPoints: clamped,
+          tier,
+          band,
+          assignmentTotal,
+        });
+      }
+      return { ok: true as const, clamped };
+    };
+
+    let useHolistic = assignmentTotalCandidate != null;
+    let validated =
+      assignmentTotalCandidate != null ? validateAndClamp(parsed) : { ok: false as const };
+
+    // Retry once when invalid holistic fields are returned.
+    if (useHolistic && !validated.ok) {
+      try {
+        const retryText = await getGradingLlmCompletion({
+          model,
+          system,
+          messages: compiledInvocation.messages,
+          maxTokens,
+          metadata: {
+            feature: 'grading',
+            kind: 'rubric-evaluation',
+            retry: 'holistic-retry',
+            gradingConfigSource: resolvedGradingConfig.source,
+            ...gradingAiContextMetadata,
+            assignmentTypeGradingLabel: resolvedGradingConfig.label,
+          },
+        });
+        parsed = await parseAiResponse(retryText);
+        validated = validateAndClamp(parsed);
+      } catch (error) {
+        if (isGradingRequestDeadlineError(error)) {
+          return gradingDeadlineResponse();
+        }
+        if (isLlmFallbackRetrySignal(error)) return retryResponse();
+      }
     }
-    overallScore = clamped;
-    numericPercentage = null;
-    letterGrade = null;
-    score = `${overallScore}/${assignmentTotal}`;
+
+    if (useHolistic && validated.ok) {
+      overallScore = validated.clamped;
+      numericPercentage = null;
+      letterGrade = null;
+      score = `${overallScore}/${assignmentTotal}`;
+    } else {
+      // Holistic configured, but invalid. Fall back to weighted without crashing.
+      holisticFallbackReason = holisticFallbackReason ?? 'invalid_output';
+      const baseGradeFields = buildDynamicGradeFields({
+        categories: parsed.categories,
+        rubricScores,
+        scoringType,
+        maxScore,
+        rubricCategories,
+        bandScored: promptShape.bandScored,
+      });
+      const adjusted = applyStrictnessToGradeFields({
+        ...baseGradeFields,
+        scoringType,
+        gradingAssistantStrictnessLevel,
+      });
+      overallScore = adjusted.overallScore;
+      numericPercentage = adjusted.numericPercentage;
+      letterGrade = adjusted.letterGrade;
+      score = adjusted.score ?? '';
+    }
   } else {
     const baseGradeFields = buildDynamicGradeFields({
       categories: parsed.categories,
@@ -1608,7 +1710,18 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
                   ? (parsed as any).overallPoints
                   : null,
               storedPoints: overallScore,
-              totalPoints: submission.document.assignment?.pointValue ?? null,
+              totalPoints:
+                submission.document.assignment?.pointValue ??
+                resolvedGradingConfig.rubricTotalPoints ??
+                null,
+            },
+          }
+        : {}),
+      ...(holisticSelected && holisticFallbackReason
+        ? {
+            holisticFallback: {
+              reason: holisticFallbackReason,
+              usedWeightedScore: true,
             },
           }
         : {}),

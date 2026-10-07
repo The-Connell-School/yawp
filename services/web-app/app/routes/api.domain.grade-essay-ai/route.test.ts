@@ -2405,6 +2405,68 @@ describe('api.domain.grade-essay-ai', () => {
     expect(stored.rubricScores.country_1.score).toBe(18);
   });
 
+  test('a weighted rubric ignores unsolicited holistic overallTier/overallPoints in model output', async () => {
+    const bands = (max: number) => [
+      { min: 0, max: 0, label: 'Absent', description: 'Missing.' },
+      { min: 1, max, label: 'Present', description: 'Inside range.' },
+    ];
+    const categories = [
+      { key: 'alpha', label: 'Alpha', description: 'A', weight: 0.5, bands: bands(20), grammarHighlighting: false },
+      { key: 'beta', label: 'Beta', description: 'B', weight: 0.5, bands: bands(20), grammarHighlighting: false },
+    ];
+
+    prisma.assignmentType.findUnique.mockResolvedValue(
+      mockAssignmentType({
+        id: 'assignment-type-weighted',
+        title: 'Weighted Two-Section',
+        scoringScaleJson: { type: 'weighted_percent', minScore: 0, maxScore: 20, step: 1 },
+        rubricJson: { categories },
+        gradingPromptConfigJson: { gradingInstructions: 'Use raw points inside each band.' },
+      })
+    );
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'sub-weighted',
+        document: {
+          ...mockSubmission().document,
+          assignmentTypeId: 'assignment-type-weighted',
+          assignmentType: { id: 'assignment-type-weighted', kind: null, title: 'Weighted Two-Section' },
+        },
+      })
+    );
+    getLLMCompletion.mockReset();
+    // Include stray holistic fields that must be ignored for weighted rubrics.
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        categories: [
+          { key: 'alpha', score: 16, comment: 'Solid.' },
+          { key: 'beta', score: 18, comment: 'Strong.' },
+        ],
+        overallTier: 'excellent',
+        overallPoints: 20,
+        overallComment: 'Jordan, balanced performance.',
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-weighted');
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+    // Weighted percent: (16/20*50 + 18/20*50) = 85 -> rounds to 85
+    expect(stored.numericPercentage).toBe(85);
+    expect(stored.letterGrade).toBe('B');
+    expect(stored.score).toBe('85% (B)');
+    // No holistic meta should be recorded.
+    expect(stored.aiMeta.holistic).toBeUndefined();
+    expect(stored.aiMeta.scoringMode).toBe('weighted_categories');
+  });
+
   describe('a Class Starter submission', () => {
     function mockClassStarterSubmission(id: string) {
       return mockSubmission({
@@ -2865,6 +2927,64 @@ describe('api.domain.grade-essay-ai', () => {
         requestedPoints: 20,
         storedPoints: 17,
         totalPoints: 20,
+      });
+    });
+
+    test('retries once on invalid holistic fields then falls back to weighted with meta', async () => {
+      prisma.submission.findFirst.mockResolvedValue(mockHolisticAssignment());
+      getLLMCompletion.mockReset();
+      // First invalid holistic payload
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: [
+              { key: 'thesis_and_content', score: 3, comment: 'Clear claim.' },
+              { key: 'evidence_and_support', score: 3, comment: 'Two quotations used.' },
+              { key: 'analysis_and_reasoning', score: 3, comment: 'Explains meaning.' },
+              { key: 'organization', score: 3, comment: 'All elements in order.' },
+              { key: 'style_and_voice', score: 3, comment: 'Direct and readable.' },
+              { key: 'style_and_conventions', score: 3, comment: 'Minor surface errors only.' },
+            ],
+            overallTier: 'awesome', // invalid
+            overallPoints: 'NaN',   // invalid
+            overallComment: 'Jordan, solid work.',
+          })
+        )
+        // Retry still invalid
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: [
+              { key: 'thesis_and_content', score: 3, comment: 'Clear claim.' },
+              { key: 'evidence_and_support', score: 2, comment: 'One quotation.' },
+              { key: 'analysis_and_reasoning', score: 3, comment: 'Explains meaning.' },
+              { key: 'organization', score: 3, comment: 'All elements in order.' },
+              { key: 'style_and_voice', score: 3, comment: 'Direct and readable.' },
+              { key: 'style_and_conventions', score: 3, comment: 'Minor surface errors only.' },
+            ],
+            overallTier: 'legendary',
+            overallPoints: 'not-a-number',
+            overallComment: 'Jordan, steady.',
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      const form = new FormData();
+      form.append('submissionId', 'sub-holistic');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      const payload = (response as { data: Record<string, unknown> }).data;
+      // Fell back to weighted percentage path
+      expect(payload.numericPercentage).not.toBeNull();
+      expect(payload.letterGrade).not.toBeNull();
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.aiMeta.holisticFallback).toMatchObject({
+        reason: 'invalid_output',
+        usedWeightedScore: true,
       });
     });
   });
