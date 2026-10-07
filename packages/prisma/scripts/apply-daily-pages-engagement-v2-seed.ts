@@ -9,6 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../generated/prisma';
 import { createPrismaClient } from './local-dev/connection';
+import { LOCAL_DEV_ORG_ID } from './local-dev/dev-personas';
 import engagementLibrary from '../../../services/web-app/app/domain/rubrics/library/daily-pages-engagement.json';
 
 const ENGAGEMENT_RUBRIC_ID = 'cmsvqo8lf002801l60o74x8wr';
@@ -95,11 +96,19 @@ export async function seedDpConsolidationQaPreviewFixtures(
   engagementRubricId: string
 ) {
   const teacher = await prisma.orgMembership.findFirst({
-    where: { user: { email: 'dev.teacher@yawp.local' }, role: 'TEACHER' },
+    where: {
+      user: { email: 'dev.teacher@yawp.local' },
+      role: 'TEACHER',
+      organizationId: LOCAL_DEV_ORG_ID,
+    },
     select: { id: true, organizationId: true },
   });
   const student = await prisma.orgMembership.findFirst({
-    where: { user: { email: 'dev.student@yawp.local' }, role: 'STUDENT' },
+    where: {
+      user: { email: 'dev.student@yawp.local' },
+      role: 'STUDENT',
+      organizationId: LOCAL_DEV_ORG_ID,
+    },
     select: { id: true },
   });
   const klass = teacher
