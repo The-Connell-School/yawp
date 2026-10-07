@@ -32,6 +32,7 @@ const membershipSelect = {
       writingPracticeEnabled: true,
       submissionActivityEnabled: true,
       revisionFlowEnabled: true,
+      googleClassroomEnabled: true,
     },
   },
 } as const;
