@@ -741,7 +741,7 @@ ensure_preview_seats() {
     return 0
   fi
   "${compose[@]}" run --rm toolbox bash -lc \
-    'cd packages/prisma && bun run seed-preview-seats'
+    'bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run seed-preview-seats'
 }
 
 remove_legacy_project_postgres() {
