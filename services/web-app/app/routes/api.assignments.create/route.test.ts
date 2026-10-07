@@ -120,6 +120,7 @@ function mockAssignmentTypeAvailable({
     systemKey,
     collaborationSupported,
     kind,
+    rubric: null,
   });
 }
 
@@ -209,7 +210,12 @@ describe('api.assignments.create', () => {
         id: 'at-1',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true, kind: true },
+      select: {
+        id: true,
+        systemKey: true,
+        kind: true,
+        rubric: { select: { name: true, schemaJson: true } },
+      },
     });
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -702,7 +708,12 @@ describe('api.assignments.create', () => {
         id: 'at-forbidden',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true, kind: true },
+      select: {
+        id: true,
+        systemKey: true,
+        kind: true,
+        rubric: { select: { name: true, schemaJson: true } },
+      },
     });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
