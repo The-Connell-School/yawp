@@ -35,7 +35,7 @@ function request(url, { method = 'GET', body, headers = {} } = {}) {
   });
 }
 
-function appendPath(baseUrl, pathname) {
+export function appendPath(baseUrl, pathname) {
   const url = new URL(baseUrl);
   url.pathname = pathname;
   url.search = '';
@@ -148,11 +148,12 @@ export async function enterPreviewAccess({
   return cookie;
 }
 
-export async function runLoginSmoke({
+export async function loginCookieHeader({
   baseUrl,
   email,
   password,
   accessCode,
+  redirectTo = '/app',
   requestFn = request,
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required');
@@ -166,7 +167,7 @@ export async function runLoginSmoke({
   const form = new URLSearchParams({
     email,
     password,
-    redirectTo: '/app',
+    redirectTo,
   }).toString();
 
   const login = await requestFn(appendPath(baseUrl, '/auth/login'), {
@@ -186,7 +187,24 @@ export async function runLoginSmoke({
   if (!authCookies) {
     throw new Error('Expected login to set an auth cookie');
   }
-  const cookies = `${accessCookie}; ${authCookies}`;
+  return `${accessCookie}; ${authCookies}`;
+}
+
+export async function runLoginSmoke({
+  baseUrl,
+  email,
+  password,
+  accessCode,
+  requestFn = request,
+} = {}) {
+  const cookies = await loginCookieHeader({
+    baseUrl,
+    email,
+    password,
+    accessCode,
+    redirectTo: '/app',
+    requestFn,
+  });
 
   const app = await getWithRedirects(appendPath(baseUrl, '/app'), {
     cookie: cookies,

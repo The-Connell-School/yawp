@@ -9,6 +9,7 @@
  *   SHIP_REVIEW_OUT_DIR — defaults to ./ship-review-screenshots
  */
 import { chromium } from 'playwright';
+import { loginCookieHeader } from './smoke-login.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -52,17 +53,26 @@ async function devLogin(page, email) {
 }
 
 async function passwordLogin(page, email, redirectTo = '/app') {
-  await page.goto(
-    `${baseUrl}/auth/login?redirectTo=${encodeURIComponent(redirectTo)}`,
-    { waitUntil: 'networkidle' }
-  );
-  await page.fill('input[name="email"]', email);
-  await page.fill('input[name="password"]', password);
-  await page.locator('form').evaluate((form) => form.submit());
-  await page.waitForURL(
-    (url) => url.pathname === redirectTo || url.pathname.startsWith(`${redirectTo}/`),
-    { timeout: 45_000 }
-  );
+  const cookieHeader = await loginCookieHeader({
+    baseUrl,
+    accessCode,
+    email,
+    password,
+    redirectTo,
+  });
+  const host = new URL(baseUrl).hostname;
+  const secure = baseUrl.startsWith('https:');
+  for (const part of cookieHeader.split(';')) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const eq = trimmed.indexOf('=');
+    const name = eq === -1 ? trimmed : trimmed.slice(0, eq);
+    const value = eq === -1 ? '' : trimmed.slice(eq + 1);
+    await page.context().addCookies([
+      { name, value, domain: host, path: '/', secure, sameSite: 'Lax' },
+    ]);
+  }
+  await page.goto(`${baseUrl}${redirectTo}`, { waitUntil: 'networkidle' });
 }
 
 async function shot(page, name) {
