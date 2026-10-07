@@ -1263,9 +1263,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         ) {
           return {
             ...parsed,
-            // @ts-expect-error carry through extra fields when present
             overallPoints: Number(maybePoints),
-            // @ts-expect-error carry through extra fields when present
             overallTier: maybeTier,
           } as any;
         }
@@ -1283,9 +1281,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         ) {
           return {
             ...parsed,
-            // @ts-expect-error carry through extra fields when present
             overallPoints: Number(maybePoints),
-            // @ts-expect-error carry through extra fields when present
             overallTier: maybeTier,
           } as any;
         }
