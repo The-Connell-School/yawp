@@ -1,3 +1,4 @@
+/** Maps rubric catalog failures to admin toggle API responses. */
 import { CatalogError } from '~/domain/rubrics/rubric-catalog.server';
 
 export function rubricCatalogErrorResponse(error: unknown) {
