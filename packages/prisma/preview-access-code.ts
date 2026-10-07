@@ -82,6 +82,32 @@ export type GeneratedPreviewAccessSeat = {
   label: string;
 };
 
+export const PREVIEW_FREE_CLASSROOM_ACCESS_LABEL = 'Free classroom';
+
+/** Preview-only org for Free Tier A QA (see seed-preview-free-classroom.ts). */
+export const PREVIEW_FREE_CLASSROOM_ORG_ID = 'preview-free-classroom';
+
+export function withFreeClassroomPreviewAccessSeat(
+  seats: GeneratedPreviewAccessSeat[],
+  generateCode: () => string = generatePreviewAccessCode
+): GeneratedPreviewAccessSeat[] {
+  if (
+    seats.some((seat) => seat.organizationId === PREVIEW_FREE_CLASSROOM_ORG_ID)
+  ) {
+    return seats;
+  }
+  const usedCodes = seats.map((seat) => seat.code);
+  const code = generateUniquePreviewAccessCode(usedCodes, generateCode);
+  return [
+    ...seats,
+    {
+      code,
+      organizationId: PREVIEW_FREE_CLASSROOM_ORG_ID,
+      label: PREVIEW_FREE_CLASSROOM_ACCESS_LABEL,
+    },
+  ];
+}
+
 function previewSeatIdentity(
   number: number,
   masterOrganizationId: string,

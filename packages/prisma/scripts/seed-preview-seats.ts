@@ -12,6 +12,7 @@ import {
 } from './preview-seats';
 import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { attachApHistorySourceImages } from './local-dev/seed-ap-history';
+import { ensurePreviewFreeClassroomFixture } from './local-dev/seed-preview-free-classroom';
 
 assertLocalSeedTarget();
 
@@ -23,6 +24,8 @@ const prisma = createPrismaClient();
 
 try {
   const results = await ensurePreviewSeats(prisma, seats);
+  const freeClassroom = await ensurePreviewFreeClassroomFixture(prisma);
+  console.log(`Preview free classroom fixture: ${freeClassroom.status}`);
   const writingPractice = await enableWritingPracticeForPreviewOrganizations(
     prisma,
     seats.map(({ organizationId }) => organizationId)
