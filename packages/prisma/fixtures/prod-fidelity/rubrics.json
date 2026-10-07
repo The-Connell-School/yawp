@@ -78,7 +78,8 @@
       "outputSchema": {
         "responseShape": "categories_overall_comment",
         "schemaVersion": 1,
-        "assignmentPointScaling": "daily_pages_engagement_v2"
+        "assignmentPointScaling": "daily_pages_engagement_v2",
+        "teacherNotesEnabled": true
       },
       "calibrationNotes": null
     }
