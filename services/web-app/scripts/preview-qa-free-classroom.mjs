@@ -8,6 +8,10 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
+import {
+  enterPreviewAccess,
+  shouldUseDevLogin,
+} from '../../../scripts/preview/smoke-login.mjs';
 
 const PREVIEW_FREE_CLASSROOM_TEACHER_EMAIL = 'dev.teacher.free@yawp.local';
 const PREVIEW_FREE_CLASSROOM_STUDENT_EMAIL = 'dev.student.free@yawp.local';
@@ -17,9 +21,26 @@ const OUT_DIR =
 
 const base = (process.env.PREVIEW_URL ?? '').replace(/\/$/, '');
 const code = process.env.PREVIEW_ACCESS_CODE?.trim();
+const previewPassword =
+  process.env.PREVIEW_LOGIN_PASSWORD?.trim() || 'yawp-dev';
+const previewRuntime = process.env.PREVIEW_RUNTIME || 'fast';
+const previewDataMode = process.env.PREVIEW_DATA_MODE || 'seed';
 if (!base || !code) {
   console.error('Set PREVIEW_URL and PREVIEW_ACCESS_CODE');
   process.exit(1);
+}
+
+function cookiesFromHeader(cookieHeader, url) {
+  const hostname = new URL(url).hostname;
+  return cookieHeader
+    .split('; ')
+    .filter(Boolean)
+    .map((pair) => {
+      const index = pair.indexOf('=');
+      const name = pair.slice(0, index);
+      const value = pair.slice(index + 1);
+      return { name, value, domain: hostname, path: '/' };
+    });
 }
 
 const results = [];
@@ -45,12 +66,34 @@ async function shot(name) {
   return path;
 }
 
-async function devLogin(email) {
-  const response = await page.request.post(`${base}/auth/dev-login`, {
-    form: { email },
-    maxRedirects: 0,
+async function signInPreviewUser(email) {
+  await context.clearCookies();
+  const accessCookie = await enterPreviewAccess({
+    baseUrl: base,
+    accessCode: code,
   });
-  record(`dev-login ${email}`, response.ok(), String(response.status()));
+  await context.addCookies(cookiesFromHeader(accessCookie, base));
+
+  const useDevLogin = shouldUseDevLogin({
+    dataMode: previewDataMode,
+    runtime: previewRuntime,
+  });
+  const response = await page.request.post(
+    `${base}${useDevLogin ? '/auth/dev-login' : '/auth/login'}`,
+    {
+      form: useDevLogin
+        ? { email, redirectTo: '/app' }
+        : { email, password: previewPassword, redirectTo: '/app' },
+      maxRedirects: 0,
+    }
+  );
+  const loginOk =
+    response.ok() || (response.status() >= 300 && response.status() < 400);
+  record(
+    useDevLogin ? `dev-login ${email}` : `password login ${email}`,
+    loginOk,
+    String(response.status())
+  );
 }
 
 async function postForm(path, form) {
@@ -59,12 +102,7 @@ async function postForm(path, form) {
   return { response, body };
 }
 
-await page.goto(`${base}/?code=${encodeURIComponent(code)}`, {
-  waitUntil: 'networkidle',
-  timeout: 120_000,
-});
-
-await devLogin(PREVIEW_FREE_CLASSROOM_TEACHER_EMAIL);
+await signInPreviewUser(PREVIEW_FREE_CLASSROOM_TEACHER_EMAIL);
 await page.goto(`${base}/app`, { waitUntil: 'networkidle', timeout: 120_000 });
 await shot('05-free-classroom-dashboard.png');
 
@@ -224,7 +262,7 @@ record(
   JSON.stringify(secondClassAttempt.body)
 );
 
-await devLogin(PREVIEW_FREE_CLASSROOM_STUDENT_EMAIL);
+await signInPreviewUser(PREVIEW_FREE_CLASSROOM_STUDENT_EMAIL);
 await page.goto(`${base}/app`, { waitUntil: 'networkidle', timeout: 120_000 });
 await shot('10-free-classroom-student-home.png');
 
