@@ -148,15 +148,6 @@ async function runProductionMigrations(env: NodeJS.ProcessEnv) {
     return backfillCode;
   }
 
-  const exitTicketCode = await runCommand(
-    'bun',
-    ['run', 'scripts/seed-exit-ticket-assignment-type.ts', '--all-orgs'],
-    env
-  );
-  if (exitTicketCode !== 0) {
-    return exitTicketCode;
-  }
-
   const gateCode = await runCommand(
     'bun',
     ['run', 'scripts/assignment-type-release-gate.ts', '--require-data'],

@@ -4,7 +4,6 @@ import {
   parseExitTicketAllOrgsArg,
   parseExitTicketOrganizationArgs,
   resolveExitTicketOrganizationIds,
-  resolveExitTicketScopeGrants,
 } from './exit-ticket-assignment-type-data';
 
 describe('the exit ticket assignment type seed', () => {
@@ -108,51 +107,3 @@ describe('parseExitTicketAllOrgsArg', () => {
   });
 });
 
-describe('resolveExitTicketScopeGrants', () => {
-  test('grants to the schools and teachers that picked their own list', () => {
-    // Visibility is an override chain: a customized scope ignores the
-    // organization defaults entirely, so granting at the org alone leaves the
-    // type invisible to exactly these schools and teachers.
-    expect(
-      resolveExitTicketScopeGrants({
-        organizationIds: ['org-1'],
-        schools: [
-          { id: 'school-1', organizationId: 'org-1', customized: true },
-          { id: 'school-2', organizationId: 'org-1', customized: false },
-        ],
-        teachers: [
-          { id: 'teacher-1', organizationId: 'org-1', customized: true },
-          { id: 'teacher-2', organizationId: 'org-1', customized: false },
-        ],
-      })
-    ).toEqual({ schoolIds: ['school-1'], membershipIds: ['teacher-1'] });
-  });
-
-  test('leaves uncustomized scopes to inherit the organization default', () => {
-    expect(
-      resolveExitTicketScopeGrants({
-        organizationIds: ['org-1'],
-        schools: [
-          { id: 'school-1', organizationId: 'org-1', customized: false },
-        ],
-        teachers: [
-          { id: 'teacher-1', organizationId: 'org-1', customized: false },
-        ],
-      })
-    ).toEqual({ schoolIds: [], membershipIds: [] });
-  });
-
-  test('never reaches into an organization this run is not targeting', () => {
-    expect(
-      resolveExitTicketScopeGrants({
-        organizationIds: ['org-1'],
-        schools: [
-          { id: 'school-2', organizationId: 'org-2', customized: true },
-        ],
-        teachers: [
-          { id: 'teacher-2', organizationId: 'org-2', customized: true },
-        ],
-      })
-    ).toEqual({ schoolIds: [], membershipIds: [] });
-  });
-});

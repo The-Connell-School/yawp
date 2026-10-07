@@ -86,37 +86,3 @@ export function parseExitTicketAllOrgsArg(argv: string[]): boolean {
   return argv.includes('--all-orgs');
 }
 
-/**
- * Assignment type visibility is an override chain, not a union: a teacher with
- * `assignmentTypesCustomized` sees only their own assigned types, then a
- * customized school sees only its own, and only an uncustomized scope falls
- * through to the organization defaults (see
- * `utils/assignment-type-access.server.ts`).
- *
- * So granting at the organization alone is not enough to make a type visible —
- * it is invisible to exactly the schools and teachers that picked their own
- * list. This works out which extra grants a run needs, so "seeded" means "the
- * teacher can actually see it" rather than "a row exists somewhere".
- */
-export function resolveExitTicketScopeGrants({
-  organizationIds,
-  schools,
-  teachers,
-}: {
-  organizationIds: string[];
-  schools: { id: string; organizationId: string; customized: boolean }[];
-  teachers: { id: string; organizationId: string; customized: boolean }[];
-}): { schoolIds: string[]; membershipIds: string[] } {
-  const targeted = new Set(organizationIds);
-
-  return {
-    schoolIds: schools
-      .filter((school) => school.customized && targeted.has(school.organizationId))
-      .map((school) => school.id),
-    membershipIds: teachers
-      .filter(
-        (teacher) => teacher.customized && targeted.has(teacher.organizationId)
-      )
-      .map((teacher) => teacher.id),
-  };
-}
