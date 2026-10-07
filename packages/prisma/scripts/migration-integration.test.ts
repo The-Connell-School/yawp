@@ -780,7 +780,7 @@ describe('migration integration (real Postgres)', () => {
       INSERT INTO "Organization" ("id","createdAt","updatedAt","name","plan")
       VALUES ('org-legacy-starter', now(), now(), 'Legacy Starter Org', 'SCHOOL');
       INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position")
-      VALUES ('legacy-class-starter-keep', now(), now(), 'Legacy Class Starter', 'class_starter', 99);
+      VALUES ('legacy-class-starter-keep', now(), now(), 'Legacy Class Starter', 'welcome', 99);
       INSERT INTO "OrganizationAssignmentType" ("organizationId","assignmentTypeId")
       VALUES ('org-legacy-starter', 'legacy-class-starter-keep');
     `);
