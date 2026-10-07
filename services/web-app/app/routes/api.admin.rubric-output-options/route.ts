@@ -8,7 +8,10 @@ import {
 import { RubricCatalog } from '~/domain/rubrics/rubric-catalog.server';
 import { requireAdmin, requireSuperAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { rubricCatalogErrorResponse } from './catalog-errors.server';
+import {
+  rubricCatalogErrorBody,
+  rubricCatalogErrorResponse,
+} from './catalog-errors.server';
 
 const toggleInput = z
   .object({
@@ -34,14 +37,9 @@ export async function loader({ request }: ActionFunctionArgs) {
       return dataResponse({ state });
     } catch (error) {
       const failure = rubricCatalogErrorResponse(error);
-      return dataResponse(
-        {
-          error: failure.error,
-          httpStatus: failure.status,
-          ...(failure.issues ? { issues: failure.issues } : {}),
-        },
-        { status: failure.status }
-      );
+      return dataResponse(rubricCatalogErrorBody(failure), {
+        status: failure.status,
+      });
     }
   }
 
@@ -58,14 +56,9 @@ export async function loader({ request }: ActionFunctionArgs) {
       });
     } catch (error) {
       const failure = rubricCatalogErrorResponse(error);
-      return dataResponse(
-        {
-          error: failure.error,
-          httpStatus: failure.status,
-          ...(failure.issues ? { issues: failure.issues } : {}),
-        },
-        { status: failure.status }
-      );
+      return dataResponse(rubricCatalogErrorBody(failure), {
+        status: failure.status,
+      });
     }
   }
 
@@ -109,13 +102,6 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   } catch (error) {
     const failure = rubricCatalogErrorResponse(error);
-    return dataResponse(
-      {
-        error: failure.error,
-        httpStatus: failure.status,
-        ...(failure.issues ? { issues: failure.issues } : {}),
-      },
-      { status: failure.status }
-    );
+    return dataResponse(rubricCatalogErrorBody(failure), { status: failure.status });
   }
 }

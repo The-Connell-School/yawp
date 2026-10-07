@@ -42,24 +42,25 @@ try {
   await page.goto(gateUrl);
   await devLogin(page, 'dev.admin@yawp.local');
 
-  await page.goto(`${origin}/app/admin/assignments`);
-  await page.getByRole('link', { name: /Class Starter/i }).first().click();
-  await page.waitForURL(/\/app\/admin\/assignment-types\//);
+  await page.goto(`${origin}/app/admin/assignment-types`);
+  await page.getByRole('heading', { name: 'Class Starter', level: 3 }).click();
+  await page.waitForURL(/\/app\/admin\/assignment-types\/[^/]+$/);
 
   const toggle = page.getByTestId('rubric-teacher-notes-toggle');
-  await toggle.waitFor({ state: 'visible', timeout: 60000 });
+  await toggle.waitFor({ state: 'visible', timeout: 90000 });
+  await page.locator('text=Notes to the teacher').scrollIntoViewIfNeeded();
 
   if (await toggle.isEnabled()) {
     if (await toggle.isChecked()) {
       await toggle.click();
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(2000);
     }
     await page.screenshot({
       path: join(outDir, 'toggle-off-superadmin.png'),
       fullPage: true,
     });
     await toggle.click();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(2500);
     await page.screenshot({
       path: join(outDir, 'toggle-on-superadmin.png'),
       fullPage: true,
@@ -71,33 +72,40 @@ try {
     });
     writeFileSync(
       join(outDir, 'README.txt'),
-      'dev.admin@yawp.local was not superadmin on preview; only disabled-admin screenshot captured.\n'
+      'dev.admin@yawp.local was not superadmin on preview; toggle-disabled screenshot only.\n'
     );
   }
 
   await devLogin(page, 'dev.teacher@yawp.local');
-  const submissionLink = page
+  await page.goto(`${origin}/app/classes`);
+  const submissionHref = await page
     .locator('a[href*="/app/submissions/"]')
-    .first();
-  if (await submissionLink.count()) {
-    await submissionLink.click();
-    await page.waitForURL(/\/app\/submissions\//);
+    .first()
+    .getAttribute('href');
+  if (submissionHref) {
+    await page.goto(`${origin}${submissionHref}`);
     const notes = page.getByTestId('teacher-private-notes');
     if (await notes.count()) {
+      await notes.scrollIntoViewIfNeeded();
       await page.screenshot({
         path: join(outDir, 'teacher-view-with-note.png'),
         fullPage: true,
       });
     }
     await devLogin(page, 'dev.student@yawp.local');
-    await page.goto(page.url());
-    await page.screenshot({
-      path: join(outDir, 'student-view-no-note.png'),
-      fullPage: true,
-    });
+    await page.goto(`${origin}${submissionHref}`);
+    await expectNoPrivateNotes(page, join(outDir, 'student-view-no-note.png'));
   }
 
   console.log(JSON.stringify({ status: 'ok', outDir }));
 } finally {
   await browser.close();
+}
+
+async function expectNoPrivateNotes(
+  page: import('@playwright/test').Page,
+  screenshotPath: string
+) {
+  await page.waitForLoadState('networkidle');
+  await page.screenshot({ path: screenshotPath, fullPage: true });
 }

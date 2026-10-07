@@ -170,9 +170,10 @@ describe('api.admin.rubric-output-options', () => {
       context: {} as never,
     } as never);
     expect((response as { init?: { status: number } }).init?.status).toBe(422);
-    expect((response as { data: { issues: unknown[] } }).data.issues).toHaveLength(
-      1
-    );
+    const payload = (response as { data: unknown }).data as {
+      issues?: unknown[];
+    };
+    expect(payload.issues).toHaveLength(1);
   });
 
   test('loader resolves assignment-type output options for admins', async () => {
