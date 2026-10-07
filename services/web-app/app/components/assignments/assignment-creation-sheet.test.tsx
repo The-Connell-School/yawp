@@ -843,7 +843,6 @@ describe('AssignmentCreationSheetContent', () => {
       return renderSheet({
         assignmentTypes: exitTicketAssignmentTypes,
         fixedAssignmentTypeId: 'exit-1',
-        exitTicketBuilder: 'v2',
         ...props,
       });
     }
@@ -1279,6 +1278,7 @@ describe('AssignmentCreationSheetContent', () => {
       expect(submitButton().disabled).toBe(false);
     });
   });
+});
 
 describe('AssignmentCreationSheetContent writing time', () => {
   let root: Root | null = null;
@@ -1468,6 +1468,7 @@ describe('AssignmentCreationSheetContent with the writing-conditions flag off', 
     {
       id: 'daily-pages',
       title: 'Daily Pages',
+      kind: null,
       collaborationSupported: true,
       gradesGrammar: true,
       defaultWritingTimeMinutes: 15,
