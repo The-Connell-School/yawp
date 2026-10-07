@@ -1,3 +1,4 @@
+import '~/domain/free-tier/register-free-tier-approval-hooks.server';
 import { startImpersonationEndDelivery } from './utils/internal-impersonation-runtime.server';
 import { reportImpersonationError } from './utils/internal-impersonation-error.server';
 import { PassThrough } from 'node:stream';
