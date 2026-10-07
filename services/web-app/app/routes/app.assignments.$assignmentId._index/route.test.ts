@@ -3,11 +3,15 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   class: { findFirst: mock() },
   assignment: { findFirst: mock(), update: mock() },
+  assignmentType: { findMany: mock(async () => []) },
   documentGroup: { findFirst: mock() },
-  classAssignment: { findMany: mock() },
+  classAssignment: { findMany: mock(), updateMany: mock() },
   classAssignmentInsight: { findUnique: mock() },
   submission: { count: mock() },
   setting: { findUnique: mock() },
+  freeClassroomAssignmentKindUsage: { findUnique: mock(), upsert: mock() },
+  $executeRawUnsafe: mock(async () => 0),
+  $transaction: mock(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),
 };
 
 const requireUserId = mock();

@@ -114,16 +114,18 @@ describe('free tier real Postgres integration', () => {
       },
       select: { id: true },
     });
+    const teacher = await prisma.user.create({
+      data: {
+        email: `race-teacher-${Date.now()}@yawp.test`,
+        name: 'Race Teacher',
+      },
+      select: { id: true },
+    });
     const membership = await prisma.orgMembership.create({
       data: {
-        organizationId: org.id,
+        organization: { connect: { id: org.id } },
         role: 'TEACHER',
-        user: {
-          create: {
-            email: `race-teacher-${Date.now()}@yawp.test`,
-            name: 'Race Teacher',
-          },
-        },
+        user: { connect: { id: teacher.id } },
         schools: { connect: { id: school.id } },
       },
       select: { id: true },

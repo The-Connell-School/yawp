@@ -714,17 +714,23 @@ describe('migration integration (real Postgres)', () => {
     prismaDeploy(PRISMA_DIR);
 
     const bundleKinds = jsonQuery(`
-      SELECT COUNT(*)::int AS count
-      FROM "AssignmentType"
-      WHERE "kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+      SELECT json_build_object(
+        'count', (
+          SELECT COUNT(*)::int
+          FROM "AssignmentType"
+          WHERE "kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+        )
+      )
     `);
     expect(bundleKinds.count).toBe(3);
 
     const usageTable = jsonQuery(`
-      SELECT EXISTS (
-        SELECT 1 FROM information_schema.tables
-        WHERE table_name = 'FreeClassroomAssignmentKindUsage'
-      ) AS exists
+      SELECT json_build_object(
+        'exists', EXISTS (
+          SELECT 1 FROM information_schema.tables
+          WHERE table_name = 'FreeClassroomAssignmentKindUsage'
+        )
+      )
     `);
     expect(usageTable.exists).toBe(true);
 
@@ -737,18 +743,26 @@ describe('migration integration (real Postgres)', () => {
     expect(seedOnce.status).toBe(0);
 
     const moduleCount = jsonQuery(`
-      SELECT COUNT(*)::int AS count
-      FROM "AssignmentModule" am
-      JOIN "AssignmentType" at ON at.id = am."assignmentTypeId"
-      WHERE at."kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+      SELECT json_build_object(
+        'count', (
+          SELECT COUNT(*)::int
+          FROM "AssignmentModule" am
+          JOIN "AssignmentType" at ON at.id = am."assignmentTypeId"
+          WHERE at."kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+        )
+      )
     `);
     expect(moduleCount.count).toBeGreaterThanOrEqual(3);
 
     const imageCount = jsonQuery(`
-      SELECT COUNT(*)::int AS count
-      FROM "AssignmentTypeImage" img
-      JOIN "AssignmentType" at ON at.id = img."assignmentTypeId"
-      WHERE at."kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+      SELECT json_build_object(
+        'count', (
+          SELECT COUNT(*)::int
+          FROM "AssignmentTypeImage" img
+          JOIN "AssignmentType" at ON at.id = img."assignmentTypeId"
+          WHERE at."kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+        )
+      )
     `);
     expect(imageCount.count).toBe(3);
 
@@ -783,19 +797,25 @@ describe('migration integration (real Postgres)', () => {
     psql(bundleRollback);
 
     const legacyKept = jsonQuery(`
-      SELECT EXISTS (
-        SELECT 1 FROM "AssignmentType" WHERE id = 'legacy-class-starter-keep'
-      ) AS exists
+      SELECT json_build_object(
+        'exists', EXISTS (
+          SELECT 1 FROM "AssignmentType" WHERE id = 'legacy-class-starter-keep'
+        )
+      )
     `);
     expect(legacyKept.exists).toBe(true);
 
     const fixedRemoved = jsonQuery(`
-      SELECT COUNT(*)::int AS count
-      FROM "AssignmentType"
-      WHERE id IN (
-        'cfreeclassstarter00000001',
-        'cfreeprewriting000000001',
-        'cfreethesisstatement00001'
+      SELECT json_build_object(
+        'count', (
+          SELECT COUNT(*)::int
+          FROM "AssignmentType"
+          WHERE id IN (
+            'cfreeclassstarter00000001',
+            'cfreeprewriting000000001',
+            'cfreethesisstatement00001'
+          )
+        )
       )
     `);
     expect(fixedRemoved.count).toBe(0);
@@ -811,10 +831,12 @@ describe('migration integration (real Postgres)', () => {
     );
     psql(usageRollback);
     const usageGone = jsonQuery(`
-      SELECT EXISTS (
-        SELECT 1 FROM information_schema.tables
-        WHERE table_name = 'FreeClassroomAssignmentKindUsage'
-      ) AS exists
+      SELECT json_build_object(
+        'exists', EXISTS (
+          SELECT 1 FROM information_schema.tables
+          WHERE table_name = 'FreeClassroomAssignmentKindUsage'
+        )
+      )
     `);
     expect(usageGone.exists).toBe(false);
   }, 120000);
