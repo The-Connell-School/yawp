@@ -52,14 +52,17 @@ async function devLogin(page, email) {
 }
 
 async function passwordLogin(page, email, redirectTo = '/app') {
-  const login = await page.request.post(`${baseUrl}/auth/login`, {
-    form: { email, password, redirectTo },
-    maxRedirects: 0,
-  });
-  if (login.status() >= 400) {
-    throw new Error(`password login failed for ${email}: HTTP ${login.status()}`);
-  }
-  await page.goto(`${baseUrl}${redirectTo}`, { waitUntil: 'networkidle' });
+  await page.goto(
+    `${baseUrl}/auth/login?redirectTo=${encodeURIComponent(redirectTo)}`,
+    { waitUntil: 'networkidle' }
+  );
+  await page.fill('input[name="email"]', email);
+  await page.fill('input[name="password"]', password);
+  await page.locator('form').evaluate((form) => form.submit());
+  await page.waitForURL(
+    (url) => url.pathname === redirectTo || url.pathname.startsWith(`${redirectTo}/`),
+    { timeout: 45_000 }
+  );
 }
 
 async function shot(page, name) {
@@ -227,7 +230,7 @@ async function main() {
       await loginLanding.context.close();
 
       const setup = await freshContext(browser);
-      await passwordLogin(setup.page, teacherFlowEmail);
+      await passwordLogin(setup.page, teacherFlowEmail, '/app/free-tier/setup');
       await setup.page.waitForURL(/\/app\/free-tier\/setup/, { timeout: 30_000 });
       manifest.shots.push(await shot(setup.page, '11-teacher-first-class-setup'));
       await setup.context.close();
@@ -235,7 +238,7 @@ async function main() {
 
     try {
       const pending = await freshContext(browser);
-      await passwordLogin(pending.page, PENDING_EMAIL);
+      await passwordLogin(pending.page, PENDING_EMAIL, '/app/free-tier/pending');
       await pending.page.waitForURL(/\/app\/free-tier\/pending/, { timeout: 15_000 });
       manifest.shots.push(await shot(pending.page, '12-seed-pending-approval-state'));
       await pending.context.close();
