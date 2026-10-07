@@ -1165,6 +1165,7 @@ model Organization {
   invitations                   Invitation[]
   schools                       School[]
   assignmentTypes               AssignmentType[]
+  freeClassroomAssignmentKindUsages FreeClassroomAssignmentKindUsage[]
   assignmentTypeAssignments     OrganizationAssignmentType[]
   reporterConversations         ReporterConversation[]
   reporterGrowthPlans           ReporterGrowthPlan[]
@@ -1182,6 +1183,16 @@ model OrganizationAssignmentType {
 
   @@id([organizationId, assignmentTypeId])
   @@index([assignmentTypeId])
+}
+
+/// Lifetime assignment-kind consumption for FREE_CLASSROOM orgs. Never decremented.
+model FreeClassroomAssignmentKindUsage {
+  organizationId         String
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  kind                   String
+  lifetimeCreatedCount   Int          @default(0)
+
+  @@id([organizationId, kind])
 }
 
 model OrgMembership {
