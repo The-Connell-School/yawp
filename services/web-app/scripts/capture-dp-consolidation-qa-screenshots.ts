@@ -17,7 +17,8 @@ const dailyPagesTypeId =
 const teacherEmail =
   process.env.QA_TEACHER_EMAIL || 'dev.teacher@yawp.local';
 const adminEmail = process.env.QA_ADMIN_EMAIL || 'dev.admin@yawp.local';
-const password = process.env.QA_PASSWORD || 'yawp-dev';
+const qaClassTitle =
+  process.env.QA_CLASS_TITLE || 'English 10 - Period 3';
 
 mkdirSync(outputDir, { recursive: true });
 
@@ -54,33 +55,51 @@ async function shot(page: Page, name: string) {
   console.log(`Wrote ${path}`);
 }
 
-async function openClassWorkspace(page: Page) {
+async function openQaClass(page: Page) {
   await page.goto(`${baseUrl}/app/my-classes`);
-  await page.locator('a[href*="/app/my-classes/"]').first().click({
-    timeout: 60_000,
-  });
+  const classLink = page
+    .locator('a[href*="/app/my-classes/"]')
+    .filter({ hasText: qaClassTitle });
+  if (await classLink.count()) {
+    await classLink.first().click({ timeout: 60_000 });
+  } else {
+    await page.locator('a[href*="/app/my-classes/"]').first().click({
+      timeout: 60_000,
+    });
+  }
+  await page.waitForLoadState('networkidle');
 }
 
-async function openSubmissionByTitle(page: Page, title: string) {
-  await openClassWorkspace(page);
-  const assignmentTab = page.getByRole('tab', { name: /Assignments/i });
-  if (await assignmentTab.isVisible().catch(() => false)) {
-    await assignmentTab.click();
+async function openAssignmentDetail(page: Page, assignmentTitle: string) {
+  await openQaClass(page);
+  const assignmentsTab = page.getByRole('tab', { name: /Assignments/i });
+  if (await assignmentsTab.isVisible().catch(() => false)) {
+    await assignmentsTab.click();
   }
-  const assignmentRow = page.getByText(title, { exact: false }).first();
-  await assignmentRow.waitFor({ timeout: 60_000 });
-  await assignmentRow.click();
-  const submissionLink = page
-    .locator('a[href*="/app/submissions/"]')
-    .filter({ hasText: /submission|graded|needs grading/i })
-    .first();
-  if (await submissionLink.isVisible().catch(() => false)) {
-    await submissionLink.click();
-    return;
-  }
-  await page.locator('a[href*="/app/submissions/"]').first().click({
-    timeout: 30_000,
+  await page.getByText(assignmentTitle, { exact: false }).first().click({
+    timeout: 60_000,
   });
+  await page.waitForLoadState('networkidle');
+}
+
+async function openSubmissionForAssignment(page: Page, assignmentTitle: string) {
+  await openAssignmentDetail(page, assignmentTitle);
+  const submissionLink = page.locator('a[href*="/app/submissions/"]').first();
+  await submissionLink.click({ timeout: 60_000 });
+  await page.waitForLoadState('networkidle');
+}
+
+async function openPinnedLegacyEdit(page: Page) {
+  await openAssignmentDetail(page, 'DP QA Pinned Legacy (Preview)');
+  const assignmentUrl = page.url();
+  const assignmentId = assignmentUrl.match(/assignments\/([^/?]+)/)?.[1];
+  if (!assignmentId) {
+    await page.getByRole('button', { name: /^Edit/i }).click();
+  } else {
+    await page.goto(`${baseUrl}/app/assignments/${assignmentId}`);
+    await page.getByRole('button', { name: /^Edit/i }).click();
+  }
+  await page.getByRole('dialog').waitFor({ timeout: 60_000 });
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -122,7 +141,7 @@ try {
   await shot(page, 'c-create-12pt');
   await page.getByRole('button', { name: 'Cancel' }).click();
 
-  await openSubmissionByTitle(
+  await openSubmissionForAssignment(
     page,
     'DP QA Class Starter Grading (Preview)'
   );
@@ -131,24 +150,17 @@ try {
     .waitFor({ timeout: 60_000 });
   await shot(page, 'd-class-starter-grading');
 
-  await openSubmissionByTitle(page, 'DP QA Teacher Notes (Preview)');
+  await openSubmissionForAssignment(page, 'DP QA Teacher Notes (Preview)');
   await page
     .getByRole('region', { name: 'Teacher Context' })
     .waitFor({ timeout: 60_000 });
   await shot(page, 'e-teacher-notes');
 
-  await openClassWorkspace(page);
-  await page.getByText('DP QA Pinned Legacy (Preview)').first().click({
-    timeout: 60_000,
-  });
-  await page.getByRole('button', { name: /Edit assignment/i }).click({
-    timeout: 30_000,
-  });
-  await page.getByRole('dialog').waitFor();
+  await openPinnedLegacyEdit(page);
   await shot(page, 'f-pinned-legacy-tiers');
   await page.getByRole('button', { name: 'Cancel' }).click();
 
-  await openClassWorkspace(page);
+  await openQaClass(page);
   await page.getByText('DP QA Swap Persistence (Preview)').waitFor({
     timeout: 60_000,
   });

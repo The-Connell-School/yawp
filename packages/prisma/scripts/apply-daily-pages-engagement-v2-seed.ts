@@ -108,11 +108,18 @@ export async function seedDpConsolidationQaPreviewFixtures(
   const classWithStudent = await prisma.class.findFirst({
     where: {
       isArchived: false,
+      teachers: {
+        some: {
+          user: { email: 'dev.teacher@yawp.local' },
+          organizationId: LOCAL_DEV_ORG_ID,
+        },
+      },
       students: { some: { user: { email: 'dev.student@yawp.local' } } },
     },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true,
+      title: true,
       students: {
         where: { user: { email: 'dev.student@yawp.local' } },
         take: 1,
@@ -138,6 +145,16 @@ export async function seedDpConsolidationQaPreviewFixtures(
       })
     );
     return;
+  }
+
+  async function ensureClassAssignment(assignmentId: string) {
+    await prisma.classAssignment.upsert({
+      where: {
+        assignmentId_classId: { assignmentId, classId: klass!.id },
+      },
+      create: { assignmentId, classId: klass!.id },
+      update: {},
+    });
   }
 
   const legacySchema = {
@@ -207,9 +224,9 @@ export async function seedDpConsolidationQaPreviewFixtures(
       },
       select: { id: true },
     });
-    await prisma.classAssignment.create({
-      data: { assignmentId: pinnedAssignment.id, classId: klass.id },
-    });
+    await ensureClassAssignment(pinnedAssignment.id);
+  } else {
+    await ensureClassAssignment(pinnedAssignment.id);
   }
 
   const swapTitle = 'DP QA Swap Persistence (Preview)';
@@ -228,8 +245,9 @@ export async function seedDpConsolidationQaPreviewFixtures(
       },
       select: { id: true },
     });
-    const classAssignment = await prisma.classAssignment.create({
-      data: { assignmentId: swapAssignment.id, classId: klass.id },
+    await ensureClassAssignment(swapAssignment.id);
+    const classAssignment = await prisma.classAssignment.findFirstOrThrow({
+      where: { assignmentId: swapAssignment.id, classId: klass.id },
       select: { id: true },
     });
     const text =
@@ -256,6 +274,8 @@ export async function seedDpConsolidationQaPreviewFixtures(
         overallScore: 10,
       },
     });
+  } else {
+    await ensureClassAssignment(swapAssignment.id);
   }
 
   const notesTitle = 'DP QA Teacher Notes (Preview)';
@@ -274,8 +294,9 @@ export async function seedDpConsolidationQaPreviewFixtures(
       },
       select: { id: true },
     });
-    const classAssignment = await prisma.classAssignment.create({
-      data: { assignmentId: notesAssignment.id, classId: klass.id },
+    await ensureClassAssignment(notesAssignment.id);
+    const classAssignment = await prisma.classAssignment.findFirstOrThrow({
+      where: { assignmentId: notesAssignment.id, classId: klass.id },
       select: { id: true },
     });
     const submissionId = randomUUID();
@@ -335,6 +356,8 @@ export async function seedDpConsolidationQaPreviewFixtures(
         },
       },
     });
+  } else {
+    await ensureClassAssignment(notesAssignment.id);
   }
 
   const classStarterType = await prisma.assignmentType.findFirst({
@@ -358,8 +381,9 @@ export async function seedDpConsolidationQaPreviewFixtures(
         },
         select: { id: true },
       });
-      const classAssignment = await prisma.classAssignment.create({
-        data: { assignmentId: csAssignment.id, classId: klass.id },
+      await ensureClassAssignment(csAssignment.id);
+      const classAssignment = await prisma.classAssignment.findFirstOrThrow({
+        where: { assignmentId: csAssignment.id, classId: klass.id },
         select: { id: true },
       });
       const submissionId = randomUUID();
@@ -387,6 +411,8 @@ export async function seedDpConsolidationQaPreviewFixtures(
           submittedAt: new Date(),
         },
       });
+    } else {
+      await ensureClassAssignment(csAssignment.id);
     }
   }
 
@@ -394,6 +420,15 @@ export async function seedDpConsolidationQaPreviewFixtures(
     where: { id: dailyPagesType.id },
     data: { rubricId: engagementRubricId },
   });
+
+  console.log(
+    'DP QA preview fixtures ready:',
+    JSON.stringify({
+      classId: klass.id,
+      classTitle: classWithStudent?.title,
+      dailyPagesTypeId: dailyPagesType.id,
+    })
+  );
 }
 
 if (import.meta.main) {
