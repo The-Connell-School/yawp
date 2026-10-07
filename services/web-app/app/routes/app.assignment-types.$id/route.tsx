@@ -699,12 +699,12 @@ export default function AppAssignmentTypesIdRoute() {
     sources?: ApHistorySourceCardData[];
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
-  const showShortFormLibrary = data.shortFormPromptLibrary != null;
+  const showDailyPagesAbout = data.assignmentType.kind === 'daily_pages';
   // Daily Pages carries one module, whose blurb is freewrite-era copy telling
   // students to throw ideas around — which the about section directly above it
   // now contradicts. The module row itself stays: documents are created inside
   // it, and `hasModules` still gates New → Document.
-  const showModules = hasModules && !showShortFormLibrary;
+  const showModules = hasModules && !showDailyPagesAbout;
   const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -798,6 +798,7 @@ export default function AppAssignmentTypesIdRoute() {
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
+                assignmentTypeKind={data.assignmentType.kind}
                 assignmentTypeCollaborationSupported={
                   data.assignmentType.collaborationSupported
                 }
@@ -874,7 +875,7 @@ export default function AppAssignmentTypesIdRoute() {
         {data.promptLibrary ? (
           <TeacherDirections variant={data.promptLibrary.variant} />
         ) : null}
-        {showShortFormLibrary ? (
+        {showDailyPagesAbout ? (
           <AboutDailyPages
             writingConditionsEnabled={data.writingConditionsEnabled}
           />

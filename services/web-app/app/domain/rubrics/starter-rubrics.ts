@@ -47,6 +47,13 @@ const dailyPagesEngagement: RubricSchema = dailyPagesEngagementSchema;
 
 export const CLASS_STARTER_RUBRIC_NAME = 'class-starter-engagement';
 export const DAILY_PAGES_SHORT_FORM_RUBRIC_NAME = 'daily-pages-short-form';
+export const DAILY_PAGES_REFLECTION_RUBRIC_NAME = 'daily-pages-reflection';
+
+/** Library rubrics retired from the admin picker; rows remain for history. */
+export const RETIRED_STARTER_RUBRIC_NAMES = new Set([
+  DAILY_PAGES_SHORT_FORM_RUBRIC_NAME,
+  DAILY_PAGES_REFLECTION_RUBRIC_NAME,
+]);
 
 /**
  * The two assistants Daily Pages split into, as library rubrics an admin can

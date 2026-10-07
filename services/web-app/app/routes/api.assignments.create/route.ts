@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { z } from 'zod';
 import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/daily-pages-rubric';
+import { dailyPagesEngagementPointValueError } from '~/domain/assignment-types/daily-pages-engagement-point-validation';
 import { parseParagraphMode } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import {
   buildAssignmentCreateInputFromApHistoryEntry,
@@ -245,7 +246,12 @@ export async function action({ request }: ActionFunctionArgs) {
       id: assignmentTypeId,
       archivedAt: null,
     },
-    select: { id: true, systemKey: true, kind: true },
+    select: {
+      id: true,
+      systemKey: true,
+      kind: true,
+      rubric: { select: { name: true, schemaJson: true } },
+    },
   });
 
   if (!assignmentTypeAvailable || !assignmentType) {
@@ -264,6 +270,23 @@ export async function action({ request }: ActionFunctionArgs) {
     assignmentType.kind === DAILY_PAGES_ASSIGNMENT_TYPE_KIND
       ? paragraphModeResult.value
       : null;
+
+  if (gradingIntent?.success && gradingIntent.data.submitForGrade) {
+    const pointValue = gradingIntent.data.pointValue;
+    if (pointValue != null) {
+      const engagementError = dailyPagesEngagementPointValueError({
+        kind: assignmentType.kind,
+        rubricName: assignmentType.rubric?.name ?? null,
+        pointValue,
+      });
+      if (engagementError) {
+        return dataResponse(
+          { success: false, message: engagementError },
+          { status: 400 }
+        );
+      }
+    }
+  }
 
   const collaboration = collaborationResult.value;
 

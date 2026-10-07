@@ -35,6 +35,7 @@ type TeacherClass = {
 type Props = {
   assignmentTypeId: string;
   assignmentTypeTitle: string;
+  assignmentTypeKind?: string | null;
   /** Whether this kind of writing is in the collaborative-drafts pilot. */
   assignmentTypeCollaborationSupported?: boolean;
   /** Whether this type's rubric grades grammar, so the toggle is worth showing. */
@@ -67,6 +68,7 @@ function classLabel(klass: TeacherClass) {
 export function CreateAssignmentSheet({
   assignmentTypeId,
   assignmentTypeTitle,
+  assignmentTypeKind = null,
   assignmentTypeCollaborationSupported = false,
   assignmentTypeGradesGrammar = false,
   assignmentTypeDefaultWritingTimeMinutes = null,
@@ -121,6 +123,7 @@ export function CreateAssignmentSheet({
           {
             id: assignmentTypeId,
             title: assignmentTypeTitle,
+            kind: assignmentTypeKind,
             collaborationSupported: assignmentTypeCollaborationSupported,
             gradesGrammar: assignmentTypeGradesGrammar,
             defaultWritingTimeMinutes: assignmentTypeDefaultWritingTimeMinutes,

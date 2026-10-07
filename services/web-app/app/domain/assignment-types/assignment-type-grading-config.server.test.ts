@@ -142,7 +142,7 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     });
     const config = await resolveAssignmentTypeGradingConfig({ assignmentTypeId: 'managed-library' });
     expect(config.promptTemplate).toEqual({ systemMessage: 'Promoted system {{grading_instructions}}', userMessage: 'Promoted rubric {{rubric}} Document {{document}}' });
-    expect(config.maxScore).toBe(name === 'daily-pages-engagement' ? 30 : 5);
+    expect(config.maxScore).toBe(name === 'daily-pages-engagement' ? 100 : 5);
     const invocation = compileGradingAssistantInvocation({ gradingConfig: config, studentFirstName: 'Jordan', strictnessLevel: 'intermediate', documentText: 'Synthetic essay.' });
     expect(invocation.system).toContain('Promoted system');
     expect(invocation.system).toContain('Preserved override.');

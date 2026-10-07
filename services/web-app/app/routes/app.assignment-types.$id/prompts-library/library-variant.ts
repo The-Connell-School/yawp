@@ -14,7 +14,7 @@
 export const CLASS_STARTER_TITLE = 'class starter';
 export const DAILY_PAGES_TITLE = 'daily pages';
 
-export type PromptLibraryVariant = 'class-starter' | 'daily-pages-graded';
+export type PromptLibraryVariant = 'class-starter';
 
 /**
  * The freewrite corpus in this folder is Class Starter material: its prompts
@@ -32,9 +32,9 @@ export function usesOpenEndedLibrary(
   return variant === 'class-starter';
 }
 
-/** The graded Daily Pages library, whose prompts always ask for the support. */
-export function usesShortFormLibrary(variant: PromptLibraryVariant | null) {
-  return variant === 'daily-pages-graded';
+/** Short-form prompt library retired with the short-form rubric (2026-10). */
+export function usesShortFormLibrary(_variant: PromptLibraryVariant | null) {
+  return false;
 }
 
 export function resolvePromptLibraryVariant({
@@ -45,6 +45,6 @@ export function resolvePromptLibraryVariant({
   const normalized = title.trim().toLowerCase();
 
   if (normalized === CLASS_STARTER_TITLE) return 'class-starter';
-  if (normalized === DAILY_PAGES_TITLE) return 'daily-pages-graded';
+  if (normalized === DAILY_PAGES_TITLE) return 'class-starter';
   return null;
 }

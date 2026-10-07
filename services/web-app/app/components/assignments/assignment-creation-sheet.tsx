@@ -53,6 +53,10 @@ import {
   MAX_WRITING_TIME_MINUTES,
   MIN_WRITING_TIME_MINUTES,
 } from '~/domain/grading/writing-time';
+import {
+  assignmentTypeUsesDailyPagesEngagementRubric,
+  MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL,
+} from '~/domain/assignment-types/daily-pages-engagement-rubric';
 
 function writingTimeFieldValue(minutes: number | null | undefined): string {
   return typeof minutes === 'number' && minutes > 0 ? String(minutes) : '';
@@ -150,6 +154,8 @@ export type AssignmentCreationAssignmentType = {
    * selector, no paragraph type, grading and tutoring as before.
    */
   offersParagraphModes?: boolean;
+  /** AssignmentType.kind — drives engagement point minimums for Daily Pages / Class Starter. */
+  kind?: string | null;
 };
 
 export type AssignmentCreationEditingAssignment = {
@@ -425,6 +431,11 @@ export function AssignmentCreationSheetContent({
     assignmentTypes.find((type) => type.id === assignmentTypeId)
       ?.offersParagraphModes
   );
+  const minimumPointValue = assignmentTypeUsesDailyPagesEngagementRubric({
+    kind: assignmentTypes.find((type) => type.id === assignmentTypeId)?.kind,
+  })
+    ? MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL
+    : 1;
   const paragraphModeOptions = enabledParagraphModes();
   const selectedParagraphMode = getParagraphMode(paragraphMode);
   const hasFixedClass = Boolean(fixedClassId);
@@ -946,7 +957,7 @@ export function AssignmentCreationSheetContent({
                           id="assignment-create-point-value"
                           name="pointValue"
                           type="number"
-                          min={1}
+                          min={minimumPointValue}
                           max={1000}
                           step={1}
                           inputMode="numeric"
@@ -964,8 +975,10 @@ export function AssignmentCreationSheetContent({
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      What the assignment is worth in the gradebook. The rubric
-                      keeps its own scale either way.
+                      What the assignment is worth in the gradebook.
+                      {minimumPointValue > 1
+                        ? ` Daily Pages and Class Starter require at least ${minimumPointValue} points.`
+                        : ' The rubric keeps its own scale either way.'}
                     </p>
                   </div>
 

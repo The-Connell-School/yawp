@@ -122,21 +122,18 @@ describe('rubric schema', () => {
       thesis.rubric.categories.every((category) => category.bands === undefined)
     ).toBe(true);
 
-    // The production-library Daily Pages revision keeps its 30-point identity
-    // and admits integer scores inside engagement bands.
     const dailyPages = STARTER_RUBRICS[1];
     expect(dailyPages.scoringScale).toMatchObject({
       minScore: 0,
-      maxScore: 30,
+      maxScore: 100,
       step: 1,
+      type: 'rubric_points',
     });
     expect(dailyPages.rubric.categories[0].key).toBe('engagement_with_prompt');
-    expect(dailyPages.rubric.categories[0].scoreLabels).toEqual([
-      { value: 0, label: 'NOT HANDED IN' },
-      { value: 10, label: 'HARDLY THERE' },
-      { value: 20, label: 'SHOWED UP' },
-      { value: 30, label: 'ALL IN' },
-    ]);
+    expect(dailyPages.outputSchema?.assignmentPointScaling).toBe(
+      'daily_pages_engagement_v2'
+    );
+    expect(dailyPages.rubric.categories[0].bands?.length).toBe(4);
     expect(dailyPages.rubric.categories[0].grammarHighlighting).toBe(false);
 
     const expansion = STARTER_RUBRICS[2];
@@ -285,9 +282,10 @@ describe('the two assistants Daily Pages split into', () => {
     );
   });
 
-  test('preserves the production Daily Pages identity with integer engagement bands', () => {
+  test('preserves the production Daily Pages identity with proportional engagement bands', () => {
     const legacy = byName.get('daily-pages-engagement');
-    expect(legacy?.scoringScale).toMatchObject({ maxScore: 30, step: 1 });
+    expect(legacy?.scoringScale).toMatchObject({ maxScore: 100, step: 1 });
     expect(legacy?.rubric.categories).toHaveLength(1);
+    expect(legacy?.rubric.categories[0].bands?.length).toBe(4);
   });
 });

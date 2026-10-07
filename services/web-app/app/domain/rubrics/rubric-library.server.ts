@@ -4,7 +4,7 @@ import {
   parseRubricSchema,
   type RubricSchema,
 } from './rubric-schema';
-import { STARTER_RUBRICS } from './starter-rubrics';
+import { RETIRED_STARTER_RUBRIC_NAMES, STARTER_RUBRICS } from './starter-rubrics';
 
 export type StoredRubric = {
   id: string;
@@ -33,7 +33,10 @@ function toStoredRubric(row: {
 }
 
 export async function listRubrics(): Promise<StoredRubric[]> {
-  const rows = await prisma.rubric.findMany({ orderBy: { title: 'asc' } });
+  const rows = await prisma.rubric.findMany({
+    where: { archivedAt: null },
+    orderBy: { title: 'asc' },
+  });
   return rows
     .map((row) => toStoredRubric(row))
     .filter((rubric): rubric is StoredRubric => rubric !== null);
@@ -83,7 +86,13 @@ export async function seedStarterRubrics() {
 
   const created: string[] = [];
   for (const schema of STARTER_RUBRICS) {
+    if (RETIRED_STARTER_RUBRIC_NAMES.has(schema.name)) {
+      continue;
+    }
     const row = byName.get(schema.name);
+    if (row?.archivedAt) {
+      continue;
+    }
     if (!row) {
       await prisma.rubric.create({
         data: {

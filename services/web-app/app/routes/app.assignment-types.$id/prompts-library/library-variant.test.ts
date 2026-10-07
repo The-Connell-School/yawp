@@ -13,20 +13,15 @@ describe('resolvePromptLibraryVariant', () => {
     );
   });
 
-  /**
-   * Daily Pages is the graded assignment now, so it reads the short-form
-   * corpus — whose prompts ask for the backing the rubric scores — rather than
-   * borrowing the freewrite corpus it used to share with Class Starter.
-   */
-  test('Daily Pages gets the graded short-form library', () => {
+  test('Daily Pages shares the open-ended library after short-form retirement', () => {
     expect(resolvePromptLibraryVariant({ title: 'Daily Pages' })).toBe(
-      'daily-pages-graded'
+      'class-starter'
     );
   });
 
   test('matches the title the way the route always has: trimmed, case-insensitive', () => {
     expect(resolvePromptLibraryVariant({ title: '  DAILY pages  ' })).toBe(
-      'daily-pages-graded'
+      'class-starter'
     );
     expect(resolvePromptLibraryVariant({ title: 'CLASS STARTER' })).toBe(
       'class-starter'
@@ -42,18 +37,16 @@ describe('resolvePromptLibraryVariant', () => {
 });
 
 describe('which library a variant gets', () => {
-  test('Class Starter is the only reader of the freewrite corpus', () => {
+  test('Class Starter and Daily Pages read the freewrite corpus', () => {
     expect(usesOpenEndedLibrary('class-starter')).toBe(true);
-    expect(usesOpenEndedLibrary('daily-pages-graded')).toBe(false);
   });
 
-  test('Daily Pages is the only reader of the short-form corpus', () => {
-    expect(usesShortFormLibrary('daily-pages-graded')).toBe(true);
+  test('short-form library is retired', () => {
     expect(usesShortFormLibrary('class-starter')).toBe(false);
+    expect(usesShortFormLibrary(null)).toBe(false);
   });
 
   test('an assignment type with no library gets neither', () => {
     expect(usesOpenEndedLibrary(null)).toBe(false);
-    expect(usesShortFormLibrary(null)).toBe(false);
   });
 });
