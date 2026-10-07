@@ -376,22 +376,19 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
 
-      # Chromium only. `test:e2e:smoke` runs `--project=chromium` and the
-      # preview-access config defines a single chromium project, so Firefox was
-      # downloaded on every run and never launched.
-      - name: Install Playwright browsers
-        if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true')) && steps.playwright-cache.outputs.cache-hit != 'true' }}
+      # Chromium only. On a browser cache hit, install the binary only — apt deps
+      # are already on the runner and `install-deps` has timed out on cache hits.
+      - name: Install Playwright chromium
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
-        timeout-minutes: 10
-        run: npx --yes playwright install --with-deps chromium
-
-      # The cache holds the browsers, not the apt packages they link against, so
-      # a restored cache still needs the system libraries putting back.
-      - name: Install Playwright system dependencies
-        if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true')) && steps.playwright-cache.outputs.cache-hit == 'true' }}
-        working-directory: services/web-app
-        timeout-minutes: 10
-        run: npx --yes playwright install-deps chromium
+        timeout-minutes: 15
+        run: |
+          version=$(node -p "require('@playwright/test/package.json').version")
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            bunx --package "@playwright/test@${version}" playwright install chromium
+          else
+            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
+          fi
 
       - name: 🧪 Run Playwright tests
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
