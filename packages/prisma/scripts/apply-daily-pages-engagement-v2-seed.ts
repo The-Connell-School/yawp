@@ -107,7 +107,6 @@ async function seedDpConsolidationQaPreviewFixtures(
   const klass = teacher
     ? await prisma.class.findFirst({
         where: {
-          organizationId: teacher.organizationId,
           teachers: { some: { id: teacher.id } },
           isArchived: false,
         },
