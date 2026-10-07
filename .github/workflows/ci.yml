@@ -286,6 +286,7 @@ jobs:
         working-directory: services/web-app
         run: bun test app/utils/ai-usage-log.server.test.ts app/utils/getLLMCompletion/getLLMCompletion.test.ts
 
+      # Isolated bun processes for mock-heavy suites (feature flags, grading, rubric promotion).
       # The Daily Pages paragraph-type / writing-time feature flag. These suites
       # replace modules with mocks, which leak across files in one bun process,
       # so each runs on its own.
