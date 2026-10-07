@@ -170,7 +170,7 @@ export async function resolveRubricConfigForSubmission({
       maxScore: assignmentTypeConfig.maxScore,
       step: assignmentTypeConfig.step,
       scoringType: assignmentTypeConfig.scoringType,
-      source: assignmentTypeConfig.source,
+      source: parseRubricDisplaySource(assignmentTypeConfig.source),
       rubricIncomplete: assignmentTypeConfig.rubricIncomplete,
     };
   }

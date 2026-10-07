@@ -127,6 +127,7 @@ type AssignmentTypeDetailRow = {
   id: string;
   title: string;
   description: string | null;
+  kind: string | null;
   systemKey: string | null;
   collaborationSupported: boolean;
   image: { id: string } | null;
@@ -409,6 +410,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         id: true,
         title: true,
         description: true,
+        kind: true,
         systemKey: true,
         collaborationSupported: true,
         image: { select: { id: true } },

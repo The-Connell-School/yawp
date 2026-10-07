@@ -347,6 +347,7 @@ describe('parseRubricDisplaySource', () => {
       'assignment-type',
       'thesis-default',
       'daily-pages-default',
+      'daily-pages-engagement-default',
       'daily-pages-short-form-default',
       'class-starter-default',
     ]) {

@@ -75,7 +75,13 @@ export async function upsertRubric(schema: RubricSchema, title?: string) {
  */
 export async function seedStarterRubrics() {
   const existing = await prisma.rubric.findMany({
-    select: { id: true, name: true, title: true, schemaJson: true },
+    select: {
+      id: true,
+      name: true,
+      title: true,
+      schemaJson: true,
+      archivedAt: true,
+    },
   });
   const byName = new Map(existing.map((row) => [row.name, row]));
   const revisedNames = new Set(
