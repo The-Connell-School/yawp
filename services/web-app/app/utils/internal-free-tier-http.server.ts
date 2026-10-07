@@ -137,7 +137,16 @@ export async function releaseBatchHttp(request: Request) {
   if (text === null) return response({ error: 'Payload too large' }, 413);
   let body: any; try { body = JSON.parse(text); } catch { return response({ error: 'Malformed JSON' }, 400); }
   try {
-    const result = await releaseBatch(releaseBatchSchema.parse(body));
+    const parsed = releaseBatchSchema.parse(body);
+    const result = await releaseBatch(parsed);
+    if (result.released > 0) {
+      const leads = await prisma.freeTierApplication.findMany({
+        where: { id: { in: parsed.applicationIds }, status: 'INVITED' },
+        select: { id: true },
+      });
+      const { sendReleaseEmailsForApplicationIds } = await import('~/domain/free-tier/approval-flow.server');
+      await sendReleaseEmailsForApplicationIds(leads.map((l) => l.id));
+    }
     return response(result);
   } catch { return response({ error: 'Invalid input' }, 400); }
 }

@@ -82,6 +82,15 @@ export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  const pathname = new URL(request.url).pathname;
+  if (profile.role === 'TEACHER') {
+    const { enforceFreeTierTeacherGate } = await import('~/domain/free-tier/free-tier-gate.server');
+    await enforceFreeTierTeacherGate({
+      userId,
+      pathname,
+      organizationPlan: profile.organization.plan,
+    });
+  }
 
   if (profile.role === 'STUDENT' && !profile.isOrgOwner) {
     const classCount =

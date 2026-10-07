@@ -47,4 +47,3 @@ export function ensureFreeTierProductionApprovalHooks(): Promise<void> {
 export function getApprovalHooks(): ApprovalHooks {
   return currentHooks;
 }
-

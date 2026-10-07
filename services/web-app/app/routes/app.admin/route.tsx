@@ -49,6 +49,11 @@ export const adminTabs = [
     to: '/app/admin/audit',
     icon: <ScrollText size={16} className="opacity-75 mr-1" />,
   },
+  {
+    label: 'Free tier',
+    to: '/app/admin/free-tier',
+    icon: <User size={16} className="opacity-75 mr-1" />,
+  },
 ];
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Admin' };
