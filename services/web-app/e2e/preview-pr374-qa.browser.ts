@@ -20,6 +20,7 @@ if (!previewUrl || !accessCode) {
   console.error('PREVIEW_URL and PREVIEW_ACCESS_CODE are required');
   process.exit(1);
 }
+const accessCodeValue = accessCode;
 
 mkdirSync(screenshotDir, { recursive: true });
 
@@ -27,7 +28,7 @@ const shot = (name: string) => join(screenshotDir, name);
 
 async function enterPreview(page: import('@playwright/test').Page) {
   await page.goto(`${previewUrl}/`);
-  await page.getByLabel('Access code').fill(accessCode);
+  await page.getByLabel('Access code').fill(accessCodeValue);
   await page.getByRole('button', { name: 'Open preview' }).click();
   await page.waitForURL(/\/(auth\/preview-access)?/, { timeout: 60_000 });
   if (page.url().includes('/auth/preview-access')) {

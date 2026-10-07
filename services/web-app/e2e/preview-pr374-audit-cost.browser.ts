@@ -3,12 +3,13 @@ import { chromium } from '@playwright/test';
 const previewUrl = process.env.PREVIEW_URL?.replace(/\/$/, '');
 const accessCode = process.env.PREVIEW_ACCESS_CODE;
 if (!previewUrl || !accessCode) process.exit(1);
+const accessCodeValue = accessCode;
 
 async function main() {
   const browser = await chromium.launch({ headless: true, channel: 'chrome' });
   const page = await browser.newPage();
   await page.goto(`${previewUrl}/`);
-  await page.getByLabel('Access code').fill(accessCode);
+  await page.getByLabel('Access code').fill(accessCodeValue);
   await page.getByRole('button', { name: 'Open preview' }).click();
   await page.waitForURL((url) => !url.pathname.includes('/auth/preview-access'), {
     timeout: 60_000,
