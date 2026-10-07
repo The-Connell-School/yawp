@@ -49,8 +49,19 @@ export function isStudentMembership(membership: { role: MembershipRole }) {
 }
 
 export const SESSION_EXPIRATION_TIME = 1000 * 60 * 60 * 24 * 365 * 100;
+export const HANDLE_ONLY_SESSION_EXPIRATION_TIME = 1000 * 60 * 60 * 12;
+
 export const getSessionExpirationDate = () =>
   new Date(Date.now() + SESSION_EXPIRATION_TIME);
+
+export function getSessionExpirationDateForUser(user: {
+  email: string | null;
+}) {
+  if (!user.email) {
+    return new Date(Date.now() + HANDLE_ONLY_SESSION_EXPIRATION_TIME);
+  }
+  return getSessionExpirationDate();
+}
 
 export const sessionKey = 'sessionId';
 export const impersonationModeKey = 'impersonationMode';
@@ -128,7 +139,7 @@ export async function getUserId(request: Request) {
 
 export async function requireUserId(
   request: Request,
-  { redirectTo }: { redirectTo?: string | null } = {}
+  { redirectTo, skipPasswordChangeGate = false }: { redirectTo?: string | null; skipPasswordChangeGate?: boolean } = {}
 ) {
   const userId = await getUserId(request);
   if (!userId) {
@@ -142,6 +153,9 @@ export async function requireUserId(
       .filter(Boolean)
       .join('?');
     throw redirect(loginRedirect);
+  }
+  if (!skipPasswordChangeGate) {
+    await requireUserWithoutPasswordChange(request, userId);
   }
   await requireMutableRequest(request);
   return userId;
@@ -303,7 +317,7 @@ export async function resetUserPassword({
   email,
   password,
 }: {
-  email: User['email'];
+  email: NonNullable<User['email']>;
   password: string;
 }) {
   const normalizedEmail = normalizeEmail(email);
@@ -343,7 +357,7 @@ export async function signup({
   schoolId,
   teacherId,
 }: {
-  email: User['email'];
+  email: NonNullable<User['email']>;
   name: User['name'];
   password: string;
   schoolId: string;
@@ -409,22 +423,57 @@ export async function getPasswordHash(password: string) {
   return hash;
 }
 
+export async function findUserForLoginIdentifier(identifier: string) {
+  const trimmed = identifier.trim();
+  if (trimmed.includes('@')) {
+    const email = normalizeEmail(trimmed);
+    return prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: {
+        id: true,
+        email: true,
+        mustChangePassword: true,
+        password: { select: { hash: true } },
+      },
+    });
+  }
+  const { normalizeUsername } = await import('./username.server');
+  const username = normalizeUsername(trimmed);
+  return prisma.user.findFirst({
+    where: { username },
+    select: {
+      id: true,
+      email: true,
+      mustChangePassword: true,
+      password: { select: { hash: true } },
+    },
+  });
+}
+
 export async function verifyUserPassword(
-  where: Pick<User, 'email'> | Pick<User, 'id'>,
+  where: Pick<User, 'email'> | Pick<User, 'id'> | { login: string },
   password: Password['hash']
 ) {
-  const userWithPassword = await prisma.user.findFirst({
-    where:
-      'email' in where
-        ? {
-            email: {
-              equals: normalizeEmail(where.email),
-              mode: 'insensitive',
-            },
-          }
-        : where,
-    select: { id: true, password: { select: { hash: true } } },
-  });
+  const userWithPassword =
+    'login' in where
+      ? await findUserForLoginIdentifier(where.login)
+      : await prisma.user.findFirst({
+          where:
+            'email' in where && where.email
+              ? {
+                  email: {
+                    equals: normalizeEmail(where.email),
+                    mode: 'insensitive',
+                  },
+                }
+              : where,
+          select: {
+            id: true,
+            email: true,
+            mustChangePassword: true,
+            password: { select: { hash: true } },
+          },
+        });
 
   if (!userWithPassword || !userWithPassword.password) {
     return null;
@@ -439,5 +488,41 @@ export async function verifyUserPassword(
     return null;
   }
 
-  return { id: userWithPassword.id };
+  return {
+    id: userWithPassword.id,
+    email: userWithPassword.email,
+    mustChangePassword: userWithPassword.mustChangePassword,
+  };
+}
+
+export async function requireUserWithoutPasswordChange(
+  request: Request,
+  userId: string
+) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { mustChangePassword: true },
+  });
+  const pathname = new URL(request.url).pathname;
+  const allowed =
+    pathname.startsWith('/auth/required-password-change') ||
+    pathname === '/auth/logout';
+  if (user?.mustChangePassword && !allowed) {
+    throw redirect('/auth/required-password-change');
+  }
+}
+
+export async function clearMustChangePassword(userId: string, password: string) {
+  const hash = await getPasswordHash(password);
+  await prisma.$transaction([
+    prisma.password.upsert({
+      where: { userId },
+      create: { userId, hash },
+      update: { hash },
+    }),
+    prisma.user.update({
+      where: { id: userId },
+      data: { mustChangePassword: false },
+    }),
+  ]);
 }

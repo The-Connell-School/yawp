@@ -3,11 +3,14 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { LoginSchema } from '~/components/login-form';
 import {
-  getSessionExpirationDate,
+  getSessionExpirationDateForUser,
   requireAnonymous,
   sessionKey,
   verifyUserPassword,
 } from '~/utils/auth.server';
+import { enforceUnauthByIpAndTarget, rateLimitedFormResponse } from '~/utils/rate-limit.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
+import { parseLoginIdentifier } from '~/utils/login-identifier.server';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { posthog } from '~/services/posthog.server';
@@ -24,8 +27,28 @@ export async function loginAction({ request }: ActionFunctionArgs) {
   if (error) return validationError(error);
 
   try {
-    const { email, password } = data;
-    const user = await verifyUserPassword({ email }, password);
+    const { email: loginIdentifier, password } = data;
+    const parsed = parseLoginIdentifier(loginIdentifier);
+    {
+      const cfg = RATE_LIMITS.unauth.login;
+      const decision = await enforceUnauthByIpAndTarget({
+        request,
+        route: '/auth/login',
+        targetKey: parsed.value,
+        perIpPerMinute: cfg.perIpPerMinute,
+        perIpPerHour: cfg.perIpPerHour,
+        perTargetPerHour: cfg.perEmailPerHour,
+      });
+      if (!decision.allowed) {
+        return rateLimitedFormResponse(
+          'email',
+          decision.retryAfterSeconds,
+          'Too many login attempts. Please wait and try again.'
+        );
+      }
+    }
+
+    const user = await verifyUserPassword({ login: loginIdentifier }, password);
 
     if (!user) {
       return validationError(
@@ -59,7 +82,9 @@ export async function loginAction({ request }: ActionFunctionArgs) {
     const session = await prisma.session.create({
       select: { id: true, expirationDate: true, userId: true },
       data: {
-        expirationDate: getSessionExpirationDate(),
+        expirationDate: getSessionExpirationDateForUser({
+          email: user.email,
+        }),
         userId: user.id,
       },
     });
@@ -68,7 +93,11 @@ export async function loginAction({ request }: ActionFunctionArgs) {
     const authSession = await authSessionStorage.getSession(cookies);
     authSession.set(sessionKey, session.id);
 
-    return redirect(safeRedirect(data.redirectTo, '/app'), {
+    const destination = user.mustChangePassword
+      ? '/auth/required-password-change'
+      : safeRedirect(data.redirectTo, '/app');
+
+    return redirect(destination, {
       headers: combineHeaders(
         {
           'set-cookie': await authSessionStorage.commitSession(authSession, {

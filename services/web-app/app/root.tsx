@@ -130,7 +130,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const {
     getImpersonationState,
-    getSessionExpirationDate,
+    getSessionExpirationDateForUser,
     getUserId,
     logout,
     sessionKey,
@@ -153,6 +153,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
               id: true,
               name: true,
               email: true,
+              username: true,
+              mustChangePassword: true,
               isAdmin: true,
               memberships: {
                 ...(internal ? { where: { id: internal.membershipId, organizationId: internal.organizationId, isActive: true } } : previewAccessSeat && isIsolatedPreviewSeatMode()
@@ -194,7 +196,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const refreshedAuthSessionCookie =
     userId && authSessionId
       ? await authSessionStorage.commitSession(authSession, {
-          expires: getSessionExpirationDate(),
+          expires: getSessionExpirationDateForUser({
+            email: user?.email ?? null,
+          }),
         })
       : null;
 
@@ -374,12 +378,13 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
       // Identify user if logged in
       if (data.user) {
         posthog.identify(data.user.id, {
-          email: data.user.email,
+          ...(data.user.email ? { email: data.user.email } : {}),
+          ...(data.user.username ? { username: data.user.username } : {}),
           name: data.user.name,
           membership_id: data.user.selectedMembership?.id,
           is_admin: data.user.isAdmin,
           is_owner: data.user.selectedMembership?.isOrgOwner,
-          ...omit(data.user, ['id', 'email', 'name']),
+          ...omit(data.user, ['id', 'email', 'name', 'username']),
         });
       }
     }

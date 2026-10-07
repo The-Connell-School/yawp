@@ -4,10 +4,11 @@ import { ArrowRightIcon } from 'lucide-react';
 import { useForm } from '@rvf/react-router';
 import { FormInput } from '~/components/forms/form-input-2';
 import { Button, button } from '~/components/ui/button';
-import { EmailSchema, PasswordSchema } from '~/utils/schemas/user';
+import { PasswordSchema } from '~/utils/schemas/user';
+import { LoginEmailOrHandleSchema } from '~/utils/login-identifier.server';
 
 export const LoginSchema = z.object({
-  email: EmailSchema,
+  email: LoginEmailOrHandleSchema,
   password: PasswordSchema,
   redirectTo: z.string().nullish(),
 });
@@ -43,9 +44,9 @@ export function LoginForm({
           <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />
           <FormInput
             scope={form.scope('email')}
-            type="email"
-            label="Email"
-            autoComplete="email"
+            type="text"
+            label="Email or handle"
+            autoComplete="username"
           />
           <FormInput
             scope={form.scope('password')}
