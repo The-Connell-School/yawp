@@ -86,13 +86,11 @@ export async function applyDailyPagesEngagementV2Seed(
     });
   }
 
-  await seedDpConsolidationQaPreviewFixtures(prisma, engagement.id);
-
   return { applied: true, engagementRubricId: engagement.id };
 }
 
 /** Preview-only rows for the seven QA screenshots (idempotent). */
-async function seedDpConsolidationQaPreviewFixtures(
+export async function seedDpConsolidationQaPreviewFixtures(
   prisma: ReturnType<typeof createPrismaClient>,
   engagementRubricId: string
 ) {
