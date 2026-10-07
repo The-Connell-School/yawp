@@ -251,7 +251,7 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Extract from PDF');
       expectText('Submit for grade');
       expectText(
-        'Graded out of 100 points in steps, read at the intermediate level.'
+        'Graded out of 100 points in bands, read at the intermediate level.'
       );
       expectText('Tutor enabled');
       expectText(
@@ -343,7 +343,7 @@ describe('AssignmentCreationSheetContent', () => {
     root = renderSheet().root;
 
     expectText(
-      'Graded out of 100 points in steps, read at the intermediate level.'
+      'Graded out of 100 points in bands, read at the intermediate level.'
     );
     // The old block stated the same facts four times over three nested boxes.
     expectNoText('Grade Configuration');
@@ -355,7 +355,7 @@ describe('AssignmentCreationSheetContent', () => {
     expectNoText('Grading Total');
     expectNoText('AI');
     expect(inputByName('pointValue').value).toBe('100');
-    expect(inputByName('gradingMode').value).toBe('step');
+    expect(inputByName('gradingMode').value).toBe('bands');
     expect(inputByName('rubricTotalPoints').value).toBe('');
     expect(document.getElementById('assignment-create-point-value')).toBeNull();
   });
@@ -368,10 +368,7 @@ describe('AssignmentCreationSheetContent', () => {
     });
 
     expectText('Point value');
-    expectText('Scoring behavior');
     expectText('Grading assistance');
-    expectText('Steps');
-    expectText('Bands');
     expectNoText('Customize Grading');
     expect(controlById('assignment-create-point-value')).toHaveProperty(
       'readOnly',
@@ -394,37 +391,7 @@ describe('AssignmentCreationSheetContent', () => {
     expect(inputByName('gradingMode').value).toBe('bands');
   });
 
-  it('marks the chosen scoring behavior as the selected one', () => {
-    root = renderSheet({ initialGradingMode: 'bands' }).root;
-
-    act(() => {
-      controlById('assignment-create-change-grading').click();
-    });
-
-    const step = controlById('assignment-create-grading-mode-step');
-    const bands = controlById('assignment-create-grading-mode-bands');
-    expect(bands.getAttribute('aria-pressed')).toBe('true');
-    expect(step.getAttribute('aria-pressed')).toBe('false');
-    // The chosen segment is the one lifted out of the recessed track.
-    expect(bands.className).toContain('bg-popover');
-    expect(step.className).not.toContain('bg-popover');
-  });
-
-  it('lets a teacher opt into bands grading without a customize gate', () => {
-    root = renderSheet().root;
-
-    act(() => {
-      controlById('assignment-create-change-grading').click();
-    });
-    act(() => {
-      controlById('assignment-create-grading-mode-bands').click();
-    });
-
-    expect(inputByName('gradingMode').value).toBe('bands');
-    expectText(
-      'Graded out of 100 points in bands, read at the intermediate level.'
-    );
-  });
+  // Scoring behavior selector removed — always bands now
 
   // `rubricTotalPoints` rescales the rubric's own scale and the `max_score`
   // handed to the grading assistant. It is not the gradebook total, and

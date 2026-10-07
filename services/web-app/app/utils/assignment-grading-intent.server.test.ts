@@ -65,10 +65,10 @@ describe('parseAssignmentGradingIntent', () => {
 });
 
 describe('parseAssignmentRubricOverrides', () => {
-  test('defaults legacy forms to the backward-compatible step mode', () => {
+  test('defaults legacy forms to bands mode', () => {
     expect(parseAssignmentRubricOverrides(formFor({}))).toEqual({
       success: true,
-      data: { rubricTotalPoints: null, gradingMode: 'step' },
+      data: { rubricTotalPoints: null, gradingMode: 'bands' },
     });
   });
 
@@ -83,16 +83,26 @@ describe('parseAssignmentRubricOverrides', () => {
     });
   });
 
-  test('rejects invalid totals and modes', () => {
+  test('rejects invalid totals and unsupported modes; ignores client-sent step', () => {
     expect(
       parseAssignmentRubricOverrides(
         formFor({ rubricTotalPoints: '12.5', gradingMode: 'step' })
       )
     ).toMatchObject({ success: false });
+    // Unsupported grading mode remains invalid
     expect(
       parseAssignmentRubricOverrides(
         formFor({ rubricTotalPoints: '50', gradingMode: 'range' })
       )
     ).toEqual({ success: false, message: 'Grading mode is invalid.' });
+    // Client can still send 'step', which is coerced to 'bands'
+    expect(
+      parseAssignmentRubricOverrides(
+        formFor({ rubricTotalPoints: '50', gradingMode: 'step' })
+      )
+    ).toEqual({
+      success: true,
+      data: { rubricTotalPoints: 50, gradingMode: 'bands' },
+    });
   });
 });
