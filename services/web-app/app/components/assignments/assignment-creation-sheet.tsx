@@ -44,7 +44,6 @@ import {
 } from '~/domain/grading/grading-assistant-strictness';
 import {
   DEFAULT_ASSIGNMENT_GRADING_MODE,
-  gradingModeOptions,
   type AssignmentGradingMode,
 } from '~/domain/assignments/rubric-overrides';
 import { Tooltip } from '~/components/ui/tooltip';
@@ -467,11 +466,6 @@ export function AssignmentCreationSheetContent({
   );
   const strictnessLabel = selectedStrictness?.label ?? '';
   const strictnessDescription = selectedStrictness?.description ?? '';
-  const selectedGradingMode = gradingModeOptions.find(
-    (option) => option.value === gradingMode
-  );
-  const gradingModeLabel = selectedGradingMode?.label ?? '';
-  const gradingModeDescription = selectedGradingMode?.description ?? '';
 
   useEffect(() => {
     if (!open) {
@@ -914,9 +908,7 @@ export function AssignmentCreationSheetContent({
                     {pointValue || '—'} points
                   </span>{' '}
                   in{' '}
-                  <span className="font-medium text-foreground">
-                    {gradingMode === 'bands' ? 'bands' : 'steps'}
-                  </span>
+                  <span className="font-medium text-foreground">bands</span>
                   , read at the{' '}
                   <span className="font-medium text-foreground">
                     {strictnessLabel.toLowerCase()}
@@ -977,28 +969,7 @@ export function AssignmentCreationSheetContent({
                     </p>
                   </div>
 
-                  <div className="space-y-2">
-                    <p
-                      id="assignment-create-scoring-behavior"
-                      className="text-sm font-medium"
-                    >
-                      Scoring behavior
-                    </p>
-                    <GradingChoiceGroup
-                      labelId="assignment-create-scoring-behavior"
-                      idPrefix="assignment-create-grading-mode"
-                      value={gradingMode}
-                      options={gradingModeOptions}
-                      onChange={setGradingMode}
-                      disabled={isSaving}
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      <span className="font-medium text-foreground">
-                        {gradingModeLabel}
-                      </span>{' '}
-                      — {gradingModeDescription}
-                    </p>
-                  </div>
+                  {/* Scoring behavior is now fixed to bands; UI selector removed */}
 
                   <div className="space-y-2">
                     <p
@@ -1036,7 +1007,7 @@ export function AssignmentCreationSheetContent({
                 name="rubricTotalPoints"
                 value={pointValueFieldValue(initialRubricTotalPoints)}
               />
-              <input type="hidden" name="gradingMode" value={gradingMode} />
+              <input type="hidden" name="gradingMode" value="bands" />
               <input
                 type="hidden"
                 name="gradingAssistantStrictnessLevel"

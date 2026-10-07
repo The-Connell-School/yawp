@@ -18,7 +18,7 @@ export const TEACHER_NOTES_EVIDENCE_RULE = [
   '- If an entry appears pasted or unlike the student’s own register, don’t penalize on suspicion — describe only an observable contrast for the teacher.',
   '- Do not make a comparison without supplied comparison writing.',
   '- Return null when no clear, useful inconsistency is supported. Avoid vague warnings and overflagging.',
-].join('\\n');
+].join('\n');
 
 /** Private observations belong to the teacher, never to released feedback. */
 export function teacherNotesEnabled(outputSchema: unknown): boolean {

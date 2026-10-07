@@ -353,7 +353,7 @@ model Assignment {
   rubricTotalPoints               Int?
   /// `step` preserves the original discrete label behavior; `bands` allows
   /// whole-number scores inside each rubric label's declared range.
-  gradingMode                     String            @default("step")
+  gradingMode                     String            @default("bands")
   gradingAssistantStrictnessLevel String            @default("intermediate")
   tutorEnabled                    Boolean           @default(true)
   /// The teacher's per-assignment toggle: is this one graded for grammar and
