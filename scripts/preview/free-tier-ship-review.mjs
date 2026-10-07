@@ -75,6 +75,27 @@ async function passwordLogin(page, email, redirectTo = '/app') {
   await page.goto(`${baseUrl}${redirectTo}`, { waitUntil: 'networkidle' });
 }
 
+async function waitForPostApprovalApp(page, email) {
+  const deadline = Date.now() + 90_000;
+  while (Date.now() < deadline) {
+    await passwordLogin(page, email, '/app');
+    const url = page.url();
+    if (/\/app\/free-tier\/setup/.test(url) || /\/app\/my-classes/.test(url)) {
+      return url;
+    }
+    if (/\/app\/free-tier\/pending/.test(url)) {
+      await page.waitForTimeout(4000);
+      continue;
+    }
+    if (/\/auth\/login/.test(url)) {
+      await page.waitForTimeout(2000);
+      continue;
+    }
+    await page.waitForTimeout(2500);
+  }
+  throw new Error(`Post-approval login did not reach setup (last URL: ${page.url()})`);
+}
+
 async function shot(page, name) {
   const file = path.join(outDir, `${name}.png`);
   await page.screenshot({ path: file, fullPage: true });
@@ -205,14 +226,6 @@ async function main() {
       await devLogin(admin.page, 'dev.admin@yawp.local');
       const approvalLinks = await fetchManifest(admin.page, teacherFlowEmail);
 
-      if (approvalLinks.declineUrl) {
-        const deny = await freshContext(browser);
-        await deny.page.goto(approvalLinks.declineUrl);
-        await deny.page.waitForLoadState('networkidle');
-        manifest.shots.push(await shot(deny.page, '13-denial-not-right-person-landing'));
-        await deny.context.close();
-      }
-
       if (approvalLinks.approveUrl) {
         const approveCtx = await freshContext(browser);
         await approveCtx.page.goto(approvalLinks.approveUrl);
@@ -225,8 +238,12 @@ async function main() {
         await approveCtx.page.waitForLoadState('networkidle');
         manifest.shots.push(await shot(approveCtx.page, '08-admin-approve-submitted'));
 
-        await approveCtx.page.locator('button[type="submit"]').click();
-        await approveCtx.page.waitForLoadState('networkidle');
+        try {
+          await approveCtx.page.locator('button[type="submit"]').click({ timeout: 5000 });
+          await approveCtx.page.waitForLoadState('networkidle');
+        } catch {
+          // Second submit may show a consumed-link state after idempotent approval.
+        }
         manifest.shots.push(await shot(approveCtx.page, '09-admin-approve-idempotent-resubmit'));
         await approveCtx.context.close();
       }
@@ -240,8 +257,11 @@ async function main() {
       await loginLanding.context.close();
 
       const setup = await freshContext(browser);
-      await passwordLogin(setup.page, teacherFlowEmail, '/app/free-tier/setup');
-      await setup.page.waitForURL(/\/app\/free-tier\/setup/, { timeout: 30_000 });
+      await waitForPostApprovalApp(setup.page, teacherFlowEmail);
+      if (!setup.page.url().includes('/app/free-tier/setup')) {
+        await setup.page.goto(`${baseUrl}/app/free-tier/setup`, { waitUntil: 'networkidle' });
+      }
+      await setup.page.getByRole('heading', { name: /first class/i }).waitFor({ timeout: 20_000 });
       manifest.shots.push(await shot(setup.page, '11-teacher-first-class-setup'));
       await setup.context.close();
     }
@@ -254,6 +274,22 @@ async function main() {
       await pending.context.close();
     } catch {
       manifest.seedPendingSkipped = true;
+    }
+
+    try {
+      const denyAdmin = await freshContext(browser);
+      await devLogin(denyAdmin.page, 'dev.admin@yawp.local');
+      const pendingManifest = await fetchManifest(denyAdmin.page, PENDING_EMAIL);
+      await denyAdmin.context.close();
+      if (pendingManifest.declineUrl) {
+        const deny = await freshContext(browser);
+        await deny.page.goto(pendingManifest.declineUrl);
+        await deny.page.waitForLoadState('networkidle');
+        manifest.shots.push(await shot(deny.page, '13-denial-not-right-person-landing'));
+        await deny.context.close();
+      }
+    } catch (error) {
+      manifest.denialSkipped = String(error.message || error);
     }
   } finally {
     await writeFile(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
