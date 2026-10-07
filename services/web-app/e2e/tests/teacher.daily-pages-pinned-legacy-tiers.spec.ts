@@ -36,6 +36,7 @@ async function seedPinnedLegacyDailyPagesAssignment(e2eContext: E2EContext) {
     };
     const revision = await prisma.rubricRevision.create({
       data: {
+        id: `legacy-pin-${Date.now()}`,
         rubricName: 'daily-pages-engagement',
         version: 99_001,
         schemaJson: legacySchema,
