@@ -128,10 +128,10 @@ describe('Daily Pages assignment points', () => {
         {
           ...original.rubricCategories[0],
           bands: [
-            { min: 0, max: 0, label: 'Not Present' },
-            { min: 10, max: 10, label: 'Needs More' },
-            { min: 20, max: 20, label: 'Good' },
-            { min: 30, max: 30, label: 'Excellent' },
+            { min: 0, max: 0, label: 'Not Present', description: 'Legacy' },
+            { min: 10, max: 10, label: 'Needs More', description: 'Legacy' },
+            { min: 20, max: 20, label: 'Good', description: 'Legacy' },
+            { min: 30, max: 30, label: 'Excellent', description: 'Legacy' },
           ],
         },
       ],

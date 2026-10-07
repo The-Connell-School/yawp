@@ -14,30 +14,36 @@ async function seedDailyPagesWork(e2eContext: E2EContext) {
       prompt: 'Write about a habit you are trying to build.',
       pointValue: 12,
     });
+    const text =
+      'I kept writing even when I did not know where it was going.';
+    const html = `<p>${text}</p>`;
     const document = await prisma.document.create({
       data: {
         title: 'Swap persistence doc',
-        text: 'I kept writing even when I did not know where it was going.',
-        html: '<p>I kept writing even when I did not know where it was going.</p>',
+        text,
+        html,
         membershipId: e2eContext.membershipId,
         assignmentTypeId: e2eContext.dailyPagesAssignmentTypeId,
         assignmentId: assignment.id,
         classAssignmentId: classAssignment.id,
       },
-      select: { id: true, title: true },
+      select: { id: true, title: true, text: true, html: true },
     });
     await prisma.submission.create({
       data: {
         documentId: document.id,
-        html: document.html,
-        text: document.text,
-        title: document.title,
+        html,
+        text,
+        title: document.title ?? 'Swap persistence doc',
         submittedAt: new Date(),
         score: '10/12',
         overallScore: 10,
       },
     });
-    return { assignmentTitle: assignment.title, documentTitle: document.title };
+    return {
+      assignmentTitle: assignment.title ?? 'SJP swap persistence',
+      documentTitle: document.title ?? 'Swap persistence doc',
+    };
   } finally {
     await prisma.$disconnect();
   }
