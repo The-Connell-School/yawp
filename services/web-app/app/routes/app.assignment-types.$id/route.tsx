@@ -731,7 +731,7 @@ export default function AppAssignmentTypesIdRoute() {
 
           {isTeacher ? (
             <div className="flex items-center gap-2">
-              {showThesisLibrary ? (
+              {isThesisDrivenEssayTitle(data.assignmentType.title) ? (
                 <SeeHowItWorksLink
                   to={`/app/assignment-types/${data.assignmentType.id}/how-it-works`}
                 />
