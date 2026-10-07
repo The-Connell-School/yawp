@@ -5,6 +5,7 @@
  *
  * Never runs against production URLs or management keys — local/preview Postgres only.
  */
+import type { PrismaClient } from '../generated/prisma';
 import { createPassword } from './utils';
 import {
   assertLocalSeedTarget,
@@ -19,18 +20,45 @@ import {
 import { sampleRubricSnapshot } from './local-dev/seed-daily-pages-samples';
 import { DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG } from '../../../services/web-app/app/domain/assignment-types/daily-pages-short-form-rubric.ts';
 
-if (process.env.PREVIEW_DATA_MODE && process.env.PREVIEW_DATA_MODE !== 'seed') {
-  console.log(
-    'seed-preview-teacher-notes-qa: skipped (PREVIEW_DATA_MODE is not seed)'
-  );
-  process.exit(0);
+type SeedClient = PrismaClient;
+
+export function shouldRunPreviewTeacherNotesQaSeed() {
+  const mode = process.env.PREVIEW_DATA_MODE;
+  return !mode || mode === 'seed';
 }
 
-assertLocalSeedTarget();
+export async function seedPreviewTeacherNotesQa(prisma: SeedClient) {
+  const teacherMembership = await prisma.orgMembership.findFirst({
+    where: {
+      isActive: true,
+      role: 'TEACHER',
+      user: { email: 'dev.teacher@yawp.local' },
+    },
+    select: { organizationId: true },
+  });
 
-const prisma = createPrismaClient();
+  if (!teacherMembership) {
+    console.log(
+      'seed-preview-teacher-notes-qa: no dev.teacher preview org; skipping'
+    );
+    return { status: 'skipped' as const, reason: 'missing-dev-teacher' };
+  }
 
-async function ensurePreviewSuperAdmin(organizationId: string) {
+  await ensurePreviewSuperAdmin(prisma, teacherMembership.organizationId);
+  const submissionId = await ensureTeacherNoteOnGradedDailyPagesSample(prisma);
+  const result = {
+    status: 'ok' as const,
+    superadminEmail: PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_EMAIL,
+    submissionId,
+  };
+  console.log(JSON.stringify(result));
+  return result;
+}
+
+async function ensurePreviewSuperAdmin(
+  prisma: SeedClient,
+  organizationId: string
+) {
   const existing = await prisma.user.findUnique({
     where: { email: PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_EMAIL },
     include: {
@@ -77,7 +105,7 @@ async function ensurePreviewSuperAdmin(organizationId: string) {
   return user.id;
 }
 
-async function ensureTeacherNoteOnGradedDailyPagesSample() {
+async function ensureTeacherNoteOnGradedDailyPagesSample(prisma: SeedClient) {
   const submission = await prisma.submission.findFirst({
     where: {
       document: {
@@ -86,7 +114,7 @@ async function ensureTeacherNoteOnGradedDailyPagesSample() {
           user: { email: PREVIEW_TEACHER_NOTES_QA_STUDENT_EMAIL },
         },
       },
-      releasedAt: { not: null },
+      gradedAt: { not: null },
     },
     orderBy: { submittedAt: 'desc' },
     select: {
@@ -97,7 +125,7 @@ async function ensureTeacherNoteOnGradedDailyPagesSample() {
 
   if (!submission?.document.assignmentTypeId) {
     console.log(
-      'seed-preview-teacher-notes-qa: no released Daily Pages submission for graded student; skipping note'
+      'seed-preview-teacher-notes-qa: no graded Daily Pages submission for graded student; skipping note'
     );
     return null;
   }
@@ -112,7 +140,9 @@ async function ensureTeacherNoteOnGradedDailyPagesSample() {
     ...(run?.metadata && typeof run.metadata === 'object' ? run.metadata : {}),
     teacherNote: PREVIEW_TEACHER_NOTES_QA_NOTE,
     output: {
-      rubricScores: { engagement_with_prompt: { score: 24, comment: '', isAi: true } },
+      rubricScores: {
+        engagement_with_prompt: { score: 24, comment: '', isAi: true },
+      },
       overallComment: 'Strong engagement with the prompt.',
       score: '24/30',
     },
@@ -143,32 +173,19 @@ async function ensureTeacherNoteOnGradedDailyPagesSample() {
   return submission.id;
 }
 
-try {
-  const teacherMembership = await prisma.orgMembership.findFirst({
-    where: {
-      isActive: true,
-      role: 'TEACHER',
-      user: { email: 'dev.teacher@yawp.local' },
-    },
-    select: { organizationId: true },
-  });
-
-  if (!teacherMembership) {
+if (import.meta.main) {
+  if (!shouldRunPreviewTeacherNotesQaSeed()) {
     console.log(
-      'seed-preview-teacher-notes-qa: no dev.teacher preview org; skipping'
+      'seed-preview-teacher-notes-qa: skipped (PREVIEW_DATA_MODE is not seed)'
     );
     process.exit(0);
   }
 
-  await ensurePreviewSuperAdmin(teacherMembership.organizationId);
-  const submissionId = await ensureTeacherNoteOnGradedDailyPagesSample();
-  console.log(
-    JSON.stringify({
-      status: 'ok',
-      superadminEmail: PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_EMAIL,
-      submissionId,
-    })
-  );
-} finally {
-  await prisma.$disconnect();
+  assertLocalSeedTarget();
+  const prisma = createPrismaClient();
+  try {
+    await seedPreviewTeacherNotesQa(prisma);
+  } finally {
+    await prisma.$disconnect();
+  }
 }

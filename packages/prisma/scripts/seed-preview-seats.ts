@@ -12,6 +12,10 @@ import {
 } from './preview-seats';
 import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { attachApHistorySourceImages } from './local-dev/seed-ap-history';
+import {
+  seedPreviewTeacherNotesQa,
+  shouldRunPreviewTeacherNotesQaSeed,
+} from './seed-preview-teacher-notes-qa';
 
 assertLocalSeedTarget();
 
@@ -34,6 +38,9 @@ try {
   // idempotent AP catalog on every seed-mode deploy, including existing seats.
   await seedApHistoryLibrary(prisma, seats[0].organizationId);
   await attachApHistorySourceImages(prisma);
+  if (shouldRunPreviewTeacherNotesQaSeed()) {
+    await seedPreviewTeacherNotesQa(prisma);
+  }
   for (const seat of seats) {
     const result = results.find(
       ({ organizationId }) => organizationId === seat.organizationId

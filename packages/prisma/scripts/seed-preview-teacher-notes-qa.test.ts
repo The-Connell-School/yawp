@@ -20,6 +20,11 @@ describe('seed-preview-teacher-notes-qa', () => {
       'utf8'
     );
     expect(deploy).toContain('bun run seed-preview-teacher-notes-qa');
+    const seats = readFileSync(
+      join(import.meta.dir, 'seed-preview-seats.ts'),
+      'utf8'
+    );
+    expect(seats).toContain('seedPreviewTeacherNotesQa');
     const classStarter = deploy.indexOf('bun run seed-class-starter-assignment-type');
     const qaSeed = deploy.indexOf('bun run seed-preview-teacher-notes-qa');
     expect(classStarter).toBeGreaterThan(-1);
