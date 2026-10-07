@@ -5,7 +5,7 @@ import { useForm } from '@rvf/react-router';
 import { FormInput } from '~/components/forms/form-input-2';
 import { Button, button } from '~/components/ui/button';
 import { PasswordSchema } from '~/utils/schemas/user';
-import { LoginEmailOrHandleSchema } from '~/utils/login-identifier.server';
+import { LoginEmailOrHandleSchema } from '~/utils/login-identifier';
 
 export const LoginSchema = z.object({
   email: LoginEmailOrHandleSchema,

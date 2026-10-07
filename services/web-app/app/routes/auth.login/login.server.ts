@@ -8,7 +8,12 @@ import {
   sessionKey,
   verifyUserPassword,
 } from '~/utils/auth.server';
-import { enforceUnauthByIpAndTarget, rateLimitedFormResponse } from '~/utils/rate-limit.server';
+import {
+  checkFailedLoginIpRateLimit,
+  enforceLoginTargetRateLimit,
+  rateLimitedFormResponse,
+  recordFailedLoginIpRateLimit,
+} from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { parseLoginIdentifier } from '~/utils/login-identifier.server';
 import { prisma } from '~/utils/db.server';
@@ -31,18 +36,29 @@ export async function loginAction({ request }: ActionFunctionArgs) {
     const parsed = parseLoginIdentifier(loginIdentifier);
     {
       const cfg = RATE_LIMITS.unauth.login;
-      const decision = await enforceUnauthByIpAndTarget({
+      const targetDecision = await enforceLoginTargetRateLimit({
         request,
         route: '/auth/login',
         targetKey: parsed.value,
-        perIpPerMinute: cfg.perIpPerMinute,
-        perIpPerHour: cfg.perIpPerHour,
         perTargetPerHour: cfg.perEmailPerHour,
       });
-      if (!decision.allowed) {
+      if (!targetDecision.allowed) {
         return rateLimitedFormResponse(
           'email',
-          decision.retryAfterSeconds,
+          targetDecision.retryAfterSeconds,
+          'Too many login attempts. Please wait and try again.'
+        );
+      }
+      const ipDecision = await checkFailedLoginIpRateLimit({
+        request,
+        route: '/auth/login',
+        perIpPerMinute: cfg.perIpPerMinute,
+        perIpPerHour: cfg.perIpPerHour,
+      });
+      if (!ipDecision.allowed) {
+        return rateLimitedFormResponse(
+          'email',
+          ipDecision.retryAfterSeconds,
           'Too many login attempts. Please wait and try again.'
         );
       }
@@ -51,6 +67,20 @@ export async function loginAction({ request }: ActionFunctionArgs) {
     const user = await verifyUserPassword({ login: loginIdentifier }, password);
 
     if (!user) {
+      const cfg = RATE_LIMITS.unauth.login;
+      const failIp = await recordFailedLoginIpRateLimit({
+        request,
+        route: '/auth/login',
+        perIpPerMinute: cfg.perIpPerMinute,
+        perIpPerHour: cfg.perIpPerHour,
+      });
+      if (!failIp.allowed) {
+        return rateLimitedFormResponse(
+          'email',
+          failIp.retryAfterSeconds,
+          'Too many login attempts. Please wait and try again.'
+        );
+      }
       return validationError(
         { fieldErrors: { email: 'Invalid email or password' } },
         data

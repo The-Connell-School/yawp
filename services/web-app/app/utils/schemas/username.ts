@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { validateUsername } from '../username.server';
+import { validateUsername } from '../username';
 
 export const UsernameFieldSchema = z
   .string({ required_error: 'Handle is required' })

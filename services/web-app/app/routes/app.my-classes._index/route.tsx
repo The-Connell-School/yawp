@@ -28,6 +28,7 @@ import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
+import { studentJoinTokenForClassCreate } from '~/utils/class-student-join-token.server';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
@@ -190,6 +191,7 @@ export async function action({ request }: ActionFunctionArgs) {
           period,
           title,
           code,
+          studentJoinToken: studentJoinTokenForClassCreate(profile.organization.plan),
           cardGradientKey: generateClassCardGradientKey(code),
           classArtKey: await pickClassArtKeyForOrganization(
             profile.organization.id

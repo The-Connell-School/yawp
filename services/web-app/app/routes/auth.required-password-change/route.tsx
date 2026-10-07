@@ -19,6 +19,7 @@ import { PasswordAndConfirmPasswordSchema } from '~/utils/schemas/user';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { getSessionExpirationDateForUser } from '~/utils/auth.server';
+import { mayChangeRequiredPassword } from '~/domain/free-tier/required-password-change';
 
 const Schema = PasswordAndConfirmPasswordSchema;
 
@@ -36,6 +37,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request, { skipPasswordChangeGate: true });
+  const gateUser = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { mustChangePassword: true },
+  });
+  if (!mayChangeRequiredPassword(gateUser)) {
+    throw Response.json({ error: 'Forbidden' }, { status: 403 });
+  }
   const { error, data } = await parseFormData(request, Schema);
   if (error) return validationError(error);
 

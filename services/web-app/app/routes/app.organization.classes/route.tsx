@@ -63,6 +63,7 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import { generateClassCode } from '~/utils/class';
+import { studentJoinTokenForClassCreate } from '~/utils/class-student-join-token.server';
 import {
   currentSchoolYear,
   selectableSchoolYears,
@@ -359,6 +360,9 @@ export async function action({ request }: ActionFunctionArgs) {
               period,
               title,
               code,
+              studentJoinToken: studentJoinTokenForClassCreate(
+                profile.organization.plan
+              ),
               cardGradientKey: generateClassCardGradientKey(code),
               classArtKey,
               teachers: {

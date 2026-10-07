@@ -163,6 +163,12 @@ import {
   summarizeStudentPasteActivity,
 } from './class-paste-alerts';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import {
+  ensureClassStudentJoinToken,
+  teacherResetStudentPassword,
+} from '~/domain/free-tier/student-join.server';
+import { FreeClassStudentJoinCard } from '~/components/free-class-student-join-card';
+import { getDomainUrl } from '~/utils/misc';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -756,8 +762,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    const { teacherResetStudentPassword } =
-      await import('~/domain/free-tier/student-join.server');
     const result = await teacherResetStudentPassword({
       studentMembershipId,
       classId,
@@ -951,7 +955,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             name: true,
             organizationId: true,
             organization: {
-              select: { classInsightsEnabled: true, reporterEnabled: true },
+              select: {
+                plan: true,
+                classInsightsEnabled: true,
+                reporterEnabled: true,
+              },
             },
           },
         },
@@ -1336,9 +1344,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     { writingConditionsEnabled }
   );
 
+  let studentJoinUrl: string | null = null;
+  if (klass.school.organization.plan === 'FREE_CLASSROOM') {
+    const joinToken = await ensureClassStudentJoinToken(klass.id);
+    if (joinToken) {
+      const joinPath = new URL('/join', getDomainUrl(request));
+      joinPath.searchParams.set('t', joinToken);
+      studentJoinUrl = joinPath.toString();
+    }
+  }
+
   return dataResponse({
     role: 'TEACHER' as const,
     writingConditionsEnabled,
+    studentJoinUrl,
     klass,
     submissions,
     inProgressDocuments,
@@ -2204,6 +2223,12 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
 
       return (
         <div className="space-y-4">
+          {data.studentJoinUrl ? (
+            <FreeClassStudentJoinCard
+              joinUrl={data.studentJoinUrl}
+              classCode={data.klass.code}
+            />
+          ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="relative min-w-0 w-full max-w-sm flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />

@@ -6,6 +6,12 @@ import {
   validateUsername,
 } from '~/utils/username.server';
 import { getSessionExpirationDateForUser } from '~/utils/auth.server';
+import {
+  isPrismaUniqueViolation,
+  isUsernameUniqueViolation,
+} from './prisma-username-conflict';
+import { evaluateTeacherResetHandleStudentEligibility } from './teacher-reset-handle-student';
+import { generateStudentJoinToken } from '~/utils/student-join-token';
 
 export type FreeTierClassSummary = {
   id: string;
@@ -17,6 +23,31 @@ export type FreeTierClassSummary = {
   teachers: { user: { name: string | null } }[];
 };
 
+export async function findFreeTierClassByJoinToken(
+  token: string
+): Promise<FreeTierClassSummary | null> {
+  const trimmed = token.trim();
+  if (!trimmed) return null;
+
+  return prisma.class.findFirst({
+    where: {
+      isArchived: false,
+      studentJoinToken: trimmed,
+      school: { organization: { plan: 'FREE_CLASSROOM' } },
+    },
+    select: {
+      id: true,
+      code: true,
+      schoolYear: true,
+      grade: true,
+      period: true,
+      school: { select: { name: true, organizationId: true } },
+      teachers: { select: { user: { select: { name: true } } } },
+    },
+  });
+}
+
+/** @deprecated Use join token links; retained for migration compatibility only. */
 export async function findFreeTierClassesByCode(
   code: string
 ): Promise<FreeTierClassSummary[]> {
@@ -41,6 +72,34 @@ export async function findFreeTierClassesByCode(
     orderBy: [{ schoolYear: 'desc' }, { grade: 'asc' }, { period: 'asc' }],
     take: 20,
   });
+}
+
+export async function ensureClassStudentJoinToken(classId: string) {
+  const klass = await prisma.class.findFirst({
+    where: {
+      id: classId,
+      isArchived: false,
+      school: { organization: { plan: 'FREE_CLASSROOM' } },
+    },
+    select: { id: true, studentJoinToken: true },
+  });
+  if (!klass) return null;
+  if (klass.studentJoinToken) return klass.studentJoinToken;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const token = generateStudentJoinToken();
+    try {
+      const updated = await prisma.class.update({
+        where: { id: klass.id },
+        data: { studentJoinToken: token },
+        select: { studentJoinToken: true },
+      });
+      return updated.studentJoinToken;
+    } catch (error) {
+      if (!isPrismaUniqueViolation(error, 'studentJoinToken')) throw error;
+    }
+  }
+  throw new Error('Could not allocate student join token.');
 }
 
 async function assertClassHasSeat(classId: string, organizationId: string) {
@@ -68,11 +127,13 @@ export async function registerFreeTierStudent({
   username: rawUsername,
   password,
   classId,
+  joinToken,
 }: {
   name: string;
   username: string;
   password: string;
   classId: string;
+  joinToken: string;
 }) {
   const usernameResult = validateUsername(rawUsername);
   if (!usernameResult.ok) {
@@ -85,10 +146,12 @@ export async function registerFreeTierStudent({
     };
   }
 
+  const trimmedToken = joinToken.trim();
   const klass = await prisma.class.findFirst({
     where: {
       id: classId,
       isArchived: false,
+      studentJoinToken: trimmedToken,
       school: { organization: { plan: 'FREE_CLASSROOM' } },
     },
     select: {
@@ -132,36 +195,49 @@ export async function registerFreeTierStudent({
   }
 
   const hashedPassword = await getPasswordHash(password);
-  const membership = await prisma.orgMembership.create({
-    data: {
-      user: {
-        create: {
-          name: name.trim(),
-          username: usernameResult.username,
-          password: { create: { hash: hashedPassword } },
+  try {
+    const membership = await prisma.orgMembership.create({
+      data: {
+        user: {
+          create: {
+            name: name.trim(),
+            username: usernameResult.username,
+            password: { create: { hash: hashedPassword } },
+          },
         },
+        organization: { connect: { id: klass.school.organizationId } },
+        role: 'STUDENT',
+        classesAsStudent: { connect: { id: klass.id } },
       },
-      organization: { connect: { id: klass.school.organizationId } },
-      role: 'STUDENT',
-      classesAsStudent: { connect: { id: klass.id } },
-    },
-    select: { id: true, userId: true },
-  });
+      select: { id: true, userId: true },
+    });
 
-  const session = await prisma.session.create({
-    data: {
+    const session = await prisma.session.create({
+      data: {
+        userId: membership.userId,
+        expirationDate: getSessionExpirationDateForUser({ email: null }),
+      },
+      select: { id: true, expirationDate: true },
+    });
+
+    return {
+      status: 'ok' as const,
+      membershipId: membership.id,
+      session,
       userId: membership.userId,
-      expirationDate: getSessionExpirationDateForUser({ email: null }),
-    },
-    select: { id: true, expirationDate: true },
-  });
-
-  return {
-    status: 'ok' as const,
-    membershipId: membership.id,
-    session,
-    userId: membership.userId,
-  };
+    };
+  } catch (error) {
+    if (isUsernameUniqueViolation(error)) {
+      const suggestions = await suggestAvailableUsernames(usernameResult.username);
+      return {
+        status: 'error' as const,
+        field: 'username' as const,
+        error: 'This handle is already taken.',
+        suggestions,
+      };
+    }
+    throw error;
+  }
 }
 
 export async function teacherResetStudentPassword({
@@ -206,11 +282,29 @@ export async function teacherResetStudentPassword({
     },
     select: {
       userId: true,
-      user: { select: { id: true, email: true } },
+      user: {
+        select: {
+          id: true,
+          email: true,
+          isAdmin: true,
+          isSuperAdmin: true,
+          memberships: {
+            select: { role: true, isActive: true },
+          },
+        },
+      },
     },
   });
   if (!student) {
     return { status: 'error' as const, error: 'Student not found in this class.' };
+  }
+
+  const eligibility = evaluateTeacherResetHandleStudentEligibility(
+    student.user,
+    student.user.memberships
+  );
+  if (!eligibility.ok) {
+    return { status: 'error' as const, error: eligibility.message };
   }
 
   const hash = await getPasswordHash(temporaryPassword);

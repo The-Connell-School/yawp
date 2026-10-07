@@ -13,60 +13,63 @@ import { Button } from '~/components/ui/button';
 import { FormInput } from '~/components/rvf-forms/form-input';
 import { requireAnonymous, sessionKey } from '~/utils/auth.server';
 import { NameSchema, PasswordAndConfirmPasswordSchema } from '~/utils/schemas/user';
-import { enforceUnauthByIpAndTarget, rateLimitedFormResponse } from '~/utils/rate-limit.server';
+import {
+  enforceUnauthByIpAndTarget,
+  enforceUnauthByIpOnly,
+  rateLimitedFormResponse,
+} from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import {
-  findFreeTierClassesByCode,
+  findFreeTierClassByJoinToken,
   registerFreeTierStudent,
 } from '~/domain/free-tier/student-join.server';
-import { formatClassGradePeriod } from '~/utils/class-display';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { combineHeaders } from '~/utils/misc';
 import { UsernameFieldSchema } from '~/utils/schemas/username';
 
-const CodeSchema = z.object({
-  code: z.string().min(1, 'Class code is required'),
-});
-
 const JoinSchema = z
   .object({
     name: NameSchema,
     classId: z.string().min(1, 'Class is required'),
-    code: z.string().min(1),
+    joinToken: z.string().min(1, 'Join link is invalid or expired.'),
     username: UsernameFieldSchema,
   })
   .and(PasswordAndConfirmPasswordSchema);
 
+async function rateLimitJoinLookup(request: Request) {
+  const cfg = RATE_LIMITS.unauth.joinLookup;
+  return enforceUnauthByIpOnly({
+    request,
+    route: '/join/lookup',
+    perIpPerMinute: cfg.perIpPerMinute,
+    perIpPerHour: cfg.perIpPerHour,
+  });
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAnonymous(request);
-  const code = new URL(request.url).searchParams.get('code')?.trim() ?? '';
-  if (!code) {
-    return { code: null as string | null, classes: [] };
+  const token = new URL(request.url).searchParams.get('t')?.trim() ?? '';
+  if (!token) {
+    return { joinToken: null as string | null, klass: null };
   }
-  const classes = await findFreeTierClassesByCode(code);
-  return { code, classes };
+  const lookupLimit = await rateLimitJoinLookup(request);
+  if (!lookupLimit.allowed) {
+    throw Response.json(
+      { error: 'Too many requests. Please wait and try again.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(lookupLimit.retryAfterSeconds) },
+      }
+    );
+  }
+  const klass = await findFreeTierClassByJoinToken(token);
+  return { joinToken: token, klass };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireAnonymous(request);
   const formData = await request.formData();
-  const intent = formData.get('intent');
-
-  if (intent === 'lookup-code') {
-    const { error, data } = await parseFormData(formData, CodeSchema);
-    if (error) return validationError(error);
-    const classes = await findFreeTierClassesByCode(data.code);
-    if (classes.length === 0) {
-      return validationError(
-        { fieldErrors: { code: 'Invalid class code for a free classroom.' } },
-        data
-      );
-    }
-    const params = new URLSearchParams({ code: data.code });
-    return redirect(`/join?${params.toString()}`);
-  }
-
   const { error, data } = await parseFormData(formData, JoinSchema);
   if (error) return validationError(error);
 
@@ -89,8 +92,8 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   }
 
-  const classes = await findFreeTierClassesByCode(data.code);
-  if (!classes.some((klass) => klass.id === data.classId)) {
+  const klass = await findFreeTierClassByJoinToken(data.joinToken);
+  if (!klass || klass.id !== data.classId) {
     return validationError({ fieldErrors: { classId: 'Class not found.' } }, data);
   }
 
@@ -99,6 +102,7 @@ export async function action({ request }: ActionFunctionArgs) {
     username: data.username,
     password: data.password,
     classId: data.classId,
+    joinToken: data.joinToken,
   });
 
   if (result.status === 'error') {
@@ -132,13 +136,6 @@ export default function JoinRoute() {
   const data = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
-  const showClassSelect = data.classes.length > 1;
-
-  const lookupForm = useForm({
-    schema: CodeSchema,
-    method: 'POST',
-    defaultValues: { code: data.code ?? '' },
-  });
 
   const joinForm = useForm({
     schema: JoinSchema,
@@ -148,25 +145,19 @@ export default function JoinRoute() {
       username: '',
       password: '',
       confirmPassword: '',
-      code: data.code ?? '',
-      classId: showClassSelect ? '' : data.classes[0]?.id ?? '',
+      joinToken: data.joinToken ?? '',
+      classId: data.klass?.id ?? '',
     },
   });
 
-  if (!data.code || data.classes.length === 0) {
+  if (!data.joinToken || !data.klass) {
     return (
       <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
         <h1 className="text-lg font-semibold">Join your class</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Enter the class code from your teacher to create your free Yawp account.
+          Ask your teacher for the class join link or scan their QR code. Class
+          codes alone are not enough to join on Yawp.
         </p>
-        <Form {...lookupForm.getFormProps()} className="mt-6 flex flex-col gap-4">
-          <input type="hidden" name="intent" value="lookup-code" />
-          <FormInput scope={lookupForm.scope('code')} label="Class code" autoFocus />
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            Continue
-          </Button>
-        </Form>
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Already have an account?{' '}
           <Link to="/auth/login" className="text-primary underline-offset-4 hover:underline">
@@ -177,36 +168,19 @@ export default function JoinRoute() {
     );
   }
 
+  const teacherName =
+    data.klass.teachers[0]?.user.name?.trim() || 'your teacher';
+
   return (
     <div className="mx-auto w-full max-w-md rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
       <h1 className="text-lg font-semibold">Create your student account</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Pick a handle and password. No email required.
+        Join {data.klass.school.name} ({data.klass.schoolYear}) with{' '}
+        {teacherName}. Pick a handle and password — no email required.
       </p>
       <Form {...joinForm.getFormProps()} className="mt-6 flex flex-col gap-4">
-        <input type="hidden" name="code" value={data.code} />
-        {showClassSelect ? (
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Class</label>
-            <select
-              name="classId"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              defaultValue=""
-            >
-              <option value="" disabled>Select a class</option>
-              {data.classes.map((klass) => (
-                <option key={klass.id} value={klass.id}>
-                  {klass.school.name} • {klass.schoolYear}
-                  {formatClassGradePeriod(klass)
-                    ? ` • ${formatClassGradePeriod(klass)}`
-                    : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <input type="hidden" name="classId" value={data.classes[0]!.id} />
-        )}
+        <input type="hidden" name="joinToken" value={data.joinToken} />
+        <input type="hidden" name="classId" value={data.klass.id} />
         <FormInput scope={joinForm.scope('name')} label="Display name" autoFocus />
         <FormInput
           scope={joinForm.scope('username')}
