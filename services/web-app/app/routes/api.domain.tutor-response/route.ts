@@ -1,3 +1,4 @@
+import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
@@ -296,8 +297,12 @@ export async function action({ request }: ActionFunctionArgs) {
             cms.assignmentModule.assignmentType?.tutorInstructions,
           tutorInstructions: cms.assignmentModule.tutorInstructions,
           instructionTutorInstructions: instruction.tutorInstructions,
+          // Behind the writing-conditions flag: off, a stored paragraph type
+          // is not read and the tutor coaches as it did before it existed.
           paragraphModeInstructions: buildParagraphModeTutorInstructions(
-            cms.document?.assignment?.paragraphMode ?? null
+            (await isDailyPagesWritingConditionsEnabled())
+              ? cms.document?.assignment?.paragraphMode ?? null
+              : null
           ),
           moduleRubricGuidance,
         });

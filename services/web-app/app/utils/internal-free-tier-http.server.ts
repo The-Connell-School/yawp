@@ -10,7 +10,11 @@ const response = (value: unknown, status = 200, headers?: HeadersInit) =>
   Response.json(value, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', ...(headers || {}) } });
 const digest = (value: string) => createHash('sha256').update(value).digest();
 
-function authenticate(request: Request) {
+/**
+ * The management-key check every internal endpoint shares (free tier, feature
+ * flags). Returns a response to send back when the request is not allowed.
+ */
+export function authenticate(request: Request) {
   const key = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
   if (!key) return response({ error: 'Not found' }, 404);
   if (!/^[A-Za-z0-9_-]{43,}$/.test(key)) return response({ error: 'Integration unavailable' }, 503);

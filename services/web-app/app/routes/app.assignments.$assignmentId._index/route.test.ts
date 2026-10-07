@@ -7,6 +7,7 @@ const prisma = {
   classAssignment: { findMany: mock() },
   classAssignmentInsight: { findUnique: mock() },
   submission: { count: mock() },
+  setting: { findUnique: mock() },
 };
 
 const requireUserId = mock();
@@ -99,6 +100,7 @@ describe('app.assignments.$assignmentId loader', () => {
     prisma.assignment.findFirst.mockReset();
     prisma.assignment.update.mockReset();
     prisma.documentGroup.findFirst.mockReset();
+    prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
   });
 
   test('scopes deployments to classes this teacher actually teaches', async () => {
@@ -231,6 +233,45 @@ describe('app.assignments.$assignmentId loader', () => {
       where: { id: 'assignment-1' },
       data: expect.objectContaining({ writingTimeMinutes: 12 }),
     });
+  });
+
+  test('with the writing-conditions flag off, an edit leaves the stored writing time alone', async () => {
+    prisma.setting.findUnique.mockReset().mockResolvedValue(null);
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      school: { id: 'school-1', organizationId: 'org-1' },
+    });
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', systemKey: null },
+    ]);
+    prisma.assignment.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+      assignmentTypeId: 'at-1',
+      collaborationEnabled: false,
+      promptAttachmentKey: null,
+      assignmentType: { systemKey: null },
+    });
+    const form = new FormData();
+    form.set('intent', 'update-assignment');
+    form.set('assignmentId', 'assignment-1');
+    form.set('assignmentTypeId', 'at-1');
+    form.set('prompt', 'Write it.');
+    form.set('submitForGrade', 'true');
+    form.set('pointValue', '100');
+    form.set('writingTimeMinutes', '');
+
+    await action({
+      request: new Request(
+        'https://example.com/app/assignments/assignment-1?classId=class-1',
+        { method: 'POST', body: form }
+      ),
+      params: { assignmentId: 'assignment-1' },
+    } as any);
+
+    expect(prisma.assignment.update).toHaveBeenCalled();
+    const data = prisma.assignment.update.mock.calls.at(-1)?.[0].data;
+    expect(data).not.toHaveProperty('writingTimeMinutes');
+    expect(data).not.toHaveProperty('paragraphMode');
   });
 
   test('refuses to change assignment type after a shared artifact exists', async () => {

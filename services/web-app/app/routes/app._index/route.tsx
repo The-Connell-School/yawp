@@ -1,3 +1,4 @@
+import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
@@ -274,8 +275,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)
   );
+  // Paragraph type and writing time are behind a global flag (off by
+  // default); off, the form offers neither.
+  const writingConditionsEnabled =
+    await isDailyPagesWritingConditionsEnabled();
   const creationTypeDefaults = await getCreationTypeDefaultsById(
-    creationTypeRows.map((type) => type.id)
+    creationTypeRows.map((type) => type.id),
+    { writingConditionsEnabled }
   );
   const assignmentCreationTypes = creationTypeRows.map((type) => ({
     id: type.id,
@@ -331,6 +337,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [];
 
   return dataResponse({
+    writingConditionsEnabled,
     requiresClassCode: isStudentOnlyWithNoClasses,
     enrolledClasses,
     writingPracticeAssignments,
@@ -423,6 +430,7 @@ export default function AppRoute() {
                 }}
                 entryPoint="dashboard"
                 assignmentTypes={data.assignmentCreationTypes}
+                writingConditionsEnabled={data.writingConditionsEnabled}
                 teacherClasses={data.assignmentCreationClasses}
                 initialAssignmentTypeId={createAssignmentTypeId}
               />
