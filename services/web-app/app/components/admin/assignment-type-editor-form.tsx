@@ -17,6 +17,8 @@ import {
   RubricLibrarySection,
   type RubricOption,
 } from '~/components/admin/rubric-library-section';
+import { RubricTeacherNotesToggle } from '~/components/admin/rubric-teacher-notes-toggle';
+import type { RubricOutputOptionsState } from '~/domain/rubrics/rubric-output-options.server';
 import {
   AssignmentTypeModulesSection,
   type AssignmentTypeModuleRow,
@@ -39,6 +41,8 @@ type AssignmentTypeEditorFormProps = {
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
+  rubricOutputOptions?: RubricOutputOptionsState | null;
+  canEditRubricOutputOptions?: boolean;
 };
 
 function formSnapshot(values: {
@@ -117,6 +121,8 @@ export function AssignmentTypeEditorForm({
   modules = [],
   rubrics = [],
   selectedRubricId = null,
+  rubricOutputOptions = null,
+  canEditRubricOutputOptions = false,
 }: AssignmentTypeEditorFormProps) {
   const fetcher = useFetcher<{ error?: string }>();
   const navigation = useNavigation();
@@ -365,6 +371,10 @@ export function AssignmentTypeEditorForm({
               gradingInstructions={gradingInstructions}
               onGradingInstructionsChange={setGradingInstructions}
             />
+          <RubricTeacherNotesToggle
+            state={rubricOutputOptions}
+            canEdit={canEditRubricOutputOptions}
+          />
         </Section>
 
         {assignmentTypeId ? (

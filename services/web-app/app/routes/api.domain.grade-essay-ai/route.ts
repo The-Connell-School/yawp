@@ -1,6 +1,11 @@
 import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { readableWritingConditions } from '~/domain/feature-flags/feature-flags';
-import { teacherNotesEnabled as hasTeacherNotes, normalizeTeacherNote, TEACHER_NOTES_EVIDENCE_RULE } from '~/domain/grading/teacher-notes';
+import {
+  teacherNotesEnabled as hasTeacherNotes,
+  normalizeTeacherNote,
+  overallCommentWriterRules,
+  gradingRepairPrivateObservationRules,
+} from '~/domain/grading/teacher-notes';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import type { Prisma } from '@app/prisma';
 import { parseFormData, validationError } from '@rvf/react-router';
@@ -1201,7 +1206,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   ) => {
     const overallCommentResponseText = await getGradingLlmCompletion({
       model,
-      system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${studentFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.\n- Do not include private observations, notes for the teacher, or speculation about authorship. Write only student feedback and obey the supplied grading constraints.\n- ${TEACHER_NOTES_EVIDENCE_RULE}`,
+      system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${studentFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.\n- ${overallCommentWriterRules(teacherNotesEnabled)}`,
       messages: [
         {
           role: 'user',
@@ -1249,6 +1254,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     return { categories, overallComment: null, teacherNote: teacherNotesEnabled && isRecord(value) ? normalizeTeacherNote(value.teacherNote) : null };
   };
 
+  const repairPrivateObservationRules =
+    gradingRepairPrivateObservationRules(teacherNotesEnabled);
+
   const parseAiResponse = async (rawResponseText: string) => {
     const parsedJson = parseFirstJsonValue(rawResponseText);
     const parsed = tryParseAiResponse(parsedJson);
@@ -1261,7 +1269,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       model,
       system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n${buildGradingResponseSchemaText(
         { minScore, maxScore, categoryFeedbackEnabled, teacherNotesEnabled }
-      )}\nCategory-specific score bands:\n${promptShape.rubricText}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Every score must fall inside one declared band for its category.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Private observations belong only in teacherNote when the schema permits it. Never put them in overallComment or category comments. Do not infer AI authorship or penalize suspicion.\n- ${TEACHER_NOTES_EVIDENCE_RULE}\n- Do not include markdown or explanation.`,
+      )}\nCategory-specific score bands:\n${promptShape.rubricText}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Every score must fall inside one declared band for its category.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n${repairPrivateObservationRules ? `${repairPrivateObservationRules}\n` : ''}- Do not include markdown or explanation.`,
       messages: [
         {
           role: 'user',

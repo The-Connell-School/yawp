@@ -235,6 +235,27 @@ export async function requireAdmin(request: Request) {
   return user;
 }
 
+export async function requireSuperAdmin(request: Request) {
+  const userId = await requireUserId(request);
+  const user = await prisma.user.findFirst({
+    select: { id: true, email: true },
+    where: { id: userId, isSuperAdmin: true },
+  });
+
+  if (!user) {
+    throw data(
+      {
+        error: 'Unauthorized',
+        requiredRole: 'isSuperAdmin',
+        message: 'Unauthorized: required role: isSuperAdmin',
+      },
+      { status: 403 }
+    );
+  }
+
+  return user;
+}
+
 /**
  * Ownership of the organization the request is actually scoped to.
  *

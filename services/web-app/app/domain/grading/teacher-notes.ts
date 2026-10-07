@@ -12,13 +12,44 @@ export const TEACHER_NOTES_EVIDENCE_RULE = [
   '- Do not claim or suggest that AI, plagiarism, copying, or another person wrote the work.',
   '- Do not assign probabilities, make misconduct accusations, recommend discipline, change a score, or penalize suspicion.',
   '- Do not compare against the student’s usual writing unless comparison writing is explicitly supplied.',
-  '- Never mention grammar, spelling, syntax, or organization as a grading judgment.',
-  '- Never evaluate whether the content is correct; this is an engagement judgment, not a correctness judgment.',
-  '- Feedback is 1–3 warm sentences; do not turn the private note into student-facing feedback.',
   '- If an entry appears pasted or unlike the student’s own register, don’t penalize on suspicion — describe only an observable contrast for the teacher.',
   '- Do not make a comparison without supplied comparison writing.',
   '- Return null when no clear, useful inconsistency is supported. Avoid vague warnings and overflagging.',
 ].join('\n');
+
+/** Lines that belong in rubric grading instructions, not the shared note contract. */
+export const DAILY_PAGES_ONLY_TEACHER_NOTE_PHRASES = [
+  'Never mention grammar, spelling, syntax, or organization as a grading judgment.',
+  'Never evaluate whether the content is correct; this is an engagement judgment, not a correctness judgment.',
+  'Feedback is 1–3 warm sentences; do not turn the private note into student-facing feedback.',
+] as const;
+
+export function overallCommentWriterRules(teacherNotesEnabled: boolean): string {
+  const base =
+    '- Do not include private observations, notes for the teacher, or speculation about authorship. Write only student feedback and obey the supplied grading constraints.';
+  if (!teacherNotesEnabled) return base;
+  return `${base}\n- ${TEACHER_NOTES_EVIDENCE_RULE}`;
+}
+
+export function gradingRepairPrivateObservationRules(
+  teacherNotesEnabled: boolean
+): string {
+  if (!teacherNotesEnabled) return '';
+  return [
+    '- Private observations belong only in teacherNote when the schema permits it. Never put them in overallComment or category comments. Do not infer AI authorship or penalize suspicion.',
+    `- ${TEACHER_NOTES_EVIDENCE_RULE}`,
+  ].join('\n');
+}
+
+export function withTeacherNotesEnabled(
+  outputSchema: Record<string, unknown>,
+  enabled: boolean
+): Record<string, unknown> {
+  const next = { ...outputSchema };
+  if (enabled) next.teacherNotesEnabled = true;
+  else delete next.teacherNotesEnabled;
+  return next;
+}
 
 /** Private observations belong to the teacher, never to released feedback. */
 export function teacherNotesEnabled(outputSchema: unknown): boolean {
