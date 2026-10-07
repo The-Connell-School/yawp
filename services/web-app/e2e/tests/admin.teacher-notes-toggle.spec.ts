@@ -45,12 +45,7 @@ test.describe.serial('Admin teacher notes output toggle', () => {
       });
       rubricId = rubric.id;
 
-      await prisma.user.update({
-        where: { id: e2eContext.adminUserId },
-        data: { isSuperAdmin: true },
-      });
-
-      await signIn(e2eContext.adminEmail, 'admin-e2e-password');
+      await signIn(e2eContext.superAdminEmail, 'admin-e2e-password');
       await page.goto('/app/admin/assignments');
       await page.getByRole('link', { name: 'Create assignment type' }).click();
       await page.getByLabel('Title').fill(`Teacher notes type ${suffix}`);
@@ -64,6 +59,7 @@ test.describe.serial('Admin teacher notes output toggle', () => {
 
       const toggle = page.getByTestId('rubric-teacher-notes-toggle');
       await expect(toggle).toBeVisible({ timeout: 15000 });
+      await expect(toggle).toBeEnabled();
       await expect(toggle).not.toBeChecked();
       await toggle.click();
       await expect
@@ -145,10 +141,6 @@ test.describe.serial('Admin teacher notes output toggle', () => {
       await expect(page.getByTestId('teacher-private-notes')).toHaveCount(0);
       expect(await page.content()).not.toContain(note);
 
-      await prisma.user.update({
-        where: { id: e2eContext.adminUserId },
-        data: { isSuperAdmin: false },
-      });
       await signIn(e2eContext.adminEmail, 'admin-e2e-password');
       await page.goto(`/app/admin/assignment-types/${assignmentTypeId}`);
       await expect(page.getByTestId('rubric-teacher-notes-toggle')).toBeDisabled();
@@ -179,10 +171,6 @@ test.describe.serial('Admin teacher notes output toggle', () => {
         await prisma.rubricRevision.deleteMany({ where: { rubricName } });
         await prisma.rubric.deleteMany({ where: { id: rubricId } });
       }
-      await prisma.user.update({
-        where: { id: e2eContext.adminUserId },
-        data: { isSuperAdmin: false },
-      });
       await prisma.$disconnect();
     }
   });

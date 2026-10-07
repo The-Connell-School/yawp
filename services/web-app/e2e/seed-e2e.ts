@@ -76,6 +76,8 @@ export type E2EContext = {
   userEmail: string;
   adminUserId: string;
   adminEmail: string;
+  superAdminUserId: string;
+  superAdminEmail: string;
   membershipId: string;
   teacherUserId: string;
   teacherMembershipId: string;
@@ -378,6 +380,22 @@ export async function seedE2E(): Promise<E2EContext> {
         ],
       },
     },
+    {
+      email: 'superadmin.e2e@yawp.test',
+      name: 'Superadmin E2E',
+      isAdmin: true,
+      isSuperAdmin: true,
+      password: { create: createPassword('admin-e2e-password') },
+      memberships: {
+        create: [
+          {
+            organizationId: org.id,
+            isOrgOwner: true,
+            role: 'TEACHER' as const,
+          },
+        ],
+      },
+    },
   ];
 
   for (const u of users) {
@@ -390,6 +408,9 @@ export async function seedE2E(): Promise<E2EContext> {
   });
   const adminUser = await prisma.user.findUniqueOrThrow({
     where: { email: 'admin.e2e@yawp.test' },
+  });
+  const superAdminUser = await prisma.user.findUniqueOrThrow({
+    where: { email: 'superadmin.e2e@yawp.test' },
   });
   const membership = await prisma.orgMembership.findFirstOrThrow({
     where: { userId: user.id },
@@ -1012,6 +1033,8 @@ export async function seedE2E(): Promise<E2EContext> {
     userEmail: user.email,
     adminUserId: adminUser.id,
     adminEmail: adminUser.email,
+    superAdminUserId: superAdminUser.id,
+    superAdminEmail: superAdminUser.email,
     membershipId: membership.id,
     teacherUserId: seededTeacher.id,
     teacherMembershipId: seededTeacherMembershipId,
