@@ -19,6 +19,7 @@ import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { loadAssignmentCreationQuotasForTypes } from '~/utils/assignment-quota.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import type { TeacherClassCardData } from '~/components/teacher-class-card';
@@ -256,6 +257,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             title: true,
+            kind: true,
             collaborationSupported: true,
             systemKey: true,
             image: { select: { id: true } },
@@ -283,6 +285,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     creationTypeRows.map((type) => type.id),
     { writingConditionsEnabled }
   );
+  const quotaByTypeId = await loadAssignmentCreationQuotasForTypes(
+    profile.organization,
+    creationTypeRows.map((type) => ({ id: type.id, kind: type.kind ?? null }))
+  );
   const assignmentCreationTypes = creationTypeRows.map((type) => ({
     id: type.id,
     title: type.title,
@@ -294,6 +300,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       creationTypeDefaults.get(type.id)?.defaultWritingTimeMinutes ?? null,
     offersParagraphModes:
       creationTypeDefaults.get(type.id)?.offersParagraphModes ?? false,
+    ...quotaByTypeId.get(type.id),
   }));
 
   // A student's assigned Writing Fundamentals practice, surfaced on their

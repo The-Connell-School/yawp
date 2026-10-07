@@ -28,6 +28,7 @@ import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-
 import { autoArrangeNewAssignment } from '~/domain/collaboration/auto-arrange.server';
 import { groupSetupNextStep } from '~/domain/collaboration/next-step';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
+import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -39,6 +40,20 @@ import { parseAssignmentCollaboration } from '~/utils/assignment-collaboration.s
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 import { parseAssignmentGrammarGrading } from '~/utils/assignment-grammar-grading.server';
 import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
+
+function freeClassroomDeployOptions(
+  organization: { id: string; plan: string },
+  assignmentTypeKind: string | null
+) {
+  if (organization.plan !== 'FREE_CLASSROOM') return {};
+  return {
+    quotaOrganization: {
+      id: organization.id,
+      plan: organization.plan as 'FREE_CLASSROOM',
+    },
+    assignmentTypeKind,
+  };
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -305,6 +320,10 @@ export async function action({ request }: ActionFunctionArgs) {
           custom: { key: `custom-${randomUUID()}`, ...parsed.data },
         }),
         classIds: deployClassIds,
+        ...freeClassroomDeployOptions(
+          profile.organization,
+          assignmentType.kind
+        ),
       });
 
       return dataResponse({
@@ -347,6 +366,10 @@ export async function action({ request }: ActionFunctionArgs) {
         ...collaboration,
       },
       classIds: deployClassIds,
+      ...freeClassroomDeployOptions(
+        profile.organization,
+        assignmentType.kind
+      ),
       deployment: { postAt, dueAt },
     });
 
@@ -429,6 +452,10 @@ export async function action({ request }: ActionFunctionArgs) {
           : {}),
       },
       classIds: deployClassIds,
+      ...freeClassroomDeployOptions(
+        profile.organization,
+        assignmentType.kind
+      ),
       deployment: { postAt, dueAt },
     });
 
@@ -465,6 +492,12 @@ export async function action({ request }: ActionFunctionArgs) {
       await deleteAssignmentPromptAttachment(
         promptAttachmentData.promptAttachmentKey
       ).catch(() => {});
+    }
+    if (error instanceof FreeClassroomAssignmentQuotaError) {
+      return dataResponse(
+        { success: false, message: error.message },
+        { status: 403 }
+      );
     }
     throw error;
   }

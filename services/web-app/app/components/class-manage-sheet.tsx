@@ -45,6 +45,7 @@ export function ClassManageSheet({
   schools,
   actionUrl = '/app/my-classes?index',
   onSuccess,
+  classCreateBlockedMessage = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -52,6 +53,8 @@ export function ClassManageSheet({
   schools: { id: string; name: string }[];
   actionUrl?: string;
   onSuccess?: () => void;
+  /** When set, creating a class is disabled (free tier one-class cap). */
+  classCreateBlockedMessage?: string | null;
 }) {
   const fetcher = useFetcher({
     key: editingClass ? `edit-${editingClass.id}` : 'create',
@@ -90,8 +93,11 @@ export function ClassManageSheet({
     }
   }, [fetcher.state, fetcher.data, onOpenChange, onSuccess]);
 
+  const createBlocked = !editingClass && Boolean(classCreateBlockedMessage);
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
+    if (createBlocked) return;
     const formData = new FormData();
     formData.append('intent', editingClass ? 'edit-class' : 'create-class');
     if (editingClass) formData.append('classId', editingClass.id);
@@ -120,6 +126,12 @@ export function ClassManageSheet({
           <div className="mt-4 rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
             {fetcher.data.error}
           </div>
+        ) : null}
+
+        {createBlocked ? (
+          <p className="mt-4 text-sm text-muted-foreground">
+            {classCreateBlockedMessage}
+          </p>
         ) : null}
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -228,7 +240,10 @@ export function ClassManageSheet({
           </div>
 
           <div className="flex gap-2 pt-2">
-            <Button type="submit" disabled={fetcher.state !== 'idle'}>
+            <Button
+              type="submit"
+              disabled={fetcher.state !== 'idle' || createBlocked}
+            >
               {fetcher.state !== 'idle'
                 ? 'Saving...'
                 : editingClass

@@ -42,6 +42,7 @@ import {
   setOrganizationClassesTableCookie,
   getOrganizationClassesTableCookieValue,
 } from '~/utils/cookies.server';
+import { assertCanCreateClassForOrganization } from '~/utils/assignment-quota.server';
 import { prisma } from '~/utils/db.server';
 import { SearchInput } from '~/components/search-input';
 import {
@@ -347,6 +348,18 @@ export async function action({ request }: ActionFunctionArgs) {
       profile.organization.id
     );
     const maxAttempts = codeWasGenerated ? 4 : 1;
+
+    try {
+      await assertCanCreateClassForOrganization(profile.organization);
+    } catch (error: unknown) {
+      if (
+        error instanceof Error &&
+        error.message.includes('Free classroom accounts include one class')
+      ) {
+        return dataResponse({ error: error.message }, { status: 403 });
+      }
+      throw error;
+    }
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {

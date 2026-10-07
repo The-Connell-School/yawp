@@ -150,6 +150,12 @@ export type AssignmentCreationAssignmentType = {
    * selector, no paragraph type, grading and tutoring as before.
    */
   offersParagraphModes?: boolean;
+  /** Free classroom bundle: assignments remaining for this kind. */
+  quotaRemaining?: number;
+  quotaTotal?: number;
+  quotaLabel?: string;
+  quotaExhausted?: boolean;
+  quotaExhaustedMessage?: string;
 };
 
 export type AssignmentCreationEditingAssignment = {
@@ -662,8 +668,21 @@ export function AssignmentCreationSheetContent({
             </SelectTrigger>
             <SelectContent>
               {assignmentTypes.map((assignmentType) => (
-                <SelectItem key={assignmentType.id} value={assignmentType.id}>
-                  {assignmentType.title}
+                <SelectItem
+                  key={assignmentType.id}
+                  value={assignmentType.id}
+                  disabled={assignmentType.quotaExhausted}
+                >
+                  <span className="flex flex-col gap-0.5">
+                    <span>{assignmentType.title}</span>
+                    {assignmentType.quotaLabel ? (
+                      <span className="text-xs text-muted-foreground">
+                        {assignmentType.quotaExhausted
+                          ? assignmentType.quotaExhaustedMessage
+                          : assignmentType.quotaLabel}
+                      </span>
+                    ) : null}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
