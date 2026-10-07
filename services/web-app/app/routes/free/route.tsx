@@ -11,6 +11,11 @@ import { z } from 'zod';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
+  // This module is the /free layout; child routes (/free/join, /free/admin/*) also carry ?t=
+  // for signed links. Only interpret ?t= as an acquisition token on the landing path.
+  if (url.pathname !== '/free') {
+    return { mode: 'waitlist' as const, tokenValid: null };
+  }
   const token = url.searchParams.get('t')?.trim();
   if (!token) return { mode: 'waitlist' as const, tokenValid: null };
   const validity = await checkTokenValidity(token);

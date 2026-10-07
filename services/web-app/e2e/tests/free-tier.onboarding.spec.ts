@@ -22,4 +22,10 @@ test.describe('Free tier public flow', () => {
     await page.goto('/free/admin/approve');
     await expect(page.getByText(/not valid|expired/i)).toBeVisible();
   });
+
+  test('join page does not treat release token as acquisition token', async ({ page }) => {
+    await page.goto('/free/join?t=not-a-real-signed-token');
+    await expect(page.getByText(/This link is not valid/i)).toBeVisible();
+    await expect(page.getByText(/no longer valid/i)).not.toBeVisible();
+  });
 });
