@@ -29,6 +29,12 @@ describe('daily-pages-engagement migration SQL', () => {
     expect(sql).toContain('Brian 2026-10-02 merged Daily Pages rubric');
   });
 
+  test('v2 schema keeps teacher notes enabled (only prod rubric with teacher notes)', () => {
+    const sql = readFileSync(join(MIGRATION_DIR, 'migration.sql'), 'utf8');
+
+    expect(sql).toContain('"teacherNotesEnabled":true');
+  });
+
   test('rollback restores rubricId pointers on both assignment types', () => {
     const rollback = readFileSync(join(MIGRATION_DIR, 'rollback.sql'), 'utf8');
 

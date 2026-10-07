@@ -119,6 +119,7 @@ const thesisDefaultConfig: AssignmentTypeRubricConfig = {
 const dailyPagesEngagementOutputSchema = {
   ...DEFAULT_OUTPUT_SCHEMA_JSON,
   assignmentPointScaling: DAILY_PAGES_ENGAGEMENT_SCALING_RULE,
+  teacherNotesEnabled: true,
 };
 
 const dailyPagesEngagementConfig: AssignmentTypeRubricConfig = {

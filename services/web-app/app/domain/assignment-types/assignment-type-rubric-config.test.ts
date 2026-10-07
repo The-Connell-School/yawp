@@ -438,6 +438,7 @@ describe('the default rubric config for a Daily Pages assignment type', () => {
     expect(config.outputSchema.assignmentPointScaling).toBe(
       'daily_pages_engagement_v2'
     );
+    expect(config.outputSchema.teacherNotesEnabled).toBe(true);
     expect(config.defaultLabel).toBe('Daily Pages engagement');
   });
 
