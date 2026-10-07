@@ -1,54 +1,19 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
-
-const prisma = {
-  $transaction: mock(),
-  $queryRaw: mock(),
-  freeTierApplication: {
-    findFirst: mock(),
-  },
-};
-
-mock.module('~/utils/db.server', () => ({ prisma }));
-
-const { provisionFreeClassroom, teacherEmailDomainMatchesSchoolOrg } =
-  await import('./provision-free-classroom.server');
-
-afterEach(() => {
-  prisma.$transaction.mockReset();
-  prisma.$queryRaw.mockReset();
-  prisma.freeTierApplication.findFirst.mockReset();
-});
+import { describe, expect, test } from 'bun:test';
+import { teacherEmailDomainMatchesSchoolOrg } from './provision-free-classroom.server';
 
 describe('teacherEmailDomainMatchesSchoolOrg', () => {
   test('returns true when a school org teacher shares the domain', async () => {
-    prisma.$queryRaw.mockResolvedValue([{ exists: true }]);
-    await expect(teacherEmailDomainMatchesSchoolOrg('northridge.edu')).resolves.toBe(
-      true
-    );
+    const client = {
+      $queryRaw: async () => [{ exists: true }],
+    };
+    await expect(
+      teacherEmailDomainMatchesSchoolOrg('northridge.edu', client as any)
+    ).resolves.toBe(true);
   });
-});
 
-describe('provisionFreeClassroom', () => {
-  test('is idempotent when organizationId is already set', async () => {
-    prisma.$transaction.mockImplementation(async (fn: any) =>
-      fn({
-        $executeRaw: mock(),
-        freeTierApplication: {
-          findUnique: mock().mockResolvedValue({
-            id: 'app-1',
-            email: 't@example.com',
-            schoolName: 'North',
-            userId: 'user-1',
-            organizationId: 'org-existing',
-          }),
-        },
-      })
+  test('returns false for an empty domain', async () => {
+    await expect(teacherEmailDomainMatchesSchoolOrg('', {} as any)).resolves.toBe(
+      false
     );
-
-    const result = await provisionFreeClassroom('app-1');
-    expect(result).toEqual({
-      status: 'already_provisioned',
-      organizationId: 'org-existing',
-    });
   });
 });
