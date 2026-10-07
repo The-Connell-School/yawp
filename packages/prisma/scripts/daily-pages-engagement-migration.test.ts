@@ -19,6 +19,9 @@ describe('daily-pages-engagement migration SQL', () => {
     expect(sql).not.toContain('"rubricJson" = v2_schema');
     expect(sql).not.toContain('"scoringScaleJson" = v2_schema');
     expect(sql).not.toContain('"gradingPromptConfigJson" = v2_schema');
+    expect(sql).not.toContain('JOIN "AssignmentModule"');
+    expect(sql).toContain('a."assignmentTypeId" IN (daily_pages_type_id, sjp_daily_pages_type_id)');
+    expect(sql).toContain('"rubricId" IS NULL');
   });
 
   test('captures library v1 and publishes v2 with a stable request id', () => {

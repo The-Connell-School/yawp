@@ -23,7 +23,11 @@ BEGIN
   END IF;
 
   UPDATE "Rubric"
-  SET "schemaJson" = prev, "currentRevisionId" = prev_rev, "updatedAt" = CURRENT_TIMESTAMP
+  SET "schemaJson" = prev, "updatedAt" = CURRENT_TIMESTAMP
+  WHERE id = engagement_id;
+
+  UPDATE "Rubric"
+  SET "currentRevisionId" = NULL, "updatedAt" = CURRENT_TIMESTAMP
   WHERE id = engagement_id;
 
   UPDATE "AssignmentType"

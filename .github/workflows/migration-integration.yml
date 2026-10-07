@@ -35,7 +35,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration
       - name: Run migration integration test
-        run: bun test ./packages/prisma/scripts/migration-integration.test.ts
+        run: |
+          bun test ./packages/prisma/scripts/migration-integration.test.ts
+          bun test ./packages/prisma/scripts/daily-pages-engagement-migration.integration.test.ts
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration
 

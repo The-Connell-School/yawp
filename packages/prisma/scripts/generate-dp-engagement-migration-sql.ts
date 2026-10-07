@@ -76,9 +76,8 @@ BEGIN
   INSERT INTO "InternalAssignmentRubricPinBackfill" ("assignmentId", "selectedRevisionId", "reason")
   SELECT a.id, a."rubricRevisionId", 'dp_engagement_v2_pre_publish'
   FROM "Assignment" a
-  JOIN "AssignmentModule" am ON am.id = a."assignmentModuleId"
   WHERE a."rubricRevisionId" IS NOT NULL
-    AND am."assignmentTypeId" IN (daily_pages_type_id, sjp_daily_pages_type_id)
+    AND a."assignmentTypeId" IN (daily_pages_type_id, sjp_daily_pages_type_id)
   ON CONFLICT ("assignmentId") DO NOTHING;
 
   IF NOT EXISTS (
@@ -113,11 +112,13 @@ BEGIN
   UPDATE "AssignmentType"
   SET "rubricId" = engagement_id, "updatedAt" = CURRENT_TIMESTAMP
   WHERE id = daily_pages_type_id
+    AND "rubricId" IS NULL
     AND EXISTS (SELECT 1 FROM "AssignmentType" WHERE id = daily_pages_type_id AND kind = 'daily_pages');
 
   UPDATE "AssignmentType"
   SET "rubricId" = engagement_id, "updatedAt" = CURRENT_TIMESTAMP
   WHERE id = sjp_daily_pages_type_id
+    AND "rubricId" IS NULL
     AND EXISTS (SELECT 1 FROM "AssignmentType" WHERE id = sjp_daily_pages_type_id);
 END $$;
 `;
@@ -147,7 +148,11 @@ BEGIN
   END IF;
 
   UPDATE "Rubric"
-  SET "schemaJson" = prev, "currentRevisionId" = prev_rev, "updatedAt" = CURRENT_TIMESTAMP
+  SET "schemaJson" = prev, "updatedAt" = CURRENT_TIMESTAMP
+  WHERE id = engagement_id;
+
+  UPDATE "Rubric"
+  SET "currentRevisionId" = NULL, "updatedAt" = CURRENT_TIMESTAMP
   WHERE id = engagement_id;
 
   UPDATE "AssignmentType"
