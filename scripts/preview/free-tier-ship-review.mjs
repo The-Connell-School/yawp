@@ -55,7 +55,7 @@ async function passwordLogin(page, email) {
   await page.goto(`${baseUrl}/auth/login`);
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);
-  await page.locator('form').evaluate((form) => form.requestSubmit());
+  await page.locator('form').evaluate((form) => form.submit());
   await page.waitForLoadState('networkidle');
 }
 
@@ -167,17 +167,22 @@ async function main() {
       await teacher.page.waitForLoadState('networkidle');
       manifest.shots.push(await shot(teacher.page, '04-free-join-release-link'));
 
+      await teacher.page.fill('input[name="name"]', 'Ship Review Flow');
       await teacher.page.fill('input[name="password"]', password);
       await teacher.page.fill('input[name="confirmPassword"]', password);
-      await teacher.page.locator('button[type="submit"]').click();
-      await teacher.page.waitForURL(/\/app\/free-tier\/onboarding/, { timeout: 30_000 });
+      await teacher.page.locator('form').evaluate((form) => form.submit());
+      await teacher.page.waitForTimeout(1500);
+      await passwordLogin(teacher.page, teacherFlowEmail);
+      await teacher.page.waitForURL(/\/app\/free-tier\/onboarding/, { timeout: 45_000 });
       manifest.shots.push(await shot(teacher.page, '05-teacher-onboarding-admin-form'));
 
       await teacher.page.fill('input[name="adminName"]', 'Preview Principal');
       await teacher.page.fill('input[name="adminEmail"]', 'principal@shipreview-high.edu');
       await teacher.page.fill('input[name="adminRole"]', 'Principal');
-      await teacher.page.locator('button[type="submit"]').click();
-      await teacher.page.waitForURL(/\/app\/free-tier\/pending/, { timeout: 30_000 });
+      await Promise.all([
+        teacher.page.waitForURL(/\/app\/free-tier\/pending/, { timeout: 45_000 }),
+        teacher.page.locator('button[type="submit"]').click(),
+      ]);
       manifest.shots.push(await shot(teacher.page, '06-teacher-pending-approval'));
 
       const admin = await freshContext(browser);

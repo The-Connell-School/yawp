@@ -13,6 +13,9 @@ const prisma = {
   orgMembership: {
     findFirst: mock(),
   },
+  freeTierApplication: {
+    findFirst: mock(),
+  },
   session: {
     create: mock(),
   },
@@ -57,7 +60,9 @@ describe('auth.login', () => {
     getPreviewAccessSeat.mockReset();
     setMembershipId.mockReset();
     prisma.orgMembership.findFirst.mockReset();
+    prisma.freeTierApplication.findFirst.mockReset();
     prisma.session.create.mockReset();
+    prisma.freeTierApplication.findFirst.mockResolvedValue(null);
 
     getSessionExpirationDate.mockReturnValue(new Date('2026-01-01T00:00:00.000Z'));
     verifyUserPassword.mockResolvedValue({
@@ -125,6 +130,29 @@ describe('auth.login', () => {
       select: { id: true },
     });
     expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
+  test('allows free-tier teachers without a preview seat membership', async () => {
+    process.env.PREVIEW_ACCESS_GATE = 'on';
+    process.env.PREVIEW_DATA_MODE = 'seed';
+    prisma.orgMembership.findFirst.mockResolvedValue(null);
+    prisma.freeTierApplication.findFirst.mockResolvedValue({ id: 'app-1' });
+    const form = new FormData();
+    form.append('email', 'teacher@shipreview-high.edu');
+    form.append('password', 'yawp-dev');
+    form.append('redirectTo', '/app/free-tier/onboarding');
+
+    const response = (await action({
+      request: new Request('https://example.com/auth/login', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/app/free-tier/onboarding');
+    expect(prisma.session.create).toHaveBeenCalledTimes(1);
+    expect(setMembershipId).not.toHaveBeenCalled();
   });
 
   test('binds a successful seeded-preview login to the seat membership', async () => {
