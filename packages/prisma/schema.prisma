@@ -1507,16 +1507,19 @@ model WritingPracticeClassAssignment {
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
-  id           String          @id @default(cuid())
-  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime        @default(now()) @db.Timestamptz(6)
-  email        String          @unique
-  name         String?
-  password     Password?
-  sessions     Session[]
-  memberships  OrgMembership[]
-  isAdmin      Boolean         @default(false)
-  isSuperAdmin Boolean         @default(false)
+  id                 String          @id @default(cuid())
+  createdAt          DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime        @default(now()) @db.Timestamptz(6)
+  email              String?         @unique
+  username           String?         @unique
+  emailVerifiedAt    DateTime?       @db.Timestamptz(6)
+  mustChangePassword Boolean         @default(false)
+  name               String?
+  password           Password?
+  sessions           Session[]
+  memberships        OrgMembership[]
+  isAdmin            Boolean         @default(false)
+  isSuperAdmin       Boolean         @default(false)
 }
 
 model Invitation {
