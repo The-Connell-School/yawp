@@ -229,10 +229,19 @@ async function main() {
         teacher.page.locator('button[type="submit"]').click(),
       ]);
       manifest.shots.push(await shot(teacher.page, '06-teacher-pending-approval'));
+      manifest.shots.push(await shot(teacher.page, '12-seed-pending-approval-state'));
 
       const admin = await freshContext(browser);
       await devLogin(admin.page, 'dev.admin@yawp.local');
       const approvalLinks = await fetchManifest(admin.page, teacherFlowEmail);
+
+      if (approvalLinks.declineUrl) {
+        const deny = await freshContext(browser);
+        await deny.page.goto(approvalLinks.declineUrl);
+        await deny.page.waitForLoadState('networkidle');
+        manifest.shots.push(await shot(deny.page, '13-denial-not-right-person-landing'));
+        await deny.context.close();
+      }
 
       if (approvalLinks.approveUrl) {
         const approveCtx = await freshContext(browser);
@@ -282,31 +291,6 @@ async function main() {
       await setup.context.close();
     }
 
-    try {
-      const pending = await freshContext(browser);
-      await passwordLogin(pending.page, PENDING_EMAIL, '/app/free-tier/pending');
-      await pending.page.waitForURL(/\/app\/free-tier\/pending/, { timeout: 15_000 });
-      manifest.shots.push(await shot(pending.page, '12-seed-pending-approval-state'));
-      await pending.context.close();
-    } catch {
-      manifest.seedPendingSkipped = true;
-    }
-
-    try {
-      const denyAdmin = await freshContext(browser);
-      await devLogin(denyAdmin.page, 'dev.admin@yawp.local');
-      const pendingManifest = await fetchManifest(denyAdmin.page, PENDING_EMAIL);
-      await denyAdmin.context.close();
-      if (pendingManifest.declineUrl) {
-        const deny = await freshContext(browser);
-        await deny.page.goto(pendingManifest.declineUrl);
-        await deny.page.waitForLoadState('networkidle');
-        manifest.shots.push(await shot(deny.page, '13-denial-not-right-person-landing'));
-        await deny.context.close();
-      }
-    } catch (error) {
-      manifest.denialSkipped = String(error.message || error);
-    }
   } finally {
     await writeFile(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
     await browser.close();
