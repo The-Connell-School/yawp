@@ -1,3 +1,4 @@
+/** Holistic Cristo Rey smoke: grade-essay-ai on a 20-point assignment type. */
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
@@ -111,7 +112,9 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     await page.goto(
       `/app/my-classes/${e2eContext.classId}?tab=documents&status=released`
     );
-    await expect(page.getByText(new RegExp(pointsLabel.replace(' ', '\\s*')))).toBeVisible();
+    await expect(
+      page.getByText(new RegExp(pointsLabel.replace(' / ', '\\s*/\\s*')))
+    ).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('holistic-gradebook-row.png'),
       fullPage: true,
