@@ -24,8 +24,15 @@ const prisma = createPrismaClient();
 
 try {
   const results = await ensurePreviewSeats(prisma, seats);
-  const freeClassroom = await ensurePreviewFreeClassroomFixture(prisma);
-  console.log(`Preview free classroom fixture: ${freeClassroom.status}`);
+  const includeFreeClassroomFixture =
+    process.env.PREVIEW_SLUG !== 'demo' &&
+    process.env.INCLUDE_PREVIEW_FREE_CLASSROOM_FIXTURE !== 'false';
+  if (includeFreeClassroomFixture) {
+    const freeClassroom = await ensurePreviewFreeClassroomFixture(prisma);
+    console.log(`Preview free classroom fixture: ${freeClassroom.status}`);
+  } else {
+    console.log('Preview free classroom fixture: skipped');
+  }
   const writingPractice = await enableWritingPracticeForPreviewOrganizations(
     prisma,
     seats.map(({ organizationId }) => organizationId)

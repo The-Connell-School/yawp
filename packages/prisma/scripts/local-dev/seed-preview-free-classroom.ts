@@ -8,6 +8,7 @@ import {
   FREE_CLASSROOM_TEACHER_SEAT_CAP,
 } from '../../../../services/web-app/app/utils/entitlements.server';
 import { seedFreeTierBundleAssignmentTypes } from '../seed-free-tier-bundle-assignment-types';
+import { currentSchoolYear } from '../../../../services/web-app/app/utils/school-year';
 
 export const PREVIEW_FREE_CLASSROOM_ORG_ID = 'preview-free-classroom';
 export const PREVIEW_FREE_CLASSROOM_ORG_NAME = 'Yawp Preview — Free Classroom';
@@ -104,6 +105,7 @@ async function createPreviewFreeClassroomOrg(
           organizationId: PREVIEW_FREE_CLASSROOM_ORG_ID,
           role: 'TEACHER',
           isOrgOwner: true,
+          schools: { connect: { id: school.id } },
         },
       },
     },
@@ -136,7 +138,7 @@ async function createPreviewFreeClassroomOrg(
   const klass = await tx.class.create({
     data: {
       code: 'FREE-CLASS-101',
-      schoolYear: '2025-2026',
+      schoolYear: currentSchoolYear(),
       title: 'Free Classroom — Period 1',
       grade: '11',
       period: '1',
@@ -237,6 +239,25 @@ async function seedClassStarterAssignments(
       },
     });
   }
+  const deployedCount = await client.assignment.count({
+    where: {
+      assignmentTypeId,
+      classAssignments: {
+        some: { class: { school: { organizationId } } },
+      },
+    },
+  });
+  await client.freeClassroomAssignmentKindUsage.upsert({
+    where: {
+      organizationId_kind: { organizationId, kind: 'class_starter' },
+    },
+    create: {
+      organizationId,
+      kind: 'class_starter',
+      lifetimeCreatedCount: deployedCount,
+    },
+    update: { lifetimeCreatedCount: deployedCount },
+  });
   console.log(
     `Seeded ${count} class starter assignment(s) for ${organizationId}.`
   );
