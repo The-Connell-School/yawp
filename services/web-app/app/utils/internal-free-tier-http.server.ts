@@ -356,7 +356,14 @@ async function enforceHeadroomForActivation(tx: any) {
   return remaining > 0;
 }
 
-type HookApp = { id: string; email: string; name: string; schoolName: string };
+type HookApp = {
+  id: string;
+  email: string;
+  name: string;
+  schoolName: string;
+  userId: string | null;
+  organizationId: string | null;
+};
 
 /**
  * Hooks run after the transaction commits, so a slow or failing hook can never
@@ -412,7 +419,15 @@ async function transition(args: {
   return prisma.$transaction(async (tx) => {
     const app = await tx.freeTierApplication.findUnique({
       where: { id: args.id },
-      select: { id: true, status: true, email: true, name: true, schoolName: true },
+      select: {
+        id: true,
+        status: true,
+        email: true,
+        name: true,
+        schoolName: true,
+        userId: true,
+        organizationId: true,
+      },
     });
     if (!app) return { status: 404 as const, payload: { error: 'Not found' }, changed: false };
     if (app.status === args.to) return { status: 200 as const, payload: { ok: true, idempotent: true, status: app.status }, changed: false };
@@ -427,7 +442,14 @@ async function transition(args: {
     return {
       status: 200 as const,
       payload: { ok: true, status: args.to, previousStatus: app.status },
-      app: { id: app.id, email: app.email, name: app.name, schoolName: app.schoolName },
+      app: {
+        id: app.id,
+        email: app.email,
+        name: app.name,
+        schoolName: app.schoolName,
+        userId: app.userId,
+        organizationId: app.organizationId,
+      },
       changed: true,
     };
   });
