@@ -25,24 +25,30 @@ if (!baseUrl || !accessCode) {
 }
 
 async function enterPreview(page) {
-  await page.goto(baseUrl);
-  const codeInput = page.locator('input[name="code"]');
-  if ((await codeInput.count()) > 0) {
-    await codeInput.fill(accessCode);
-    await page
-      .locator('form')
-      .filter({ has: codeInput })
-      .first()
-      .evaluate((form) => form.requestSubmit());
-    await page.waitForLoadState('networkidle');
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  if (page.url().includes('/auth/preview-access')) {
+    await page.fill('input[name="code"]', accessCode);
+    await page.locator('form[method="post"]').first().evaluate((form) => form.requestSubmit());
+    await page.waitForURL((url) => !url.pathname.includes('/auth/preview-access'), {
+      timeout: 20_000,
+    });
   }
 }
 
 async function devLogin(page, email) {
-  await page.goto(`${baseUrl}/auth/dev-login`);
-  await page.fill('input[name="email"]', email);
-  await page.locator('form').evaluate((form) => form.requestSubmit());
-  await page.waitForLoadState('networkidle');
+  const status = await page.evaluate(async (loginEmail) => {
+    const response = await fetch('/auth/dev-login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ email: loginEmail, redirectTo: '/app' }),
+      credentials: 'same-origin',
+    });
+    return response.status;
+  }, email);
+  if (status < 300 || status >= 400) {
+    throw new Error(`dev login failed for ${email}: HTTP ${status}`);
+  }
+  await page.goto(`${baseUrl}/app`, { waitUntil: 'networkidle' });
 }
 
 async function passwordLogin(page, email) {
@@ -92,8 +98,8 @@ async function main() {
       await page.fill('input[name="schoolName"]', 'Ship Review High');
       await page.fill('input[name="location"]', 'Preview');
       await page.fill('input[name="gradeLevel"]', '9');
-      await page.locator('button[type="submit"]').click();
-      await page.waitForSelector("text=You're on the list", { timeout: 15_000 });
+      await page.getByRole('button', { name: /Join the waitlist/i }).click();
+      await page.getByRole('status').getByText(/on the list/i).waitFor({ timeout: 20_000 });
       manifest.shots.push(await shot(page, '02-free-waitlist-submitted'));
       await context.close();
     }

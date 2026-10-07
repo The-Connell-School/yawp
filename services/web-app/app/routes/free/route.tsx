@@ -75,7 +75,14 @@ export async function action({ request }: ActionFunctionArgs) {
     return { ok: true as const, redeemed: true as const };
   }
 
-  const parsed = formSchema.safeParse(raw);
+  const parsed = formSchema.safeParse({
+    name: raw.name,
+    email: raw.email,
+    schoolName: raw.schoolName,
+    location: raw.location,
+    gradeLevel: raw.gradeLevel,
+    middleName: raw.middleName,
+  });
   if (!parsed.success) return { ok: false, error: 'invalid' as const };
   await submitWaitlist(parsed.data);
   return { ok: true as const };
