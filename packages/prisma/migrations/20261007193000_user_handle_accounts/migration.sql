@@ -41,6 +41,8 @@ ALTER TABLE "Class" ADD COLUMN IF NOT EXISTS "studentJoinToken" TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "Class_studentJoinToken_key" ON "Class"("studentJoinToken");
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 UPDATE "Class" c
 SET "studentJoinToken" = replace(
   replace(
