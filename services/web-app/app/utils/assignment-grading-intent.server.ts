@@ -21,10 +21,15 @@ export function parseAssignmentRubricOverrides(
   if (total === false) return { success: false, message: rubricOverrideError() };
 
   const rawMode = formData.get('gradingMode');
-  const gradingMode = rawMode === null
+  const parsed = rawMode === null
     ? DEFAULT_ASSIGNMENT_GRADING_MODE
     : parseAssignmentGradingMode(rawMode.toString().trim());
-  if (!gradingMode) {
+  // Ignore a client-sent 'step' — rubric grading now always uses bands.
+  const gradingMode: AssignmentGradingMode | null =
+    parsed === 'bands' ? 'bands'
+    : parsed === 'step' ? 'bands'
+    : null;
+  if (gradingMode == null) {
     return { success: false, message: 'Grading mode is invalid.' };
   }
 
