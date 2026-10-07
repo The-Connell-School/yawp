@@ -51,12 +51,15 @@ async function devLogin(page, email) {
   await page.goto(`${baseUrl}/app`, { waitUntil: 'networkidle' });
 }
 
-async function passwordLogin(page, email) {
-  await page.goto(`${baseUrl}/auth/login`);
-  await page.fill('input[name="email"]', email);
-  await page.fill('input[name="password"]', password);
-  await page.locator('form').evaluate((form) => form.submit());
-  await page.waitForLoadState('networkidle');
+async function passwordLogin(page, email, redirectTo = '/app') {
+  const login = await page.request.post(`${baseUrl}/auth/login`, {
+    form: { email, password, redirectTo },
+    maxRedirects: 0,
+  });
+  if (login.status() >= 400) {
+    throw new Error(`password login failed for ${email}: HTTP ${login.status()}`);
+  }
+  await page.goto(`${baseUrl}${redirectTo}`, { waitUntil: 'networkidle' });
 }
 
 async function shot(page, name) {
@@ -172,7 +175,7 @@ async function main() {
       await teacher.page.fill('input[name="confirmPassword"]', password);
       await teacher.page.locator('form').evaluate((form) => form.submit());
       await teacher.page.waitForTimeout(1500);
-      await passwordLogin(teacher.page, teacherFlowEmail);
+      await passwordLogin(teacher.page, teacherFlowEmail, '/app/free-tier/onboarding');
       await teacher.page.waitForURL(/\/app\/free-tier\/onboarding/, { timeout: 45_000 });
       manifest.shots.push(await shot(teacher.page, '05-teacher-onboarding-admin-form'));
 
