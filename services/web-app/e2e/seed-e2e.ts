@@ -8,6 +8,7 @@ import { AP_HISTORY_SEED_MODULES } from '../../../packages/prisma/scripts/ap-his
 import { UNIVERSAL_TUTOR_BLOCK } from '../../../packages/prisma/scripts/universal-tutor-block';
 import bcrypt from 'bcryptjs';
 import { E2E_UA_ORGANIZATION_ID } from './constants';
+import cristoReyHornbuckleRubric from '../app/domain/rubrics/library/cristo-rey-hornbuckle-five-paragraph-essay.json' with { type: 'json' };
 
 let prisma: E2EPrismaClient | null = null;
 
@@ -85,6 +86,8 @@ export type E2EContext = {
   dailyPagesAssignmentTypeId: string;
   classStarterAssignmentTypeId: string;
   thesisEssayAssignmentTypeId: string;
+  /** Cristo Rey Hornbuckle holistic tier rubric (6 categories, 1–4 bands). */
+  holisticEssayAssignmentTypeId: string;
   apHistoryAssignmentTypeId: string;
   /** Assignment type with allowsImageUploads on (the GBA 300 expansion rollout). */
   imageUploadAssignmentTypeId: string;
@@ -497,6 +500,49 @@ export async function seedE2E(): Promise<E2EContext> {
                 {
                   title: 'Write',
                   prompt: 'Write freely for ten minutes.',
+                  position: 1,
+                  showChatButton: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  const holisticEssayAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'In-class Essay/Analysis (Cristo Rey)',
+      description:
+        'Holy Family Cristo Rey five-paragraph essay with holistic tier scoring.',
+      position: 3,
+      ownerOrgId: org.id,
+      scoringScaleJson: cristoReyHornbuckleRubric.scoringScale,
+      rubricJson: cristoReyHornbuckleRubric.rubric,
+      gradingPromptConfigJson: cristoReyHornbuckleRubric.promptConfig,
+      gradingOutputSchemaJson: {
+        ...cristoReyHornbuckleRubric.outputSchema,
+        scoringMode: 'holistic_tier',
+        teacherNotesEnabled: true,
+      },
+      gradingCalibrationNotes: cristoReyHornbuckleRubric.calibrationNotes,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: [
+          {
+            title: 'In-class Essay/Analysis',
+            position: 1,
+            description: 'Five-paragraph essay or literary analysis.',
+            instructions: {
+              create: [
+                {
+                  title: 'Draft',
+                  prompt:
+                    'Write a five-paragraph essay that answers the prompt with a clear thesis and evidence.',
                   position: 1,
                   showChatButton: true,
                 },
@@ -1021,6 +1067,7 @@ export async function seedE2E(): Promise<E2EContext> {
     dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
     classStarterAssignmentTypeId: classStarterAssignmentType.id,
     thesisEssayAssignmentTypeId: thesisEssayAssignmentType.id,
+    holisticEssayAssignmentTypeId: holisticEssayAssignmentType.id,
     apHistoryAssignmentTypeId: apHistoryAssignmentType.id,
     imageUploadAssignmentTypeId: imageUploadAssignmentType.id,
     imageUploadDocumentId: imageUploadDoc.id,

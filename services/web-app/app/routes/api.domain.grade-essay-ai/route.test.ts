@@ -2930,6 +2930,101 @@ describe('api.domain.grade-essay-ai', () => {
       });
     });
 
+    const holisticCategories = [
+      { key: 'thesis_and_content', score: 3, comment: 'Clear claim.' },
+      { key: 'evidence_and_support', score: 3, comment: 'Two quotations used.' },
+      { key: 'analysis_and_reasoning', score: 3, comment: 'Explains meaning.' },
+      { key: 'organization', score: 3, comment: 'All elements in order.' },
+      { key: 'style_and_voice', score: 3, comment: 'Direct and readable.' },
+      { key: 'style_and_conventions', score: 3, comment: 'Minor surface errors only.' },
+    ];
+
+    test('generates overall feedback when holistic tuple arrives without overallComment', async () => {
+      prisma.submission.findFirst.mockResolvedValue(mockHolisticAssignment());
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: holisticCategories,
+            overallTier: 'excellent',
+            overallPoints: 18,
+          })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            overallComment:
+              'Jordan, your thesis and evidence work together clearly.',
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      const form = new FormData();
+      form.append('submissionId', 'sub-holistic');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      expect((response as { data: Record<string, unknown> }).data.success).toBe(
+        true
+      );
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.overallComment).toBe(
+        'Jordan, your thesis and evidence work together clearly.'
+      );
+      expect(stored.score).toBe('18/20');
+      expect(stored.aiMeta.holistic).toMatchObject({
+        tier: 'excellent',
+        requestedPoints: 18,
+        storedPoints: 18,
+        totalPoints: 20,
+      });
+    });
+
+    test('schema repair preserves holistic tier and points', async () => {
+      prisma.submission.findFirst.mockResolvedValue(mockHolisticAssignment());
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce('{}')
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: holisticCategories,
+            overallTier: 'excellent',
+            overallPoints: 18,
+          })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            overallComment: 'Jordan, this is cohesive and well supported.',
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      const form = new FormData();
+      form.append('submissionId', 'sub-holistic');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      expect((response as { data: Record<string, unknown> }).data.success).toBe(
+        true
+      );
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.score).toBe('18/20');
+      expect(stored.aiMeta.holistic).toMatchObject({
+        tier: 'excellent',
+        requestedPoints: 18,
+        storedPoints: 18,
+      });
+      const repairCall = getLLMCompletion.mock.calls[1][0];
+      expect(repairCall.metadata.kind).toBe('rubric-schema-repair');
+    });
+
     test('retries once on invalid holistic fields then falls back to weighted with meta', async () => {
       prisma.submission.findFirst.mockResolvedValue(mockHolisticAssignment());
       getLLMCompletion.mockReset();

@@ -354,14 +354,18 @@ function buildE2EGradingFixtureResponse({
   maxScore,
   studentFirstName,
   categoryFeedbackEnabled,
+  scoringMode = 'weighted_categories',
+  assignmentPointTotal = null,
 }: {
   rubricCategories: GradingRubricCategory[];
   minScore: number;
   maxScore: number;
   studentFirstName: string;
   categoryFeedbackEnabled: boolean;
+  scoringMode?: 'weighted_categories' | 'holistic_tier';
+  assignmentPointTotal?: number | null;
 }) {
-  return JSON.stringify({
+  const payload: Record<string, unknown> = {
     categories: rubricCategories.map((category) => {
       const fixture = e2eRubricFixtures[category.key] ?? {
         score: maxScore,
@@ -376,7 +380,43 @@ function buildE2EGradingFixtureResponse({
       };
     }),
     overallComment: `${studentFirstName}, these legacy grading assistant suggestions still apply.`,
-  });
+  };
+  if (
+    scoringMode === 'holistic_tier' &&
+    typeof assignmentPointTotal === 'number' &&
+    Number.isFinite(assignmentPointTotal) &&
+    assignmentPointTotal > 0
+  ) {
+    payload.overallTier = 'excellent';
+    payload.overallPoints = Math.round(0.9 * assignmentPointTotal);
+  }
+  return JSON.stringify(payload);
+}
+
+function extractHolisticFieldsFromRecord(value: unknown) {
+  if (!isRecord(value)) return null;
+  const maybePoints = value.overallPoints;
+  const maybeTier = value.overallTier;
+  if (
+    (typeof maybePoints === 'number' || typeof maybePoints === 'string') &&
+    typeof maybeTier === 'string'
+  ) {
+    const points = Number(maybePoints);
+    if (!Number.isFinite(points)) return null;
+    return { overallPoints: points, overallTier: maybeTier };
+  }
+  return null;
+}
+
+function withPreservedHolisticFields<T extends object>(
+  base: T,
+  ...sources: unknown[]
+) {
+  for (const source of sources) {
+    const holistic = extractHolisticFieldsFromRecord(source);
+    if (holistic) return { ...base, ...holistic };
+  }
+  return base;
 }
 
 function computeWeightedPercentageForCategories({
@@ -1154,6 +1194,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       maxScore,
       studentFirstName,
       categoryFeedbackEnabled,
+      scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
+      assignmentPointTotal: submission.document.assignment?.pointValue ?? null,
     });
   } else {
     try {
@@ -1254,39 +1296,14 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     const parsedJson = parseFirstJsonValue(rawResponseText);
     const parsed = tryParseAiResponse(parsedJson);
     if (parsed?.overallComment) {
-      if (isRecord(parsedJson)) {
-        const maybePoints = (parsedJson as any).overallPoints;
-        const maybeTier = (parsedJson as any).overallTier;
-        if (
-          (typeof maybePoints === 'number' || typeof maybePoints === 'string') &&
-          typeof maybeTier === 'string'
-        ) {
-          return {
-            ...parsed,
-            overallPoints: Number(maybePoints),
-            overallTier: maybeTier,
-          } as any;
-        }
-      }
-      return parsed;
+      return withPreservedHolisticFields(parsed, parsedJson) as typeof parsed;
     }
     if (parsed?.categories) {
-      // If the model already returned holistic fields, preserve them regardless of mode.
-      if (isRecord(parsedJson)) {
-        const maybePoints = (parsedJson as any).overallPoints;
-        const maybeTier = (parsedJson as any).overallTier;
-        if (
-          (typeof maybePoints === 'number' || typeof maybePoints === 'string') &&
-          typeof maybeTier === 'string'
-        ) {
-          return {
-            ...parsed,
-            overallPoints: Number(maybePoints),
-            overallTier: maybeTier,
-          } as any;
-        }
-      }
-      return buildAiResponseFromCategories(parsed.categories, parsed.teacherNote);
+      const built = await buildAiResponseFromCategories(
+        parsed.categories,
+        parsed.teacherNote
+      );
+      return withPreservedHolisticFields(built, parsedJson) as typeof built;
     }
 
     const repairedResponseText = await getGradingLlmCompletion({
@@ -1311,9 +1328,23 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
     const repairedParsedJson = parseFirstJsonValue(repairedResponseText);
     const repairedParsed = tryParseAiResponse(repairedParsedJson);
-    if (repairedParsed?.overallComment) return repairedParsed;
+    if (repairedParsed?.overallComment) {
+      return withPreservedHolisticFields(
+        repairedParsed,
+        repairedParsedJson,
+        parsedJson
+      ) as typeof repairedParsed;
+    }
     if (repairedParsed?.categories) {
-      return buildAiResponseFromCategories(repairedParsed.categories, repairedParsed.teacherNote);
+      const built = await buildAiResponseFromCategories(
+        repairedParsed.categories,
+        repairedParsed.teacherNote
+      );
+      return withPreservedHolisticFields(
+        built,
+        repairedParsedJson,
+        parsedJson
+      ) as typeof built;
     }
 
     throw new Error('Malformed grading assistant response');
