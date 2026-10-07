@@ -156,6 +156,8 @@ export type AssignmentCreationAssignmentType = {
   offersParagraphModes?: boolean;
   /** AssignmentType.kind — drives engagement point minimums for Daily Pages / Class Starter. */
   kind?: string | null;
+  /** Library rubric name when the type points at a shared rubric (e.g. SJP Daily Pages). */
+  rubricName?: string | null;
 };
 
 export type AssignmentCreationEditingAssignment = {
@@ -431,8 +433,12 @@ export function AssignmentCreationSheetContent({
     assignmentTypes.find((type) => type.id === assignmentTypeId)
       ?.offersParagraphModes
   );
+  const selectedAssignmentType = assignmentTypes.find(
+    (type) => type.id === assignmentTypeId
+  );
   const minimumPointValue = assignmentTypeUsesDailyPagesEngagementRubric({
-    kind: assignmentTypes.find((type) => type.id === assignmentTypeId)?.kind,
+    kind: selectedAssignmentType?.kind,
+    rubricName: selectedAssignmentType?.rubricName,
   })
     ? MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL
     : 1;

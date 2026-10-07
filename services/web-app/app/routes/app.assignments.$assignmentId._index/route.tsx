@@ -35,6 +35,7 @@ import {
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { formatClassLabel } from '~/utils/class-display';
+import { dailyPagesEngagementPointValueError } from '~/domain/assignment-types/daily-pages-engagement-point-validation';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
   AssignmentSummarySheetContent,
@@ -220,9 +221,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentTypes.map((assignmentType) => assignmentType.id),
     { writingConditionsEnabled }
   );
+  const rubricMeta = await prisma.assignmentType.findMany({
+    where: { id: { in: assignmentTypes.map((type) => type.id) } },
+    select: {
+      id: true,
+      kind: true,
+      rubric: { select: { name: true } },
+    },
+  });
+  const rubricMetaById = new Map(rubricMeta.map((row) => [row.id, row]));
   const assignmentTypeOptions = assignmentTypes.map((assignmentType) => ({
     ...assignmentType,
     gradesGrammar: gradesGrammarIds.has(assignmentType.id),
+    kind: rubricMetaById.get(assignmentType.id)?.kind ?? null,
+    rubricName: rubricMetaById.get(assignmentType.id)?.rubric?.name ?? null,
     defaultWritingTimeMinutes:
       creationTypeDefaults.get(assignmentType.id)?.defaultWritingTimeMinutes ??
       null,
@@ -421,6 +433,31 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
+
+    if (gradingIntent.data.submitForGrade) {
+      const pointValue = gradingIntent.data.pointValue;
+      if (pointValue != null) {
+        const assignmentTypeForPoints = await prisma.assignmentType.findFirst({
+          where: { id: assignmentTypeId },
+          select: {
+            kind: true,
+            rubric: { select: { name: true } },
+          },
+        });
+        const engagementError = dailyPagesEngagementPointValueError({
+          kind: assignmentTypeForPoints?.kind ?? null,
+          rubricName: assignmentTypeForPoints?.rubric?.name ?? null,
+          pointValue,
+        });
+        if (engagementError) {
+          return dataResponse(
+            { success: false, message: engagementError },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // Behind the writing-conditions flag: off, a sent writing time is ignored
     // and the stored one is left exactly as it is.
     const writingTimeResult = (await isDailyPagesWritingConditionsEnabled())
