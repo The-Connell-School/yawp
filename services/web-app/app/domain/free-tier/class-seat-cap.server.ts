@@ -1,6 +1,12 @@
 import type { OrganizationPlan, Prisma } from '@app/prisma';
 import { getEntitlements } from '~/utils/entitlements.server';
 import { FREE_CLASS_CLASS_FULL_MESSAGE } from './class-seat-cap';
+import {
+  lockClassCollaborationDeployments,
+  lockStudentRosters,
+} from '~/domain/collaboration/class-assignment-lock.server';
+import { prisma } from '~/utils/db.server';
+import { FreeClassSeatError } from './free-class-seat-error';
 
 export type FreeClassSeatCheckResult =
   | { ok: true; plan: OrganizationPlan }
@@ -25,16 +31,6 @@ export async function lockClassRosterSeatCap(
   }
 }
 
-function pendingInviteTargetsClass(metadata: string | null, classId: string) {
-  if (!metadata) return false;
-  try {
-    const parsed = JSON.parse(metadata) as { klassId?: string };
-    return parsed.klassId === classId;
-  } catch {
-    return metadata.includes(classId);
-  }
-}
-
 export async function countFreeClassSeatUsage(
   tx: Prisma.TransactionClient,
   classId: string
@@ -47,16 +43,13 @@ export async function countFreeClassSeatUsage(
     },
   });
 
-  const inviteRows = await tx.invitation.findMany({
+  const pendingInvites = await tx.invitation.count({
     where: {
       type: 'onboard-student',
+      studentClassId: classId,
       expiresAt: { gt: new Date() },
     },
-    select: { metadata: true },
   });
-  const pendingInvites = inviteRows.filter((row) =>
-    pendingInviteTargetsClass(row.metadata, classId)
-  ).length;
 
   return { currentStudents, pendingInvites };
 }
@@ -110,4 +103,49 @@ export async function assertFreeClassSeatAvailableInTx(
   }
 
   return { ok: true, plan };
+}
+
+export type EnrollStudentInClassResult =
+  | { ok: true }
+  | { ok: false; code: 'class_not_found' | 'class_full'; error: string };
+
+/** Shared enrollment choke point (seat cap + collaboration locks). */
+export async function enrollStudentInClassWithSeatCap(params: {
+  membershipId: string;
+  classId: string;
+  organizationId: string;
+  client?: Prisma.TransactionClient;
+}): Promise<EnrollStudentInClassResult> {
+  const run = async (tx: Prisma.TransactionClient) => {
+    const seat = await assertFreeClassSeatAvailableInTx(tx, {
+      classId: params.classId,
+      organizationId: params.organizationId,
+    });
+    if (!seat.ok) {
+      return {
+        ok: false as const,
+        code: seat.code,
+        error: seat.error,
+      };
+    }
+    await lockStudentRosters(tx, [params.membershipId]);
+    await lockClassCollaborationDeployments(tx, params.classId);
+    await tx.orgMembership.update({
+      where: { id: params.membershipId },
+      data: { classesAsStudent: { connect: { id: params.classId } } },
+    });
+    return { ok: true as const };
+  };
+
+  if (params.client) {
+    return run(params.client);
+  }
+  return prisma.$transaction(run);
+}
+
+export function throwIfSeatCheckFailed(
+  result: FreeClassSeatCheckResult
+): void {
+  if (result.ok) return;
+  throw new FreeClassSeatError(result.code, result.error);
 }

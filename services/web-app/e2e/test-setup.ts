@@ -40,7 +40,7 @@ export const test = base.extend<TestFixtures>({
     const signInFn = async (email: string, password: string) => {
       await page.goto('/auth/login');
       await page.waitForLoadState('networkidle');
-      const emailInput = page.locator('input[type="email"]');
+      const emailInput = page.getByLabel('Email or handle');
       const passwordInput = page.locator('input[type="password"]');
       const submitButton = page.getByRole('button', { name: /log in/i });
       await emailInput.fill(email);

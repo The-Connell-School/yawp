@@ -304,6 +304,10 @@ jobs:
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
             'app/routes/app.assignments.$assignmentId._index/route.test.ts' \
             'app/routes/app.my-classes.$classId/route.test.ts' \
+            'app/routes/app.my-classes.$classId/class-student-enrollment.server.test.ts' \
+            'app/utils/impersonation-read-only.server.test.ts' \
+            'app/utils/internal-management.server.test.ts' \
+            'app/domain/free-tier/student-join.server.test.ts' \
             'app/routes/app.assignment-types.$id/about-daily-pages/content.test.ts'
           do
             bun test "$f"

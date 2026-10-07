@@ -60,7 +60,7 @@ export async function ensurePreviewFreeClassroomFixture(prisma: PrismaClient) {
     await tx.class.create({
       data: {
         code: 'FREEPRV',
-        schoolYear: '2025-2026',
+        schoolYear: '2026-2027',
         grade: '9',
         period: '1',
         schoolId: school.id,

@@ -6,10 +6,13 @@ import { getDomainUrl } from '~/utils/misc';
 import { normalizeEmail } from '~/utils/normalize-email';
 import { generateTOTP } from '~/utils/totp.server';
 import {
-  lockClassCollaborationDeployments,
-  lockStudentRosters,
-} from '~/domain/collaboration/class-assignment-lock.server';
-import { assertFreeClassSeatAvailableInTx } from '~/domain/free-tier/class-seat-cap.server';
+  assertFreeClassSeatAvailableInTx,
+  enrollStudentInClassWithSeatCap,
+} from '~/domain/free-tier/class-seat-cap.server';
+import {
+  FreeClassSeatError,
+  isFreeClassSeatError,
+} from '~/domain/free-tier/free-class-seat-error';
 
 export type StudentEmailLookupResult =
   | { status: 'existing'; email: string }
@@ -174,32 +177,13 @@ export async function enrollExistingStudentInClass({
     };
   }
 
-  try {
-    await prisma.$transaction(async (tx) => {
-      const seat = await assertFreeClassSeatAvailableInTx(tx, {
-        classId,
-        organizationId,
-      });
-      if (!seat.ok) {
-        throw Object.assign(new Error(seat.error), { code: seat.code });
-      }
-      await lockStudentRosters(tx, [orgMembership.id]);
-      await lockClassCollaborationDeployments(tx, classId);
-      await tx.orgMembership.update({
-        where: { id: orgMembership.id },
-        data: { classesAsStudent: { connect: { id: classId } } },
-      });
-    });
-  } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error as { code?: string }).code === 'class_full'
-    ) {
-      return { status: 'error', error: (error as Error).message };
-    }
-    throw error;
+  const enrolled = await enrollStudentInClassWithSeatCap({
+    membershipId: orgMembership.id,
+    classId,
+    organizationId,
+  });
+  if (!enrolled.ok) {
+    return { status: 'error', error: enrolled.error };
   }
 
   return { status: 'enrolled' };
@@ -314,6 +298,7 @@ export async function sendStudentClassInvite({
     ...verificationConfig,
     expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
     metadata: JSON.stringify({ klassId: classId }),
+    studentClassId: classId,
   };
 
   try {
@@ -323,7 +308,7 @@ export async function sendStudentClassInvite({
         organizationId,
       });
       if (!seat.ok) {
-        throw Object.assign(new Error(seat.error), { code: seat.code });
+        throw new FreeClassSeatError(seat.code, seat.error);
       }
       if (existingInvitation) {
         await tx.invitation.delete({ where: { id: existingInvitation.id } });
@@ -331,13 +316,8 @@ export async function sendStudentClassInvite({
       await tx.invitation.create({ data: verificationData });
     });
   } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error as { code?: string }).code === 'class_full'
-    ) {
-      return { status: 'error', error: (error as Error).message };
+    if (isFreeClassSeatError(error)) {
+      return { status: 'error', error: error.message };
     }
     throw error;
   }

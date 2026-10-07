@@ -5,6 +5,7 @@ import {
   Link,
   redirect,
   useLoaderData,
+  useActionData,
   useNavigation,
 } from 'react-router';
 import { z } from 'zod';
@@ -27,6 +28,8 @@ import { authSessionStorage } from '~/cookie-session-storages/authentication.ser
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { combineHeaders } from '~/utils/misc';
 import { UsernameFieldSchema } from '~/utils/schemas/username';
+import { AuthPageShell } from '~/components/auth-brand-lockup';
+import { FREE_CLASS_CLASS_FULL_MESSAGE } from '~/domain/free-tier/class-seat-cap';
 
 const JoinSchema = z
   .object({
@@ -94,7 +97,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const klass = await findFreeTierClassByJoinToken(data.joinToken);
   if (!klass || klass.id !== data.classId) {
-    return validationError({ fieldErrors: { classId: 'Class not found.' } }, data);
+    return validationError(
+      { fieldErrors: { _form: 'Class not found.' } },
+      data
+    );
   }
 
   const result = await registerFreeTierStudent({
@@ -106,9 +112,14 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   if (result.status === 'error') {
-    const fieldErrors: Record<string, string> = {
-      [result.field]: result.error,
-    };
+    const fieldErrors: Record<string, string> = {};
+    if (result.formLevel) {
+      fieldErrors._form = result.error.includes('full')
+          ? FREE_CLASS_CLASS_FULL_MESSAGE
+          : result.error;
+    } else {
+      fieldErrors[result.field] = result.error;
+    }
     if (result.field === 'username' && result.suggestions?.length) {
       fieldErrors.username = `${result.error} Try: ${result.suggestions.map((s) => `@${s}`).join(', ')}`;
     }
@@ -150,8 +161,12 @@ export default function JoinRoute() {
     },
   });
 
+  const actionData = useActionData<{ fieldErrors?: Record<string, string> }>();
+  const formLevelError = actionData?.fieldErrors?._form;
+
   if (!data.joinToken || !data.klass) {
     return (
+      <AuthPageShell>
       <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
         <h1 className="text-lg font-semibold">Join your class</h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -165,6 +180,7 @@ export default function JoinRoute() {
           </Link>
         </p>
       </div>
+      </AuthPageShell>
     );
   }
 
@@ -172,12 +188,18 @@ export default function JoinRoute() {
     data.klass.teachers[0]?.user.name?.trim() || 'your teacher';
 
   return (
+    <AuthPageShell>
     <div className="mx-auto w-full max-w-md rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
       <h1 className="text-lg font-semibold">Create your student account</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Join {data.klass.school.name} ({data.klass.schoolYear}) with{' '}
         {teacherName}. Pick a handle and password — no email required.
       </p>
+      {formLevelError ? (
+        <p className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          {formLevelError}
+        </p>
+      ) : null}
       <Form {...joinForm.getFormProps()} className="mt-6 flex flex-col gap-4">
         <input type="hidden" name="joinToken" value={data.joinToken} />
         <input type="hidden" name="classId" value={data.klass.id} />
@@ -201,5 +223,6 @@ export default function JoinRoute() {
         </Button>
       </Form>
     </div>
+    </AuthPageShell>
   );
 }

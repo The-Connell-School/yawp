@@ -2616,7 +2616,11 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                           <div className="flex flex-col gap-1">
                             <span>{formatUserContactLabel(s.user)}</span>
                             {!s.user.email ? (
-                              <Form method="post" className="flex flex-wrap items-end gap-2">
+                              <studentFetcher.Form
+                                method="post"
+                                className="flex flex-wrap items-end gap-2"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <input
                                   type="hidden"
                                   name="intent"
@@ -2640,7 +2644,16 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                                 <Button type="submit" size="sm" variant="outline">
                                   Reset login
                                 </Button>
-                              </Form>
+                                {studentFetcher.data &&
+                                'success' in studentFetcher.data &&
+                                studentFetcher.data.success &&
+                                'message' in studentFetcher.data &&
+                                studentFetcher.data.message ? (
+                                  <p className="w-full text-xs text-green-700">
+                                    {studentFetcher.data.message}
+                                  </p>
+                                ) : null}
+                              </studentFetcher.Form>
                             ) : null}
                           </div>
                         </TableCell>

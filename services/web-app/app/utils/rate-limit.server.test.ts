@@ -159,6 +159,7 @@ suite('login IP limits count only failed attempts', () => {
       const ipCheck = await mod!.checkFailedLoginIpRateLimit({
         request: schoolIp,
         route: '/auth/login',
+        loginIdentifier: `${run}-ok-user-${i}@school.test`,
         perIpPerMinute: cfg.perIpPerMinute,
         perIpPerHour: cfg.perIpPerHour,
         nowMs: t0 + i,

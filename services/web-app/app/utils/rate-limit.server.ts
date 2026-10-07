@@ -530,13 +530,16 @@ export async function enforceLoginTargetRateLimit(params: {
 function failedLoginIpBuckets(params: {
   request: Request;
   route: string;
+  loginIdentifier: string;
   perIpPerMinute: number;
   perIpPerHour: number;
   nowMs?: number;
 }) {
-  const { request, route, perIpPerMinute, perIpPerHour, nowMs } = params;
+  const { request, route, loginIdentifier, perIpPerMinute, perIpPerHour, nowMs } =
+    params;
   const ip = getClientIp(request);
-  const ipKeyBase = `ip:${ipHash(ip)}:${route}:failed`;
+  const normalizedLogin = loginIdentifier.trim().toLowerCase();
+  const ipKeyBase = `ip:${ipHash(ip)}:login:${ipHash(normalizedLogin)}:${route}:failed`;
   const base = { route, nowMs };
   return [
     {
@@ -561,6 +564,7 @@ function failedLoginIpBuckets(params: {
 export async function checkFailedLoginIpRateLimit(params: {
   request: Request;
   route: string;
+  loginIdentifier: string;
   perIpPerMinute: number;
   perIpPerHour: number;
   nowMs?: number;
@@ -571,6 +575,7 @@ export async function checkFailedLoginIpRateLimit(params: {
 export async function recordFailedLoginIpRateLimit(params: {
   request: Request;
   route: string;
+  loginIdentifier: string;
   perIpPerMinute: number;
   perIpPerHour: number;
   nowMs?: number;

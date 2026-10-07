@@ -124,7 +124,10 @@ export async function getUserId(request: Request) {
   const sessionId = authSession.get(sessionKey);
   if (!sessionId) return null;
   const session = await prisma.session.findUnique({
-    select: { user: { select: { id: true } } },
+    select: {
+      expirationDate: true,
+      user: { select: { id: true, email: true } },
+    },
     where: { id: sessionId },
   });
   if (!session?.user) {
@@ -134,7 +137,30 @@ export async function getUserId(request: Request) {
       },
     });
   }
+  if (session.expirationDate.getTime() <= Date.now()) {
+    await prisma.session.delete({ where: { id: sessionId } }).catch(() => {});
+    throw redirect('/', {
+      headers: {
+        'set-cookie': await authSessionStorage.destroySession(authSession),
+      },
+    });
+  }
   return session.user.id;
+}
+
+/** Cookie expiry for the auth session: rolling for email users, fixed for handle-only. */
+export async function getAuthSessionCookieExpiresAt(params: {
+  sessionId: string;
+  userEmail: string | null;
+}) {
+  if (params.userEmail) {
+    return getSessionExpirationDateForUser({ email: params.userEmail });
+  }
+  const session = await prisma.session.findUnique({
+    where: { id: params.sessionId },
+    select: { expirationDate: true },
+  });
+  return session?.expirationDate ?? new Date(0);
 }
 
 export async function requireUserId(

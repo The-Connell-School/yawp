@@ -4,7 +4,14 @@ import {
   suggestAvailableUsernames,
   validateUsername,
 } from '~/utils/username.server';
-import { assertFreeClassSeatAvailableInTx } from './class-seat-cap.server';
+import {
+  assertFreeClassSeatAvailableInTx,
+  throwIfSeatCheckFailed,
+} from './class-seat-cap.server';
+import {
+  FreeClassSeatError,
+  isFreeClassSeatError,
+} from './free-class-seat-error';
 import { getSessionExpirationDateForUser } from '~/utils/auth.server';
 import {
   isPrismaUniqueViolation,
@@ -145,6 +152,7 @@ export async function registerFreeTierStudent({
       status: 'error' as const,
       field: 'classId' as const,
       error: 'Class not found.',
+      formLevel: true as const,
     };
   }
 
@@ -169,11 +177,7 @@ export async function registerFreeTierStudent({
         classId: klass.id,
         organizationId: klass.school.organizationId,
       });
-      if (!seat.ok) {
-        throw Object.assign(new Error(seat.error), {
-          code: seat.code,
-        });
-      }
+      throwIfSeatCheckFailed(seat);
 
       return tx.orgMembership.create({
         data: {
@@ -207,16 +211,12 @@ export async function registerFreeTierStudent({
       userId: membership.userId,
     };
   } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error as { code?: string }).code === 'class_full'
-    ) {
+    if (isFreeClassSeatError(error)) {
       return {
         status: 'error' as const,
         field: 'classId' as const,
-        error: (error as Error).message,
+        error: error.message,
+        formLevel: true as const,
       };
     }
     if (isUsernameUniqueViolation(error)) {

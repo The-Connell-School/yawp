@@ -52,6 +52,7 @@ export async function loginAction({ request }: ActionFunctionArgs) {
       const ipDecision = await checkFailedLoginIpRateLimit({
         request,
         route: '/auth/login',
+        loginIdentifier: parsed.value,
         perIpPerMinute: cfg.perIpPerMinute,
         perIpPerHour: cfg.perIpPerHour,
       });
@@ -71,6 +72,7 @@ export async function loginAction({ request }: ActionFunctionArgs) {
       const failIp = await recordFailedLoginIpRateLimit({
         request,
         route: '/auth/login',
+        loginIdentifier: parsed.value,
         perIpPerMinute: cfg.perIpPerMinute,
         perIpPerHour: cfg.perIpPerHour,
       });

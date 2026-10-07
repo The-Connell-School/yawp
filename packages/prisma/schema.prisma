@@ -1536,12 +1536,15 @@ model Invitation {
   charSet        String
   expiresAt      DateTime?     @db.Timestamptz(6)
   metadata       String?
+  /// For onboard-student invites: class the student will join (indexed seat-cap counts).
+  studentClassId String?
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   schoolId       String?
   school         School?       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@unique([target, type])
+  @@index([type, studentClassId])
 }
 
 model TeacherTraining {

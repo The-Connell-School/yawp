@@ -130,7 +130,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const {
     getImpersonationState,
-    getSessionExpirationDateForUser,
+    getAuthSessionCookieExpiresAt,
     getUserId,
     logout,
     sessionKey,
@@ -196,8 +196,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const refreshedAuthSessionCookie =
     userId && authSessionId
       ? await authSessionStorage.commitSession(authSession, {
-          expires: getSessionExpirationDateForUser({
-            email: user?.email ?? null,
+          expires: await getAuthSessionCookieExpiresAt({
+            sessionId: authSessionId,
+            userEmail: user?.email ?? null,
           }),
         })
       : null;

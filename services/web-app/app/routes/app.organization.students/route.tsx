@@ -35,6 +35,7 @@ import {
   getOrganizationStudentsTableCookieValue,
 } from '~/utils/cookies.server';
 import { prisma } from '~/utils/db.server';
+import { enrollStudentInClassWithSeatCap } from '~/domain/free-tier/class-seat-cap.server';
 import { SearchInput } from '~/components/search-input';
 import {
   Sheet,
@@ -173,10 +174,14 @@ const createOrEnrollStudent = async (
     }
 
     if (membership.classesAsStudent.length === 0) {
-      await prisma.orgMembership.update({
-        where: { id: membership.id },
-        data: { classesAsStudent: { connect: { id: classId } } },
+      const enrolled = await enrollStudentInClassWithSeatCap({
+        membershipId: membership.id,
+        classId,
+        organizationId,
       });
+      if (!enrolled.ok) {
+        return { success: false, email, error: enrolled.error };
+      }
     }
 
     return { success: true, email };
@@ -192,7 +197,7 @@ const createOrEnrollStudent = async (
 
   const hashedPassword = await getPasswordHash(password);
 
-  await prisma.orgMembership.create({
+  const membership = await prisma.orgMembership.create({
     data: {
       role: 'STUDENT',
       user: {
@@ -203,9 +208,20 @@ const createOrEnrollStudent = async (
         },
       },
       organization: { connect: { id: organizationId } },
-      classesAsStudent: { connect: { id: classId } },
     },
+    select: { id: true, userId: true },
   });
+
+  const enrolled = await enrollStudentInClassWithSeatCap({
+    membershipId: membership.id,
+    classId,
+    organizationId,
+  });
+  if (!enrolled.ok) {
+    await prisma.orgMembership.delete({ where: { id: membership.id } }).catch(() => {});
+    await prisma.user.delete({ where: { id: membership.userId } }).catch(() => {});
+    return { success: false, email, error: enrolled.error };
+  }
 
   return { success: true, email };
 };

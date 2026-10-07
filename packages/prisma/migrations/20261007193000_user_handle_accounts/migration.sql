@@ -1,17 +1,22 @@
 SET lock_timeout = '5s';
 
 -- Additive migration: nullable email, optional username (handle), email verification timestamp.
--- Rollback note:
---   prisma migrate resolve --rolled-back 20261007193000_user_handle_accounts
---   Then deploy prior migration. Columns remain harmless if left in place on rollback deploy.
---   To fully revert schema manually (only if no handle-only users exist):
---     ALTER TABLE "User" DROP CONSTRAINT IF EXISTS "User_email_or_username_check";
---     ALTER TABLE "User" DROP CONSTRAINT IF EXISTS "User_username_lowercase_check";
---     DROP INDEX IF EXISTS "User_username_key";
---     ALTER TABLE "User" DROP COLUMN IF EXISTS "mustChangePassword";
---     ALTER TABLE "User" DROP COLUMN IF EXISTS "emailVerifiedAt";
---     ALTER TABLE "User" DROP COLUMN IF EXISTS "username";
---     ALTER TABLE "User" ALTER COLUMN "email" SET NOT NULL;
+--
+-- Rollback (production has NOT applied a later migration that depends on these columns):
+--   1. Stop app traffic.
+--   2. psql $DATABASE_URL -c 'ALTER TABLE "Class" DROP COLUMN IF EXISTS "studentJoinToken";'
+--   3. psql $DATABASE_URL -c 'ALTER TABLE "Invitation" DROP COLUMN IF EXISTS "studentClassId";'
+--   4. psql $DATABASE_URL -c 'ALTER TABLE "User" DROP CONSTRAINT IF EXISTS "User_email_or_username_check";'
+--   5. psql $DATABASE_URL -c 'ALTER TABLE "User" DROP CONSTRAINT IF EXISTS "User_username_lowercase_check";'
+--   6. psql $DATABASE_URL -c 'DROP INDEX IF EXISTS "User_username_key";'
+--   7. psql $DATABASE_URL -c 'ALTER TABLE "User" DROP COLUMN IF EXISTS "mustChangePassword";'
+--   8. psql $DATABASE_URL -c 'ALTER TABLE "User" DROP COLUMN IF EXISTS "emailVerifiedAt";'
+--   9. psql $DATABASE_URL -c 'ALTER TABLE "User" DROP COLUMN IF EXISTS "username";'
+--  10. Backfill NULL emails before NOT NULL (only if no handle-only users remain):
+--      UPDATE "User" SET email = username || '@invalid.local' WHERE email IS NULL;
+--  11. psql $DATABASE_URL -c 'ALTER TABLE "User" ALTER COLUMN "email" SET NOT NULL;'
+--   12. Mark migration rolled back in Prisma history:
+--      cd packages/prisma && bun prisma migrate resolve --rolled-back 20261007193000_user_handle_accounts
 
 ALTER TABLE "User" ALTER COLUMN "email" DROP NOT NULL;
 
@@ -41,20 +46,15 @@ ALTER TABLE "Class" ADD COLUMN IF NOT EXISTS "studentJoinToken" TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "Class_studentJoinToken_key" ON "Class"("studentJoinToken");
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 UPDATE "Class" c
-SET "studentJoinToken" = replace(
-  replace(
-    replace(encode(gen_random_bytes(18), 'base64'), '/', '_'),
-    '+',
-    '-'
-  ),
-  '=',
-  ''
-)
+SET "studentJoinToken" = replace(gen_random_uuid()::text, '-', '')
 FROM "School" s
 JOIN "Organization" o ON s."organizationId" = o.id
 WHERE c."schoolId" = s.id
   AND o.plan = 'FREE_CLASSROOM'
   AND c."studentJoinToken" IS NULL;
+
+ALTER TABLE "Invitation" ADD COLUMN IF NOT EXISTS "studentClassId" TEXT;
+
+CREATE INDEX IF NOT EXISTS "Invitation_type_studentClassId_idx"
+  ON "Invitation" ("type", "studentClassId");

@@ -42,8 +42,8 @@ describe('DB: free-class seat cap', () => {
     for (let i = 0; i < FREE_CLASSROOM_STUDENT_SEAT_CAP; i++) {
       await prisma.orgMembership.create({
         data: {
-          organizationId: org.id,
           role: 'STUDENT',
+          organization: { connect: { id: org.id } },
           user: {
             create: {
               email: `cap-student-${i}-${Date.now()}@example.com`,

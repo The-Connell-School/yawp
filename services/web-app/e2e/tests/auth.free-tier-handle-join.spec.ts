@@ -18,20 +18,19 @@ test.describe('Free-tier handle student', () => {
     const displayName = 'E2E Handle Student';
     const promptMarker = `Free tier prompt ${Date.now()}`;
 
-    const assignmentType = await prisma.assignmentType.findFirst({
-      where: { ownerOrgId: null },
-      select: { id: true },
-    });
-    if (!assignmentType) throw new Error('No assignment type for E2E.');
-
     const org = await prisma.organization.create({
       data: {
         name: `Free Tier E2E ${Date.now()}`,
         plan: 'FREE_CLASSROOM',
       },
     });
-    await prisma.organizationAssignmentType.create({
-      data: { organizationId: org.id, assignmentTypeId: assignmentType.id },
+    const assignmentType = await prisma.assignmentType.create({
+      data: {
+        title: 'Free Tier E2E Writing',
+        position: 1,
+        ownerOrgId: org.id,
+        organizationAssignments: { create: { organizationId: org.id } },
+      },
     });
     const school = await prisma.school.create({
       data: {
