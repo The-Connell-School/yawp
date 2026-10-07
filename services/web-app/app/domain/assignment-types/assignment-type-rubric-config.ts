@@ -21,6 +21,18 @@ import {
   CLASS_STARTER_RUBRIC,
   CLASS_STARTER_SCORING_SCALE,
 } from './class-starter-rubric';
+import {
+  PREWRITING_ASSIGNMENT_TYPE_KIND,
+  PREWRITING_PROMPT_CONFIG,
+  PREWRITING_RUBRIC,
+  PREWRITING_SCORING_SCALE,
+} from './prewriting-assignment-type';
+import {
+  THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND,
+  THESIS_STATEMENT_PROMPT_CONFIG,
+  THESIS_STATEMENT_RUBRIC,
+  THESIS_STATEMENT_SCORING_SCALE,
+} from './thesis-statement-assignment-type';
 
 export const MODULE_RUBRIC_RELATIONSHIPS = [
   'primary',
@@ -114,6 +126,28 @@ const thesisDefaultConfig: AssignmentTypeRubricConfig = {
  * The soft assistant, under the name it is keeping. Class Starter is what
  * Daily Pages was: one engagement judgment, overall feedback, no markup.
  */
+const prewritingConfig: AssignmentTypeRubricConfig = {
+  source: 'assignment-type',
+  scoringScale: PREWRITING_SCORING_SCALE,
+  rubric: PREWRITING_RUBRIC,
+  promptConfig: PREWRITING_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'Standalone pre-writing: exploratory effort and movement toward a specific focus.',
+  rubricIncomplete: false,
+};
+
+const thesisStatementConfig: AssignmentTypeRubricConfig = {
+  source: 'assignment-type',
+  scoringScale: THESIS_STATEMENT_SCORING_SCALE,
+  rubric: THESIS_STATEMENT_RUBRIC,
+  promptConfig: THESIS_STATEMENT_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'Standalone thesis statement: one arguable sentence with observation and analysis.',
+  rubricIncomplete: false,
+};
+
 const classStarterConfig: AssignmentTypeRubricConfig = {
   source: 'class-starter-default',
   scoringScale: CLASS_STARTER_SCORING_SCALE,
@@ -151,6 +185,8 @@ const dailyPagesShortFormConfig: AssignmentTypeRubricConfig = {
 const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
   [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: dailyPagesShortFormConfig,
   [CLASS_STARTER_ASSIGNMENT_TYPE_KIND]: classStarterConfig,
+  [PREWRITING_ASSIGNMENT_TYPE_KIND]: prewritingConfig,
+  [THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND]: thesisStatementConfig,
 };
 
 function getDefaultRubricConfig(
