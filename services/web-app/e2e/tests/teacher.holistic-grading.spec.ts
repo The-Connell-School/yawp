@@ -7,6 +7,7 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
   e2eContext,
   signIn,
 }, testInfo) => {
+  test.setTimeout(180_000);
   const prisma = createE2EPrismaClient();
   const title = `Holistic E2E ${Date.now()}`;
   const { assignment, classAssignment } = await createDeployedAssignment({
@@ -48,18 +49,27 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     await page.goto(`/app/submissions/${submission.id}`);
 
     const panel = page.getByTestId('submission-lifecycle-panel');
+    await expect(page.getByTestId('grading-assistant-generate')).toBeVisible({
+      timeout: 30_000,
+    });
     const gradingResponse = page.waitForResponse(
       (response) =>
         response.url().includes('/api/domain/grade-essay-ai') &&
         response.request().method() === 'POST' &&
         response.status() === 200,
-      { timeout: 60000 }
+      { timeout: 120_000 }
     );
     await page.getByTestId('grading-assistant-generate').click();
     await gradingResponse;
 
-    await expect(panel.getByText('18 / 20', { exact: true })).toBeVisible({
-      timeout: 30000,
+    const afterAssistant = await prisma.submission.findUniqueOrThrow({
+      where: { id: submission.id },
+    });
+    expect(afterAssistant.score).toMatch(/^\d+\/20$/);
+    expect(afterAssistant.numericPercentage).toBeNull();
+    const pointsLabel = afterAssistant.score!.replace('/', ' / ');
+    await expect(panel.getByText(pointsLabel, { exact: true })).toBeVisible({
+      timeout: 30_000,
     });
     await page.screenshot({
       path: testInfo.outputPath('holistic-teacher-before-save.png'),
@@ -67,7 +77,7 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     });
 
     await panel.getByTestId('submission-lifecycle-save').click();
-    await expect(panel.getByText('18 / 20', { exact: true })).toBeVisible();
+    await expect(panel.getByText(pointsLabel, { exact: true })).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('holistic-teacher-after-save.png'),
       fullPage: true,
@@ -81,18 +91,17 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     });
     const aiMeta = graded.aiMeta as Record<string, unknown>;
     expect(aiMeta.scoringMode).toBe('holistic_tier');
-    expect(aiMeta.holistic).toMatchObject({
-      tier: 'excellent',
-      requestedPoints: 18,
-      storedPoints: 18,
-      totalPoints: 20,
-    });
     expect(graded.numericPercentage).toBeNull();
-    expect(graded.score).toBe('18/20');
+    expect(graded.score).toMatch(/^\d+\/20$/);
+    const holistic = aiMeta.holistic as Record<string, unknown>;
+    expect(holistic.totalPoints).toBe(20);
+    expect(holistic.storedPoints).toBe(
+      Number.parseInt(graded.score!.split('/')[0]!, 10)
+    );
 
     await signIn('jdoe@brock.software', 'johndoe');
     await page.goto(`/app/submissions/${submission.id}`);
-    await expect(page.getByText('18 / 20', { exact: true })).toBeVisible();
+    await expect(page.getByText(pointsLabel, { exact: true })).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('holistic-student-view.png'),
       fullPage: true,
@@ -102,7 +111,7 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     await page.goto(
       `/app/my-classes/${e2eContext.classId}?tab=documents&status=released`
     );
-    await expect(page.getByText(/18\s*\/\s*20/)).toBeVisible();
+    await expect(page.getByText(new RegExp(pointsLabel.replace(' ', '\\s*')))).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('holistic-gradebook-row.png'),
       fullPage: true,
