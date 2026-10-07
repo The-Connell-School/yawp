@@ -227,6 +227,13 @@ export async function seedDpConsolidationQaPreviewFixtures(
     await ensureClassAssignment(pinnedAssignment.id);
   } else {
     await ensureClassAssignment(pinnedAssignment.id);
+    await prisma.assignment.update({
+      where: { id: pinnedAssignment.id },
+      data: {
+        rubricRevisionId: legacyRevision.id,
+        pointValue: 30,
+      },
+    });
   }
 
   const swapTitle = 'DP QA Swap Persistence (Preview)';

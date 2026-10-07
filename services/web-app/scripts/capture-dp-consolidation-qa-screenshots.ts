@@ -78,7 +78,7 @@ async function openQaClass(page: Page) {
 
 async function openDocumentsTab(page: Page) {
   await openQaClass(page);
-  const documentsTab = page.getByRole('tab', { name: /^Documents$/i });
+  const documentsTab = page.getByRole('tab', { name: /Documents/i });
   await documentsTab.click({ timeout: 60_000 });
   await page.waitForLoadState('networkidle');
 }
@@ -94,7 +94,7 @@ async function openSubmissionViaDocumentTitle(page: Page, documentTitle: string)
 
 async function openAssignmentFromClassTab(page: Page, assignmentTitle: string) {
   await openQaClass(page);
-  const assignmentsTab = page.getByRole('tab', { name: /^Assignments$/i });
+  const assignmentsTab = page.getByRole('tab', { name: /Assignments/i });
   await assignmentsTab.click({ timeout: 60_000 });
   const row = page.getByRole('row').filter({ hasText: assignmentTitle }).first();
   await row.click({ timeout: 60_000 });
@@ -105,7 +105,18 @@ async function openAssignmentFromClassTab(page: Page, assignmentTitle: string) {
 async function openPinnedLegacyEdit(page: Page) {
   await openAssignmentFromClassTab(page, 'DP QA Pinned Legacy (Preview)');
   await page.getByRole('button', { name: /^Edit/i }).click({ timeout: 60_000 });
-  await page.getByRole('dialog').waitFor({ timeout: 60_000 });
+  const dialog = page.getByRole('dialog');
+  await dialog.waitFor({ timeout: 60_000 });
+  await dialog.getByRole('button', { name: 'Change', exact: true }).click();
+  await dialog.locator('#assignment-create-point-value').waitFor({
+    timeout: 60_000,
+  });
+  const pointValueInput = dialog.locator('#assignment-create-point-value');
+  await pointValueInput.scrollIntoViewIfNeeded();
+  await dialog
+    .getByText(/Graded out of\s+30 points/i)
+    .first()
+    .waitFor({ timeout: 60_000 });
 }
 
 async function openSwapPersistenceSpecG(page: Page) {
@@ -133,9 +144,9 @@ try {
   await page.goto(
     `${baseUrl}/app/admin/assignment-types/${dailyPagesTypeId}`
   );
-  await page.getByText(/Library rubric|Grading assistant/i).first().waitFor({
-    timeout: 60_000,
-  });
+  const rubricLibrarySelect = page.getByTestId('rubric-library-select');
+  await rubricLibrarySelect.scrollIntoViewIfNeeded();
+  await rubricLibrarySelect.waitFor({ state: 'visible', timeout: 60_000 });
   await shot(page, 'a-admin-rubric-picker');
 
   await devLogin(page, teacherEmail);
@@ -162,13 +173,19 @@ try {
   await shot(page, 'c-create-12pt');
   await page.getByRole('button', { name: 'Cancel' }).click();
 
-  await openSubmissionViaDocumentTitle(page, 'DP QA class starter doc');
+  await openSubmissionViaDocumentTitle(page, 'DP QA class starter submission');
+  const engagementTrigger = page.getByRole('button', {
+    name: /^Engagement with Prompt/,
+  });
+  await engagementTrigger.waitFor({ timeout: 60_000 });
+  await engagementTrigger.click();
   await page
     .getByTestId('grading-rubric-score-engagement_with_prompt')
-    .waitFor({ timeout: 60_000 });
+    .waitFor({ state: 'visible', timeout: 60_000 });
+  await page.waitForTimeout(300);
   await shot(page, 'd-class-starter-grading');
 
-  await openSubmissionViaDocumentTitle(page, 'DP QA teacher notes doc');
+  await openSubmissionViaDocumentTitle(page, 'DP QA teacher notes submission');
   await page
     .getByRole('region', { name: 'Teacher Context' })
     .waitFor({ timeout: 60_000 });
