@@ -244,6 +244,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         title: type.title,
         collaborationSupported: type.collaborationSupported,
         gradesGrammar: gradesGrammarIds.has(type.id),
+        kind: type.kind,
         defaultWritingTimeMinutes:
           creationTypeDefaults.get(type.id)?.defaultWritingTimeMinutes ?? null,
         offersParagraphModes:

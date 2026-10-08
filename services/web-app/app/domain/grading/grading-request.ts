@@ -18,6 +18,7 @@ export function buildGradingRequest({
   label,
   studentFirstName,
   assignmentPrompt,
+  gradingContext,
   essayText,
 }: {
   promptShape: GradingPromptShape;
@@ -25,14 +26,24 @@ export function buildGradingRequest({
   label: string;
   studentFirstName: string;
   assignmentPrompt: string | null | undefined;
+  /**
+   * What this particular assignment adds for the grader and the student never
+   * saw: how to read the rubric for it, and any notes the teacher gave.
+   * Absent for every assignment that supplies none, which keeps the payload
+   * for every existing type byte-identical.
+   */
+  gradingContext?: string | null;
   essayText: string;
 }): GradingRequest {
   const assignmentPromptSection = assignmentPrompt?.trim()
     ? `Assignment prompt: ${assignmentPrompt.trim()}`
     : 'Assignment prompt: No assignment prompt was provided.';
+  const gradingContextSection = gradingContext?.trim()
+    ? `\n\n${gradingContext.trim()}`
+    : '';
 
   const header = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${label}\n\nRubric category keys (use these exact keys in categories[].key):\n${promptShape.rubricText}`;
-  const tail = `${assignmentPromptSection}\n\nEssay:\n${essayText}`;
+  const tail = `${assignmentPromptSection}${gradingContextSection}\n\nEssay:\n${essayText}`;
 
   if (instructions.mode === 'unified') {
     return {
@@ -42,7 +53,9 @@ export function buildGradingRequest({
   }
 
   const systemInstructions =
-    instructions.mode === 'legacy-split' ? instructions.systemInstructions : undefined;
+    instructions.mode === 'legacy-split'
+      ? instructions.systemInstructions
+      : undefined;
   const templateSystemInstructions = systemInstructions
     ? `${systemInstructions}\n\n`
     : '';

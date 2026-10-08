@@ -172,6 +172,12 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma migrate deploy
 
+      - name: 🧪 Exit ticket bootstrap migration idempotency
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./packages/prisma/scripts/exit-ticket-bootstrap-migration.test.ts
+
       - name: 🧪 Free tier bundle seed connection (tunnel TLS)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         run: bun test ./packages/prisma/scripts/seed-free-tier-bundle-assignment-types.test.ts
@@ -330,7 +336,20 @@ jobs:
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
             'app/routes/app.assignments.$assignmentId._index/route.test.ts' \
             'app/routes/app.my-classes.$classId/route.test.ts' \
-            'app/routes/app.assignment-types.$id/about-daily-pages/content.test.ts'
+            'app/routes/app.assignment-types.$id/about-daily-pages/content.test.ts' \
+            app/routes/api.domain.lesson-planner/route.test.ts \
+            app/routes/api.domain.lesson-planner.packet/route.test.ts \
+            app/domain/lesson-planner/artifact-from-reply.test.ts \
+            app/domain/lesson-planner/lesson-pdf.server.test.ts \
+            app/domain/lesson-planner/lesson-packet.test.ts \
+            app/utils/lesson-planner/lesson-planner-access.server.test.ts \
+            app/utils/lesson-planner/lesson-planner-quota.server.test.ts \
+            app/utils/lesson-planner/lesson-planner-admission.server.test.ts \
+            ../../packages/prisma/scripts/bootstrap-exit-ticket-assignment-type.test.ts \
+            ../../packages/prisma/scripts/seed-preview-planner-qa.test.ts \
+            ../../packages/prisma/scripts/exit-ticket-migration-image.test.ts \
+            ../../packages/prisma/scripts/preview-seats.test.ts \
+            app/domain/lesson-planner/lesson-seed.test.ts
           do
             bun test "$f"
           done
