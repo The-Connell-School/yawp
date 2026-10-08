@@ -50,11 +50,11 @@ const POST = z.object({
   llmRetry: z.enum(['fallback']).optional(),
 });
 
-const errorResponse = (error: { message: string }) => {
-  return dataResponse(
-    { error: LLM_FAILED + 'Error: ' + error.message },
-    { status: 500 }
-  );
+// The provider's message stays in the server log: it can name credentials,
+// models or quotas, and it means nothing to a student.
+const errorResponse = (error: unknown) => {
+  console.error('Tutor response failed', error);
+  return dataResponse({ error: LLM_FAILED }, { status: 500 });
 };
 
 function buildDocumentContextMessage({
@@ -407,7 +407,7 @@ export async function action({ request }: ActionFunctionArgs) {
       if (isLlmFallbackRetrySignal(error)) {
         return dataResponse({ retrying: true }, { status: 202 });
       }
-      return errorResponse(error as any);
+      return errorResponse(error);
     }
 
     await prisma.assignmentModuleSession.update({
