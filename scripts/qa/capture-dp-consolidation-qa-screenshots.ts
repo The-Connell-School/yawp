@@ -109,14 +109,24 @@ async function openSubmissionViaDocumentTitle(page: Page, documentTitle: string)
 }
 
 async function openPinnedLegacyGrading(page: Page) {
-  await openSubmissionViaDocumentTitle(page, 'DP QA pinned legacy submission');
+  await openDocumentsTab(page);
+  const legacyRow = page
+    .getByRole('row')
+    .filter({ hasText: /DP QA pinned legacy/i })
+    .first();
+  if (!(await legacyRow.count())) {
+    throw new Error('DP QA pinned legacy row missing (re-run preview DP seed)');
+  }
+  await legacyRow.click({ timeout: 60_000 });
+  await page.waitForURL(/\/app\/submissions\//, { timeout: 60_000 });
+  await page.waitForLoadState('networkidle');
   const engagementTrigger = page.getByRole('button', {
     name: /^Engagement with Prompt/i,
   });
   await engagementTrigger.waitFor({ timeout: 60_000 });
   await engagementTrigger.click();
-  await page.getByText('NOT HANDED IN').waitFor({ timeout: 60_000 });
-  await page.getByText('ALL IN').waitFor({ timeout: 60_000 });
+  await page.getByText('Not Present').waitFor({ timeout: 60_000 });
+  await page.getByText('Excellent').waitFor({ timeout: 60_000 });
 }
 
 async function openSwapPersistenceSpecG(page: Page) {
@@ -148,9 +158,11 @@ try {
   await rubricLibrarySelect.scrollIntoViewIfNeeded();
   await rubricLibrarySelect.waitFor({ state: 'visible', timeout: 60_000 });
   await rubricLibrarySelect.click();
-  await page.getByRole('option', { name: /daily-pages-engagement/i }).waitFor({
-    timeout: 60_000,
-  });
+  await page
+    .getByRole('option', { name: /Daily Pages engagement/i })
+    .waitFor({
+      timeout: 60_000,
+    });
   await page.getByText(/daily-pages-short-form/i).count().then((n) => {
     if (n > 0) throw new Error('short-form rubric visible in picker');
   });
@@ -160,13 +172,34 @@ try {
   await shot(page, 'a-admin-rubric-picker');
 
   await devLogin(page, teacherEmail);
+  await page.goto(`${baseUrl}/app/assignment-types`);
+  await page.waitForLoadState('networkidle');
+  const classStarterTypeHref = await page
+    .locator('a[href*="/app/assignment-types/"]')
+    .filter({ hasText: /^Class Starter$/i })
+    .first()
+    .getAttribute('href')
+    .catch(() => null);
+  if (classStarterTypeHref) {
+    await devLogin(page, adminEmail);
+    const classStarterTypeId = classStarterTypeHref.split('/').pop();
+    if (classStarterTypeId) {
+      await page.goto(
+        `${baseUrl}/app/admin/assignment-types/${classStarterTypeId}`
+      );
+      await rubricLibrarySelect.scrollIntoViewIfNeeded();
+      await rubricLibrarySelect.waitFor({ state: 'visible', timeout: 60_000 });
+      await shot(page, 'a2-class-starter-admin-rubric');
+    }
+    await devLogin(page, teacherEmail);
+  }
   await page.goto(`${baseUrl}/app/assignment-types/${dailyPagesTypeId}`);
   await page
     .getByRole('heading', { name: 'About Daily Pages' })
     .waitFor({ timeout: 60_000 });
   await page.getByRole('button', { name: 'How it is graded' }).click();
   await page
-    .getByText(/Graded on engagement in four tiers/i)
+    .getByRole('row', { name: /Excellent/i })
     .waitFor({ timeout: 60_000 });
   await shot(page, 'b-daily-pages-about');
 
@@ -174,9 +207,11 @@ try {
   await page.getByRole('menuitem', { name: 'Assignment' }).click();
   await page.getByRole('dialog').waitFor();
   await page.getByRole('button', { name: 'Change', exact: true }).click();
-  await page.getByLabel(/Point value/i).fill('12');
-  await page.getByText(/Not Present/i).waitFor({ timeout: 60_000 });
-  await page.getByText(/Excellent/i).waitFor({ timeout: 60_000 });
+  const createDialog = page.getByRole('dialog');
+  await createDialog.getByLabel(/Point value/i).fill('12');
+  await createDialog
+    .getByTestId('assignment-create-engagement-bands')
+    .waitFor({ timeout: 60_000 });
   await shot(page, 'c-create-12pt');
   await page.getByRole('button', { name: 'Cancel' }).click();
 

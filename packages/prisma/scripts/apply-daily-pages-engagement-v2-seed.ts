@@ -288,6 +288,51 @@ export async function seedDpConsolidationQaPreviewFixtures(
     });
   }
 
+  const pinnedDocTitle = 'DP QA pinned legacy submission';
+  const existingPinnedDoc = await prisma.document.findFirst({
+    where: { title: pinnedDocTitle, assignmentId: pinnedAssignment.id },
+    select: { id: true },
+  });
+  if (!existingPinnedDoc) {
+    const classAssignment = await prisma.classAssignment.findFirstOrThrow({
+      where: { assignmentId: pinnedAssignment.id, classId: klass.id },
+      select: { id: true },
+    });
+    const submissionId = randomUUID();
+    const text =
+      'Pinned legacy QA entry. I wrote about the kitchen table where we ate breakfast.';
+    await prisma.document.create({
+      data: {
+        id: submissionId,
+        title: pinnedDocTitle,
+        text,
+        html: `<p>${text}</p>`,
+        membershipId: student.id,
+        assignmentTypeId: dailyPagesType.id,
+        assignmentId: pinnedAssignment.id,
+        classAssignmentId: classAssignment.id,
+      },
+    });
+    await prisma.submission.create({
+      data: {
+        id: submissionId,
+        documentId: submissionId,
+        html: `<p>${text}</p>`,
+        text,
+        title: pinnedDocTitle,
+        submittedAt: new Date(),
+        gradedAt: new Date(),
+        gradedByMembershipId: teacher.id,
+        overallScore: 20,
+        score: '20/30',
+        overallComment: 'Legacy tier labels preserved on pinned revision.',
+        rubricScores: {
+          engagement_with_prompt: { score: 20, comment: '', isAi: true },
+        },
+      },
+    });
+  }
+
   const swapTitle = 'DP QA Swap Persistence (Preview)';
   let swapAssignment = await prisma.assignment.findFirst({
     where: { title: swapTitle, assignmentTypeId: dailyPagesType.id },
