@@ -7,6 +7,27 @@ const createdOrgIds: string[] = [];
 
 afterAll(async () => {
   try {
+    if (createdOrgIds.length === 0) return;
+    const memberships = await prisma.orgMembership.findMany({
+      where: { organizationId: { in: createdOrgIds } },
+      select: { id: true, userId: true },
+    });
+    const userIds = [...new Set(memberships.map((m) => m.userId))];
+    const classIds = (
+      await prisma.class.findMany({
+        where: { school: { organizationId: { in: createdOrgIds } } },
+        select: { id: true },
+      })
+    ).map((c) => c.id);
+
+    await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
+    await prisma.password.deleteMany({ where: { userId: { in: userIds } } });
+    await prisma.orgMembership.deleteMany({
+      where: { organizationId: { in: createdOrgIds } },
+    });
+    await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.class.deleteMany({ where: { id: { in: classIds } } });
+    await prisma.school.deleteMany({ where: { organizationId: { in: createdOrgIds } } });
     await prisma.organization.deleteMany({ where: { id: { in: createdOrgIds } } });
     await prisma.$disconnect();
   } catch {

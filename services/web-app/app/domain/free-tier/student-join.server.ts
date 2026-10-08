@@ -156,28 +156,28 @@ export async function registerFreeTierStudent({
     };
   }
 
-  const taken = await prisma.user.findFirst({
-    where: { username: usernameResult.username },
-    select: { id: true },
-  });
-  if (taken) {
-    const suggestions = await suggestAvailableUsernames(usernameResult.username);
-    return {
-      status: 'error' as const,
-      field: 'username' as const,
-      error: 'This handle is already taken.',
-      suggestions,
-    };
-  }
-
   const hashedPassword = await getPasswordHash(password);
   try {
     const membership = await prisma.$transaction(async (tx) => {
+      // Serialize concurrent sign-ups for the same handle so one succeeds and the
+      // other gets a username conflict instead of both racing past a pre-check.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${usernameResult.username}))`;
+
       const seat = await assertFreeClassSeatAvailableInTx(tx, {
         classId: klass.id,
         organizationId: klass.school.organizationId,
       });
       throwIfSeatCheckFailed(seat);
+
+      const takenInTx = await tx.user.findFirst({
+        where: { username: usernameResult.username },
+        select: { id: true },
+      });
+      if (takenInTx) {
+        throw Object.assign(new Error('username_taken'), {
+          code: 'USERNAME_TAKEN',
+        });
+      }
 
       return tx.orgMembership.create({
         data: {
@@ -219,7 +219,12 @@ export async function registerFreeTierStudent({
         formLevel: true as const,
       };
     }
-    if (isUsernameUniqueViolation(error)) {
+    if (
+      isUsernameUniqueViolation(error) ||
+      (error &&
+        typeof error === 'object' &&
+        (error as { code?: string }).code === 'USERNAME_TAKEN')
+    ) {
       const suggestions = await suggestAvailableUsernames(usernameResult.username);
       return {
         status: 'error' as const,

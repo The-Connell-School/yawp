@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   class: { findMany: mock(), findFirst: mock(), update: mock() },
@@ -6,6 +6,7 @@ const prisma = {
   orgMembership: { create: mock(), findFirst: mock() },
   session: { create: mock(), deleteMany: mock() },
   password: { upsert: mock() },
+  $executeRaw: mock(async () => undefined),
   $transaction: mock(),
 };
 
@@ -14,6 +15,10 @@ mock.module('~/utils/auth.server', () => ({
   getPasswordHash: async () => 'hash',
   getSessionExpirationDateForUser: () => new Date('2030-01-01'),
 }));
+
+afterAll(() => {
+  mock.restore();
+});
 
 const {
   findFreeTierClassesByCode,
