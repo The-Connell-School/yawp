@@ -3,14 +3,18 @@ import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 
 describe('sanitizeFreeTierEmailLogPayload', () => {
   const prev = process.env.YAWP_ENVIRONMENT;
+  const prevDbTests = process.env.FREE_TIER_DB_TESTS;
 
   afterEach(() => {
     if (prev === undefined) delete process.env.YAWP_ENVIRONMENT;
     else process.env.YAWP_ENVIRONMENT = prev;
+    if (prevDbTests === undefined) delete process.env.FREE_TIER_DB_TESTS;
+    else process.env.FREE_TIER_DB_TESTS = prevDbTests;
   });
 
   test('strips signed URLs outside preview/dev', () => {
     process.env.YAWP_ENVIRONMENT = 'production';
+    delete process.env.FREE_TIER_DB_TESTS;
     expect(
       sanitizeFreeTierEmailLogPayload({
         approveUrl: 'https://yawp.school/free/admin/approve?t=secret',
@@ -27,7 +31,6 @@ describe('sanitizeFreeTierEmailLogPayload', () => {
       approveUrl: 'https://yawp.test/free/admin/approve?t=x',
     };
     expect(sanitizeFreeTierEmailLogPayload(payload)).toEqual(payload);
-    delete process.env.FREE_TIER_DB_TESTS;
   });
 
   test('keeps URLs in preview for QA manifest', () => {
