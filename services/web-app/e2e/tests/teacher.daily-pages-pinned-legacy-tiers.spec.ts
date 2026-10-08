@@ -1,6 +1,5 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { createDeployedAssignment } from '../db-helpers';
 import type { E2EContext } from '../seed-e2e';
 import legacySchema from '../../app/domain/rubrics/library/daily-pages-engagement-v1.fixture.json' with {
   type: 'json',
@@ -9,31 +8,44 @@ import legacySchema from '../../app/domain/rubrics/library/daily-pages-engagemen
 async function seedPinnedLegacyDailyPagesWork(e2eContext: E2EContext) {
   const prisma = createE2EPrismaClient();
   try {
+    const rubricName = `assignment-type:${e2eContext.dailyPagesAssignmentTypeId}`;
+    const stamp = Date.now();
     const revision = await prisma.rubricRevision.create({
       data: {
-        id: `legacy-pin-${Date.now()}`,
-        rubricName: 'daily-pages-engagement',
+        id: `legacy-pin-${stamp}`,
+        rubricName,
         version: 99_001,
         schemaJson: legacySchema,
-        fingerprint: `legacy-pin-${Date.now()}`,
-        requestId: `legacy-pin-${Date.now()}`,
-        requestHash: `legacy-pin-${Date.now()}`,
+        fingerprint: `legacy-pin-${stamp}`,
+        requestId: `legacy-pin-${stamp}`,
+        requestHash: `legacy-pin-${stamp}`,
         createdBy: 'e2e',
-        reason: `assignment-type:${e2eContext.dailyPagesAssignmentTypeId}`,
+        reason: rubricName,
       },
       select: { id: true },
     });
-    const { assignment, classAssignment } = await createDeployedAssignment({
-      prisma,
-      classId: e2eContext.classId,
-      assignmentTypeId: e2eContext.dailyPagesAssignmentTypeId,
-      title: `Pinned legacy Daily Pages ${Date.now()}`,
-      prompt: 'Describe a place that matters to you.',
-      pointValue: 30,
+
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE "Assignment" DISABLE TRIGGER "internal_assignment_rubric_pin"'
+    );
+    const assignment = await prisma.assignment.create({
+      data: {
+        assignmentTypeId: e2eContext.dailyPagesAssignmentTypeId,
+        title: `Pinned legacy Daily Pages ${stamp}`,
+        prompt: 'Describe a place that matters to you.',
+        pointValue: 30,
+        rubricRevisionId: revision.id,
+      },
     });
-    await prisma.assignment.update({
-      where: { id: assignment.id },
-      data: { rubricRevisionId: revision.id },
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE "Assignment" ENABLE TRIGGER "internal_assignment_rubric_pin"'
+    );
+
+    const classAssignment = await prisma.classAssignment.create({
+      data: {
+        assignmentId: assignment.id,
+        classId: e2eContext.classId,
+      },
     });
     const text = 'My grandmother’s kitchen still smells like cinnamon.';
     const html = `<p>${text}</p>`;

@@ -15,11 +15,10 @@ test.describe.serial('Daily Pages engagement tiers at 12 points', () => {
     await page.getByRole('menuitem', { name: 'Assignment' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
 
+    await page.getByRole('button', { name: 'Change', exact: true }).click();
     const pointField = page.getByLabel(/Point value/i);
     await pointField.fill('12');
     await expect(pointField).toHaveValue('12');
-
-    await page.getByRole('button', { name: 'Change', exact: true }).click();
     await expect(page.getByText(/Not Present/i)).toBeVisible();
     await expect(page.getByText(/0.?7/)).toBeVisible();
     await expect(page.getByText(/Needs More/i)).toBeVisible();

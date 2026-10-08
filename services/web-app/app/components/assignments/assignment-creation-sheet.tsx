@@ -57,6 +57,10 @@ import {
   assignmentTypeUsesDailyPagesEngagementRubric,
   MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL,
 } from '~/domain/assignment-types/daily-pages-engagement-rubric';
+import {
+  dailyPagesEngagementTierBands,
+  formatDailyPagesEngagementBandRange,
+} from '~/domain/assignment-types/daily-pages-engagement-tier-bands';
 
 function writingTimeFieldValue(minutes: number | null | undefined): string {
   return typeof minutes === 'number' && minutes > 0 ? String(minutes) : '';
@@ -436,12 +440,31 @@ export function AssignmentCreationSheetContent({
   const selectedAssignmentType = assignmentTypes.find(
     (type) => type.id === assignmentTypeId
   );
-  const minimumPointValue = assignmentTypeUsesDailyPagesEngagementRubric({
-    kind: selectedAssignmentType?.kind,
-    rubricName: selectedAssignmentType?.rubricName,
-  })
+  const usesDailyPagesEngagementRubric =
+    assignmentTypeUsesDailyPagesEngagementRubric({
+      kind: selectedAssignmentType?.kind,
+      rubricName: selectedAssignmentType?.rubricName,
+    });
+  const minimumPointValue = usesDailyPagesEngagementRubric
     ? MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL
     : 1;
+  const engagementBandPreview = useMemo(() => {
+    if (!usesDailyPagesEngagementRubric || !gradingPanelOpen) return null;
+    const parsed = Number.parseInt(pointValue, 10);
+    if (!Number.isSafeInteger(parsed) || parsed < minimumPointValue) {
+      return null;
+    }
+    try {
+      return dailyPagesEngagementTierBands(parsed);
+    } catch {
+      return null;
+    }
+  }, [
+    gradingPanelOpen,
+    minimumPointValue,
+    pointValue,
+    usesDailyPagesEngagementRubric,
+  ]);
   const paragraphModeOptions = enabledParagraphModes();
   const selectedParagraphMode = getParagraphMode(paragraphMode);
   const hasFixedClass = Boolean(fixedClassId);
@@ -987,6 +1010,26 @@ export function AssignmentCreationSheetContent({
                         : ' The rubric keeps its own scale either way.'}
                     </p>
                   </div>
+
+                  {engagementBandPreview ? (
+                    <div
+                      className="space-y-2"
+                      data-testid="assignment-create-engagement-bands"
+                    >
+                      <p className="text-sm font-medium">Engagement tiers</p>
+                      <ul className="space-y-1 text-sm text-muted-foreground">
+                        {engagementBandPreview.map((band) => (
+                          <li key={band.tier}>
+                            <span className="font-medium text-foreground">
+                              {band.label}
+                            </span>
+                            {' — '}
+                            {formatDailyPagesEngagementBandRange(band)} points
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
 
                   {/* Scoring behavior is now fixed to bands; UI selector removed */}
 

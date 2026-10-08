@@ -118,6 +118,7 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
     await expect(page.getByTestId('grading-overall-comment')).toBeVisible();
 
     await engagementScore.click();
+    await expect(page.getByRole('listbox')).toBeVisible();
     for (const label of [
       'Excellent',
       'Good',
