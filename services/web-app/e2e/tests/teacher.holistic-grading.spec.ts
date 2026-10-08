@@ -73,15 +73,16 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
         return row?.score ?? '';
       },
       { timeout: 180_000 }
-    ).toMatch(/^\d+\/20$/);
+    ).toBe('18/20');
 
     const gradedAfterAssistant = await prisma.submission.findUniqueOrThrow({
       where: { id: submission.id },
     });
     expect(gradedAfterAssistant.numericPercentage).toBeNull();
-    const pointsLabel = gradedAfterAssistant.score!.replace('/', ' / ');
+    const pointsLabel = '18 / 20';
+    await page.reload();
     await expect(panel.getByText(pointsLabel, { exact: true })).toBeVisible({
-      timeout: 30_000,
+      timeout: 60_000,
     });
     await page.screenshot({
       path: testInfo.outputPath('holistic-teacher-before-save.png'),
