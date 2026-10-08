@@ -10,14 +10,19 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import {
+  enterPreviewAccess,
+  runLoginSmoke,
+} from '../scripts/preview/smoke-login.mjs';
 
 const BASE = process.env.PREVIEW_BASE_URL?.replace(/\/$/, '');
 const ACCESS_CODE = process.env.PREVIEW_ACCESS_CODE?.trim();
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'qa', 'handle-password-screens');
 
-const TEACHER_EMAIL = 'preview.free-classroom@yawp.local';
-const TEACHER_PASSWORD = 'yawp-dev';
+const TEACHER_EMAIL =
+  process.env.PREVIEW_TEACHER_EMAIL?.trim() || 'dev.teacher@yawp.local';
+const TEACHER_PASSWORD = process.env.PREVIEW_TEACHER_PASSWORD ?? 'yawp-dev';
 const EMAIL_STUDENT = process.env.PREVIEW_EMAIL_STUDENT?.trim() || 'preview-student-0001@example.test';
 const EMAIL_STUDENT_PASSWORD = process.env.PREVIEW_EMAIL_STUDENT_PASSWORD ?? 'yawp-dev';
 
@@ -27,25 +32,72 @@ async function shot(page, name) {
   console.log('saved', path);
 }
 
-async function passPreviewGate(page) {
-  if (!ACCESS_CODE) throw new Error('PREVIEW_ACCESS_CODE is required');
-  await page.goto(`${BASE}/auth/preview-access`, { waitUntil: 'domcontentloaded' });
-  const codeInput = page.getByLabel(/access code/i);
-  if (await codeInput.isVisible().catch(() => false)) {
-    await codeInput.fill(ACCESS_CODE);
-    await page.getByRole('button', { name: /continue|submit|enter/i }).click();
-  } else {
-    await page.goto(`${BASE}/?code=${ACCESS_CODE}`, { waitUntil: 'domcontentloaded' });
-  }
-  await page.waitForTimeout(1500);
+function cookieHeaderToPlaywright(cookieHeader, url) {
+  const { hostname } = new URL(url);
+  return cookieHeader
+    .split('; ')
+    .filter(Boolean)
+    .map((pair) => {
+      const eq = pair.indexOf('=');
+      const name = pair.slice(0, eq);
+      const value = pair.slice(eq + 1);
+      return { name, value, domain: hostname, path: '/' };
+    });
 }
 
-async function login(page, identifier, password) {
-  await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
-  await page.getByLabel(/email or handle/i).fill(identifier);
-  await page.getByLabel(/^password$/i).fill(password);
-  await page.getByRole('button', { name: /^log in$/i }).click();
-  await page.waitForURL(/\/app/, { timeout: 90_000 });
+async function passPreviewGate(context) {
+  if (!ACCESS_CODE) throw new Error('PREVIEW_ACCESS_CODE is required');
+  const accessCookie = await enterPreviewAccess({
+    baseUrl: BASE,
+    accessCode: ACCESS_CODE,
+  });
+  await context.addCookies(cookieHeaderToPlaywright(accessCookie, BASE));
+}
+
+async function loginWithPassword(context, email, password) {
+  await runLoginSmoke({
+    baseUrl: BASE,
+    email,
+    password,
+    accessCode: ACCESS_CODE,
+  });
+  const accessCookie = await enterPreviewAccess({
+    baseUrl: BASE,
+    accessCode: ACCESS_CODE,
+  });
+  const form = new URLSearchParams({
+    email,
+    password,
+    redirectTo: '/app',
+  }).toString();
+  const res = await fetch(`${BASE}/auth/login`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      cookie: accessCookie,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: form,
+  });
+  const setCookie = res.headers.getSetCookie?.() ?? [];
+  const authPairs = setCookie.map((c) => c.split(';')[0]).filter(Boolean);
+  const all = [...cookieHeaderToPlaywright(accessCookie, BASE)];
+  for (const pair of authPairs) {
+    const eq = pair.indexOf('=');
+    all.push({
+      name: pair.slice(0, eq),
+      value: pair.slice(eq + 1),
+      domain: new URL(BASE).hostname,
+      path: '/',
+    });
+  }
+  await context.clearCookies();
+  await context.addCookies(all);
+}
+
+async function login(page, context, identifier, password) {
+  await loginWithPassword(context, identifier, password);
+  await page.goto(`${BASE}/app`, { waitUntil: 'networkidle' });
 }
 
 async function joinStudent(page, joinUrl, { name, handle, password }) {
@@ -72,38 +124,50 @@ async function main() {
   const dupHandle = studentHandle;
 
   try {
-    await passPreviewGate(page);
+    await passPreviewGate(context);
+    await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
     await shot(page, '00-preview-gate-passed.png');
 
-    await login(page, TEACHER_EMAIL, TEACHER_PASSWORD);
+    await login(page, context, TEACHER_EMAIL, TEACHER_PASSWORD);
     await shot(page, '01-teacher-logged-in.png');
 
     await page.goto(`${BASE}/app/my-classes`, { waitUntil: 'networkidle' });
     await shot(page, '02-teacher-my-classes.png');
 
-    const createBtn = page.getByRole('button', { name: /create class|new class/i }).first();
-    if (await createBtn.isVisible().catch(() => false)) {
-      await createBtn.click();
-      await page.getByLabel(/class code|code/i).first().fill(`P${run}`.slice(0, 8).toUpperCase());
-      const save = page.getByRole('button', { name: /create|save/i }).first();
-      await save.click();
-      await page.waitForTimeout(2000);
-    }
-    await shot(page, '03-teacher-class-created.png');
-
-    await page.goto(`${BASE}/app/my-classes`, { waitUntil: 'networkidle' });
-    const classLink = page.getByRole('link', { name: /FREEPRV|P\d/i }).first();
+    const classLink = page.locator('a[href*="/app/my-classes/"]').first();
     await classLink.click();
+    await shot(page, '03-teacher-opened-class.png');
     await page.waitForURL(/\/app\/my-classes\//);
     await page.getByRole('tab', { name: /students/i }).click().catch(() => {});
     await shot(page, '04-teacher-student-join-link.png');
 
-    const joinLink = await page.locator('a[href*="/join?t="]').first().getAttribute('href');
-    const joinUrl = joinLink?.startsWith('http') ? joinLink : `${BASE}${joinLink}`;
+    const joinHref =
+      (await page.locator('a[href*="/join?t="]').first().getAttribute('href').catch(() => null)) ||
+      process.env.PREVIEW_JOIN_PATH?.trim() ||
+      null;
+    const joinUrl = joinHref
+      ? joinHref.startsWith('http')
+        ? joinHref
+        : `${BASE}${joinHref}`
+      : null;
 
     const studentCtx = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 900 } });
     const studentPage = await studentCtx.newPage();
-    await passPreviewGate(studentPage);
+    await passPreviewGate(studentCtx);
+
+    if (!joinUrl) {
+      console.warn('No student join link on this class; set PREVIEW_JOIN_PATH for free-tier join QA.');
+      await studentCtx.close();
+      const emailCtx = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 900 } });
+      const emailPage = await emailCtx.newPage();
+      await passPreviewGate(emailCtx);
+      await login(emailPage, emailCtx, EMAIL_STUDENT, EMAIL_STUDENT_PASSWORD);
+      await shot(emailPage, '09-email-student-login.png');
+      await login(page, context, TEACHER_EMAIL, TEACHER_PASSWORD);
+      await shot(page, '10-teacher-email-login.png');
+      await emailCtx.close();
+      return;
+    }
 
     await joinStudent(studentPage, joinUrl, {
       name: 'Preview Handle Student',
@@ -122,7 +186,7 @@ async function main() {
     await shot(studentPage, '06-duplicate-handle-rejected.png');
 
     await studentPage.goto(`${BASE}/auth/logout`).catch(() => {});
-    await login(studentPage, studentHandle, studentPassword);
+    await login(studentPage, studentCtx, studentHandle, studentPassword);
     await shot(studentPage, '07-handle-student-login.png');
 
     const cookies = await studentCtx.cookies();
@@ -143,19 +207,19 @@ async function main() {
 
     const emailCtx = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 900 } });
     const emailPage = await emailCtx.newPage();
-    await passPreviewGate(emailPage);
-    await login(emailPage, EMAIL_STUDENT, EMAIL_STUDENT_PASSWORD);
+    await passPreviewGate(emailCtx);
+    await login(emailPage, emailCtx, EMAIL_STUDENT, EMAIL_STUDENT_PASSWORD);
     await shot(emailPage, '09-email-student-login.png');
 
     await page.bringToFront();
     await page.goto(`${BASE}/auth/logout`).catch(() => {});
-    await login(page, TEACHER_EMAIL, TEACHER_PASSWORD);
+    await login(page, context, TEACHER_EMAIL, TEACHER_PASSWORD);
     await shot(page, '10-teacher-email-login.png');
 
     const cap = Number(process.env.CLASS_FULL_FILL_COUNT ?? '35');
     const fullCtx = await browser.newContext({ ignoreHTTPSErrors: true });
     const fullPage = await fullCtx.newPage();
-    await passPreviewGate(fullPage);
+    await passPreviewGate(fullCtx);
     for (let i = 0; i < cap; i += 1) {
       await joinStudent(fullPage, joinUrl, {
         name: `Fill ${i}`,
@@ -164,7 +228,7 @@ async function main() {
       });
       if (!(await fullPage.url().includes('/app'))) break;
       await fullPage.goto(`${BASE}/auth/logout`).catch(() => {});
-      await passPreviewGate(fullPage);
+      await passPreviewGate(fullCtx);
     }
     await joinStudent(fullPage, joinUrl, {
       name: 'One Too Many',
