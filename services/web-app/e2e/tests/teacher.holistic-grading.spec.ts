@@ -102,6 +102,35 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
       await expect(
         panel.getByTestId('submission-lifecycle-release')
       ).toBeVisible({ timeout: 30_000 });
+
+      await panel.getByTestId('submission-lifecycle-edit').click();
+      const pointsInput = page.getByTestId('grading-overall-points');
+      await expect(pointsInput).toBeVisible({ timeout: 15_000 });
+      await pointsInput.fill('6');
+      await pointsInput.blur();
+      await panel.getByTestId('submission-lifecycle-save').click();
+      await expect
+        .poll(
+          async () => {
+            const row = await prisma.submission.findUnique({
+              where: { id: submission.id },
+              select: {
+                score: true,
+                numericPercentage: true,
+                letterGrade: true,
+              },
+            });
+            return row;
+          },
+          { timeout: 60_000 }
+        )
+        .toMatchObject({
+          score: '6/20',
+          numericPercentage: null,
+          letterGrade: null,
+        });
+      await expect(page.getByText(/\d+\s*%/)).not.toBeVisible();
+      await expect(page.getByText(/\(F\)/i)).not.toBeVisible();
       await page.screenshot({
         path: testInfo.outputPath('holistic-teacher-after-save.png'),
         fullPage: true,
@@ -123,7 +152,7 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
       expect(aiMeta.scoringMode).toBe('holistic_tier');
       expect(graded.numericPercentage).toBeNull();
       expect(graded.letterGrade).toBeNull();
-      expect(graded.score).toMatch(/^\d+\/20$/);
+      expect(graded.score).toBe('6/20');
       expect((aiMeta.holistic as Record<string, unknown>).totalPoints).toBe(20);
     } finally {
       await prisma.$disconnect();
@@ -138,7 +167,7 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
     test.setTimeout(120_000);
     await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto(`/app/submissions/${holisticSubmissionId}`);
-    await expect(page.getByText(/\d+\s*\/\s*20/)).toBeVisible();
+    await expect(page.getByText(/6\s*\/\s*20/)).toBeVisible();
     await expect(page.getByText(/\d+\s*%/)).not.toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('holistic-student-view.png'),
@@ -156,7 +185,7 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
     await page.goto(
       `/app/my-classes/${holisticClassId}?tab=documents&status=released`
     );
-    await expect(page.getByText(/18\s*\/\s*20/)).toBeVisible();
+    await expect(page.getByText(/6\s*\/\s*20/)).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('holistic-gradebook-row.png'),
       fullPage: true,

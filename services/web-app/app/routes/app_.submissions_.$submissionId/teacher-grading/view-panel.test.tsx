@@ -166,6 +166,31 @@ describe('ViewPanel on work that is not for a grade', () => {
     expect(text()).not.toContain('Reflection');
   });
 
+  it('hides percent and letter for holistic tier even when stored on the row', () => {
+    render(
+      <ViewPanel
+        submission={{
+          numericPercentage: 30,
+          letterGrade: 'F',
+          overallScore: 6,
+          score: '6/20',
+          overallComment: null,
+          rubricScores: {},
+          rubricConfig: {
+            minScore: 0,
+            maxScore: 20,
+            scoringMode: 'holistic_tier',
+          },
+          document: { assignment: { submitForGrade: true, pointValue: 20 } },
+        }}
+      />
+    );
+
+    expect(text()).toContain('6 / 20');
+    expect(text()).not.toContain('30%');
+    expect(text()).not.toContain('(F)');
+  });
+
   it('shows legacy percentage grades as points out of 100', () => {
     render(
       <ViewPanel

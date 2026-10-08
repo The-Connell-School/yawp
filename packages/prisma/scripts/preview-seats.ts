@@ -364,6 +364,10 @@ export async function seedCollaborationDemoForSeat(
   }
 
   // Top-up: Cristo Rey holistic tier assignment type + 20-point demo submission.
+  // PR previews only — not the long-lived demo box on first seed (see seatTopUpEnabled).
+  if (!seatTopUpEnabled()) {
+    return;
+  }
   try {
     const teacherEmail = seat.personas.find((p) => p.key === 'teacher')?.email;
     const studentEmail = seat.personas.find((p) => p.key === 'student')?.email;

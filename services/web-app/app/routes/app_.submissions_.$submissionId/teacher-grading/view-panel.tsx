@@ -6,6 +6,10 @@ import {
 } from '~/components/ui/accordion';
 import { formatAssignmentGrade, formatPointGrade } from '~/domain/grading/gradeMath';
 import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
+import {
+  isHolisticTierScoringMode,
+  scoringModeFromAiMeta,
+} from '~/domain/grading/scoring-mode';
 import { isScored } from '~/domain/grading/rubric-display';
 import { getCategoryScoreBand } from '~/domain/assignment-types/rubric-category-options';
 import type { RubricScoreBand } from '~/domain/assignment-types/assignment-type-rubric.shared';
@@ -27,12 +31,14 @@ export type ViewPanelSubmission = {
   rubricConfig?: {
     minScore: number;
     maxScore: number;
+    scoringMode?: 'weighted_categories' | 'holistic_tier';
     categories?: {
       key: string;
       label?: string;
       bands?: RubricScoreBand[];
     }[];
   } | null;
+  aiMeta?: unknown;
   document?: {
     assignment?: {
       submitForGrade: boolean;
@@ -151,12 +157,15 @@ export function ViewPanel({
     (entry) => entry.band != null || showsGrade || entry.comment?.trim()
   );
 
+  const holisticTier =
+    isHolisticTierScoringMode(submission.rubricConfig?.scoringMode) ||
+    scoringModeFromAiMeta(submission.aiMeta) === 'holistic_tier';
   const percentageDisplay =
-    submission.numericPercentage != null
-      ? `${submission.numericPercentage}%${
+    holisticTier || submission.numericPercentage == null
+      ? null
+      : `${submission.numericPercentage}%${
           submission.letterGrade ? ` (${submission.letterGrade})` : ''
-        }`
-      : null;
+        }`;
 
   return (
     <div className="p-4 space-y-4">

@@ -1,17 +1,29 @@
 SET lock_timeout = '5s';
 
+SELECT set_config('yawp.rubric_revision_actor', 'migration:holistic-tier-hornbuckle', true);
+SELECT set_config(
+  'yawp.rubric_revision_reason',
+  'Opt in Cristo Rey Hornbuckle in-class essay type to holistic tier scoring (PR #411)',
+  true
+);
+
 -- Opt-in holistic tier scoring for Mr. Hornbuckle's in-class essay/analysis assignment type.
--- Store the mode alongside the grading output schema JSON so it is captured
--- by the AssignmentType baseline trigger and versioned in RubricRevision.
--- Idempotent: safe when an older out-of-order migration name already applied this row.
+-- Idempotent: skips rows that already store scoringMode holistic_tier; skips non-object JSON.
 UPDATE "AssignmentType"
 SET "gradingOutputSchemaJson" =
-  COALESCE("gradingOutputSchemaJson", '{}'::jsonb)
-  || jsonb_build_object('scoringMode', 'holistic_tier')
+  CASE
+    WHEN "gradingOutputSchemaJson" IS NULL THEN
+      jsonb_build_object('scoringMode', 'holistic_tier')
+    ELSE
+      "gradingOutputSchemaJson" || jsonb_build_object('scoringMode', 'holistic_tier')
+  END
 WHERE id = 'cmur0glku00d401l1cg6ou25q'
-  AND NOT (
-    COALESCE("gradingOutputSchemaJson", '{}'::jsonb)
-    @> '{"scoringMode": "holistic_tier"}'::jsonb
+  AND (
+    "gradingOutputSchemaJson" IS NULL
+    OR (
+      jsonb_typeof("gradingOutputSchemaJson") = 'object'
+      AND NOT ("gradingOutputSchemaJson" @> '{"scoringMode": "holistic_tier"}'::jsonb)
+    )
   );
 
 RESET lock_timeout;

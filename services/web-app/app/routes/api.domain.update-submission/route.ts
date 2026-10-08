@@ -15,6 +15,12 @@ import {
   submissionAuditValuesEqual,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
+import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import {
+  isHolisticTierScoringMode,
+  scoringModeFromAiMeta,
+} from '~/domain/grading/scoring-mode';
+import { assignmentPointTotal } from '~/domain/grading/gradeMath';
 
 const UNSUBMITTED_BEFORE_GRADED_MESSAGE =
   'This submission was unsubmitted before you could grade it. Please refresh the page.';
@@ -89,6 +95,7 @@ export async function action({ request }: ActionFunctionArgs) {
       document: {
         select: {
           membershipId: true,
+          assignmentTypeId: true,
           membership: {
             select: {
               userId: true,
@@ -115,6 +122,7 @@ export async function action({ request }: ActionFunctionArgs) {
           },
           assignment: {
             select: {
+              id: true,
               submitForGrade: true,
               pointValue: true,
             },
@@ -273,6 +281,38 @@ export async function action({ request }: ActionFunctionArgs) {
       data.gradedAt = new Date();
     }
     data.gradedByMembershipId = gradeActorMembershipId;
+  }
+
+  const assignmentTypeId = submission.document.assignmentTypeId;
+  let holisticTier = scoringModeFromAiMeta(submission.aiMeta) === 'holistic_tier';
+  if (assignmentTypeId) {
+    const gradingConfig = await resolveAssignmentTypeGradingConfig({
+      assignmentTypeId,
+      assignmentId: submission.document.assignment?.id ?? undefined,
+    });
+    holisticTier =
+      isHolisticTierScoringMode(gradingConfig.scoringMode) || holisticTier;
+  }
+  if (holisticTier) {
+    data.numericPercentage = null;
+    data.letterGrade = null;
+    const pointValue = submission.document.assignment?.pointValue;
+    const total = assignmentPointTotal(pointValue, 100);
+    const earned =
+      typeof data.overallScore === 'number' && Number.isFinite(data.overallScore)
+        ? Math.round(data.overallScore)
+        : typeof submission.overallScore === 'number'
+          ? Math.round(submission.overallScore)
+          : null;
+    if (earned !== null) {
+      data.overallScore = earned;
+      data.score = `${earned}/${total}`;
+    } else if (
+      typeof data.score === 'string' &&
+      !/^\s*\d+\s*\/\s*\d+\s*$/.test(data.score)
+    ) {
+      data.score = submission.score;
+    }
   }
 
   const activityChanges = buildSubmissionActivityChanges({

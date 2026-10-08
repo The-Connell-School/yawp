@@ -43,6 +43,7 @@ import {
   type RubricScore,
 } from '~/domain/grading/rubric-display';
 import { rubricScaleGradeFieldsFromScores } from '~/domain/grading/recorded-grade';
+import { isHolisticTierScoringMode } from '~/domain/grading/scoring-mode';
 import {
   getCategoryScoreLabel,
   getCategoryScoreBounds,
@@ -283,6 +284,8 @@ export function TeacherGradingPanel({
     );
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
   const isRawPoints = isPointsScaleScoringType(activeRubricConfig.scoringType) || activeRubricConfig.scoringType === 'act_writing_2_12';
+  const isHolisticTier = isHolisticTierScoringMode(activeRubricConfig.scoringMode);
+  const suppressPercentAndLetter = isRawPoints || isHolisticTier;
   const computedNumericPercentage = useMemo(() => {
     if (isRawPoints) return null;
     // A rubric whose categories declare bands is already scored as a
@@ -607,11 +610,13 @@ export function TeacherGradingPanel({
 
     const trimmedPercent = effectivePercentStr.trim();
     const rawPercent = Number(trimmedPercent);
-    const percent = isRawPoints ? null : manualScaleScore !== null && scaleScoreOutOf !== null
-      ? Math.round(manualScaleScore / scaleScoreOutOf * 100) :
-      trimmedPercent !== '' && Number.isFinite(rawPercent)
-        ? Math.max(0, Math.min(100, Math.round(rawPercent)))
-        : null;
+    const percent = suppressPercentAndLetter
+      ? null
+      : manualScaleScore !== null && scaleScoreOutOf !== null
+        ? Math.round(manualScaleScore / scaleScoreOutOf * 100)
+        : trimmedPercent !== '' && Number.isFinite(rawPercent)
+          ? Math.max(0, Math.min(100, Math.round(rawPercent)))
+          : null;
     const letter = percent === null ? null : letterFromPercent(percent);
 
     // What the teacher's own scores are worth on this rubric's scale. Raw
@@ -663,8 +668,13 @@ export function TeacherGradingPanel({
     if (derivedScaleScore !== null && scaleScoreOutOf !== null) {
       payload.overallScore = derivedScaleScore;
       payload.score = `${derivedScaleScore}/${scaleScoreOutOf}`;
-      payload.numericPercentage = percent;
-      payload.letterGrade = letter;
+      if (!suppressPercentAndLetter) {
+        payload.numericPercentage = percent;
+        payload.letterGrade = letter;
+      } else {
+        payload.numericPercentage = null;
+        payload.letterGrade = null;
+      }
     } else if (scaled) {
       payload.overallScore = scaled.earned;
       payload.score = `${scaled.earned}/${scaled.possible}`;
@@ -826,8 +836,11 @@ export function TeacherGradingPanel({
   const saveDraft = useCallback(() => saveAllRef.current(), []);
 
   const buildSavedGradeSnapshot = useCallback((): SavedGradeSnapshot => {
-    const percent = isRawPoints ? null : manualScaleScore !== null
-      ? Math.round(manualScaleScore / scaleScoreOutOf * 100) : resolvedNumericPercentage;
+    const percent = suppressPercentAndLetter
+      ? null
+      : manualScaleScore !== null
+        ? Math.round(manualScaleScore / scaleScoreOutOf * 100)
+        : resolvedNumericPercentage;
     const letter = percent === null ? null : letterFromPercent(percent);
     const scaleScore =
       manualScaleScore ??
@@ -849,7 +862,7 @@ export function TeacherGradingPanel({
     };
   }, [
     existingGrade?.score,
-    isRawPoints,
+    suppressPercentAndLetter,
     manualScaleScore,
     overallComment,
     resolvedNumericPercentage,

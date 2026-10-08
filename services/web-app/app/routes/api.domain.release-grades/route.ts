@@ -15,6 +15,7 @@ import {
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
+import { scoringModeFromAiMeta } from '~/domain/grading/scoring-mode';
 
 const POST = z.object({
   submissionIds: z.preprocess(
@@ -238,30 +239,36 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const releasedSubs = await prisma.submission.findMany({
       where: { id: { in: requestedSubmissionIds } },
-      select: { id: true, numericPercentage: true, score: true },
+      select: {
+        id: true,
+        numericPercentage: true,
+        score: true,
+        aiMeta: true,
+      },
     });
     for (const s of releasedSubs) {
-      // LTI passback only: when a submission stores points-only (X/Y) with no
-      // numericPercentage, derive a percent for the mock AGS endpoint.
-      const pct =
-        typeof s.numericPercentage === 'number'
-          ? s.numericPercentage
-          : (() => {
-              const m =
-                typeof s.score === 'string'
-                  ? /^\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*$/.exec(
-                      s.score
-                    )
-                  : null;
-              if (!m) return null;
-              const earned = Number(m[1]);
-              const possible = Number(m[2]);
-              return Number.isFinite(earned) &&
-                Number.isFinite(possible) &&
-                possible > 0
-                ? Math.round((earned / possible) * 100)
-                : null;
-            })();
+      // LTI passback only: holistic grades store points-only; derive a percent
+      // for the mock AGS endpoint from X/Y when numericPercentage is absent.
+      let pct: number | null =
+        typeof s.numericPercentage === 'number' ? s.numericPercentage : null;
+      if (
+        pct == null &&
+        scoringModeFromAiMeta(s.aiMeta) === 'holistic_tier' &&
+        typeof s.score === 'string'
+      ) {
+        const m = /^\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*$/.exec(s.score);
+        if (m) {
+          const earned = Number(m[1]);
+          const possible = Number(m[2]);
+          if (
+            Number.isFinite(earned) &&
+            Number.isFinite(possible) &&
+            possible > 0
+          ) {
+            pct = Math.round((earned / possible) * 100);
+          }
+        }
+      }
       if (pct == null) continue;
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       maybePostGradeToBlackboard({ numericPercentage: pct });
