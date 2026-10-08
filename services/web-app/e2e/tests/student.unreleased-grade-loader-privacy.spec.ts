@@ -83,7 +83,9 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
     ).text();
 
     expect(submissionHtml).toContain('80 / 100');
-    expect(submissionData).toMatch(/\\"numericPercentage\\",80\b|"numericPercentage"\s*:\s*80\b/);
+    // Single-fetch `.data` uses turbo JSON (`"overallScore",80`), not HTML stream escaping.
+    expect(submissionData).toMatch(/"overallScore",80\b/);
+    expect(submissionData).toContain(gradePrivacy.releaseComment);
     expect(submissionHtml).toContain(gradePrivacy.releaseComment);
   });
 });
