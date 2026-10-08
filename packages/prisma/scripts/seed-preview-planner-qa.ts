@@ -286,14 +286,19 @@ export async function seedPreviewPlannerQa(
       title: exitAssignment.title ?? '[QA] Exit ticket',
       text: responseText,
       html: responseHtml,
-      ownerMembershipId: student.id,
+      membershipId: student.id,
+      assignmentId: exitAssignment.id,
+      classAssignmentId: PREVIEW_PLANNER_QA_IDS.exitTicketClassAssignmentId,
     },
     create: {
       id: PREVIEW_PLANNER_QA_IDS.exitTicketDocumentId,
+      assignmentTypeId: exitTicketType.id,
       title: exitAssignment.title ?? '[QA] Exit ticket',
       text: responseText,
       html: responseHtml,
-      ownerMembershipId: student.id,
+      membershipId: student.id,
+      assignmentId: exitAssignment.id,
+      classAssignmentId: PREVIEW_PLANNER_QA_IDS.exitTicketClassAssignmentId,
     },
   });
 
