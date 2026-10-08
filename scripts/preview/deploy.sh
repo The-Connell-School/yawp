@@ -178,15 +178,11 @@ load_or_create_access_config() {
   )"
   # A retained seat map may be larger than a subsequently lowered count. Never
   # orphan one of those worlds on a reset; seed through the full retained map.
-  PREVIEW_SEAT_COUNT="$(
-    docker run --rm \
-      -e PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" \
-      -e PREVIEW_ACCESS_MASTER_ORGANIZATION_ID="$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID" \
-      -v "$SOURCE_DIR:/app:ro" \
-      -w /app \
-      oven/bun:1.3.1 \
-      bun scripts/preview/provisioned-seat-count.mjs
-  )"
+  # Count from deploy tooling on the host (SCRIPT_DIR), not the PR checkout — older
+  # open PRs may lack older checkout-only seat-count helpers and must still preview-deploy.
+  # shellcheck source=scripts/preview/resolve-provisioned-seat-count.sh
+  source "$SCRIPT_DIR/resolve-provisioned-seat-count.sh"
+  PREVIEW_SEAT_COUNT="$(resolve_provisioned_preview_seat_count)"
 
   if [[ -z "${PREVIEW_ACCESS_SECRET:-}" ]]; then
     if [[ -s "$ACCESS_SECRET_FILE" ]]; then
