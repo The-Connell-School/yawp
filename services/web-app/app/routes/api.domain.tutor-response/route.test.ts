@@ -336,7 +336,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
 
     expect(prisma.assignmentModuleSession.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        include: expect.objectContaining({
+        select: expect.objectContaining({
           document: {
             select: expect.objectContaining({
               assignment: {
@@ -800,7 +800,7 @@ describe('api.domain.tutor-response authorization', () => {
 
     requireMutableRequest.mockResolvedValue(undefined);
     requireUserId.mockResolvedValue('user-b');
-    requireMembership.mockResolvedValue({ id: 'profile-b', role: 'STUDENT' });
+    requireMembership.mockResolvedValue({ id: 'profile-b', role: 'STUDENT', organization: { id: 'org-1' } });
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
     getLLMCompletion.mockResolvedValue('Try tightening your thesis.');
 

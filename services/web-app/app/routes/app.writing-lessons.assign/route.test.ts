@@ -121,7 +121,9 @@ describe('writing-lessons assign action', () => {
     expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
   });
 
-  test('rejects composition lessons while their rollout flag is off', async () => {
+  // Composition was enabled for all orgs in #389; the old env rollout flag no
+  // longer gates assignment.
+  test('assigns composition lessons even when the retired rollout flag is off', async () => {
     process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
 
     const result = (await run({
@@ -132,9 +134,8 @@ describe('writing-lessons assign action', () => {
       dueAt: '2026-09-01',
     })) as { success: boolean; message: string };
 
-    expect(result.success).toBe(false);
-    expect(result.message).toContain('Composition practice is not enabled');
-    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(createWritingPracticeAssignmentForClasses).toHaveBeenCalledTimes(1);
   });
 
   test('rejects a class the teacher does not own', async () => {

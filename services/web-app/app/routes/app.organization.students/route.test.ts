@@ -16,7 +16,7 @@ mock.module('~/domain/collaboration/student-roster.server', () => ({
   replaceStudentClassRoster,
 }));
 
-const prisma = {
+const prisma: Record<string, any> = {
   class: {
     findFirst: mock(),
     findMany: mock(),
@@ -29,6 +29,10 @@ const prisma = {
     update: mock(),
     create: mock(),
   },
+  // Enrollment runs through the free-tier seat-cap choke point, which takes row
+  // locks inside a transaction. The stub runs the callback against itself.
+  $queryRaw: mock(async () => [{ id: 'locked-row' }]),
+  $transaction: mock(async (run: (tx: unknown) => unknown) => run(prisma)),
 };
 
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -60,7 +64,10 @@ describe('app.organization.students action', () => {
     prisma.orgMembership.findFirst.mockReset();
     prisma.orgMembership.create.mockReset();
 
-    prisma.class.findFirst.mockResolvedValue({ id: 'class-1' });
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      school: { organization: { plan: 'SCHOOL' } },
+    });
     replaceStudentClassRoster
       .mockReset()
       .mockResolvedValue({ id: 'student-1' });
@@ -137,7 +144,10 @@ describe('app.organization.students action', () => {
 
   test('bulk import still creates a new student from a name, email, password row', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
-    prisma.orgMembership.create.mockResolvedValue({ id: 'membership-2' });
+    prisma.orgMembership.create.mockResolvedValue({
+      id: 'membership-2',
+      userId: 'user-2',
+    });
 
     const result = (await action({
       request: createBulkImportRequest(
@@ -168,8 +178,13 @@ describe('app.organization.students action', () => {
           },
         },
         organization: { connect: { id: 'org-1' } },
-        classesAsStudent: { connect: { id: 'class-1' } },
       },
+      select: { id: true, userId: true },
+    });
+    // Class enrollment happens afterwards through the seat-cap choke point.
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith({
+      where: { id: 'membership-2' },
+      data: { classesAsStudent: { connect: { id: 'class-1' } } },
     });
   });
 });

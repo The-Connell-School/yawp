@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
-const prisma = { llmLog: { create: mock() } };
+const prisma = {
+  llmLog: { create: mock() },
+  aiUsageDecisionLog: { create: mock(async () => ({})) },
+  // The PDF limiter and single-flight lease both run one raw statement that
+  // returns a row when the caller may proceed.
+  $queryRawUnsafe: mock(async () => [{ ok: 1, lease: 'lease-1' }]),
+};
 const requireUserId = mock();
 const requireMembership = mock();
 const messagesCreate = mock();
@@ -40,7 +46,11 @@ describe('api.ap-history.extract-document', () => {
     requireMembership.mockReset();
     messagesCreate.mockReset();
     requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1' },
+    });
     prisma.llmLog.create.mockResolvedValue({ id: 'log-1' });
   });
 

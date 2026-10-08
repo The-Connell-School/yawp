@@ -305,9 +305,15 @@ const prisma: any = {
     },
     findFirst: async ({ where }: any) => {
       const row = CLASSES.find((c) => classMatches(where, c));
-      return row ? { id: row.id } : null;
+      // The seat-cap choke point reads the owning organization's plan.
+      return row
+        ? { id: row.id, school: { organization: { plan: 'SCHOOL' } } }
+        : null;
     },
   },
+  // Enrollment takes row locks inside a transaction; run it against this stub.
+  $queryRaw: async () => [{ id: 'locked-row' }],
+  $transaction: async (run: (tx: unknown) => unknown) => run(prisma),
   document: {
     findFirst: async ({ where }: any) => {
       const row = DOCS.find((d) => docMatches(where, d));

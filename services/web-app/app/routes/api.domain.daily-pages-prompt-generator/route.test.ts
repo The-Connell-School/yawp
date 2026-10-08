@@ -14,6 +14,16 @@ mock.module('~/utils/getLLMCompletion', () => ({
   },
   getLLMCompletion,
 }));
+// The route charges a Postgres-backed token bucket before calling the model.
+// Keep the rest of the module real (module mocks are global to the run) and
+// let only the generator limit through, so these tests never touch a database
+// or exhaust a real per-teacher bucket.
+const realRateLimit = { ...(await import('~/utils/rate-limit.server')) };
+const enforceTeacherGeneratorLimits = mock(async () => ({ allowed: true }));
+mock.module('~/utils/rate-limit.server', () => ({
+  ...realRateLimit,
+  enforceTeacherGeneratorLimits,
+}));
 
 const { action } = await import('./route');
 
@@ -46,7 +56,11 @@ describe('api.domain.daily-pages-prompt-generator', () => {
     getLLMCompletion.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1' },
+    });
   });
 
   test('returns the reply and drafted options from the model', async () => {

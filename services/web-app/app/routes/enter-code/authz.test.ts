@@ -21,9 +21,13 @@ import {
   type ScopedClass,
 } from '~/utils/testing/where-eval';
 
-const prisma = {
+const prisma: Record<string, any> = {
   class: { findMany: mock(), findFirst: mock() },
   orgMembership: { update: mock() },
+  // Enrollment runs through the free-tier seat-cap choke point, which takes row
+  // locks inside a transaction. The stub runs the callback against itself.
+  $queryRaw: mock(async () => [{ id: 'locked-row' }]),
+  $transaction: mock(async (run: (tx: unknown) => unknown) => run(prisma)),
 };
 
 const requireUserId = mock();
@@ -89,7 +93,10 @@ function classRow(klass: ScopedClass) {
     schoolYear: '2024-2025',
     period: null,
     grade: null,
-    school: { name: `school-${klass.organizationId}` },
+    school: {
+      name: `school-${klass.organizationId}`,
+      organization: { plan: 'SCHOOL' as const },
+    },
     teachers: [{ user: { name: 'Teacher' } }],
   };
 }

@@ -266,7 +266,9 @@ describe('app index loader assignments', () => {
     expect(practice.classLabel.title).toBe('English 10');
   });
 
-  test('hides Composition assignments while their rollout flag is off', async () => {
+  // Composition was enabled for all orgs in #389; the old env rollout flag no
+  // longer hides Composition assignments.
+  test('shows Composition assignments even when the retired rollout flag is off', async () => {
     process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
     getAssignedPracticeForStudent.mockResolvedValue([
       {
@@ -304,10 +306,12 @@ describe('app index loader assignments', () => {
       data.writingPracticeAssignments.map(
         (assignment: { id: string }) => assignment.id
       )
-    ).toEqual(['grammar-assignment']);
+    ).toEqual(['grammar-assignment', 'composition-assignment']);
   });
 
-  test('does not load assigned writing practice while the organization flag is off', async () => {
+  // Writing Practice org gating was removed in #389; the retired
+  // writingPracticeEnabled column no longer hides assigned practice.
+  test('loads assigned writing practice even when the retired organization flag is off', async () => {
     requireMembership.mockResolvedValue({
       id: 'profile-1',
       role: 'STUDENT',
@@ -326,8 +330,8 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(getAssignedPracticeForStudent).not.toHaveBeenCalled();
-    expect(data.writingPracticeAssignments).toEqual([]);
+    expect(getAssignedPracticeForStudent).toHaveBeenCalledWith('profile-1');
+    expect(Array.isArray(data.writingPracticeAssignments)).toBe(true);
   });
 
   test('keeps all teacher classes navigable while scoping assignment data to available classes', async () => {

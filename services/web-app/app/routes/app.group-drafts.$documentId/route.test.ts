@@ -375,6 +375,15 @@ describe('app.group-drafts.$documentId loader', () => {
     });
 
     describe('drafting individual grades', () => {
+      beforeEach(() => {
+        // The drafting call attributes AI usage to the teacher's organization (#404).
+        requireMembership.mockResolvedValue({
+          id: 'teacher-1',
+          role: 'TEACHER',
+          organization: { id: 'org-1' },
+        });
+      });
+
       test('returns suggestions without recording any grade', async () => {
         // The whole safety argument: the assistant fills the teacher's form and
         // stops. Saving is still their press.

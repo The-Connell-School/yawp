@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { matchesOwnerWhere } from '~/utils/testing/where-eval';
 
 const prisma = {
-  user: { findFirst: mock() },
+  user: { findFirst: mock(), findUnique: mock() },
   orgMembership: { findUnique: mock(), findFirst: mock(), findMany: mock(), count: mock() },
   session: { findUnique: mock() },
   class: { findMany: mock() },
@@ -59,6 +59,7 @@ function arrange(activeMembershipId: string) {
     get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
   });
   prisma.session.findUnique.mockResolvedValue({ user: { id: 'user-1' } });
+  prisma.user.findUnique.mockResolvedValue({ mustChangePassword: false });
   getMembershipId.mockResolvedValue(activeMembershipId);
 
   const active = twoOrgUser.memberships.find((m) => m.id === activeMembershipId)!;

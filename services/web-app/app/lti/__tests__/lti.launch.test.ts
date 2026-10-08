@@ -95,9 +95,42 @@ describe('/lti/launch', () => {
       'cookie',
       'yawp_lti_state=s2; yawp_lti_nonce=n2; yawp_lti_client=yawp-blackboard-mock'
     );
+    // With the preview access gate on and no session, the launch hands off to
+    // dev-login instead (covered below); the plain redirect is the gate-off path.
+    process.env.PREVIEW_ACCESS_GATE = 'off';
+    try {
+      const res = await loader({ request: req, params: {} } as any);
+      expect(res.status).toBe(302);
+      expect(res.headers.get('location')).toBe('https://app.test/app');
+    } finally {
+      process.env.PREVIEW_ACCESS_GATE = fixtureEnv.PREVIEW_ACCESS_GATE;
+    }
+  });
+
+  test('hands a sessionless preview launch to dev-login', async () => {
+    const payload = {
+      iss: 'https://blackboard.com',
+      aud: 'yawp-blackboard-mock',
+      nonce: 'n3',
+      'https://purl.imsglobal.org/spec/lti/claim/message_type':
+        'LtiResourceLinkRequest',
+      'https://purl.imsglobal.org/spec/lti/claim/target_link_uri':
+        'https://app.test/app',
+      'https://purl.imsglobal.org/spec/lti/claim/roles': [
+        'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+      ],
+    };
+    const req = formPost('https://app.test/lti/launch', {
+      id_token: unsignedIdToken(payload),
+      state: 's3',
+    });
+    req.headers.set(
+      'cookie',
+      'yawp_lti_state=s3; yawp_lti_nonce=n3; yawp_lti_client=yawp-blackboard-mock'
+    );
     const res = await loader({ request: req, params: {} } as any);
-    expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('https://app.test/app');
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('dev.teacher@yawp.local');
   });
 });
 

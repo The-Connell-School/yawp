@@ -30,6 +30,9 @@ const actualReactRouter = await import('react-router');
 mock.module('react-router', () => ({
   ...actualReactRouter,
   useFetcher: () => fetcher,
+  // The panel reads the root loader for the Lesson Planner flag; there is no
+  // data router here, so answer as the root would with the flag off.
+  useRouteLoaderData: () => undefined,
 }));
 
 import type { ClassInsight } from './class-insights-panel';

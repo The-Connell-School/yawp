@@ -19,6 +19,7 @@ const {
   HOW_ITS_GRADED_HEADING,
   HOW_TO_USE,
   HOW_TO_USE_HEADING,
+  howToUse,
   PROMPT_REWRITES,
   REGISTER_NOTE,
   PROMPT_WARNINGS,
@@ -171,7 +172,9 @@ describe('the Daily Pages about section', () => {
     renderAbout();
     const body = openSection(HOW_TO_USE_HEADING);
 
-    for (const item of HOW_TO_USE) {
+    // Rendered with the writing-conditions flag at its default (off), so the
+    // paragraph-type and writing-time items are left out (#408).
+    for (const item of howToUse(false)) {
       expect(body.textContent).toContain(item);
     }
   });

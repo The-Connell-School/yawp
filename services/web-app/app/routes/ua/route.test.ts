@@ -13,6 +13,8 @@ const setMembershipId = mock();
 mock.module('~/utils/auth.server', () => ({ getUserId, requireUserId }));
 mock.module('~/utils/ua-partner.server', () => ({
   commitUaPartnerContext,
+  // No UA_PARTNER_HOSTNAME in tests, so the entry never redirects to a canonical host.
+  getCanonicalUaUrl: () => null,
   getUaPartnerCodeCapture,
   getUaPartnerContext,
   isValidUaPartnerCode,
