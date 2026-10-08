@@ -537,8 +537,13 @@ export async function seedDpConsolidationQaPreviewFixtures(
 
 if (import.meta.main) {
   const prisma = createPrismaClient();
+  const includePreviewQaFixtures =
+    process.env.YAWP_INCLUDE_DP_PREVIEW_QA === '1' ||
+    process.env.LOCAL_DEV_INCLUDE_DP_QA_FIXTURES === 'true';
   try {
-    const result = await applyDailyPagesEngagementV2Seed(prisma);
+    const result = await applyDailyPagesEngagementV2Seed(prisma, {
+      includePreviewQaFixtures,
+    });
     console.log(JSON.stringify(result, null, 2));
   } finally {
     await prisma.$disconnect();
