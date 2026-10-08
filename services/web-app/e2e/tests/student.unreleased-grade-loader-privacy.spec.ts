@@ -40,21 +40,24 @@ function expectNoGradedAtInDocumentLoader(
   submissionId: string
 ) {
   const route = getRouteLoaderData(loaderData, 'app_.documents_.$id');
-  const lists: Record<string, unknown>[][] = [];
-  if (Array.isArray(route.submissions)) {
-    lists.push(route.submissions as Record<string, unknown>[]);
+  expect(route.doc).toBeTruthy();
+  const rows = findObjectsWithId(route, submissionId);
+  expect(rows.length).toBeGreaterThan(0);
+  for (const row of rows) {
+    expect(row.gradedAt).toBeUndefined();
   }
-  const doc = route.doc;
-  if (doc && typeof doc === 'object' && Array.isArray((doc as { submissions?: unknown }).submissions)) {
-    lists.push(
-      (doc as { submissions: Record<string, unknown>[] }).submissions
+  const topList = route.submissions as Record<string, unknown>[];
+  expect(Array.isArray(topList)).toBe(true);
+  expect(topList.some((row) => row.id === submissionId)).toBe(true);
+  expect(topList.find((row) => row.id === submissionId)?.gradedAt).toBeUndefined();
+
+  const docSubmissions = (route.doc as Record<string, unknown>).submissions;
+  if (Array.isArray(docSubmissions)) {
+    const nestedRow = (docSubmissions as Record<string, unknown>[]).find(
+      (row) => row.id === submissionId
     );
-  }
-  expect(lists.length).toBe(2);
-  for (const list of lists) {
-    const row = list.find((entry) => entry.id === submissionId);
-    expect(row).toBeTruthy();
-    expect(row!.gradedAt).toBeUndefined();
+    expect(nestedRow).toBeTruthy();
+    expect(nestedRow!.gradedAt).toBeUndefined();
   }
 }
 
@@ -85,11 +88,19 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
     });
     expect(submission.comments).toEqual([]);
 
+    const documentHtml = await (
+      await page.request.get(
+        `/app/documents/${gradePrivacy.documentId}?revise=1`
+      )
+    ).text();
     const documentDataText = await (
       await page.request.get(
         `/app/documents/${gradePrivacy.documentId}.data?revise=1`
       )
     ).text();
+    const gradedAtWire = /"gradedAt",\["D",|\\"gradedAt\\",\["D",/;
+    expect(documentHtml).not.toMatch(gradedAtWire);
+    expect(documentDataText).not.toMatch(gradedAtWire);
     const documentLoader = decodeRouterDataResponse(documentDataText);
     expectNoGradedAtInDocumentLoader(
       documentLoader,
