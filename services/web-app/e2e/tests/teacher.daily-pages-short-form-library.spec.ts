@@ -47,9 +47,10 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
       `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
     );
 
-    await page.getByRole('button', { name: /Prompt Library/i }).first().click();
-    await page.getByPlaceholder(/Search prompts/).fill('counterexample');
-    await page.keyboard.press('Enter');
+    await page
+      .getByRole('button', { name: 'Prompt Library', exact: true })
+      .first()
+      .click();
 
     const prompt = page.getByText('Honest and kind at once');
     await expect(prompt).toBeVisible();

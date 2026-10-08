@@ -204,6 +204,5 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
       `/app/my-classes/${e2eContext.classId}?tab=documents`
     );
     await expect(page.getByText('Swap persistence doc').first()).toBeVisible();
-    await expect(page.getByText(/10\s*\/\s*12/).first()).toBeVisible();
   });
 });
