@@ -1,4 +1,5 @@
 import { prisma } from '~/utils/db.server';
+import { readLiveRubricOutputOptionsForAssignmentType } from '~/domain/rubrics/rubric-output-options.server';
 import {
   gradingAssistantRubricInstructions,
   gradingAssistantScoreScaleInstructions,
@@ -350,6 +351,10 @@ export function buildResolvedAssignmentTypeGradingConfig({
   const usesProductionThesis =
     row?.selectedRubricName === THESIS_DRIVEN_ESSAY_RUBRIC_NAME &&
     !row?.internalAuthoredRevision;
+  const libraryOutputSchemaJson =
+    usesProductionThesis && isRecord(row?.gradingOutputSchemaJson)
+      ? row.gradingOutputSchemaJson
+      : null;
   const parsedConfig = parseAssignmentTypeRubricConfig({
     assignmentTypeKind: usesProductionThesis
       ? null
@@ -463,7 +468,9 @@ export function buildResolvedAssignmentTypeGradingConfig({
       scoringType,
     },
     promptConfigSnapshot,
-    outputSchemaSnapshot: parsedConfig.outputSchema,
+    outputSchemaSnapshot: libraryOutputSchemaJson
+      ? { ...parsedConfig.outputSchema, ...libraryOutputSchemaJson }
+      : parsedConfig.outputSchema,
     calibrationNotes: parsedConfig.calibrationNotes,
     sourceTemplateId:
       parsedConfig.source === 'assignment-type'
@@ -541,7 +548,7 @@ export async function resolveAssignmentTypeGradingConfig({
     rubric: { name: revision.rubricName, schemaJson: revision.schemaJson },
     ...(internalAuthoredRevision ? { internalAuthoredRevision: true } : {}),
   } : assignmentType;
-  return buildResolvedAssignmentTypeGradingConfig({
+  const resolved = buildResolvedAssignmentTypeGradingConfig({
     assignmentTypeId,
     assignmentTypeKind,
     assignmentTypeTitle,
@@ -557,6 +564,17 @@ export async function resolveAssignmentTypeGradingConfig({
     rubricTotalPoints: assignmentRubricTotalPoints,
     gradingMode: assignmentGradingMode,
   });
+  const liveOutput = await readLiveRubricOutputOptionsForAssignmentType(
+    prisma,
+    assignmentTypeId
+  );
+  if (liveOutput) {
+    resolved.outputSchemaSnapshot = {
+      ...resolved.outputSchemaSnapshot,
+      teacherNotesEnabled: liveOutput.teacherNotesEnabled,
+    };
+  }
+  return resolved;
 }
 
 /**

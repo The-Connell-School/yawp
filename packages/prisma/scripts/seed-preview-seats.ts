@@ -22,6 +22,10 @@ import {
   seedPreviewPlannerQa,
 } from './seed-preview-planner-qa';
 import { ensureLessonPlannerEnabledForDemo } from './local-dev/seed-lesson-planner-feature-flag';
+import {
+  seedPreviewTeacherNotesQa,
+  shouldRunPreviewTeacherNotesQaSeed,
+} from './seed-preview-teacher-notes-qa';
 
 assertLocalSeedTarget();
 
@@ -56,6 +60,13 @@ try {
   await seedApHistoryLibrary(prisma, seats[0].organizationId);
   await attachApHistorySourceImages(prisma);
   await applyDailyPagesEngagementV2Seed(prisma);
+  if (shouldRunPreviewTeacherNotesQaSeed()) {
+    try {
+      await seedPreviewTeacherNotesQa(prisma);
+    } catch (error) {
+      console.error('seed-preview-teacher-notes-qa: failed (non-fatal)', error);
+    }
+  }
   for (const seat of seats) {
     const result = results.find(
       ({ organizationId }) => organizationId === seat.organizationId

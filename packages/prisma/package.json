@@ -34,6 +34,7 @@
     "seed-grading-evaluations": "bun run scripts/seed-grading-evaluations.ts",
     "sync-prod-fidelity-fixtures": "bun run scripts/sync-prod-fidelity-fixtures.ts",
     "seed-preview-seats": "bun run scripts/seed-preview-seats.ts",
+    "seed-preview-teacher-notes-qa": "bun run scripts/seed-preview-teacher-notes-qa.ts",
     "seed-preview-planner-qa": "bun run scripts/seed-preview-planner-qa.ts",
     "ensure-class-insights-local": "bun run scripts/local-dev/ensure-class-insights-enabled.ts",
     "fixtures:export-prod-fidelity": "bun run scripts/export-prod-fidelity-fixtures.ts",
