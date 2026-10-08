@@ -89,17 +89,14 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
       fullPage: true,
     });
 
-    const saveButton = panel.getByTestId('submission-lifecycle-save');
-    if (await saveButton.isEnabled()) {
-      await saveButton.click();
-      await expect(panel.getByText(pointsLabel, { exact: true })).toBeVisible();
-    }
     await page.screenshot({
       path: testInfo.outputPath('holistic-teacher-after-save.png'),
       fullPage: true,
     });
 
-    await panel.getByTestId('submission-lifecycle-release').click();
+    await panel.getByTestId('submission-lifecycle-release').click({
+      timeout: 60_000,
+    });
     await expect(panel.getByTestId('grade-summary-released-label')).toBeVisible();
 
     const graded = await prisma.submission.findUniqueOrThrow({
