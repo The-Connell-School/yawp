@@ -80,7 +80,9 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     });
     expect(gradedAfterAssistant.numericPercentage).toBeNull();
     const pointsLabel = '18 / 20';
-    await page.reload();
+    await expect(generateButton).toContainText('Grading Assistant Suggestions', {
+      timeout: 120_000,
+    });
     await expect(panel.getByText(pointsLabel, { exact: true })).toBeVisible({
       timeout: 60_000,
     });
@@ -89,15 +91,23 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
       fullPage: true,
     });
 
+    await panel.getByTestId('submission-lifecycle-cancel').click();
+    await expect(panel.getByTestId('submission-lifecycle-release')).toBeVisible({
+      timeout: 30_000,
+    });
     await page.screenshot({
       path: testInfo.outputPath('holistic-teacher-after-save.png'),
       fullPage: true,
     });
 
-    await panel.getByTestId('submission-lifecycle-release').click({
-      timeout: 60_000,
+    await panel.getByTestId('submission-lifecycle-release').click();
+    const releaseDialog = page.getByRole('alertdialog', {
+      name: /release grade/i,
     });
-    await expect(panel.getByTestId('grade-summary-released-label')).toBeVisible();
+    await releaseDialog.getByRole('button', { name: /^release$/i }).click();
+    await expect(panel.getByTestId('grade-summary-released-label')).toBeVisible({
+      timeout: 30_000,
+    });
 
     const graded = await prisma.submission.findUniqueOrThrow({
       where: { id: submission.id },
