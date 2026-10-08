@@ -27,6 +27,12 @@ const OPEN_PATHS = new Set([
   // Stripe cannot present the human preview-access cookie. The route itself
   // remains protected by Stripe's signed webhook secret.
   '/api/stripe/webhook',
+  // Yawp Internal publishes rubrics to every environment, demo included. These
+  // routes require YAWP_MANAGEMENT_SERVICE_KEY themselves.
+  '/api/internal/v1/rubric-catalog',
+  '/api/internal/v1/rubric-catalog/item',
+  '/api/internal/v1/rubric-catalog/stage',
+  '/api/internal/v1/rubric-catalog/versions',
   '/lti/jwks',
   PREVIEW_ACCESS_PATH,
   `${PREVIEW_ACCESS_PATH}.data`,
