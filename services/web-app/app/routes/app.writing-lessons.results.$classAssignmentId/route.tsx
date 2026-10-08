@@ -136,7 +136,6 @@ export default function WritingPracticeResultsRoute() {
     classLabel,
     title,
     lessonTitles,
-    hasComposition,
     problemCount,
     dueAt,
     results,
@@ -221,9 +220,11 @@ export default function WritingPracticeResultsRoute() {
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
-                        {hasComposition && row.masteredCount > 0 ? (
-                          <span className="hidden items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-900 sm:inline-flex">
-                            {row.masteredCount} mastered
+                        {/* Still working: how far they've got, beside the
+                            score below. */}
+                        {!row.completed && row.attemptCount > 0 ? (
+                          <span className="hidden text-xs text-muted-foreground sm:inline">
+                            {row.attemptCount} answered
                           </span>
                         ) : null}
                         {row.latestStatus ? (
@@ -239,8 +240,13 @@ export default function WritingPracticeResultsRoute() {
                             )}
                           </span>
                         ) : null}
-                        <span className="text-base tabular-nums text-muted-foreground sm:text-sm">
-                          {row.attemptCount}/{problemCount}
+                        {/* The score: problems answered correctly. A written
+                            problem counts once the Tutor marks it Strong work. */}
+                        <span
+                          data-testid="student-progress-score"
+                          className="text-base tabular-nums text-muted-foreground sm:text-sm"
+                        >
+                          {row.masteredCount}/{problemCount} correct
                         </span>
                       </div>
                     </AccordionTrigger>

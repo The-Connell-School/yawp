@@ -158,10 +158,13 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     await expect(
       page.getByRole('heading', { name: /student progress/i })
     ).toBeVisible();
+    // One problem answered, none right yet: the written answer was never
+    // marked Strong work, so it doesn't count toward the score.
     const studentRow = page
       .getByTestId('student-progress-row')
-      .filter({ hasText: '1/3' });
+      .filter({ hasText: '1 answered' });
     await expect(studentRow).toBeVisible();
+    await expect(studentRow).toContainText('0/3 correct');
     await studentRow.click();
 
     const attempts = page.getByTestId('student-attempts');

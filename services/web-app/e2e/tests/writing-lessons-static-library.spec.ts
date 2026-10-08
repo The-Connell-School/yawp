@@ -435,7 +435,14 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       page.getByRole('heading', { name: /problem 2 of/i })
     ).toBeVisible();
 
-    // Teacher can see that the student has started (1 of 4 problems).
+    // The second question is another comma splice; leaving it unchanged is
+    // wrong, so the student has answered two and gotten one right.
+    await page.getByRole('radio', { name: /no change/i }).check();
+    await page.getByRole('button', { name: /check & save/i }).click();
+    await expect(page.getByTestId('act-result')).toBeVisible();
+    await expect(page.getByText(/2 of 4 done/i)).toBeVisible();
+
+    // The teacher sees the score, not just how many were answered.
     await page.request.post('/auth/logout');
     await page.context().clearCookies();
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
@@ -449,17 +456,22 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     ).toBeVisible();
     const studentRow = page
       .getByTestId('student-progress-row')
-      .filter({ hasText: '1/4' });
+      .filter({ hasText: '1/4 correct' });
     await expect(studentRow).toBeVisible();
+    await expect(studentRow).toContainText(/2 answered/i);
 
     // And can expand that student to read the exact answer and its feedback.
     await studentRow.click();
     const attempts = page.getByTestId('student-attempts');
     await expect(attempts).toBeVisible();
-    await expect(attempts.getByText(/their answer/i)).toBeVisible();
+    await expect(attempts.getByText(/their answer/i).first()).toBeVisible();
     // The teacher sees the exact choice the student picked, marked correct.
     await expect(attempts.getByText(/week; students/i)).toBeVisible();
     await expect(attempts.getByText('Correct', { exact: true })).toBeVisible();
+    // And the one they missed is marked as missed.
+    await expect(
+      attempts.getByText('Incorrect', { exact: true })
+    ).toBeVisible();
   });
 
   // KNOWN GAP, not a flake: writing practice is no longer an assignment type
