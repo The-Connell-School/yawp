@@ -249,12 +249,10 @@ describe('daily-pages-engagement migration (real Postgres)', () => {
     ) as string;
 
     psql(`
-      ALTER TABLE "Assignment" DISABLE TRIGGER "internal_assignment_rubric_pin";
       INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt")
       VALUES
         ('${NEW_DP_ASSIGNMENT_ID}', now(), now(), '${DAILY_PAGES_TYPE_ID}', 'New DP after migration'),
         ('${NEW_SJP_ASSIGNMENT_ID}', now(), now(), '${SJP_DAILY_PAGES_TYPE_ID}', 'New SJP after migration');
-      ALTER TABLE "Assignment" ENABLE TRIGGER "internal_assignment_rubric_pin";
     `);
 
     const afterReapply = jsonQuery(`
