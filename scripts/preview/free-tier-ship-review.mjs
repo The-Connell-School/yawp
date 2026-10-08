@@ -97,9 +97,9 @@ async function shot(page, name, manifest) {
   return file;
 }
 
-async function waitForJoinManifest(page, email) {
+async function pollJoinManifest(page, email, attempts = 40) {
   const normalized = email.trim().toLowerCase();
-  for (let attempt = 0; attempt < 25; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     try {
       const manifest = await fetchManifest(page, normalized);
       if (manifest.joinUrl) return manifest;
@@ -109,14 +109,23 @@ async function waitForJoinManifest(page, email) {
         throw error;
       }
     }
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1500);
   }
+  throw new Error(`joinUrl not in manifest for ${normalized}`);
+}
+
+async function releaseWaitlistEmail(page, email) {
+  const normalized = email.trim().toLowerCase();
   await page.goto(`${baseUrl}/app/admin/free-tier?view=waitlist`, { waitUntil: 'networkidle' });
   const row = page.locator('tr').filter({ hasText: normalized });
-  await row.locator('input[type="checkbox"]').check();
+  const checkbox = row.locator('input[type="checkbox"]');
+  if (await checkbox.count() === 0) {
+    throw new Error(`No waitlist row for ${normalized}`);
+  }
+  await checkbox.check();
   await page.getByRole('button', { name: /Release selected/i }).click();
   await page.waitForTimeout(3000);
-  return await fetchManifest(page, normalized);
+  return await pollJoinManifest(page, normalized);
 }
 
 async function fetchManifest(page, email) {
@@ -162,13 +171,19 @@ async function createBypassToken(adminPage) {
 async function redeemBypassToken(page, acqToken, teacherEmail) {
   await page.goto(`${baseUrl}/free?t=${encodeURIComponent(acqToken)}`);
   await page.waitForLoadState('networkidle');
-  await page.fill('input[name="name"]', 'Self Approval E2E');
+  await page.fill('input[name="name"]', 'Ship Review Flow');
   await page.fill('input[name="email"]', teacherEmail);
   await page.fill('input[name="schoolName"]', 'Ship Review High');
   await page.fill('input[name="location"]', 'Preview');
   await page.fill('input[name="gradeLevel"]', '11');
-  await page.getByRole('button', { name: /Continue/i }).click();
-  await page.waitForTimeout(2000);
+  await Promise.all([
+    page.waitForResponse(
+      (res) => res.url().includes('/free') && res.request().method() === 'POST',
+      { timeout: 30_000 }
+    ),
+    page.getByRole('button', { name: /Continue/i }).click(),
+  ]);
+  await page.waitForTimeout(1500);
 }
 
 async function main() {
@@ -200,13 +215,29 @@ async function main() {
       await page.goto(`${baseUrl}/app/admin/free-tier`);
       await page.waitForLoadState('networkidle');
       await shot(page, '02-operator-free-tier-admin', manifest);
-      await page.goto(`${baseUrl}/app/admin/free-tier?view=waitlist`, { waitUntil: 'networkidle' });
-      const releaseRow = page.locator('tr').filter({ hasText: RELEASE_EMAIL });
-      await releaseRow.locator('input[type="checkbox"]').check();
-      await page.getByRole('button', { name: /Release selected/i }).click();
-      await page.waitForTimeout(3000);
-      teacherFlowEmailResolved = RELEASE_EMAIL;
-      releaseManifest = await waitForJoinManifest(page, RELEASE_EMAIL);
+
+      releaseManifest = await fetchManifest(page, RELEASE_EMAIL).catch(() => null);
+      if (!releaseManifest?.joinUrl) {
+        await page.goto(`${baseUrl}/app/admin/free-tier?view=waitlist`, { waitUntil: 'networkidle' });
+        const releaseRow = page.locator('tr').filter({ hasText: RELEASE_EMAIL });
+        const hasWaitlistRow = await releaseRow.locator('input[type="checkbox"]').count();
+        if (hasWaitlistRow > 0) {
+          await releaseRow.locator('input[type="checkbox"]').check();
+          await page.getByRole('button', { name: /Release selected/i }).click();
+          await page.waitForTimeout(3000);
+          teacherFlowEmailResolved = RELEASE_EMAIL;
+          releaseManifest = await releaseWaitlistEmail(page, RELEASE_EMAIL);
+        } else {
+          const acqToken = await createBypassToken(page);
+          teacherFlowEmailResolved = teacherFlowEmail;
+          const redeem = await freshContext(browser);
+          await redeemBypassToken(redeem.page, acqToken, teacherFlowEmailResolved);
+          await redeem.context.close();
+          releaseManifest = await pollJoinManifest(page, teacherFlowEmailResolved, 60);
+        }
+      } else {
+        teacherFlowEmailResolved = RELEASE_EMAIL;
+      }
       await context.close();
     }
 
