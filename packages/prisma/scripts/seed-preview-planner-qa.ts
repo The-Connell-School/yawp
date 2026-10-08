@@ -49,29 +49,65 @@ export function assertPreviewPlannerQaTarget(databaseUrl = process.env.DATABASE_
 export async function seedPreviewPlannerQa(
   prisma: ReturnType<typeof createPrismaClient>
 ) {
-  const teacher = await prisma.orgMembership.findFirst({
+  let teacher = await prisma.orgMembership.findFirst({
     where: {
       role: 'TEACHER',
       isActive: true,
       user: { email: PREVIEW_PLANNER_QA_TEACHER_EMAIL },
     },
-    select: { id: true, organizationId: true },
+    select: {
+      id: true,
+      organizationId: true,
+      user: { select: { email: true } },
+    },
   });
   if (!teacher) {
-    console.log('preview planner QA: dev.teacher not found; skipping');
+    teacher = await prisma.orgMembership.findFirst({
+      where: { role: 'TEACHER', isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        organizationId: true,
+        user: { select: { email: true } },
+      },
+    });
+    if (teacher) {
+      console.log(
+        `preview planner QA: ${PREVIEW_PLANNER_QA_TEACHER_EMAIL} missing; using ${teacher.user.email}`
+      );
+    }
+  }
+  if (!teacher) {
+    console.log('preview planner QA: no active teacher; skipping');
     return { skipped: true as const };
   }
 
   await enableClassInsightsForOrganizations(prisma, [teacher.organizationId]);
 
-  const student = await prisma.orgMembership.findFirst({
+  let student = await prisma.orgMembership.findFirst({
     where: {
       role: 'STUDENT',
       isActive: true,
       user: { email: PREVIEW_PLANNER_QA_STUDENT_EMAIL },
     },
-    select: { id: true },
+    select: { id: true, user: { select: { email: true } } },
   });
+  if (!student) {
+    student = await prisma.orgMembership.findFirst({
+      where: {
+        role: 'STUDENT',
+        isActive: true,
+        organizationId: teacher.organizationId,
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, user: { select: { email: true } } },
+    });
+    if (student) {
+      console.log(
+        `preview planner QA: ${PREVIEW_PLANNER_QA_STUDENT_EMAIL} missing; using ${student.user.email}`
+      );
+    }
+  }
 
   const school = await prisma.school.findFirst({
     where: { organizationId: teacher.organizationId },
@@ -83,6 +119,18 @@ export async function seedPreviewPlannerQa(
     return { skipped: true as const };
   }
 
+  const devTeacherMembership = await prisma.orgMembership.findFirst({
+    where: {
+      role: 'TEACHER',
+      isActive: true,
+      user: { email: PREVIEW_PLANNER_QA_TEACHER_EMAIL },
+    },
+    select: { id: true },
+  });
+  const classTeacherIds = [
+    ...new Set([teacher.id, devTeacherMembership?.id].filter(Boolean)),
+  ];
+
   // Stable class id so preview QA URLs never drift when dev.teacher already
   // teaches another section on a preserved database.
   const klass = await prisma.class.upsert({
@@ -90,7 +138,7 @@ export async function seedPreviewPlannerQa(
     update: {
       title: '[QA] Lesson planner preview class',
       isArchived: false,
-      teachers: { connect: [{ id: teacher.id }] },
+      teachers: { connect: classTeacherIds.map((id) => ({ id })) },
       ...(student ? { students: { connect: [{ id: student.id }] } } : {}),
     },
     create: {
@@ -101,7 +149,7 @@ export async function seedPreviewPlannerQa(
       grade: '10',
       title: '[QA] Lesson planner preview class',
       schoolId: school.id,
-      teachers: { connect: [{ id: teacher.id }] },
+      teachers: { connect: classTeacherIds.map((id) => ({ id })) },
       ...(student ? { students: { connect: [{ id: student.id }] } } : {}),
     },
     select: { id: true, title: true },
