@@ -1,5 +1,6 @@
 import { prisma } from '~/utils/db.server';
 import { getPasswordHash } from '~/utils/auth.server';
+import { clearFailedLoginRateLimitsForTarget } from '~/utils/rate-limit.server';
 import {
   suggestAvailableUsernames,
   validateUsername,
@@ -283,6 +284,7 @@ export async function teacherResetStudentPassword({
         select: {
           id: true,
           email: true,
+          username: true,
           isAdmin: true,
           isSuperAdmin: true,
           memberships: {
@@ -317,6 +319,14 @@ export async function teacherResetStudentPassword({
     }),
     prisma.session.deleteMany({ where: { userId: student.userId } }),
   ]);
+
+  const loginTarget = student.user.username?.trim().toLowerCase();
+  if (loginTarget) {
+    await clearFailedLoginRateLimitsForTarget({
+      route: '/auth/login',
+      targetKey: loginTarget,
+    });
+  }
 
   return { status: 'ok' as const };
 }

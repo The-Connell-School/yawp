@@ -548,16 +548,13 @@ export async function recordFailedLoginTargetRateLimit(params: {
 function failedLoginIpBuckets(params: {
   request: Request;
   route: string;
-  loginIdentifier: string;
   perIpPerMinute: number;
   perIpPerHour: number;
   nowMs?: number;
 }) {
-  const { request, route, loginIdentifier, perIpPerMinute, perIpPerHour, nowMs } =
-    params;
+  const { request, route, perIpPerMinute, perIpPerHour, nowMs } = params;
   const ip = getClientIp(request);
-  const normalizedLogin = loginIdentifier.trim().toLowerCase();
-  const ipKeyBase = `ip:${ipHash(ip)}:login:${ipHash(normalizedLogin)}:${route}:failed`;
+  const ipKeyBase = `ip:${ipHash(ip)}:${route}:failed`;
   const base = { route, nowMs };
   return [
     {
@@ -579,27 +576,57 @@ function failedLoginIpBuckets(params: {
   ];
 }
 
-export async function checkFailedLoginIpRateLimit(params: {
+function failedLoginIpSprayBuckets(params: {
   request: Request;
   route: string;
-  loginIdentifier: string;
-  perIpPerMinute: number;
-  perIpPerHour: number;
+  perIpSprayPerHour: number;
   nowMs?: number;
-}): Promise<LimitResult> {
-  return peekConsumeAll(failedLoginIpBuckets(params));
+}) {
+  const { request, route, perIpSprayPerHour, nowMs } = params;
+  const ip = getClientIp(request);
+  const ipKeyBase = `ip:${ipHash(ip)}:${route}:failed-spray`;
+  const base = { route, nowMs };
+  return [
+    {
+      ...base,
+      key: `${ipKeyBase}:h`,
+      limit: perIpSprayPerHour,
+      windowMs: HOUR_MS,
+      scope: 'ip' as const,
+      subjectKey: ipKeyBase,
+    },
+  ];
 }
 
 export async function recordFailedLoginIpRateLimit(params: {
   request: Request;
   route: string;
-  loginIdentifier: string;
   perIpPerMinute: number;
   perIpPerHour: number;
   nowMs?: number;
 }): Promise<LimitResult> {
   const buckets = failedLoginIpBuckets(params);
   return consumeAll(buckets.map((b) => windowBucket(b)));
+}
+
+export async function recordFailedLoginIpSprayRateLimit(params: {
+  request: Request;
+  route: string;
+  perIpSprayPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  const buckets = failedLoginIpSprayBuckets(params);
+  return consumeAll(buckets.map((b) => windowBucket(b)));
+}
+
+export async function clearFailedLoginRateLimitsForTarget(params: {
+  route: string;
+  targetKey: string;
+}) {
+  const targetBase = `target:${hashTarget(params.targetKey)}:${params.route}:failed`;
+  await prisma.rateLimitBucket.deleteMany({
+    where: { key: `${targetBase}:h` },
+  });
 }
 
 export async function enforceUnauthByIpOnly(params: {
