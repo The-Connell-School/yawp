@@ -50,6 +50,7 @@ export async function enforceFreeTierTeacherGate(args: {
     return application;
   }
 
+  // APPROVED teachers use normal /app routes (setup redirect removed — see gate tests).
   if (application.status === 'APPROVED') {
     return application;
   }
