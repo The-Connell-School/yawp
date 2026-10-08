@@ -8,7 +8,7 @@ const STUDENT_PASSWORD = 'johndoe';
 const SELECT_ALL_SHORTCUT =
   process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
 
-/** Org flag removed: planner is teacher-only and always on. */
+/** Lesson Planner is gated by the global feature_flag.lesson_planner setting (on in E2E seed). */
 
 async function setWritingPracticeEnabled(
   organizationId: string,
