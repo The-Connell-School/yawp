@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { inflateSync } from 'node:zlib';
 import { buildLessonPacket } from './lesson-packet';
+import { deckAsMaterial } from './lesson-material';
 import {
   pdfFilename,
   printsForStudents,
@@ -497,5 +498,87 @@ ${JSON.stringify(
 
     expect(text).toContain('The lesson still stands.');
     expect(text).not.toContain('"slides"');
+  });
+});
+
+/**
+ * A teacher who filed the deck, the handout, and the exit ticket expects one
+ * download to carry all three — not slides without the handout, or handouts
+ * without the deck.
+ */
+describe('renderPacketPdf — deck, handout, and exit ticket in the stack', () => {
+  const STACKED_DECK_REPLY = `## Beyond the Quote
+
+\`\`\`yawp-slides
+${JSON.stringify(
+  {
+    title: 'Comma splice fixes',
+    subtitle: 'English 9',
+    slides: [
+      {
+        layout: 'title',
+        title: 'Fix comma splices',
+        subtitle: 'Cover test',
+        speakerNotes: 'Name the splice before they fix it.',
+        minutes: 2,
+      },
+      {
+        layout: 'bullets',
+        title: 'Three repairs',
+        bullets: ['Conjunction', 'Semicolon', 'Period'],
+        speakerNotes: 'Model one of each.',
+        minutes: 5,
+      },
+    ],
+  },
+  null,
+  2
+)}
+\`\`\``;
+
+  test('prints slide notes, handout body, and exit ticket prompt', async () => {
+    const deckMaterial = deckAsMaterial(STACKED_DECK_REPLY);
+    expect(deckMaterial).not.toBeNull();
+
+    const packet = buildLessonPacket({
+      title: 'Fixing Comma Splices',
+      className: 'English 9',
+      sections: [
+        {
+          id: 'mat-deck',
+          content: deckMaterial!.content,
+          keptAudience: 'teacher',
+          keptTitle: deckMaterial!.title,
+          kind: 'slides',
+          origin: 'material',
+        },
+        {
+          id: 'mat-handout',
+          content:
+            '## Diagnose & Repair\n\nThe Cover Test: cover each side of the comma.',
+          keptAudience: 'student',
+          keptTitle: 'Diagnose & Repair',
+          kind: 'handout',
+          origin: 'material',
+        },
+        {
+          id: 'mat-exit',
+          content:
+            '## Exit ticket\n\nIn your own words, explain what a comma splice is and how to fix one.',
+          keptAudience: 'student',
+          keptTitle: 'Exit ticket: comma splices',
+          kind: 'handout',
+          origin: 'material',
+        },
+      ],
+    });
+
+    const text = pdfText(await renderPacketPdf(packet));
+
+    expect(text).toContain('Fix comma splices');
+    expect(text).toContain('Name the splice');
+    expect(text).toContain('Cover Test');
+    expect(text).toContain('comma splice');
+    expect(text).not.toContain('yawp-slides');
   });
 });

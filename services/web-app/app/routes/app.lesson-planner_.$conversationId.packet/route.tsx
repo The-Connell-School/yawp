@@ -85,6 +85,11 @@ export default function LessonPacketRoute() {
     }`;
   }
 
+  /** The stacked lesson packet — every filed resource, not the tab on screen. */
+  function fullPacketPdfHref() {
+    return `/app/lesson-planner/${conversationId}/packet.pdf`;
+  }
+
   /**
    * One handout piece on its own, kept separate rather than folded into the
    * combined handout. Distinct from `pdfHref(sectionId)`: a piece can be
@@ -228,7 +233,7 @@ export default function LessonPacketRoute() {
             <Button type="button" size="sm" asChild>
               <a
                 data-testid="packet-save-pdf"
-                href={pdfHref()}
+                href={fullPacketPdfHref()}
                 download
                 aria-disabled={packet.sections.length === 0}
               >

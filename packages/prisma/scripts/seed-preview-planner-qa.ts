@@ -73,39 +73,39 @@ export async function seedPreviewPlannerQa(
     select: { id: true },
   });
 
-  let klass = await prisma.class.findFirst({
-    where: {
-      isArchived: false,
-      teachers: { some: { id: teacher.id } },
-    },
+  const school = await prisma.school.findFirst({
+    where: { organizationId: teacher.organizationId },
     orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  if (!school) {
+    console.log('preview planner QA: no school for dev.teacher; skipping');
+    return { skipped: true as const };
+  }
+
+  // Stable class id so preview QA URLs never drift when dev.teacher already
+  // teaches another section on a preserved database.
+  const klass = await prisma.class.upsert({
+    where: { id: PREVIEW_PLANNER_QA_IDS.classId },
+    update: {
+      title: '[QA] Lesson planner preview class',
+      isArchived: false,
+      teachers: { connect: [{ id: teacher.id }] },
+      ...(student ? { students: { connect: [{ id: student.id }] } } : {}),
+    },
+    create: {
+      id: PREVIEW_PLANNER_QA_IDS.classId,
+      code: 'QA-PLANNER-01',
+      schoolYear: '2025-2026',
+      period: 'QA',
+      grade: '10',
+      title: '[QA] Lesson planner preview class',
+      schoolId: school.id,
+      teachers: { connect: [{ id: teacher.id }] },
+      ...(student ? { students: { connect: [{ id: student.id }] } } : {}),
+    },
     select: { id: true, title: true },
   });
-  if (!klass) {
-    const school = await prisma.school.findFirst({
-      where: { organizationId: teacher.organizationId },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true },
-    });
-    if (!school) {
-      console.log('preview planner QA: no school for dev.teacher; skipping');
-      return { skipped: true as const };
-    }
-    klass = await prisma.class.create({
-      data: {
-        id: PREVIEW_PLANNER_QA_IDS.classId,
-        code: 'QA-PLANNER-01',
-        schoolYear: '2025-2026',
-        period: 'QA',
-        grade: '10',
-        title: '[QA] Lesson planner preview class',
-        schoolId: school.id,
-        teachers: { connect: [{ id: teacher.id }] },
-        ...(student ? { students: { connect: [{ id: student.id }] } } : {}),
-      },
-      select: { id: true, title: true },
-    });
-  }
 
   const insightType =
     (await prisma.assignmentType.findFirst({
