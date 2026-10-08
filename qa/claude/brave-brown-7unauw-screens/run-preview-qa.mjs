@@ -127,6 +127,7 @@ function assertStackedPacketPdf(path) {
 }
 
 async function main() {
+  reseedPreviewPlannerQaExitTicketUnreleased();
   const browser = await chromium.launch({ headless: true, channel: 'chrome' });
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
@@ -136,7 +137,6 @@ async function main() {
 
   try {
     await enterPreview(page);
-    await resetPreviewPlannerQaExitTicket(page);
     await devLogin(page, 'dev.teacher@yawp.local');
     await page.goto(`${previewUrl}/app/lesson-planner`);
     await page.waitForLoadState('networkidle');
