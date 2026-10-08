@@ -36,6 +36,7 @@ import {
   buildScoreOptions,
   isScored,
   legacyRubricDisplayConfig,
+  mergeRubricDisplayPickerRestrictions,
   normalizeRubricDisplayConfig,
   normalizeRubricScoresForCategories,
   toPersistedRubricScores,
@@ -529,8 +530,11 @@ export function TeacherGradingPanel({
       letterGrade: typeof d.letterGrade === 'string' ? d.letterGrade : null,
       grammarIssues: d.grammarIssues ?? null,
     });
-    const nextRubricConfig = normalizeRubricDisplayConfig(
-      d.rubricConfig ?? legacyRubricDisplayConfig
+    const nextRubricConfig = mergeRubricDisplayPickerRestrictions(
+      normalizeRubricDisplayConfig(
+        d.rubricConfig ?? legacyRubricDisplayConfig
+      ),
+      propRubricConfig
     );
     setActiveRubricConfig(nextRubricConfig);
     setRubricScores(

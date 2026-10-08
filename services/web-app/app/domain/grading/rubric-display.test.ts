@@ -3,6 +3,7 @@ import {
   buildEmptyRubricScores,
   buildScoreOptions,
   isScored,
+  mergeRubricDisplayPickerRestrictions,
   normalizeRubricDisplayConfig,
   normalizeRubricScoresForCategories,
   parseRubricDisplaySource,
@@ -360,5 +361,43 @@ describe('parseRubricDisplaySource', () => {
     expect(parseRubricDisplaySource(null)).toBeUndefined();
     expect(parseRubricDisplaySource(undefined)).toBeUndefined();
     expect(parseRubricDisplaySource(7)).toBeUndefined();
+  });
+});
+
+describe('mergeRubricDisplayPickerRestrictions', () => {
+  test('restores allowedScores from the baseline when the assistant omits them', () => {
+    const baseline = normalizeRubricDisplayConfig({
+      categories: [
+        {
+          key: 'engagement_with_prompt',
+          label: 'Engagement',
+          description: '',
+          weight: 1,
+          allowedScores: [0, 3, 7, 12],
+        },
+      ],
+      minScore: 0,
+      maxScore: 12,
+      step: 1,
+      scoringType: 'rubric_points',
+      scoringMode: 'holistic_tier',
+    });
+    const fromAssistant = normalizeRubricDisplayConfig({
+      categories: [
+        {
+          key: 'engagement_with_prompt',
+          label: 'Engagement',
+          description: '',
+          weight: 1,
+        },
+      ],
+      minScore: 0,
+      maxScore: 12,
+      step: 1,
+      scoringType: 'rubric_points',
+    });
+    const merged = mergeRubricDisplayPickerRestrictions(fromAssistant, baseline);
+    expect(merged.categories[0].allowedScores).toEqual([0, 3, 7, 12]);
+    expect(merged.scoringMode).toBe('holistic_tier');
   });
 });

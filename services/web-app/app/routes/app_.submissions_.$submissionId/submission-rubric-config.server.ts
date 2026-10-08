@@ -55,6 +55,12 @@ function parseSnapshotCategory(value: unknown): RubricSnapshotCategory | null {
   const bands = parseRubricScoreBands(value.bands);
   const feedbackEnabled = parseOptionalBoolean(value.feedbackEnabled);
   const grammarHighlighting = parseOptionalBoolean(value.grammarHighlighting);
+  const allowedScores = Array.isArray(value.allowedScores)
+    ? value.allowedScores.filter(
+        (score): score is number =>
+          typeof score === 'number' && Number.isFinite(score)
+      )
+    : undefined;
 
   return {
     key,
@@ -65,6 +71,7 @@ function parseSnapshotCategory(value: unknown): RubricSnapshotCategory | null {
     ...(bands ? { bands } : {}),
     ...(feedbackEnabled === undefined ? {} : { feedbackEnabled }),
     ...(grammarHighlighting === undefined ? {} : { grammarHighlighting }),
+    ...(allowedScores?.length ? { allowedScores } : {}),
   };
 }
 
