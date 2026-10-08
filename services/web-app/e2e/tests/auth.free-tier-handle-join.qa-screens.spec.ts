@@ -118,24 +118,22 @@ test.describe('QA screenshots — free-tier handle flows', () => {
           teachers: { connect: { id: teacherMembership.id } },
         },
       });
-      const studentUsers = [];
       for (let i = 0; i < FREE_CLASSROOM_STUDENT_SEAT_CAP; i += 1) {
-        const u = await prisma.user.create({
+        await prisma.orgMembership.create({
           data: {
-            email: null,
-            username: `fill${run}${i}`.slice(0, 20),
-            name: `Fill ${i}`,
-            password: { create: { hash: await bcrypt.hash(password, 10) } },
-            memberships: {
+            role: 'STUDENT',
+            organization: { connect: { id: org.id } },
+            user: {
               create: {
-                organizationId: org.id,
-                role: 'STUDENT',
-                classes: { connect: { id: fullClass.id } },
+                email: null,
+                username: `fill${run}${i}`.slice(0, 20),
+                name: `Fill ${i}`,
+                password: { create: { hash: await bcrypt.hash(password, 10) } },
               },
             },
+            classesAsStudent: { connect: { id: fullClass.id } },
           },
         });
-        studentUsers.push(u.id);
       }
 
       const fullJoin = `/join?t=${fullClass.studentJoinToken}`;
