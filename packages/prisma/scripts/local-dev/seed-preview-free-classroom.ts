@@ -239,25 +239,35 @@ async function seedClassStarterAssignments(
       },
     });
   }
-  const deployedCount = await client.assignment.count({
-    where: {
-      assignmentTypeId,
-      classAssignments: {
-        some: { class: { school: { organizationId } } },
+  const usageTable = await client.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = 'FreeClassroomAssignmentKindUsage'
+    ) AS "exists"
+  `;
+  if (usageTable[0]?.exists) {
+    const deployedCount = await client.assignment.count({
+      where: {
+        assignmentTypeId,
+        classAssignments: {
+          some: { class: { school: { organizationId } } },
+        },
       },
-    },
-  });
-  await client.freeClassroomAssignmentKindUsage.upsert({
-    where: {
-      organizationId_kind: { organizationId, kind: 'class_starter' },
-    },
-    create: {
-      organizationId,
-      kind: 'class_starter',
-      lifetimeCreatedCount: deployedCount,
-    },
-    update: { lifetimeCreatedCount: deployedCount },
-  });
+    });
+    await client.freeClassroomAssignmentKindUsage.upsert({
+      where: {
+        organizationId_kind: { organizationId, kind: 'class_starter' },
+      },
+      create: {
+        organizationId,
+        kind: 'class_starter',
+        lifetimeCreatedCount: deployedCount,
+      },
+      update: { lifetimeCreatedCount: deployedCount },
+    });
+  }
   console.log(
     `Seeded ${count} class starter assignment(s) for ${organizationId}.`
   );
