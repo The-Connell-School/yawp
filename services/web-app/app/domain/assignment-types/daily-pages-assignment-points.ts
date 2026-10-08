@@ -62,9 +62,13 @@ export function scaleDailyPagesForAssignment(
   }
 
   const total = pointValue!;
+  const snapshotScaling = config.rubricSnapshot?.assignmentPointScaling as
+    | { sourceMaxScore?: number }
+    | undefined;
+  const snapshotMaxScore = config.rubricSnapshot?.maxScore as number | undefined;
   const sourceMax =
-    config.rubricSnapshot?.assignmentPointScaling?.sourceMaxScore ??
-    config.rubricSnapshot?.maxScore ??
+    snapshotScaling?.sourceMaxScore ??
+    snapshotMaxScore ??
     config.maxScore ??
     DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL;
 
