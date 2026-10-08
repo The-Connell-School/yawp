@@ -191,7 +191,7 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
       `/app/my-classes/${e2eContext.classId}?tab=documents`
     );
     await expect(page.getByText(seeded.documentTitle).first()).toBeVisible();
-    await expect(page.getByText(/10\s*\/\s*12/)).toBeVisible();
+    await expect(page.getByText(/10\s*\/\s*12/).first()).toBeVisible();
   });
 
   test('student still sees documents, assignments, and grades after the swap', async ({
@@ -200,8 +200,10 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     signIn,
   }) => {
     await signIn(e2eContext.userEmail, 'johndoe');
-    await page.goto(`/app/my-classes/${e2eContext.classId}`);
-    await expect(page.getByText('Swap persistence doc')).toBeVisible();
-    await expect(page.getByText(/10\s*\/\s*12/)).toBeVisible();
+    await page.goto(
+      `/app/my-classes/${e2eContext.classId}?tab=documents`
+    );
+    await expect(page.getByText('Swap persistence doc').first()).toBeVisible();
+    await expect(page.getByText(/10\s*\/\s*12/).first()).toBeVisible();
   });
 });
