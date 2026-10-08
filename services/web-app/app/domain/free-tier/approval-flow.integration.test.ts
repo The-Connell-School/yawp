@@ -1,5 +1,6 @@
 // FREE_TIER_DB_TESTS=1 DATABASE_URL=... bun test app/domain/free-tier/approval-flow.integration.test.ts
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import bcrypt from 'bcryptjs';
 
 const sendEmailMock = mock(async () => ({
   status: 'success' as const,
@@ -18,9 +19,12 @@ const {
   submitAdminDetails,
 } = await import('./approval-flow.server');
 const { mintSignedLink, peekSignedLink, RELEASE_LINK_TTL_MS } = await import('./signed-link.server');
-const { getPasswordHash } = await import('~/utils/auth.server');
 
 const enabled = process.env.FREE_TIER_DB_TESTS === '1';
+
+async function testPasswordHash(password: string) {
+  return bcrypt.hash(password, 10);
+}
 
 describe('free-tier approval flow', () => {
   if (!enabled) {
@@ -413,7 +417,7 @@ describe('free-tier approval flow', () => {
       purpose: 'RELEASE',
       ttlMs: RELEASE_LINK_TTL_MS,
     });
-    const passwordHash = await getPasswordHash('yawp-ft-join-pass');
+    const passwordHash = await testPasswordHash('yawp-ft-join-pass');
     const created = await createFreeTierTeacherAccount({
       token: minted.token,
       name: 'Release Join',
@@ -432,7 +436,7 @@ describe('free-tier approval flow', () => {
       data: {
         email,
         name: 'Existing',
-        password: { create: { hash: await getPasswordHash('existing-pass') } },
+        password: { create: { hash: await testPasswordHash('existing-pass') } },
       },
     });
     const app = await prisma.freeTierApplication.create({
@@ -454,7 +458,7 @@ describe('free-tier approval flow', () => {
     const created = await createFreeTierTeacherAccount({
       token: minted.token,
       name: 'Existing',
-      passwordHash: await getPasswordHash('new-pass'),
+      passwordHash: await testPasswordHash('new-pass'),
     });
     expect(created).toEqual({ ok: false, reason: 'sign_in_required' });
     const after = await peekSignedLink({ token: minted.token, expectedPurpose: 'RELEASE' });
@@ -485,7 +489,7 @@ describe('free-tier approval flow', () => {
     const created = await createFreeTierTeacherAccount({
       token: minted.token,
       name: 'Orphan Teacher',
-      passwordHash: await getPasswordHash('fresh-pass'),
+      passwordHash: await testPasswordHash('fresh-pass'),
     });
     expect(created.ok).toBe(true);
     if (!created.ok) throw new Error('expected success');
