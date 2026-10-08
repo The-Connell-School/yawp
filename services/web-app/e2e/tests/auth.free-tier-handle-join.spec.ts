@@ -31,6 +31,24 @@ test.describe('Free-tier handle student', () => {
         position: 1,
         ownerOrgId: org.id,
         organizationAssignments: { create: { organizationId: org.id } },
+        assignmentModules: {
+          create: [
+            {
+              title: 'Writing',
+              position: 1,
+              instructions: {
+                create: [
+                  {
+                    title: 'Draft',
+                    prompt: 'Write your paragraph.',
+                    position: 1,
+                    showChatButton: true,
+                  },
+                ],
+              },
+            },
+          ],
+        },
       },
     });
     const school = await prisma.school.create({

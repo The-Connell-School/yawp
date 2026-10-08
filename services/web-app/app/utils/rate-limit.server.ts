@@ -504,27 +504,45 @@ export async function enforceUnauthByIpAndTarget(params: {
   ]);
 }
 
-/** Login: per-handle limits apply to every attempt; per-IP limits apply only after a failed login. */
-export async function enforceLoginTargetRateLimit(params: {
-  request: Request;
+/** Login: per-target and per-IP limits apply only after a failed login (successful logins do not consume budget). */
+function failedLoginTargetBuckets(params: {
+  route: string;
+  targetKey: string;
+  perTargetPerHour: number;
+  nowMs?: number;
+}) {
+  const { route, targetKey, perTargetPerHour, nowMs } = params;
+  const targetBase = `target:${hashTarget(targetKey)}:${route}:failed`;
+  const base = { route, nowMs };
+  return [
+    {
+      ...base,
+      key: `${targetBase}:h`,
+      limit: perTargetPerHour,
+      windowMs: HOUR_MS,
+      scope: 'ip' as const,
+      subjectKey: targetBase,
+    },
+  ];
+}
+
+export async function checkFailedLoginTargetRateLimit(params: {
   route: string;
   targetKey: string;
   perTargetPerHour: number;
   nowMs?: number;
 }): Promise<LimitResult> {
-  const { request, route, targetKey, perTargetPerHour, nowMs } = params;
-  const targetBase = `target:${hashTarget(targetKey)}:${route}`;
-  const base = { route, nowMs };
-  return consumeAll([
-    windowBucket({
-      ...base,
-      key: `${targetBase}:h`,
-      limit: perTargetPerHour,
-      windowMs: HOUR_MS,
-      scope: 'ip',
-      subjectKey: targetBase,
-    }),
-  ]);
+  return peekConsumeAll(failedLoginTargetBuckets(params));
+}
+
+export async function recordFailedLoginTargetRateLimit(params: {
+  route: string;
+  targetKey: string;
+  perTargetPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  const buckets = failedLoginTargetBuckets(params);
+  return consumeAll(buckets.map((b) => windowBucket(b)));
 }
 
 function failedLoginIpBuckets(params: {

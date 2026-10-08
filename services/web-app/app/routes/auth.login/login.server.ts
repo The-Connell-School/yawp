@@ -10,9 +10,10 @@ import {
 } from '~/utils/auth.server';
 import {
   checkFailedLoginIpRateLimit,
-  enforceLoginTargetRateLimit,
+  checkFailedLoginTargetRateLimit,
   rateLimitedFormResponse,
   recordFailedLoginIpRateLimit,
+  recordFailedLoginTargetRateLimit,
 } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { parseLoginIdentifier } from '~/utils/login-identifier.server';
@@ -36,8 +37,7 @@ export async function loginAction({ request }: ActionFunctionArgs) {
     const parsed = parseLoginIdentifier(loginIdentifier);
     {
       const cfg = RATE_LIMITS.unauth.login;
-      const targetDecision = await enforceLoginTargetRateLimit({
-        request,
+      const targetDecision = await checkFailedLoginTargetRateLimit({
         route: '/auth/login',
         targetKey: parsed.value,
         perTargetPerHour: cfg.perEmailPerHour,
@@ -69,6 +69,11 @@ export async function loginAction({ request }: ActionFunctionArgs) {
 
     if (!user) {
       const cfg = RATE_LIMITS.unauth.login;
+      const failTarget = await recordFailedLoginTargetRateLimit({
+        route: '/auth/login',
+        targetKey: parsed.value,
+        perTargetPerHour: cfg.perEmailPerHour,
+      });
       const failIp = await recordFailedLoginIpRateLimit({
         request,
         route: '/auth/login',
@@ -76,6 +81,13 @@ export async function loginAction({ request }: ActionFunctionArgs) {
         perIpPerMinute: cfg.perIpPerMinute,
         perIpPerHour: cfg.perIpPerHour,
       });
+      if (!failTarget.allowed) {
+        return rateLimitedFormResponse(
+          'email',
+          failTarget.retryAfterSeconds,
+          'Too many login attempts. Please wait and try again.'
+        );
+      }
       if (!failIp.allowed) {
         return rateLimitedFormResponse(
           'email',

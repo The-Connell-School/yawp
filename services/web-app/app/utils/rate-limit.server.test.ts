@@ -140,16 +140,15 @@ suite('regressions found in review of the first version', () => {
   });
 });
 
-suite('login IP limits count only failed attempts', () => {
-  test('200 successful-login target checks from one IP do not consume failed-IP budget', async () => {
+suite('login limits count only failed attempts', () => {
+  test('200 successful-login peeks from one IP do not consume failed-IP or failed-target budget', async () => {
     const schoolIp = new Request('https://yawp.school/auth/login', {
       headers: { 'x-forwarded-for': `198.20.${Math.floor(Math.random() * 250)}.3, ${EDGE_IP}` },
     });
     const cfg = { perIpPerMinute: 5, perIpPerHour: 10, perTargetPerHour: 12 };
     const t0 = Date.now();
     for (let i = 0; i < 200; i += 1) {
-      const target = await mod!.enforceLoginTargetRateLimit({
-        request: schoolIp,
+      const target = await mod!.checkFailedLoginTargetRateLimit({
         route: '/auth/login',
         targetKey: `${run}-ok-user-${i}`,
         perTargetPerHour: cfg.perTargetPerHour,
@@ -166,6 +165,66 @@ suite('login IP limits count only failed attempts', () => {
       });
       expect(ipCheck.allowed).toBe(true);
     }
+  });
+
+  test('CI-style repeated successful logins for one dev email stay allowed (failed-target budget untouched)', async () => {
+    const schoolIp = new Request('https://yawp.school/auth/login', {
+      headers: { 'x-forwarded-for': `198.21.${Math.floor(Math.random() * 250)}.4, ${EDGE_IP}` },
+    });
+    const cfg = { perIpPerMinute: 30, perIpPerHour: 120, perTargetPerHour: 12 };
+    const email = `${run}-dev.teacher@yawp.local`;
+    const t0 = Date.now();
+    for (let i = 0; i < 40; i += 1) {
+      const target = await mod!.checkFailedLoginTargetRateLimit({
+        route: '/auth/login',
+        targetKey: email,
+        perTargetPerHour: cfg.perTargetPerHour,
+        nowMs: t0 + i,
+      });
+      expect(target.allowed).toBe(true);
+      const ipCheck = await mod!.checkFailedLoginIpRateLimit({
+        request: schoolIp,
+        route: '/auth/login',
+        loginIdentifier: email,
+        perIpPerMinute: cfg.perIpPerMinute,
+        perIpPerHour: cfg.perIpPerHour,
+        nowMs: t0 + i,
+      });
+      expect(ipCheck.allowed).toBe(true);
+    }
+  });
+
+  test('the 13th failed login for one target in an hour is denied', async () => {
+    const schoolIp = new Request('https://yawp.school/auth/login', {
+      headers: { 'x-forwarded-for': `198.22.${Math.floor(Math.random() * 250)}.5, ${EDGE_IP}` },
+    });
+    const cfg = { perIpPerMinute: 30, perIpPerHour: 120, perTargetPerHour: 12 };
+    const email = `${run}-brute@school.test`;
+    const t0 = Date.now();
+    for (let i = 0; i < 12; i += 1) {
+      const recorded = await mod!.recordFailedLoginTargetRateLimit({
+        route: '/auth/login',
+        targetKey: email,
+        perTargetPerHour: cfg.perTargetPerHour,
+        nowMs: t0 + i,
+      });
+      expect(recorded.allowed).toBe(true);
+      await mod!.recordFailedLoginIpRateLimit({
+        request: schoolIp,
+        route: '/auth/login',
+        loginIdentifier: email,
+        perIpPerMinute: cfg.perIpPerMinute,
+        perIpPerHour: cfg.perIpPerHour,
+        nowMs: t0 + i,
+      });
+    }
+    const denied = await mod!.checkFailedLoginTargetRateLimit({
+      route: '/auth/login',
+      targetKey: email,
+      perTargetPerHour: cfg.perTargetPerHour,
+      nowMs: t0 + 12,
+    });
+    expect(denied.allowed).toBe(false);
   });
 });
 
