@@ -24,7 +24,7 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
     ).toHaveCount(0);
 
     await page.getByRole('button', { name: /Prompt Library/i }).first().click();
-    await expect(page.getByPlaceholder('Search prompts')).toBeVisible();
+    await expect(page.getByPlaceholder(/Search prompts/)).toBeVisible();
 
     // A freewrite prompt has no business in the graded corpus.
     await expect(
@@ -45,7 +45,7 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
     );
 
     await page.getByRole('button', { name: /Prompt Library/i }).first().click();
-    await page.getByPlaceholder('Search prompts').fill('counterexample');
+    await page.getByPlaceholder(/Search prompts/).fill('counterexample');
     await page.keyboard.press('Enter');
 
     const prompt = page.getByText('Honest and kind at once');

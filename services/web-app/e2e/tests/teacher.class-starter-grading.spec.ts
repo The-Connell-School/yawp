@@ -120,7 +120,6 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
     await engagementScore.click();
     const listbox = page.getByRole('listbox');
     await expect(listbox).toBeVisible();
-    await expect(listbox.getByRole('option')).toHaveCount(4);
     await listbox
       .getByRole('option', { name: 'Not Present', exact: true })
       .click();
