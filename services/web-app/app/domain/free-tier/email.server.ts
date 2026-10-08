@@ -92,6 +92,7 @@ export async function sendFreeTierReleaseEmail(payload: ReleaseEmailPayload): Pr
         toEmail: payload.email,
         success: false,
         error: delivered.error,
+        payload: { joinUrl },
       });
       return delivered;
     }

@@ -1,6 +1,11 @@
 import type { LoaderFunctionArgs } from 'react-router';
 import { requireSuperAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import {
+  FREE_TIER_LINK_TTL_MS,
+  mintSignedLink,
+} from '~/domain/free-tier/signed-link.server';
+import { freeTierPublicAppOrigin } from '~/domain/free-tier/free-tier-public-url.server';
 
 function notFound() {
   return new Response('Not Found', { status: 404, headers: { 'cache-control': 'no-store' } });
@@ -32,7 +37,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     select: { payload: true },
   });
   const releasePayload = releaseLog?.payload as { joinUrl?: string } | null;
-  if (releasePayload?.joinUrl) out.joinUrl = releasePayload.joinUrl;
+  if (releasePayload?.joinUrl) {
+    out.joinUrl = releasePayload.joinUrl;
+  } else if (app.status === 'INVITED' || app.status === 'LEAD') {
+    const minted = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'RELEASE',
+      ttlMs: FREE_TIER_LINK_TTL_MS,
+    });
+    out.joinUrl = `${freeTierPublicAppOrigin()}/free/join?t=${encodeURIComponent(minted.token)}`;
+  }
 
   const approvalLog = await prisma.freeTierEmailLog.findFirst({
     where: {
