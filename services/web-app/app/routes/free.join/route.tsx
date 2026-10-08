@@ -12,10 +12,6 @@ import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { PasswordAndConfirmPasswordSchema, NameSchema } from '~/utils/schemas/user';
 import { z } from 'zod';
-import {
-  getPreviewAccessSeat,
-  isIsolatedPreviewSeatMode,
-} from '~/utils/preview-access.server';
 import { FreeTierEntryHeader } from './FreeTierEntryHeader';
 import {
   FreeTierFieldLabel,
@@ -57,27 +53,6 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
     return { ok: false as const, reason: created.reason };
-  }
-
-  if (isIsolatedPreviewSeatMode()) {
-    const seat = await getPreviewAccessSeat(request);
-    if (seat) {
-      await prisma.orgMembership.upsert({
-        where: {
-          userId_organizationId: {
-            userId: created.userId,
-            organizationId: seat.organizationId,
-          },
-        },
-        create: {
-          userId: created.userId,
-          organizationId: seat.organizationId,
-          role: 'TEACHER',
-          isActive: true,
-        },
-        update: { role: 'TEACHER', isActive: true },
-      });
-    }
   }
 
   const session = await prisma.session.create({

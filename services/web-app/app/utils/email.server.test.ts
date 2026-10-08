@@ -32,10 +32,12 @@ const originalFetch = globalThis.fetch;
 const envKeys = [
 	'AWS_REGION',
 	'AWS_SES_REGION',
+	'DATABASE_URL',
 	'EMAIL_PROVIDER',
 	'RESEND_API_KEY',
 	'RESEND_FROM_EMAIL',
 	'SES_FROM_EMAIL',
+	'YAWP_ENVIRONMENT',
 ] as const;
 const originalEnv = Object.fromEntries(
 	envKeys.map((key) => [key, process.env[key]]),
@@ -137,5 +139,25 @@ describe('sendEmail', () => {
 			},
 		});
 		expect(sesSend).not.toHaveBeenCalled();
+	});
+
+	test('captures email on yawp_pr preview without calling Resend', async () => {
+		process.env.YAWP_ENVIRONMENT = 'preview';
+		process.env.DATABASE_URL = 'postgresql://app@db/yawp_pr_416';
+		process.env.RESEND_FROM_EMAIL = 'preview@yawp.local';
+		process.env.RESEND_API_KEY = '';
+
+		const result = await sendEmail({
+			to: 'admin@school.edu',
+			subject: 'Approve YAWP',
+			html: '<p>test</p>',
+			text: 'test',
+		});
+
+		expect(result).toEqual({
+			status: 'success',
+			data: { id: 'preview-captured' },
+		});
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });
