@@ -175,7 +175,7 @@ async function main() {
   await mkdir(outDir, { recursive: true });
   const browser = await chromium.launch({ headless: true });
   const manifest = { capturedAt: new Date().toISOString(), baseUrl, shots: [] };
-  const teacherFlowEmail = `shipreview-flow+${Date.now()}@shipreview-high.edu`;
+  const teacherFlowEmail = `shipreview.flow.${Date.now()}@shipreview-high.edu`;
 
   try {
     {
@@ -200,16 +200,13 @@ async function main() {
       await page.goto(`${baseUrl}/app/admin/free-tier`);
       await page.waitForLoadState('networkidle');
       await shot(page, '02-operator-free-tier-admin', manifest);
-      try {
-        releaseManifest = await waitForJoinManifest(page, RELEASE_EMAIL);
-      } catch {
-        const acqToken = await createBypassToken(page);
-        teacherFlowEmailResolved = teacherFlowEmail;
-        const redeem = await freshContext(browser);
-        await redeemBypassToken(redeem.page, acqToken, teacherFlowEmailResolved);
-        await redeem.context.close();
-        releaseManifest = await waitForJoinManifest(page, teacherFlowEmailResolved);
-      }
+      await page.goto(`${baseUrl}/app/admin/free-tier?view=waitlist`, { waitUntil: 'networkidle' });
+      const releaseRow = page.locator('tr').filter({ hasText: RELEASE_EMAIL });
+      await releaseRow.locator('input[type="checkbox"]').check();
+      await page.getByRole('button', { name: /Release selected/i }).click();
+      await page.waitForTimeout(3000);
+      teacherFlowEmailResolved = RELEASE_EMAIL;
+      releaseManifest = await waitForJoinManifest(page, RELEASE_EMAIL);
       await context.close();
     }
 

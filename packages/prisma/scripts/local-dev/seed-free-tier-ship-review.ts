@@ -93,9 +93,9 @@ export async function seedFreeTierShipReview(prisma: PrismaClient) {
       schoolName: 'Ship Review High',
       location: 'Preview',
       gradeLevel: '11',
-      status: 'INVITED',
-      releasedAt: new Date(),
+      status: 'LEAD',
+      releasedAt: null,
     },
-    update: { status: 'INVITED', releasedAt: new Date() },
+    update: { status: 'LEAD', releasedAt: null },
   });
 }
