@@ -17,10 +17,8 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
     );
 
     await expect(
-      page.getByRole('heading', { name: 'How the Daily Pages library works' })
+      page.getByRole('heading', { name: 'About Daily Pages' })
     ).toBeVisible();
-    // The Class Starter directions must not appear here — that heading showing
-    // up would mean Daily Pages is still borrowing the freewrite corpus.
     await expect(
       page.getByRole('heading', { name: 'How Class Starter works' })
     ).toHaveCount(0);
@@ -72,7 +70,7 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
     );
 
     await expect(
-      page.getByRole('heading', { name: 'How the Daily Pages library works' })
+      page.getByRole('heading', { name: 'About Daily Pages' })
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: /Prompt Library/i })

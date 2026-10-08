@@ -164,7 +164,7 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     }
   });
 
-  test.afterAll(async ({ e2eContext }) => {
+  test.afterEach(async ({ e2eContext }) => {
     await restoreTeacherAssignmentTypes(e2eContext);
   });
 
@@ -178,9 +178,13 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
 
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app');
-    await expect(page.getByRole('link', { name: 'Daily Pages' })).toHaveCount(0);
     await expect(
-      page.getByRole('link', { name: 'SJP Daily Pages E2E' })
+      page.locator(
+        `a[href="/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}"]`
+      )
+    ).toHaveCount(0);
+    await expect(
+      page.locator(`a[href="/app/assignment-types/${sjpTypeId}"]`)
     ).toBeVisible();
 
     await page.goto(`/app/my-classes/${e2eContext.classId}`);

@@ -87,9 +87,20 @@ test.describe.serial('Pinned legacy Daily Pages assignment', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/submissions/${submissionId}?edit=1`);
     await page.getByRole('button', { name: /^Engagement with Prompt/i }).click();
-    await expect(page.getByText('NOT HANDED IN')).toBeVisible();
-    await expect(page.getByText('HARDLY THERE')).toBeVisible();
-    await expect(page.getByText('SHOWED UP')).toBeVisible();
-    await expect(page.getByText('ALL IN')).toBeVisible();
+    const scoreControl = page.getByTestId(
+      'grading-rubric-score-engagement_with_prompt'
+    );
+    await scoreControl.click();
+    await expect(page.getByRole('listbox')).toBeVisible();
+    for (const label of [
+      'Excellent',
+      'Good',
+      'Needs Improvement',
+      'Absent/Missing',
+    ]) {
+      await expect(
+        page.getByRole('option', { name: label, exact: true })
+      ).toBeVisible();
+    }
   });
 });

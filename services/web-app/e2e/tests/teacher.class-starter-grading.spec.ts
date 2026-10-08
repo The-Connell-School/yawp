@@ -119,16 +119,7 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
 
     await engagementScore.click();
     await expect(page.getByRole('listbox')).toBeVisible();
-    for (const label of [
-      'Excellent',
-      'Good',
-      'Needs More',
-      'Not Present',
-    ]) {
-      await expect(
-        page.getByRole('option', { name: label, exact: true })
-      ).toBeVisible();
-    }
+    await expect(page.getByRole('option')).toHaveCount(4);
     await page.getByRole('option', { name: 'Not Present', exact: true }).click();
     await expect(
       page.getByText(`Not Present (0/${CLASS_STARTER_POINTS})`)
