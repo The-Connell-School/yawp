@@ -137,7 +137,13 @@ export async function getUserId(request: Request) {
       },
     });
   }
-  if (session.expirationDate.getTime() <= Date.now()) {
+  // Handle-only accounts use a fixed 12h server-side session. Email users keep
+  // the legacy behavior: session rows may carry stale expirationDate values from
+  // before rolling cookie expiry; the auth cookie remains authoritative.
+  if (
+    session.user.email === null &&
+    session.expirationDate.getTime() <= Date.now()
+  ) {
     await prisma.session.delete({ where: { id: sessionId } }).catch(() => {});
     throw redirect('/', {
       headers: {

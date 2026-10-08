@@ -76,7 +76,7 @@ describe('session expiry', () => {
     prisma.session.findUnique.mockReset();
   });
 
-  test('getUserId rejects expired sessions', async () => {
+  test('getUserId rejects expired sessions for handle-only users', async () => {
     getSession.mockResolvedValue({ get: () => 'sess-expired' });
     prisma.session.findUnique.mockResolvedValue({
       expirationDate: new Date('2020-01-01T00:00:00Z'),
@@ -90,6 +90,18 @@ describe('session expiry', () => {
       thrown = error;
     }
     expect(thrown).toBeDefined();
+  });
+
+  test('getUserId keeps email users signed in when session expirationDate is in the past', async () => {
+    getSession.mockResolvedValue({ get: () => 'sess-legacy-email' });
+    prisma.session.findUnique.mockResolvedValue({
+      expirationDate: new Date('2020-01-01T00:00:00Z'),
+      user: { id: 'user-email', email: 'teacher@example.com' },
+    });
+
+    await expect(getUserId(new Request('https://example.com/app'))).resolves.toBe(
+      'user-email'
+    );
   });
 
   test('getAuthSessionCookieExpiresAt keeps handle-only expiry fixed', async () => {
