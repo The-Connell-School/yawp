@@ -295,7 +295,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         : {};
 
     if (hasGradingConfigFields) {
-      const nextRubric = parseRubric(gradingConfigData.rubricJson);
+      const nextRubric = parseRubric(
+        parseJsonFormField(formData, 'rubricJson')
+      );
       const nextRubricComplete = isRubricFullyPopulated(nextRubric);
       if (!nextRubricComplete) {
         // Grandfather assignment types whose rubric was already incomplete
