@@ -33,10 +33,30 @@ const OPEN_PATHS = new Set([
   '/api/internal/v1/rubric-catalog/item',
   '/api/internal/v1/rubric-catalog/stage',
   '/api/internal/v1/rubric-catalog/versions',
+  // Yawp Internal manages feature flags (and picks schools to target) in every
+  // environment. These routes require YAWP_MANAGEMENT_SERVICE_KEY themselves.
+  '/api/internal/v1/feature-flags',
+  '/api/internal/v1/organizations',
   '/lti/jwks',
   PREVIEW_ACCESS_PATH,
   `${PREVIEW_ACCESS_PATH}.data`,
 ]);
+
+/**
+ * Open prefixes followed by exactly one path segment (a flag key), never a
+ * deeper path: `/api/internal/v1/feature-flags/<key>` only.
+ */
+const OPEN_SINGLE_SEGMENT_PREFIXES = ['/api/internal/v1/feature-flags/'];
+const OPEN_SEGMENT = /^[A-Za-z0-9_-]{1,128}$/;
+
+function isOpenPath(pathname: string) {
+  if (OPEN_PATHS.has(pathname)) return true;
+  return OPEN_SINGLE_SEGMENT_PREFIXES.some(
+    (prefix) =>
+      pathname.startsWith(prefix) &&
+      OPEN_SEGMENT.test(pathname.slice(prefix.length))
+  );
+}
 
 function normalizeCode(value: string) {
   return value.trim().toLowerCase();
@@ -582,7 +602,7 @@ export function createPreviewAccessMiddleware(
     if (!isPreviewAccessGateEnabled()) return next();
 
     const pathname = new URL(request.url).pathname;
-    if (OPEN_PATHS.has(pathname)) return next();
+    if (isOpenPath(pathname)) return next();
 
     const seat = await getPreviewAccessSeat(request, repository);
     if (!seat) {

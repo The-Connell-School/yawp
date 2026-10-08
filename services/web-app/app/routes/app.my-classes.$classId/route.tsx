@@ -522,7 +522,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
     // Behind the writing-conditions flag: off, a sent writing time is ignored
     // and the stored one is left exactly as it is.
-    const writingTimeResult = (await isDailyPagesWritingConditionsEnabled())
+    const writingTimeResult = (await isDailyPagesWritingConditionsEnabled(profile.organization.id))
       ? parseWritingTimeMinutes(formData)
       : ({ success: true, sent: false, value: null } as const);
     if (!writingTimeResult.success) {
@@ -1393,10 +1393,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     creationTypeRows.map((assignmentType) => assignmentType.id)
   );
 
-  // Paragraph type and writing time are behind a global flag (off by
+  // Paragraph type and writing time are behind a per-school flag (off by
   // default); off, the form offers neither.
   const writingConditionsEnabled =
-    await isDailyPagesWritingConditionsEnabled();
+    await isDailyPagesWritingConditionsEnabled(profile.organization.id);
   const creationTypeDefaults = await getCreationTypeDefaultsById(
     creationTypeRows.map((assignmentType) => assignmentType.id),
     { writingConditionsEnabled }

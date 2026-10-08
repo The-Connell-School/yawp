@@ -289,10 +289,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)
   );
-  // Paragraph type and writing time are behind a global flag (off by
+  // Paragraph type and writing time are behind a per-school flag (off by
   // default); off, the form offers neither.
   const writingConditionsEnabled =
-    await isDailyPagesWritingConditionsEnabled();
+    await isDailyPagesWritingConditionsEnabled(profile.organization.id);
   const creationTypeDefaults = await getCreationTypeDefaultsById(
     creationTypeRows.map((type) => type.id),
     { writingConditionsEnabled }

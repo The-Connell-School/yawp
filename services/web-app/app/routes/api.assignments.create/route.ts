@@ -131,10 +131,12 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   const grammarGradingEnabled = grammarGradingResult.value;
 
-  // Paragraph type and writing time are behind a global flag that starts
+  // Paragraph type and writing time are behind a per-school flag that starts
   // off. Off, anything sent for either is ignored (not rejected, so a form
   // opened before the flag was switched off still saves) and stored as unset.
-  const writingConditionsEnabled = await isDailyPagesWritingConditionsEnabled();
+  const writingConditionsEnabled = await isDailyPagesWritingConditionsEnabled(
+    profile.organization.id
+  );
   const writingTimeResult = writingConditionsEnabled
     ? parseWritingTimeMinutes(formData)
     : ({ success: true, sent: false, value: null } as const);
