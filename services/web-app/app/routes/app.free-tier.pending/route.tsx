@@ -115,7 +115,8 @@ export default function FreeTierPendingRoute() {
       })
     : '';
   return (
-    <main className="p-6 max-w-2xl mx-auto space-y-4">
+    <main className="yawp-entry">
+      <section className="yawp-entry-shell max-w-2xl space-y-4">
       <h1 className="text-2xl font-semibold">Waiting for {adminName}</h1>
       <p className="text-muted-foreground">
         We emailed {pending?.adminEmail ?? 'your school administrator'}. You will not have classes or AI tools until
@@ -139,6 +140,7 @@ export default function FreeTierPendingRoute() {
           </button>
         </Form>
       ) : null}
+      </section>
     </main>
   );
 }

@@ -38,19 +38,29 @@ export function hashRequestMeta(request: Request) {
 }
 
 export async function sendReleaseEmailsForApplicationIds(applicationIds: string[]) {
+  const results: { applicationId: string; ok: boolean; error?: string }[] = [];
   for (const id of applicationIds) {
     const app = await prisma.freeTierApplication.findUnique({
       where: { id, status: 'INVITED' },
       select: { id: true, email: true, name: true, schoolName: true },
     });
-    if (!app) continue;
-    await sendFreeTierReleaseEmail({
+    if (!app) {
+      results.push({ applicationId: id, ok: false, error: 'not_invited' });
+      continue;
+    }
+    const sent = await sendFreeTierReleaseEmail({
       applicationId: app.id,
       email: app.email,
       name: app.name,
       schoolName: app.schoolName,
     });
+    results.push({
+      applicationId: app.id,
+      ok: sent.ok,
+      error: sent.ok ? undefined : sent.error,
+    });
   }
+  return results;
 }
 
 export async function submitAdminDetails(args: {
@@ -72,7 +82,6 @@ export async function submitAdminDetails(args: {
   }
 
   const rules = evaluateAdminEmail({ teacherEmail: app.email, adminEmail, schoolName: app.schoolName });
-  if (!rules.ok) return { ok: false as const, reason: rules.reason };
 
   const copyHash = adminApprovalEmailCopyVersionHash();
   const note = args.personalNote?.trim() || null;
@@ -301,7 +310,6 @@ export async function redirectSchoolAdmin(args: {
     }
 
     const rules = evaluateAdminEmail({ teacherEmail: app.email, adminEmail: newEmail, schoolName: app.schoolName });
-    if (!rules.ok) return { ok: false as const, reason: rules.reason };
 
     const pending = await tx.freeTierAdminApproval.findFirst({
       where: { applicationId: app.id, signedLinkId: consumed.linkId, status: 'PENDING' },
@@ -404,6 +412,28 @@ export async function createFreeTierTeacherAccount(args: {
   }
 
   return prisma.$transaction(async (tx) => {
+    const appId = applicationIdFromSignedToken(args.token);
+    if (!appId) return { ok: false as const, reason: 'invalid' as const };
+
+    const preApp = await tx.freeTierApplication.findUnique({
+      where: { id: appId },
+      select: { id: true, status: true, email: true, userId: true },
+    });
+    if (!preApp) return { ok: false as const, reason: 'not_found' as const };
+    if (preApp.userId) return { ok: true as const, idempotent: true as const, userId: preApp.userId };
+
+    const existingUser = await tx.user.findUnique({
+      where: { email: preApp.email },
+      select: { id: true },
+    });
+    if (existingUser) {
+      await tx.freeTierApplication.updateMany({
+        where: { id: preApp.id, userId: null },
+        data: { userId: existingUser.id, status: 'ACCOUNT_CREATED' },
+      });
+      return { ok: false as const, reason: 'sign_in_required' as const };
+    }
+
     const consumed = await claimSignedLinkInTransaction(tx, {
       token: args.token,
       expectedPurpose: 'RELEASE',
@@ -416,18 +446,6 @@ export async function createFreeTierTeacherAccount(args: {
     });
     if (!app) return { ok: false as const, reason: 'not_found' as const };
     if (app.userId) return { ok: true as const, idempotent: true as const, userId: app.userId };
-
-    const existingUser = await tx.user.findUnique({
-      where: { email: app.email },
-      select: { id: true },
-    });
-    if (existingUser) {
-      await tx.freeTierApplication.updateMany({
-        where: { id: app.id, userId: null },
-        data: { userId: existingUser.id, status: 'ACCOUNT_CREATED' },
-      });
-      return { ok: false as const, reason: 'sign_in_required' as const };
-    }
 
     if (app.status !== 'INVITED') return { ok: false as const, reason: 'illegal_state' as const, status: app.status };
 

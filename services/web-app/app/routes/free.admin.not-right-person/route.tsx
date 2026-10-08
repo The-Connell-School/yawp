@@ -1,4 +1,4 @@
-import { type ActionFunctionArgs, type LoaderFunctionArgs, useLoaderData } from 'react-router';
+import { type ActionFunctionArgs, type LoaderFunctionArgs, useActionData, useLoaderData } from 'react-router';
 import { Form } from 'react-router';
 import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
 import { redirectSchoolAdmin } from '~/domain/free-tier/approval-flow.server';
@@ -24,6 +24,38 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function FreeAdminNotRightPersonRoute() {
   const data = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+
+  if (actionData?.ok) {
+    return (
+      <main className="yawp-entry">
+        <section className="yawp-entry-shell max-w-lg text-center space-y-3">
+          <h1 className="text-2xl font-semibold">Request forwarded</h1>
+          <p className="text-muted-foreground">
+            We emailed the administrator you named. The previous link is no longer active.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  if (actionData && !actionData.ok) {
+    const message =
+      actionData.reason === 'email_failed'
+        ? 'We could not send the email. Try again or contact support@yawp.school.'
+        : actionData.reason === 'chain_cap'
+          ? 'This request has been forwarded too many times. Contact support@yawp.school.'
+          : 'We could not forward this request. The link may be invalid or already used.';
+    return (
+      <main className="yawp-entry">
+        <section className="yawp-entry-shell max-w-lg">
+          <h1 className="text-2xl font-semibold">Unable to forward</h1>
+          <p className="text-muted-foreground mt-2">{message}</p>
+        </section>
+      </main>
+    );
+  }
+
   if (!data.ok) {
     return (
       <main className="yawp-entry">

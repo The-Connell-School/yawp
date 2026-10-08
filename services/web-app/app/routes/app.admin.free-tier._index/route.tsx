@@ -16,6 +16,7 @@ import {
 import { sendReleaseEmailsForApplicationIds } from '~/domain/free-tier/approval-flow.server';
 import { APPROVABLE_FROM, REJECTABLE_FROM } from '~/utils/internal-free-tier-http.server';
 import { getApprovalHooks } from '~/domain/free-tier/approval-hooks.server';
+import { retryFreeClassroomProvisioningForUser } from '~/domain/free-tier/provision-free-classroom.server';
 import type { FreeTierApplicationStatus } from '@app/prisma';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -56,8 +57,15 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { id: { in: ids }, status: 'INVITED' },
       select: { id: true },
     });
-    await sendReleaseEmailsForApplicationIds(invited.map((i) => i.id));
-    return { ok: true, result };
+    const emailResults = await sendReleaseEmailsForApplicationIds(invited.map((i) => i.id));
+    const emailFailures = emailResults.filter((r) => !r.ok);
+    return {
+      ok: true,
+      result,
+      emailFailures,
+      releasedCount: invited.length,
+      emailFailureCount: emailFailures.length,
+    };
   }
   if (intent === 'token') {
     const tokens = await createAcquisitionTokens({
@@ -78,7 +86,17 @@ export async function action({ request }: ActionFunctionArgs) {
       decision: 'APPROVED',
       decidedByEmail,
     });
-    if (result.changed && result.app) await getApprovalHooks().onApplicationApproved(result.app);
+    if (result.changed && result.app) {
+      try {
+        await getApprovalHooks().onApplicationApproved(result.app);
+      } catch (error) {
+        if (result.app.userId) {
+          await retryFreeClassroomProvisioningForUser(result.app.userId);
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        return { ok: false, error: 'provisioning_failed', detail: message, applicationId: result.app.id };
+      }
+    }
     return result.payload;
   }
   if (intent === 'reject') {
@@ -135,18 +153,37 @@ async function operatorTransition(args: {
 
 export default function AdminFreeTierRoute() {
   const data = useLoaderData<typeof loader>();
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<typeof action>();
+  const releaseFetcher = useFetcher<typeof action>();
   return (
-    <div className="p-4 space-y-6">
-      <div className="flex gap-2">
-        <a href="?view=waitlist" className="underline">Waitlist</a>
-        <a href="?view=queue" className="underline">Review queue</a>
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div className="flex flex-wrap gap-3 items-center">
+        <a
+          href="?view=waitlist"
+          className={`yawp-entry-button yawp-entry-button-secondary text-sm ${data.view === 'waitlist' ? 'ring-2 ring-primary' : ''}`}
+        >
+          Waitlist
+        </a>
+        <a
+          href="?view=queue"
+          className={`yawp-entry-button yawp-entry-button-secondary text-sm ${data.view === 'queue' ? 'ring-2 ring-primary' : ''}`}
+        >
+          Review queue
+        </a>
         <span className="text-muted-foreground text-sm">Release cap: {data.cap}</span>
       </div>
+      {releaseFetcher.data && 'emailFailureCount' in (releaseFetcher.data as object) ? (
+        <p className="text-sm rounded-md border p-3 bg-muted" role="status">
+          Released {(releaseFetcher.data as { releasedCount: number }).releasedCount} application(s).
+          {(releaseFetcher.data as { emailFailureCount: number }).emailFailureCount > 0
+            ? ` ${(releaseFetcher.data as { emailFailureCount: number }).emailFailureCount} release email(s) failed — check email logs and retry from support tools.`
+            : ' Release emails sent.'}
+        </p>
+      ) : null}
       {data.view === 'waitlist' && 'waitlist' in data ? (
-        <Form method="post">
+        <releaseFetcher.Form method="post">
           <input type="hidden" name="intent" value="release" />
-          <table className="w-full text-sm">
+          <table className="w-full text-sm border-collapse">
             <thead>
               <tr>
                 <th />
@@ -166,30 +203,40 @@ export default function AdminFreeTierRoute() {
               ))}
             </tbody>
           </table>
-          <button type="submit" className="mt-3 rounded-md border px-3 py-1">Release selected</button>
-        </Form>
+          <button type="submit" className="mt-3 yawp-entry-button yawp-entry-button-primary">
+            Release selected
+          </button>
+        </releaseFetcher.Form>
       ) : 'queue' in data ? (
         <div className="space-y-4">
           {data.queue.map((app: (typeof data.queue)[number]) => (
-            <div key={app.id} className="border rounded-md p-3 text-sm space-y-2">
+            <div key={app.id} className="border rounded-lg p-4 text-sm space-y-3 bg-card">
               <div className="font-medium">{app.name} — {app.schoolName} ({app.status})</div>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap items-end">
                 <fetcher.Form method="post">
                   <input type="hidden" name="intent" value="approve" />
                   <input type="hidden" name="applicationId" value={app.id} />
-                  <button type="submit">Approve</button>
+                  <button type="submit" className="yawp-entry-button yawp-entry-button-primary text-sm">
+                    Approve
+                  </button>
                 </fetcher.Form>
-                <fetcher.Form method="post" className="flex gap-1">
+                <fetcher.Form method="post" className="flex gap-2 flex-wrap items-end">
                   <input type="hidden" name="intent" value="reject" />
                   <input type="hidden" name="applicationId" value={app.id} />
-                  <input name="reason" placeholder="Reason" required className="border px-1" />
-                  <button type="submit">Reject</button>
+                  <input
+                    name="reason"
+                    placeholder="Reason"
+                    required
+                    className="rounded-md border px-3 py-2 text-sm min-w-[12rem]"
+                  />
+                  <button type="submit" className="yawp-entry-button yawp-entry-button-secondary text-sm">
+                    Reject
+                  </button>
                 </fetcher.Form>
               </div>
-              <details>
-                <summary>Timeline</summary>
-                <pre className="text-xs overflow-auto">{JSON.stringify({ decisions: app.approvalDecisions, admins: app.adminApprovals, emails: app.emailLogs }, null, 2)}</pre>
-              </details>
+              <pre className="text-xs overflow-auto rounded-md border bg-muted p-2 max-h-48">
+                {JSON.stringify({ decisions: app.approvalDecisions, admins: app.adminApprovals, emails: app.emailLogs }, null, 2)}
+              </pre>
             </div>
           ))}
         </div>
@@ -203,7 +250,7 @@ export default function AdminFreeTierRoute() {
         <label className="text-sm flex gap-1 items-center">
           <input type="checkbox" name="bypass" /> Bypass waitlist
         </label>
-        <button type="submit">Create token</button>
+        <button type="submit" className="yawp-entry-button yawp-entry-button-secondary text-sm">Create token</button>
       </Form>
       {fetcher.data && 'tokens' in (fetcher.data as object) ? (
         <p className="text-sm text-green-700">Token (shown once): {(fetcher.data as { tokens: { token: string }[] }).tokens[0]?.token}</p>

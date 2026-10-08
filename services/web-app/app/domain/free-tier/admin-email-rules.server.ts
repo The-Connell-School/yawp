@@ -25,8 +25,7 @@ export function mailboxIdentity(email: string): string {
 
 export type AdminEmailCheckResult =
   | { ok: true; manualReview: false }
-  | { ok: true; manualReview: true; reason: 'consumer_domain' | 'domain_mismatch' | 'same_as_teacher' }
-  | { ok: false; reason: 'same_as_teacher' };
+  | { ok: true; manualReview: true; reason: 'consumer_domain' | 'domain_mismatch' | 'same_as_teacher' };
 
 export function evaluateAdminEmail(args: {
   teacherEmail: string;
@@ -35,7 +34,9 @@ export function evaluateAdminEmail(args: {
 }): AdminEmailCheckResult {
   const teacherMailbox = mailboxIdentity(args.teacherEmail);
   const adminMailbox = mailboxIdentity(args.adminEmail);
-  if (teacherMailbox === adminMailbox) return { ok: false, reason: 'same_as_teacher' };
+  if (teacherMailbox === adminMailbox) {
+    return { ok: true, manualReview: true, reason: 'same_as_teacher' };
+  }
 
   const adminDomain = emailDomain(args.adminEmail);
   const teacherDomain = emailDomain(args.teacherEmail);

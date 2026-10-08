@@ -16,6 +16,7 @@ import {
   getPreviewAccessSeat,
   isIsolatedPreviewSeatMode,
 } from '~/utils/preview-access.server';
+import { FreeTierEntryHeader } from './FreeTierEntryHeader';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = new URL(request.url).searchParams.get('t') ?? '';
@@ -102,8 +103,8 @@ export default function FreeJoinRoute() {
   return (
     <main className="yawp-entry">
       <section className="yawp-entry-shell max-w-lg">
-        <h1 className="text-2xl font-semibold mb-2">Before we begin</h1>
-        <ul className="list-disc pl-5 text-sm space-y-2 mb-6 text-muted-foreground">
+        <FreeTierEntryHeader title="Before we begin" subtitle="Create your free classroom account." />
+        <ul className="list-disc pl-5 text-sm space-y-2 mb-6 text-muted-foreground max-w-prose">
           <li>Students&apos; drafts stay in your classroom. You decide what to assign and when work is final.</li>
           <li>The writing tutor gives feedback while students draft. You always review grades and submissions.</li>
           <li>Student writing is not used to train public AI models.</li>

@@ -17,19 +17,23 @@ test('onboarding action redirects without returning approval tokens', async () =
     },
   }));
 
-  const response = await action({
-    request: new Request('https://yawp.test/app/free-tier/onboarding', {
-      method: 'POST',
-      body: new URLSearchParams({
-        adminName: 'Pat',
-        adminEmail: 'pat@school.edu',
-        adminRole: 'Principal',
+  let res: Response;
+  try {
+    await action({
+      request: new Request('https://yawp.test/app/free-tier/onboarding', {
+        method: 'POST',
+        body: new URLSearchParams({
+          adminName: 'Pat',
+          adminEmail: 'pat@school.edu',
+          adminRole: 'Principal',
+        }),
       }),
-    }),
-  } as never);
-
-  expect(response).toBeInstanceOf(Response);
-  const res = response as Response;
+    } as never);
+    throw new Error('expected redirect');
+  } catch (response) {
+    expect(response).toBeInstanceOf(Response);
+    res = response as Response;
+  }
   expect(res.status).toBe(302);
   expect(res.headers.get('location')).toBe('/app/free-tier/pending');
   const body = await res.text();

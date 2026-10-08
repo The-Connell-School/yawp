@@ -47,7 +47,8 @@ export default function FreeTierOnboardingRoute() {
     notRightPersonUrl: 'https://yawp.school/free/admin/not-right-person',
   });
   return (
-    <main className="p-6 max-w-2xl mx-auto space-y-6">
+    <main className="yawp-entry">
+      <section className="yawp-entry-shell max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Administrator approval</h1>
         <p className="text-muted-foreground">
@@ -79,6 +80,7 @@ export default function FreeTierOnboardingRoute() {
           Send approval request
         </button>
       </Form>
+      </section>
     </main>
   );
 }

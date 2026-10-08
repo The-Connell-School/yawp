@@ -6,14 +6,17 @@ import {
 } from './admin-email-rules.server';
 import { isConsumerEmailDomain } from './consumer-email-domains';
 
-test('rejects admin email matching teacher', () => {
-  expect(evaluateAdminEmail({ teacherEmail: 't@school.edu', adminEmail: 't@school.edu' }).ok).toBe(false);
+test('routes exact teacher mailbox to manual review', () => {
+  const r = evaluateAdminEmail({ teacherEmail: 't@school.edu', adminEmail: 't@school.edu' });
+  expect(r.ok && r.manualReview && r.reason).toBe('same_as_teacher');
 });
 
-test('rejects plus-tag alias of teacher mailbox', () => {
-  expect(
-    evaluateAdminEmail({ teacherEmail: 'teacher@school.edu', adminEmail: 'teacher+alias@school.edu' }).ok
-  ).toBe(false);
+test('routes plus-tag alias of teacher mailbox to manual review', () => {
+  const r = evaluateAdminEmail({
+    teacherEmail: 'teacher@school.edu',
+    adminEmail: 'teacher+alias@school.edu',
+  });
+  expect(r.ok && r.manualReview && r.reason).toBe('same_as_teacher');
 });
 
 test('normalizes gmail dots and plus tags', () => {

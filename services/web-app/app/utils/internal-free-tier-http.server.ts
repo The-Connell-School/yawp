@@ -145,7 +145,9 @@ export async function releaseBatchHttp(request: Request) {
         select: { id: true },
       });
       const { sendReleaseEmailsForApplicationIds } = await import('~/domain/free-tier/approval-flow.server');
-      await sendReleaseEmailsForApplicationIds(leads.map((l) => l.id));
+      const emailResults = await sendReleaseEmailsForApplicationIds(leads.map((l) => l.id));
+      const emailFailures = emailResults.filter((r) => !r.ok);
+      return response({ ...result, emailFailures, emailFailureCount: emailFailures.length });
     }
     return response(result);
   } catch { return response({ error: 'Invalid input' }, 400); }
