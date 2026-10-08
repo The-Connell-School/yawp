@@ -43,6 +43,7 @@ jobs:
           bun test
           ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
           ./packages/prisma/scripts/migration-integration.test.ts
+          ./packages/prisma/scripts/holistic-migration-label.integration.test.ts
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration
 

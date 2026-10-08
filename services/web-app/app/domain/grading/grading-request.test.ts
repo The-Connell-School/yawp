@@ -160,6 +160,7 @@ describe('per-assignment grading context in the request', () => {
       bandScored: true,
       systemPrompt: 'system',
       rubricText: 'rubric',
+      holisticScoring: false,
     },
     instructions: {
       mode: 'unified' as const,

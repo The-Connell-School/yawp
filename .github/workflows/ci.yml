@@ -327,6 +327,12 @@ jobs:
             app/domain/feature-flags/feature-flags.test.ts \
             app/domain/feature-flags/feature-flags.server.test.ts \
             app/utils/internal-feature-flags-http.server.test.ts \
+            app/domain/rubrics/rubric-promotion.test.ts \
+            app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
+            app/domain/grading/gradeMath.test.ts \
+            app/routes/api.domain.update-submission/route.test.ts \
+            'app/routes/app_.submissions_.$submissionId/teacher-grading/view-panel.test.tsx' \
+            app/domain/reporter/reporter-report.test.ts \
             app/routes/api.assignments.create/route.test.ts \
             app/routes/app.assignments._index/route.test.ts \
             app/routes/app.my-classes._index/route.test.ts \
