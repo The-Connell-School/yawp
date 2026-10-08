@@ -361,6 +361,13 @@ async function runStoryboardGeneration(params: {
           kind: params.kind,
           attempt,
         },
+        // Studio renders are an admin tool with no tenant to bill.
+        attribution: {
+          organizationId: null,
+          membershipId: null,
+          route: 'services/marketing-storyboard.server',
+          requestId: crypto.randomUUID(),
+        },
       })
     );
     lastRaw = raw;
