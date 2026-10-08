@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
+import type { LoaderFunctionArgs } from 'react-router';
 
 const findUnique = mock();
 
@@ -32,7 +33,7 @@ describe('free.admin.approve loader', () => {
       request: new Request('https://yawp.test/free/admin/approve?t=token'),
       params: {},
       context: {},
-    });
+    } as LoaderFunctionArgs);
     expect(data).toEqual({
       ok: false,
       reason: 'declined',
