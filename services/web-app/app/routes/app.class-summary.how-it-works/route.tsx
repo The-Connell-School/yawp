@@ -188,7 +188,7 @@ export default function ClassSummaryHowItWorksRoute() {
           <GuideStep n={3}>Plan what’s next</GuideStep>
           <GuideH3>Turn the gaps into next steps</GuideH3>
           <GuideCopy>
-            Suggested teaching moves, plus small groups and students to check in
+            Suggested teaching moves, small groups, and students to check in
             with, drawn from rubric scores.
           </GuideCopy>
         </GuideRow>

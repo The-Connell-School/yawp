@@ -104,7 +104,7 @@ export default function WritingPracticeHowItWorksRoute() {
           }
         >
           <GuideCopy>
-            Every lesson starts with a short explanation and examples, then
+            Every lesson starts with a short explanation, examples, and then
             practice problems.
           </GuideCopy>
           <GuideList
