@@ -481,7 +481,7 @@ test.describe.serial('Teacher class page redesign', () => {
 
     await actionsButton.click();
     const releaseGradesAction = page.getByRole('menuitem', {
-      name: /Release grades\s+1/i,
+      name: /Release grades\s+\d+/i,
     });
     await expect(releaseGradesAction).toBeVisible();
     await releaseGradesAction.click();

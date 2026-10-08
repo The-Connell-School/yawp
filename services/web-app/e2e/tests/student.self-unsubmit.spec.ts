@@ -4,7 +4,7 @@ import { EDITOR_SELECTOR } from '../test-helpers';
 import type { E2EContext } from '../seed-e2e';
 
 const GRADED_REASON =
-  'This submission has been graded and can no longer be unsubmitted.';
+  "This submission can't be unsubmitted right now. Ask your teacher if you need to make changes.";
 
 async function createSubmissionFixture(
   prisma: E2EPrismaClient,

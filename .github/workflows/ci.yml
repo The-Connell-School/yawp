@@ -214,6 +214,12 @@ jobs:
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
           ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
+          ./services/web-app/app/domain/submissions/student-submission-grade-visibility.server.test.ts
+          './services/web-app/app/routes/app_.submissions_.$submissionId/route.loader.test.ts'
+          './services/web-app/app/routes/app.assignment-types.$id/route.test.ts'
+          './services/web-app/app/routes/app_.documents_.$id/route.test.ts'
+          ./services/web-app/e2e/decode-router-data.test.ts
+          # decode-router-data: turbo .data assertions in student.unreleased-grade-loader-privacy E2E
 
       - name: 🎨 Backfill class artwork keys
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
