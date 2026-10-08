@@ -336,8 +336,9 @@ jobs:
     # The browser download hung for five hours on 2026-08-18 and would have run
     # to GitHub's six-hour default before failing. Nothing about this job is
     # worth half a day of a runner: the tests themselves take about seven
-    # minutes, so anything past half an hour is wedged, not slow.
-    timeout-minutes: 30
+    # minutes; the smoke list includes free-tier onboarding (~3 min) plus
+    # handle-join and bundle quotas, so allow ~45 minutes with CI retries.
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16
