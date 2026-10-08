@@ -1311,7 +1311,7 @@ export async function seedE2E(): Promise<E2EContext> {
     adminUserId: adminUser.id,
     adminEmail: adminUser.email!,
     superAdminUserId: superAdminUser.id,
-    superAdminEmail: superAdminUser.email,
+    superAdminEmail: superAdminUser.email!,
     membershipId: membership.id,
     teacherUserId: seededTeacher.id,
     teacherMembershipId: seededTeacherMembershipId,
