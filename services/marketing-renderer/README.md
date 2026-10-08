@@ -14,7 +14,10 @@ Narration is phase three and is not implemented here.
 3. This worker claims the oldest ready job, re-validates the storyboard, and
    drives Chromium through it.
 4. Stills — and, for a `CLIP` job, an H.264 MP4 — go to the videos bucket under
-   `marketing-media/<jobId>/`. The job flips to `SUCCEEDED` with the output list.
+   `marketing-media/<jobId>/`. A `GUIDE` job is filmed the same way, then each
+   guide step is cut into its own short loop and everything is inlined into one
+   how-to guide page (`src/guide.ts`), shipped as a `DOCUMENT` output beside its
+   stills and loops. The job flips to `SUCCEEDED` with the output list.
 5. The admin page signs a short-lived URL per output. Nothing is public.
 
 A failure re-queues the job until `MAX_RENDER_ATTEMPTS`, then stops with the

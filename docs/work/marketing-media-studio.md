@@ -4,8 +4,41 @@
 **Branch:** `claude/yawp-marketing-skill-ydi8ne`
 
 An admin describes a feature or a course; YAWP! writes a storyboard, films it
-against a demo environment, and hands back screenshots (phase 1) or a short
-silent clip (phase 2) for marketing use.
+against a demo environment, and hands back screenshots (phase 1), a short
+silent clip (phase 2), or a how-to guide for marketing use.
+
+## How-to guides (`GUIDE` jobs)
+
+A guide is the studio's lead deliverable: one self-contained HTML page in the
+shape of the in-app "See how it works" guides (`docs/how-to-guides.md`), which
+a school can forward to a department head or a district can approve a feature
+from. Clips and stills are its parts.
+
+- **Copy on the storyboard.** A guide storyboard carries a `guide` block
+  (headline, highlight, lede, workflow heading, range list, use cases, will,
+  won't, demo footer, start label) and tags scenes `hero`, `range`, `step`, or
+  `extra` with a heading and a line or two. Untagged scenes are filmed only to
+  get the camera somewhere.
+- **The standard is enforced, not suggested.** `validateGuideStoryboard` holds
+  the shape (one hero still, at most 3 steps, will and won't, demo footer). A
+  generated draft that misses it goes back to the model with what is missing,
+  and a pasted one is refused. `lintGuideCopy` catches em-dash asides, "not X,
+  but Y", marketing filler, a missing Oxford comma, and YAWP! written any other
+  way. Lint findings get the model one more pass and never fail a job.
+- **The prompt is the style guide.** The GUIDE system prompt carries the job of
+  a guide, its shape, the copy rules, the will / won't honesty rule, and the
+  Reporter guide's voice as the example.
+- **Rendering.** The run is filmed once like a clip. Each tagged scene with
+  something happening in it is cut into its own silent 1120px H.264 loop, each
+  tagged still is downscaled to a 1120px JPEG, and everything is inlined into
+  `<slug>.html` (a `DOCUMENT` output). The page has no script and loads
+  nothing; it works from an email attachment, prints cleanly (clips fall back
+  to stills), and respects dark mode and reduced motion.
+- **Review.** The job page shows the guide in a sandboxed frame with a short
+  pre-share checklist. The model cannot read the code, so a person still checks
+  every won't line is true before the guide is shared.
+- **Library.** `library-daily-pages-guide` renders a Daily Pages guide with
+  one click from verified targets.
 
 ## Why it is shaped this way
 
@@ -90,7 +123,8 @@ renderer to zero. The table and routes can stay.
   today only in the local `yawp-marketing-media` Claude skill. Bringing it
   in-app means either shipping the voice model in the worker image or moving to
   hosted TTS, plus narration timing, which is the fiddliest part of the skill.
-- **Copy generation.** The studio produces media, not captions or launch posts.
+- **Copy generation beyond guides.** Guides carry their own copy; the studio
+  still does not write captions or launch posts for clips and stills.
 - **Demo data seeding for a chosen course.** Picking a course today attaches it
   to the job and tells the model about it; it does not copy that course into the
   demo tenant. Storyboards therefore film what the demo tenant already has.

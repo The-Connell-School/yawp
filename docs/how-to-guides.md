@@ -48,3 +48,12 @@ Skip a "Where it lives" section. A teacher reads the guide after opening the fea
 - Media: `public/img/<feature>-guide/`.
 - Button: **See how it works**, in the feature's page header. Icon only on a phone, with an `aria-label`.
 - Test: an E2E test that opens the guide from the button, checks the "won't" section and checks phone width.
+
+## Making one in the Marketing Studio
+
+The admin Marketing Studio (`/app/admin/marketing-media`, demo environments only) can draft a guide from a brief. Pick **How-to guide** as the deliverable. The studio writes the copy to these rules, films the steps against demo data, and hands back one self-contained page with looping clips that can be emailed, attached to a proposal, or printed.
+
+The rules above live in code there too: `packages/marketing-media/src/guide.ts` checks the shape and the copy, and the guide prompt in `services/web-app/app/services/marketing-storyboard.server.ts` teaches them to the model. Change them together with this page.
+
+A studio guide is a draft. The model cannot read the code, so check every "won't" line before it goes anywhere.
+
