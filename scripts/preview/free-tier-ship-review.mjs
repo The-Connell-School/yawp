@@ -88,16 +88,23 @@ async function waitForPostApprovalApp(page, email) {
   throw new Error(`Post-approval did not reach my-classes (last URL: ${page.url()})`);
 }
 
-async function shot(page, name, manifest) {
-  const file = path.join(outDir, `${name}.png`);
+async function shot(page, name, manifest, options = {}) {
+  const suffix = options.mobile ? '-mobile' : '';
+  const file = path.join(outDir, `${name}${suffix}.png`);
   await page.screenshot({ path: file, fullPage: true });
   const bytes = await readFile(file);
   const md5 = createHash('md5').update(bytes).digest('hex');
-  manifest.shots.push({ file: `${name}.png`, md5 });
+  manifest.shots.push({ file: `${name}${suffix}.png`, md5 });
   return file;
 }
 
-async function pollJoinManifest(page, email, attempts = 40) {
+async function withMobileViewport(page, fn) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await fn();
+  await page.setViewportSize({ width: 1280, height: 900 });
+}
+
+async function pollJoinManifest(page, email, attempts = 80) {
   const normalized = email.trim().toLowerCase();
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
@@ -196,6 +203,10 @@ async function main() {
     {
       const { context, page } = await freshContext(browser);
       await page.goto(`${baseUrl}/free`);
+      await shot(page, '01-free-waitlist', manifest);
+      await withMobileViewport(page, async () => {
+        await shot(page, '01-free-waitlist', manifest, { mobile: true });
+      });
       await page.fill('input[name="name"]', 'Ship Review Waitlist');
       await page.fill('input[name="email"]', `shipreview-waitlist+${Date.now()}@shipreview-high.edu`);
       await page.fill('input[name="schoolName"]', 'Ship Review High');
@@ -204,6 +215,9 @@ async function main() {
       await page.getByRole('button', { name: /Join the waitlist/i }).click();
       await page.getByRole('status').getByText(/on the list/i).waitFor({ timeout: 20_000 });
       await shot(page, '01-free-waitlist-submitted', manifest);
+      await withMobileViewport(page, async () => {
+        await shot(page, '01-free-waitlist-submitted', manifest, { mobile: true });
+      });
       await context.close();
     }
 
