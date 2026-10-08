@@ -30,6 +30,17 @@ export async function repairLessonPlannerMigrationHistory(
   prisma: ReturnType<typeof createPrismaClient>
 ) {
   let updated = 0;
+  let clearedFailed = 0;
+  const newNames = Object.values(LESSON_PLANNER_MIGRATION_RENAMES);
+  for (const newName of newNames) {
+    const deleted = await prisma.$executeRaw`
+      DELETE FROM "_prisma_migrations"
+      WHERE migration_name = ${newName} AND finished_at IS NULL
+    `;
+    if (typeof deleted === 'number' && deleted > 0) {
+      clearedFailed += deleted;
+    }
+  }
   for (const [oldName, newName] of Object.entries(
     LESSON_PLANNER_MIGRATION_RENAMES
   )) {
@@ -47,7 +58,7 @@ export async function repairLessonPlannerMigrationHistory(
     `;
     updated += 1;
   }
-  return { updated };
+  return { updated, clearedFailed };
 }
 
 if (import.meta.main) {
