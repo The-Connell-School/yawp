@@ -677,9 +677,16 @@ run_tooling_if_needed() {
     TOOLING_CHANGED=0
     # Even when skipping full tooling, always run idempotent seeds that must
     # keep preview data current with the codebase (e.g., AP History library).
+    local skip_path_seeds='bun prisma generate'
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
-      echo "Running AP History library seed on existing preview database (skip path)."
-      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && bun run seed-ap-history-library'
+      skip_path_seeds+=' && bun run seed-ap-history-library'
+    fi
+    if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-planner-qa.ts" ]]; then
+      skip_path_seeds+=' && bun run seed-preview-planner-qa'
+    fi
+    if [[ "$skip_path_seeds" != 'bun prisma generate' ]]; then
+      echo "Running idempotent preview seeds on existing database (skip path)."
+      "${compose[@]}" run --rm toolbox bash -lc "$skip_path_seeds"
     fi
     return 0
   fi
