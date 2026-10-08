@@ -44,10 +44,27 @@ describe('free-tier approval flow', () => {
       secret || 'integration-test-free-tier-link-secret-key';
     process.env.PRIMARY_APP_URL = 'https://yawp.test';
   });
-  afterEach(() => {
+  afterEach(async () => {
     if (secret === undefined) delete process.env.FREE_TIER_LINK_HMAC_SECRET;
     else process.env.FREE_TIER_LINK_HMAC_SECRET = secret;
     setApprovalHooks({});
+    const apps = await prisma.freeTierApplication.findMany({
+      where: { email: { endsWith: '@school.edu' } },
+      select: { id: true, userId: true },
+    });
+    const appIds = apps.map((row) => row.id);
+    const userIds = apps.map((row) => row.userId).filter(Boolean) as string[];
+    if (appIds.length > 0) {
+      await prisma.freeTierSignedLink.deleteMany({ where: { applicationId: { in: appIds } } });
+      await prisma.freeTierEmailLog.deleteMany({ where: { applicationId: { in: appIds } } });
+      await prisma.freeTierAdminApproval.deleteMany({ where: { applicationId: { in: appIds } } });
+      await prisma.freeTierApprovalDecision.deleteMany({ where: { applicationId: { in: appIds } } });
+      await prisma.freeTierApplication.deleteMany({ where: { id: { in: appIds } } });
+    }
+    if (userIds.length > 0) {
+      await prisma.password.deleteMany({ where: { userId: { in: userIds } } });
+      await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    }
   });
 
   test('account → admin submit → approve calls hook once (idempotent second click)', async () => {
