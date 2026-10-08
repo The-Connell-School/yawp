@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireAnonymous = mock();
 const verifyUserPassword = mock();
-const getSessionExpirationDate = mock();
+const getSessionExpirationDateForUser = mock();
 const getSession = mock();
 const commitSession = mock();
 const captureException = mock();
@@ -22,10 +22,16 @@ const prisma = {
 };
 
 mock.module('~/utils/auth.server', () => ({
-  getSessionExpirationDate,
+  getSessionExpirationDateForUser,
   requireAnonymous,
   sessionKey: 'sessionId',
   verifyUserPassword,
+}));
+mock.module('~/utils/rate-limit.server', () => ({
+  enforceLoginTargetRateLimit: async () => ({ allowed: true }),
+  checkFailedLoginIpRateLimit: async () => ({ allowed: true }),
+  recordFailedLoginIpRateLimit: async () => ({ allowed: true }),
+  rateLimitedFormResponse: () => new Response(null, { status: 429 }),
 }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/cookie-session-storages/authentication.server', () => ({
@@ -53,7 +59,7 @@ describe('auth.login', () => {
   beforeEach(() => {
     requireAnonymous.mockReset();
     verifyUserPassword.mockReset();
-    getSessionExpirationDate.mockReset();
+    getSessionExpirationDateForUser.mockReset();
     getSession.mockReset();
     commitSession.mockReset();
     captureException.mockReset();
@@ -64,7 +70,7 @@ describe('auth.login', () => {
     prisma.session.create.mockReset();
     prisma.freeTierApplication.findFirst.mockResolvedValue(null);
 
-    getSessionExpirationDate.mockReturnValue(new Date('2026-01-01T00:00:00.000Z'));
+    getSessionExpirationDateForUser.mockReturnValue(new Date('2026-01-01T00:00:00.000Z'));
     verifyUserPassword.mockResolvedValue({
       id: 'user-1',
       email: 'student@example.com',
