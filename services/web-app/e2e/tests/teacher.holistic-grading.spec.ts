@@ -83,9 +83,10 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     await expect(generateButton).toContainText('Grading Assistant Suggestions', {
       timeout: 120_000,
     });
-    await expect(panel.getByText(pointsLabel, { exact: true })).toBeVisible({
+    await expect(panel.getByText(/\d+\s*\/\s*20/)).toBeVisible({
       timeout: 60_000,
     });
+    await expect(panel.getByText(/%/)).not.toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('holistic-teacher-before-save.png'),
       fullPage: true,
@@ -130,7 +131,8 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
 
     await signIn('jdoe@brock.software', 'johndoe');
     await page.goto(`/app/submissions/${submission.id}`);
-    await expect(page.getByText(pointsLabel, { exact: true })).toBeVisible();
+    await expect(page.getByText(/\d+\s*\/\s*20/)).toBeVisible();
+    await expect(page.getByText(/%/)).not.toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('holistic-student-view.png'),
       fullPage: true,
