@@ -39,6 +39,23 @@ const CASEY_SAMPLE_ENTRY =
   DAILY_PAGES_SAMPLE_ENTRIES[0];
 const ENGAGEMENT_QA_SCORE = 24;
 
+const PR_PREVIEW_DATABASE_NAME = /^yawp_pr_[0-9]+$/;
+
+/** PR preview Postgres only — never yawp_demo or production-like databases. */
+export function previewTeacherNotesQaDatabaseAllowed(
+  databaseUrl = process.env.DATABASE_URL
+): boolean {
+  if (!databaseUrl?.trim()) return false;
+  try {
+    const normalized = databaseUrl.replace(/^postgres:/, 'postgresql:');
+    const pathname = new URL(normalized).pathname.replace(/^\//, '');
+    const databaseName = pathname.split('/')[0]?.split('?')[0] ?? '';
+    return PR_PREVIEW_DATABASE_NAME.test(databaseName);
+  } catch {
+    return false;
+  }
+}
+
 function dailyPagesEngagementRubricSnapshot() {
   const schema = dailyPagesEngagementSchema as {
     rubric: { categories: unknown[] };
@@ -100,6 +117,16 @@ export function shouldRunPreviewTeacherNotesQaSeed() {
 
 export async function seedPreviewTeacherNotesQa(prisma: SeedClient) {
   try {
+    if (!previewTeacherNotesQaDatabaseAllowed()) {
+      console.log(
+        'seed-preview-teacher-notes-qa: skipped (database is not a PR preview yawp_pr_<n> database)'
+      );
+      return {
+        status: 'skipped' as const,
+        reason: 'non-pr-preview-database',
+      };
+    }
+
     const teacherMembership = await prisma.orgMembership.findFirst({
       where: {
         isActive: true,
@@ -119,6 +146,7 @@ export async function seedPreviewTeacherNotesQa(prisma: SeedClient) {
     await ensurePreviewSuperAdmin(prisma, teacherMembership.organizationId);
     await ensureDailyPagesEngagementTeacherNotesEnabled(prisma, true);
     await restoreEssayGradedSamplesMutatedByLegacyQaSeed(prisma, {
+      organizationId: teacherMembership.organizationId,
       teacherMembershipId: teacherMembership.id,
     });
     const submissionId = await ensureEngagementGradedQaSubmission(prisma, {
@@ -205,10 +233,16 @@ function submissionLooksLikeCorruptedEssayGrade(rubricScores: unknown): boolean 
  */
 async function restoreEssayGradedSamplesMutatedByLegacyQaSeed(
   prisma: SeedClient,
-  options: { teacherMembershipId: string }
+  options: { organizationId: string; teacherMembershipId: string }
 ) {
   const mutated = await prisma.submission.findMany({
     where: {
+      document: {
+        membership: {
+          organizationId: options.organizationId,
+          user: { email: PREVIEW_TEACHER_NOTES_QA_STUDENT_EMAIL },
+        },
+      },
       OR: [
         { title: LEGACY_QA_TITLE },
         { title: CASEY_SAMPLE_ENTRY.title },
@@ -274,16 +308,11 @@ async function restoreEssayGradedSamplesMutatedByLegacyQaSeed(
       where: { submissionId: row.id },
       orderBy: { createdAt: 'desc' },
     });
-    const essayMetadata = {
-      ...(run?.metadata && typeof run.metadata === 'object' ? run.metadata : {}),
-    };
-    delete (essayMetadata as { teacherNote?: string }).teacherNote;
-
     if (run) {
       await prisma.submissionGradingAssistantRun.update({
         where: { id: run.id },
         data: {
-          metadata: essayMetadata,
+          metadata: { seeded: true },
           status: 'succeeded',
           assignmentTypeRubricSnapshot: sampleRubricSnapshot(),
           source: 'daily-pages-short-form-default',
@@ -315,7 +344,18 @@ async function ensureEngagementGradedQaSubmission(
   const engagementAssignment = await prisma.assignment.findFirst({
     where: {
       title: PREVIEW_ENGAGEMENT_CHECK_ASSIGNMENT_TITLE,
-      classAssignments: { some: { class: { organizationId: options.organizationId } } },
+      classAssignments: {
+        some: {
+          class: {
+            teachers: {
+              some: {
+                organizationId: options.organizationId,
+                isActive: true,
+              },
+            },
+          },
+        },
+      },
     },
     orderBy: { createdAt: 'asc' },
     select: {
