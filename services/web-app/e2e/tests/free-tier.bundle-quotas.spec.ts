@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+const FREE_CLASSROOM_PASSWORD = 'yawp-dev';
+
 test.describe('Free classroom bundle quotas', () => {
   test('teacher sees assignment type counters in the creation sheet', async ({
     page,
@@ -7,11 +9,21 @@ test.describe('Free classroom bundle quotas', () => {
     const email =
       process.env.E2E_FREE_CLASSROOM_TEACHER_EMAIL ??
       'dev.teacher.free@yawp.local';
-    const login = await page.request.post('/auth/dev-login', {
-      form: { email },
-      maxRedirects: 0,
-    });
-    expect(login.ok()).toBeTruthy();
+
+    await page.goto('/auth/login');
+    await page.waitForLoadState('networkidle');
+    await page.locator('input[type="email"]').fill(email);
+    await page.locator('input[type="password"]').fill(FREE_CLASSROOM_PASSWORD);
+    await page.getByRole('button', { name: /log in/i }).click();
+    await page.waitForURL(
+      (url) =>
+        url.pathname.startsWith('/app') || url.pathname === '/enter-code',
+      { timeout: 15000 }
+    );
+    if (new URL(page.url()).pathname === '/enter-code') {
+      throw new Error('Free classroom teacher should not require enter-code in E2E');
+    }
+
     await page.goto('/app');
     await page
       .getByRole('button', { name: /new assignment|create assignment/i })
