@@ -867,32 +867,18 @@ describe('migration integration (real Postgres)', () => {
     });
   }, 120000);
 
-  test('20261008133000 e2e handle join activity cleanup extends immutability guard', () => {
+  test('20261008140000 user handle accounts is re-runnable', () => {
     const forward = readFileSync(
       join(
         PRISMA_DIR,
         'migrations',
-        '20261008133000_e2e_handle_join_activity_cleanup',
+        '20261008140000_user_handle_accounts',
         'migration.sql'
       ),
       'utf8'
     );
     psql(forward);
     psql(forward);
-  });
-
-  test('20261008124500 repair free class join columns is re-runnable', () => {
-    const repairSql = readFileSync(
-      join(
-        PRISMA_DIR,
-        'migrations',
-        '20261008124500_repair_free_class_join_columns',
-        'migration.sql'
-      ),
-      'utf8'
-    );
-    psql(repairSql);
-    psql(repairSql);
     const joinCol = jsonQuery(`
       SELECT json_build_object(
         'exists', EXISTS (

@@ -1,6 +1,7 @@
 SET lock_timeout = '5s';
 
--- Additive migration: nullable email, optional username (handle), email verification timestamp.
+-- Handle + password free-tier student accounts (sorts after 20261008001100).
+-- Idempotent: safe on preview DBs that partially applied an older migration name.
 --
 -- Rollback (production has NOT applied a later migration that depends on these columns):
 --   1. Stop app traffic.
@@ -15,8 +16,7 @@ SET lock_timeout = '5s';
 --  10. Backfill NULL emails before NOT NULL (only if no handle-only users remain):
 --      UPDATE "User" SET email = username || '@invalid.local' WHERE email IS NULL;
 --  11. psql $DATABASE_URL -c 'ALTER TABLE "User" ALTER COLUMN "email" SET NOT NULL;'
---   12. Mark migration rolled back in Prisma history:
---      cd packages/prisma && bun prisma migrate resolve --rolled-back 20261007193000_user_handle_accounts
+--  12. cd packages/prisma && bun prisma migrate resolve --rolled-back 20261008140000_user_handle_accounts
 
 ALTER TABLE "User" ALTER COLUMN "email" DROP NOT NULL;
 
@@ -37,10 +37,6 @@ DO $$ BEGIN
     CHECK ("email" IS NOT NULL OR "username" IS NOT NULL);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
-
-UPDATE "User"
-SET "emailVerifiedAt" = "createdAt"
-WHERE "email" IS NOT NULL AND "emailVerifiedAt" IS NULL;
 
 ALTER TABLE "Class" ADD COLUMN IF NOT EXISTS "studentJoinToken" TEXT;
 
