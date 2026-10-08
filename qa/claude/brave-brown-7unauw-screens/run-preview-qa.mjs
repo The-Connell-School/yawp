@@ -150,11 +150,38 @@ async function main() {
     await page.waitForLoadState('networkidle');
     await page.screenshot({ path: shot('07-reporter-home.png'), fullPage: true });
 
+    const seededClassId = 'previewqa000class00001';
+    await page.goto(
+      `${previewUrl}/app/my-classes/${seededClassId}/summary/${QA.insightAssignmentId}`
+    );
+    await page.waitForLoadState('networkidle');
+    let classId = seededClassId;
+    if (
+      await page
+        .getByText(/something didn't work|Class not found/i)
+        .isVisible()
+        .catch(() => false)
+    ) {
     await page.goto(`${previewUrl}/app/my-classes`);
     await page.waitForLoadState('networkidle');
-    const qaAssignmentLink = page
+    let qaAssignmentLink = page
       .getByRole('link', { name: /\[QA\] Class summary insight/i })
       .first();
+    if (!(await qaAssignmentLink.isVisible().catch(() => false))) {
+      const classCard = page.getByRole('link', { name: /English 10|Period 3/i }).first();
+      if (await classCard.isVisible().catch(() => false)) {
+        await classCard.click();
+        await page.waitForLoadState('networkidle');
+        const assignmentsTab = page.getByRole('tab', { name: /assignments/i });
+        if (await assignmentsTab.isVisible().catch(() => false)) {
+          await assignmentsTab.click();
+          await page.waitForLoadState('networkidle');
+        }
+      }
+      qaAssignmentLink = page
+        .getByRole('link', { name: /\[QA\] Class summary insight/i })
+        .first();
+    }
     await qaAssignmentLink.waitFor({ state: 'visible', timeout: 120_000 });
     const assignmentHref = await qaAssignmentLink.getAttribute('href');
     const classIdMatch = assignmentHref?.match(/\/my-classes\/([^/]+)/);
