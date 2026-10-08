@@ -34,6 +34,12 @@ const { action: orgClassesAction } = await import(
   './app.organization.classes/route'
 );
 
+function actionHttpStatus(result: unknown) {
+  if (result instanceof Response) return result.status;
+  const wrapped = result as { init?: ResponseInit };
+  return wrapped.init?.status ?? 200;
+}
+
 describe.skipIf(!process.env.DATABASE_URL)(
   'free tier class create routes (real db)',
   () => {
@@ -132,7 +138,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         context: {} as never,
       } as any);
 
-      expect(response.init?.status ?? 200).toBe(403);
+      expect(actionHttpStatus(response)).toBe(403);
       const after = await prisma.class.count({
         where: { isArchived: false, school: { organizationId: org.id } },
       });
@@ -159,7 +165,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         context: {} as never,
       } as any);
 
-      expect(response.init?.status ?? 200).toBe(200);
+      expect(actionHttpStatus(response)).toBe(200);
       const after = await prisma.class.count({
         where: { isArchived: false, school: { organizationId: org.id } },
       });
@@ -189,7 +195,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         context: {} as never,
       } as any);
 
-      expect(response.init?.status ?? 200).toBe(403);
+      expect(actionHttpStatus(response)).toBe(403);
       const after = await prisma.class.count({
         where: { isArchived: false, school: { organizationId: org.id } },
       });
@@ -219,7 +225,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         context: {} as never,
       } as any);
 
-      expect(response.init?.status ?? 200).toBe(200);
+      expect(actionHttpStatus(response)).toBe(200);
       const after = await prisma.class.count({
         where: { isArchived: false, school: { organizationId: org.id } },
       });
