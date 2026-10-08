@@ -6,9 +6,10 @@
 import type { Prisma } from '../generated/prisma';
 import {
   composeExitTicketPrompt,
+  EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   type ExitTicketConfig,
 } from '../../../services/web-app/app/domain/assignment-types/exit-ticket';
-import type { createPrismaClient } from './local-dev/connection';
+import { createPrismaClient } from './local-dev/connection';
 import { isLocalDatabaseUrl } from './local-dev/database-url';
 import {
   PREVIEW_PLANNER_QA_IDS,
@@ -245,7 +246,7 @@ export async function seedPreviewPlannerQa(
   }
 
   const exitConfig: ExitTicketConfig = {
-    schemaVersion: 1,
+    schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
     mode: 'specific',
     focus: 'explain-concept',
     topic: 'what a comma splice is and how to fix one',
