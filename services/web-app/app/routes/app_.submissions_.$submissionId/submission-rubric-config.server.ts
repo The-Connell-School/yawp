@@ -1,4 +1,8 @@
 import { scaleDailyPagesForAssignment } from '~/domain/assignment-types/daily-pages-assignment-points';
+import {
+  DAILY_PAGES_ENGAGEMENT_CATEGORY_KEY,
+  usesDailyPagesEngagementPointScaling,
+} from '~/domain/assignment-types/daily-pages-engagement-rubric';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import {
   legacyRubricDisplayConfig,
@@ -55,6 +59,12 @@ function parseSnapshotCategory(value: unknown): RubricSnapshotCategory | null {
   const bands = parseRubricScoreBands(value.bands);
   const feedbackEnabled = parseOptionalBoolean(value.feedbackEnabled);
   const grammarHighlighting = parseOptionalBoolean(value.grammarHighlighting);
+  const allowedScores = Array.isArray(value.allowedScores)
+    ? value.allowedScores.filter(
+        (score): score is number =>
+          typeof score === 'number' && Number.isFinite(score)
+      )
+    : undefined;
 
   return {
     key,
@@ -65,6 +75,7 @@ function parseSnapshotCategory(value: unknown): RubricSnapshotCategory | null {
     ...(bands ? { bands } : {}),
     ...(feedbackEnabled === undefined ? {} : { feedbackEnabled }),
     ...(grammarHighlighting === undefined ? {} : { grammarHighlighting }),
+    ...(allowedScores?.length ? { allowedScores } : {}),
   };
 }
 
@@ -159,23 +170,52 @@ export async function resolveRubricConfigForSubmission({
   let activeConfig = snapshotConfig
     ? { ...snapshotConfig, source: parseRubricDisplaySource(latestGradingRun?.source) }
     : null;
-  if (!activeConfig) {
+
+  const snapshotNeedsDailyPagesBandRefresh =
+    activeConfig != null &&
+    Number.isSafeInteger(pointValue) &&
+    pointValue === activeConfig.maxScore &&
+    pointValue !== 100 &&
+    activeConfig.categories.some(
+      (category) =>
+        category.key === DAILY_PAGES_ENGAGEMENT_CATEGORY_KEY &&
+        category.bands?.some((band) => /100-point/.test(band.description ?? ''))
+    );
+
+  if (!activeConfig || snapshotNeedsDailyPagesBandRefresh) {
     const assignmentTypeConfig = scaleDailyPagesForAssignment(
       await resolveAssignmentTypeGradingConfig({ assignmentTypeId, assignmentId }),
       pointValue,
     );
-    activeConfig = {
+    const scaledDailyPagesDisplay = {
       categories: assignmentTypeConfig.rubricCategories,
       minScore: assignmentTypeConfig.minScore,
       maxScore: assignmentTypeConfig.maxScore,
       step: assignmentTypeConfig.step,
       scoringType: assignmentTypeConfig.scoringType,
-      source: assignmentTypeConfig.source,
+      source: parseRubricDisplaySource(assignmentTypeConfig.source),
       rubricIncomplete: assignmentTypeConfig.rubricIncomplete,
       ...(assignmentTypeConfig.scoringMode
         ? { scoringMode: assignmentTypeConfig.scoringMode }
         : {}),
     };
+
+    if (!activeConfig) {
+      activeConfig = scaledDailyPagesDisplay;
+    } else if (
+      usesDailyPagesEngagementPointScaling(
+        assignmentTypeConfig.outputSchemaSnapshot
+      )
+    ) {
+      activeConfig = {
+        ...activeConfig,
+        categories: scaledDailyPagesDisplay.categories,
+        step: scaledDailyPagesDisplay.step,
+        ...(scaledDailyPagesDisplay.scoringMode
+          ? { scoringMode: scaledDailyPagesDisplay.scoringMode }
+          : {}),
+      };
+    }
   }
 
   const storedKeys = rubricKeysFromScores(rubricScores);

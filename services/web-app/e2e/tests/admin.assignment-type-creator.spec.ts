@@ -143,12 +143,12 @@ test.describe('Admin assignment type creator', () => {
     }
   });
 
-  test('creation selects the new Daily Pages short-form static rubric', async ({
+  test('creation selects the Daily Pages engagement library rubric', async ({
     page,
     signIn,
   }) => {
     const prisma = createE2EPrismaClient();
-    const title = `Short-form Creator QA ${Date.now()}`;
+    const title = `Engagement Creator QA ${Date.now()}`;
     let assignmentTypeId: string | null = null;
 
     try {
@@ -163,9 +163,9 @@ test.describe('Admin assignment type creator', () => {
         .fill('Minimal assignment type creator QA test.');
 
       await page.getByTestId('rubric-library-select').click();
-      await page.getByRole('option', { name: 'Daily Pages short-form writing', exact: true }).click();
-      const shortForm = await prisma.rubric.findUniqueOrThrow({
-        where: { name: 'daily-pages-short-form' },
+      await page.getByRole('option', { name: 'Daily Pages engagement', exact: true }).click();
+      const engagement = await prisma.rubric.findUniqueOrThrow({
+        where: { name: 'daily-pages-engagement' },
       });
       await Promise.all([
         page.waitForURL(
@@ -192,10 +192,10 @@ test.describe('Admin assignment type creator', () => {
       });
       expect(created.title).toBe(title);
       expect(created.kind).toBeNull();
-      expect(created.rubricId).toBe(shortForm.id);
+      expect(created.rubricId).toBe(engagement.id);
       await page.reload();
       await expect(page.getByTestId('rubric-library-select')).toContainText(
-        'Daily Pages short-form writing'
+        'Daily Pages engagement'
       );
     } finally {
       if (assignmentTypeId) {

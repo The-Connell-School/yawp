@@ -142,8 +142,9 @@ type AssignmentTypeDetailRow = {
   id: string;
   title: string;
   description: string | null;
-  systemKey: string | null;
   kind: string | null;
+  rubric: { name: string } | null;
+  systemKey: string | null;
   collaborationSupported: boolean;
   image: { id: string } | null;
   assignmentModules: Array<{
@@ -425,8 +426,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         id: true,
         title: true,
         description: true,
-        systemKey: true,
         kind: true,
+        rubric: { select: { name: true } },
+        systemKey: true,
         collaborationSupported: true,
         image: { select: { id: true } },
         assignmentModules: {
@@ -793,6 +795,8 @@ export default function AppAssignmentTypesIdRoute() {
   }, [incomingPrompt, setSearchParams]);
 
   const showShortFormLibrary = data.shortFormPromptLibrary != null;
+  const showDailyPagesAbout =
+    isTeacher && data.assignmentType.kind === 'daily_pages';
   // Daily Pages carries one module, whose blurb is freewrite-era copy telling
   // students to throw ideas around — which the about section directly above it
   // now contradicts. The module row itself stays: documents are created inside
@@ -935,11 +939,12 @@ export default function AppAssignmentTypesIdRoute() {
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
+                assignmentTypeKind={data.assignmentType.kind}
+                assignmentTypeRubricName={data.assignmentType.rubric?.name ?? null}
                 assignmentTypeCollaborationSupported={
                   data.assignmentType.collaborationSupported
                 }
                 assignmentTypeGradesGrammar={data.assignmentTypeGradesGrammar}
-                assignmentTypeKind={data.assignmentType.kind}
                 assignmentTypeDefaultWritingTimeMinutes={
                   data.assignmentTypeDefaultWritingTimeMinutes
                 }
@@ -1014,7 +1019,7 @@ export default function AppAssignmentTypesIdRoute() {
         {data.promptLibrary ? (
           <TeacherDirections variant={data.promptLibrary.variant} />
         ) : null}
-        {showShortFormLibrary ? (
+        {showDailyPagesAbout ? (
           <AboutDailyPages
             writingConditionsEnabled={data.writingConditionsEnabled}
           />

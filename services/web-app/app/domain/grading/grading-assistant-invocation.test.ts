@@ -49,6 +49,20 @@ function gradingConfig(
 }
 
 describe('compileGradingAssistantInvocation', () => {
+  test('includes the assignment prompt in the user message when provided', () => {
+    const invocation = compileGradingAssistantInvocation({
+      gradingConfig: gradingConfig(),
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'My reflection for today.',
+      assignmentPrompt: 'What surprised you in chapter 4?',
+    });
+
+    expect(invocation.userMessage).toContain(
+      'Assignment prompt: What surprised you in chapter 4?'
+    );
+  });
+
   test('compiles the exact system and user messages for assignment-type instructions', () => {
     const invocation = compileGradingAssistantInvocation({
       gradingConfig: gradingConfig(),

@@ -41,14 +41,10 @@ describe('buildStaticDailyPagesGradingConfig', () => {
     const config = buildStaticDailyPagesGradingConfig();
 
     expect(config.rubricCategories.map((category) => category.key)).toEqual([
-      'depth_of_thought',
-      'development_of_thought',
-      'organization_and_structure',
-      'voice_and_style',
-      'grammar_and_mechanics',
+      'engagement_with_prompt',
     ]);
-    expect(config.minScore).toBe(1);
-    expect(config.maxScore).toBe(5);
+    expect(config.minScore).toBe(0);
+    expect(config.maxScore).toBe(100);
   });
 });
 

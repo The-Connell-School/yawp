@@ -345,7 +345,14 @@ describe('My Assignments loader', () => {
         },
       ]);
       getAvailableAssignmentTypesForScopes.mockResolvedValue([
-        { id: 'at-1', title: 'Essay', systemKey: null },
+        {
+          id: 'at-1',
+          title: 'Essay',
+          systemKey: null,
+          kind: null,
+          collaborationSupported: false,
+          rubric: null,
+        },
       ]);
 
       const result = (await loader({
@@ -363,7 +370,9 @@ describe('My Assignments loader', () => {
         {
           id: 'at-1',
           title: 'Essay',
-          collaborationSupported: undefined,
+          kind: null,
+          rubricName: null,
+          collaborationSupported: false,
           // No rubric and no kind on the mocked type: no grammar toggle and
           // no suggested writing time.
           gradesGrammar: false,

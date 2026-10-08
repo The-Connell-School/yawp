@@ -89,6 +89,14 @@ import {
   MAX_WRITING_TIME_MINUTES,
   MIN_WRITING_TIME_MINUTES,
 } from '~/domain/grading/writing-time';
+import {
+  assignmentTypeUsesDailyPagesEngagementRubric,
+  MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL,
+} from '~/domain/assignment-types/daily-pages-engagement-rubric';
+import {
+  dailyPagesEngagementTierBands,
+  formatDailyPagesEngagementBandRange,
+} from '~/domain/assignment-types/daily-pages-engagement-tier-bands';
 
 function writingTimeFieldValue(minutes: number | null | undefined): string {
   return typeof minutes === 'number' && minutes > 0 ? String(minutes) : '';
@@ -224,6 +232,8 @@ export type AssignmentCreationAssignmentType = {
    * selector, no paragraph type, grading and tutoring as before.
    */
   offersParagraphModes?: boolean;
+  /** Library rubric name when the type points at a shared rubric (e.g. SJP Daily Pages). */
+  rubricName?: string | null;
   /** Free classroom bundle: assignments remaining for this kind. */
   quotaRemaining?: number;
   quotaTotal?: number;
@@ -766,6 +776,34 @@ export function AssignmentCreationSheetContent({
     assignmentTypes.find((type) => type.id === assignmentTypeId)
       ?.offersParagraphModes
   );
+  const selectedAssignmentType = assignmentTypes.find(
+    (type) => type.id === assignmentTypeId
+  );
+  const usesDailyPagesEngagementRubric =
+    assignmentTypeUsesDailyPagesEngagementRubric({
+      kind: selectedAssignmentType?.kind,
+      rubricName: selectedAssignmentType?.rubricName,
+    });
+  const minimumPointValue = usesDailyPagesEngagementRubric
+    ? MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL
+    : 1;
+  const engagementBandPreview = useMemo(() => {
+    if (!usesDailyPagesEngagementRubric || !gradingPanelOpen) return null;
+    const parsed = Number.parseInt(pointValue, 10);
+    if (!Number.isSafeInteger(parsed) || parsed < minimumPointValue) {
+      return null;
+    }
+    try {
+      return dailyPagesEngagementTierBands(parsed);
+    } catch {
+      return null;
+    }
+  }, [
+    gradingPanelOpen,
+    minimumPointValue,
+    pointValue,
+    usesDailyPagesEngagementRubric,
+  ]);
   const paragraphModeOptions = enabledParagraphModes();
   const selectedParagraphMode = getParagraphMode(paragraphMode);
   const hasFixedClass = Boolean(fixedClassId);
@@ -1566,7 +1604,7 @@ export function AssignmentCreationSheetContent({
                             id="assignment-create-point-value"
                             name="pointValue"
                             type="number"
-                            min={1}
+                            min={minimumPointValue}
                             max={1000}
                             step={1}
                             inputMode="numeric"
@@ -1584,11 +1622,33 @@ export function AssignmentCreationSheetContent({
                         </span>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        What the assignment is worth in the gradebook. The
-                        rubric keeps its own scale either way.
+                        What the assignment is worth in the gradebook.
+                        {minimumPointValue > 1
+                          ? ` Daily Pages engagement assignments need at least ${minimumPointValue} points when graded.`
+                          : ' The rubric keeps its own scale either way.'}
                       </p>
                     </div>
                   )}
+
+                  {engagementBandPreview ? (
+                    <div
+                      className="space-y-2"
+                      data-testid="assignment-create-engagement-bands"
+                    >
+                      <p className="text-sm font-medium">Engagement tiers</p>
+                      <ul className="space-y-1 text-sm text-muted-foreground">
+                        {engagementBandPreview.map((band) => (
+                          <li key={band.tier}>
+                            <span className="font-medium text-foreground">
+                              {band.label}
+                            </span>
+                            {' — '}
+                            {formatDailyPagesEngagementBandRange(band)} points
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
 
                   {/* Scoring behavior is now fixed to bands; UI selector removed */}
 

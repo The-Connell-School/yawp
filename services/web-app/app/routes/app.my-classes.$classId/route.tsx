@@ -1252,6 +1252,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       systemKey: string | null;
       kind: string | null;
       collaborationSupported: boolean;
+      rubric: { name: string } | null;
     }>({
       scopes: [
         {
@@ -1263,9 +1264,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       select: {
         id: true,
         title: true,
-        systemKey: true,
         kind: true,
+        systemKey: true,
         collaborationSupported: true,
+        rubric: { select: { name: true } },
       },
       orderBy: { position: 'asc' },
     }),
@@ -1421,12 +1423,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     inProgressDocuments,
     assignments,
     assignmentTypes: creationTypeRows.map(
-      ({ id, title, collaborationSupported, kind }) => ({
+      ({ id, title, kind, collaborationSupported, rubric }) => ({
         id,
         title,
+        kind,
+        rubricName: rubric?.name ?? null,
         collaborationSupported,
         gradesGrammar: gradesGrammarIds.has(id),
-        kind,
         defaultWritingTimeMinutes:
           creationTypeDefaults.get(id)?.defaultWritingTimeMinutes ?? null,
         offersParagraphModes:

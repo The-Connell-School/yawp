@@ -834,6 +834,60 @@ describe('AssignmentCreationSheetContent', () => {
     });
   });
 
+  it('shows scaled engagement tiers when the grading panel is open', () => {
+    root = renderSheet({
+      entryPoint: 'assignment-type',
+      fixedAssignmentTypeId: 'daily-pages',
+      initialPointValue: 12,
+      assignmentTypes: [
+        ...assignmentTypes,
+        {
+          id: 'daily-pages',
+          title: 'Daily Pages',
+          kind: 'daily_pages',
+          rubricName: null,
+          collaborationSupported: false,
+          gradesGrammar: false,
+        },
+      ],
+    }).root;
+
+    act(() => {
+      controlById('assignment-create-change-grading').click();
+    });
+
+    expectText('Not Present');
+    expectText('Excellent');
+    expect(
+      document.querySelector('[data-testid="assignment-create-engagement-bands"]')
+    ).not.toBeNull();
+  });
+
+  it('requires at least five points for SJP Daily Pages (null kind, engagement rubric)', () => {
+    root = renderSheet({
+      entryPoint: 'assignment-type',
+      fixedAssignmentTypeId: 'sjp-daily-pages',
+      assignmentTypes: [
+        ...assignmentTypes,
+        {
+          id: 'sjp-daily-pages',
+          title: 'SJP Daily Pages',
+          kind: null,
+          rubricName: 'daily-pages-engagement',
+          collaborationSupported: false,
+          gradesGrammar: false,
+        },
+      ],
+    }).root;
+
+    act(() => {
+      controlById('assignment-create-change-grading').click();
+    });
+
+    expect(inputByName('pointValue').getAttribute('min')).toBe('5');
+    expectText('need at least 5 points when graded');
+  });
+
   // The original builder, kept as the flag-off path. These pin it so
   // switching the new builder off always lands on exactly what shipped.
   describe('exit tickets (quick builder)', () => {

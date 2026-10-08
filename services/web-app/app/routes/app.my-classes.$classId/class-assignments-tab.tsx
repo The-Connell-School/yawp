@@ -44,9 +44,12 @@ type ClassAssignmentsTabProps = {
   assignmentTypes: {
     id: string;
     title: string;
+    kind: string | null;
+    rubricName?: string | null;
     collaborationSupported: boolean;
     gradesGrammar: boolean;
-    kind: string | null;
+    defaultWritingTimeMinutes?: number | null;
+    offersParagraphModes?: boolean;
   }[];
   apHistoryAssignmentTypeId?: string | null;
   /** Gated on the organization's classInsightsEnabled flag. */

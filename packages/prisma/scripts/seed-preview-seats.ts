@@ -12,6 +12,7 @@ import {
 } from './preview-seats';
 import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { attachApHistorySourceImages } from './local-dev/seed-ap-history';
+import { applyDailyPagesEngagementV2Seed } from './apply-daily-pages-engagement-v2-seed';
 import {
   ensurePreviewFreeClassroomFixture,
   ensurePreviewSchoolReporterNavFixture,
@@ -54,6 +55,7 @@ try {
   // idempotent AP catalog on every seed-mode deploy, including existing seats.
   await seedApHistoryLibrary(prisma, seats[0].organizationId);
   await attachApHistorySourceImages(prisma);
+  await applyDailyPagesEngagementV2Seed(prisma);
   for (const seat of seats) {
     const result = results.find(
       ({ organizationId }) => organizationId === seat.organizationId

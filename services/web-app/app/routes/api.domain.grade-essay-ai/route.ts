@@ -873,6 +873,9 @@ export async function action({ request }: ActionFunctionArgs) {
     step,
     scoringType,
     source: resolvedGradingConfig.source,
+    ...(resolvedGradingConfig.scoringMode
+      ? { scoringMode: resolvedGradingConfig.scoringMode }
+      : {}),
   };
   const gradingInstructionsOverride =
     typeof resolvedGradingConfig.promptConfigSnapshot

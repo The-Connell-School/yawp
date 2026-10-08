@@ -27,6 +27,7 @@
     "compare-grade-submission-parity": "bun ./scripts/compare-grade-submission-parity.ts",
     "seed-ap-history-library": "bun run scripts/seed-ap-history-library.ts",
     "seed-class-starter-assignment-type": "bun run scripts/seed-class-starter-assignment-type.ts",
+    "apply-daily-pages-engagement-v2-seed": "bun run scripts/apply-daily-pages-engagement-v2-seed.ts",
     "seed-exit-ticket-assignment-type": "bun run scripts/seed-exit-ticket-assignment-type.ts",
     "seed-free-tier-bundle-assignment-types": "bun run scripts/seed-free-tier-bundle-assignment-types.ts",
     "seed-local-dev": "bun run scripts/seed-local-dev.ts",

@@ -151,8 +151,11 @@ model Rubric {
   assignmentTypes AssignmentType[]
   currentRevisionId String?
   currentRevision RubricRevision? @relation("CurrentRubricRevision", fields: [currentRevisionId], references: [id], onDelete: Restrict)
+  /// When set, the rubric is hidden from the admin picker and excluded from seed repair.
+  archivedAt      DateTime? @db.Timestamptz(6)
 
   @@index([title])
+  @@index([archivedAt])
 }
 
 model AssignmentType {
