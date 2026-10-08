@@ -35,6 +35,7 @@ import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server'
 import { listSavedThesisPrompts } from '~/domain/thesis-prompts/saved-prompts.server';
 import { listSavedDailyPagesPrompts } from '~/domain/daily-pages-prompts/saved-prompts.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { stripUnreleasedGradeFromSubmissionSummaries } from '~/domain/submissions/student-submission-grade-visibility.server';
 import {
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
@@ -573,14 +574,36 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentTypeOffersParagraphModes =
     creationTypeDefaults?.offersParagraphModes ?? false;
 
+  const sanitizeDocumentListForStudents = <
+    T extends {
+      submissions: Array<
+        { releasedAt?: Date | string | null } & Record<string, unknown>
+      >;
+    },
+  >(
+    rows: T[]
+  ) =>
+    rows.map((document) => ({
+      ...document,
+      submissions: stripUnreleasedGradeFromSubmissionSummaries(
+        document.submissions
+      ),
+    }));
+
+  const isStudent = profile.role === 'STUDENT';
+
   return dataResponse({
     writingConditionsEnabled,
     assignmentType,
     assignmentTypeGradesGrammar,
     assignmentTypeDefaultWritingTimeMinutes,
     assignmentTypeOffersParagraphModes,
-    documents,
-    archivedDocuments,
+    documents: isStudent
+      ? sanitizeDocumentListForStudents(documents)
+      : documents,
+    archivedDocuments: isStudent
+      ? sanitizeDocumentListForStudents(archivedDocuments)
+      : archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
     shortFormPromptLibrary,

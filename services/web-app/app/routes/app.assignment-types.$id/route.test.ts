@@ -807,4 +807,62 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     expect(response.data.apHistoryLibrary).toBeNull();
     expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
   });
+
+  test('strips unreleased grade fields from document submission summaries', async () => {
+    requireMembership.mockResolvedValueOnce({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    prisma.document.findMany.mockImplementation(async (args: any) => {
+      if (args.where?.archivedAt?.not) {
+        return [];
+      }
+      return [
+        {
+          id: 'doc-1',
+          assignmentModuleSessions: [],
+          submissions: [
+            {
+              id: 'sub-1',
+              score: '80% (B)',
+              overallScore: 85,
+              numericPercentage: 80,
+              letterGrade: 'B',
+              releasedAt: null,
+              submittedAt: new Date('2026-08-01T00:00:00.000Z'),
+            },
+            {
+              id: 'sub-2',
+              score: '90% (A)',
+              overallScore: 20,
+              numericPercentage: 90,
+              letterGrade: 'A',
+              releasedAt: new Date('2026-08-02T00:00:00.000Z'),
+              submittedAt: new Date('2026-08-03T00:00:00.000Z'),
+            },
+          ],
+        },
+      ];
+    });
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    const submissions = response.data.documents[0].submissions;
+    expect(submissions[0]).toEqual({
+      id: 'sub-1',
+      releasedAt: null,
+      submittedAt: submissions[0].submittedAt,
+    });
+    expect(submissions[0]).not.toHaveProperty('overallScore');
+    expect(submissions[0]).not.toHaveProperty('numericPercentage');
+    expect(submissions[0]).not.toHaveProperty('score');
+    expect(submissions[1].numericPercentage).toBe(90);
+    expect(submissions[1].overallScore).toBe(20);
+    expect(JSON.stringify(response.data)).not.toContain('80% (B)');
+    expect(JSON.stringify(response.data)).not.toMatch(/overallScore["\\]*,85\b/);
+  });
 });
