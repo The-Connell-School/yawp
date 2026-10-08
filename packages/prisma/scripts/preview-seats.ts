@@ -408,7 +408,7 @@ export async function seedCollaborationDemoForSeat(
       scoringMode: 'holistic_tier',
       teacherNotesEnabled: true,
     } as Prisma.InputJsonValue;
-    let holisticType = await prisma.assignmentType.findFirst({
+    const existingHolisticType = await prisma.assignmentType.findFirst({
       where: {
         title: holisticTitle,
         ownerOrgId: seat.organizationId,
@@ -416,8 +416,9 @@ export async function seedCollaborationDemoForSeat(
       },
       select: { id: true, gradingOutputSchemaJson: true },
     });
-    if (!holisticType) {
-      holisticType = await prisma.assignmentType.create({
+    let holisticTypeId: string;
+    if (!existingHolisticType) {
+      const createdHolisticType = await prisma.assignmentType.create({
         data: {
           title: holisticTitle,
           description:
@@ -454,17 +455,17 @@ export async function seedCollaborationDemoForSeat(
         },
         select: { id: true },
       });
+      holisticTypeId = createdHolisticType.id;
       console.log(
         `Holistic Cristo Rey assignment type created for ${seat.label} (${seat.organizationId}).`
       );
     } else {
-      const current = (holisticType.gradingOutputSchemaJson ?? {}) as Record<
-        string,
-        unknown
-      >;
+      holisticTypeId = existingHolisticType.id;
+      const current = (existingHolisticType.gradingOutputSchemaJson ??
+        {}) as Record<string, unknown>;
       if (current.scoringMode !== 'holistic_tier') {
         await prisma.assignmentType.update({
-          where: { id: holisticType.id },
+          where: { id: holisticTypeId },
           data: {
             gradingOutputSchemaJson: {
               ...current,
@@ -476,14 +477,13 @@ export async function seedCollaborationDemoForSeat(
           `Holistic Cristo Rey assignment type updated with scoringMode for ${seat.label} (${seat.organizationId}).`
         );
       }
-      holisticType = { id: holisticType.id };
     }
 
     const demoTitle = 'Holistic Tier Demo (Preview)';
     const existingAssignment = await prisma.assignment.findFirst({
       where: {
         title: demoTitle,
-        assignmentTypeId: holisticType.id,
+        assignmentTypeId: holisticTypeId,
         classAssignments: { some: { classId: klass.id } },
       },
       select: { id: true, classAssignments: { select: { id: true } } },
@@ -493,7 +493,7 @@ export async function seedCollaborationDemoForSeat(
     if (!assignmentId || !classAssignmentId) {
       const assignment = await prisma.assignment.create({
         data: {
-          assignmentTypeId: holisticType.id,
+          assignmentTypeId: holisticTypeId,
           title: demoTitle,
           prompt:
             'Analyze how the author uses a symbol to develop a theme in the assigned text.',
@@ -534,7 +534,7 @@ export async function seedCollaborationDemoForSeat(
           text: essayText,
           html: `<p>${essayText}</p>`,
           membershipId: student.id,
-          assignmentTypeId: holisticType.id,
+          assignmentTypeId: holisticTypeId,
           assignmentId,
           classAssignmentId,
           artifactKind: 'STUDENT',
