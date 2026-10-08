@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 /**
  * Preview / local bootstrap for the Exit Ticket assignment type.
- * Production uses migration 20261007174800 instead of this script on deploy.
+ * Production uses migration 20261008001100 instead of this script on deploy.
  *
  *   cd packages/prisma && DATABASE_URL=... bun run scripts/seed-exit-ticket-assignment-type.ts --all-orgs
  */

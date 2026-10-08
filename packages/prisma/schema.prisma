@@ -1173,6 +1173,7 @@ model Organization {
   invitations                   Invitation[]
   schools                       School[]
   assignmentTypes               AssignmentType[]
+  freeClassroomAssignmentKindUsages FreeClassroomAssignmentKindUsage[]
   assignmentTypeAssignments     OrganizationAssignmentType[]
   reporterConversations         ReporterConversation[]
   lessonPlanConversations    LessonPlanConversation[]
@@ -1192,6 +1193,16 @@ model OrganizationAssignmentType {
 
   @@id([organizationId, assignmentTypeId])
   @@index([assignmentTypeId])
+}
+
+/// Lifetime assignment-kind consumption for FREE_CLASSROOM orgs. Never decremented.
+model FreeClassroomAssignmentKindUsage {
+  organizationId         String
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  kind                   String
+  lifetimeCreatedCount   Int          @default(0)
+
+  @@id([organizationId, kind])
 }
 
 model OrgMembership {
@@ -1377,7 +1388,7 @@ model LessonPlanConversation {
   /// Set when the teacher stars the lesson as worth finding again. Starring is
   /// a decision they make, separate from keeping a reply in the packet.
   /// Left from starring, which publishing replaced. Unread — see the
-  /// 20261007174500_add_lesson_published migration.
+  /// 20261008000800_add_lesson_published migration.
   starredAt               DateTime?           @db.Timestamptz(6)
   /// Set when the teacher publishes this lesson to their library. Null is a
   /// draft, which is where every lesson starts.

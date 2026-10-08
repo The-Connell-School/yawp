@@ -10,7 +10,7 @@ export const EXIT_TICKET_FIXTURE_IMAGE_MD5 =
 const migrationSql = readFileSync(
   join(
     import.meta.dirname,
-    '../migrations/20261007174800_bootstrap_exit_ticket_assignment_type/migration.sql'
+    '../migrations/20261008001100_bootstrap_exit_ticket_assignment_type/migration.sql'
   ),
   'utf8'
 );

@@ -1,7 +1,7 @@
 /**
  * One-time-style Exit Ticket bootstrap: create the global type and org grants
  * only. Safe to call from preview tooling; production relies on migration
- * 20261007174800 for the same shape.
+ * 20261008001100 for the same shape.
  *
  * Re-runs must not un-archive, overwrite title/description/position/image, or
  * inject the type into customized school/teacher lists.

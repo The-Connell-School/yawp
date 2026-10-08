@@ -26,6 +26,8 @@ import {
 import { StudentClassCard } from '~/components/student-class-card';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
+import { assertCanCreateClassForOrganizationPlan } from '~/utils/assignment-quota.server';
+import { getEntitlements } from '~/utils/entitlements.server';
 import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
@@ -137,6 +139,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
     };
   });
 
+  const entitlements = getEntitlements(profile.organization);
+  let classCreateBlockedMessage: string | null = null;
+  if (entitlements.activeClassCap != null) {
+    const activeClassCount = await prisma.class.count({
+      where: {
+        isArchived: false,
+        school: { organizationId: profile.organization.id },
+      },
+    });
+    if (!entitlements.canCreateClass({ currentActiveClasses: activeClassCount })) {
+      classCreateBlockedMessage =
+        'Free classroom accounts include one class. Archive your existing class or upgrade to add another.';
+    }
+  }
+
   return dataResponse({
     role: 'TEACHER' as const,
     classes: classesWithStats,
@@ -144,6 +161,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherSchoolCount: teacherSchools?.schools.length ?? 0,
     schools,
     manageSchools: teacherSchools?.schools ?? [],
+    classCreateBlockedMessage,
   });
 }
 
@@ -182,23 +200,30 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!code) code = generateClassCode();
 
     try {
-      await prisma.class.create({
-        data: {
-          schoolId,
-          schoolYear,
-          grade,
-          period,
-          title,
-          code,
-          cardGradientKey: generateClassCardGradientKey(code),
-          classArtKey: await pickClassArtKeyForOrganization(
-            profile.organization.id
-          ),
-          teachers: { connect: [{ id: profile.id }] },
-        },
+      const classArtKey = await pickClassArtKeyForOrganization(
+        profile.organization.id
+      );
+      await prisma.$transaction(async (tx) => {
+        await assertCanCreateClassForOrganizationPlan(tx, profile.organization);
+        await tx.class.create({
+          data: {
+            schoolId,
+            schoolYear,
+            grade,
+            period,
+            title,
+            code,
+            cardGradientKey: generateClassCardGradientKey(code),
+            classArtKey,
+            teachers: { connect: [{ id: profile.id }] },
+          },
+        });
       });
       return dataResponse({ success: true });
     } catch (error: any) {
+      if (error instanceof Error && error.message.includes('Free classroom accounts include one class')) {
+        return dataResponse({ error: error.message }, { status: 403 });
+      }
       if (error.code === 'P2002') {
         return dataResponse(
           { error: 'Class code already in use. Choose a different code.' },
@@ -456,6 +481,12 @@ function TeacherMyClassesView({
         onOpenChange={setSheetOpen}
         editingClass={null}
         schools={data.manageSchools}
+        classCreateBlockedMessage={data.classCreateBlockedMessage}
+        preferredSchoolYear={
+          data.selectedSchoolYear !== ALL_SCHOOL_YEARS
+            ? data.selectedSchoolYear
+            : null
+        }
       />
     </section>
   );

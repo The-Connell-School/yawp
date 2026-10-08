@@ -224,6 +224,12 @@ export type AssignmentCreationAssignmentType = {
    * selector, no paragraph type, grading and tutoring as before.
    */
   offersParagraphModes?: boolean;
+  /** Free classroom bundle: assignments remaining for this kind. */
+  quotaRemaining?: number;
+  quotaTotal?: number;
+  quotaLabel?: string;
+  quotaExhausted?: boolean;
+  quotaExhaustedMessage?: string;
 };
 
 export type AssignmentCreationEditingAssignment = {
@@ -372,12 +378,14 @@ function initialAssignmentTypeSelection(
   fixedAssignmentTypeId?: string,
   initialAssignmentTypeId?: string
 ) {
-  return (
-    fixedAssignmentTypeId ??
-    initialAssignmentTypeId ??
-    assignmentTypes[0]?.id ??
-    ''
-  );
+  const preferredId =
+    fixedAssignmentTypeId ?? initialAssignmentTypeId ?? undefined;
+  if (preferredId) {
+    const preferred = assignmentTypes.find((type) => type.id === preferredId);
+    if (preferred && !preferred.quotaExhausted) return preferredId;
+  }
+  const firstAvailable = assignmentTypes.find((type) => !type.quotaExhausted);
+  return firstAvailable?.id ?? preferredId ?? assignmentTypes[0]?.id ?? '';
 }
 
 function initialClassIds(fixedClassId?: string) {
@@ -1160,8 +1168,20 @@ export function AssignmentCreationSheetContent({
             </SelectTrigger>
             <SelectContent>
               {assignmentTypes.map((assignmentType) => (
-                <SelectItem key={assignmentType.id} value={assignmentType.id}>
-                  {assignmentType.title}
+                <SelectItem
+                  key={assignmentType.id}
+                  value={assignmentType.id}
+                  textValue={assignmentType.title}
+                  triggerLabel={assignmentType.title}
+                  disabled={assignmentType.quotaExhausted}
+                >
+                  {assignmentType.quotaLabel ? (
+                    <span className="text-xs text-muted-foreground">
+                      {assignmentType.quotaExhausted
+                        ? assignmentType.quotaExhaustedMessage
+                        : assignmentType.quotaLabel}
+                    </span>
+                  ) : null}
                 </SelectItem>
               ))}
             </SelectContent>

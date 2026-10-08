@@ -1,5 +1,5 @@
 -- Roll back after reverting the app deploy, then mark rolled back in Prisma:
---   bun prisma migrate resolve --rolled-back 20261007174800_bootstrap_exit_ticket_assignment_type
+--   bun prisma migrate resolve --rolled-back 20261008001100_bootstrap_exit_ticket_assignment_type
 --
 -- Removes bootstrap org availability and the global type only when no Assignment
 -- references exit_ticket. Module/instruction/image deletes run inside the same

@@ -157,6 +157,8 @@ load_or_create_access_config() {
     PREVIEW_ACCESS_SEATS="$(
       docker run --rm \
         -e PREVIEW_SEAT_COUNT="$PREVIEW_SEAT_COUNT" \
+        -e PREVIEW_SLUG="$SLUG" \
+        -e INCLUDE_PREVIEW_FREE_CLASSROOM_FIXTURE="${INCLUDE_PREVIEW_FREE_CLASSROOM_FIXTURE:-}" \
         -e PREVIEW_ACCESS_MASTER_ORGANIZATION_ID="$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID" \
         -e PREVIEW_ACCESS_MASTER_LABEL="$PREVIEW_ACCESS_MASTER_LABEL" \
         -e PREVIEW_EXISTING_ACCESS_SEATS="$existing_seats" \
@@ -176,9 +178,13 @@ load_or_create_access_config() {
   )"
   # A retained seat map may be larger than a subsequently lowered count. Never
   # orphan one of those worlds on a reset; seed through the full retained map.
+  # Count from deploy tooling on the host (SCRIPT_DIR), not the PR checkout — older
+  # open PRs may lack older checkout-only seat-count helpers and must still preview-deploy.
+  # shellcheck source=scripts/preview/resolve-provisioned-seat-count.sh
+  source "$SCRIPT_DIR/resolve-provisioned-seat-count.sh"
   PREVIEW_SEAT_COUNT="$(
-    PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e \
-      "process.stdout.write(String(JSON.parse(process.env.PREVIEW_ACCESS_SEATS).length))"
+    PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" \
+      resolve_provisioned_preview_seat_count
   )"
 
   if [[ -z "${PREVIEW_ACCESS_SECRET:-}" ]]; then
@@ -201,6 +207,13 @@ load_or_create_access_config() {
 
   export PREVIEW_ACCESS_CODES PREVIEW_ACCESS_SEATS PREVIEW_ACCESS_SECRET PREVIEW_MASTER_ACCESS_CODE PREVIEW_MASTER_ORG_GATE_ENABLED PREVIEW_SESSION_SECRET PREVIEW_SEAT_COUNT
 }
+
+if [[ "${YAWP_DEPLOY_STOP_AFTER:-}" == "access_config" ]]; then
+  load_or_create_access_config
+  printf 'YAWP_TEST_PREVIEW_SEAT_COUNT=%s\n' "$PREVIEW_SEAT_COUNT"
+  printf 'YAWP_TEST_PREVIEW_ACCESS_SEATS=%s\n' "$PREVIEW_ACCESS_SEATS"
+  exit 0
+fi
 
 load_or_create_access_config
 if [[ -n "${DIRECT_PORT:-}" || -f "$ROOT/ingress/current/ingress-server.mjs" ]]; then
@@ -730,6 +743,9 @@ run_tooling_if_needed() {
   # never appears in the assignment picker.
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-exit-ticket-assignment-type.ts" ]]; then
     tooling_command+=' && bun run scripts/seed-exit-ticket-assignment-type.ts --all-orgs'
+  fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts" ]]; then
+    tooling_command+=' && bun run seed-free-tier-bundle-assignment-types'
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-planner-qa.ts" ]]; then
     tooling_command+=' && (bun run seed-preview-planner-qa || { echo "Warning: preview planner QA seed failed; continuing deploy (non-fatal)." >&2; true; })'

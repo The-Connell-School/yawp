@@ -69,7 +69,11 @@ import {
   isExitTicketAssignmentType,
   parseStoredExitTicketConfig,
 } from '~/domain/assignment-types/exit-ticket';
-import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
+import {
+  createAssignmentDeployedToClasses,
+  updateAssignmentInClassDeployment,
+} from '~/utils/assignment-deployment.server';
+import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
 import {
   getGrammarGradingAssignmentTypeIds,
@@ -601,6 +605,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
             promptAttachmentData.promptAttachmentKey
           ).catch(() => {});
         }
+        if (error instanceof FreeClassroomAssignmentQuotaError) {
+          return dataResponse(
+            { success: false, message: error.message },
+            { status: 403 }
+          );
+        }
         throw error;
       }
 
@@ -667,8 +677,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     try {
-      await prisma.assignment.update({
-        where: { id: existingAssignment.id },
+      await updateAssignmentInClassDeployment({
+        assignmentId: existingAssignment.id,
+        classId,
         data: {
           assignmentTypeId,
           title,
@@ -719,6 +730,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
         await deleteAssignmentPromptAttachment(
           promptAttachmentData.promptAttachmentKey
         ).catch(() => {});
+      }
+      if (error instanceof FreeClassroomAssignmentQuotaError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 403 }
+        );
       }
       throw error;
     }

@@ -29,6 +29,7 @@ import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-
 import { autoArrangeNewAssignment } from '~/domain/collaboration/auto-arrange.server';
 import { groupSetupNextStep } from '~/domain/collaboration/next-step';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
+import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -499,6 +500,12 @@ export async function action({ request }: ActionFunctionArgs) {
       await deleteAssignmentPromptAttachment(
         promptAttachmentData.promptAttachmentKey
       ).catch(() => {});
+    }
+    if (error instanceof FreeClassroomAssignmentQuotaError) {
+      return dataResponse(
+        { success: false, message: error.message },
+        { status: 403 }
+      );
     }
     throw error;
   }
