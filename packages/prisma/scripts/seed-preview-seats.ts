@@ -13,7 +13,7 @@ import {
 import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { attachApHistorySourceImages } from './local-dev/seed-ap-history';
 import {
-  assertPreviewPlannerQaTarget,
+  isDemoPlannerQaEnvironment,
   seedPreviewPlannerQa,
 } from './seed-preview-planner-qa';
 
@@ -60,15 +60,18 @@ try {
       );
     }
   }
-  try {
-    assertPreviewPlannerQaTarget();
-    const plannerQa = await seedPreviewPlannerQa(prisma);
-    console.log('preview planner QA seed:', JSON.stringify(plannerQa));
-  } catch (error) {
-    console.log(
-      'preview planner QA seed skipped:',
-      error instanceof Error ? error.message : error
-    );
+  if (!isDemoPlannerQaEnvironment()) {
+    for (const seat of seats) {
+      const plannerQa = await seedPreviewPlannerQa(prisma, {
+        organizationId: seat.organizationId,
+      });
+      console.log(
+        `preview planner QA seed (seat ${seat.number}):`,
+        JSON.stringify(plannerQa)
+      );
+    }
+  } else {
+    console.log('preview planner QA seed skipped: demo environment');
   }
 } finally {
   await prisma.$disconnect();
