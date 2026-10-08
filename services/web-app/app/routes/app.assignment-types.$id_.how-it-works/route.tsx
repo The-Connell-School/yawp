@@ -99,7 +99,7 @@ const GRADING_POINTS = [
   {
     title: 'What it is',
     detail:
-      'A first read of every essay against the rubric, at the level you set for the assignment: beginner, intermediate or advanced.',
+      'A first read of every essay against the rubric, at the level you set for the assignment: beginner, intermediate, or advanced.',
   },
   {
     title: 'What it isn’t',
@@ -168,8 +168,8 @@ export default function ThesisEssayHowItWorksRoute() {
           <strong className="text-foreground">The Thesis-Driven Essay</strong>{' '}
           and choose <strong className="text-foreground">New</strong>, then{' '}
           <strong className="text-foreground">Assignment</strong>. When you
-          assign it you set the due date, the points, the time limit and whether
-          the Tutor and grammar grading are on.
+          assign it you set the due date, the points, the time limit, and
+          whether the Tutor and grammar grading are on.
         </GuideCopy>
       </GuideSection>
 
@@ -181,14 +181,15 @@ export default function ThesisEssayHowItWorksRoute() {
         <GuideRow
           media={clip(
             'prompts',
-            'The teacher opens the Prompt Library, searches for Macbeth and picks the prompt. It opens in the New Assignment sheet, where the teacher chooses English 10, adds a title and creates the assignment.'
+            'The teacher opens the Prompt Library, searches for Macbeth and picks the prompt. It opens in the New Assignment sheet, where the teacher chooses English 10, adds a title, and creates the assignment.'
           )}
         >
           <GuideStep n={1}>Pick a prompt</GuideStep>
           <GuideH3>100 essay prompts ready to assign</GuideH3>
           <GuideCopy>
-            Search by subject, text or grade. You can also generate your own and
-            save it to <strong className="text-foreground">My prompts</strong>.
+            Search by subject, text, or grade. You can also generate your own
+            and save it to{' '}
+            <strong className="text-foreground">My prompts</strong>.
           </GuideCopy>
         </GuideRow>
 
@@ -196,14 +197,14 @@ export default function ThesisEssayHowItWorksRoute() {
           flip
           media={clip(
             'steps',
-            'A student moves through the Tutor’s steps beside their draft: Pre-writing, Thesis Statement, Introduction Paragraph, Body Paragraphs, Conclusion Paragraph, Title Your Essay and Review my Essay. Each opens with a short lesson.'
+            'A student moves through the Tutor’s steps beside their draft: Pre-writing, Thesis Statement, Introduction Paragraph, Body Paragraphs, Conclusion Paragraph, Title Your Essay, and Review my Essay. Each opens with a short lesson.'
           )}
         >
           <GuideStep n={2}>Students write with the Tutor</GuideStep>
           <GuideH3>Seven steps from pre-writing to a title</GuideH3>
           <GuideCopy>
             Pre-writing, thesis, introduction, body paragraphs, conclusion,
-            title and a final review. Each step starts with a short lesson from
+            title, and a final review. Each step starts with a short lesson from
             the Tutor.
           </GuideCopy>
         </GuideRow>
@@ -223,7 +224,7 @@ export default function ThesisEssayHowItWorksRoute() {
           </h2>
           <p className="max-w-prose text-lg leading-relaxed text-muted-foreground">
             The Tutor reads the student’s draft and coaches them through it one
-            step at a time. It asks questions, says what is working and gives
+            step at a time. It asks questions, says what is working, and gives
             one or two things to try next. The writing stays the student’s.
           </p>
         </div>
@@ -239,7 +240,7 @@ export default function ThesisEssayHowItWorksRoute() {
             Students tap{' '}
             <strong className="text-foreground">Give me feedback!</strong> or
             ask a question whenever they want. The Tutor reads what they have
-            written, starts with what works and suggests one or two next steps.
+            written, starts with what works, and suggests one or two next steps.
           </GuideCopy>
         </GuideRow>
 
@@ -253,7 +254,7 @@ export default function ThesisEssayHowItWorksRoute() {
           <GuideH3>Questions instead of answers</GuideH3>
           <GuideCopy>
             When a student asks the Tutor to write for them, it asks a question,
-            offers an example on another topic or gives a sentence starter for
+            offers an example on another topic, or gives a sentence starter for
             them to finish.
           </GuideCopy>
         </GuideRow>
@@ -285,7 +286,7 @@ export default function ThesisEssayHowItWorksRoute() {
           </h2>
           <p className="max-w-prose text-lg leading-relaxed text-muted-foreground">
             The Grading Assistant reads each essay against the rubric and drafts
-            scores and feedback. You read it, change what you disagree with and
+            scores and feedback. You read it, change what you disagree with, and
             decide when students see it. Every grade is yours.
           </p>
         </div>
@@ -302,7 +303,7 @@ export default function ThesisEssayHowItWorksRoute() {
             <strong className="text-foreground">
               Grading Assistant Suggestions
             </strong>{' '}
-            and it scores thesis, organization, evidence, voice and grammar,
+            and it scores thesis, organization, evidence, voice, and grammar,
             with a comment for each. Change any score or comment, then release
             the grade when you are ready.
           </GuideCopy>
@@ -337,7 +338,7 @@ export default function ThesisEssayHowItWorksRoute() {
           <GuideCopy>
             The goal is for students to write better without the Tutor. Turn it
             off for an in-class essay and use it as a diagnostic, as an
-            assessment or to track whether skills transfer.
+            assessment, or to track whether skills transfer.
           </GuideCopy>
         </GuideRow>
 
@@ -369,7 +370,7 @@ export default function ThesisEssayHowItWorksRoute() {
       <WillWont will={WILL} wont={WONT} />
 
       <GuideFooter
-        note="Clips use demo classes. The Tutor’s replies, the Grading Assistant’s suggestions and Reporter’s answer in them were scripted for the recording. Reporter’s numbers are the demo class’s grades."
+        note="Clips use demo classes. The Tutor’s replies, the Grading Assistant’s suggestions, and Reporter’s answer in them were scripted for the recording. Reporter’s numbers are the demo class’s grades."
         startTo={pagePath}
         startLabel="Create an assignment"
       />

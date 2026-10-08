@@ -46,7 +46,7 @@ const WONT = [
   'Change, give, or release grades.',
   'See unreleased grades, drafts, or ungraded work.',
   'See other teachers’ classes.',
-  'Make up grades, averages or student names.',
+  'Make up grades, averages, or student names.',
   'Save a growth plan unless you click Save.',
   'Talk to students. It’s for teachers only.',
 ];
