@@ -42,7 +42,23 @@ async function devLogin(page: import('@playwright/test').Page, email: string) {
     });
     return response.ok;
   }, email);
-  if (!ok) throw new Error(`Dev login failed for ${email}`);
+  if (ok) return;
+
+  const password =
+    email === PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_EMAIL
+      ? process.env.PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_PASSWORD?.trim()
+      : undefined;
+  if (password && password.length >= 16) {
+    await page.getByLabel(/email/i).fill(email);
+    await page.getByLabel(/password/i).fill(password);
+    await page.getByRole('button', { name: /sign in/i }).click();
+    await page.waitForURL((url) => url.pathname.startsWith('/app'), {
+      timeout: 60_000,
+    });
+    return;
+  }
+
+  throw new Error(`Dev login failed for ${email}`);
 }
 
 async function openDailyPagesAssignmentType(page: import('@playwright/test').Page) {
