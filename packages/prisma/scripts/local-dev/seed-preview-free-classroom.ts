@@ -484,25 +484,12 @@ async function seedClassStarterAssignments(
       },
     });
   }
-  const deployedCount = await client.assignment.count({
-    where: {
-      assignmentTypeId,
-      classAssignments: {
-        some: { class: { school: { organizationId } } },
-      },
-    },
-  });
-  await client.freeClassroomAssignmentKindUsage.upsert({
-    where: {
-      organizationId_kind: { organizationId, kind: 'class_starter' },
-    },
-    create: {
-      organizationId,
-      kind: 'class_starter',
-      lifetimeCreatedCount: deployedCount,
-    },
-    update: { lifetimeCreatedCount: deployedCount },
-  });
+  await syncFreeClassroomKindUsageFromAssignments(
+    client,
+    organizationId,
+    assignmentTypeId,
+    'class_starter'
+  );
   console.log(
     `Seeded ${count} class starter assignment(s) for ${organizationId}.`
   );
@@ -574,4 +561,45 @@ async function ensurePreviewShowcaseBundleAssignments(
       });
     }
   }
+
+  for (const { kind, typeId } of [
+    { kind: 'prewriting' as const, typeId: prewritingTypeId },
+    { kind: 'thesis_statement' as const, typeId: thesisTypeId },
+  ]) {
+    if (typeId) {
+      await syncFreeClassroomKindUsageFromAssignments(
+        client,
+        PREVIEW_FREE_CLASSROOM_ORG_ID,
+        typeId,
+        kind
+      );
+    }
+  }
+}
+
+async function syncFreeClassroomKindUsageFromAssignments(
+  client: SeedClient,
+  organizationId: string,
+  assignmentTypeId: string,
+  kind: 'class_starter' | 'prewriting' | 'thesis_statement'
+) {
+  const deployedCount = await client.assignment.count({
+    where: {
+      assignmentTypeId,
+      classAssignments: {
+        some: { class: { school: { organizationId } } },
+      },
+    },
+  });
+  await client.freeClassroomAssignmentKindUsage.upsert({
+    where: {
+      organizationId_kind: { organizationId, kind },
+    },
+    create: {
+      organizationId,
+      kind,
+      lifetimeCreatedCount: deployedCount,
+    },
+    update: { lifetimeCreatedCount: deployedCount },
+  });
 }
