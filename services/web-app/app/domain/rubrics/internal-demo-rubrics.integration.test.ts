@@ -188,3 +188,60 @@ run('an error while reading the internal schema never blocks assignment creation
     await db.$executeRawUnsafe('ALTER TABLE internal.platform_demo_revisions RENAME COLUMN renamed_revision_id TO platform_revision_id');
   }
 });
+
+run('staging a never-versioned library rubric captures a baseline, keeps schools on it and pins demo orgs to the staged revision', async () => {
+  const { RubricCatalog } = await import('./rubric-catalog.server');
+  const catalog = new RubricCatalog(db);
+  const source = prodLibrary('daily-pages-engagement');
+  const name = `daily-pages-engagement-never-${suffix}`;
+  const rubric = await db.rubric.create({ data: { name, title: source.title, schemaJson: { ...(source.schemaJson as object), name } as any } });
+  const type = await db.assignmentType.create({ data: { title: `Never versioned ${name}`, position: 9102, rubricId: rubric.id } });
+  cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
+  const existing = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Existing unpinned' } });
+  expect(existing.rubricRevisionId).toBeNull();
+  expect(await db.rubricRevision.count({ where: { rubricName: name } })).toBe(0);
+
+  const detail = await catalog.get(name);
+  const document = structuredClone(detail.live.editable) as any;
+  document.calibrationNotes = 'Demo-only staged version';
+  const staged = await catalog.stage({ key: name, requestId: randomUUID(), actorEmail: 'staff@yawp.test', reason: 'Stage for demo', document, source: { contentId: randomUUID(), version: 1, fingerprint: 'a'.repeat(64) } });
+
+  const revisions = await db.rubricRevision.findMany({ where: { rubricName: name }, orderBy: { version: 'asc' } });
+  expect(revisions.map((r) => [r.version, r.createdBy])).toEqual([[1, 'capture-before-edit'], [2, 'staff@yawp.test']]);
+  const [baseline] = revisions;
+  expect(staged.revision).toMatchObject({ id: revisions[1]!.id, version: 2 });
+  const after = await db.rubric.findUniqueOrThrow({ where: { id: rubric.id } });
+  expect(after.currentRevisionId).toBe(baseline!.id);
+  expect(after.schemaJson).toEqual(rubric.schemaJson as any);
+  expect(baseline!.schemaJson).toEqual(rubric.schemaJson as any);
+  expect((await db.assignment.findUniqueOrThrow({ where: { id: existing.id } })).rubricRevisionId).toBe(baseline!.id);
+
+  const demo = await organizationWithClass('Demo org never versioned', true);
+  const school = await organizationWithClass('School never versioned', false);
+  await stage(name, staged.revision.id);
+  expect((await create(type.id, [demo.klass.id])).rubricRevisionId).toBe(staged.revision.id);
+  expect((await create(type.id, [school.klass.id])).rubricRevisionId).toBe(baseline!.id);
+});
+
+run('staging a per-type rubric without a baseline lets demo orgs pin to it', async () => {
+  const { RubricCatalog, perTypeKey } = await import('./rubric-catalog.server');
+  const catalog = new RubricCatalog(db);
+  const daily = fixture.perTypeRubrics.find((type) => type.title === 'Daily Pages')!;
+  const type = await db.assignmentType.create({ data: {
+    title: `Daily Pages unbaselined ${suffix}`, position: 9103, scoringScaleJson: daily.scoringScaleJson as any, rubricJson: daily.rubricJson as any,
+    gradingPromptConfigJson: (daily.gradingPromptConfigJson ?? undefined) as any, gradingOutputSchemaJson: (daily.gradingOutputSchemaJson ?? undefined) as any, gradingCalibrationNotes: daily.gradingCalibrationNotes,
+  } });
+  cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
+  const key = perTypeKey(type.id);
+  const detail = await catalog.get(key);
+  const document = structuredClone(detail.live.editable) as any;
+  document.calibrationNotes = 'Demo per-type';
+  const staged = await catalog.stage({ key, requestId: randomUUID(), actorEmail: 'staff@yawp.test', reason: 'Stage per-type', document, source: { contentId: randomUUID(), version: 1, fingerprint: 'a'.repeat(64) } });
+  const baseline = await db.assignmentTypeRubricBaseline.findUniqueOrThrow({ where: { assignmentTypeId: type.id } });
+  expect(baseline.rubricRevisionId).not.toBe(staged.revision.id);
+  const demo = await organizationWithClass('Demo org unbaselined', true);
+  const school = await organizationWithClass('School unbaselined', false);
+  await stage(key, staged.revision.id);
+  expect((await create(type.id, [demo.klass.id])).rubricRevisionId).toBe(staged.revision.id);
+  expect((await create(type.id, [school.klass.id])).rubricRevisionId).toBe(baseline.rubricRevisionId);
+});

@@ -236,7 +236,13 @@ run('staging keeps non-editable prompt keys and validates like save', async () =
   expect((row.schemaJson as any).promptConfig.gradingInstructionsOverride).toBe('Teacher override stays');
   expect((row.schemaJson as any).rubric.categories[0].label).toContain('(demo)');
   expect(await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } })).toEqual(typeBefore);
-  expect(await db.assignmentTypeRubricBaseline.findUnique({ where: { assignmentTypeId: type.id } })).toBeNull();
+  // Like a first save, staging captures the live content as the baseline first; the staged revision follows it.
+  const baseline = await db.assignmentTypeRubricBaseline.findUniqueOrThrow({ where: { assignmentTypeId: type.id } });
+  const baselineRow = await db.rubricRevision.findUniqueOrThrow({ where: { id: baseline.rubricRevisionId } });
+  expect(baselineRow).toMatchObject({ rubricName: key, createdBy: 'capture-before-edit', version: staged.revision.version - 1, sourceContentId: null });
+  expect(baselineRow.schemaJson).toEqual(detail.live.content as any);
+  expect((await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'School entry' } })).rubricRevisionId).toBe(baselineRow.id);
+  cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
 
   await expect(catalog.stage({ key, requestId: randomUUID(), actorEmail: actor, reason: 'Broken', document: { ...document, rubric: { categories: [] } }, source: source() })).rejects.toMatchObject({ statusCode: 422 });
   await expect(catalog.stage({ key: 'does-not-exist', requestId: randomUUID(), actorEmail: actor, reason: 'Missing', document: { ...document, name: 'does-not-exist' }, source: source() })).rejects.toMatchObject({ statusCode: 404 });
