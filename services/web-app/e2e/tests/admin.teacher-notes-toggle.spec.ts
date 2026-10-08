@@ -114,8 +114,6 @@ test.describe.serial('Admin teacher notes output toggle', () => {
     async function switchUser(email: string, password: string) {
       const logout = await page.request.post('/auth/logout');
       expect(logout.ok()).toBeTruthy();
-      await page.goto('/auth/login');
-      await page.waitForSelector('input[type="email"]', { state: 'visible' });
       await signIn(email, password);
       await page.waitForURL((url) => url.pathname.startsWith('/app'), {
         timeout: 30_000,
