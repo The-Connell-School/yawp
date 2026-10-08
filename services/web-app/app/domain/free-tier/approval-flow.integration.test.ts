@@ -50,10 +50,11 @@ describe('free-tier approval flow', () => {
     setApprovalHooks({});
     const apps = await prisma.freeTierApplication.findMany({
       where: { email: { endsWith: '@school.edu' } },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true, organizationId: true },
     });
     const appIds = apps.map((row) => row.id);
     const userIds = apps.map((row) => row.userId).filter(Boolean) as string[];
+    const orgIds = apps.map((row) => row.organizationId).filter(Boolean) as string[];
     if (appIds.length > 0) {
       await prisma.freeTierSignedLink.deleteMany({ where: { applicationId: { in: appIds } } });
       await prisma.freeTierEmailLog.deleteMany({ where: { applicationId: { in: appIds } } });
@@ -61,7 +62,19 @@ describe('free-tier approval flow', () => {
       await prisma.freeTierApprovalDecision.deleteMany({ where: { applicationId: { in: appIds } } });
       await prisma.freeTierApplication.deleteMany({ where: { id: { in: appIds } } });
     }
+    if (orgIds.length > 0) {
+      await prisma.class.deleteMany({
+        where: { school: { organizationId: { in: orgIds } } },
+      });
+      await prisma.school.deleteMany({ where: { organizationId: { in: orgIds } } });
+      await prisma.organizationAssignmentType.deleteMany({
+        where: { organizationId: { in: orgIds } },
+      });
+      await prisma.orgMembership.deleteMany({ where: { organizationId: { in: orgIds } } });
+      await prisma.organization.deleteMany({ where: { id: { in: orgIds } } });
+    }
     if (userIds.length > 0) {
+      await prisma.orgMembership.deleteMany({ where: { userId: { in: userIds } } });
       await prisma.password.deleteMany({ where: { userId: { in: userIds } } });
       await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     }
