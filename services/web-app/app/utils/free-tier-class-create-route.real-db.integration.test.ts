@@ -28,10 +28,10 @@ mock.module('~/utils/auth.server.js', () => ({
 }));
 
 const { action: myClassesAction } = await import(
-  './app.my-classes._index/route'
+  '../routes/app.my-classes._index/route'
 );
 const { action: orgClassesAction } = await import(
-  './app.organization.classes/route'
+  '../routes/app.organization.classes/route'
 );
 
 function actionHttpStatus(result: unknown) {
@@ -99,6 +99,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         },
         select: { id: true },
       });
+      createdUserIds.push(user.id);
       const membership = await prisma.orgMembership.create({
         data: {
           userId: user.id,
