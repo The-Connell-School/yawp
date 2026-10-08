@@ -807,4 +807,50 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     expect(response.data.apHistoryLibrary).toBeNull();
     expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
   });
+
+  test('strips unreleased grade fields from document submission summaries', async () => {
+    prisma.document.findMany.mockImplementation(async (args: any) => {
+      if (args.where?.archivedAt?.not) {
+        return [];
+      }
+      return [
+        {
+          id: 'doc-1',
+          assignmentModuleSessions: [],
+          submissions: [
+            {
+              id: 'sub-1',
+              score: '80% (B)',
+              overallScore: 18,
+              numericPercentage: 80,
+              letterGrade: 'B',
+              releasedAt: null,
+              submittedAt: new Date('2026-08-01T00:00:00.000Z'),
+            },
+            {
+              id: 'sub-2',
+              score: '90% (A)',
+              overallScore: 20,
+              numericPercentage: 90,
+              letterGrade: 'A',
+              releasedAt: new Date('2026-08-02T00:00:00.000Z'),
+              submittedAt: new Date('2026-08-03T00:00:00.000Z'),
+            },
+          ],
+        },
+      ];
+    });
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    const submissions = response.data.documents[0].submissions;
+    expect(submissions[0].numericPercentage).toBeNull();
+    expect(submissions[0].letterGrade).toBeNull();
+    expect(submissions[0].score).toBeNull();
+    expect(submissions[1].numericPercentage).toBe(90);
+    expect(JSON.stringify(response.data)).not.toContain('80% (B)');
+  });
 });
