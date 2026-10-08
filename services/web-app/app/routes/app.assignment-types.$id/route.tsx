@@ -704,7 +704,8 @@ export default function AppAssignmentTypesIdRoute() {
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
   const showShortFormLibrary = data.shortFormPromptLibrary != null;
-  const showDailyPagesAbout = data.assignmentType.kind === 'daily_pages';
+  const showDailyPagesAbout =
+    isTeacher && data.assignmentType.kind === 'daily_pages';
   // Daily Pages carries one module, whose blurb is freewrite-era copy telling
   // students to throw ideas around — which the about section directly above it
   // now contradicts. The module row itself stays: documents are created inside
