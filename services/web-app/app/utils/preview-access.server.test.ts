@@ -169,6 +169,31 @@ describe('preview access gate', () => {
     expect(next).toHaveBeenCalledTimes(4);
   });
 
+  test('lets Yawp Internal reach the rubric catalog without a preview cookie', async () => {
+    const next = mock(async () => new Response('ok'));
+
+    for (const path of [
+      '/api/internal/v1/rubric-catalog',
+      '/api/internal/v1/rubric-catalog/item',
+      '/api/internal/v1/rubric-catalog/stage',
+      '/api/internal/v1/rubric-catalog/versions',
+    ]) {
+      const response = await previewAccessMiddleware(
+        middlewareArgs(request(path)),
+        next
+      );
+      expect(await response?.text()).toBe('ok');
+    }
+    expect(next).toHaveBeenCalledTimes(4);
+
+    const gated = await previewAccessMiddleware(
+      middlewareArgs(request('/api/internal/v1/feature-flags')),
+      next
+    );
+    expect((gated as Response).status).toBe(401);
+    expect(next).toHaveBeenCalledTimes(4);
+  });
+
   test('fails closed when no access codes are configured', async () => {
     delete process.env.PREVIEW_ACCESS_SEATS;
     delete process.env.PREVIEW_ACCESS_CODES;
