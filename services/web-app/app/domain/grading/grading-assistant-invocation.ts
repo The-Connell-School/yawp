@@ -28,6 +28,7 @@ export const GRADING_ASSISTANT_PROMPT_VARIABLES = [
   'assignment_type',
   'assignment_prompt',
   'document',
+  'grading_context',
   'grading_instructions',
   'grading_response_instructions',
   'max_score',
@@ -123,9 +124,11 @@ export function compileGradingAssistantInvocation({
   strictnessLevel,
   documentText,
   assignmentPrompt,
+  gradingContext,
   writingTimeMinutes,
   coldWrite,
   paragraphMode,
+  assignmentPointTotal,
 }: {
   gradingConfig: Pick<
     ResolvedAssignmentTypeGradingConfig,
@@ -138,19 +141,28 @@ export function compileGradingAssistantInvocation({
   > & Partial<
     Pick<
       ResolvedAssignmentTypeGradingConfig,
-      'outputSchemaSnapshot' | 'gradingMode' | 'rubricTotalPoints'
+      'outputSchemaSnapshot' | 'gradingMode' | 'rubricTotalPoints' | 'scoringMode'
     >
   >;
   studentFirstName: string;
   strictnessLevel: GradingAssistantStrictnessLevel;
   documentText: string;
   assignmentPrompt?: string | null;
+  /**
+   * What this particular assignment adds for the grader and the student never
+   * saw: how to read the rubric for it, and any notes the teacher gave.
+   * Absent for every assignment that supplies none, which keeps the payload
+   * for every existing type byte-identical.
+   */
+  gradingContext?: string | null;
   /** How long the student had to write; null or absent leaves the prompt as it was. */
   writingTimeMinutes?: number | null;
   /** True when the tutor was off: a cold write. Absent or false changes nothing. */
   coldWrite?: boolean | null;
   /** The Daily Pages paragraph type the teacher chose; absent changes nothing. */
   paragraphMode?: string | null;
+  /** The assignment's point total, for holistic scoring prompts. */
+  assignmentPointTotal?: number | null;
 }): CompiledGradingAssistantInvocation {
   const { minScore, maxScore } = gradingConfig;
   const promptShape = buildGradingPromptShape({
@@ -160,6 +172,8 @@ export function compileGradingAssistantInvocation({
     studentFirstName,
     teacherNotesEnabled: teacherNotesEnabled(gradingConfig.outputSchemaSnapshot),
     gradingMode: gradingConfig.gradingMode,
+    scoringMode: gradingConfig.scoringMode,
+    assignmentPointTotal: assignmentPointTotal ?? null,
   });
   const strictnessLabel = getGradingAssistantStrictnessLabel(strictnessLevel);
   const strictnessInstructions =
@@ -195,6 +209,7 @@ export function compileGradingAssistantInvocation({
       ? `${gradingConfig.label} (total rubric points: ${gradingConfig.rubricTotalPoints})`
       : gradingConfig.label,
     assignment_prompt: assignmentPrompt?.trim() || 'No assignment prompt was provided.',
+    grading_context: gradingContext?.trim() ?? '',
     grading_response_instructions: promptShape.systemPrompt,
     document: documentText,
     grading_instructions: gradingInstructions,
@@ -228,11 +243,19 @@ export function compileGradingAssistantInvocation({
     writingTimeBlock && !/{{\s*writing_time\s*}}/i.test(template.userMessage)
       ? insertBeforeEssay(userMessageWithPrompt, writingTimeBlock)
       : userMessageWithPrompt;
+  // Same story as the assignment prompt above: no existing template carries a
+  // slot for what an assignment adds for the grader, so it is appended rather
+  // than dropped. An assignment that supplies none appends nothing, which
+  // leaves every other type's payload exactly as it was.
+  const userMessageWithContext =
+    gradingContext?.trim() && !/{{\s*grading_context\s*}}/i.test(template.userMessage)
+      ? `${userMessage}\n\n${gradingContext.trim()}`
+      : userMessage;
 
   return {
     system,
-    userMessage,
-    messages: [{ role: 'user', content: userMessage }],
+    userMessage: userMessageWithContext,
+    messages: [{ role: 'user', content: userMessageWithContext }],
     maxTokens: 900,
   };
 }

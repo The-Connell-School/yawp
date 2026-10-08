@@ -2,6 +2,7 @@
 // RATE_LIMIT_DB_TESTS=1 and DATABASE_URL points at a migrated database:
 //   RATE_LIMIT_DB_TESTS=1 DATABASE_URL=postgresql://... bun test app/utils/rate-limit
 import { beforeEach, describe, expect, test } from 'bun:test';
+import { RATE_LIMITS } from '~/config/rate-limits';
 import { CLOUDFRONT_IPV4_RANGES } from './cloudfront-ranges.server';
 
 // The app trusts the address CloudFront appended (see ip.server.ts), so the tests
@@ -137,6 +138,209 @@ suite('regressions found in review of the first version', () => {
     const t0 = Date.now() + 20 * 24 * 3_600_000;
     for (let i = 0; i < 6; i += 1) await tutor(id, t0);
     expect((await tutor(id, t0)).allowed).toBe(false);
+  });
+});
+
+suite('login limits count only failed attempts', () => {
+  test('the 13th failed login for one target in an hour is denied', async () => {
+    const schoolIp = new Request('https://yawp.school/auth/login', {
+      headers: { 'x-forwarded-for': `198.22.${Math.floor(Math.random() * 250)}.5, ${EDGE_IP}` },
+    });
+    const cfg = { perIpPerMinute: 30, perIpPerHour: 120, perTargetPerHour: 12 };
+    const email = `${run}-brute@school.test`;
+    const t0 = Date.now();
+    for (let i = 0; i < 12; i += 1) {
+      const recorded = await mod!.recordFailedLoginTargetRateLimit({
+        route: '/auth/login',
+        targetKey: email,
+        perTargetPerHour: cfg.perTargetPerHour,
+        nowMs: t0 + i,
+      });
+      expect(recorded.allowed).toBe(true);
+      await mod!.recordFailedLoginIpRateLimit({
+        request: schoolIp,
+        route: '/auth/login',
+        perIpPerMinute: cfg.perIpPerMinute,
+        perIpPerHour: cfg.perIpPerHour,
+        nowMs: t0 + i,
+      });
+    }
+    const denied = await mod!.recordFailedLoginTargetRateLimit({
+      route: '/auth/login',
+      targetKey: email,
+      perTargetPerHour: cfg.perTargetPerHour,
+      nowMs: t0 + 12,
+    });
+    expect(denied.allowed).toBe(false);
+  });
+
+  test('concurrent failed attempts cannot exceed the per-target hourly cap', async () => {
+    const email = `${run}-concurrent-target@school.test`;
+    const cfg = { perTargetPerHour: 12 };
+    const t0 = Date.now();
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        mod!.recordFailedLoginTargetRateLimit({
+          route: '/auth/login',
+          targetKey: email,
+          perTargetPerHour: cfg.perTargetPerHour,
+          nowMs: t0 + i,
+        })
+      )
+    );
+    const allowed = results.filter((r) => r.allowed).length;
+    expect(allowed).toBe(12);
+    expect(results.filter((r) => !r.allowed).length).toBe(8);
+  });
+
+  test('one IP spraying many handles is throttled by the per-IP spray bucket', async () => {
+    const schoolIp = new Request('https://yawp.school/auth/login', {
+      headers: { 'x-forwarded-for': `198.23.${Math.floor(Math.random() * 250)}.6, ${EDGE_IP}` },
+    });
+    const sprayLimit = 300;
+    const t0 = Date.now();
+    let allowed = 0;
+    let denied = false;
+    for (let i = 0; i < sprayLimit + 5; i += 1) {
+      const result = await mod!.recordFailedLoginIpSprayRateLimit({
+        request: schoolIp,
+        route: '/auth/login',
+        perIpSprayPerHour: sprayLimit,
+        nowMs: t0 + i,
+      });
+      if (result.allowed) allowed += 1;
+      else denied = true;
+    }
+    expect(allowed).toBe(sprayLimit);
+    expect(denied).toBe(true);
+  });
+
+  test('clearFailedLoginRateLimitsForTarget removes the target bucket', async () => {
+    const email = `${run}-clear@school.test`;
+    const t0 = Date.now();
+    for (let i = 0; i < 12; i += 1) {
+      await mod!.recordFailedLoginTargetRateLimit({
+        route: '/auth/login',
+        targetKey: email,
+        perTargetPerHour: 12,
+        nowMs: t0 + i,
+      });
+    }
+    const blocked = await mod!.recordFailedLoginTargetRateLimit({
+      route: '/auth/login',
+      targetKey: email,
+      perTargetPerHour: 12,
+      nowMs: t0 + 12,
+    });
+    expect(blocked.allowed).toBe(false);
+    await mod!.clearFailedLoginRateLimitsForTarget({
+      route: '/auth/login',
+      targetKey: email,
+    });
+    const afterClear = await mod!.recordFailedLoginTargetRateLimit({
+      route: '/auth/login',
+      targetKey: email,
+      perTargetPerHour: 12,
+      nowMs: t0 + 13,
+    });
+    expect(afterClear.allowed).toBe(true);
+  });
+});
+
+suite('login consume limits (classroom + brute force)', () => {
+  const loginCfg = () => ({
+    perIpPerMinute: RATE_LIMITS.unauth.login.perIpPerMinute,
+    perIpPerHour: RATE_LIMITS.unauth.login.perIpPerHour,
+    perTargetPerHour: RATE_LIMITS.unauth.login.perEmailPerHour,
+    perIpHandlePer15Minutes: RATE_LIMITS.unauth.login.perIpHandlePer15Minutes,
+    perIpSprayPerHour: RATE_LIMITS.unauth.login.perIpFailedSprayPerHour,
+  });
+
+  const schoolLoginRequest = () =>
+    new Request('https://yawp.school/auth/login', {
+      headers: {
+        'x-forwarded-for': `198.31.${Math.floor(Math.random() * 250)}.4, ${EDGE_IP}`,
+      },
+    });
+
+  async function consumeLogin(
+    request: Request,
+    targetKey: string,
+    nowMs: number
+  ) {
+    return mod!.consumeLoginAttemptRateLimits({
+      request,
+      route: '/auth/login',
+      targetKey,
+      ...loginCfg(),
+      nowMs,
+    });
+  }
+
+  test('40 concurrent sign-in attempts from one IP are all allowed before password check', async () => {
+    const request = schoolLoginRequest();
+    const t0 = Date.now();
+    const results = await Promise.all(
+      Array.from({ length: 40 }, (_, i) =>
+        consumeLogin(request, `${run}-class-${i}`, t0)
+      )
+    );
+    expect(results.every((r) => r.allowed)).toBe(true);
+    for (const r of results) {
+      if (r.allowed) await mod!.refundLoginAttemptRateLimits(r.charged);
+    }
+  });
+
+  test('40 students within 10s with one typo each still pass the limiter', async () => {
+    const request = schoolLoginRequest();
+    const t0 = Date.now();
+    for (let i = 0; i < 40; i += 1) {
+      const target = `${run}-student-${i}@class.test`;
+      const first = await consumeLogin(request, target, t0 + i * 200);
+      expect(first.allowed).toBe(true);
+      if (i % 2 === 0) {
+        // failed password: keep the charge
+        continue;
+      }
+      if (first.allowed) await mod!.refundLoginAttemptRateLimits(first.charged);
+      const retry = await consumeLogin(request, target, t0 + i * 200 + 50);
+      expect(retry.allowed).toBe(true);
+      if (retry.allowed) await mod!.refundLoginAttemptRateLimits(retry.charged);
+    }
+  });
+
+  test('a teacher with the correct password is not blocked after a class of typos on the same IP', async () => {
+    const request = schoolLoginRequest();
+    const t0 = Date.now();
+    for (let i = 0; i < 20; i += 1) {
+      const failed = await consumeLogin(
+        request,
+        `${run}-typo-${i}@class.test`,
+        t0 + i * 100
+      );
+      expect(failed.allowed).toBe(true);
+    }
+    const teacher = await consumeLogin(
+      request,
+      `${run}-teacher@class.test`,
+      t0 + 2_000
+    );
+    expect(teacher.allowed).toBe(true);
+    if (teacher.allowed) await mod!.refundLoginAttemptRateLimits(teacher.charged);
+  });
+
+  test('brute force on one handle hits 429 and blocks even the correct password at the limit', async () => {
+    const request = schoolLoginRequest();
+    const victim = `${run}-victim@school.test`;
+    const t0 = Date.now();
+    for (let i = 0; i < loginCfg().perIpHandlePer15Minutes; i += 1) {
+      const attempt = await consumeLogin(request, victim, t0 + i * 50);
+      expect(attempt.allowed).toBe(true);
+    }
+    const blockedWrong = await consumeLogin(request, victim, t0 + 500);
+    expect(blockedWrong.allowed).toBe(false);
+    const blockedRight = await consumeLogin(request, victim, t0 + 550);
+    expect(blockedRight.allowed).toBe(false);
   });
 });
 

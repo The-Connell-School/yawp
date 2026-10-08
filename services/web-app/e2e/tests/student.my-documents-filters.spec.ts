@@ -14,7 +14,7 @@ const UNASSIGNED_LABEL = 'Not tied to a class';
 
 async function signInAsStudent(page: import('@playwright/test').Page) {
   await page.goto('/auth/login');
-  await page.locator('input[type="email"]').fill(STUDENT_EMAIL);
+  await page.getByLabel('Email or handle').fill(STUDENT_EMAIL);
   await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
   await page.getByRole('button', { name: /log in/i }).click();
   await page.waitForURL('**/app**', { timeout: 15000 });

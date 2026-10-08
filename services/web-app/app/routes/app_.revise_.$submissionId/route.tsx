@@ -37,6 +37,7 @@ import { useAuthHeartbeat } from '~/routes/app_.documents_.$id/hooks/use-auth-he
 import { useDocumentSubmit } from '~/routes/app_.documents_.$id/hooks/use-document-submit';
 import { EssayPanel } from '~/routes/app_.submissions_.$submissionId/essay-panel';
 import { GradeHighlightsOverlay } from '~/routes/app_.submissions_.$submissionId/teacher-grading/grade-highlights-overlay';
+import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import {
   resolveGrammarHighlightingForAssignmentType,
   resolveRubricConfigForSubmission,
@@ -407,11 +408,20 @@ export default function ReviseRoute() {
   );
 
   const gradeSummaryLabel = useMemo(() => {
-    if (submission.numericPercentage == null) return submission.score ?? null;
-    return submission.letterGrade
-      ? `${submission.numericPercentage}% (${submission.letterGrade})`
-      : `${submission.numericPercentage}%`;
-  }, [submission.numericPercentage, submission.letterGrade, submission.score]);
+    const assignment = submission.document.assignment;
+    return formatAssignmentGrade({
+      submitForGrade: assignment?.submitForGrade,
+      numericPercentage: submission.numericPercentage,
+      letterGrade: submission.letterGrade,
+      pointValue: assignment?.pointValue,
+      score: submission.score,
+    });
+  }, [
+    submission.numericPercentage,
+    submission.letterGrade,
+    submission.score,
+    submission.document.assignment,
+  ]);
 
   const canSubmitRevision = isRevisionSubmissionReady({
     editorSubmittable,

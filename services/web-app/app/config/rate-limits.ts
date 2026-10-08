@@ -82,6 +82,21 @@ export const RATE_LIMITS = {
       perIpPerHour: 600,
       perEmailPerHour: 20,
     },
+    login: {
+      // Sized for ~35–40 students behind one school NAT signing in together
+      // (PostHog peak ~31 distinct people per IP per hour) with typo retries.
+      perIpPerMinute: 90,
+      perIpPerHour: 600,
+      perEmailPerHour: 12,
+      /** Per IP + login identifier; slows guessing one account before the hourly cap. */
+      perIpHandlePer15Minutes: 5,
+      /** Failed attempts from one IP across any login identifier (password spraying). */
+      perIpFailedSprayPerHour: 300,
+    },
+    joinLookup: {
+      perIpPerMinute: 60,
+      perIpPerHour: 600,
+    },
     // Free-tier waitlist / QR token redemption. A conference QR (NCTE) is
     // scanned by hundreds of teachers on one venue network, so per-IP budgets
     // are generous; the per-email budget stops hammering one address.

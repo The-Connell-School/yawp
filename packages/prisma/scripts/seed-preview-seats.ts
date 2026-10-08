@@ -12,6 +12,16 @@ import {
 } from './preview-seats';
 import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { attachApHistorySourceImages } from './local-dev/seed-ap-history';
+import { applyDailyPagesEngagementV2Seed } from './apply-daily-pages-engagement-v2-seed';
+import {
+  ensurePreviewFreeClassroomFixture,
+  ensurePreviewSchoolReporterNavFixture,
+} from './local-dev/seed-preview-free-classroom';
+import {
+  isDemoPlannerQaEnvironment,
+  seedPreviewPlannerQa,
+} from './seed-preview-planner-qa';
+import { ensureLessonPlannerEnabledForDemo } from './local-dev/seed-lesson-planner-feature-flag';
 import {
   seedPreviewTeacherNotesQa,
   shouldRunPreviewTeacherNotesQaSeed,
@@ -27,6 +37,17 @@ const prisma = createPrismaClient();
 
 try {
   const results = await ensurePreviewSeats(prisma, seats);
+  const includeFreeClassroomFixture =
+    process.env.PREVIEW_SLUG !== 'demo' &&
+    process.env.INCLUDE_PREVIEW_FREE_CLASSROOM_FIXTURE !== 'false';
+  if (includeFreeClassroomFixture) {
+    const freeClassroom = await ensurePreviewFreeClassroomFixture(prisma);
+    console.log(`Preview free classroom fixture: ${freeClassroom.status}`);
+    const schoolReporterNav = await ensurePreviewSchoolReporterNavFixture(prisma);
+    console.log(`Preview school reporter nav fixture: ${schoolReporterNav.status}`);
+  } else {
+    console.log('Preview free classroom fixture: skipped');
+  }
   const writingPractice = await enableWritingPracticeForPreviewOrganizations(
     prisma,
     seats.map(({ organizationId }) => organizationId)
@@ -38,6 +59,7 @@ try {
   // idempotent AP catalog on every seed-mode deploy, including existing seats.
   await seedApHistoryLibrary(prisma, seats[0].organizationId);
   await attachApHistorySourceImages(prisma);
+  await applyDailyPagesEngagementV2Seed(prisma);
   if (shouldRunPreviewTeacherNotesQaSeed()) {
     try {
       await seedPreviewTeacherNotesQa(prisma);
@@ -66,6 +88,27 @@ try {
         `Preview seat code ${result.organizationId}: ${result.status}`
       );
     }
+  }
+  if (!isDemoPlannerQaEnvironment()) {
+    for (const seat of seats) {
+      try {
+        const plannerQa = await seedPreviewPlannerQa(prisma, {
+          organizationId: seat.organizationId,
+        });
+        console.log(
+          `preview planner QA seed (seat ${seat.number}):`,
+          JSON.stringify(plannerQa)
+        );
+      } catch (error) {
+        console.warn(
+          'preview planner QA seed failed (non-fatal):',
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
+  } else {
+    console.log('preview planner QA seed skipped: demo environment');
+    await ensureLessonPlannerEnabledForDemo(prisma);
   }
 } finally {
   await prisma.$disconnect();

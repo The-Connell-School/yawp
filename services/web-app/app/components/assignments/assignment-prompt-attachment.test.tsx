@@ -15,7 +15,9 @@ import { createRoot, type Root } from 'react-dom/client';
 const actualDialog = await import('~/components/ui/dialog');
 mock.module('~/components/ui/dialog', () => ({
   ...actualDialog,
-  Dialog: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Dialog: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   DialogContent: ({ children }: { children: React.ReactNode }) => (
     <div role="dialog">{children}</div>
   ),

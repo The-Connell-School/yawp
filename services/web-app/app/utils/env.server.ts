@@ -25,6 +25,12 @@ const schema = z.object({
   PREVIEW_DATA_MODE: z
     .enum(['seed', 'production-dump', 'sanitized-production'])
     .optional(),
+  /**
+   * Demo-org rollout of rubric revisions staged in Yawp Internal. Only the
+   * exact string `true` enables it (see internal-demo-rubrics.server.ts);
+   * anything else, including unset, keeps today's behavior.
+   */
+  INTERNAL_DEMO_RUBRICS_ENABLED: z.string().optional(),
 });
 
 declare global {

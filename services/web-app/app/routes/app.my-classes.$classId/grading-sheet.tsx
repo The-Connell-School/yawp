@@ -25,6 +25,7 @@ import {
   formatGrade,
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
+import { scoringModeFromAiMeta } from '~/domain/grading/scoring-mode';
 import { rubricCategories as rubric } from '~/domain/grading/rubric';
 import {
   cloneFormDataWithFallbackRetry,
@@ -258,8 +259,13 @@ export function GradingSheet({
 
     const formData = new FormData();
 
-    const normalizedPercent =
-      resolvedNumericPercentage === null ? null : resolvedNumericPercentage;
+    const holisticTier =
+      scoringModeFromAiMeta(existingGrade?.aiMeta) === 'holistic_tier';
+    const normalizedPercent = holisticTier
+      ? null
+      : resolvedNumericPercentage === null
+        ? null
+        : resolvedNumericPercentage;
     const normalizedLetter =
       normalizedPercent === null ? null : letterFromPercent(normalizedPercent);
     const normalizedScore =
@@ -271,9 +277,16 @@ export function GradingSheet({
       overallComment,
       rubricScores,
     };
-    if (normalizedScore) payload.score = normalizedScore;
-    if (normalizedPercent !== null) payload.numericPercentage = normalizedPercent;
-    if (normalizedLetter) payload.letterGrade = normalizedLetter;
+    if (normalizedScore && !holisticTier) payload.score = normalizedScore;
+    if (holisticTier) {
+      payload.numericPercentage = null;
+      payload.letterGrade = null;
+    } else {
+      if (normalizedPercent !== null) {
+        payload.numericPercentage = normalizedPercent;
+      }
+      if (normalizedLetter) payload.letterGrade = normalizedLetter;
+    }
     if (!isEditing && releaseImmediately) {
       payload.releasedAt = new Date().toISOString();
     }

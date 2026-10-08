@@ -33,8 +33,10 @@ export type RubricDisplaySource =
   | 'assignment-type'
   | 'thesis-default'
   | 'daily-pages-default'
+  | 'daily-pages-engagement-default'
   | 'daily-pages-short-form-default'
-  | 'class-starter-default';
+  | 'class-starter-default'
+  | 'exit-ticket-default';
 
 export type RubricDisplayConfig = {
   categories: RubricDisplayCategory[];
@@ -56,14 +58,18 @@ export type RubricDisplayConfig = {
    * Surfaced to the teacher instead of quietly falling back to a default.
    */
   rubricIncomplete?: boolean;
+  /** When holistic_tier, overall grades are points-only (no % / letter). */
+  scoringMode?: 'weighted_categories' | 'holistic_tier';
 };
 
 const rubricDisplaySources = new Set<string>([
   'assignment-type',
   'thesis-default',
   'daily-pages-default',
+  'daily-pages-engagement-default',
   'daily-pages-short-form-default',
   'class-starter-default',
+  'exit-ticket-default',
 ]);
 
 /**
@@ -206,6 +212,30 @@ export function normalizeRubricDisplayConfig(
     scoringType,
     source: parseRubricDisplaySource(raw.source),
     rubricIncomplete: raw.rubricIncomplete === true,
+    ...(raw.scoringMode === 'holistic_tier' ? { scoringMode: 'holistic_tier' } : {}),
+  };
+}
+
+/** Keeps tier-only score pickers after the grading assistant returns a config snapshot. */
+export function mergeRubricDisplayPickerRestrictions(
+  next: RubricDisplayConfig,
+  baseline: RubricDisplayConfig
+): RubricDisplayConfig {
+  const baselineByKey = new Map(
+    baseline.categories.map((category) => [category.key, category])
+  );
+  const categories = next.categories.map((category) => {
+    const allowedScores = category.allowedScores?.length
+      ? category.allowedScores
+      : baselineByKey.get(category.key)?.allowedScores;
+    return allowedScores?.length ? { ...category, allowedScores } : category;
+  });
+  const scoringMode =
+    next.scoringMode ?? baseline.scoringMode;
+  return {
+    ...next,
+    categories,
+    ...(scoringMode ? { scoringMode } : {}),
   };
 }
 

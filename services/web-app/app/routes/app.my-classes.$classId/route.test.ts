@@ -362,11 +362,19 @@ describe('class detail loader document visibility', () => {
 
   test('loads generic assignment types for the current class scope', async () => {
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
-      { id: 'generic-type', title: 'Generic Essay', systemKey: null },
+      {
+        id: 'generic-type',
+        title: 'Generic Essay',
+        systemKey: null,
+        kind: null,
+        rubric: null,
+      },
       {
         id: 'ap-history-type',
         title: 'AP History Essay',
         systemKey: 'ap_history_essay',
+        kind: null,
+        rubric: null,
       },
     ]);
 
@@ -390,8 +398,10 @@ describe('class detail loader document visibility', () => {
       select: {
         id: true,
         title: true,
+        kind: true,
         systemKey: true,
         collaborationSupported: true,
+        rubric: { select: { name: true } },
       },
       orderBy: { position: 'asc' },
     });
@@ -399,6 +409,8 @@ describe('class detail loader document visibility', () => {
       {
         id: 'generic-type',
         title: 'Generic Essay',
+        kind: null,
+        rubricName: null,
         collaborationSupported: undefined,
         // The mocked type has no rubric, so it grades no grammar and the
         // creation sheet offers the teacher no toggle for it.
@@ -706,6 +718,8 @@ describe('class detail loader document visibility', () => {
         prompt: 'Updated prompt',
         submitForGrade: true,
         pointValue: 100,
+        // Not an exit ticket, so any stored ticket config is cleared.
+        exitTicketConfigJson: expect.anything(),
       },
     });
   });

@@ -108,8 +108,9 @@ describe('admin assignment type prompt loader', () => {
   });
 
   test('opens prompt tools with the selected library rubric and no inline grading JSON', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
-    const schema = STARTER_RUBRICS.find(row => row.name === DAILY_PAGES_RUBRIC_NAME)!;
+    const { dailyPagesEngagementV1LibrarySchema: schema } = await import(
+      '~/domain/rubrics/library/daily-pages-engagement-v1.fixture'
+    );
     prisma.assignmentType.findUnique.mockResolvedValue({
       ...baseAssignmentType, kind: null, rubricJson: null, scoringScaleJson: null,
       gradingPromptConfigJson: { gradingInstructionsOverride: 'Reward reflection.' },

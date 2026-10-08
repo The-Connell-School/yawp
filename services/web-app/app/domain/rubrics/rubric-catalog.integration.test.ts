@@ -199,3 +199,92 @@ run('code-seeded starters are editable and flagged; library-linked types are rea
   }
   await expect(catalog.get('does-not-exist')).rejects.toMatchObject({ statusCode: 404 });
 });
+const source = () => ({ contentId: randomUUID(), version: 3, fingerprint: 'e'.repeat(64) });
+
+run('staging a library rubric appends a source-tagged revision and changes nothing schools use', async () => {
+  const { db, catalog } = await setup();
+  const { rubric, type, name } = await libraryRubric(db, 'daily-pages-engagement');
+  // Give the rubric a current (school-facing) revision and a pinned assignment.
+  const first = await catalog.get(name);
+  const doc1 = structuredClone(first.live.editable) as any; doc1.calibrationNotes = 'School notes';
+  const v1 = await catalog.save({ key: name, requestId: randomUUID(), actorEmail: actor, reason: 'Baseline', expectedFingerprint: first.live.fingerprint, document: doc1 });
+  const pinned = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'School assignment' } });
+  const rubricBefore = await db.rubric.findUniqueOrThrow({ where: { id: rubric.id } });
+  const typeBefore = await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } });
+
+  const detail = await catalog.get(name);
+  const document = structuredClone(detail.live.editable) as any;
+  document.calibrationNotes = 'Demo notes';
+  document.rubric.categories[0].description = `${document.rubric.categories[0].description} (demo)`;
+  const requestId = randomUUID();
+  const src = source();
+  const staged = await catalog.stage({ key: name, requestId, actorEmail: 'staff@yawp.test', reason: 'Stage for demo orgs', document, source: src });
+  expect(staged.replayed).toBe(false);
+  expect(staged.revision).toMatchObject({ rubricName: name, version: v1.revision.version + 1, createdBy: 'staff@yawp.test', reason: 'Stage for demo orgs' });
+
+  const row = await db.rubricRevision.findUniqueOrThrow({ where: { id: staged.revision.id } });
+  expect(row).toMatchObject({ requestId, sourceContentId: src.contentId, sourceVersion: src.version, sourceFingerprint: src.fingerprint });
+  const { contentFingerprint } = await import('./rubric-catalog.server');
+  expect(row.fingerprint).toBe(contentFingerprint(row.schemaJson));
+  expect((row.schemaJson as any).calibrationNotes).toBe('Demo notes');
+  expect((row.schemaJson as any).name).toBe(name);
+  expect((row.schemaJson as any).rubric.categories[0].description).toContain('(demo)');
+  // Nothing the platform reads by default moved.
+  expect(await db.rubric.findUniqueOrThrow({ where: { id: rubric.id } })).toEqual(rubricBefore);
+  expect(await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } })).toEqual(typeBefore);
+  expect((await db.assignment.findUniqueOrThrow({ where: { id: pinned.id } })).rubricRevisionId).toBe(v1.revision.id);
+  const fresh = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'New school assignment' } });
+  expect(fresh.rubricRevisionId).toBe(v1.revision.id);
+  // An explicit pin to the staged revision is accepted by the pin trigger.
+  const demo = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Demo assignment', rubricRevisionId: staged.revision.id } });
+  expect(demo.rubricRevisionId).toBe(staged.revision.id);
+
+  // Replays are idempotent; reusing the id for different inputs is refused.
+  const replay = await catalog.stage({ key: name, requestId, actorEmail: 'staff@yawp.test', reason: 'Stage for demo orgs', document, source: src });
+  expect(replay).toMatchObject({ replayed: true, revision: { id: staged.revision.id } });
+  await expect(catalog.stage({ key: name, requestId, actorEmail: 'staff@yawp.test', reason: 'Stage for demo orgs', document, source: { ...src, version: 4 } })).rejects.toMatchObject({ statusCode: 409 });
+  // A later save still versions after the staged revision.
+  const again = await catalog.get(name);
+  const doc3 = structuredClone(again.live.editable) as any; doc3.calibrationNotes = 'School notes 2';
+  const v3 = await catalog.save({ key: name, requestId: randomUUID(), actorEmail: actor, reason: 'School edit', expectedFingerprint: again.live.fingerprint, document: doc3 });
+  expect(v3.revision.version).toBe(staged.revision.version + 1);
+  cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
+});
+
+run('staging keeps non-editable prompt keys and validates like save', async () => {
+  const { db, catalog, perTypeKey } = await setup();
+  const daily = fixture.perTypeRubrics.find((type) => type.title === 'Daily Pages')!;
+  const promptConfig = { ...((daily.gradingPromptConfigJson as object) ?? {}), gradingInstructionsOverride: 'Teacher override stays' };
+  const type = await db.assignmentType.create({ data: {
+    title: `Daily Pages stage ${suffix}`, position: 9002, scoringScaleJson: daily.scoringScaleJson as any, rubricJson: daily.rubricJson as any,
+    gradingPromptConfigJson: promptConfig as any, gradingOutputSchemaJson: (daily.gradingOutputSchemaJson ?? undefined) as any, gradingCalibrationNotes: daily.gradingCalibrationNotes,
+  } });
+  const key = perTypeKey(type.id);
+  const typeBefore = await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } });
+  const detail = await catalog.get(key);
+  const document = structuredClone(detail.live.editable) as any;
+  document.rubric.categories[0].label = `${document.rubric.categories[0].label} (demo)`;
+  const staged = await catalog.stage({ key, requestId: randomUUID(), actorEmail: actor, reason: 'Stage per-type', document, source: source() });
+  const row = await db.rubricRevision.findUniqueOrThrow({ where: { id: staged.revision.id } });
+  expect(row.rubricName).toBe(key);
+  expect((row.schemaJson as any).promptConfig.gradingInstructionsOverride).toBe('Teacher override stays');
+  expect((row.schemaJson as any).rubric.categories[0].label).toContain('(demo)');
+  expect(await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } })).toEqual(typeBefore);
+  // Like a first save, staging captures the live content as the baseline first; the staged revision follows it.
+  const baseline = await db.assignmentTypeRubricBaseline.findUniqueOrThrow({ where: { assignmentTypeId: type.id } });
+  const baselineRow = await db.rubricRevision.findUniqueOrThrow({ where: { id: baseline.rubricRevisionId } });
+  expect(baselineRow).toMatchObject({ rubricName: key, createdBy: 'capture-before-edit', version: staged.revision.version - 1, sourceContentId: null });
+  expect(baselineRow.schemaJson).toEqual(detail.live.content as any);
+  expect((await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'School entry' } })).rubricRevisionId).toBe(baselineRow.id);
+  cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
+
+  await expect(catalog.stage({ key, requestId: randomUUID(), actorEmail: actor, reason: 'Broken', document: { ...document, rubric: { categories: [] } }, source: source() })).rejects.toMatchObject({ statusCode: 422 });
+  await expect(catalog.stage({ key: 'does-not-exist', requestId: randomUUID(), actorEmail: actor, reason: 'Missing', document: { ...document, name: 'does-not-exist' }, source: source() })).rejects.toMatchObject({ statusCode: 404 });
+  const { name } = await libraryRubric(db, 'daily-pages-engagement');
+  const libDetail = await catalog.get(name);
+  await expect(catalog.stage({ key: name, requestId: randomUUID(), actorEmail: actor, reason: 'Rename', document: { ...(libDetail.live.editable as object), name: 'renamed' }, source: source() })).rejects.toMatchObject({ statusCode: 422 });
+  // Read-only rubrics (library-linked per-type key) are refused.
+  const linked = await libraryRubric(db, 'gba300-international-etiquette');
+  await db.assignmentType.update({ where: { id: linked.type.id }, data: { rubricJson: { categories: [{ key: 'old', label: 'Old', description: 'Unused', weight: 1 }] } } });
+  await expect(catalog.stage({ key: perTypeKey(linked.type.id), requestId: randomUUID(), actorEmail: actor, reason: 'Read only', document, source: source() })).rejects.toMatchObject({ statusCode: 403 });
+});

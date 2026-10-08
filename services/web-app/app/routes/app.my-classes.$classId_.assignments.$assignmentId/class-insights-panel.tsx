@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Link, useFetcher } from 'react-router';
+import { Link, useFetcher, useRouteLoaderData } from 'react-router';
+import type { Route as RootRoute } from '../../+types/root';
 import {
   ArrowUpRight,
   BarChart3,
   ChevronDown,
+  Lightbulb,
   Minus,
   TrendingUp,
   TriangleAlert,
@@ -403,9 +405,11 @@ function StatChip({
 function InsightBody({
   insight,
   classAssignmentId,
+  lessonPlannerEnabled,
 }: {
   insight: ClassInsight;
   classAssignmentId: string;
+  lessonPlannerEnabled: boolean;
 }) {
   const summary = insight.summary;
   if (!summary) return null;
@@ -499,6 +503,17 @@ function InsightBody({
                     <p className="text-base/7 text-muted-foreground [overflow-wrap:anywhere] @sm:text-sm/6">
                       {step.detail}
                     </p>
+                    {lessonPlannerEnabled ? (
+                      <Link
+                        // Ids only: the planner rebuilds the ask from the
+                        // stored insight rather than trusting URL text.
+                        to={`/app/lesson-planner?from=${classAssignmentId}&step=${index}`}
+                        className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-md text-sm font-medium text-primary hover:underline"
+                      >
+                        <Lightbulb size={14} className="shrink-0" />
+                        Plan this lesson
+                      </Link>
+                    ) : null}
                   </div>
                 </li>
               );
@@ -523,6 +538,9 @@ export function ClassInsightsPanel({
   initialInsight: ClassInsight | null;
   gradedCount: number;
 }) {
+  const lessonPlannerEnabled =
+    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
+      ?.lessonPlannerEnabled ?? false;
   const fetcher = useFetcher<InsightActionData>();
   const isWorking = fetcher.state !== 'idle';
 
@@ -628,6 +646,7 @@ export function ClassInsightsPanel({
           <InsightBody
             insight={insight!}
             classAssignmentId={classAssignmentId}
+            lessonPlannerEnabled={lessonPlannerEnabled}
           />
         )}
       </div>

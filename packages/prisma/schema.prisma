@@ -114,6 +114,8 @@ model Class {
   createdAt                       DateTime                         @default(now()) @db.Timestamptz(6)
   updatedAt                       DateTime                         @default(now()) @db.Timestamptz(6)
   code                            String
+  /// Globally unique token for free-tier student join links (cross-tenant safe).
+  studentJoinToken                String?                          @unique
   schoolYear                      String                           @default("2024-2025")
   period                          String?
   grade                           String?
@@ -149,8 +151,11 @@ model Rubric {
   assignmentTypes AssignmentType[]
   currentRevisionId String?
   currentRevision RubricRevision? @relation("CurrentRubricRevision", fields: [currentRevisionId], references: [id], onDelete: Restrict)
+  /// When set, the rubric is hidden from the admin picker and excluded from seed repair.
+  archivedAt      DateTime? @db.Timestamptz(6)
 
   @@index([title])
+  @@index([archivedAt])
 }
 
 model AssignmentType {
@@ -384,6 +389,12 @@ model Assignment {
   /// Target students per group. Null for whole-class, where the group is the roster.
   collaborationGroupSize          Int?
   apHistorySnapshot               Json?
+  /// What the teacher answered in the exit ticket form: basic, or specific
+  /// with its focus and topic. The composed student-facing prompt is written
+  /// to `prompt` as well, so every existing reader keeps working and this
+  /// column only records what the prompt was built from. Null on every
+  /// assignment that is not an exit ticket.
+  exitTicketConfigJson            Json?
   classAssignments                ClassAssignment[]
   documents                       Document[]
 
@@ -405,6 +416,8 @@ model ClassAssignment {
   documents      Document[]
   insight        ClassAssignmentInsight?
   documentGroups DocumentGroup[]
+  lessonPlans  LessonPlanConversation[]
+
 
   @@unique([assignmentId, classId])
   @@index([classId, createdAt(sort: Desc)])
@@ -1165,8 +1178,11 @@ model Organization {
   invitations                   Invitation[]
   schools                       School[]
   assignmentTypes               AssignmentType[]
+  freeClassroomAssignmentKindUsages FreeClassroomAssignmentKindUsage[]
   assignmentTypeAssignments     OrganizationAssignmentType[]
   reporterConversations         ReporterConversation[]
+  lessonPlanConversations    LessonPlanConversation[]
+  lessonPlanUnits            LessonPlanUnit[]
   reporterGrowthPlans           ReporterGrowthPlan[]
   aiRequestReservations         AiRequestReservation[]
   submissionActivities          SubmissionActivity[]
@@ -1184,40 +1200,53 @@ model OrganizationAssignmentType {
   @@index([assignmentTypeId])
 }
 
+/// Lifetime assignment-kind consumption for FREE_CLASSROOM orgs. Never decremented.
+model FreeClassroomAssignmentKindUsage {
+  organizationId         String
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  kind                   String
+  lifetimeCreatedCount   Int          @default(0)
+
+  @@id([organizationId, kind])
+}
+
 model OrgMembership {
-  id                            String                         @id @default(cuid())
-  createdAt                     DateTime                       @default(now()) @db.Timestamptz(6)
-  userId                        String
-  user                          User                           @relation(fields: [userId], references: [id])
-  organizationId                String
-  organization                  Organization                   @relation(fields: [organizationId], references: [id])
-  role                          MembershipRole
-  isOrgOwner                    Boolean                        @default(false)
-  isActive                      Boolean                        @default(true)
-  school                        String?
-  schoolTeacher                 String?
-  grade                         String?
-  period                        String?
-  documents                     Document[]
-  documentComments              DocumentComment[]
-  documentCommentResponses      DocumentCommentResponse[]
-  pasteAlerts                   PasteAlert[]
-  submissionsGraded             Submission[]                   @relation("SubmissionGradedBy")
-  submissionsUnsubmitted        Submission[]                   @relation("SubmissionUnsubmittedBy")
-  submissionActivities          SubmissionActivity[]           @relation("SubmissionActivityActor")
-  submissionComments            SubmissionComment[]            @relation("SubmissionCommentProfile")
-  ownedAssignmentTypes          AssignmentType[]               @relation("AssignmentTypeOwner")
-  classesAsTeacher              Class[]                        @relation("ClassTeachers")
-  classesAsStudent              Class[]                        @relation("ClassStudents")
-  schools                       School[]                       @relation("SchoolTeachers")
-  teacherTrainingModuleSessions TeacherTrainingModuleSession[]
-  assignedTeacherTrainings      TeacherTraining[]              @relation("TeacherTrainingAssignments")
-  assignmentTypesCustomized     Boolean                        @default(false)
-  assignmentTypeAssignments     TeacherAssignmentType[]
-  reporterConversations         ReporterConversation[]
-  reporterGrowthPlansOwned      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
-  reporterGrowthPlansAsStudent  ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
-  aiRequestReservations         AiRequestReservation[]
+  id                                String                         @id @default(cuid())
+  createdAt                         DateTime                       @default(now()) @db.Timestamptz(6)
+  userId                            String
+  user                              User                           @relation(fields: [userId], references: [id])
+  organizationId                    String
+  organization                      Organization                   @relation(fields: [organizationId], references: [id])
+  role                              MembershipRole
+  isOrgOwner                        Boolean                        @default(false)
+  isActive                          Boolean                        @default(true)
+  school                            String?
+  schoolTeacher                     String?
+  grade                             String?
+  period                            String?
+  documents                         Document[]
+  documentComments                  DocumentComment[]
+  documentCommentResponses          DocumentCommentResponse[]
+  pasteAlerts                       PasteAlert[]
+  submissionsGraded                 Submission[]                   @relation("SubmissionGradedBy")
+  submissionsUnsubmitted            Submission[]                   @relation("SubmissionUnsubmittedBy")
+  submissionActivities              SubmissionActivity[]           @relation("SubmissionActivityActor")
+  submissionComments                SubmissionComment[]            @relation("SubmissionCommentProfile")
+  ownedAssignmentTypes              AssignmentType[]               @relation("AssignmentTypeOwner")
+  classesAsTeacher                  Class[]                        @relation("ClassTeachers")
+  classesAsStudent                  Class[]                        @relation("ClassStudents")
+  schools                           School[]                       @relation("SchoolTeachers")
+  teacherTrainingModuleSessions     TeacherTrainingModuleSession[]
+  assignedTeacherTrainings          TeacherTraining[]              @relation("TeacherTrainingAssignments")
+  assignmentTypesCustomized         Boolean                        @default(false)
+  assignmentTypeAssignments         TeacherAssignmentType[]
+  writingPracticeAssignmentsCreated WritingPracticeAssignment[]    @relation("WritingPracticeAssignmentCreator")
+  reporterConversations             ReporterConversation[]
+  lessonPlanConversations       LessonPlanConversation[]
+  lessonPlanUnits               LessonPlanUnit[]
+  reporterGrowthPlansOwned          ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
+  reporterGrowthPlansAsStudent      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
+  aiRequestReservations             AiRequestReservation[]
 
   classAssignmentInsightsGenerated ClassAssignmentInsight[]
   savedThesisPrompts               SavedThesisPrompt[]
@@ -1231,7 +1260,6 @@ model OrgMembership {
   assignmentModuleSessions         AssignmentModuleSession[]
   documentGroupMemberGradesGiven   DocumentGroupMemberGrade[] @relation("DocumentGroupMemberGradedBy")
 
-  writingPracticeAssignmentsCreated WritingPracticeAssignment[] @relation("WritingPracticeAssignmentCreator")
   writingPracticeAttempts           WritingPracticeAttempt[]    @relation("WritingPracticeAttemptStudent")
   writingPracticePromptSets         WritingPracticePromptSet[]  @relation("WritingPracticePromptSetStudent")
 
@@ -1323,6 +1351,139 @@ model ReporterMessage {
   conversation   ReporterConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
+}
+
+/// A multi-day unit: one map, and one lesson per day that gets built out of it.
+///
+/// A unit exists because a day is a whole lesson — its own plan, packet, deck
+/// and handouts — and stacking eight of those into the conversation that wrote
+/// the map produces a packet nobody can teach from. The unit is the thing that
+/// holds them together, so a teacher can come back on Tuesday and open Tuesday.
+model LessonPlanUnit {
+  id             String                   @id @default(cuid())
+  createdAt      DateTime                 @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime                 @default(now()) @updatedAt @db.Timestamptz(6)
+  deletedAt      DateTime?                @db.Timestamptz(6)
+  /// Copied off the map when the unit is created, so the library can list a
+  /// unit without parsing a message to find out what it is called.
+  title          String                   @default("New unit")
+  membershipId   String
+  membership     OrgMembership            @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organizationId String
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations  LessonPlanConversation[]
+
+  @@index([membershipId, updatedAt(sort: Desc)])
+  @@index([organizationId])
+}
+
+/// A YAWP! Lesson Planner chat session. Owned by a teacher (OrgMembership) and
+/// scoped to their organization. Holds an ordered transcript of planner
+/// messages. `originClassAssignmentId` records the Class Summary next step the
+/// session was opened from, when the teacher came in through that seam.
+///
+/// `unitId` links a session to the unit it belongs to; `unitDay` says which
+/// part it is. A null `unitDay` on a unit-linked session means the map itself,
+/// and a number means that day's lesson.
+model LessonPlanConversation {
+  id                      String              @id @default(cuid())
+  createdAt               DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
+  deletedAt               DateTime?           @db.Timestamptz(6)
+  /// Set when the teacher stars the lesson as worth finding again. Starring is
+  /// a decision they make, separate from keeping a reply in the packet.
+  /// Left from starring, which publishing replaced. Unread — see the
+  /// 20261008000800_add_lesson_published migration.
+  starredAt               DateTime?           @db.Timestamptz(6)
+  /// Set when the teacher publishes this lesson to their library. Null is a
+  /// draft, which is where every lesson starts.
+  publishedAt             DateTime?           @db.Timestamptz(6)
+  title                   String              @default("New lesson")
+  /// The name the teacher gave the printable packet; falls back to `title`.
+  packetTitle             String?
+  membershipId            String
+  membership              OrgMembership       @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organizationId          String
+  organization            Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  originClassAssignmentId String?
+  originClassAssignment   ClassAssignment?    @relation(fields: [originClassAssignmentId], references: [id], onDelete: SetNull)
+  /// The unit this session belongs to, if any. Deleting a unit leaves its
+  /// lessons standing on their own rather than destroying a teacher's work.
+  unitId                  String?
+  unit                    LessonPlanUnit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  /// Which day of the unit this is. Null on a unit-linked session means the
+  /// map; a number means that day's lesson.
+  unitDay                 Int?
+  messages                LessonPlanMessage[]
+  materials               LessonPlanMaterial[]
+
+  @@index([membershipId, updatedAt(sort: Desc)])
+  @@index([membershipId, starredAt(sort: Desc)])
+  @@index([membershipId, publishedAt(sort: Desc)])
+  @@index([organizationId])
+  @@index([originClassAssignmentId])
+  @@index([unitId, unitDay])
+}
+
+/// A single turn in a Lesson Planner conversation. `role` is 'user' or
+/// 'assistant'. `toolCalls` optionally records the tool invocations the
+/// assistant made to produce its answer (for transparency/auditing).
+/// `keptAt` marks a reply the teacher chose to keep in the printable lesson
+/// packet; `keptAudience` is 'teacher' (a plan they read) or 'student' (a
+/// handout that prints with writing space on its own page).
+model LessonPlanMessage {
+  id             String                 @id @default(cuid())
+  createdAt      DateTime               @default(now()) @db.Timestamptz(6)
+  role           String
+  content        String
+  toolCalls      Json?
+  keptAt         DateTime?              @db.Timestamptz(6)
+  keptAudience   String?
+  /// Teacher-supplied name for this resource; falls back to a derived title.
+  keptTitle      String?
+  conversationId String
+  conversation   LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, keptAt])
+}
+
+/// One piece of teaching material the teacher pulled out of a planner reply and
+/// into their lesson packet — a handout, a sample piece of writing, an exit
+/// ticket, an answer key. Kept separately from the reply it came out of so a
+/// teacher can take the handout without taking the whole lesson plan around it.
+/// `blockKey` identifies which material block in that reply this is, so adding
+/// the same one twice is one add. `content` is a copy of the Markdown rather
+/// than a pointer into the message, so the saved material survives any later
+/// change to how replies are parsed, and can be renamed on its own.
+model LessonPlanMaterial {
+  id              String                 @id @default(cuid())
+  createdAt       DateTime               @default(now()) @db.Timestamptz(6)
+  conversationId  String
+  conversation    LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sourceMessageId String
+  /// The message's own createdAt, copied so the packet reads in lesson order
+  /// rather than in the order the teacher happened to click.
+  sourceCreatedAt DateTime               @db.Timestamptz(6)
+  blockKey        String
+  /// What this artifact IS, rather than where it came from — "handout:diagnose
+  /// -repair", "deck". One slot holds one current version, so a revision the
+  /// teacher files takes the old one's place instead of piling up beside it.
+  slot            String
+  kind            String
+  title           String
+  audience        String
+  content         String
+  /// Set the moment a teacher hand-edits this material's content in the
+  /// stack. While set, a revision the planner writes for the same slot no
+  /// longer replaces it silently — editing forks the material out of the
+  /// model's control, because a hand-edited handout is a decision, not a
+  /// draft to be clobbered by the next thing the model happens to write.
+  editedAt        DateTime?              @db.Timestamptz(6)
+
+  @@unique([conversationId, slot])
+  @@index([conversationId, sourceMessageId, blockKey])
+  @@index([conversationId, sourceCreatedAt])
 }
 
 /// A saved, forward-looking writing growth plan for one student, produced by
@@ -1507,16 +1668,19 @@ model WritingPracticeClassAssignment {
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
-  id           String          @id @default(cuid())
-  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime        @default(now()) @db.Timestamptz(6)
-  email        String          @unique
-  name         String?
-  password     Password?
-  sessions     Session[]
-  memberships  OrgMembership[]
-  isAdmin      Boolean         @default(false)
-  isSuperAdmin Boolean         @default(false)
+  id                 String          @id @default(cuid())
+  createdAt          DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime        @default(now()) @db.Timestamptz(6)
+  email              String?         @unique
+  username           String?         @unique
+  emailVerifiedAt    DateTime?       @db.Timestamptz(6)
+  mustChangePassword Boolean         @default(false)
+  name               String?
+  password           Password?
+  sessions           Session[]
+  memberships        OrgMembership[]
+  isAdmin            Boolean         @default(false)
+  isSuperAdmin       Boolean         @default(false)
 }
 
 model Invitation {
@@ -1531,12 +1695,15 @@ model Invitation {
   charSet        String
   expiresAt      DateTime?     @db.Timestamptz(6)
   metadata       String?
+  /// For onboard-student invites: class the student will join (indexed seat-cap counts).
+  studentClassId String?
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   schoolId       String?
   school         School?       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@unique([target, type])
+  @@index([type, studentClassId])
 }
 
 model TeacherTraining {

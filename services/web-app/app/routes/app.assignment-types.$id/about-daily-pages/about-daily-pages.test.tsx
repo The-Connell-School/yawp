@@ -28,10 +28,7 @@ const {
   WHAT_IT_IS_NOT_HEADING,
   WRITE_YOUR_OWN_HEADING,
 } = await import('./content');
-const { SHORT_FORM_LIBRARY_HEADING } =
-  await import('../short-form-prompts-library/short-form-teacher-directions');
-const { KIND_LABEL, KIND_ORDER, TEACHING_NOTES } =
-  await import('../short-form-prompts-library/data');
+const PROMPT_LIBRARY_HEADING = 'Prompt library';
 
 const SECTION_HEADINGS = [
   WHAT_IT_IS_HEADING,
@@ -39,7 +36,7 @@ const SECTION_HEADINGS = [
   HOW_ITS_GRADED_HEADING,
   HOW_TO_USE_HEADING,
   WRITE_YOUR_OWN_HEADING,
-  SHORT_FORM_LIBRARY_HEADING,
+  PROMPT_LIBRARY_HEADING,
 ];
 
 function render(element: ReactElement) {
@@ -103,7 +100,6 @@ describe('the Daily Pages about section', () => {
       ...WHAT_IT_IS,
       ...HOW_TO_USE,
       ...PROMPT_WARNINGS,
-      ...TEACHING_NOTES,
     ]) {
       expect(body.textContent).not.toContain(item);
     }
@@ -145,7 +141,7 @@ describe('the Daily Pages about section', () => {
     expect(body.textContent).toContain('Class Starter');
   });
 
-  it('puts every rubric category in a table row with its weight', () => {
+  it('puts every engagement tier in a table row with its share', () => {
     renderAbout();
     const body = openSection(HOW_ITS_GRADED_HEADING);
     const rows = Array.from(body.querySelectorAll('tbody tr'));
@@ -153,8 +149,8 @@ describe('the Daily Pages about section', () => {
     expect(rows).toHaveLength(GRADING_SUMMARY.length);
     for (const [index, row] of rows.entries()) {
       const summary = GRADING_SUMMARY[index];
-      expect(row.textContent).toContain(summary.label);
-      expect(row.textContent).toContain(`${summary.weightPercent}%`);
+      expect(row.textContent).toContain(summary.tier);
+      expect(row.textContent).toContain(summary.share);
     }
   });
 
@@ -190,19 +186,12 @@ describe('the Daily Pages about section', () => {
     }
   });
 
-  it('carries the library directions as its last section', () => {
+  it('carries the open-ended library directions as its last section', () => {
     renderAbout();
-    const body = openSection(SHORT_FORM_LIBRARY_HEADING);
+    const body = openSection(PROMPT_LIBRARY_HEADING);
 
-    // The kinds and the library's own notes, which used to sit in a
-    // second card below this one.
-    for (const kind of KIND_ORDER) {
-      expect(body.textContent).toContain(KIND_LABEL[kind]);
-    }
-    for (const note of TEACHING_NOTES) {
-      expect(body.textContent).toContain(note);
-    }
-    expect(SECTION_HEADINGS.at(-1)).toBe(SHORT_FORM_LIBRARY_HEADING);
+    expect(body.textContent).toContain('How Class Starter works');
+    expect(SECTION_HEADINGS.at(-1)).toBe(PROMPT_LIBRARY_HEADING);
   });
 
   it('keeps sections open independently, so two can be read side by side', () => {
@@ -213,7 +202,7 @@ describe('the Daily Pages about section', () => {
     expect(triggerFor(HOW_ITS_GRADED_HEADING).getAttribute('data-state')).toBe(
       'open'
     );
-    expect(body.textContent).toContain(GRADING_SUMMARY[0].label);
+    expect(body.textContent).toContain(GRADING_SUMMARY[0].tier);
     expect(body.textContent).toContain(PROMPT_REWRITES[0].after);
   });
 

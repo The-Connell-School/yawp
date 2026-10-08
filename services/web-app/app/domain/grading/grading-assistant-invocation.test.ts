@@ -49,6 +49,20 @@ function gradingConfig(
 }
 
 describe('compileGradingAssistantInvocation', () => {
+  test('includes the assignment prompt in the user message when provided', () => {
+    const invocation = compileGradingAssistantInvocation({
+      gradingConfig: gradingConfig(),
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'My reflection for today.',
+      assignmentPrompt: 'What surprised you in chapter 4?',
+    });
+
+    expect(invocation.userMessage).toContain(
+      'Assignment prompt: What surprised you in chapter 4?'
+    );
+  });
+
   test('compiles the exact system and user messages for assignment-type instructions', () => {
     const invocation = compileGradingAssistantInvocation({
       gradingConfig: gradingConfig(),
@@ -179,6 +193,68 @@ describe('compileGradingAssistantInvocation', () => {
     expect(invocation.system).toContain('"teacherNote": string | null');
     expect(invocation.system).toContain('Never put private observations in overallComment');
     expect(invocation.system).toContain('Do not infer AI authorship');
+  });
+
+  test('appends assignment grading context for a template that has no slot for it', () => {
+    const invocation = compileGradingAssistantInvocation({
+      gradingConfig: gradingConfig(),
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'Weathering breaks rock down where it sits.',
+      assignmentPrompt: 'What is the difference between weathering and erosion?',
+      gradingContext:
+        "The teacher's notes on the lesson this ticket closes. The student did not see these; judge the response against them.\n- Main points: Erosion moves the pieces.",
+    });
+
+    expect(invocation.userMessage).toContain('Erosion moves the pieces.');
+    expect(invocation.userMessage).toContain(
+      'The student did not see these'
+    );
+    expect(invocation.userMessage).not.toContain('{{');
+  });
+
+  test('renders grading context inline when the template asks for it', () => {
+    const invocation = compileGradingAssistantInvocation({
+      gradingConfig: gradingConfig({
+        promptTemplate: {
+          systemMessage: 'Managed grading system.',
+          userMessage: '{{grading_context}}\n\nEssay:\n{{document}}',
+        },
+      }),
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'A response.',
+      gradingContext: 'Judge this against the objective.',
+    });
+
+    expect(invocation.userMessage).toStartWith(
+      'Judge this against the objective.'
+    );
+    // Inline means once, not once inline and once appended.
+    expect(
+      invocation.userMessage.split('Judge this against the objective.').length - 1
+    ).toBe(1);
+  });
+
+  test('leaves the payload untouched for an assignment with no grading context', () => {
+    const without = compileGradingAssistantInvocation({
+      gradingConfig: gradingConfig(),
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'A response.',
+      assignmentPrompt: 'A prompt.',
+    });
+    const withNull = compileGradingAssistantInvocation({
+      gradingConfig: gradingConfig(),
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'A response.',
+      assignmentPrompt: 'A prompt.',
+      gradingContext: null,
+    });
+
+    expect(withNull.userMessage).toBe(without.userMessage);
+    expect(withNull.system).toBe(without.system);
   });
 
 });
