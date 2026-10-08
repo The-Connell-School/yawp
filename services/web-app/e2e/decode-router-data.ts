@@ -18,7 +18,9 @@ function decodeTurboLine(line: unknown[], index: number): unknown {
     if (value[0] === 'D' && typeof value[1] === 'number') {
       return new Date(value[1]);
     }
-    return value;
+    return value.map((item) =>
+      typeof item === 'number' ? decodeTurboLine(line, item) : item
+    );
   }
 
   if (typeof value === 'object') {
