@@ -203,3 +203,32 @@ describe('diffStoryboards', () => {
     expect(diffStoryboards(BASE, 'nonsense')).toEqual([]);
   });
 });
+
+// Guide revisions are usually about the words. A headline rewrite has to read
+// as a change, or the refine flow sends it back as "unchanged".
+describe('guide copy changes', () => {
+  test('reports a change to the guide copy and to a scene’s guide text', async () => {
+    const { guideStoryboard } = await import('./guide.fixture');
+    const before = guideStoryboard();
+    const after = guideStoryboard({
+      guide: { ...before.guide, headline: 'Daily writing, every day.', wont: [] },
+    });
+    (after.scenes as unknown[])[2] = {
+      ...after.scenes[2],
+      guide: { section: 'step', heading: 'Send a prompt', body: 'Pick one.' },
+    };
+
+    const changes = diffStoryboards(before, after);
+
+    expect(changes).toContainEqual({
+      scene: null,
+      field: 'guide.headline',
+      before: 'Get students writing every day in five minutes.',
+      after: 'Daily writing, every day.',
+    });
+    expect(changes.map((change) => change.field)).toContain('guide.wont');
+    expect(changes).toContainEqual(
+      expect.objectContaining({ scene: 'assign', field: 'guide' })
+    );
+  });
+});

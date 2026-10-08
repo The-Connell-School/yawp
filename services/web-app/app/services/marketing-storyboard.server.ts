@@ -8,7 +8,9 @@ import {
   describeStoryboardError,
   diffStoryboards,
   estimateRenderSeconds,
+  lintGuideStoryboard,
   safeParseStoryboard,
+  validateGuideStoryboard,
   type MarketingJobKind,
   type MarketingStoryboard,
   type MarketingSubjectType,
@@ -77,9 +79,65 @@ const REVISION_INSTRUCTIONS = [
   '  element — and change that.',
 ].join('\n');
 
+/**
+ * The house standard for how-to guides, from docs/how-to-guides.md and the
+ * reviews behind it (Lesson Planner, Reporter, Thesis-Driven Essay). A GUIDE
+ * job is held to the same bar a hand-built "See how it works" page is.
+ */
+const GUIDE_INSTRUCTIONS = [
+  'This storyboard becomes a HOW-TO GUIDE: one shareable page in the shape of the YAWP! "See how it works" guides. The renderer films your scenes once, cuts each step scene into its own short silent loop, takes a still of every guide scene, and lays the page out from the copy you write. Schools read it, teachers forward it to a department head, and districts approve features from it.',
+  '',
+  'THE JOB OF A GUIDE',
+  'A guide is the teaser that gets a teacher to try the feature. It is not the manual, the abstract, or the defense of how it was built. "You\'ve got to put the hay down low enough where the goats can reach it." Give a teacher only what they need to jump in.',
+  '',
+  'SHAPE (tag every scene that appears in the guide with "guide": { "section": ... })',
+  '1. Hero: exactly one scene with "section": "hero" and "screenshot": true. It is the still beside the headline. Land on the screen where the feature lives, looking its best.',
+  '2. What it can do: at most one "range" scene that shows the full range of what the feature makes (its starter options, its menu of types), plus the same range as a short bulleted list in guide.canDo for readers who skim past the picture. Show the range before walking through one workflow.',
+  '3. The main workflow: 3 numbered steps at most, each a "step" scene. Each step is one thing happening on screen, so it loops cleanly: one click, one panel opening, one paced scroll through a list. Give each a short heading that says what the teacher does and a body of one or two sentences. Put guide.workflowHeading over the steps, saying what the workflow is for ("Track student growth over time"). Then list the real moments a teacher uses it in guide.useCases (parent-teacher conferences, the end of a marking period, a department meeting, bell work). Do the thinking for them.',
+  '4. Extras: up to 3 "extra" scenes for the other big things it does, one heading and one line each.',
+  '5. What it will do / What it won’t do: guide.will and guide.wont.',
+  '6. Footer: guide.footerNote, the honest demo line, and guide.startLabel for the start button ("Open Daily Pages").',
+  'Scenes that only get the camera somewhere (navigation, a click through a list) carry no "guide" field. They are filmed but never shown.',
+  '',
+  'RULES FOR THE COPY',
+  '- Less is more. One or two sentences per section, then the picture does the rest.',
+  '- Say what it does, in simple terms. Do not describe what they will experience: progress bars, what appears where, or which screen comes next. They will see it.',
+  '- Name the controls that matter, once. "Answers are one tap: suggested replies, a slider for the period length, and a checklist of activity types" is the model.',
+  '- No secret sauce. Never explain how it works inside: prompts, rules it follows, what it searches, how it decides, or which AI model it uses.',
+  '- Always include "What it will do" and "What it won’t do". The won’t column matters most. Lead it with student safety and data: what it never does to or with students. Every line has to be true. Only claim what the brief states or what the filmed screens plainly show; if you are not sure a line is true, leave it out rather than soften it. Never write "it never sends student data anywhere".',
+  '- Cut AI-sounding copy: no em-dash asides, no "not X, but Y", no "not just", no clever headings, no seamless, effortless, unlock, empower, leverage, supercharge, elevate, streamline, or magic. Plain and direct: "Speaker notes included."',
+  '- Make headings say the thing: "Create a full unit of study", not "A unit map first, then one day at a time".',
+  '- Always use the Oxford comma, in every line: "class reports, student growth reports, and growth plans".',
+  '- Write the product name as YAWP!, in capitals with the exclamation mark.',
+  '- Be honest about the demo: the footer note says the media uses demo classes, and that any AI replies shown were scripted for the recording if they were.',
+  '- Headline: one line that says what the feature does for a teacher, with guide.highlight set to the few words of it that matter most. Lede: one or two sentences.',
+  '',
+  'Examples of the voice, from the Reporter guide:',
+  '  headline "Ask about your classes in plain language." with highlight "in plain language."',
+  '  lede "Reporter turns your released grades into class reports, student growth reports, and growth plans."',
+  '  step heading "See the whole class at once", body "Every student’s average, and who is trending down."',
+  '  won’t "Change, give, or release grades." and "Talk to students. It’s for teachers only."',
+  '  footer "Clips use demo classes. Reporter’s replies in them were scripted for the recording from the demo class’s real numbers."',
+  '',
+  'FILMING A GUIDE',
+  '- The run is filmed once with an enlarged cursor, then cut per step, so each step scene should start on the screen it is about and do one legible motion. Give it a hold of 1.5 to 2.5 seconds so the loop lands on the result.',
+  '- A step scene with no motion is shown as a still. That is fine for a result screen, but most steps should move.',
+  '- Leave "overlay" and "focus" off guide scenes. The page carries the words and shows the media at full width.',
+  '',
+  'Guide copy fields:',
+  '  storyboard "guide": {',
+  '    "headline": "...", "highlight": "words from the headline", "lede": "...",',
+  '    "workflowHeading": "...", "canDo": ["..."], "useCases": ["..."],',
+  '    "will": ["..."], "wont": ["..."], "footerNote": "...", "startLabel": "..."',
+  '  }',
+  '  scene "guide": { "section": "hero" | "range" | "step" | "extra", "heading": "...", "body": "..." }',
+];
+
 function buildSystemPrompt(kind: MarketingJobKind, revising = false): string {
   const shape =
-    kind === 'CLIP'
+    kind === 'GUIDE'
+      ? GUIDE_INSTRUCTIONS
+      : kind === 'CLIP'
       ? [
           'This storyboard becomes a short-form silent clip: 5 to 15 seconds of screen time showing ONE feature, and nothing else.',
           'One or two scenes. Start on the screen where the feature lives — no tour, no navigation montage.',
@@ -200,9 +258,11 @@ function buildUserPrompt(params: GenerateStoryboardParams): string {
     lines.push(`Subject: ${params.subject.label} (${params.subject.type})`);
   }
   lines.push(
-    params.kind === 'CLIP'
-      ? 'Deliverable: a short silent clip.'
-      : 'Deliverable: a set of still screenshots.'
+    params.kind === 'GUIDE'
+      ? 'Deliverable: a how-to guide, in the shape and voice described above.'
+      : params.kind === 'CLIP'
+        ? 'Deliverable: a short silent clip.'
+        : 'Deliverable: a set of still screenshots.'
   );
   lines.push('Return only the storyboard JSON.');
   return lines.join('\n');
@@ -347,6 +407,11 @@ async function runStoryboardGeneration(params: {
   let lastProblem = '';
   /** The revision failed because nothing moved, not because the JSON was bad. */
   let unrevised = false;
+  /**
+   * A guide that had the right shape but was sent back for copy. Kept so a
+   * second take that comes back worse cannot cost the admin a usable guide.
+   */
+  let usableGuide: MarketingStoryboard | null = null;
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const raw = String(
@@ -445,6 +510,47 @@ async function runStoryboardGeneration(params: {
         continue;
       }
 
+      if (params.kind === 'GUIDE') {
+        const shapeProblems = validateGuideStoryboard(result.data);
+        if (shapeProblems.length > 0) {
+          lastProblem = shapeProblems.join('; ');
+          if (attempt === 2) break;
+          messages.push(
+            { role: AgentType.Assistant, content: JSON.stringify(candidate) },
+            {
+              role: AgentType.User,
+              content: [
+                'That storyboard is not a complete how-to guide:',
+                ...shapeProblems.map((problem) => `- ${problem}`),
+                '',
+                'Fix those and return the corrected storyboard JSON only.',
+              ].join('\n'),
+            }
+          );
+          continue;
+        }
+
+        // Copy style gets one more pass, never a failure: the lint is a
+        // heuristic, and a misread line must not cost the admin the guide.
+        const copyProblems = lintGuideStoryboard(result.data);
+        if (copyProblems.length > 0 && attempt === 1) {
+          usableGuide = result.data;
+          messages.push(
+            { role: AgentType.Assistant, content: JSON.stringify(candidate) },
+            {
+              role: AgentType.User,
+              content: [
+                'The guide copy needs one more pass against the house rules:',
+                ...copyProblems.map((problem) => `- ${problem}`),
+                '',
+                'Rewrite only those lines, plain and direct, and keep everything else. Return the storyboard JSON only.',
+              ].join('\n'),
+            }
+          );
+          continue;
+        }
+      }
+
       return { storyboard: result.data, model, raw };
     }
 
@@ -464,6 +570,8 @@ async function runStoryboardGeneration(params: {
       }
     );
   }
+
+  if (usableGuide) return { storyboard: usableGuide, model, raw: lastRaw };
 
   throw new StoryboardGenerationError(
     unrevised

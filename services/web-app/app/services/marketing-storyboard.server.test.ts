@@ -484,3 +484,160 @@ describe('reviseStoryboard', () => {
     expect(thrown).toBeInstanceOf(StoryboardGenerationError);
   });
 });
+
+// A how-to guide is the studio's most useful deliverable for schools: the
+// "See how it works" shape from docs/how-to-guides.md, filmed from the app.
+// The prompt has to carry that standard, and a draft that misses the shape
+// is sent back rather than rendered.
+const VALID_GUIDE = {
+  slug: 'daily-pages-guide',
+  title: 'Daily Pages',
+  persona: 'teacher',
+  viewport: 'laptop',
+  guide: {
+    headline: 'Get students writing every day.',
+    highlight: 'every day',
+    lede: 'Daily Pages gives your class a short prompt to write about at the start of the period.',
+    workflowHeading: 'Run daily writing in your class',
+    canDo: ['Prompts for any subject', 'A record of every entry'],
+    useCases: ['Bell work', 'Exit tickets'],
+    will: ['Save every entry to the student record.'],
+    wont: ['Show a student’s writing to other students.'],
+    footerNote: 'Clips use demo classes.',
+    startLabel: 'Open Daily Pages',
+  },
+  scenes: [
+    { id: 'hero', goto: '/app', waitFor: 'main', guide: { section: 'hero' } },
+    {
+      id: 'open-course',
+      steps: [{ action: 'click', role: 'link', name: 'Daily Pages' }],
+      guide: {
+        section: 'step',
+        heading: 'Open the course',
+        body: 'Daily Pages sits with the rest of your courses.',
+      },
+    },
+  ],
+};
+
+function guideWith(overrides: Record<string, unknown>) {
+  return { ...VALID_GUIDE, guide: { ...VALID_GUIDE.guide, ...overrides } };
+}
+
+describe('generateStoryboard for a how-to guide', () => {
+  beforeEach(() => {
+    getLLMCompletion.mockReset();
+  });
+
+  test('accepts a guide in the documented shape on the first take', async () => {
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_GUIDE));
+
+    const result = await generateStoryboard(brief({ kind: 'GUIDE' }));
+
+    expect(result.storyboard.guide?.headline).toBe(
+      'Get students writing every day.'
+    );
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  test('teaches the model the house guide standard', async () => {
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_GUIDE));
+
+    await generateStoryboard(brief({ kind: 'GUIDE' }));
+
+    const call = getLLMCompletion.mock.calls[0][0];
+    const system = call.system as string;
+    // The job of a guide, its shape, and the rules from the review.
+    expect(system).toContain('teaser');
+    expect(system).toContain('3 numbered steps at most');
+    expect(system).toContain('What it will do');
+    expect(system).toContain('What it won’t do');
+    expect(system).toContain('student safety and data');
+    expect(system).toContain('Oxford comma');
+    expect(system).toContain('No secret sauce');
+    expect(system).toContain('demo classes');
+    expect(system).toContain('"section": "hero" | "range" | "step" | "extra"');
+    expect(JSON.stringify(call.messages)).toContain(
+      'Deliverable: a how-to guide'
+    );
+  });
+
+  test('sends a guide missing its shape back with what is missing', async () => {
+    const noWont = guideWith({ wont: [] });
+    getLLMCompletion
+      .mockResolvedValueOnce(JSON.stringify(noWont))
+      .mockResolvedValueOnce(JSON.stringify(VALID_GUIDE));
+
+    const result = await generateStoryboard(brief({ kind: 'GUIDE' }));
+
+    expect(result.storyboard.guide?.wont).toHaveLength(1);
+    expect(
+      JSON.stringify(getLLMCompletion.mock.calls[1][0].messages)
+    ).toMatch(/won.t do/);
+  });
+
+  test('fails a guide that never reaches the shape', async () => {
+    const { guide: _guide, ...noCopy } = VALID_GUIDE;
+    getLLMCompletion.mockResolvedValue(JSON.stringify(noCopy));
+
+    let thrown: unknown;
+    try {
+      await generateStoryboard(brief({ kind: 'GUIDE' }));
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(StoryboardGenerationError);
+    expect((thrown as Error).message).toContain('guide copy');
+  });
+
+  test('sends AI-sounding copy back for one more pass', async () => {
+    const dashy = guideWith({ lede: 'It writes the prompt — so you can teach.' });
+    getLLMCompletion
+      .mockResolvedValueOnce(JSON.stringify(dashy))
+      .mockResolvedValueOnce(JSON.stringify(VALID_GUIDE));
+
+    const result = await generateStoryboard(brief({ kind: 'GUIDE' }));
+
+    expect(result.storyboard.guide?.lede).not.toContain('—');
+    expect(
+      JSON.stringify(getLLMCompletion.mock.calls[1][0].messages)
+    ).toContain('guide.lede');
+  });
+
+  // Style is a second pass, not a gate: a heuristic that misreads one line
+  // must not cost the admin the whole guide.
+  test('keeps a guide whose copy is still flagged after the second pass', async () => {
+    const dashy = guideWith({ lede: 'It writes the prompt — so you can teach.' });
+    getLLMCompletion.mockResolvedValue(JSON.stringify(dashy));
+
+    const result = await generateStoryboard(brief({ kind: 'GUIDE' }));
+
+    expect(result.storyboard.guide?.lede).toContain('—');
+    expect(getLLMCompletion).toHaveBeenCalledTimes(2);
+  });
+
+  test('does not hold stills to the guide shape', async () => {
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
+
+    await generateStoryboard(brief({ kind: 'STILLS' }));
+
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  test('revises a guide and keeps it a guide', async () => {
+    const revised = guideWith({ headline: 'Get students writing every day, in minutes.' });
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(revised));
+
+    const result = await reviseStoryboard({
+      brief: 'A guide to Daily Pages',
+      kind: 'GUIDE',
+      previousStoryboard: VALID_GUIDE,
+      feedback: 'Make the headline about speed.',
+    });
+
+    expect(result.storyboard.guide?.headline).toContain('in minutes');
+    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    expect(system).toContain('What it won’t do');
+  });
+});

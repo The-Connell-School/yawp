@@ -40,6 +40,30 @@ const SCENE_FIELDS = [
 
 const STORYBOARD_FIELDS = ['slug', 'title', 'audience', 'goal', 'persona'] as const;
 
+/** Guide copy fields, so a revision of the words reads as a change. */
+const GUIDE_FIELDS = [
+  'headline',
+  'highlight',
+  'lede',
+  'workflowHeading',
+  'canDo',
+  'useCases',
+  'will',
+  'wont',
+  'footerNote',
+  'startLabel',
+] as const;
+
+function describeGuideValue(value: unknown): string {
+  if (Array.isArray(value)) return value.length === 0 ? 'none' : value.join(' · ');
+  return describe(value);
+}
+
+function describeSceneGuide(guide: StoryboardScene['guide']): string {
+  if (!guide) return 'none';
+  return [guide.section, guide.heading, guide.body].filter(Boolean).join(': ');
+}
+
 /**
  * One step in the words an operator uses about it.
  *
@@ -143,6 +167,15 @@ export function diffStoryboards(
     `${storyboard.viewport.width}×${storyboard.viewport.height}`;
   push(null, 'viewport', viewport(before.data), viewport(after.data));
 
+  for (const field of GUIDE_FIELDS) {
+    push(
+      null,
+      `guide.${field}`,
+      describeGuideValue(before.data.guide?.[field]),
+      describeGuideValue(after.data.guide?.[field])
+    );
+  }
+
   const beforeScenes = new Map(
     before.data.scenes.map((scene) => [scene.id, scene])
   );
@@ -187,6 +220,12 @@ export function diffStoryboards(
       'focus',
       describeFocus(previous.focus),
       describeFocus(scene.focus)
+    );
+    push(
+      scene.id,
+      'guide',
+      describeSceneGuide(previous.guide),
+      describeSceneGuide(scene.guide)
     );
   }
 
