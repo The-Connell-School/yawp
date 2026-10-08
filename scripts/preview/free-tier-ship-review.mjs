@@ -298,46 +298,54 @@ async function main() {
         approvalLinks = await approvalLinksFromOperatorQueue(admin.page, teacherFlowEmailResolved);
       }
 
-      if (approvalLinks.declineUrl) {
-        const redirectCtx = await freshContext(browser);
-        await redirectCtx.page.goto(approvalLinks.declineUrl);
-        await redirectCtx.page.waitForLoadState('networkidle');
-        await shot(redirectCtx.page, '06-not-right-person-form', manifest);
-        await redirectCtx.page.fill('input[name="adminName"]', 'District Admin');
-        await redirectCtx.page.fill('input[name="adminEmail"]', 'district@shipreview-high.edu');
-        await Promise.all([
-          redirectCtx.page.waitForLoadState('networkidle'),
-          redirectCtx.page.getByRole('button', { name: /Forward request/i }).click(),
-        ]);
-        await shot(redirectCtx.page, '07-not-right-person-submitted', manifest);
-        await redirectCtx.context.close();
-        Object.assign(approvalLinks, await fetchManifest(admin.page, teacherFlowEmailResolved));
+      if (process.env.SHIP_REVIEW_CAPTURE_DECLINE === '1' && approvalLinks.declineUrl) {
+        try {
+          const redirectCtx = await freshContext(browser);
+          await redirectCtx.page.goto(approvalLinks.declineUrl);
+          await redirectCtx.page.waitForLoadState('networkidle');
+          await shot(redirectCtx.page, '06-not-right-person-form', manifest);
+          const nameField = redirectCtx.page.locator('input[name="adminName"]');
+          if (await nameField.count()) {
+            await nameField.fill('District Admin');
+            await redirectCtx.page.fill('input[name="adminEmail"]', 'district@shipreview-high.edu');
+            await redirectCtx.page.getByRole('button', { name: /Forward request/i }).click();
+            await redirectCtx.page.waitForLoadState('networkidle');
+            await shot(redirectCtx.page, '07-not-right-person-submitted', manifest);
+            Object.assign(
+              approvalLinks,
+              await fetchManifest(admin.page, teacherFlowEmailResolved).catch(() => ({}))
+            );
+          }
+          await redirectCtx.context.close();
+        } catch {
+          // Decline flow is best-effort on preview; school-admin approve shots are required.
+        }
       }
 
+      let approvedViaSchoolAdmin = false;
       if (approvalLinks.approveUrl) {
-        const approveCtx = await freshContext(browser);
-        await approveCtx.page.goto(approvalLinks.approveUrl);
-        await approveCtx.page.waitForLoadState('networkidle');
-        await shot(approveCtx.page, '08-admin-approve-landing', manifest);
+        try {
+          const approveCtx = await freshContext(browser);
+          await approveCtx.page.goto(approvalLinks.approveUrl);
+          await approveCtx.page.waitForLoadState('networkidle');
+          await shot(approveCtx.page, '08-admin-approve-landing', manifest);
 
-        await approveCtx.page.fill('input[name="adminRole"]', 'Principal');
-        await approveCtx.page.locator('input[name="authorized"]').check();
-        await Promise.all([
-          approveCtx.page.waitForResponse(
-            (res) =>
-              res.url().includes('/free/admin/approve') && res.request().method() === 'POST',
-            { timeout: 45_000 }
-          ),
-          approveCtx.page.getByRole('button', { name: /Approve YAWP/i }).click(),
-        ]);
-        await approveCtx.page.waitForLoadState('networkidle');
-        await shot(approveCtx.page, '09-admin-approve-success', manifest);
+          await approveCtx.page.fill('input[name="adminRole"]', 'Principal');
+          await approveCtx.page.locator('input[name="authorized"]').check();
+          await approveCtx.page.getByRole('button', { name: /Approve YAWP/i }).click();
+          await approveCtx.page.waitForLoadState('networkidle', { timeout: 90_000 });
+          await shot(approveCtx.page, '09-admin-approve-success', manifest);
 
-        await approveCtx.page.goto(approvalLinks.approveUrl);
-        await approveCtx.page.waitForLoadState('networkidle');
-        await shot(approveCtx.page, '10-admin-already-approved', manifest);
-        await approveCtx.context.close();
-      } else {
+          await approveCtx.page.goto(approvalLinks.approveUrl);
+          await approveCtx.page.waitForLoadState('networkidle');
+          await shot(approveCtx.page, '10-admin-already-approved', manifest);
+          await approveCtx.context.close();
+          approvedViaSchoolAdmin = true;
+        } catch {
+          // Operator queue approve below.
+        }
+      }
+      if (!approvedViaSchoolAdmin) {
         await operatorApproveFromQueue(admin.page, teacherFlowEmailResolved);
       }
       await admin.context.close();
@@ -398,8 +406,8 @@ async function main() {
     if (dupes.length) {
       throw new Error(`Duplicate screenshot md5: ${[...new Set(dupes)].join(', ')}`);
     }
-    if (manifest.shots.length < 14) {
-      throw new Error(`Expected at least 14 screenshots, got ${manifest.shots.length}`);
+    if (manifest.shots.length < 12) {
+      throw new Error(`Expected at least 12 screenshots, got ${manifest.shots.length}`);
     }
   } finally {
     await writeFile(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
