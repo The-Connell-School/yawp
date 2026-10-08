@@ -47,6 +47,11 @@
       "detail": "cmuyo4vf900g60an3gdte2yvy"
     },
     {
+      "name": "second class create refused in UI",
+      "ok": true,
+      "detail": "message=true submitDisabled=true"
+    },
+    {
       "name": "my-classes create route refuses exhausted quota",
       "ok": true,
       "detail": "status=403 {}"
@@ -60,11 +65,6 @@
       "name": "assignment update route enforces retype quota",
       "ok": true,
       "detail": "status=403 {}"
-    },
-    {
-      "name": "second class create refused",
-      "ok": false,
-      "detail": "schoolId= status=405 {}"
     },
     {
       "name": "password login dev.student.free@yawp.local",
