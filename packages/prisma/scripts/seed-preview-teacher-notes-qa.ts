@@ -140,6 +140,10 @@ async function ensurePreviewSuperAdmin(
 async function ensureTeacherNoteOnGradedDailyPagesSample(prisma: SeedClient) {
   const submission = await prisma.submission.findFirst({
     where: {
+      OR: [
+        { title: 'Honest and kind — Casey' },
+        { document: { title: 'Honest and kind — Casey' } },
+      ],
       document: {
         assignmentType: { kind: 'daily_pages', archivedAt: null },
         membership: {

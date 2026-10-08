@@ -1,5 +1,6 @@
 import { staffTeacherNoteLoaderField } from '~/domain/grading/teacher-notes';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { resolveRubricOutputOptionsForAssignmentType } from '~/domain/rubrics/rubric-output-options.server';
 import { TeacherNotes } from './teacher-grading/teacher-notes';
 import { invariant } from '@epic-web/invariant';
 import {
@@ -355,7 +356,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const assignmentTypeId = submission.document.assignmentTypeId;
-  const [rubricConfig, grammarHighlightingEnabled, gradingConfig] =
+  const [rubricConfig, grammarHighlightingEnabled, gradingConfig, rubricOutputOptions] =
     await Promise.all([
       resolveRubricConfigForSubmission({
         assignmentTypeId,
@@ -380,7 +381,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             return null;
           })
         : Promise.resolve(null),
+      assignmentTypeId
+        ? resolveRubricOutputOptionsForAssignmentType(prisma, assignmentTypeId).catch(
+            (error) => {
+              console.error(
+                'Failed to resolve rubric output options for submission view',
+                { assignmentTypeId, error }
+              );
+              return null;
+            }
+          )
+        : Promise.resolve(null),
     ]);
+
+  const teacherNoteOutputSchema =
+    rubricOutputOptions != null
+      ? {
+          ...(gradingConfig?.outputSchemaSnapshot ?? {}),
+          teacherNotesEnabled: rubricOutputOptions.teacherNotesEnabled,
+        }
+      : gradingConfig?.outputSchemaSnapshot;
 
   const activityPage =
     !isOwner && (isTeacher || isAdmin)
@@ -501,7 +521,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       isOwner,
       isTeacher,
       isAdmin,
-      outputSchemaSnapshot: gradingConfig?.outputSchemaSnapshot,
+      outputSchemaSnapshot: teacherNoteOutputSchema,
       run: gradingAssistantRuns[0] ?? null,
     }),
     isOwner,

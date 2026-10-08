@@ -34,6 +34,12 @@ mock.module('~/domain/grading/grading-queue.server', () => ({
   loadGradingQueueNeighbors,
   loadDocumentNavigationNeighbors,
 }));
+const resolveRubricOutputOptionsForAssignmentType = mock(() =>
+  Promise.resolve(null)
+);
+mock.module('~/domain/rubrics/rubric-output-options.server', () => ({
+  resolveRubricOutputOptionsForAssignmentType,
+}));
 const { loader: routeLoader } = await import('./route');
 const loader = routeLoader as any;
 
@@ -623,6 +629,45 @@ describe('submission loader — unsubmitted redirect', () => {
       expect(JSON.stringify(result)).not.toContain('PRIVATE_OBSERVATION');
       expect(result).not.toHaveProperty('teacherNote');
     }
+  });
+
+  test('uses live rubric output toggle even when pinned grading config omits teacherNotesEnabled', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue(membership(TEACHER_MEMBERSHIP_ID, 'TEACHER'));
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Daily Pages',
+      kind: 'daily_pages',
+      scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 },
+      rubricJson: null,
+      gradingPromptConfigJson: {},
+      gradingOutputSchemaJson: { schemaVersion: 1 },
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      rubric: {
+        name: 'daily-pages-engagement',
+        schemaJson: { outputSchema: { schemaVersion: 1 } },
+        currentRevision: null,
+      },
+    });
+    resolveRubricOutputOptionsForAssignmentType.mockResolvedValue({
+      catalogKey: 'daily-pages-engagement',
+      teacherNotesEnabled: true,
+      fingerprint: 'fp-live',
+    });
+    const submission = buildSubmission() as any;
+    submission.gradingAssistantRuns = [
+      {
+        status: 'succeeded',
+        metadata: { teacherNote: 'LIVE_TOGGLE_NOTE' },
+      },
+    ];
+    prisma.submission.findFirst.mockResolvedValue(submission);
+    const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
+    expect(result.teacherNote).toBe('LIVE_TOGGLE_NOTE');
   });
 
 });
