@@ -1,5 +1,3 @@
-import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -142,8 +140,9 @@ type AssignmentTypeDetailRow = {
   id: string;
   title: string;
   description: string | null;
-  systemKey: string | null;
   kind: string | null;
+  rubric: { name: string } | null;
+  systemKey: string | null;
   collaborationSupported: boolean;
   image: { id: string } | null;
   assignmentModules: Array<{
@@ -425,8 +424,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         id: true,
         title: true,
         description: true,
-        systemKey: true,
         kind: true,
+        rubric: { select: { name: true } },
+        systemKey: true,
         collaborationSupported: true,
         image: { select: { id: true } },
         assignmentModules: {
@@ -575,19 +575,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentTypeGradesGrammar = (
     await getGrammarGradingAssignmentTypeIds([assignmentType.id])
   ).has(assignmentType.id);
-  // Paragraph type and writing time are behind a per-school flag (off by
-  // default); off, the form offers neither.
-  const writingConditionsEnabled =
-    await isDailyPagesWritingConditionsEnabled(profile.organization.id);
-  const creationTypeDefaults = (
-    await getCreationTypeDefaultsById([assignmentType.id], {
-      writingConditionsEnabled,
-    })
-  ).get(assignmentType.id);
-  const assignmentTypeDefaultWritingTimeMinutes =
-    creationTypeDefaults?.defaultWritingTimeMinutes ?? null;
-  const assignmentTypeOffersParagraphModes =
-    creationTypeDefaults?.offersParagraphModes ?? false;
 
   const sanitizeDocumentListForStudents = <
     T extends {
@@ -608,11 +595,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isStudent = profile.role === 'STUDENT';
 
   return dataResponse({
-    writingConditionsEnabled,
     assignmentType,
     assignmentTypeGradesGrammar,
-    assignmentTypeDefaultWritingTimeMinutes,
-    assignmentTypeOffersParagraphModes,
     documents: isStudent
       ? sanitizeDocumentListForStudents(documents)
       : documents,
@@ -793,6 +777,8 @@ export default function AppAssignmentTypesIdRoute() {
   }, [incomingPrompt, setSearchParams]);
 
   const showShortFormLibrary = data.shortFormPromptLibrary != null;
+  const showDailyPagesAbout =
+    isTeacher && data.assignmentType.kind === 'daily_pages';
   // Daily Pages carries one module, whose blurb is freewrite-era copy telling
   // students to throw ideas around — which the about section directly above it
   // now contradicts. The module row itself stays: documents are created inside
@@ -935,18 +921,12 @@ export default function AppAssignmentTypesIdRoute() {
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
+                assignmentTypeKind={data.assignmentType.kind}
+                assignmentTypeRubricName={data.assignmentType.rubric?.name ?? null}
                 assignmentTypeCollaborationSupported={
                   data.assignmentType.collaborationSupported
                 }
                 assignmentTypeGradesGrammar={data.assignmentTypeGradesGrammar}
-                assignmentTypeKind={data.assignmentType.kind}
-                assignmentTypeDefaultWritingTimeMinutes={
-                  data.assignmentTypeDefaultWritingTimeMinutes
-                }
-                writingConditionsEnabled={data.writingConditionsEnabled}
-                assignmentTypeOffersParagraphModes={
-                  data.assignmentTypeOffersParagraphModes
-                }
                 teacherClasses={assignmentSheetClasses}
                 initialClassId={initialApHistoryClassId}
                 open={isAssignmentSheetOpen}
@@ -1014,11 +994,7 @@ export default function AppAssignmentTypesIdRoute() {
         {data.promptLibrary ? (
           <TeacherDirections variant={data.promptLibrary.variant} />
         ) : null}
-        {showShortFormLibrary ? (
-          <AboutDailyPages
-            writingConditionsEnabled={data.writingConditionsEnabled}
-          />
-        ) : null}
+        {showDailyPagesAbout ? <AboutDailyPages /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {data.apHistoryLibrary?.mode === 'teacher' ? (
           <ApHistoryTeacherDirections />

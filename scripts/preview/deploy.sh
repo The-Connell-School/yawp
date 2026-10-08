@@ -636,6 +636,7 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/seed-exit-ticket-assignment-type.ts \
         packages/prisma/scripts/seed-local-dev.ts \
         packages/prisma/scripts/seed-class-starter-assignment-type.ts \
+        packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts \
         packages/prisma/scripts/assets/class-starter.jpg \
         packages/prisma/scripts/sync-prod-fidelity-fixtures.ts \
         packages/prisma/scripts/preview-seats.ts \
@@ -714,6 +715,10 @@ run_tooling_if_needed() {
       echo "Running free-tier ship-review fixture seed on existing preview database (skip path)."
       "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && bun run seed-free-tier-ship-review'
     fi
+    if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
+      echo "Applying Daily Pages engagement v2 preview seed on existing database (skip path)."
+      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)'
+    fi
     return 0
   fi
 
@@ -758,6 +763,9 @@ run_tooling_if_needed() {
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-planner-qa.ts" ]]; then
     tooling_command+=' && (bun run seed-preview-planner-qa || { echo "Warning: preview planner QA seed failed; continuing deploy (non-fatal)." >&2; true; })'
+  fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
+    tooling_command+=' && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)'
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'

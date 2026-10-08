@@ -16,10 +16,6 @@ import {
 } from '~/domain/assignments/collaboration';
 import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group';
 import {
-  enabledParagraphModes,
-  getParagraphMode,
-} from '~/domain/assignment-types/daily-pages-paragraph-modes';
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -86,13 +82,13 @@ import {
 import { cn } from '~/utils/misc';
 import { toDateInputValue } from '~/utils/date-only';
 import {
-  MAX_WRITING_TIME_MINUTES,
-  MIN_WRITING_TIME_MINUTES,
-} from '~/domain/grading/writing-time';
-
-function writingTimeFieldValue(minutes: number | null | undefined): string {
-  return typeof minutes === 'number' && minutes > 0 ? String(minutes) : '';
-}
+  assignmentTypeUsesDailyPagesEngagementRubric,
+  MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL,
+} from '~/domain/assignment-types/daily-pages-engagement-rubric';
+import {
+  dailyPagesEngagementTierBands,
+  formatDailyPagesEngagementBandRange,
+} from '~/domain/assignment-types/daily-pages-engagement-tier-bands';
 
 /**
  * A segmented control in the shape of the app's pill buttons: a recessed track
@@ -212,18 +208,8 @@ export type AssignmentCreationAssignmentType = {
    * forgot to load it would render an exit ticket as a blank prompt.
    */
   kind: string | null;
-  /**
-   * The writing time the form suggests for a new assignment of this type, in
-   * minutes. Only a starting value for the field: absent or null leaves it
-   * blank, which is what every type without a suggestion should do.
-   */
-  defaultWritingTimeMinutes?: number | null;
-  /**
-   * Whether a new assignment of this type can name the kind of paragraph it
-   * practices (Daily Pages). Optional because absent is the safe answer: no
-   * selector, no paragraph type, grading and tutoring as before.
-   */
-  offersParagraphModes?: boolean;
+  /** Library rubric name when the type points at a shared rubric (e.g. SJP Daily Pages). */
+  rubricName?: string | null;
   /** Free classroom bundle: assignments remaining for this kind. */
   quotaRemaining?: number;
   quotaTotal?: number;
@@ -308,21 +294,6 @@ export type AssignmentCreationSheetProps = {
   initialGradingAssistantStrictnessLevel?: GradingAssistantStrictnessLevel;
   initialRubricTotalPoints?: number | null;
   initialGradingMode?: AssignmentGradingMode;
-  /**
-   * The assignment's saved writing time. Undefined means the caller has none
-   * to give — a new assignment — and the type's suggestion is used; null means
-   * the assignment has no writing time, and the field stays blank.
-   */
-  initialWritingTimeMinutes?: number | null;
-  /** The assignment's saved paragraph type, shown read-only when editing. */
-  initialParagraphMode?: string | null;
-  /**
-   * The Daily Pages writing-conditions flag (global, off by default). Off, the
-   * form neither shows nor submits Paragraph type or Time students have to
-   * write, on create or edit. Defaults to off so a call site that forgets it
-   * hides them rather than leaking an unreleased setting.
-   */
-  writingConditionsEnabled?: boolean;
   /** The rubric's authored total, shown before an assignment override is used. */
   /**
    * Exit ticket answers to start from. Only meaningful when the selected type
@@ -540,9 +511,6 @@ export function AssignmentCreationSheetContent({
   initialExitTicketAnswerType = null,
   initialExitTicketTopic = '',
   initialExitTicketLessonNotes = null,
-  initialWritingTimeMinutes,
-  initialParagraphMode = null,
-  writingConditionsEnabled = false,
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -602,24 +570,6 @@ export function AssignmentCreationSheetContent({
       initialTutorEnabled,
     })
   );
-  const [paragraphMode, setParagraphMode] = useState(initialParagraphMode ?? '');
-  const initialWritingTimeValue = () =>
-    writingTimeFieldValue(
-      editingAssignment || initialWritingTimeMinutes !== undefined
-        ? initialWritingTimeMinutes
-        : assignmentTypes.find(
-            (type) =>
-              type.id ===
-              initialAssignmentTypeSelection(
-                assignmentTypes,
-                fixedAssignmentTypeId,
-                initialAssignmentTypeId
-              )
-          )?.defaultWritingTimeMinutes
-    );
-  const [writingTime, setWritingTime] = useState(initialWritingTimeValue);
-  // Once the teacher types a time, switching assignment type stops replacing it.
-  const writingTimeTouchedRef = useRef(false);
   const [collaborationEnabled, setCollaborationEnabled] = useState(
     initialCollaborationEnabled
   );
@@ -762,12 +712,34 @@ export function AssignmentCreationSheetContent({
   const exitTicketPrompt = exitTicketConfig.success
     ? composeExitTicketPrompt(exitTicketConfig.config)
     : '';
-  const selectedTypeOffersParagraphModes = Boolean(
-    assignmentTypes.find((type) => type.id === assignmentTypeId)
-      ?.offersParagraphModes
+  const selectedAssignmentType = assignmentTypes.find(
+    (type) => type.id === assignmentTypeId
   );
-  const paragraphModeOptions = enabledParagraphModes();
-  const selectedParagraphMode = getParagraphMode(paragraphMode);
+  const usesDailyPagesEngagementRubric =
+    assignmentTypeUsesDailyPagesEngagementRubric({
+      kind: selectedAssignmentType?.kind,
+      rubricName: selectedAssignmentType?.rubricName,
+    });
+  const minimumPointValue = usesDailyPagesEngagementRubric
+    ? MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL
+    : 1;
+  const engagementBandPreview = useMemo(() => {
+    if (!usesDailyPagesEngagementRubric || !gradingPanelOpen) return null;
+    const parsed = Number.parseInt(pointValue, 10);
+    if (!Number.isSafeInteger(parsed) || parsed < minimumPointValue) {
+      return null;
+    }
+    try {
+      return dailyPagesEngagementTierBands(parsed);
+    } catch {
+      return null;
+    }
+  }, [
+    gradingPanelOpen,
+    minimumPointValue,
+    pointValue,
+    usesDailyPagesEngagementRubric,
+  ]);
   const hasFixedClass = Boolean(fixedClassId);
   // Every creation entry point uses the same server workflow. In particular,
   // the class page must not silently drop collaboration fields by posting to
@@ -859,9 +831,6 @@ export function AssignmentCreationSheetContent({
         initialTutorEnabled,
       })
     );
-    setParagraphMode(initialParagraphMode ?? '');
-    setWritingTime(initialWritingTimeValue());
-    writingTimeTouchedRef.current = false;
     setCollaborationEnabled(initialCollaborationEnabled);
     setCollaborationGroupMode(initialCollaborationGroupMode);
     setCollaborationGroupSize(
@@ -919,23 +888,11 @@ export function AssignmentCreationSheetContent({
     initialExitTicketGrading,
     initialExitTicketGradebook,
     editingAssignment,
-    initialWritingTimeMinutes,
-    initialParagraphMode,
     initialPostAt,
     initialDueAt,
     open,
     teacherClasses,
   ]);
-
-  // A new assignment follows its type's suggestion until the teacher types one.
-  // An edit never does: its saved time, or its lack of one, is the teacher's.
-  const selectedTypeDefaultWritingTime = assignmentTypes.find(
-    (type) => type.id === assignmentTypeId
-  )?.defaultWritingTimeMinutes;
-  useEffect(() => {
-    if (isEditing || writingTimeTouchedRef.current) return;
-    setWritingTime(writingTimeFieldValue(selectedTypeDefaultWritingTime));
-  }, [isEditing, selectedTypeDefaultWritingTime]);
 
   useEffect(() => {
     if (createFetcher.state !== 'idle' || !createFetcher.data?.success) return;
@@ -1566,7 +1523,7 @@ export function AssignmentCreationSheetContent({
                             id="assignment-create-point-value"
                             name="pointValue"
                             type="number"
-                            min={1}
+                            min={minimumPointValue}
                             max={1000}
                             step={1}
                             inputMode="numeric"
@@ -1584,11 +1541,33 @@ export function AssignmentCreationSheetContent({
                         </span>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        What the assignment is worth in the gradebook. The
-                        rubric keeps its own scale either way.
+                        What the assignment is worth in the gradebook.
+                        {minimumPointValue > 1
+                          ? ` Daily Pages engagement assignments need at least ${minimumPointValue} points when graded.`
+                          : ' The rubric keeps its own scale either way.'}
                       </p>
                     </div>
                   )}
+
+                  {engagementBandPreview ? (
+                    <div
+                      className="space-y-2"
+                      data-testid="assignment-create-engagement-bands"
+                    >
+                      <p className="text-sm font-medium">Engagement tiers</p>
+                      <ul className="space-y-1 text-sm text-muted-foreground">
+                        {engagementBandPreview.map((band) => (
+                          <li key={band.tier}>
+                            <span className="font-medium text-foreground">
+                              {band.label}
+                            </span>
+                            {' — '}
+                            {formatDailyPagesEngagementBandRange(band)} points
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
 
                   {/* Scoring behavior is now fixed to bands; UI selector removed */}
 
@@ -1758,88 +1737,6 @@ export function AssignmentCreationSheetContent({
                 {isEditing
                   ? 'Grammar grading cannot be switched on or off after an assignment is created — work may already be graded against it.'
                   : 'On by default for this assignment type. Turn it off for a quick write you want graded on the thinking alone: the grammar category is dropped, the writing is not marked up, and the remaining categories carry the whole grade.'}
-              </p>
-            </div>
-          ) : null}
-
-          {/* The kind of paragraph a Daily Pages entry practices. Only the types
-              switched on are offered, so teachers see Analyze first and the rest
-              as they are ready. Frozen after creation like the grammar toggle:
-              work may already be graded and tutored against it. */}
-          {writingConditionsEnabled &&
-          selectedTypeOffersParagraphModes &&
-          paragraphModeOptions.length > 0 ? (
-            <div className="pt-6">
-              <Label
-                htmlFor="assignment-create-paragraph-mode"
-                className="font-normal"
-              >
-                Paragraph type
-              </Label>
-              <select
-                id="assignment-create-paragraph-mode"
-                name={isEditing ? undefined : 'paragraphMode'}
-                value={paragraphMode}
-                onChange={(event) => setParagraphMode(event.target.value)}
-                disabled={isSaving || isEditing}
-                className="mt-2 block rounded border px-2 py-1 text-sm"
-              >
-                <option value="">Any kind of paragraph</option>
-                {paragraphModeOptions.map((mode) => (
-                  <option key={mode.key} value={mode.key}>
-                    {mode.label}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {isEditing
-                  ? 'The paragraph type cannot be changed after an assignment is created — work may already be graded against it.'
-                  : selectedParagraphMode
-                    ? `${selectedParagraphMode.description} The tutor coaches toward it and the grading assistant reads for it.`
-                    : 'Choose the move students are practicing, and the tutor and grading assistant will focus on it. Leave it on any kind to grade the paragraph on its own terms.'}
-              </p>
-            </div>
-          ) : null}
-
-          {/* How long students have to write. Read by the grading assistant and
-              the grammar checker, so a ten-minute paragraph is not graded as a
-              revised essay. Unlike the toggles around it this stays editable:
-              it changes how future grading reads the work, not a grade given.
-              Behind the writing-conditions flag, like Paragraph type. */}
-          {writingConditionsEnabled ? (
-            <div className="pt-6">
-              <Label
-                htmlFor="assignment-create-writing-time"
-                className="font-normal"
-              >
-                Time students have to write
-              </Label>
-              <div className="mt-2 flex items-center gap-2">
-                {/* Input fills its container, so the container sets the width. */}
-                <div className="w-24 shrink-0">
-                  <Input
-                    id="assignment-create-writing-time"
-                    name="writingTimeMinutes"
-                    type="number"
-                    inputMode="numeric"
-                    min={MIN_WRITING_TIME_MINUTES}
-                    max={MAX_WRITING_TIME_MINUTES}
-                    step={1}
-                    value={writingTime}
-                    onChange={(event) => {
-                      writingTimeTouchedRef.current = true;
-                      setWritingTime(event.target.value);
-                    }}
-                    disabled={isSaving}
-                  />
-                </div>
-                <span className="text-sm text-muted-foreground">minutes</span>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Optional. The grading assistant and grammar checker judge the
-                writing as work done in this time, so a ten-minute paragraph is
-                not held to the polish of a revised essay. Leave it blank for
-                work students take home or revise.
               </p>
             </div>
           ) : null}

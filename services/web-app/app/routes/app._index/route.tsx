@@ -1,5 +1,3 @@
-import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
   Form,
@@ -74,6 +72,7 @@ export type AssignmentTypeRow = {
   systemKey?: string | null;
   collaborationSupported?: boolean;
   image?: { id: string } | null;
+  rubric?: { name: string } | null;
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -265,6 +264,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             collaborationSupported: true,
             systemKey: true,
             image: { select: { id: true } },
+            rubric: { select: { name: true } },
           },
           orderBy: { position: 'asc' },
         })
@@ -289,14 +289,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)
   );
-  // Paragraph type and writing time are behind a per-school flag (off by
-  // default); off, the form offers neither.
-  const writingConditionsEnabled =
-    await isDailyPagesWritingConditionsEnabled(profile.organization.id);
-  const creationTypeDefaults = await getCreationTypeDefaultsById(
-    creationTypeRows.map((type) => type.id),
-    { writingConditionsEnabled }
-  );
   const quotaByTypeId = await loadAssignmentCreationQuotasForTypes(
     profile.organization,
     creationTypeRows.map((type) => ({ id: type.id, kind: type.kind ?? null }))
@@ -307,12 +299,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // AssignmentTypeRow is shared with student-side selects that do not ask
     // for this column, so it is optional there and defaulted here.
     collaborationSupported: type.collaborationSupported ?? false,
-    gradesGrammar: gradesGrammarIds.has(type.id),
     kind: type.kind ?? null,
-    defaultWritingTimeMinutes:
-      creationTypeDefaults.get(type.id)?.defaultWritingTimeMinutes ?? null,
-    offersParagraphModes:
-      creationTypeDefaults.get(type.id)?.offersParagraphModes ?? false,
+    rubricName: type.rubric?.name ?? null,
+    gradesGrammar: gradesGrammarIds.has(type.id),
     ...quotaByTypeId.get(type.id),
   }));
 
@@ -357,7 +346,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [];
 
   return dataResponse({
-    writingConditionsEnabled,
     requiresClassCode: isStudentOnlyWithNoClasses,
     enrolledClasses,
     writingPracticeAssignments,
@@ -450,7 +438,6 @@ export default function AppRoute() {
                 }}
                 entryPoint="dashboard"
                 assignmentTypes={data.assignmentCreationTypes}
-                writingConditionsEnabled={data.writingConditionsEnabled}
                 teacherClasses={data.assignmentCreationClasses}
                 initialAssignmentTypeId={createAssignmentTypeId}
               />

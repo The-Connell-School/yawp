@@ -199,7 +199,6 @@ describe('preview access gate', () => {
     const open = [
       ['GET', '/api/internal/v1/feature-flags'],
       ['POST', '/api/internal/v1/feature-flags/lesson_planner'],
-      ['POST', '/api/internal/v1/feature-flags/daily_pages_paragraph_type_and_writing_time'],
       ['GET', '/api/internal/v1/organizations'],
     ] as const;
 

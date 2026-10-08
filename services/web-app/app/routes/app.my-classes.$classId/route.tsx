@@ -1,7 +1,4 @@
 import { Prisma } from '@app/prisma';
-import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
-import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -520,22 +517,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    // Behind the writing-conditions flag: off, a sent writing time is ignored
-    // and the stored one is left exactly as it is.
-    const writingTimeResult = (await isDailyPagesWritingConditionsEnabled(profile.organization.id))
-      ? parseWritingTimeMinutes(formData)
-      : ({ success: true, sent: false, value: null } as const);
-    if (!writingTimeResult.success) {
-      return dataResponse(
-        { success: false, message: writingTimeResult.message },
-        { status: 400 }
-      );
-    }
-    // Only written when the form sent it, so an older caller that omits the
-    // field leaves the stored value alone. Blank clears it.
-    const writingTimeData = writingTimeResult.sent
-      ? { writingTimeMinutes: writingTimeResult.value }
-      : {};
+    // Daily Pages writing time and paragraph type were removed: anything sent
+    // for either is ignored, never rejected, and a stored value is left alone.
     const rubricOverrideData = {
       ...(formData.has('rubricTotalPoints')
         ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
@@ -694,7 +677,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           ...(formData.has('tutorEnabled')
             ? { tutorEnabled: tutorEnabledResult.value }
             : {}),
-          ...writingTimeData,
           ...promptAttachmentData,
         },
       });
@@ -1252,6 +1234,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       systemKey: string | null;
       kind: string | null;
       collaborationSupported: boolean;
+      rubric: { name: string } | null;
     }>({
       scopes: [
         {
@@ -1263,9 +1246,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       select: {
         id: true,
         title: true,
-        systemKey: true,
         kind: true,
+        systemKey: true,
         collaborationSupported: true,
+        rubric: { select: { name: true } },
       },
       orderBy: { position: 'asc' },
     }),
@@ -1393,15 +1377,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     creationTypeRows.map((assignmentType) => assignmentType.id)
   );
 
-  // Paragraph type and writing time are behind a per-school flag (off by
-  // default); off, the form offers neither.
-  const writingConditionsEnabled =
-    await isDailyPagesWritingConditionsEnabled(profile.organization.id);
-  const creationTypeDefaults = await getCreationTypeDefaultsById(
-    creationTypeRows.map((assignmentType) => assignmentType.id),
-    { writingConditionsEnabled }
-  );
-
   let studentJoinUrl: string | null = null;
   if (klass.school.organization.plan === 'FREE_CLASSROOM') {
     const joinToken = await ensureClassStudentJoinToken(klass.id);
@@ -1414,23 +1389,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     role: 'TEACHER' as const,
-    writingConditionsEnabled,
     studentJoinUrl,
     klass,
     submissions,
     inProgressDocuments,
     assignments,
     assignmentTypes: creationTypeRows.map(
-      ({ id, title, collaborationSupported, kind }) => ({
+      ({ id, title, kind, collaborationSupported, rubric }) => ({
         id,
         title,
+        kind,
+        rubricName: rubric?.name ?? null,
         collaborationSupported,
         gradesGrammar: gradesGrammarIds.has(id),
-        kind,
-        defaultWritingTimeMinutes:
-          creationTypeDefaults.get(id)?.defaultWritingTimeMinutes ?? null,
-        offersParagraphModes:
-          creationTypeDefaults.get(id)?.offersParagraphModes ?? false,
       })
     ),
     apHistoryAssignmentTypeId:
@@ -2264,7 +2235,6 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           }}
           assignments={managedAssignments}
           assignmentTypes={data.assignmentTypes}
-          writingConditionsEnabled={data.writingConditionsEnabled}
           apHistoryAssignmentTypeId={data.apHistoryAssignmentTypeId}
           classInsightsEnabled={classInsightsEnabled}
           onViewDocuments={handleViewAssignmentDocuments}

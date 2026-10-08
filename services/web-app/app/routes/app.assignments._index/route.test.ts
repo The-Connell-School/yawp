@@ -5,7 +5,7 @@ const prisma = {
   class: { findMany: mock(), findFirst: mock() },
   documentGroup: { findFirst: mock() },
   // The loader reads the creation types' rubrics and kinds, to know which
-  // offer the grammar toggle and which suggest a writing time.
+  // offer the grammar toggle.
   assignmentType: { findMany: mock(async () => []) },
 };
 const requireUserId = mock();
@@ -345,7 +345,14 @@ describe('My Assignments loader', () => {
         },
       ]);
       getAvailableAssignmentTypesForScopes.mockResolvedValue([
-        { id: 'at-1', title: 'Essay', systemKey: null },
+        {
+          id: 'at-1',
+          title: 'Essay',
+          systemKey: null,
+          kind: null,
+          collaborationSupported: false,
+          rubric: null,
+        },
       ]);
 
       const result = (await loader({
@@ -363,12 +370,11 @@ describe('My Assignments loader', () => {
         {
           id: 'at-1',
           title: 'Essay',
-          collaborationSupported: undefined,
-          // No rubric and no kind on the mocked type: no grammar toggle and
-          // no suggested writing time.
+          kind: null,
+          rubricName: null,
+          collaborationSupported: false,
+          // No rubric and no kind on the mocked type: no grammar toggle.
           gradesGrammar: false,
-          defaultWritingTimeMinutes: null,
-          offersParagraphModes: false,
         },
       ]);
     }

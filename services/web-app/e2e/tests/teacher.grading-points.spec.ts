@@ -20,7 +20,7 @@ function hasDailyPagesAssignmentPointScaling(schema: unknown) {
     schema &&
       typeof schema === 'object' &&
       (schema as { outputSchema?: { assignmentPointScaling?: unknown } })
-        .outputSchema?.assignmentPointScaling === 'daily_pages_engagement_v1'
+        .outputSchema?.assignmentPointScaling === 'daily_pages_engagement_v2'
   );
 }
 

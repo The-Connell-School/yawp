@@ -5,12 +5,7 @@ import {
 import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-class-read.server';
 import { EXIT_TICKET_SEED_STEP } from '~/domain/lesson-planner/lesson-seed';
 import { Prisma } from '@app/prisma';
-import {
-  isDailyPagesWritingConditionsEnabled,
-  isLessonPlannerEnabled,
-} from '~/domain/feature-flags/feature-flags.server';
-import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
-import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
+import { isLessonPlannerEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -45,6 +40,7 @@ import {
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { formatClassLabel } from '~/utils/class-display';
+import { dailyPagesEngagementPointValueError } from '~/domain/assignment-types/daily-pages-engagement-point-validation';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
   AssignmentSummarySheetContent,
@@ -162,8 +158,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           rubricTotalPoints: true,
           gradingMode: true,
           tutorEnabled: true,
-          writingTimeMinutes: true,
-          paragraphMode: true,
           collaborationEnabled: true,
           collaborationGroupMode: true,
           collaborationGroupSize: true,
@@ -241,23 +235,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     assignmentTypes.map((assignmentType) => assignmentType.id)
   );
-  // Paragraph type and writing time are behind a per-school flag (off by
-  // default); off, the form offers neither.
-  const writingConditionsEnabled =
-    await isDailyPagesWritingConditionsEnabled(profile.organization.id);
-  const creationTypeDefaults = await getCreationTypeDefaultsById(
-    assignmentTypes.map((assignmentType) => assignmentType.id),
-    { writingConditionsEnabled }
-  );
+  const rubricMeta = await prisma.assignmentType.findMany({
+    where: { id: { in: assignmentTypes.map((type) => type.id) } },
+    select: {
+      id: true,
+      kind: true,
+      rubric: { select: { name: true } },
+    },
+  });
+  const rubricMetaById = new Map(rubricMeta.map((row) => [row.id, row]));
   const assignmentTypeOptions = assignmentTypes.map((assignmentType) => ({
     ...assignmentType,
     gradesGrammar: gradesGrammarIds.has(assignmentType.id),
-    defaultWritingTimeMinutes:
-      creationTypeDefaults.get(assignmentType.id)?.defaultWritingTimeMinutes ??
-      null,
-    offersParagraphModes:
-      creationTypeDefaults.get(assignmentType.id)?.offersParagraphModes ??
-      false,
+    kind: rubricMetaById.get(assignmentType.id)?.kind ?? null,
+    rubricName: rubricMetaById.get(assignmentType.id)?.rubric?.name ?? null,
   }));
 
   // An exit ticket is read for what the class understood, graded or not, so
@@ -288,7 +279,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return {
     found: true as const,
-    writingConditionsEnabled,
     classInsightsEnabled,
     assignmentTypes: assignmentTypeOptions,
     activeClassId: active.classId,
@@ -320,8 +310,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       rubricTotalPoints: active.assignment.rubricTotalPoints,
       gradingMode: active.assignment.gradingMode,
       tutorEnabled: active.assignment.tutorEnabled,
-      writingTimeMinutes: active.assignment.writingTimeMinutes,
-      paragraphMode: active.assignment.paragraphMode,
       collaborationGroupMode: active.assignment.collaborationGroupMode,
       collaborationGroupSize: active.assignment.collaborationGroupSize,
       gradingAssistantStrictnessLevel: active.assignment
@@ -494,22 +482,33 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    // Behind the writing-conditions flag: off, a sent writing time is ignored
-    // and the stored one is left exactly as it is.
-    const writingTimeResult = (await isDailyPagesWritingConditionsEnabled(profile.organization.id))
-      ? parseWritingTimeMinutes(formData)
-      : ({ success: true, sent: false, value: null } as const);
-    if (!writingTimeResult.success) {
-      return dataResponse(
-        { success: false, message: writingTimeResult.message },
-        { status: 400 }
-      );
+
+    if (gradingIntent.data.submitForGrade) {
+      const pointValue = gradingIntent.data.pointValue;
+      if (pointValue != null) {
+        const assignmentTypeForPoints = await prisma.assignmentType.findFirst({
+          where: { id: assignmentTypeId },
+          select: {
+            kind: true,
+            rubric: { select: { name: true } },
+          },
+        });
+        const engagementError = dailyPagesEngagementPointValueError({
+          kind: assignmentTypeForPoints?.kind ?? null,
+          rubricName: assignmentTypeForPoints?.rubric?.name ?? null,
+          pointValue,
+        });
+        if (engagementError) {
+          return dataResponse(
+            { success: false, message: engagementError },
+            { status: 400 }
+          );
+        }
+      }
     }
-    // Only written when the form sent it, so an older caller that omits the
-    // field leaves the stored value alone. Blank clears it.
-    const writingTimeData = writingTimeResult.sent
-      ? { writingTimeMinutes: writingTimeResult.value }
-      : {};
+
+    // Daily Pages writing time and paragraph type were removed: anything sent
+    // for either is ignored, never rejected, and a stored value is left alone.
 
     const promptAttachment = formData.get('promptAttachment');
     let promptAttachmentData:
@@ -712,7 +711,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           ...(formData.has('tutorEnabled')
             ? { tutorEnabled: tutorEnabledResult.value }
             : {}),
-          ...writingTimeData,
           ...promptAttachmentData,
         },
       });
@@ -982,7 +980,6 @@ export default function AssignmentDetailRoute() {
           entryPoint="class"
           fixedClassId={activeClassId}
           assignmentTypes={data.assignmentTypes}
-          writingConditionsEnabled={data.writingConditionsEnabled}
           teacherClasses={[activeClassOption]}
           editingAssignment={{
             id: assignment.id,
@@ -1001,8 +998,6 @@ export default function AssignmentDetailRoute() {
             assignment.gradingMode === 'bands' ? 'bands' : 'step'
           }
           initialTutorEnabled={assignment.tutorEnabled}
-          initialWritingTimeMinutes={assignment.writingTimeMinutes ?? null}
-          initialParagraphMode={assignment.paragraphMode ?? null}
           initialCollaborationEnabled={Boolean(data.collaboration)}
           initialCollaborationGroupMode={toCollaborationGroupMode(
             assignment.collaborationGroupMode
@@ -1047,7 +1042,6 @@ export default function AssignmentDetailRoute() {
           entryPoint="class"
           fixedClassId={activeClassId}
           assignmentTypes={data.assignmentTypes}
-          writingConditionsEnabled={data.writingConditionsEnabled}
           teacherClasses={[activeClassOption]}
           initialAssignmentTypeId={assignment.assignmentTypeId}
           initialTitle={`Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`}
@@ -1081,7 +1075,6 @@ export default function AssignmentDetailRoute() {
               : null
           }
           initialExitTicketGrading={assignment.exitTicket?.grading ?? null}
-          initialParagraphMode={assignment.paragraphMode ?? null}
         />
       </div>
     </PageShell>

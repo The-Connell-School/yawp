@@ -14,8 +14,7 @@ import type {
  * setting you can tune by eye. This is the fixed set to tune against: timed
  * paragraphs across the scale, each with the band an educator would accept
  * for every category. Run it live (`bun scripts/run-daily-pages-calibration.ts`)
- * after any change to the rubric or its instructions, and before switching on
- * a new paragraph type.
+ * after any change to the rubric or its instructions.
  *
  * The bands carry the decisions made for this assignment type:
  *
@@ -30,8 +29,6 @@ import type {
  * Every case is synthetic and starts as a draft; a release run needs product
  * and educator approval on each, as the core benchmark does.
  */
-
-const WRITING_TIME_MINUTES = 15;
 
 const evaluations: GradingEvaluationDefinition[] = [
   {
@@ -140,7 +137,6 @@ function calibrationCase({
       essayText,
       strictness: 'intermediate',
       assignmentPrompt,
-      writingTimeMinutes: WRITING_TIME_MINUTES,
     },
     expectations: {
       scoreBands: bands,

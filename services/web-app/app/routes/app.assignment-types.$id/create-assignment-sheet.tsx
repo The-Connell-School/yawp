@@ -36,19 +36,13 @@ type TeacherClass = {
 type Props = {
   assignmentTypeId: string;
   assignmentTypeTitle: string;
+  /** `AssignmentType.kind` — exit ticket UI, engagement point minimums, etc. */
+  assignmentTypeKind?: string | null;
+  assignmentTypeRubricName?: string | null;
   /** Whether this kind of writing is in the collaborative-drafts pilot. */
   assignmentTypeCollaborationSupported?: boolean;
   /** Whether this type's rubric grades grammar, so the toggle is worth showing. */
   assignmentTypeGradesGrammar?: boolean;
-  /** `AssignmentType.kind`, which decides whether the sheet shows a prompt
-   * box or the exit ticket form. */
-  assignmentTypeKind?: string | null;
-  /** The writing time the form suggests for this type; null leaves it blank. */
-  assignmentTypeDefaultWritingTimeMinutes?: number | null;
-  /** Whether this type takes a paragraph type (Daily Pages). */
-  assignmentTypeOffersParagraphModes?: boolean;
-  /** The Daily Pages writing-conditions flag; off hides paragraph type and writing time. */
-  writingConditionsEnabled?: boolean;
   teacherClasses: TeacherClass[];
   initialClassId?: string;
   open: boolean;
@@ -77,12 +71,10 @@ function classLabel(klass: TeacherClass) {
 export function CreateAssignmentSheet({
   assignmentTypeId,
   assignmentTypeTitle,
+  assignmentTypeKind = null,
+  assignmentTypeRubricName = null,
   assignmentTypeCollaborationSupported = false,
   assignmentTypeGradesGrammar = false,
-  assignmentTypeKind = null,
-  assignmentTypeDefaultWritingTimeMinutes = null,
-  assignmentTypeOffersParagraphModes = false,
-  writingConditionsEnabled = false,
   teacherClasses,
   initialClassId,
   open,
@@ -133,14 +125,12 @@ export function CreateAssignmentSheet({
           {
             id: assignmentTypeId,
             title: assignmentTypeTitle,
+            kind: assignmentTypeKind,
+            rubricName: assignmentTypeRubricName,
             collaborationSupported: assignmentTypeCollaborationSupported,
             gradesGrammar: assignmentTypeGradesGrammar,
-            kind: assignmentTypeKind,
-            defaultWritingTimeMinutes: assignmentTypeDefaultWritingTimeMinutes,
-            offersParagraphModes: assignmentTypeOffersParagraphModes,
           },
         ]}
-        writingConditionsEnabled={writingConditionsEnabled}
         teacherClasses={teacherClasses}
         initialPrompt={initialPrompt}
         initialExitTicketMode={plannedExitTicket?.mode}

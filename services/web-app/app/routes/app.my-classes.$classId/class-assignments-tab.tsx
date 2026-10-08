@@ -37,16 +37,15 @@ export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
 };
 
 type ClassAssignmentsTabProps = {
-  /** The Daily Pages writing-conditions flag; off hides paragraph type and writing time. */
-  writingConditionsEnabled?: boolean;
   classOption: { id: string; name: string };
   assignments: ClassAssignmentsTabAssignment[];
   assignmentTypes: {
     id: string;
     title: string;
+    kind: string | null;
+    rubricName?: string | null;
     collaborationSupported: boolean;
     gradesGrammar: boolean;
-    kind: string | null;
   }[];
   apHistoryAssignmentTypeId?: string | null;
   /** Gated on the organization's classInsightsEnabled flag. */
@@ -78,7 +77,6 @@ export function ClassAssignmentsTab({
   classOption,
   assignments,
   assignmentTypes,
-  writingConditionsEnabled = false,
   apHistoryAssignmentTypeId,
   classInsightsEnabled,
   onViewDocuments,
@@ -364,7 +362,6 @@ export function ClassAssignmentsTab({
         entryPoint="class"
         fixedClassId={classOption.id}
         assignmentTypes={assignmentTypes}
-        writingConditionsEnabled={writingConditionsEnabled}
         teacherClasses={[classOption]}
       />
     </div>

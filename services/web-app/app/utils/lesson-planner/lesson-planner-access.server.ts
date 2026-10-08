@@ -2,8 +2,7 @@
  * Access gate for the YAWP! Lesson Planner.
  *
  * Teacher-only, and gated by the Lesson Planner feature flag for the
- * teacher's school (same mechanism as Daily Pages writing conditions). Students get a 404 so the
- * feature stays invisible to them.
+ * teacher's school. Students get a 404 so the feature stays invisible to them.
  */
 import { data } from 'react-router';
 import {

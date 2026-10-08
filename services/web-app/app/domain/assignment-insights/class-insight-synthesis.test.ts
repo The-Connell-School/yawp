@@ -90,8 +90,6 @@ describe('buildInsightPrompt writing conditions', () => {
         className: 'English 9',
         assignmentTitle: 'Juliet argues with a name',
         assignmentTypeTitle: null,
-        paragraphModeLabel: null,
-        writingTimeMinutes: null,
         coldWrite: false,
         grammarGraded: null,
       })
@@ -103,16 +101,12 @@ describe('buildInsightPrompt writing conditions', () => {
     className: 'English 9',
     assignmentTitle: 'Juliet argues with a name',
     assignmentTypeTitle: 'Daily Pages',
-    paragraphModeLabel: 'Analyze',
-    writingTimeMinutes: 15,
     coldWrite: true,
     grammarGraded: false,
   });
 
-  test('names the type, paragraph type and time', () => {
+  test('names the assignment type', () => {
     expect(conditioned.user).toContain('Assignment type: Daily Pages');
-    expect(conditioned.user).toContain('Paragraph type: Analyze');
-    expect(conditioned.user).toContain('15 minutes');
   });
 
   test('names a cold write and says not to recommend the tutor for it', () => {
@@ -127,7 +121,17 @@ describe('buildInsightPrompt writing conditions', () => {
 
   test('asks for next steps suited to the conditions', () => {
     expect(conditioned.system).toContain('writing conditions');
-    expect(conditioned.system).toContain('paragraph type');
+  });
+
+  // Daily Pages paragraph type and writing time were removed: the summary is
+  // never told about either, and never asked to read for them.
+  test('never mentions a paragraph type or a writing time', () => {
+    for (const prompt of [plain, conditioned]) {
+      const text = `${prompt.system}\n${prompt.user}`.toLowerCase();
+      expect(text).not.toContain('paragraph type');
+      expect(text).not.toContain('writing time');
+      expect(text).not.toContain('timed piece');
+    }
   });
 });
 

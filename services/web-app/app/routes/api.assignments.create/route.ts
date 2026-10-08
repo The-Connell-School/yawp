@@ -1,10 +1,8 @@
-import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@app/prisma';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { z } from 'zod';
-import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/daily-pages-rubric';
-import { parseParagraphMode } from '~/domain/assignment-types/daily-pages-paragraph-modes';
+import { dailyPagesEngagementPointValueError } from '~/domain/assignment-types/daily-pages-engagement-point-validation';
 import {
   buildAssignmentCreateInputFromApHistoryEntry,
   buildAssignmentCreateInputFromCustomApHistory,
@@ -44,7 +42,6 @@ import {
   exitTicketGradingModeFor,
   resolveAssignmentPrompt,
 } from '~/utils/assignment-exit-ticket.server';
-import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -131,32 +128,9 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   const grammarGradingEnabled = grammarGradingResult.value;
 
-  // Paragraph type and writing time are behind a per-school flag that starts
-  // off. Off, anything sent for either is ignored (not rejected, so a form
-  // opened before the flag was switched off still saves) and stored as unset.
-  const writingConditionsEnabled = await isDailyPagesWritingConditionsEnabled(
-    profile.organization.id
-  );
-  const writingTimeResult = writingConditionsEnabled
-    ? parseWritingTimeMinutes(formData)
-    : ({ success: true, sent: false, value: null } as const);
-  if (!writingTimeResult.success) {
-    return dataResponse(
-      { success: false, message: writingTimeResult.message },
-      { status: 400 }
-    );
-  }
-  const writingTimeMinutes = writingTimeResult.value;
-
-  const paragraphModeResult = writingConditionsEnabled
-    ? parseParagraphMode(formData)
-    : ({ success: true, value: null } as const);
-  if (!paragraphModeResult.success) {
-    return dataResponse(
-      { success: false, message: paragraphModeResult.message },
-      { status: 400 }
-    );
-  }
+  // Daily Pages paragraph type and writing time were removed before release.
+  // Anything a client still sends for either (`paragraphMode`,
+  // `writingTimeMinutes`) is ignored, never rejected, and nothing is stored.
 
   const collaborationResult = parseAssignmentCollaboration(formData);
   if (!collaborationResult.success) {
@@ -245,7 +219,12 @@ export async function action({ request }: ActionFunctionArgs) {
       id: assignmentTypeId,
       archivedAt: null,
     },
-    select: { id: true, systemKey: true, kind: true },
+    select: {
+      id: true,
+      systemKey: true,
+      kind: true,
+      rubric: { select: { name: true, schemaJson: true } },
+    },
   });
 
   if (!assignmentTypeAvailable || !assignmentType) {
@@ -274,12 +253,22 @@ export async function action({ request }: ActionFunctionArgs) {
         }
       : {}),
   };
-  // A paragraph type only means something on Daily Pages; anything sent for
-  // another type is dropped rather than stored where nothing reads it.
-  const paragraphMode =
-    assignmentType.kind === DAILY_PAGES_ASSIGNMENT_TYPE_KIND
-      ? paragraphModeResult.value
-      : null;
+  if (gradingIntent?.success && gradingIntent.data.submitForGrade) {
+    const pointValue = gradingIntent.data.pointValue;
+    if (pointValue != null) {
+      const engagementError = dailyPagesEngagementPointValueError({
+        kind: assignmentType.kind,
+        rubricName: assignmentType.rubric?.name ?? null,
+        pointValue,
+      });
+      if (engagementError) {
+        return dataResponse(
+          { success: false, message: engagementError },
+          { status: 400 }
+        );
+      }
+    }
+  }
 
   const collaboration = collaborationResult.value;
 
@@ -357,8 +346,6 @@ export async function action({ request }: ActionFunctionArgs) {
         }),
         tutorEnabled,
         grammarGradingEnabled,
-        writingTimeMinutes,
-        paragraphMode,
         ...rubricOverrideData,
         ...collaboration,
       },
@@ -453,8 +440,6 @@ export async function action({ request }: ActionFunctionArgs) {
         ...rubricOverrideData,
         tutorEnabled,
         grammarGradingEnabled,
-        writingTimeMinutes,
-        paragraphMode,
         ...collaboration,
         ...promptAttachmentData,
         ...(exitTicketConfigJson ? { exitTicketConfigJson } : {}),

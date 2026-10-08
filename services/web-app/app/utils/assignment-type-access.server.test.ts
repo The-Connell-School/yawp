@@ -233,6 +233,32 @@ describe('assignment type inheritance resolution', () => {
     expect(assignmentTypes).toEqual([{ id: 'at-1', title: 'Allowed' }]);
   });
 
+  /**
+   * Brian (2026-10-02): swapping a teacher from Daily Pages to SJP Daily Pages in
+   * their picker must not hide existing Daily Pages assignments or submissions.
+   * Visibility here only gates *new* work; historical rows stay keyed by assignment id.
+   */
+  test('hides Daily Pages from the picker after a teacher swap without implying submission loss', async () => {
+    const dailyPagesTypeId = 'cmlgtyo8j01em0qjs6knw7cni';
+    const sjpTypeId = 'cmtk7cy2r017y01l8r5ix4kxf';
+
+    mockScopeConfig({
+      orgTypeIds: [dailyPagesTypeId, sjpTypeId],
+      teacher: { customized: true, typeIds: [sjpTypeId] },
+    });
+    prisma.assignmentType.findMany.mockResolvedValue([
+      { id: sjpTypeId, title: 'SJP Daily Pages' },
+    ]);
+
+    const visible = await getAvailableAssignmentTypesForScopes<{ id: string }>({
+      scopes: [{ organizationId: 'org-1', teacherProfileId: 'teacher-1' }],
+      select: { id: true },
+    });
+
+    expect(visible.map((row) => row.id)).toEqual([sjpTypeId]);
+    expect(visible.some((row) => row.id === dailyPagesTypeId)).toBe(false);
+  });
+
   test('does not query assignment types when no usable scope exists', async () => {
     await expect(
       getAvailableAssignmentTypesForScopes({

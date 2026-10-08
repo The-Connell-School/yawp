@@ -45,6 +45,11 @@ mock.module('~/utils/grading-auth.server', () => ({
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
 }));
+const rateLimitModule = await import('~/utils/rate-limit.server');
+mock.module('~/utils/rate-limit.server', () => ({
+  ...rateLimitModule,
+  enforceGradingLimits: mock(async () => ({ allowed: true })),
+}));
 
 const { LlmFallbackRetrySignal } =
   await import('~/utils/getLLMCompletion/llm-provider-errors.server');
@@ -2091,12 +2096,6 @@ describe('api.domain.grade-essay-ai', () => {
       } as any);
     }
 
-    beforeEach(() => {
-      // Paragraph type and writing time are behind a flag; these tests
-      // describe it on. The flag-off tests below switch it off.
-      prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
-    });
-
     async function gradeTimed(
       id: string,
       writingTimeMinutes: number | null,
@@ -2158,76 +2157,53 @@ describe('api.domain.grade-essay-ai', () => {
       expect(grading.messages[0].content).toContain('Cold write:');
     });
 
-    test('tells the grading assistant the paragraph type the teacher chose', async () => {
-      const { grading } = await gradeTimed('sub-analyze', 15, true, 'analyze');
-
-      expect(grading.messages[0].content).toContain('Paragraph type: Analyze');
-    });
-
-    test('says nothing about a paragraph type when none was chosen', async () => {
-      const { grading } = await gradeTimed('sub-any', 15, true, null);
-
-      expect(grading.messages[0].content).not.toContain('Paragraph type');
-    });
-
     test('says nothing about a cold write when the tutor was on', async () => {
       const { grading } = await gradeTimed('sub-tutored', 15, true);
 
       expect(grading.messages[0].content).not.toContain('Cold write');
     });
 
-    test('tells both the grading assistant and the grammar checker how long the student had', async () => {
-      const { grading, grammar } = await gradeTimed('sub-timed', 10);
+    /**
+     * Daily Pages paragraph type and writing time were removed. An old
+     * assignment may still have both stored; neither the grading assistant
+     * nor the grammar checker is ever told about them.
+     */
+    test('the grading assistant ignores a stored paragraph type and writing time', async () => {
+      const { grading } = await gradeTimed('sub-stored', 10, true, 'analyze');
 
-      expect(grading.messages[0].content).toContain('Writing time:');
-      expect(grading.messages[0].content).toContain('10 minutes');
-      expect(grammar.system).toContain('written in 10 minutes');
-      expect(grammar.system).toMatch(/fragment used on purpose/);
-      expect(grammar.messages[0].content).toContain('Written in 10 minutes');
+      expect(grading.messages[0].content).not.toContain('Paragraph type');
+      expect(grading.messages[0].content).not.toContain('Writing time');
+      expect(grading.system).not.toContain('Paragraph type');
+      expect(grading.system).not.toContain('Writing time');
     });
 
-    test('without a writing time, both prompts are what they were before the setting', async () => {
+    test('the grammar checker reads the work as untimed, whatever is stored', async () => {
       const { buildGrammarCheckerSystemPrompt } = await import(
-        '~/domain/grading/writing-time'
+        '~/domain/grading/grammar-checker-prompts'
       );
-      const { grading, grammar } = await gradeTimed('sub-untimed', null);
+      const { grammar } = await gradeTimed('sub-stored-grammar', 10);
 
-      expect(grading.messages[0].content).not.toContain('Writing time');
-      expect(grammar.system).toBe(buildGrammarCheckerSystemPrompt(null));
+      expect(grammar.system).toBe(buildGrammarCheckerSystemPrompt());
       expect(grammar.messages[0].content).toMatch(
         /^Essay:\n[\s\S]*\n\nReturn up to 15 issues\.$/
       );
     });
 
-    describe('with the writing-conditions flag off', () => {
-      beforeEach(() => {
-        prisma.setting.findUnique.mockReset().mockResolvedValue(null);
-      });
+    test('a cold write with a stored writing time is still only a cold write', async () => {
+      const { grading } = await gradeTimed('sub-stored-cold', 10, false);
 
-      test('the grading assistant ignores a stored paragraph type and writing time', async () => {
-        const { grading } = await gradeTimed('sub-flag-off', 10, true, 'analyze');
+      expect(grading.messages[0].content).toContain('Cold write:');
+      expect(grading.messages[0].content).not.toContain('Writing time');
+    });
 
-        expect(grading.messages[0].content).not.toContain('Paragraph type');
-        expect(grading.messages[0].content).not.toContain('Writing time');
-      });
+    test('never reads the removed flag', async () => {
+      await gradeTimed('sub-no-flag', 10, true, 'analyze');
 
-      test('the grammar checker reads the work as untimed, exactly as before the setting', async () => {
-        const { buildGrammarCheckerSystemPrompt } = await import(
-          '~/domain/grading/writing-time'
-        );
-        const { grammar } = await gradeTimed('sub-flag-off-grammar', 10);
-
-        expect(grammar.system).toBe(buildGrammarCheckerSystemPrompt(null));
-        expect(grammar.messages[0].content).toMatch(
-          /^Essay:\n[\s\S]*\n\nReturn up to 15 issues\.$/
-        );
-      });
-
-      test('a cold write is still a cold write (not part of the flag)', async () => {
-        const { grading } = await gradeTimed('sub-flag-off-cold', 10, false);
-
-        expect(grading.messages[0].content).toContain('Cold write:');
-      });
+      expect(prisma.setting.findUnique).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { name: 'feature_flag.daily_pages_paragraph_type_and_writing_time' },
+        })
+      );
     });
 
     function grammarCallCount() {
@@ -2565,9 +2541,6 @@ describe('api.domain.grade-essay-ai', () => {
     test('never asks for grammar or syntax highlighting', async () => {
       await gradeClassStarter('sub-class-starter-grammar');
 
-      // The rubric prompt never asks for grammar output. The grading
-      // instructions do tell the model not to grade grammar, which is the
-      // opposite ask and has to survive.
       const call = gradingCall();
       expect(call.system.toLowerCase()).not.toContain('grammar');
       expect(call.system.toLowerCase()).not.toContain('syntax');
@@ -2602,8 +2575,6 @@ describe('api.domain.grade-essay-ai', () => {
 
       const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
       expect(stored.score).toBe('3/3');
-      // An engagement judgment is not a percentage grade, so it never becomes
-      // one: 3 of 3 must not come back as the 79% the 1-5 bands would give it.
       expect(stored.numericPercentage).toBeNull();
       expect(stored.letterGrade).toBeNull();
     });
@@ -2638,7 +2609,11 @@ describe('api.domain.grade-essay-ai', () => {
       const pinnedSchema = structuredClone(schema);
       if (pin === 'legacy') {
         delete pinnedSchema.outputSchema.assignmentPointScaling;
+        delete pinnedSchema.outputSchema.scoringMode;
+        delete pinnedSchema.scoringMode;
         pinnedSchema.scoringScale.step = 10;
+        pinnedSchema.scoringScale.maxScore = 30;
+        pinnedSchema.scoringScale.compositeMax = 30;
         delete pinnedSchema.rubric.categories[0].bands;
       }
       prisma.assignment.findUnique.mockResolvedValue({
@@ -2655,7 +2630,7 @@ describe('api.domain.grade-essay-ai', () => {
       return action({ request: new Request('https://example.com/api/domain/grade-essay-ai', { method: 'POST', body: form }) } as any);
     }
 
-    test.each([0, 7, 13, 17, 18, 23, 28, 29, 30])('preserves %i raw points in storage, response and the immutable suggestion', async (score) => {
+    test.each([0, 7, 13, 17, 18, 23, 30])('preserves %i raw points in storage, response and the immutable suggestion', async (score) => {
       const response = await gradeRevisedDailyPages(score);
       const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
       expect(stored).toMatchObject({ overallScore: score, score: `${score}/30`, numericPercentage: null, letterGrade: null });
@@ -2675,20 +2650,36 @@ describe('api.domain.grade-essay-ai', () => {
       expect(prisma.submission.update.mock.calls.at(-1)?.[0].data).toMatchObject({ overallScore: 55, score: '55/90', numericPercentage: null, letterGrade: null });
       const snapshot = prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data.assignmentTypeRubricSnapshot;
       expect(snapshot.maxScore).toBe(90);
-      expect(snapshot.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual([[0, 0], [21, 39], [51, 69], [84, 90]]);
+      expect(snapshot.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual([[0, 62], [63, 71], [72, 80], [90, 90]]);
       const call = getLLMCompletion.mock.calls.find((call: any[]) => call[0]?.metadata?.kind === 'rubric-evaluation')?.[0];
       expect(call.system).toContain('"score": 0-90');
-      expect(call.messages[0].content).toContain('51-69 SHOWED UP');
-      expect(call.messages[0].content).toContain('Configured anchor: 60/90');
+      expect(call.messages[0].content).toContain('Good');
+      expect(call.messages[0].content).toContain('90');
     });
 
     test('scales a 10-point assignment and rejects a score in its scaled gap', async () => {
       const response = await gradeRevisedDailyPages(7, 10, 'current');
       expect((response as any).data.score).toBe('7/10');
       prisma.submission.update.mockClear();
-      const invalid = await gradeRevisedDailyPages(8, 10, 'current');
+      const invalid = await gradeRevisedDailyPages(9, 10, 'current');
       expect((invalid as any).init?.status).toBe(502);
       expect(prisma.submission.update).not.toHaveBeenCalled();
+    });
+
+    test('12-point totals expose Brian tier bands (0–7 / 8–9 / 10 / 12) to the model', async () => {
+      await gradeRevisedDailyPages(10, 12, 'current');
+      const snapshot =
+        prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data
+          .assignmentTypeRubricSnapshot;
+      expect(snapshot.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual(
+        [[0, 7], [8, 9], [10, 10], [12, 12]]
+      );
+      const call = getLLMCompletion.mock.calls.find(
+        (entry: any[]) => entry[0]?.metadata?.kind === 'rubric-evaluation'
+      )?.[0];
+      expect(call.messages[0].content).toContain('0-7');
+      expect(call.messages[0].content).toContain('8-9');
+      expect(call.messages[0].content).toContain('12');
     });
 
     test('does not rescale an explicitly pinned legacy rubric on a 90-point assignment', async () => {
@@ -2696,7 +2687,7 @@ describe('api.domain.grade-essay-ai', () => {
       expect((response as any).data).toMatchObject({ score: '20/30', rubricConfig: { maxScore: 30, step: 10 } });
     });
 
-    test.each([1, 6, 14, 16, 24, 27])('rejects %i in a gap between authored tiers instead of rounding it', async (score) => {
+    test.each([27, 28, 29])('rejects %i in a gap between authored tiers instead of rounding it', async (score) => {
       const response = await gradeRevisedDailyPages(score);
       expect((response as any).init?.status).toBe(502);
       expect(prisma.submission.update).not.toHaveBeenCalled();
@@ -2710,10 +2701,23 @@ describe('api.domain.grade-essay-ai', () => {
       const schema = structuredClone(STARTER_RUBRICS.find(r => r.name === 'daily-pages-engagement')!);
       schema.outputSchema.teacherNotesEnabled = enabled;
       prisma.assignmentType.findUnique.mockResolvedValue(mockAssignmentType({
+        id: 'daily-pages-production',
+        title: 'Daily Pages',
+        kind: 'daily_pages',
         rubric: { name: schema.name, schemaJson: schema },
         ...(managed ? { gradingPromptConfigJson: { systemMessageTemplate: '{{grading_instructions}}', userMessageTemplate: '{{document}}' } } : {}),
       }));
-      prisma.submission.findFirst.mockResolvedValue(mockSubmission());
+      prisma.submission.findFirst.mockResolvedValue(mockSubmission({
+        document: {
+          assignmentTypeId: 'daily-pages-production',
+          assignmentType: { id: 'daily-pages-production', kind: 'daily_pages', title: 'Daily Pages' },
+          assignment: { id: 'daily-assignment', prompt: 'Daily prompt.', pointValue: 30 },
+        },
+      }));
+      prisma.assignment.findUnique.mockResolvedValue({
+        assignmentTypeId: 'daily-pages-production',
+        rubricRevision: null,
+      });
       getLLMCompletion.mockReset();
       getLLMCompletion.mockResolvedValueOnce(JSON.stringify(response));
       if (fallback) getLLMCompletion.mockResolvedValueOnce(JSON.stringify(fallback));
@@ -2758,7 +2762,10 @@ describe('api.domain.grade-essay-ai', () => {
     });
 
     test('schema repair keeps a private note separate and obeys the same source constraints', async () => {
-      const result = await gradeWithNote({ response: { categories: [{ key: 'engagement_with_prompt', score: 24 }], teacherNote, overallComment }, fallback: { categories, teacherNote, overallComment } });
+      const result = await gradeWithNote({
+        response: { categories: [{ key: 'engagement_with_prompt', score: 99 }], teacherNote, overallComment },
+        fallback: { categories, teacherNote, overallComment },
+      });
       expect((result as any).data.teacherNote).toBe(teacherNote);
       expect((result as any).data.score).toBe('18/30');
       const repair = getLLMCompletion.mock.calls[1][0];
@@ -2771,9 +2778,10 @@ describe('api.domain.grade-essay-ai', () => {
     test.each(['missing-feedback', 'schema-repair'] as const)('preserves authored system-template constraints during %s', async (mode) => {
       const response = mode === 'missing-feedback'
         ? { categories, teacherNote }
-        : { categories: [{ key: 'engagement_with_prompt', score: 24 }], teacherNote, overallComment };
+        : { categories: [{ key: 'engagement_with_prompt', score: 99 }], teacherNote, overallComment };
       const result = await gradeWithNote({ managed: true, response, fallback: { categories, teacherNote, overallComment } });
       expect((result as any).data.teacherNote).toBe(teacherNote);
+      expect(getLLMCompletion.mock.calls.length).toBeGreaterThan(1);
       const retry = getLLMCompletion.mock.calls[1][0];
       const retryPrompt = retry.system + retry.messages[0].content;
       expect(retryPrompt).toContain('Never mention grammar, spelling, syntax, or organization');

@@ -125,6 +125,7 @@ function mockAssignmentTypeAvailable({
     id,
     systemKey,
     kind,
+    rubric: null,
     collaborationSupported,
   });
 }
@@ -143,10 +144,7 @@ describe('api.assignments.create', () => {
     prisma.orgMembership.findMany.mockReset();
     prisma.apHistoryPromptLibraryEntry.findFirst.mockReset();
     createAssignmentDeployedToClasses.mockReset();
-    // Paragraph type and writing time are behind a flag. These tests describe
-    // the flag on (the behavior since they shipped); the flag-off block below
-    // describes the default.
-    prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
+    prisma.setting.findUnique.mockReset().mockResolvedValue(null);
     isAssignmentTypeAvailableForEveryScope.mockReset();
     uploadAssignmentPromptAttachment.mockReset();
     deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
@@ -215,7 +213,12 @@ describe('api.assignments.create', () => {
         id: 'at-1',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true, kind: true },
+      select: {
+        id: true,
+        systemKey: true,
+        kind: true,
+        rubric: { select: { name: true, schemaJson: true } },
+      },
     });
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -381,50 +384,12 @@ describe('api.assignments.create', () => {
     });
   });
 
-  test('records how long students have to write', async () => {
-    const response = await action({
-      request: requestFor({
-        intent: 'create-assignment',
-        assignmentTypeId: 'at-1',
-        classIds: ['class-1', 'class-2'],
-        prompt: 'Write the essay.',
-        title: 'Essay',
-        writingTimeMinutes: '10',
-      }),
-      params: {},
-    } as any);
-
-    const body = await readBody(response);
-    expect(body.success).toBe(true);
-    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
-      data: expect.objectContaining({ writingTimeMinutes: 10 }),
-      classIds: ['class-1', 'class-2'],
-      deployment: { postAt: null, dueAt: null },
-    });
-  });
-
-  test('records no writing time when none is given (preserves current behavior)', async () => {
-    const response = await action({
-      request: requestFor({
-        intent: 'create-assignment',
-        assignmentTypeId: 'at-1',
-        classIds: ['class-1', 'class-2'],
-        prompt: 'Write the essay.',
-        title: 'Essay',
-      }),
-      params: {},
-    } as any);
-
-    const body = await readBody(response);
-    expect(body.success).toBe(true);
-    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
-      data: expect.objectContaining({ writingTimeMinutes: null }),
-      classIds: ['class-1', 'class-2'],
-      deployment: { postAt: null, dueAt: null },
-    });
-  });
-
-  describe('paragraph type', () => {
+  /**
+   * Daily Pages paragraph type and writing time were removed (never
+   * released). Anything sent for either is ignored, never rejected, so a form
+   * opened before the release still saves; nothing is written for either.
+   */
+  describe('without writing conditions', () => {
     function createWith(fields: Record<string, string>) {
       return action({
         request: requestFor({
@@ -439,79 +404,18 @@ describe('api.assignments.create', () => {
       } as any);
     }
 
-    test('records the chosen type on a Daily Pages assignment', async () => {
+    function createdData() {
+      return (createAssignmentDeployedToClasses.mock.calls[0]?.[0] as any)?.data;
+    }
+
+    test('writes neither a paragraph type nor a writing time', async () => {
       mockAssignmentTypeAvailable({ kind: 'daily_pages' });
 
-      const body = await readBody(await createWith({ paragraphMode: 'analyze' }));
+      const body = await readBody(await createWith({}));
 
       expect(body).toMatchObject({ success: true });
-      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ paragraphMode: 'analyze' }),
-        })
-      );
-    });
-
-    test('records none when no type is chosen (preserves current behavior)', async () => {
-      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
-
-      await createWith({});
-
-      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ paragraphMode: null }),
-        })
-      );
-    });
-
-    test('ignores a type sent for an assignment type that is not Daily Pages', async () => {
-      mockAssignmentTypeAvailable({ kind: null });
-
-      await createWith({ paragraphMode: 'analyze' });
-
-      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ paragraphMode: null }),
-        })
-      );
-    });
-
-    test('rejects a type that is not switched on yet', async () => {
-      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
-
-      const response = await createWith({ paragraphMode: 'argue' });
-
-      expect(responseStatus(response)).toBe(400);
-      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('with the writing-conditions flag off', () => {
-    beforeEach(() => {
-      prisma.setting.findUnique.mockReset().mockResolvedValue(null);
-    });
-
-    function createWith(fields: Record<string, string>) {
-      return action({
-        request: requestFor({
-          intent: 'create-assignment',
-          assignmentTypeId: 'at-1',
-          classIds: ['class-1', 'class-2'],
-          prompt: 'Quote the line where the argument turns.',
-          title: 'Daily Pages',
-          ...fields,
-        }),
-        params: {},
-      } as any);
-    }
-
-    test('reads the flag from its Setting row', async () => {
-      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
-      await createWith({});
-      expect(prisma.setting.findUnique).toHaveBeenCalledWith({
-        where: { name: 'feature_flag.daily_pages_paragraph_type_and_writing_time' },
-        select: { value: true },
-      });
+      expect(createdData()).not.toHaveProperty('paragraphMode');
+      expect(createdData()).not.toHaveProperty('writingTimeMinutes');
     });
 
     test('ignores a paragraph type and a writing time sent anyway', async () => {
@@ -522,17 +426,11 @@ describe('api.assignments.create', () => {
       );
 
       expect(body).toMatchObject({ success: true });
-      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            paragraphMode: null,
-            writingTimeMinutes: null,
-          }),
-        })
-      );
+      expect(createdData()).not.toHaveProperty('paragraphMode');
+      expect(createdData()).not.toHaveProperty('writingTimeMinutes');
     });
 
-    test('does not reject values it ignores (a form opened before the flag was switched off still saves)', async () => {
+    test('does not reject values it ignores, however malformed', async () => {
       mockAssignmentTypeAvailable({ kind: 'daily_pages' });
 
       const response = await createWith({
@@ -541,52 +439,19 @@ describe('api.assignments.create', () => {
       });
 
       expect(responseStatus(response)).not.toBe(400);
-      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            paragraphMode: null,
-            writingTimeMinutes: null,
-          }),
-        })
-      );
+      expect(createdData()).not.toHaveProperty('paragraphMode');
+      expect(createdData()).not.toHaveProperty('writingTimeMinutes');
     });
 
-    test('treats a failed flag read as off', async () => {
-      prisma.setting.findUnique.mockReset().mockRejectedValue(new Error('db down'));
+    test('never reads the removed flag', async () => {
       mockAssignmentTypeAvailable({ kind: 'daily_pages' });
-      const error = console.error;
-      console.error = () => {};
-      try {
-        await createWith({ paragraphMode: 'analyze', writingTimeMinutes: '10' });
-      } finally {
-        console.error = error;
-      }
-      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+      await createWith({});
+      expect(prisma.setting.findUnique).not.toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            paragraphMode: null,
-            writingTimeMinutes: null,
-          }),
+          where: { name: 'feature_flag.daily_pages_paragraph_type_and_writing_time' },
         })
       );
     });
-  });
-
-  test('rejects a writing time that is not whole minutes', async () => {
-    const response = await action({
-      request: requestFor({
-        intent: 'create-assignment',
-        assignmentTypeId: 'at-1',
-        classIds: ['class-1'],
-        prompt: 'Write the essay.',
-        title: 'Essay',
-        writingTimeMinutes: 'ten',
-      }),
-      params: {},
-    } as any);
-
-    expect(responseStatus(response)).toBe(400);
-    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects an invalid tutor toggle value', async () => {
@@ -708,7 +573,12 @@ describe('api.assignments.create', () => {
         id: 'at-forbidden',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true, kind: true },
+      select: {
+        id: true,
+        systemKey: true,
+        kind: true,
+        rubric: { select: { name: true, schemaJson: true } },
+      },
     });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });

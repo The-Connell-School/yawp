@@ -18,6 +18,7 @@ import {
   MissingOrganizationError,
   seedClassStarterAssignmentType,
 } from './seed-class-starter-assignment-type';
+import { applyDailyPagesEngagementV2Seed } from './apply-daily-pages-engagement-v2-seed';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
@@ -158,6 +159,8 @@ try {
   try {
     await seedClassStarterAssignmentType(prisma);
     console.log('Class Starter assignment type ready.');
+    const engagementV2 = await applyDailyPagesEngagementV2Seed(prisma);
+    console.log('Daily Pages engagement v2 seed:', engagementV2);
   } catch (error) {
     // Never fail a whole seed run over the one case that is legitimately absent.
     if (error instanceof MissingOrganizationError) {

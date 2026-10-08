@@ -1,6 +1,5 @@
 import { prisma } from '~/utils/db.server';
 import {
-  DAILY_PAGES_WRITING_CONDITIONS_FLAG,
   LESSON_PLANNER_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
@@ -77,16 +76,6 @@ export async function isFeatureFlagEnabled(
     });
     return false;
   }
-}
-
-/**
- * Paragraph type and writing time on Daily Pages (and every assignment form),
- * for the school whose assignment or viewer it is.
- */
-export function isDailyPagesWritingConditionsEnabled(
-  orgId: string | null | undefined
-): Promise<boolean> {
-  return isFeatureFlagEnabled(DAILY_PAGES_WRITING_CONDITIONS_FLAG, orgId);
 }
 
 /** YAWP! Lesson Planner for teachers at the given school. */
