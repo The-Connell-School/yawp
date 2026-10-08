@@ -43,12 +43,14 @@ SELECT
   'Exit Ticket',
   1,
   'Answer the exit ticket in your own words.',
-  'cexitticket000000000000000'
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM "AssignmentModule"
-  WHERE "assignmentTypeId" = 'cexitticket000000000000000'
-);
+  t."id"
+FROM "AssignmentType" t
+WHERE t."kind" = 'exit_ticket'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM "AssignmentModule" m
+    WHERE m."assignmentTypeId" = t."id"
+  );
 
 INSERT INTO "AssignmentModuleInstruction" (
   "id",
@@ -68,14 +70,20 @@ SELECT
   'Write',
   'Answer the prompt in your own words, and explain your thinking.',
   false,
-  'cexitticketmod00000000001'
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM "AssignmentModuleInstruction"
-  WHERE "assignmentModuleId" = 'cexitticketmod00000000001'
-);
+  m."id"
+FROM "AssignmentModule" m
+INNER JOIN "AssignmentType" t ON t."id" = m."assignmentTypeId"
+WHERE t."kind" = 'exit_ticket'
+  AND m."id" = 'cexitticketmod00000000001'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM "AssignmentModuleInstruction" i
+    WHERE i."assignmentModuleId" = m."id"
+  );
 
 INSERT INTO "OrganizationAssignmentType" ("organizationId", "assignmentTypeId")
-SELECT o."id", 'cexitticket000000000000000'
+SELECT o."id", t."id"
 FROM "Organization" o
+CROSS JOIN "AssignmentType" t
+WHERE t."kind" = 'exit_ticket'
 ON CONFLICT ("organizationId", "assignmentTypeId") DO NOTHING;
