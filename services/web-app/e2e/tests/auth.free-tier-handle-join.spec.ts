@@ -152,8 +152,14 @@ test.describe('Free-tier handle student', () => {
       await teacherPage.getByRole('button', { name: 'Reset login' }).click();
       await teacherContext.close();
 
-      await page.goto('/app');
-      await expect(page).toHaveURL(/required-password-change/);
+      await page.goto('/auth/logout');
+      await page.goto('/auth/login');
+      await page.getByLabel('Email or handle').fill(handle);
+      await page.getByLabel('Password').fill(tempPassword);
+      await page.getByRole('button', { name: 'Log in' }).click();
+      await expect(page).toHaveURL(/required-password-change/, {
+        timeout: 15000,
+      });
       await page.getByLabel('New password', { exact: true }).fill(newPassword);
       await page.getByLabel('Confirm new password').fill(newPassword);
       await page.getByRole('button', { name: 'Save and continue' }).click();
