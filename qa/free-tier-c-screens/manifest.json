@@ -1,0 +1,22 @@
+{
+  "capturedAt": "2026-10-08T14:33:53.538Z",
+  "baseUrl": "https://pr-416.preview.yawp.school",
+  "shots": [
+    {
+      "file": "01-free-waitlist.png",
+      "md5": "63895aeededb71c0f5aa04dafc6384e7"
+    },
+    {
+      "file": "01-free-waitlist-mobile.png",
+      "md5": "fd7f3bbf06d1178c23b7860f44664228"
+    },
+    {
+      "file": "01-free-waitlist-submitted.png",
+      "md5": "ba1e68d683bf3101876a6fb5a2c5bcb8"
+    },
+    {
+      "file": "01-free-waitlist-submitted-mobile.png",
+      "md5": "c4f35ceccc6c756482d4d676835c3aec"
+    }
+  ]
+}

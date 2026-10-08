@@ -1,14 +1,22 @@
 // FREE_TIER_DB_TESTS=1 DATABASE_URL=... bun test app/domain/free-tier/approval-flow.integration.test.ts
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { prisma } from '~/utils/db.server';
-import { setApprovalHooks } from './approval-hooks.server';
-import {
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+
+const sendEmailMock = mock(async () => ({
+  status: 'success' as const,
+  data: { id: 'integration-test-email' },
+}));
+mock.module('~/utils/email.server.ts', () => ({ sendEmail: sendEmailMock }));
+mock.module('~/utils/email.server', () => ({ sendEmail: sendEmailMock }));
+
+const { prisma } = await import('~/utils/db.server');
+const { setApprovalHooks } = await import('./approval-hooks.server');
+const {
   completeSchoolAdminApproval,
   redirectSchoolAdmin,
   resendFreeTierAdminApprovalReminder,
   submitAdminDetails,
-} from './approval-flow.server';
-import { peekSignedLink } from './signed-link.server';
+} = await import('./approval-flow.server');
+const { peekSignedLink } = await import('./signed-link.server');
 
 const enabled = process.env.FREE_TIER_DB_TESTS === '1';
 
@@ -20,6 +28,11 @@ describe('free-tier approval flow', () => {
 
   const secret = process.env.FREE_TIER_LINK_HMAC_SECRET;
   beforeEach(() => {
+    sendEmailMock.mockReset();
+    sendEmailMock.mockResolvedValue({
+      status: 'success' as const,
+      data: { id: 'integration-test-email' },
+    });
     process.env.FREE_TIER_LINK_HMAC_SECRET =
       secret || 'integration-test-free-tier-link-secret-key';
     process.env.PRIMARY_APP_URL = 'https://yawp.test';
@@ -61,7 +74,7 @@ describe('free-tier approval flow', () => {
       adminEmail: 'principal@school.edu',
       adminRole: 'Principal',
     });
-    expect(submit.ok).toBe(true);
+    expect(submit.ok, JSON.stringify(submit)).toBe(true);
     const emailLog = await prisma.freeTierEmailLog.findFirst({
       where: { applicationId: app.id, kind: 'admin_approval', success: true },
       orderBy: { createdAt: 'desc' },
