@@ -34,9 +34,13 @@ mock.module('~/domain/grading/grading-queue.server', () => ({
   loadGradingQueueNeighbors,
   loadDocumentNavigationNeighbors,
 }));
-const resolveRubricOutputOptionsForAssignmentType = mock(() =>
-  Promise.resolve(null)
-);
+const resolveRubricOutputOptionsForAssignmentType = mock<
+  () => Promise<{
+    catalogKey: string;
+    teacherNotesEnabled: boolean;
+    fingerprint: string;
+  } | null>
+>(() => Promise.resolve(null));
 mock.module('~/domain/rubrics/rubric-output-options.server', () => ({
   resolveRubricOutputOptionsForAssignmentType,
 }));
@@ -140,6 +144,8 @@ describe('submission loader — unsubmitted redirect', () => {
     prisma.assignmentType.findUnique.mockReset();
     loadGradingQueueNeighbors.mockReset();
     loadDocumentNavigationNeighbors.mockReset();
+    resolveRubricOutputOptionsForAssignmentType.mockReset();
+    resolveRubricOutputOptionsForAssignmentType.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
     prisma.assignmentType.findUnique.mockResolvedValue(null);
     prisma.submissionActivity.findMany.mockResolvedValue([]);
