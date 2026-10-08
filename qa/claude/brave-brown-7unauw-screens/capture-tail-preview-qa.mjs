@@ -9,7 +9,7 @@ import {
   assertStudentSubmissionUnreleased,
   assertTeacherSubmissionUnreleased,
   releaseGradeFromSubmissionPage,
-  resetPreviewPlannerQaExitTicket,
+  reseedPreviewPlannerQaExitTicketUnreleased,
   waitForReleasedGradeOnStudentSubmission,
 } from './release-grade-helpers.mjs';
 
@@ -60,11 +60,11 @@ async function devLogin(page, email) {
 }
 
 async function main() {
+  reseedPreviewPlannerQaExitTicketUnreleased();
   const browser = await chromium.launch({ headless: true, channel: 'chrome' });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   try {
     await enterPreview(page);
-    await resetPreviewPlannerQaExitTicket(page);
     await devLogin(page, 'dev.teacher@yawp.local');
     await page.goto(
       `${previewUrl}/app/my-classes/${QA.classId}/summary/${QA.insightAssignmentId}`

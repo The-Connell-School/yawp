@@ -1,15 +1,30 @@
-/** Reset the preview QA exit-ticket submission to graded-but-unreleased (preview DB only). */
-export async function resetPreviewPlannerQaExitTicket(page) {
-  const ok = await page.evaluate(async () => {
-    const response = await fetch(
-      '/auth/dev-reset-preview-planner-qa-exit-ticket',
-      { method: 'POST' }
-    );
-    return response.ok;
-  });
-  if (!ok) {
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+
+const REPO_ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '../../..');
+
+/** Re-run preview planner QA seed so the exit ticket is graded but unreleased (preview DB only). */
+export function reseedPreviewPlannerQaExitTicketUnreleased() {
+  const databaseUrl =
+    process.env.PREVIEW_DATABASE_URL ?? process.env.DATABASE_URL;
+  if (!databaseUrl?.trim()) {
     throw new Error(
-      'failed to reset preview planner QA exit ticket (dev-reset route)'
+      'PREVIEW_DATABASE_URL or DATABASE_URL is required to reset the QA exit ticket via seed-preview-planner-qa'
+    );
+  }
+  const result = spawnSync(
+    'bun',
+    ['packages/prisma/scripts/seed-preview-planner-qa.ts'],
+    {
+      cwd: REPO_ROOT,
+      env: { ...process.env, DATABASE_URL: databaseUrl },
+      encoding: 'utf8',
+    }
+  );
+  if (result.status !== 0) {
+    throw new Error(
+      `seed-preview-planner-qa failed: ${result.stderr || result.stdout || 'unknown error'}`
     );
   }
 }

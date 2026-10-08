@@ -13,7 +13,7 @@ import {
   assertStudentSubmissionUnreleased,
   assertTeacherSubmissionUnreleased,
   releaseGradeFromSubmissionPage,
-  resetPreviewPlannerQaExitTicket,
+  reseedPreviewPlannerQaExitTicketUnreleased,
   waitForReleasedGradeOnStudentSubmission,
 } from './release-grade-helpers.mjs';
 
