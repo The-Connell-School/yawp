@@ -189,12 +189,6 @@ jobs:
           bun test
           ./services/web-app/app/domain/rubrics/rubric-catalog.test.ts
           ./services/web-app/app/domain/rubrics/rubric-catalog.integration.test.ts
-          ./services/web-app/app/domain/grading/teacher-notes.test.ts
-          ./services/web-app/app/domain/grading/grading-prompt-shape.test.ts
-          ./services/web-app/app/domain/assignment-types/assignment-type-grading-config.server.test.ts
-          ./services/web-app/app/routes/api.admin.rubric-output-options/route.test.ts
-          'services/web-app/app/routes/app_.submissions_.$submissionId/route.loader.test.ts'
-          ./packages/prisma/scripts/seed-preview-teacher-notes-qa.test.ts
           ./services/web-app/app/utils/internal-rubric-catalog-http.server.test.ts
           ./services/web-app/app/utils/ip.server.test.ts
           ./services/web-app/app/utils/rate-limit.server.test.ts
@@ -205,6 +199,22 @@ jobs:
           ./services/web-app/app/domain/free-tier/
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
           ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
+
+      # These mock ~/utils/db.server; run each in its own process so DB integration
+      # suites above keep a real Prisma client.
+      - name: 🧪 Teacher notes + grading output unit tests (isolated)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          set -e
+          bun test ./services/web-app/app/domain/grading/teacher-notes.test.ts
+          bun test ./services/web-app/app/domain/grading/grading-prompt-shape.test.ts
+          bun test ./packages/prisma/scripts/seed-preview-teacher-notes-qa.test.ts
+          cd services/web-app
+          bun test app/domain/assignment-types/assignment-type-grading-config.server.test.ts
+          bun test app/routes/api.admin.rubric-output-options/route.test.ts
+          bun test 'app/routes/app_.submissions_.$submissionId/route.loader.test.ts'
 
       - name: 🎨 Backfill class artwork keys
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
