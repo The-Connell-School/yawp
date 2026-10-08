@@ -616,6 +616,7 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/backfill-class-art-key.ts \
         packages/prisma/scripts/seed-local-dev.ts \
         packages/prisma/scripts/seed-class-starter-assignment-type.ts \
+        packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts \
         packages/prisma/scripts/seed-preview-teacher-notes-qa.ts \
         packages/prisma/scripts/local-dev/preview-teacher-notes-qa.ts \
         packages/prisma/scripts/assets/class-starter.jpg \
@@ -712,6 +713,9 @@ run_tooling_if_needed() {
   # idempotent, so it runs on every data mode and on every deploy.
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-class-starter-assignment-type.ts" ]]; then
     tooling_command+=' && bun run seed-class-starter-assignment-type'
+  fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
+    tooling_command+=' && bun run scripts/apply-daily-pages-engagement-v2-seed.ts'
   fi
   if [[ "$DATA_MODE" == "seed" && -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-teacher-notes-qa.ts" ]]; then
     tooling_command+=' && bun run seed-preview-teacher-notes-qa'

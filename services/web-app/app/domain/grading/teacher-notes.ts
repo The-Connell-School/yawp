@@ -17,11 +17,20 @@ export const TEACHER_NOTES_EVIDENCE_RULE = [
   '- Return null when no clear, useful inconsistency is supported. Avoid vague warnings and overflagging.',
 ].join('\n');
 
-export function overallCommentWriterRules(teacherNotesEnabled: boolean): string {
-  const base =
-    '- Do not include private observations, notes for the teacher, or speculation about authorship. Write only student feedback and obey the supplied grading constraints.';
-  if (!teacherNotesEnabled) return base;
-  return `${base}\n- ${TEACHER_NOTES_EVIDENCE_RULE}`;
+export function overallCommentWriterRules(_teacherNotesEnabled: boolean): string {
+  return '- Do not include private observations, notes for the teacher, or speculation about authorship. Write only student feedback and obey the supplied grading constraints.';
+}
+
+/** Strip teacherNotesEnabled changes from non-superadmin assignment-type saves. */
+export function authorizeOutputSchemaTeacherNotes(
+  submitted: Record<string, unknown> | null,
+  existingOutputSchema: unknown,
+  canEditTeacherNotesToggle: boolean
+): Record<string, unknown> | null {
+  if (!submitted) return submitted;
+  if (canEditTeacherNotesToggle) return submitted;
+  const preserveEnabled = teacherNotesEnabled(existingOutputSchema);
+  return withTeacherNotesEnabled(submitted, preserveEnabled);
 }
 
 export function gradingRepairPrivateObservationRules(

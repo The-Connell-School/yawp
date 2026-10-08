@@ -9,7 +9,8 @@ import {
 } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
-import { requireAdmin } from '~/utils/auth.server';
+import { requireAdmin, requireUserId } from '~/utils/auth.server';
+import { authorizeOutputSchemaTeacherNotes } from '~/domain/grading/teacher-notes';
 import { prisma } from '~/utils/db.server';
 import {
   DEFAULT_OUTPUT_SCHEMA_JSON,
@@ -27,7 +28,10 @@ function parseJsonFormField(formData: FormData, name: string) {
   }
 }
 
-function parseGradingConfig(formData: FormData) {
+function parseGradingConfig(
+  formData: FormData,
+  canEditTeacherNotesToggle: boolean
+) {
   const hasGradingConfigFields =
     formData.has('scoringScale') ||
     formData.has('rubricJson') ||
@@ -54,9 +58,12 @@ function parseGradingConfig(formData: FormData) {
           formData,
           'promptConfigJson'
         ),
-        gradingOutputSchemaJson:
-          parseJsonFormField(formData, 'outputSchemaJson') ??
+        gradingOutputSchemaJson: authorizeOutputSchemaTeacherNotes(
+          (parseJsonFormField(formData, 'outputSchemaJson') ??
+            DEFAULT_OUTPUT_SCHEMA_JSON) as Record<string, unknown>,
           DEFAULT_OUTPUT_SCHEMA_JSON,
+          canEditTeacherNotesToggle
+        ),
       }
     : {};
 }
@@ -70,6 +77,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireAdmin(request);
+  const userId = await requireUserId(request);
+  const superAdmin = await prisma.user.findFirst({
+    where: { id: userId, isSuperAdmin: true },
+    select: { id: true },
+  });
   const formData = await request.formData();
   const title = formData.get('title')?.toString().trim();
   const description = formData.get('description')?.toString().trim() || null;
@@ -89,7 +101,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   let gradingConfigData: ReturnType<typeof parseGradingConfig>;
   try {
-    gradingConfigData = parseGradingConfig(formData);
+    gradingConfigData = parseGradingConfig(formData, Boolean(superAdmin));
   } catch (error) {
     if (error instanceof Response && error.status === 400) {
       return dataResponse({ error: await error.text() }, { status: 400 });

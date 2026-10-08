@@ -12,6 +12,8 @@ describe('seed-preview-teacher-notes-qa', () => {
     expect(script).toContain('assertLocalSeedTarget');
     expect(script).not.toContain('production-qa-profile-remote');
     expect(script).not.toContain('MANAGEMENT');
+    expect(script).not.toContain('LOCAL_DEV_PASSWORD');
+    expect(script).toContain('PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_PASSWORD');
   });
 
   test('preview deploy runs the seed after class starter', () => {

@@ -5,13 +5,13 @@
  *
  * Never runs against production URLs or management keys — local/preview Postgres only.
  */
+import { randomBytes } from 'node:crypto';
 import type { PrismaClient } from '../generated/prisma';
 import { createPassword } from './utils';
 import {
   assertLocalSeedTarget,
   createPrismaClient,
 } from './local-dev/connection';
-import { LOCAL_DEV_PASSWORD } from './local-dev/dev-personas';
 import {
   PREVIEW_TEACHER_NOTES_QA_NOTE,
   PREVIEW_TEACHER_NOTES_QA_STUDENT_EMAIL,
@@ -24,6 +24,13 @@ import dailyPagesEngagementSchema from '../../../services/web-app/app/domain/rub
 type SeedClient = PrismaClient;
 
 const DAILY_PAGES_ENGAGEMENT_RUBRIC_NAME = 'daily-pages-engagement';
+
+function previewQaSuperadminPassword(): string {
+  const configured =
+    process.env.PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_PASSWORD?.trim() ?? '';
+  if (configured.length >= 16) return configured;
+  return randomBytes(24).toString('base64url');
+}
 
 async function ensureDailyPagesEngagementTeacherNotesEnabled(
   prisma: SeedClient,
@@ -124,7 +131,7 @@ async function ensurePreviewSuperAdmin(
       name: 'Preview QA Superadmin',
       isAdmin: true,
       isSuperAdmin: true,
-      password: { create: createPassword(LOCAL_DEV_PASSWORD) },
+      password: { create: createPassword(previewQaSuperadminPassword()) },
       memberships: {
         create: {
           organizationId,

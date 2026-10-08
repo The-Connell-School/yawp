@@ -13,6 +13,9 @@ const prisma = {
     findMany: mock(),
     findUnique: mock(),
   },
+  user: {
+    findFirst: mock(),
+  },
   // The editor lists the shared rubric library and seeds the built-in
   // rubrics on first sight.
   rubric: {
@@ -56,11 +59,14 @@ describe('admin assignment type detail action', () => {
     prisma.rubricRevision.findMany.mockReset();
     prisma.orgMembership.findMany.mockReset();
     prisma.orgMembership.findUnique.mockReset();
+    prisma.user.findFirst.mockReset();
     requireAdmin.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
 
     requireAdmin.mockResolvedValue(undefined);
+    requireUserId.mockResolvedValue('admin-1');
+    prisma.user.findFirst.mockResolvedValue(null);
     prisma.$transaction.mockImplementation(async (callback) =>
       callback(prisma)
     );
@@ -79,6 +85,8 @@ describe('admin assignment type detail action', () => {
       gradingPromptConfigJson: {
         instructionsPreset: 'legacy_thesis_driven_essay',
       },
+      gradingOutputSchemaJson: { schemaVersion: 1 },
+      rubric: null,
     });
     prisma.assignmentTypePromptVersion.findMany.mockResolvedValue([]);
     prisma.orgMembership.findMany.mockResolvedValue([]);
@@ -237,6 +245,46 @@ describe('admin assignment type detail action', () => {
           responseShape: 'categories_overall_comment',
         },
         gradingAssistantVersion: { increment: 1 },
+      }),
+    });
+  });
+
+  test('plain admin cannot enable teacher notes via crafted outputSchemaJson', async () => {
+    prisma.user.findFirst.mockResolvedValue(null);
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'ACT Writing');
+    form.set(
+      'outputSchemaJson',
+      JSON.stringify({ schemaVersion: 1, teacherNotesEnabled: true })
+    );
+    form.set(
+      'rubricJson',
+      JSON.stringify({
+        categories: [
+          {
+            key: 'ideas_and_analysis',
+            label: 'Ideas and Analysis',
+            description: 'Generate productive ideas and analyze perspectives.',
+            weight: 1,
+          },
+        ],
+      })
+    );
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+      data: expect.objectContaining({
+        gradingOutputSchemaJson: { schemaVersion: 1 },
       }),
     });
   });

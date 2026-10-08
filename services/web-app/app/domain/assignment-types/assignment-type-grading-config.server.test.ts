@@ -512,4 +512,102 @@ describe('September 14 Daily Pages library revision', () => {
     });
     expect(grade).toEqual({ overallScore: 18, score: '18/30', numericPercentage: null, letterGrade: null });
   });
+
+  test('live teacher notes toggle applies to grading even when assignment pins an older revision', async () => {
+    const live = structuredClone(dailyPagesLibraryJson) as Record<string, unknown>;
+    live.outputSchema = {
+      ...(typeof live.outputSchema === 'object' && live.outputSchema
+        ? (live.outputSchema as Record<string, unknown>)
+        : {}),
+      teacherNotesEnabled: true,
+    };
+    const pinned = structuredClone(dailyPagesLibraryJson) as Record<string, unknown>;
+    pinned.outputSchema = {
+      ...(typeof pinned.outputSchema === 'object' && pinned.outputSchema
+        ? (pinned.outputSchema as Record<string, unknown>)
+        : {}),
+      teacherNotesEnabled: false,
+    };
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'dp-live-toggle',
+      title: 'Daily Pages',
+      kind: 'daily_pages',
+      rubricId: 'rubric-dp',
+      scoringScaleJson: null,
+      rubricJson: null,
+      gradingPromptConfigJson: null,
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 2,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      rubric: {
+        name: 'daily-pages-engagement',
+        schemaJson: live,
+        currentRevision: {
+          id: 'rev-2',
+          version: 2,
+          rubricName: 'daily-pages-engagement',
+          schemaJson: live,
+        },
+      },
+    });
+    prisma.assignment.findUnique.mockResolvedValue({
+      assignmentTypeId: 'dp-live-toggle',
+      rubricTotalPoints: null,
+      gradingMode: 'bands',
+      rubricRevision: {
+        id: 'rev-1',
+        version: 1,
+        rubricName: 'daily-pages-engagement',
+        schemaJson: pinned,
+      },
+    });
+    const enabled = await resolveAssignmentTypeGradingConfig({
+      assignmentTypeId: 'dp-live-toggle',
+      assignmentId: 'historical-assignment',
+    });
+    expect(
+      (enabled.outputSchemaSnapshot as { teacherNotesEnabled?: boolean })
+        .teacherNotesEnabled
+    ).toBe(true);
+
+    const liveOff = structuredClone(live);
+    liveOff.outputSchema = {
+      ...(liveOff.outputSchema as Record<string, unknown>),
+      teacherNotesEnabled: false,
+    };
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'dp-live-toggle',
+      title: 'Daily Pages',
+      kind: 'daily_pages',
+      rubricId: 'rubric-dp',
+      scoringScaleJson: null,
+      rubricJson: null,
+      gradingPromptConfigJson: null,
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 2,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      rubric: {
+        name: 'daily-pages-engagement',
+        schemaJson: liveOff,
+        currentRevision: {
+          id: 'rev-2',
+          version: 2,
+          rubricName: 'daily-pages-engagement',
+          schemaJson: liveOff,
+        },
+      },
+    });
+    const disabled = await resolveAssignmentTypeGradingConfig({
+      assignmentTypeId: 'dp-live-toggle',
+      assignmentId: 'historical-assignment',
+    });
+    expect(
+      (disabled.outputSchemaSnapshot as { teacherNotesEnabled?: boolean })
+        .teacherNotesEnabled
+    ).toBe(false);
+  });
 });

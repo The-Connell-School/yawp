@@ -189,6 +189,12 @@ jobs:
           bun test
           ./services/web-app/app/domain/rubrics/rubric-catalog.test.ts
           ./services/web-app/app/domain/rubrics/rubric-catalog.integration.test.ts
+          ./services/web-app/app/domain/grading/teacher-notes.test.ts
+          ./services/web-app/app/domain/grading/grading-prompt-shape.test.ts
+          ./services/web-app/app/domain/assignment-types/assignment-type-grading-config.server.test.ts
+          ./services/web-app/app/routes/api.admin.rubric-output-options/route.test.ts
+          'services/web-app/app/routes/app_.submissions_.$submissionId/route.loader.test.ts'
+          ./packages/prisma/scripts/seed-preview-teacher-notes-qa.test.ts
           ./services/web-app/app/utils/internal-rubric-catalog-http.server.test.ts
           ./services/web-app/app/utils/ip.server.test.ts
           ./services/web-app/app/utils/rate-limit.server.test.ts

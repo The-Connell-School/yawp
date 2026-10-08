@@ -1,9 +1,9 @@
 /**
  * Headless Playwright captures for PR #415 teacher-notes toggle QA.
  *
- * Usage:
- *   PREVIEW_URL='https://pr-415.preview.yawp.school' \
- *   PREVIEW_CODE='wise-finch-2723' \
+ * Usage (set secrets via env; never commit preview access codes):
+ *   PREVIEW_URL='https://…' PREVIEW_CODE='…' \
+ *   PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_PASSWORD='…' \
  *   bun run e2e/capture-teacher-notes-toggle-qa-screens.ts
  */
 import { chromium, expect } from '@playwright/test';

@@ -16,6 +16,9 @@ test.describe.serial('Admin teacher notes output toggle', () => {
     const note =
       'The closing paragraph shifts into formal vocabulary unlike the rest.';
     let submissionId: string | null = null;
+    let rubricId: string | null = null;
+    let assignmentTypeId: string | null = null;
+    let assignmentId: string | null = null;
 
     const schema = {
       name: rubricName,
@@ -39,6 +42,7 @@ test.describe.serial('Admin teacher notes output toggle', () => {
     const rubric = await prisma.rubric.create({
       data: { name: rubricName, title: schema.title, schemaJson: schema },
     });
+    rubricId = rubric.id;
 
     const assignmentType = await prisma.assignmentType.create({
       data: {
@@ -48,6 +52,7 @@ test.describe.serial('Admin teacher notes output toggle', () => {
         ownerOrgId: e2eContext.organizationId,
       },
     });
+    assignmentTypeId = assignmentType.id;
 
     const { assignment, classAssignment } = await createDeployedAssignment({
       prisma,
@@ -56,6 +61,7 @@ test.describe.serial('Admin teacher notes output toggle', () => {
       prompt: 'Write about a place that matters to you.',
       pointValue: 20,
     });
+    assignmentId = assignment.id;
 
     const document = await prisma.document.create({
       data: {
@@ -106,19 +112,27 @@ test.describe.serial('Admin teacher notes output toggle', () => {
     });
 
     async function switchUser(email: string, password: string) {
-      await page.request.post('/auth/logout');
+      const logout = await page.request.post('/auth/logout');
+      expect(logout.ok()).toBeTruthy();
+      await page.goto('/auth/login');
+      await page.waitForSelector('input[type="email"]', { state: 'visible' });
       await signIn(email, password);
+      await page.waitForURL((url) => url.pathname.startsWith('/app'), {
+        timeout: 30_000,
+      });
     }
 
     try {
       await switchUser(e2eContext.superAdminEmail, 'admin-e2e-password');
       await page.goto(`/app/admin/assignment-types/${assignmentType.id}`);
+      await page.waitForLoadState('domcontentloaded');
 
       const toggle = page.getByTestId('rubric-teacher-notes-toggle');
-      await expect(toggle).toBeVisible({ timeout: 30000 });
+      await expect(toggle).toBeVisible({ timeout: 30_000 });
       await expect(toggle).toBeEnabled();
       await expect(toggle).not.toBeChecked();
       await toggle.click();
+      await expect(toggle).toBeChecked({ timeout: 15_000 });
       await expect
         .poll(async () => {
           const row = await prisma.rubric.findUnique({
@@ -132,9 +146,10 @@ test.describe.serial('Admin teacher notes output toggle', () => {
 
       await switchUser(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/submissions/${submissionId}`);
-      await expect(page.getByTestId('teacher-private-notes')).toContainText(note, {
-        timeout: 30000,
+      await expect(page.getByTestId('teacher-private-notes')).toBeVisible({
+        timeout: 30_000,
       });
+      await expect(page.getByTestId('teacher-private-notes')).toContainText(note);
 
       await switchUser(e2eContext.userEmail, 'johndoe');
       await page.goto(`/app/submissions/${submissionId}`);
@@ -151,6 +166,15 @@ test.describe.serial('Admin teacher notes output toggle', () => {
         });
         await prisma.submission.deleteMany({ where: { id: submissionId } });
         await prisma.document.deleteMany({ where: { id: submissionId } });
+      }
+      if (assignmentId) {
+        await prisma.assignment.deleteMany({ where: { id: assignmentId } });
+      }
+      if (assignmentTypeId) {
+        await prisma.assignmentType.deleteMany({ where: { id: assignmentTypeId } });
+      }
+      if (rubricId) {
+        await prisma.rubric.deleteMany({ where: { id: rubricId } });
       }
       await prisma.$disconnect();
     }

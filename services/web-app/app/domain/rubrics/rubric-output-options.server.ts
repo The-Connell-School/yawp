@@ -7,6 +7,7 @@ import {
 import {
   RubricCatalog,
   contentFingerprint,
+  perTypeContent,
   perTypeKey,
   toEditable,
 } from './rubric-catalog.server';
@@ -17,6 +18,9 @@ export type RubricOutputOptionsState = {
   fingerprint: string;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
 export function readOutputSchemaTeacherNotes(content: unknown): boolean {
   if (!content || typeof content !== 'object' || Array.isArray(content)) {
     return false;
@@ -24,7 +28,8 @@ export function readOutputSchemaTeacherNotes(content: unknown): boolean {
   return teacherNotesEnabled((content as Record<string, unknown>).outputSchema);
 }
 
-export async function resolveRubricOutputOptionsForAssignmentType(
+/** Live rubric output toggle for an assignment type — no catalog list scan. */
+export async function readLiveRubricOutputOptionsForAssignmentType(
   db: PrismaClient,
   assignmentTypeId: string
 ): Promise<RubricOutputOptionsState | null> {
@@ -35,18 +40,20 @@ export async function resolveRubricOutputOptionsForAssignmentType(
       rubricId: true,
       rubricJson: true,
       scoringScaleJson: true,
-      rubric: { select: { name: true } },
+      gradingOutputSchemaJson: true,
+      gradingPromptConfigJson: true,
+      gradingCalibrationNotes: true,
+      rubric: { select: { name: true, schemaJson: true } },
     },
   });
   if (!type) return null;
 
   if (type.rubricId && type.rubric) {
-    const catalog = new RubricCatalog(db);
-    const detail = await catalog.get(type.rubric.name);
+    const content = isRecord(type.rubric.schemaJson) ? type.rubric.schemaJson : {};
     return {
       catalogKey: type.rubric.name,
-      teacherNotesEnabled: readOutputSchemaTeacherNotes(detail.live.content),
-      fingerprint: detail.live.fingerprint,
+      teacherNotesEnabled: readOutputSchemaTeacherNotes(content),
+      fingerprint: contentFingerprint(content),
     };
   }
 
@@ -54,14 +61,20 @@ export async function resolveRubricOutputOptionsForAssignmentType(
     return null;
   }
 
-  const catalog = new RubricCatalog(db);
+  const content = perTypeContent(type);
   const key = perTypeKey(type.id);
-  const detail = await catalog.get(key);
   return {
     catalogKey: key,
-    teacherNotesEnabled: readOutputSchemaTeacherNotes(detail.live.content),
-    fingerprint: detail.live.fingerprint,
+    teacherNotesEnabled: readOutputSchemaTeacherNotes(content),
+    fingerprint: contentFingerprint(content),
   };
+}
+
+export async function resolveRubricOutputOptionsForAssignmentType(
+  db: PrismaClient,
+  assignmentTypeId: string
+): Promise<RubricOutputOptionsState | null> {
+  return readLiveRubricOutputOptionsForAssignmentType(db, assignmentTypeId);
 }
 
 export async function setRubricTeacherNotesEnabled(args: {

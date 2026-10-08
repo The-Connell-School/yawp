@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   TEACHER_NOTES_EVIDENCE_RULE,
+  authorizeOutputSchemaTeacherNotes,
   gradingRepairPrivateObservationRules,
   normalizeTeacherNote,
   overallCommentWriterRules,
@@ -32,7 +33,25 @@ describe('teacher-notes', () => {
   test('repair and overall-comment helpers omit note rules when disabled', () => {
     expect(gradingRepairPrivateObservationRules(false)).toBe('');
     expect(overallCommentWriterRules(false)).not.toContain('Teacher Note rules:');
+    expect(overallCommentWriterRules(true)).not.toContain('Teacher Note rules:');
     expect(gradingRepairPrivateObservationRules(true)).toContain('Teacher Note rules:');
+  });
+
+  test('authorizeOutputSchemaTeacherNotes ignores crafted toggle from plain admins', () => {
+    expect(
+      authorizeOutputSchemaTeacherNotes(
+        { schemaVersion: 1, teacherNotesEnabled: true },
+        { schemaVersion: 1 },
+        false
+      )
+    ).toEqual({ schemaVersion: 1 });
+    expect(
+      authorizeOutputSchemaTeacherNotes(
+        { schemaVersion: 1, teacherNotesEnabled: false },
+        { schemaVersion: 1, teacherNotesEnabled: true },
+        false
+      )
+    ).toEqual({ schemaVersion: 1, teacherNotesEnabled: true });
   });
 
   test('normalizeTeacherNote trims and enforces max length', () => {
