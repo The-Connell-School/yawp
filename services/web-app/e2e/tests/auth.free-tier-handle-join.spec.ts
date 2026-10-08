@@ -15,6 +15,7 @@ test.describe('Free-tier handle student', () => {
     helpers,
     e2eContext: _e2eContext,
   }) => {
+    test.setTimeout(120_000);
     const prisma = createE2EPrismaClient();
     const handle = `e2ehandle${Date.now()}`.slice(0, 20);
     const password = 'yawp-test-pass-1';

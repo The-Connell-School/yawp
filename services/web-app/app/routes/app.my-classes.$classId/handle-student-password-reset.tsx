@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import {
@@ -29,14 +29,15 @@ export function HandleStudentPasswordResetButton({
   const [open, setOpen] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [revealedPassword, setRevealedPassword] = useState<string | null>(null);
+  const lastSubmittedPasswordRef = useRef('');
 
   useEffect(() => {
     if (fetcher.state !== 'idle' || !fetcher.data) return;
     if (fetcher.data.success) {
-      setRevealedPassword(temporaryPassword);
+      setRevealedPassword(lastSubmittedPasswordRef.current);
       setTemporaryPassword('');
     }
-  }, [fetcher.state, fetcher.data, temporaryPassword]);
+  }, [fetcher.state, fetcher.data]);
 
   const closeDialog = () => {
     setOpen(false);
@@ -95,7 +96,13 @@ export function HandleStudentPasswordResetButton({
               </DialogFooter>
             </>
           ) : (
-            <fetcher.Form method="post" onSubmit={(e) => e.stopPropagation()}>
+            <fetcher.Form
+              method="post"
+              onSubmit={(e) => {
+                e.stopPropagation();
+                lastSubmittedPasswordRef.current = temporaryPassword;
+              }}
+            >
               <DialogHeader>
                 <DialogTitle>Reset login for {studentName}</DialogTitle>
                 <DialogDescription>
