@@ -75,6 +75,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await page.fill('input[name="confirmPassword"]', JOIN_PASSWORD);
     await page.getByRole('button', { name: /Create account/i }).click();
     await page.waitForURL('**/app/free-tier/onboarding**', { timeout: 30_000 });
+    expect(page.url()).not.toMatch(/\/auth\/login/);
 
     await page.fill('input[name="adminName"]', 'E2E Principal');
     await page.fill('input[name="adminEmail"]', `principal@${ADMIN_DOMAIN}`);
@@ -161,6 +162,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await page.fill('input[name="confirmPassword"]', JOIN_PASSWORD);
     await page.getByRole('button', { name: /Create account/i }).click();
     await page.waitForURL('**/app/free-tier/onboarding**', { timeout: 30_000 });
+    expect(page.url()).not.toMatch(/\/auth\/login/);
 
     await page.fill('input[name="adminName"]', 'Wrong Admin');
     await page.fill('input[name="adminEmail"]', `wrong-${stamp}@${ADMIN_DOMAIN}`);
@@ -218,6 +220,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await page.fill('input[name="confirmPassword"]', JOIN_PASSWORD);
     await page.getByRole('button', { name: /Create account/i }).click();
     await page.waitForURL('**/app/free-tier/onboarding**', { timeout: 30_000 });
+    expect(page.url()).not.toMatch(/\/auth\/login/);
 
     await page.fill('input[name="adminName"]', 'Same Person');
     await page.fill('input[name="adminEmail"]', `ft-self-${stamp}+alias@${ADMIN_DOMAIN}`);

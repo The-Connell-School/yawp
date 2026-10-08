@@ -12,11 +12,13 @@ const { prisma } = await import('~/utils/db.server');
 const { setApprovalHooks } = await import('./approval-hooks.server');
 const {
   completeSchoolAdminApproval,
+  createFreeTierTeacherAccount,
   redirectSchoolAdmin,
   resendFreeTierAdminApprovalReminder,
   submitAdminDetails,
 } = await import('./approval-flow.server');
-const { peekSignedLink } = await import('./signed-link.server');
+const { mintSignedLink, peekSignedLink, RELEASE_LINK_TTL_MS } = await import('./signed-link.server');
+const { getPasswordHash } = await import('~/utils/auth.server');
 
 const enabled = process.env.FREE_TIER_DB_TESTS === '1';
 
@@ -391,5 +393,107 @@ describe('free-tier approval flow', () => {
       select: { usedAt: true },
     });
     expect(link?.usedAt).toBeNull();
+  });
+
+  test('release join consumes link only after account creation succeeds', async () => {
+    const email = `ft-release-join-${Date.now()}@school.edu`;
+    const app = await prisma.freeTierApplication.create({
+      data: {
+        email,
+        name: 'Release Join',
+        schoolName: 'Join HS',
+        location: 'TX',
+        gradeLevel: '10',
+        status: 'INVITED',
+        releasedAt: new Date(),
+      },
+    });
+    const minted = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'RELEASE',
+      ttlMs: RELEASE_LINK_TTL_MS,
+    });
+    const passwordHash = await getPasswordHash('yawp-ft-join-pass');
+    const created = await createFreeTierTeacherAccount({
+      token: minted.token,
+      name: 'Release Join',
+      passwordHash,
+    });
+    expect(created.ok).toBe(true);
+    const after = await peekSignedLink({ token: minted.token, expectedPurpose: 'RELEASE' });
+    expect(after.ok).toBe(false);
+    if (after.ok) throw new Error('expected used link');
+    expect(after.reason).toBe('used');
+  });
+
+  test('release join does not consume link when an existing password must sign in', async () => {
+    const email = `ft-release-existing-${Date.now()}@school.edu`;
+    await prisma.user.create({
+      data: {
+        email,
+        name: 'Existing',
+        password: { create: { hash: await getPasswordHash('existing-pass') } },
+      },
+    });
+    const app = await prisma.freeTierApplication.create({
+      data: {
+        email,
+        name: 'Existing',
+        schoolName: 'Join HS',
+        location: 'TX',
+        gradeLevel: '10',
+        status: 'INVITED',
+        releasedAt: new Date(),
+      },
+    });
+    const minted = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'RELEASE',
+      ttlMs: RELEASE_LINK_TTL_MS,
+    });
+    const created = await createFreeTierTeacherAccount({
+      token: minted.token,
+      name: 'Existing',
+      passwordHash: await getPasswordHash('new-pass'),
+    });
+    expect(created).toEqual({ ok: false, reason: 'sign_in_required' });
+    const after = await peekSignedLink({ token: minted.token, expectedPurpose: 'RELEASE' });
+    expect(after.ok).toBe(true);
+  });
+
+  test('release join completes signup for a passwordless user with the same email', async () => {
+    const email = `ft-release-nopw-${Date.now()}@school.edu`;
+    const orphan = await prisma.user.create({
+      data: { email, name: 'Orphan' },
+    });
+    const app = await prisma.freeTierApplication.create({
+      data: {
+        email,
+        name: 'Orphan Teacher',
+        schoolName: 'Join HS',
+        location: 'TX',
+        gradeLevel: '10',
+        status: 'INVITED',
+        releasedAt: new Date(),
+      },
+    });
+    const minted = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'RELEASE',
+      ttlMs: RELEASE_LINK_TTL_MS,
+    });
+    const created = await createFreeTierTeacherAccount({
+      token: minted.token,
+      name: 'Orphan Teacher',
+      passwordHash: await getPasswordHash('fresh-pass'),
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) throw new Error('expected success');
+    expect(created.userId).toBe(orphan.id);
+    const withPassword = await prisma.user.findUnique({
+      where: { id: orphan.id },
+      select: { password: { select: { userId: true } } },
+    });
+    expect(withPassword?.password?.userId).toBe(orphan.id);
   });
 });

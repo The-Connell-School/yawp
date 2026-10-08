@@ -22,6 +22,7 @@ import {
   getPreviewAccessSeat,
   isIsolatedPreviewSeatMode,
 } from '~/utils/preview-access.server';
+import { previewSessionAllowedWithoutSeatMembership } from '~/utils/preview-session-seat.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { combineHeaders } from '~/utils/misc';
 
@@ -76,7 +77,7 @@ export async function loginAction({ request }: ActionFunctionArgs) {
             select: { id: true },
           })
         : null;
-      if (!seatMembership) {
+      if (!seatMembership && !(await previewSessionAllowedWithoutSeatMembership(user.id))) {
         return validationError(
           { fieldErrors: { email: 'Invalid email or password' } },
           data

@@ -541,21 +541,8 @@ export async function createFreeTierTeacherAccount(args: {
   if (earlyAppId) {
     const invited = await prisma.freeTierApplication.findUnique({
       where: { id: earlyAppId },
-      select: { email: true, userId: true, status: true },
+      select: { userId: true },
     });
-    if (invited?.email) {
-      const existingUser = await prisma.user.findUnique({
-        where: { email: invited.email },
-        select: { id: true },
-      });
-      if (existingUser) {
-        await prisma.freeTierApplication.updateMany({
-          where: { id: earlyAppId, userId: null },
-          data: { userId: existingUser.id, status: 'ACCOUNT_CREATED' },
-        });
-        return { ok: false as const, reason: 'sign_in_required' as const };
-      }
-    }
     if (invited?.userId) {
       return { ok: true as const, idempotent: true as const, userId: invited.userId };
     }
@@ -574,9 +561,9 @@ export async function createFreeTierTeacherAccount(args: {
 
     const existingUser = await tx.user.findUnique({
       where: { email: preApp.email },
-      select: { id: true },
+      select: { id: true, password: { select: { userId: true } } },
     });
-    if (existingUser) {
+    if (existingUser?.password) {
       await tx.freeTierApplication.updateMany({
         where: { id: preApp.id, userId: null },
         data: { userId: existingUser.id, status: 'ACCOUNT_CREATED' },
@@ -600,19 +587,37 @@ export async function createFreeTierTeacherAccount(args: {
     if (app.status !== 'INVITED') return { ok: false as const, reason: 'illegal_state' as const, status: app.status };
 
     assertTransition('INVITED', 'ACCOUNT_CREATED');
-    const user = await tx.user.create({
-      data: {
-        email: app.email,
-        name: args.name.trim(),
-        password: { create: { hash: args.passwordHash } },
-      },
-      select: { id: true },
-    });
+    const userId = existingUser
+      ? (
+          await tx.user.update({
+            where: { id: existingUser.id },
+            data: {
+              name: args.name.trim(),
+              password: {
+                upsert: {
+                  create: { hash: args.passwordHash },
+                  update: { hash: args.passwordHash },
+                },
+              },
+            },
+            select: { id: true },
+          })
+        ).id
+      : (
+          await tx.user.create({
+            data: {
+              email: app.email,
+              name: args.name.trim(),
+              password: { create: { hash: args.passwordHash } },
+            },
+            select: { id: true },
+          })
+        ).id;
     const updated = await tx.freeTierApplication.updateMany({
       where: { id: app.id, status: 'INVITED', userId: null },
-      data: { status: 'ACCOUNT_CREATED', userId: user.id },
+      data: { status: 'ACCOUNT_CREATED', userId },
     });
     if (updated.count === 0) return { ok: false as const, reason: 'conflict' as const };
-    return { ok: true as const, userId: user.id, email: app.email };
+    return { ok: true as const, userId, email: app.email };
   });
 }
