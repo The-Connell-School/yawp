@@ -5,6 +5,7 @@ import { generateStudentJoinToken } from '../../app/utils/student-join-token';
 import bcrypt from 'bcryptjs';
 
 test.describe('Free-tier handle student', () => {
+  // Smoke: join link → document submit → teacher reset → handle re-login
   test('join link flow: write, submit, grading queue, password reset', async ({
     page,
     browser,
