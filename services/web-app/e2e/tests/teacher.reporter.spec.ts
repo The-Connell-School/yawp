@@ -33,6 +33,18 @@ test.describe('Yawp Reporter', () => {
     await expect(page.getByRole('link', { name: 'Reporter' })).toBeVisible();
   });
 
+  test('opens /app/reporter when reporterEnabled is false', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setReporterEnabled(e2eContext.organizationId, false);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    await page.goto('/app/reporter');
+    await expect(page).toHaveURL(/\/app\/reporter/);
+  });
+
   test('lets an enabled teacher open the reporter and start a report', async ({
     page,
     signIn,
