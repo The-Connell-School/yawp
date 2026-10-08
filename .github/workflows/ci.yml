@@ -208,8 +208,11 @@ jobs:
           ./services/web-app/app/utils/internal-rubric-catalog-http.server.test.ts
           ./services/web-app/app/utils/ip.server.test.ts
           ./services/web-app/app/utils/rate-limit.server.test.ts
+          ./services/web-app/app/utils/login-rate-limit-target.test.ts
+          ./services/web-app/app/utils/login-rate-limit.fail-closed.test.ts
           ./services/web-app/app/utils/rate-limit.false-positive.test.ts
           ./services/web-app/app/utils/rate-limit.responses.test.ts
+          ./services/web-app/app/routes/auth.login/login.server.test.ts
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
           $(find ./services/web-app/app/domain/free-tier -name '*.test.ts' ! -name 'student-join.server.test.ts')
