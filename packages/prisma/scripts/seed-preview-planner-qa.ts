@@ -108,15 +108,13 @@ export async function seedPreviewPlannerQa(
     select: { id: true, title: true },
   });
 
-  if (student) {
-    await prisma.class.update({
-      where: { id: klass.id },
-      data: {
-        students: { connect: [{ id: student.id }] },
-        teachers: { connect: [{ id: teacher.id }] },
-      },
-    });
-  }
+  await prisma.class.update({
+    where: { id: klass.id },
+    data: {
+      teachers: { connect: [{ id: teacher.id }] },
+      ...(student ? { students: { connect: [{ id: student.id }] } } : {}),
+    },
+  });
 
   const thesisType = await prisma.assignmentType.findFirst({
     where: { kind: 'thesis_driven_essay' },
