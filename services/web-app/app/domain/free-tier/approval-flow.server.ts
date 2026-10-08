@@ -9,9 +9,12 @@ import {
 import { adminApprovalEmailCopyVersionHash } from './email-copy.server';
 import {
   mintSignedLink,
-  consumeSignedLink,
+  claimSignedLinkInTransaction,
+  applicationIdFromSignedToken,
   FREE_TIER_LINK_TTL_MS,
 } from './signed-link.server';
+import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
+import { ensureFreeTierProductionApprovalHooks } from './approval-hooks.server';
 import {
   sendFreeTierAdminApprovalEmail,
   sendFreeTierCongratulationsEmail,
@@ -57,7 +60,6 @@ export async function submitAdminDetails(args: {
   adminEmail: string;
   adminRole: string;
   personalNote?: string;
-  requestBaseUrl: string;
 }) {
   const adminEmail = normalizeEmail(args.adminEmail);
   const app = await prisma.freeTierApplication.findFirst({
@@ -145,22 +147,26 @@ export async function submitAdminDetails(args: {
 
   if (!result.ok) return result;
   if (!result.manualReview) {
-    const approveUrl = `${args.requestBaseUrl}/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`;
-    const declineUrl = `${args.requestBaseUrl}/free/admin/not-right-person?t=${encodeURIComponent(result.declineToken)}`;
-    await sendFreeTierAdminApprovalEmail({
+    const base = freeTierPublicAppOrigin();
+    const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`;
+    const declineUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(result.declineToken)}`;
+    const emailResult = await sendFreeTierAdminApprovalEmail({
       applicationId: app.id,
       to: result.adminEmail,
+      teacherEmail: app.email,
       teacherName: app.name,
       schoolName: app.schoolName,
       personalNote: note,
       approveUrl,
       notRightPersonUrl: declineUrl,
     });
+    if (!emailResult.ok) {
+      return { ok: false as const, reason: 'email_failed' as const, error: emailResult.error };
+    }
   }
   return {
     ok: true as const,
     status: result.manualReview ? 'MANUAL_REVIEW' : 'SENT',
-    approveToken: result.approveToken,
   };
 }
 
@@ -169,10 +175,8 @@ export async function completeSchoolAdminApproval(args: {
   adminRole: string;
   authorized: boolean;
   request: Request;
-  requestBaseUrl: string;
 }) {
   if (!args.authorized) return { ok: false as const, reason: 'unauthorized' as const };
-  const { applicationIdFromSignedToken } = await import('./signed-link.server');
   const earlyAppId = applicationIdFromSignedToken(args.token);
   if (earlyAppId) {
     const already = await prisma.freeTierApplication.findUnique({
@@ -181,11 +185,15 @@ export async function completeSchoolAdminApproval(args: {
     });
     if (already?.status === 'APPROVED') return { ok: true as const, idempotent: true as const };
   }
-  const consumed = await consumeSignedLink({ token: args.token, expectedPurpose: 'ADMIN_APPROVE' });
-  if (!consumed.ok) return { ok: false as const, reason: consumed.reason };
 
   const meta = hashRequestMeta(args.request);
   const result = await prisma.$transaction(async (tx) => {
+    const consumed = await claimSignedLinkInTransaction(tx, {
+      token: args.token,
+      expectedPurpose: 'ADMIN_APPROVE',
+    });
+    if (!consumed.ok) return consumed;
+
     const app = await tx.freeTierApplication.findUnique({
       where: { id: consumed.applicationId },
       select: { id: true, status: true, email: true, name: true, schoolName: true, userId: true, organizationId: true },
@@ -243,15 +251,23 @@ export async function completeSchoolAdminApproval(args: {
     };
   });
 
-  if (result.ok && !('idempotent' in result) && result.app) {
+  if (!result.ok) return result;
+  if ('idempotent' in result && result.idempotent) return result;
+
+  if (result.app) {
+    await ensureFreeTierProductionApprovalHooks();
     await getApprovalHooks().onApplicationApproved(result.app);
-    await sendFreeTierCongratulationsEmail({
+    const signInUrl = `${freeTierPublicAppOrigin()}/auth/login`;
+    const emailResult = await sendFreeTierCongratulationsEmail({
       applicationId: result.app.id,
       teacherEmail: result.app.email,
       teacherName: result.app.name,
       adminName: result.adminName,
-      signInUrl: `${args.requestBaseUrl}/auth/login`,
+      signInUrl,
     });
+    if (!emailResult.ok) {
+      return { ok: false as const, reason: 'email_failed' as const, error: emailResult.error };
+    }
   }
   return result;
 }
@@ -261,30 +277,32 @@ export async function redirectSchoolAdmin(args: {
   newAdminName: string;
   newAdminEmail: string;
   request: Request;
-  requestBaseUrl: string;
 }) {
-  const consumed = await consumeSignedLink({ token: args.token, expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON' });
-  if (!consumed.ok) return { ok: false as const, reason: consumed.reason };
-
   const newEmail = normalizeEmail(args.newAdminEmail);
-  const app = await prisma.freeTierApplication.findUnique({
-    where: { id: consumed.applicationId },
-    select: { id: true, email: true, name: true, schoolName: true, status: true, adminRedirectCount: true },
-  });
-  if (!app || (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW')) {
-    return { ok: false as const, reason: 'illegal_state' as const };
-  }
-  if (app.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP) {
-    return { ok: false as const, reason: 'chain_cap' as const };
-  }
-
-  const rules = evaluateAdminEmail({ teacherEmail: app.email, adminEmail: newEmail, schoolName: app.schoolName });
-  if (!rules.ok) return { ok: false as const, reason: rules.reason };
-
   const meta = hashRequestMeta(args.request);
   const copyHash = adminApprovalEmailCopyVersionHash();
 
   const result = await prisma.$transaction(async (tx) => {
+    const consumed = await claimSignedLinkInTransaction(tx, {
+      token: args.token,
+      expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+    });
+    if (!consumed.ok) return consumed;
+
+    const app = await tx.freeTierApplication.findUnique({
+      where: { id: consumed.applicationId },
+      select: { id: true, email: true, name: true, schoolName: true, status: true, adminRedirectCount: true },
+    });
+    if (!app || (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW')) {
+      return { ok: false as const, reason: 'illegal_state' as const };
+    }
+    if (app.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP) {
+      return { ok: false as const, reason: 'chain_cap' as const };
+    }
+
+    const rules = evaluateAdminEmail({ teacherEmail: app.email, adminEmail: newEmail, schoolName: app.schoolName });
+    if (!rules.ok) return { ok: false as const, reason: rules.reason };
+
     const pending = await tx.freeTierAdminApproval.findFirst({
       where: { applicationId: app.id, signedLinkId: consumed.linkId, status: 'PENDING' },
       select: { id: true, personalNote: true },
@@ -304,7 +322,7 @@ export async function redirectSchoolAdmin(args: {
     const approveMint = await mintSignedLink({ applicationId: app.id, purpose: 'ADMIN_APPROVE', tx });
     const declineMint = await mintSignedLink({ applicationId: app.id, purpose: 'ADMIN_NOT_RIGHT_PERSON', tx });
 
-    const next = await tx.freeTierAdminApproval.create({
+    await tx.freeTierAdminApproval.create({
       data: {
         applicationId: app.id,
         adminName: args.newAdminName.trim(),
@@ -315,7 +333,6 @@ export async function redirectSchoolAdmin(args: {
         redirectedFromId: pending.id,
         personalNote: pending.personalNote,
       },
-      select: { id: true },
     });
 
     await tx.freeTierApplication.update({
@@ -326,22 +343,33 @@ export async function redirectSchoolAdmin(args: {
       },
     });
 
-    return { ok: true as const, approveToken: approveMint.token, declineToken: declineMint.token, note: pending.personalNote };
+    return {
+      ok: true as const,
+      app,
+      rules,
+      approveToken: approveMint.token,
+      declineToken: declineMint.token,
+      note: pending.personalNote,
+      to: newEmail,
+    };
   });
 
   if (!result.ok) return result;
-  if (app.status !== 'MANUAL_REVIEW' && !rules.manualReview) {
-    const approveUrl = `${args.requestBaseUrl}/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`;
-    const declineUrl = `${args.requestBaseUrl}/free/admin/not-right-person?t=${encodeURIComponent(result.declineToken)}`;
-    await sendFreeTierAdminApprovalEmail({
-      applicationId: app.id,
-      to: newEmail,
-      teacherName: app.name,
-      schoolName: app.schoolName,
+  if (result.app.status !== 'MANUAL_REVIEW' && !result.rules.manualReview) {
+    const base = freeTierPublicAppOrigin();
+    const emailResult = await sendFreeTierAdminApprovalEmail({
+      applicationId: result.app.id,
+      to: result.to,
+      teacherEmail: result.app.email,
+      teacherName: result.app.name,
+      schoolName: result.app.schoolName,
       personalNote: result.note,
-      approveUrl,
-      notRightPersonUrl: declineUrl,
+      approveUrl: `${base}/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`,
+      notRightPersonUrl: `${base}/free/admin/not-right-person?t=${encodeURIComponent(result.declineToken)}`,
     });
+    if (!emailResult.ok) {
+      return { ok: false as const, reason: 'email_failed' as const, error: emailResult.error };
+    }
   }
   return { ok: true as const };
 }
@@ -351,16 +379,56 @@ export async function createFreeTierTeacherAccount(args: {
   name: string;
   passwordHash: string;
 }) {
-  const consumed = await consumeSignedLink({ token: args.token, expectedPurpose: 'RELEASE' });
-  if (!consumed.ok) return { ok: false as const, reason: consumed.reason };
+  const earlyAppId = applicationIdFromSignedToken(args.token);
+  if (earlyAppId) {
+    const invited = await prisma.freeTierApplication.findUnique({
+      where: { id: earlyAppId },
+      select: { email: true, userId: true, status: true },
+    });
+    if (invited?.email) {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: invited.email },
+        select: { id: true },
+      });
+      if (existingUser) {
+        await prisma.freeTierApplication.updateMany({
+          where: { id: earlyAppId, userId: null },
+          data: { userId: existingUser.id, status: 'ACCOUNT_CREATED' },
+        });
+        return { ok: false as const, reason: 'sign_in_required' as const };
+      }
+    }
+    if (invited?.userId) {
+      return { ok: true as const, idempotent: true as const, userId: invited.userId };
+    }
+  }
 
   return prisma.$transaction(async (tx) => {
+    const consumed = await claimSignedLinkInTransaction(tx, {
+      token: args.token,
+      expectedPurpose: 'RELEASE',
+    });
+    if (!consumed.ok) return consumed;
+
     const app = await tx.freeTierApplication.findUnique({
       where: { id: consumed.applicationId },
       select: { id: true, status: true, email: true, userId: true },
     });
     if (!app) return { ok: false as const, reason: 'not_found' as const };
     if (app.userId) return { ok: true as const, idempotent: true as const, userId: app.userId };
+
+    const existingUser = await tx.user.findUnique({
+      where: { email: app.email },
+      select: { id: true },
+    });
+    if (existingUser) {
+      await tx.freeTierApplication.updateMany({
+        where: { id: app.id, userId: null },
+        data: { userId: existingUser.id, status: 'ACCOUNT_CREATED' },
+      });
+      return { ok: false as const, reason: 'sign_in_required' as const };
+    }
+
     if (app.status !== 'INVITED') return { ok: false as const, reason: 'illegal_state' as const, status: app.status };
 
     assertTransition('INVITED', 'ACCOUNT_CREATED');

@@ -1,21 +1,5 @@
 import { normalizeEmail } from './service.server';
-
-const CONSUMER_EMAIL_DOMAINS = new Set([
-  'gmail.com',
-  'googlemail.com',
-  'yahoo.com',
-  'yahoo.co.uk',
-  'outlook.com',
-  'hotmail.com',
-  'live.com',
-  'icloud.com',
-  'me.com',
-  'mac.com',
-  'aol.com',
-  'proton.me',
-  'protonmail.com',
-  'msn.com',
-]);
+import { isConsumerEmailDomain } from './consumer-email-domains';
 
 export function emailDomain(email: string) {
   const at = normalizeEmail(email).lastIndexOf('@');
@@ -23,8 +7,20 @@ export function emailDomain(email: string) {
   return normalizeEmail(email).slice(at + 1);
 }
 
-export function isConsumerEmailDomain(domain: string) {
-  return CONSUMER_EMAIL_DOMAINS.has(domain.toLowerCase());
+/** Gmail-style mailbox identity for self-approval and plus-tag detection. */
+export function mailboxIdentity(email: string): string {
+  const normalized = normalizeEmail(email);
+  const at = normalized.lastIndexOf('@');
+  if (at < 0) return normalized;
+  let local = normalized.slice(0, at);
+  let domain = normalized.slice(at + 1);
+  const plus = local.indexOf('+');
+  if (plus >= 0) local = local.slice(0, plus);
+  if (domain === 'googlemail.com') domain = 'gmail.com';
+  if (domain === 'gmail.com') {
+    local = local.replace(/\./g, '');
+  }
+  return `${local}@${domain}`;
 }
 
 export type AdminEmailCheckResult =
@@ -37,12 +33,12 @@ export function evaluateAdminEmail(args: {
   adminEmail: string;
   schoolName?: string;
 }): AdminEmailCheckResult {
-  const teacher = normalizeEmail(args.teacherEmail);
-  const admin = normalizeEmail(args.adminEmail);
-  if (teacher === admin) return { ok: false, reason: 'same_as_teacher' };
+  const teacherMailbox = mailboxIdentity(args.teacherEmail);
+  const adminMailbox = mailboxIdentity(args.adminEmail);
+  if (teacherMailbox === adminMailbox) return { ok: false, reason: 'same_as_teacher' };
 
-  const adminDomain = emailDomain(admin);
-  const teacherDomain = emailDomain(teacher);
+  const adminDomain = emailDomain(args.adminEmail);
+  const teacherDomain = emailDomain(args.teacherEmail);
 
   if (isConsumerEmailDomain(adminDomain)) {
     return { ok: true, manualReview: true, reason: 'consumer_domain' };

@@ -16,6 +16,7 @@ describe('free-tier approval flow', () => {
   beforeEach(() => {
     process.env.FREE_TIER_LINK_HMAC_SECRET =
       secret || 'integration-test-free-tier-link-secret-key';
+    process.env.PRIMARY_APP_URL = 'https://yawp.test';
   });
   afterEach(() => {
     if (secret === undefined) delete process.env.FREE_TIER_LINK_HMAC_SECRET;
@@ -53,11 +54,15 @@ describe('free-tier approval flow', () => {
       adminName: 'Principal Pat',
       adminEmail: 'principal@school.edu',
       adminRole: 'Principal',
-      requestBaseUrl: 'https://yawp.test',
     });
     expect(submit.ok).toBe(true);
-    if (!submit.ok || !('approveToken' in submit)) throw new Error('missing approve token');
-    const approveToken = submit.approveToken;
+    const emailLog = await prisma.freeTierEmailLog.findFirst({
+      where: { applicationId: app.id, kind: 'admin_approval', success: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)?.approveUrl;
+    const approveToken = approveUrl ? new URL(approveUrl).searchParams.get('t') : null;
+    if (!approveToken) throw new Error('missing emailed approve token');
     const req = new Request('https://yawp.test/free/admin/approve', {
       headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.1' },
     });
@@ -66,7 +71,6 @@ describe('free-tier approval flow', () => {
       adminRole: 'Principal',
       authorized: true,
       request: req,
-      requestBaseUrl: 'https://yawp.test',
     });
     expect(first.ok).toBe(true);
     const second = await completeSchoolAdminApproval({
@@ -74,7 +78,6 @@ describe('free-tier approval flow', () => {
       adminRole: 'Principal',
       authorized: true,
       request: req,
-      requestBaseUrl: 'https://yawp.test',
     });
     expect(second.ok).toBe(true);
     expect('idempotent' in second && second.idempotent).toBe(true);

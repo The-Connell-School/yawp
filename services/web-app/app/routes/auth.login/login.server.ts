@@ -102,19 +102,13 @@ export async function loginAction({ request }: ActionFunctionArgs) {
             select: { id: true },
           })
         : null;
-      if (!seatMembership) {
-        const freeTierTeacher = await prisma.freeTierApplication.findFirst({
-          where: { userId: user.id },
-          select: { id: true },
-        });
-        if (!freeTierTeacher) {
-          return validationError(
-            { fieldErrors: { email: 'Invalid email or password' } },
-            data
-          );
-        }
-      } else {
+      if (seatMembership) {
         previewMembershipId = seatMembership.id;
+      } else {
+        return validationError(
+          { fieldErrors: { email: 'Invalid email or password' } },
+          data
+        );
       }
     }
 

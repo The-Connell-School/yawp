@@ -82,4 +82,10 @@ ALTER TABLE "FreeTierApplication"
   ADD COLUMN IF NOT EXISTS "teacherPersonalNote" TEXT,
   ADD COLUMN IF NOT EXISTS "adminRedirectCount" INTEGER NOT NULL DEFAULT 0;
 
+ALTER TABLE "FreeTierEmailLog"
+  ADD COLUMN IF NOT EXISTS "payload" JSONB;
+
+CREATE INDEX IF NOT EXISTS "FreeTierApplication_userId_idx" ON "FreeTierApplication"("userId");
+CREATE INDEX IF NOT EXISTS "FreeTierApplication_organizationId_idx" ON "FreeTierApplication"("organizationId");
+
 RESET lock_timeout;

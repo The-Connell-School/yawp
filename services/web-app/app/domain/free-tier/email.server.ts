@@ -1,11 +1,4 @@
 import { sendEmail } from '~/utils/email.server';
-function publicAppOrigin() {
-  return (
-    process.env.PRIMARY_APP_URL?.trim() ||
-    process.env.APP_URL?.trim() ||
-    'https://yawp.school'
-  );
-}
 import { prisma } from '~/utils/db.server';
 import {
   renderAdminApprovalEmailBody,
@@ -13,14 +6,10 @@ import {
   renderReleaseEmailBody,
 } from './email-copy.server';
 import { mintSignedLink, RELEASE_LINK_TTL_MS } from './signed-link.server';
+import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
+import { escapeHtml } from './html-escape.server';
 
-export interface ReleaseEmailPayload {
-  applicationId: string;
-  email: string;
-  name: string;
-  schoolName: string;
-  label?: string;
-}
+export type EmailSendResult = { ok: true } | { ok: false; error: string };
 
 async function logEmail(args: {
   applicationId: string;
@@ -28,6 +17,7 @@ async function logEmail(args: {
   toEmail: string;
   success: boolean;
   error?: string;
+  payload?: Record<string, string>;
 }) {
   try {
     await prisma.freeTierEmailLog.create({
@@ -37,6 +27,7 @@ async function logEmail(args: {
         toEmail: args.toEmail,
         success: args.success,
         error: args.error ?? null,
+        payload: args.payload ?? undefined,
       },
     });
   } catch {
@@ -44,73 +35,102 @@ async function logEmail(args: {
   }
 }
 
-export async function sendFreeTierReleaseEmail(payload: ReleaseEmailPayload): Promise<void> {
-  const base = publicAppOrigin();
-  let joinUrl = `${base}/free/join`;
+export interface ReleaseEmailPayload {
+  applicationId: string;
+  email: string;
+  name: string;
+  schoolName: string;
+  label?: string;
+}
+
+export async function sendFreeTierReleaseEmail(payload: ReleaseEmailPayload): Promise<EmailSendResult> {
+  const base = freeTierPublicAppOrigin();
   try {
     const minted = await mintSignedLink({
       applicationId: payload.applicationId,
       purpose: 'RELEASE',
       ttlMs: RELEASE_LINK_TTL_MS,
     });
-    joinUrl = `${base}/free/join?t=${encodeURIComponent(minted.token)}`;
+    const joinUrl = `${base}/free/join?t=${encodeURIComponent(minted.token)}`;
+    const text = renderReleaseEmailBody({ name: payload.name, joinUrl });
+    const html = text
+      .split('\n')
+      .map((line) => `<p>${escapeHtml(line)}</p>`)
+      .join('');
     await sendEmail({
       to: payload.email,
       subject: "You're in — start your YAWP classroom",
-      html: `<p>${renderReleaseEmailBody({ name: payload.name, joinUrl }).replace(/\n/g, '<br/>')}</p>`,
-      text: renderReleaseEmailBody({ name: payload.name, joinUrl }),
+      html,
+      text,
     });
     await logEmail({
       applicationId: payload.applicationId,
       kind: 'release',
       toEmail: payload.email,
       success: true,
+      payload: { joinUrl },
     });
+    return { ok: true };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     await logEmail({
       applicationId: payload.applicationId,
       kind: 'release',
       toEmail: payload.email,
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
     });
-    throw error;
+    return { ok: false, error: message };
   }
 }
 
 export async function sendFreeTierAdminApprovalEmail(args: {
   applicationId: string;
   to: string;
+  teacherEmail: string;
   teacherName: string;
   schoolName: string;
   personalNote?: string | null;
   approveUrl: string;
   notRightPersonUrl: string;
-}) {
+}): Promise<EmailSendResult> {
   const text = renderAdminApprovalEmailBody({
     teacherName: args.teacherName,
+    teacherEmail: args.teacherEmail,
     schoolName: args.schoolName,
     personalNote: args.personalNote,
     approveUrl: args.approveUrl,
     notRightPersonUrl: args.notRightPersonUrl,
   });
   try {
+    const html = text
+      .split('\n')
+      .map((line) => `<p>${escapeHtml(line)}</p>`)
+      .join('');
     await sendEmail({
       to: args.to,
       subject: `Approve YAWP for ${args.schoolName}`,
-      html: `<pre style="font-family: sans-serif; white-space: pre-wrap">${text}</pre>`,
+      html,
       text,
     });
-    await logEmail({ applicationId: args.applicationId, kind: 'admin_approval', toEmail: args.to, success: true });
+    await logEmail({
+      applicationId: args.applicationId,
+      kind: 'admin_approval',
+      toEmail: args.to,
+      success: true,
+      payload: { approveUrl: args.approveUrl, notRightPersonUrl: args.notRightPersonUrl },
+    });
+    return { ok: true };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     await logEmail({
       applicationId: args.applicationId,
       kind: 'admin_approval',
       toEmail: args.to,
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
     });
-    throw error;
+    return { ok: false, error: message };
   }
 }
 
@@ -120,17 +140,21 @@ export async function sendFreeTierCongratulationsEmail(args: {
   teacherName: string;
   adminName: string;
   signInUrl: string;
-}) {
+}): Promise<EmailSendResult> {
   const text = renderCongratulationsEmailBody({
     teacherName: args.teacherName,
     adminName: args.adminName,
     signInUrl: args.signInUrl,
   });
   try {
+    const html = text
+      .split('\n')
+      .map((line) => `<p>${escapeHtml(line)}</p>`)
+      .join('');
     await sendEmail({
       to: args.teacherEmail,
       subject: `${args.adminName} approved YAWP for your classroom`,
-      html: `<p>${text.replace(/\n/g, '<br/>')}</p>`,
+      html,
       text,
     });
     await logEmail({
@@ -139,31 +163,37 @@ export async function sendFreeTierCongratulationsEmail(args: {
       toEmail: args.teacherEmail,
       success: true,
     });
+    return { ok: true };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     await logEmail({
       applicationId: args.applicationId,
       kind: 'congratulations',
       toEmail: args.teacherEmail,
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
     });
-    throw error;
+    return { ok: false, error: message };
   }
 }
 
 export async function sendFreeTierAdminReminderEmail(args: {
   applicationId: string;
   to: string;
+  teacherEmail: string;
   teacherName: string;
   schoolName: string;
+  personalNote?: string | null;
   approveUrl: string;
   notRightPersonUrl: string;
 }) {
   return sendFreeTierAdminApprovalEmail({
     applicationId: args.applicationId,
     to: args.to,
+    teacherEmail: args.teacherEmail,
     teacherName: args.teacherName,
     schoolName: args.schoolName,
+    personalNote: args.personalNote,
     approveUrl: args.approveUrl,
     notRightPersonUrl: args.notRightPersonUrl,
   });

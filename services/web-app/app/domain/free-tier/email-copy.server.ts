@@ -1,13 +1,16 @@
 import { createHash } from 'node:crypto';
 
-export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-07-v1';
+export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-08-v2';
 
 export function adminApprovalEmailCopyVersionHash() {
   return createHash('sha256').update(ADMIN_APPROVAL_EMAIL_COPY_VERSION).digest('hex');
 }
 
+const APPROVAL_LINK_DAYS = 14;
+
 export function renderAdminApprovalEmailBody(args: {
   teacherName: string;
+  teacherEmail: string;
   schoolName: string;
   personalNote?: string | null;
   approveUrl: string;
@@ -16,7 +19,9 @@ export function renderAdminApprovalEmailBody(args: {
   const note = args.personalNote?.trim()
     ? `${args.personalNote.trim()}\n\n---\n\n`
     : '';
-  return `${note}${args.teacherName} at ${args.schoolName} would like to use YAWP in their classroom.
+  return `${note}Hello,
+
+${args.teacherName} (${args.teacherEmail}) at ${args.schoolName} would like to use YAWP in their classroom.
 
 YAWP is a classroom writing platform where students draft essays and receive AI-assisted feedback while teachers stay in control of assignments and grading.
 
@@ -26,7 +31,7 @@ Privacy: student writing is used to provide feedback in YAWP. It is not used to 
 
 Questions? Contact us at support@yawp.school.
 
-Approve YAWP for this school:
+Approve YAWP for this school (link expires in ${APPROVAL_LINK_DAYS} days):
 ${args.approveUrl}
 
 I'm not the right person to approve this:

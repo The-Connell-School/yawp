@@ -132,27 +132,24 @@ describe('auth.login', () => {
     expect(prisma.session.create).not.toHaveBeenCalled();
   });
 
-  test('allows free-tier teachers without a preview seat membership', async () => {
+  test('rejects isolated preview login without seat membership even for free-tier teachers', async () => {
     process.env.PREVIEW_ACCESS_GATE = 'on';
     process.env.PREVIEW_DATA_MODE = 'seed';
     prisma.orgMembership.findFirst.mockResolvedValue(null);
-    prisma.freeTierApplication.findFirst.mockResolvedValue({ id: 'app-1' });
     const form = new FormData();
     form.append('email', 'teacher@shipreview-high.edu');
     form.append('password', 'yawp-dev');
     form.append('redirectTo', '/app/free-tier/onboarding');
 
-    const response = (await action({
+    const response = await action({
       request: new Request('https://example.com/auth/login', {
         method: 'POST',
         body: form,
       }),
-    } as any)) as Response;
+    } as any);
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/app/free-tier/onboarding');
-    expect(prisma.session.create).toHaveBeenCalledTimes(1);
-    expect(setMembershipId).not.toHaveBeenCalled();
+    expect(response).not.toBeInstanceOf(Response);
+    expect(prisma.session.create).not.toHaveBeenCalled();
   });
 
   test('binds a successful seeded-preview login to the seat membership', async () => {

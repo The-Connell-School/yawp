@@ -83,20 +83,23 @@ export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const pathname = new URL(request.url).pathname;
-  if (pathname.startsWith('/app/free-tier')) {
-    const freeTierApplication = await prisma.freeTierApplication.findFirst({
-      where: { userId },
-      select: { id: true },
+  const freeTierApplication = await prisma.freeTierApplication.findFirst({
+    where: { userId },
+    select: { id: true },
+  });
+
+  if (freeTierApplication) {
+    const { enforceFreeTierTeacherGate } = await import('~/domain/free-tier/free-tier-gate.server');
+    const { retryFreeClassroomProvisioningForUser } = await import(
+      '~/domain/free-tier/provision-free-classroom.server'
+    );
+    await retryFreeClassroomProvisioningForUser(userId);
+    await enforceFreeTierTeacherGate({
+      userId,
+      pathname,
+      organizationPlan: 'FREE_CLASSROOM',
     });
-    if (freeTierApplication) {
-      const { enforceFreeTierTeacherGate } = await import(
-        '~/domain/free-tier/free-tier-gate.server'
-      );
-      await enforceFreeTierTeacherGate({
-        userId,
-        pathname,
-        organizationPlan: 'FREE_CLASSROOM',
-      });
+    if (pathname.startsWith('/app/free-tier')) {
       return data({
         schoolYearScope: {
           selected: ALL_SCHOOL_YEARS,
@@ -106,6 +109,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       });
     }
   }
+
   const profile = await requireMembership(request, userId);
   if (profile.role === 'TEACHER') {
     const { enforceFreeTierTeacherGate } = await import('~/domain/free-tier/free-tier-gate.server');

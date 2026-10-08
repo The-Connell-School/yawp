@@ -4,9 +4,9 @@ import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
-import { mintSignedLink } from '~/domain/free-tier/signed-link.server';
+import { mintSignedLink, FREE_TIER_LINK_TTL_MS } from '~/domain/free-tier/signed-link.server';
 import { sendFreeTierAdminReminderEmail } from '~/domain/free-tier/email.server';
-import { getDomainUrl } from '~/utils/misc';
+import { freeTierPublicAppOrigin } from '~/domain/free-tier/free-tier-public-url.server';
 import { adminApprovalEmailCopyVersionHash, renderAdminApprovalEmailBody } from '~/domain/free-tier/email-copy.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -16,6 +16,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     select: {
       status: true,
       schoolName: true,
+      email: true,
       adminApprovals: {
         where: { status: 'PENDING' },
         orderBy: { createdAt: 'desc' },
@@ -32,15 +33,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const intent = String((await request.formData()).get('intent'));
   const app = await prisma.freeTierApplication.findFirst({
-    where: { userId, status: { in: ['SENT', 'MANUAL_REVIEW'] } },
+    where: { userId, status: 'SENT' },
     select: { id: true, name: true, schoolName: true, email: true },
   });
-  if (!app || intent !== 'resend') return { ok: false as const };
-  const pending = await prisma.freeTierAdminApproval.findFirst({
-    where: { applicationId: app.id, status: 'PENDING' },
-    orderBy: { createdAt: 'desc' },
-  });
-  if (!pending) return { ok: false as const };
+  if (!app || intent !== 'resend') return { ok: false as const, reason: 'not_allowed' as const };
+
   const gate = await enforceUnauthByIpAndTarget({
     request,
     route: '/app/free-tier/pending:resend',
@@ -50,17 +47,57 @@ export async function action({ request }: ActionFunctionArgs) {
     perTargetPerHour: RATE_LIMITS.unauth.freeTierWaitlist.perEmailPerHour,
   });
   if (!gate.allowed) return { ok: false as const, rateLimited: true as const };
-  const approve = await mintSignedLink({ applicationId: app.id, purpose: 'ADMIN_APPROVE' });
-  const decline = await mintSignedLink({ applicationId: app.id, purpose: 'ADMIN_NOT_RIGHT_PERSON' });
-  const base = getDomainUrl(request);
-  await sendFreeTierAdminReminderEmail({
+
+  const emailLinks = await prisma.$transaction(async (tx) => {
+    const pending = await tx.freeTierAdminApproval.findFirst({
+      where: { applicationId: app.id, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, adminEmail: true, personalNote: true },
+    });
+    if (!pending) return null;
+
+    const approveMint = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'ADMIN_APPROVE',
+      ttlMs: FREE_TIER_LINK_TTL_MS,
+      tx,
+    });
+    const declineMint = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'ADMIN_NOT_RIGHT_PERSON',
+      ttlMs: FREE_TIER_LINK_TTL_MS,
+      tx,
+    });
+
+    await tx.freeTierAdminApproval.update({
+      where: { id: pending.id },
+      data: { signedLinkId: approveMint.linkId },
+    });
+
+    const base = freeTierPublicAppOrigin();
+    return {
+      to: pending.adminEmail,
+      personalNote: pending.personalNote,
+      approveUrl: `${base}/free/admin/approve?t=${encodeURIComponent(approveMint.token)}`,
+      notRightPersonUrl: `${base}/free/admin/not-right-person?t=${encodeURIComponent(declineMint.token)}`,
+    };
+  });
+
+  if (!emailLinks) return { ok: false as const, reason: 'not_found' as const };
+
+  const emailResult = await sendFreeTierAdminReminderEmail({
     applicationId: app.id,
-    to: pending.adminEmail,
+    to: emailLinks.to,
+    teacherEmail: app.email,
     teacherName: app.name,
     schoolName: app.schoolName,
-    approveUrl: `${base}/free/admin/approve?t=${encodeURIComponent(approve.token)}`,
-    notRightPersonUrl: `${base}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`,
+    personalNote: emailLinks.personalNote,
+    approveUrl: emailLinks.approveUrl,
+    notRightPersonUrl: emailLinks.notRightPersonUrl,
   });
+  if (!emailResult.ok) {
+    return { ok: false as const, reason: 'email_failed' as const, error: emailResult.error };
+  }
   return { ok: true as const };
 }
 
@@ -70,6 +107,7 @@ export default function FreeTierPendingRoute() {
   const preview = pending
     ? renderAdminApprovalEmailBody({
         teacherName: 'You',
+        teacherEmail: app?.email ?? 'teacher@school.edu',
         schoolName: app?.schoolName ?? 'your school',
         personalNote: pending.personalNote,
         approveUrl: '#',
@@ -85,19 +123,22 @@ export default function FreeTierPendingRoute() {
       </p>
       {app?.status === 'MANUAL_REVIEW' ? (
         <p className="text-sm border rounded-md p-3 bg-muted">
-          Our team is reviewing this request manually. We will email you at {app?.schoolName ? '' : 'your address'} when
-          it is ready.
+          Our team is reviewing this request manually. We will email you when it is ready.
         </p>
       ) : null}
-      <details className="text-sm">
-        <summary className="cursor-pointer font-medium">Email preview</summary>
-        <pre className="mt-2 whitespace-pre-wrap rounded-md border p-3 bg-muted">{preview}</pre>
+      <div className="rounded-md border p-3 bg-muted text-sm">
+        <p className="font-medium mb-2">Email preview</p>
+        <pre className="whitespace-pre-wrap text-xs">{preview}</pre>
         <p className="text-xs text-muted-foreground mt-1">Copy version {adminApprovalEmailCopyVersionHash().slice(0, 8)}</p>
-      </details>
-      <Form method="post">
-        <input type="hidden" name="intent" value="resend" />
-        <button type="submit" className="text-sm underline">Resend reminder</button>
-      </Form>
+      </div>
+      {app?.status === 'SENT' ? (
+        <Form method="post">
+          <input type="hidden" name="intent" value="resend" />
+          <button type="submit" className="yawp-entry-button yawp-entry-button-secondary text-sm">
+            Resend reminder
+          </button>
+        </Form>
+      ) : null}
     </main>
   );
 }

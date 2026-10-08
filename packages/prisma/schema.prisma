@@ -40,6 +40,9 @@ model FreeTierApplication {
   adminApprovals    FreeTierAdminApproval[]
   signedLinks       FreeTierSignedLink[]
   emailLogs         FreeTierEmailLog[]
+
+  @@index([userId])
+  @@index([organizationId])
 }
 
 enum FreeTierAdminApprovalStatus {
@@ -98,6 +101,7 @@ model FreeTierEmailLog {
   toEmail       String
   success       Boolean
   error         String?
+  payload       Json?
 }
 
 model AcquisitionToken {

@@ -313,7 +313,8 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
             aws_secretsmanager_secret.ai_usage_ip_hmac.arn,
             aws_secretsmanager_secret.internal_token.arn,
             aws_secretsmanager_secret.sentry_dsn.arn,
-            aws_secretsmanager_secret.resend_api_key.arn
+            aws_secretsmanager_secret.resend_api_key.arn,
+            aws_secretsmanager_secret.free_tier_link_hmac.arn
           ],
           module.internal_platform_integration.secret_arns,
           local.ua_billing_runtime_enabled ? [
@@ -425,6 +426,10 @@ resource "aws_secretsmanager_secret_version" "internal_token" {
   secret_string = var.internal_command_token
 }
 
+resource "aws_secretsmanager_secret" "free_tier_link_hmac" {
+  name = "${var.app_name}-${var.env}-free-tier-link-hmac-secret"
+}
+
 resource "aws_secretsmanager_secret" "resend_api_key" {
   name = "${var.app_name}-${var.env}-resend-api-key"
 }
@@ -499,6 +504,7 @@ resource "aws_apprunner_service" "web" {
           UA_PARTNER_HOSTNAME                       = var.ua_partner_hostname
           STRIPE_UA_2026_PRICE_ID                   = var.stripe_ua_2026_price_id
           YAWP_APP_ORIGIN                           = var.yawp_app_origin
+          PRIMARY_APP_URL                           = var.yawp_app_origin
         }, length(var.stripe_ua_existing_subscription_price_ids) > 0 ? {
           STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS = join(",", var.stripe_ua_existing_subscription_price_ids)
         } : {}, module.internal_platform_integration.variables)
@@ -513,6 +519,7 @@ resource "aws_apprunner_service" "web" {
           INTERNAL_COMMAND_TOKEN = aws_secretsmanager_secret.internal_token.arn
           DATABASE_URL = aws_secretsmanager_secret.db_url.arn
           RESEND_API_KEY = aws_secretsmanager_secret.resend_api_key.arn
+          FREE_TIER_LINK_HMAC_SECRET = aws_secretsmanager_secret.free_tier_link_hmac.arn
           SENTRY_DSN = aws_secretsmanager_secret.sentry_dsn.arn
         }, local.ua_billing_runtime_enabled ? {
           STRIPE_SECRET_KEY     = aws_secretsmanager_secret.stripe_secret_key[0].arn

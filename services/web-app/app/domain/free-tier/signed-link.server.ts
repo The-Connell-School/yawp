@@ -111,43 +111,70 @@ export type ConsumeLinkResult =
   | { ok: true; applicationId: string; purpose: FreeTierSignedLinkPurpose; linkId: string }
   | { ok: false; reason: 'invalid' | 'expired' | 'used' | 'purpose_mismatch' };
 
-export async function consumeSignedLink(args: {
-  token: string;
-  expectedPurpose: FreeTierSignedLinkPurpose;
-}): Promise<ConsumeLinkResult> {
-  const segments = args.token.split('.');
+function parseSignedLinkToken(
+  token: string,
+  expectedPurpose: FreeTierSignedLinkPurpose
+):
+  | { ok: true; payload: SignedLinkPayload; tokenHash: string }
+  | { ok: false; reason: ConsumeLinkResult['reason'] } {
+  const segments = token.split('.');
   if (segments.length !== 3) return { ok: false, reason: 'invalid' };
   const signedPart = `${segments[0]}.${segments[1]}`;
   const opaque = segments[2]!;
   const decoded = decodeToken(signedPart);
   if (!decoded) return { ok: false, reason: 'invalid' };
   const { payload } = decoded;
-  if (payload.purpose !== args.expectedPurpose) return { ok: false, reason: 'purpose_mismatch' };
+  if (payload.purpose !== expectedPurpose) return { ok: false, reason: 'purpose_mismatch' };
   if (payload.exp < Date.now()) return { ok: false, reason: 'expired' };
+  return { ok: true, payload, tokenHash: hashToken(opaque) };
+}
 
-  const tokenHash = hashToken(opaque);
-  return prisma.$transaction(async (tx) => {
-    const row = await tx.freeTierSignedLink.findUnique({
-      where: { id: payload.linkId },
-      select: { id: true, applicationId: true, purpose: true, tokenHash: true, expiresAt: true, usedAt: true },
-    });
-    if (!row || row.applicationId !== payload.applicationId || row.purpose !== args.expectedPurpose) {
-      return { ok: false as const, reason: 'invalid' as const };
-    }
-    if (row.tokenHash !== tokenHash) return { ok: false as const, reason: 'invalid' as const };
-    if (row.expiresAt.getTime() < Date.now()) return { ok: false as const, reason: 'expired' as const };
-    if (row.usedAt) return { ok: false as const, reason: 'used' as const };
-    await tx.freeTierSignedLink.update({
-      where: { id: row.id },
-      data: { usedAt: new Date() },
-    });
-    return {
-      ok: true as const,
-      applicationId: row.applicationId,
-      purpose: row.purpose,
-      linkId: row.id,
-    };
+/** Atomically mark a link used inside an open transaction (rolls back with caller). */
+export async function claimSignedLinkInTransaction(
+  tx: Prisma.TransactionClient,
+  args: { token: string; expectedPurpose: FreeTierSignedLinkPurpose }
+): Promise<ConsumeLinkResult> {
+  const parsed = parseSignedLinkToken(args.token, args.expectedPurpose);
+  if (!parsed.ok) return parsed;
+  const { payload, tokenHash } = parsed;
+  const now = new Date();
+  const claimed = await tx.freeTierSignedLink.updateMany({
+    where: {
+      id: payload.linkId,
+      applicationId: payload.applicationId,
+      purpose: args.expectedPurpose,
+      tokenHash,
+      usedAt: null,
+      expiresAt: { gt: now },
+    },
+    data: { usedAt: now },
   });
+  if (claimed.count === 1) {
+    return {
+      ok: true,
+      applicationId: payload.applicationId,
+      purpose: args.expectedPurpose,
+      linkId: payload.linkId,
+    };
+  }
+  const row = await tx.freeTierSignedLink.findUnique({
+    where: { id: payload.linkId },
+    select: { usedAt: true, expiresAt: true, tokenHash: true, applicationId: true, purpose: true },
+  });
+  if (!row || row.applicationId !== payload.applicationId || row.purpose !== args.expectedPurpose) {
+    return { ok: false, reason: 'invalid' };
+  }
+  if (row.tokenHash !== tokenHash) return { ok: false, reason: 'invalid' };
+  if (row.expiresAt.getTime() < Date.now()) return { ok: false, reason: 'expired' };
+  if (row.usedAt) return { ok: false, reason: 'used' };
+  return { ok: false, reason: 'invalid' };
+}
+
+export async function consumeSignedLink(args: {
+  token: string;
+  expectedPurpose: FreeTierSignedLinkPurpose;
+}): Promise<ConsumeLinkResult> {
+  return prisma.$transaction(async (tx) => claimSignedLinkInTransaction(tx, args));
 }
 
 /** Validate without consuming (for GET loaders). */

@@ -8,6 +8,7 @@ test('release email snapshot', () => {
 test('admin approval email includes note and links', () => {
   const body = renderAdminApprovalEmailBody({
     teacherName: 'Ada',
+    teacherEmail: 'ada@example.edu',
     schoolName: 'Example HS',
     personalNote: 'Hi!',
     approveUrl: 'https://yawp.school/a',
