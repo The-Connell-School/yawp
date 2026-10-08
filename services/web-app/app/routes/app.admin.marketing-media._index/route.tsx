@@ -63,9 +63,11 @@ import {
   parseStoryboard,
   plannedShotCount,
   safeParseStoryboard,
+  validateGuideStoryboard,
   type MarketingJobKind,
   type MarketingOutput,
 } from '../../../../../packages/marketing-media';
+import { KindGlyph, marketingKindLabel } from '~/components/marketing/kind';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Marketing Studio' };
@@ -289,6 +291,12 @@ export async function action({ request }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
+    if (kind === 'GUIDE') {
+      const problems = validateGuideStoryboard(result.data);
+      if (problems.length > 0) {
+        return dataResponse({ error: problems.join('; ') }, { status: 400 });
+      }
+    }
 
     const job = await prisma.marketingMediaJob.create({
       data: {
@@ -381,13 +389,36 @@ function formatWhen(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-function KindGlyph({ kind, className }: { kind: string; className?: string }) {
-  return kind === 'CLIP' ? (
-    <Film className={className} aria-hidden />
-  ) : (
-    <Camera className={className} aria-hidden />
-  );
-}
+/**
+ * The deliverables, best marketing material first. A how-to guide is what a
+ * school forwards to a department head; stills and clips are its parts.
+ */
+const DELIVERABLES: {
+  kind: MarketingJobKind;
+  option: string;
+  title: string;
+  detail: string;
+}[] = [
+  {
+    kind: 'GUIDE',
+    option: 'How-to guide (shareable page)',
+    title: 'How-to guide',
+    detail:
+      'A "See how it works" page: headline, numbered steps with looping clips, and what it will and won’t do.',
+  },
+  {
+    kind: 'CLIP',
+    option: 'Feature clip (5–15s, silent)',
+    title: 'Feature clip',
+    detail: '5–15 seconds, silent, caption overlays.',
+  },
+  {
+    kind: 'STILLS',
+    option: 'Screenshots',
+    title: 'Screenshots',
+    detail: 'A set of framed stills, one per scene.',
+  },
+];
 
 /**
  * Open / Delete for one row of the render list.
@@ -478,7 +509,7 @@ export default function Route() {
   const navigation = useNavigation();
   const revalidator = useRevalidator();
   const [showStoryboard, setShowStoryboard] = useState(false);
-  const [kind, setKind] = useState<'STILLS' | 'CLIP'>('STILLS');
+  const [kind, setKind] = useState<MarketingJobKind>('GUIDE');
   const busy = navigation.state === 'submitting';
 
   // Renders finish in a worker, not in this tab. While anything is generating,
@@ -530,8 +561,9 @@ export default function Route() {
             </h1>
             <p className="mt-2 text-sm text-slate-300">
               Describe a feature or a course. The studio writes a storyboard,
-              films it against the demo environment, and hands back stills or a
-              short silent clip — ready for a deck, a landing page, or a feed.
+              films it against the demo environment, and hands back a how-to
+              guide, a short silent clip, or stills, ready for a district, a
+              deck, a landing page, or a feed.
             </p>
             <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-300">
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
@@ -602,61 +634,44 @@ export default function Route() {
                   name="kind"
                   value={kind}
                   onChange={(event) =>
-                    setKind(event.target.value as 'STILLS' | 'CLIP')
+                    setKind(event.target.value as MarketingJobKind)
                   }
                   className="sr-only"
                   aria-label="Deliverable"
                 >
-                  <option value="STILLS">Screenshots</option>
-                  <option value="CLIP">Feature clip (5–15s, silent)</option>
+                  {DELIVERABLES.map((deliverable) => (
+                    <option key={deliverable.kind} value={deliverable.kind}>
+                      {deliverable.option}
+                    </option>
+                  ))}
                 </select>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    aria-pressed={kind === 'STILLS'}
-                    onClick={() => setKind('STILLS')}
-                    className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
-                      kind === 'STILLS'
-                        ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/40'
-                        : 'hover:bg-muted/60'
-                    }`}
-                  >
-                    <Camera
-                      className="mt-0.5 h-5 w-5 shrink-0 text-indigo-500"
-                      aria-hidden
-                    />
-                    <span>
-                      <span className="block text-sm font-medium">
-                        Screenshots
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {DELIVERABLES.map((deliverable) => (
+                    <button
+                      key={deliverable.kind}
+                      type="button"
+                      aria-pressed={kind === deliverable.kind}
+                      onClick={() => setKind(deliverable.kind)}
+                      className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
+                        kind === deliverable.kind
+                          ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/40'
+                          : 'hover:bg-muted/60'
+                      }`}
+                    >
+                      <KindGlyph
+                        kind={deliverable.kind}
+                        className="mt-0.5 h-5 w-5 shrink-0 text-indigo-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium">
+                          {deliverable.title}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {deliverable.detail}
+                        </span>
                       </span>
-                      <span className="block text-xs text-muted-foreground">
-                        A set of framed stills, one per scene.
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={kind === 'CLIP'}
-                    onClick={() => setKind('CLIP')}
-                    className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
-                      kind === 'CLIP'
-                        ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/40'
-                        : 'hover:bg-muted/60'
-                    }`}
-                  >
-                    <Film
-                      className="mt-0.5 h-5 w-5 shrink-0 text-indigo-500"
-                      aria-hidden
-                    />
-                    <span>
-                      <span className="block text-sm font-medium">
-                        Feature clip
-                      </span>
-                      <span className="block text-xs text-muted-foreground">
-                        5–15 seconds, silent, caption overlays.
-                      </span>
-                    </span>
-                  </button>
+                    </button>
+                  ))}
                 </div>
               </fieldset>
 
@@ -798,7 +813,7 @@ export default function Route() {
                     {entry.title}
                   </span>
                   <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                    {entry.kind === 'CLIP' ? 'Clip' : 'Stills'}
+                    {marketingKindLabel(entry.kind)}
                   </span>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -891,7 +906,7 @@ export default function Route() {
                           kind={job.kind}
                           className="h-3.5 w-3.5 text-muted-foreground"
                         />
-                        {job.kind === 'CLIP' ? 'Clip' : 'Stills'}
+                        {marketingKindLabel(job.kind)}
                       </span>
                     </TableCell>
                     <TableCell>

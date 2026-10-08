@@ -175,6 +175,42 @@ describe('marketing media job page', () => {
     expect(getSignedGetUrl).not.toHaveBeenCalled();
   });
 
+  // The guide page is the deliverable of a GUIDE job; the stills and loops it
+  // was built from are its parts. The page shows it first, apart from them.
+  test('lifts the guide page out of the media grid', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({
+        kind: 'GUIDE',
+        status: 'SUCCEEDED',
+        outputs: [
+          {
+            kind: 'IMAGE',
+            key: 'marketing-media/job-1/01-hero.png',
+            contentType: 'image/png',
+            bytes: 1234,
+            label: 'hero',
+          },
+          {
+            kind: 'DOCUMENT',
+            key: 'marketing-media/job-1/guide.html',
+            contentType: 'text/html; charset=utf-8',
+            bytes: 4321,
+            label: 'See every class at a glance.',
+          },
+        ],
+      })
+    );
+
+    const result = await loader(args(new Request('http://localhost/x')));
+
+    expect(result.data.guideDocument?.url).toBe(
+      'https://signed/marketing-media/job-1/guide.html'
+    );
+    expect(result.data.outputs.map((output: { kind: string }) => output.kind)).toEqual([
+      'IMAGE',
+    ]);
+  });
+
   test('reports the render estimate from the stored storyboard', async () => {
     prisma.marketingMediaJob.findUnique.mockResolvedValue(job());
 
@@ -439,6 +475,27 @@ describe('marketing media job page', () => {
     expect(
       response instanceof Response && response.headers.get('location')
     ).toBe('/app/admin/marketing-media/job-2');
+  });
+
+  test('revises a guide as a guide', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({ status: 'SUCCEEDED', kind: 'GUIDE' })
+    );
+    prisma.marketingMediaJob.create.mockResolvedValue({ id: 'job-2' });
+    reviseStoryboard.mockResolvedValue({
+      storyboard: STORYBOARD,
+      model: 'claude-sonnet-4-6',
+      raw: '{}',
+    });
+
+    await action(
+      args(request({ intent: 'refine', feedback: 'Shorter headline.' }))
+    );
+
+    expect(prisma.marketingMediaJob.create.mock.calls[0][0].data.kind).toBe(
+      'GUIDE'
+    );
+    expect(reviseStoryboard.mock.calls[0][0].kind).toBe('GUIDE');
   });
 
   // Without the request stored beside the result there is no way to judge a

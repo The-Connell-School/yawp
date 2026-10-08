@@ -72,6 +72,32 @@ describe('marketing media file route', () => {
     expect(await response.text()).toBe('png bytes');
   });
 
+  // A guide is generated HTML served from the app's own origin. It needs no
+  // script and nothing from the network, so it gets neither.
+  test('serves a guide page sandboxed, with no scripts or network', async () => {
+    const stored = path.join(mediaDir, 'marketing-media/job-1');
+    fs.writeFileSync(path.join(stored, 'guide.html'), '<!doctype html>');
+    prisma.marketingMediaJob.findUnique.mockResolvedValue({
+      outputs: [
+        {
+          kind: 'DOCUMENT',
+          key: 'marketing-media/job-1/guide.html',
+          contentType: 'text/html; charset=utf-8',
+          bytes: 15,
+          label: 'Guide',
+        },
+      ],
+    });
+
+    const response = (await loader(args('guide.html'))) as Response;
+
+    const csp = response.headers.get('content-security-policy') ?? '';
+    expect(csp).toContain('sandbox');
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).not.toContain('allow-scripts');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+
   test('404s for a name that is not among the job outputs', async () => {
     expect(loader(args('secrets.env'))).rejects.toBeInstanceOf(Response);
   });

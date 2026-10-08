@@ -189,6 +189,54 @@ describe('marketing media job creation', () => {
     expect(prisma.marketingMediaJob.create).not.toHaveBeenCalled();
   });
 
+  // A pasted guide is held to the same shape a generated one is: a guide
+  // with no "won't" list is not a guide a district can approve from.
+  test('rejects a pasted guide that is missing the guide shape', async () => {
+    const response = await runAction({
+      brief: 'A how-to guide for the teacher dashboard.',
+      kind: 'GUIDE',
+      storyboardJson: JSON.stringify(STORYBOARD),
+    });
+
+    expect(responseStatus(response)).toBe(400);
+    expect(String(readData(response).error)).toContain('guide copy');
+    expect(prisma.marketingMediaJob.create).not.toHaveBeenCalled();
+  });
+
+  test('queues a pasted guide in the documented shape', async () => {
+    const guide = {
+      ...STORYBOARD,
+      guide: {
+        headline: 'See every class at a glance.',
+        lede: 'The dashboard shows each class and what needs you next.',
+        will: ['Show your classes.'],
+        wont: ['Show a student another student’s work.'],
+        footerNote: 'Screens use demo classes.',
+      },
+      scenes: [
+        { id: 'hero', goto: '/app', waitFor: 'main', guide: { section: 'hero' } },
+        {
+          id: 'classes',
+          goto: '/app/my-classes',
+          guide: { section: 'step', heading: 'Open a class', body: 'Pick one.' },
+        },
+      ],
+    };
+
+    const response = await runAction({
+      brief: 'A how-to guide for the teacher dashboard.',
+      kind: 'GUIDE',
+      storyboardJson: JSON.stringify(guide),
+    });
+
+    expect(responseStatus(response)).toBe(302);
+    const created = prisma.marketingMediaJob.create.mock.calls[0][0].data;
+    expect(created.kind).toBe('GUIDE');
+    expect(created.storyboard.guide.headline).toBe(
+      'See every class at a glance.'
+    );
+  });
+
   test('rejects pasted json that is not json', async () => {
     const response = await runAction({
       brief: 'Show the teacher grading loop end to end.',

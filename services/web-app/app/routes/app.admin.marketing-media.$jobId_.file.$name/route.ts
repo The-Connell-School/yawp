@@ -9,6 +9,9 @@ import {
 } from '~/utils/marketing-studio.server';
 import { type MarketingOutput } from '../../../../../packages/marketing-media';
 
+const GUIDE_DOCUMENT_CSP =
+  "sandbox; default-src 'none'; img-src data:; media-src data:; style-src 'unsafe-inline'";
+
 /**
  * Serves disk-stored render outputs (environments without S3, i.e. previews).
  *
@@ -47,11 +50,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  return new Response(new Uint8Array(body), {
-    headers: {
-      'content-type': output.contentType,
-      'content-length': String(body.byteLength),
-      'cache-control': 'private, max-age=60',
-    },
-  });
+  const headers: Record<string, string> = {
+    'content-type': output.contentType,
+    'content-length': String(body.byteLength),
+    'cache-control': 'private, max-age=60',
+    'x-content-type-options': 'nosniff',
+  };
+  // A guide page is generated HTML on the app's own origin. It inlines its
+  // media and needs no script, so it runs sandboxed with nothing else allowed.
+  if (output.contentType.startsWith('text/html')) {
+    headers['content-security-policy'] = GUIDE_DOCUMENT_CSP;
+  }
+
+  return new Response(new Uint8Array(body), { headers });
 }

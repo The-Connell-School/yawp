@@ -12,10 +12,10 @@ import {
 import { useEffect, type ReactNode } from 'react';
 import {
   ArrowLeft,
-  Camera,
   Check,
   Clapperboard,
   Download,
+  ExternalLink,
   Film,
   Images,
   Monitor,
@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { JobStatusBadge } from '~/components/marketing/job-status-badge';
+import { KindGlyph } from '~/components/marketing/kind';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { requireAdmin, requireMutableRequest } from '~/utils/auth.server';
@@ -48,6 +49,7 @@ import {
   diffStoryboards,
   estimateRenderSeconds,
   safeParseStoryboard,
+  type MarketingJobKind,
   type MarketingJobStatus,
   type MarketingOutput,
   type StoryboardScene,
@@ -173,7 +175,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         createdAt: revision.createdAt.toISOString(),
       })),
     },
-    outputs: signedOutputs,
+    // A guide job's page is its deliverable; the stills and loops it inlines
+    // stay in the grid as parts.
+    guideDocument:
+      signedOutputs.find((output) => output.kind === 'DOCUMENT') ?? null,
+    outputs: signedOutputs.filter((output) => output.kind !== 'DOCUMENT'),
     // Null on a first take — there is nothing to have changed from. An empty
     // array is a different statement: this revision moved nothing at all.
     changes: job.parent
@@ -272,7 +278,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     try {
       const revised = await reviseStoryboard({
         brief: job.brief,
-        kind: job.kind as 'STILLS' | 'CLIP',
+        kind: job.kind as MarketingJobKind,
         previousStoryboard: job.storyboard,
         feedback,
         audience: job.audience,
@@ -479,6 +485,7 @@ function summarizeSteps(scene: StoryboardScene): string | null {
 export default function Route() {
   const {
     job,
+    guideDocument,
     outputs,
     changes,
     storyboard,
@@ -537,12 +544,12 @@ export default function Route() {
               </Link>
             ) : null}
             <span className="inline-flex items-center gap-1">
-              {job.kind === 'CLIP' ? (
-                <Film className="h-3.5 w-3.5" aria-hidden />
-              ) : (
-                <Camera className="h-3.5 w-3.5" aria-hidden />
-              )}
-              {job.kind === 'CLIP' ? 'Silent clip' : 'Screenshots'}
+              <KindGlyph kind={job.kind} className="h-3.5 w-3.5" />
+              {job.kind === 'GUIDE'
+                ? 'How-to guide'
+                : job.kind === 'CLIP'
+                  ? 'Silent clip'
+                  : 'Screenshots'}
             </span>
             {estimatedSeconds ? (
               <span className="inline-flex items-center gap-1">
@@ -722,6 +729,63 @@ export default function Route() {
         </Card>
       ) : null}
 
+      {/* ——— The guide: a GUIDE job's deliverable, shown as readers see it ——— */}
+      {guideDocument ? (
+        <Card data-testid="marketing-guide-document">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
+            <CardTitle className="flex items-center gap-2">
+              <KindGlyph kind="GUIDE" className="h-4 w-4 text-indigo-500" />
+              How-to guide
+            </CardTitle>
+            <div className="flex items-center gap-3 text-sm">
+              <a
+                className="inline-flex items-center gap-1 font-medium underline"
+                href={guideDocument.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                Open full page
+              </a>
+              <a
+                className="inline-flex items-center gap-1 font-medium underline"
+                href={guideDocument.url}
+                download
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden />
+                Download ({formatBytes(guideDocument.bytes)})
+              </a>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {/* Sandboxed: the page is generated and needs no script. */}
+            <iframe
+              title={guideDocument.label}
+              src={guideDocument.url}
+              sandbox=""
+              className="h-[720px] w-full rounded-lg border bg-background"
+            />
+            <div className="rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              <p className="font-medium">Before you share it</p>
+              <ul className="mt-1 list-disc pl-5">
+                <li>
+                  Check every “What it won’t do” line is true in the code. If
+                  one is not, refine it out rather than soften it.
+                </li>
+                <li>
+                  The footer should say the media uses demo classes, and that
+                  any AI replies shown were scripted, if they were.
+                </li>
+                <li>
+                  One file, nothing to host: attach it to an email or a
+                  proposal, or print it to PDF.
+                </li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* ——— The screening room: what this take produced ——— */}
       <Card>
         <CardHeader>
@@ -846,7 +910,9 @@ export default function Route() {
                 rows={3}
                 className="w-full rounded-md border bg-background p-2 text-sm"
                 placeholder={
-                  job.kind === 'CLIP'
+                  job.kind === 'GUIDE'
+                    ? 'e.g. Lead the won’t list with student data, and make step two show the rubric instead of the list.'
+                    : job.kind === 'CLIP'
                     ? 'e.g. I can barely see the prompt library — scroll down to it and hold there for a couple of seconds.'
                     : 'e.g. The second screenshot should show the class detail instead of the list.'
                 }
