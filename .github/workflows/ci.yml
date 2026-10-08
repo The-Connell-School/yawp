@@ -321,7 +321,9 @@ jobs:
             app/utils/lesson-planner/lesson-planner-admission.server.test.ts \
             ../../packages/prisma/scripts/bootstrap-exit-ticket-assignment-type.test.ts \
             ../../packages/prisma/scripts/seed-preview-planner-qa.test.ts \
-            ../../packages/prisma/scripts/exit-ticket-migration-image.test.ts
+            ../../packages/prisma/scripts/exit-ticket-migration-image.test.ts \
+            ../../packages/prisma/scripts/preview-seats.test.ts \
+            app/domain/lesson-planner/lesson-seed.test.ts
           do
             bun test "$f"
           done

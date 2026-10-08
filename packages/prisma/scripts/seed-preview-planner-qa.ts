@@ -3,13 +3,12 @@
  * Preview-only QA fixtures for Lesson Planner ship review. Never run on production
  * or the demo environment. Invoked from preview seat bootstrap on PR previews only.
  */
-import type { Prisma } from '../generated/prisma';
+import type { Prisma, PrismaClient } from '../generated/prisma';
 import {
   composeExitTicketPrompt,
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   type ExitTicketConfig,
 } from '../../../services/web-app/app/domain/assignment-types/exit-ticket';
-import { createPrismaClient } from './local-dev/connection';
 import { isLocalDatabaseUrl } from './local-dev/database-url';
 import {
   PREVIEW_PLANNER_QA_IDS,
@@ -70,21 +69,8 @@ export function assertPreviewPlannerQaTarget(
   }
 }
 
-export async function resetPreviewPlannerQaExitTicketSubmission(
-  prisma: ReturnType<typeof createPrismaClient>
-) {
-  if (isDemoPlannerQaEnvironment()) {
-    throw new Error('preview planner QA reset refused on demo database');
-  }
-  assertPreviewPlannerQaTarget();
-  await prisma.submission.update({
-    where: { id: PREVIEW_PLANNER_QA_IDS.exitTicketSubmissionId },
-    data: { releasedAt: null },
-  });
-}
-
 export async function seedPreviewPlannerQa(
-  prisma: ReturnType<typeof createPrismaClient>,
+  prisma: PrismaClient,
   options: { organizationId?: string } = {}
 ) {
   if (isDemoPlannerQaEnvironment()) {
