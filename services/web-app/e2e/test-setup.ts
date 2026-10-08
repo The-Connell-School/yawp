@@ -38,8 +38,7 @@ export const test = base.extend<TestFixtures>({
   },
   signIn: async ({ page, e2eContext }, use) => {
     const signInFn = async (email: string, password: string) => {
-      await page.goto('/auth/login');
-      await page.waitForLoadState('networkidle');
+      await page.goto('/auth/login', { waitUntil: 'domcontentloaded' });
       const emailInput = page.locator('input[type="email"]');
       const passwordInput = page.locator('input[type="password"]');
       const submitButton = page.getByRole('button', { name: /log in/i });
