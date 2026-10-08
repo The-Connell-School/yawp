@@ -9,6 +9,7 @@ import {
 } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { CaretLeftIcon } from '~/components/icons';
+import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import type {
@@ -215,41 +216,50 @@ export default function ClassSummaryRoute() {
           {title}
         </h2>
 
-        {parentData.classInsightsEnabled === true && canReadAcrossSections ? (
-          <div
-            className="inline-flex rounded-lg border bg-muted/40 p-0.5"
-            role="group"
-            aria-label="Sections included in this summary"
-            data-testid="class-summary-scope-toggle"
-          >
-            <Link
-              to={buildToggleHref(false)}
-              replace
-              aria-current={showingAllSections ? undefined : 'true'}
-              data-testid="class-summary-scope-this-class"
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                showingAllSections
-                  ? 'text-muted-foreground hover:text-foreground'
-                  : 'bg-background text-foreground shadow-sm'
-              }`}
+        <div className="flex flex-wrap items-center gap-2">
+          {parentData.classInsightsEnabled === true ? (
+            <SeeHowItWorksLink
+              to={`/app/class-summary/how-it-works?${new URLSearchParams({
+                from: `/app/my-classes/${classId}/summary/${assignmentId}`,
+              }).toString()}`}
+            />
+          ) : null}
+          {parentData.classInsightsEnabled === true && canReadAcrossSections ? (
+            <div
+              className="inline-flex rounded-lg border bg-muted/40 p-0.5"
+              role="group"
+              aria-label="Sections included in this summary"
+              data-testid="class-summary-scope-toggle"
             >
-              This class
-            </Link>
-            <Link
-              to={buildToggleHref(true)}
-              replace
-              aria-current={showingAllSections ? 'true' : undefined}
-              data-testid="class-summary-scope-all-sections"
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                showingAllSections
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              All {sections.length} sections
-            </Link>
-          </div>
-        ) : null}
+              <Link
+                to={buildToggleHref(false)}
+                replace
+                aria-current={showingAllSections ? undefined : 'true'}
+                data-testid="class-summary-scope-this-class"
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  showingAllSections
+                    ? 'text-muted-foreground hover:text-foreground'
+                    : 'bg-background text-foreground shadow-sm'
+                }`}
+              >
+                This class
+              </Link>
+              <Link
+                to={buildToggleHref(true)}
+                replace
+                aria-current={showingAllSections ? 'true' : undefined}
+                data-testid="class-summary-scope-all-sections"
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  showingAllSections
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                All {sections.length} sections
+              </Link>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {parentData.classInsightsEnabled === true ? (
