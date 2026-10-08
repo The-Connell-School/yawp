@@ -803,12 +803,23 @@ remove_legacy_project_postgres() {
 refresh_web_container_if_needed() {
   "${compose[@]}" up -d --force-recreate web
   start_blackboard_lti_mock_if_present
+  start_marketing_renderer_if_present
   remove_legacy_project_postgres
 }
 
 start_blackboard_lti_mock_if_present() {
   if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$PREVIEW_DIR/docker-compose.yml"; then
     "${compose[@]}" up -d --force-recreate blackboard-lti-mock
+  fi
+}
+
+# The compose render emits this service only for a seeded fast preview whose
+# source carries the marketing studio, so its presence in the file is the whole
+# eligibility check. Without this, the studio's jobs sit in QUEUED forever with
+# nothing attached to film them — the container is defined and never started.
+start_marketing_renderer_if_present() {
+  if grep -qE '^[[:space:]]*renderer:' "$PREVIEW_DIR/docker-compose.yml"; then
+    "${compose[@]}" up -d --force-recreate renderer
   fi
 }
 

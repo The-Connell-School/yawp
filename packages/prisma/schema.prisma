@@ -1675,6 +1675,7 @@ model User {
   memberships        OrgMembership[]
   isAdmin            Boolean         @default(false)
   isSuperAdmin       Boolean         @default(false)
+  marketingMediaJobs MarketingMediaJob[] @relation("MarketingMediaJobAuthor")
 }
 
 model Invitation {
@@ -2079,4 +2080,56 @@ model InternalAssignmentRubricPinBackfill {
   selectedRevisionId String?
   pinnedAt           DateTime @default(now()) @db.Timestamptz(6)
   reason             String?
+}
+
+/// A request to render marketing media from a plain-language brief.
+///
+/// The admin writes a brief, an LLM turns it into a storyboard, and the
+/// marketing renderer films that storyboard against a demo environment. The row
+/// carries the whole lifecycle so a failed render explains itself without
+/// digging through worker logs.
+model MarketingMediaJob {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  createdById  String
+  createdBy    User      @relation("MarketingMediaJobAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  /// STILLS, CLIP, or GUIDE. Narrated clips are not accepted yet.
+  kind         String
+  /// GENERATING, QUEUED, RENDERING, SUCCEEDED, FAILED, or CANCELLED.
+  status       String
+  brief        String
+  audience     String?
+  /// FEATURE, ASSIGNMENT_TYPE, or TEACHER_TRAINING.
+  subjectType  String    @default("FEATURE")
+  subjectId    String?
+  subjectLabel String?
+  /// Validated storyboard the renderer executes. Null until generation succeeds.
+  storyboard   Json?
+  /// LLM that wrote the storyboard, for auditing a bad take.
+  model        String?
+  /// Demo environment the render was filmed against. Never a production URL.
+  targetUrl    String?
+  /// Array of { kind, key, contentType, bytes, label, ... } S3 outputs.
+  outputs      Json?
+  error        String?
+  attempts     Int       @default(0)
+  lockedAt     DateTime? @db.Timestamptz(6)
+  lockedBy     String?
+  startedAt    DateTime? @db.Timestamptz(6)
+  finishedAt   DateTime? @db.Timestamptz(6)
+  /// Set when this job was written by revising another render's storyboard
+  /// from operator feedback. Deleting the parent keeps the revision.
+  parentJobId  String?
+  /// What the operator asked to change about the parent take. Kept so the job
+  /// page can show the request next to what the revision actually changed —
+  /// without it there is no way to tell a revision that ignored the notes from
+  /// one that followed them.
+  revisionFeedback String?
+  parent       MarketingMediaJob?  @relation("MarketingMediaJobRevisions", fields: [parentJobId], references: [id], onDelete: SetNull)
+  revisions    MarketingMediaJob[] @relation("MarketingMediaJobRevisions")
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([createdById])
+  @@index([parentJobId])
 }
