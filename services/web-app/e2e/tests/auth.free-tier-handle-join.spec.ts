@@ -9,6 +9,7 @@ test.describe('Free-tier handle student', () => {
     page,
     browser,
     helpers,
+    e2eContext: _e2eContext,
   }) => {
     const prisma = createE2EPrismaClient();
     const handle = `e2ehandle${Date.now()}`.slice(0, 20);
