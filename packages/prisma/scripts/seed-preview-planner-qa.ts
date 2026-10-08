@@ -64,15 +64,15 @@ export async function seedPreviewPlannerQa(
 
   await enableClassInsightsForOrganizations(prisma, [teacher.organizationId]);
 
-  const anchorClass = await prisma.class.findFirst({
+  const klass = await prisma.class.findFirst({
     where: {
       isArchived: false,
       teachers: { some: { id: teacher.id } },
     },
     orderBy: { createdAt: 'asc' },
-    select: { schoolId: true },
+    select: { id: true, title: true },
   });
-  if (!anchorClass) {
+  if (!klass) {
     console.log('preview planner QA: no class for dev.teacher; skipping');
     return { skipped: true as const };
   }
@@ -84,36 +84,6 @@ export async function seedPreviewPlannerQa(
       user: { email: PREVIEW_PLANNER_QA_STUDENT_EMAIL },
     },
     select: { id: true },
-  });
-
-  const klass = await prisma.class.upsert({
-    where: { id: PREVIEW_PLANNER_QA_IDS.classId },
-    update: {
-      title: '[QA] Lesson planner preview class',
-      isArchived: false,
-    },
-    create: {
-      id: PREVIEW_PLANNER_QA_IDS.classId,
-      code: 'QA-PLANNER-01',
-      schoolYear: '2025-2026',
-      period: 'QA',
-      grade: '10',
-      title: '[QA] Lesson planner preview class',
-      schoolId: anchorClass.schoolId,
-      teachers: { connect: [{ id: teacher.id }] },
-      ...(student
-        ? { students: { connect: [{ id: student.id }] } }
-        : {}),
-    },
-    select: { id: true, title: true },
-  });
-
-  await prisma.class.update({
-    where: { id: klass.id },
-    data: {
-      teachers: { connect: [{ id: teacher.id }] },
-      ...(student ? { students: { connect: [{ id: student.id }] } } : {}),
-    },
   });
 
   const thesisType = await prisma.assignmentType.findFirst({
