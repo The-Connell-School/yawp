@@ -176,3 +176,33 @@ variable "stripe_ua_existing_subscription_price_ids" {
   description = "Legacy recurring Stripe Price IDs whose subscribers should receive the UA license without paying again."
   default     = []
 }
+
+variable "marketing_renderer_desired_count" {
+  type        = number
+  description = "Running marketing renderer tasks. Zero means renders queue but nothing films them."
+  default     = 0
+}
+
+variable "marketing_renderer_cpu" {
+  type        = string
+  description = "Fargate CPU units for the marketing renderer. Chromium wants at least 1 vCPU."
+  default     = "1024"
+}
+
+variable "marketing_renderer_memory" {
+  type        = string
+  description = "Fargate memory (MiB) for the marketing renderer."
+  default     = "2048"
+}
+
+variable "marketing_render_target_url" {
+  type        = string
+  description = "Demo environment the renderer films. Never a production URL."
+  default     = ""
+}
+
+variable "marketing_render_target_is_demo" {
+  type        = string
+  description = "Must be \"confirmed\" for the renderer to start. States that the target holds demo data only."
+  default     = ""
+}

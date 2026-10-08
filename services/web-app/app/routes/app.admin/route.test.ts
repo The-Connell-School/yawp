@@ -8,7 +8,7 @@ mock.module('~/utils/auth.server', () => ({
   requireMutableRequest,
 }));
 
-const { adminTabs } = await import('./route');
+const { adminTabs, getAdminTabs } = await import('./route');
 
 describe('admin tabs', () => {
   test('labels the assignment types surface', () => {
@@ -28,5 +28,21 @@ describe('admin tabs', () => {
     );
 
     expect(aiEvaluationsTab?.label).toBe('AI Evaluations');
+  });
+
+  test('hides the marketing tab unless the studio is enabled', () => {
+    expect(getAdminTabs().map((tab) => tab.to)).not.toContain(
+      '/app/admin/marketing-media'
+    );
+    expect(
+      getAdminTabs({ marketingMediaEnabled: false }).map((tab) => tab.to)
+    ).not.toContain('/app/admin/marketing-media');
+  });
+
+  test('appends the marketing tab when the studio is enabled', () => {
+    const tabs = getAdminTabs({ marketingMediaEnabled: true });
+
+    expect(tabs.map((tab) => tab.to)).toContain('/app/admin/marketing-media');
+    expect(tabs).toHaveLength(adminTabs.length + 1);
   });
 });

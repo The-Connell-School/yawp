@@ -1,0 +1,8 @@
+node_modules/
+qa-media/
+*.mp4
+*.webm
+*.wav
+*-audio/
+public-url.json
+__pycache__/
