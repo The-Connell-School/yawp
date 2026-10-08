@@ -574,7 +574,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentTypeOffersParagraphModes =
     creationTypeDefaults?.offersParagraphModes ?? false;
 
-  const sanitizeDocumentList = <
+  const sanitizeDocumentListForStudents = <
     T extends {
       submissions: Array<
         { releasedAt?: Date | string | null } & Record<string, unknown>
@@ -590,14 +590,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ),
     }));
 
+  const isStudent = profile.role === 'STUDENT';
+
   return dataResponse({
     writingConditionsEnabled,
     assignmentType,
     assignmentTypeGradesGrammar,
     assignmentTypeDefaultWritingTimeMinutes,
     assignmentTypeOffersParagraphModes,
-    documents: sanitizeDocumentList(documents),
-    archivedDocuments: sanitizeDocumentList(archivedDocuments),
+    documents: isStudent
+      ? sanitizeDocumentListForStudents(documents)
+      : documents,
+    archivedDocuments: isStudent
+      ? sanitizeDocumentListForStudents(archivedDocuments)
+      : archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
     shortFormPromptLibrary,

@@ -657,6 +657,12 @@ describe('submission loader — unsubmitted redirect', () => {
     expect(serialized).not.toContain('SECRET_INLINE_COMMENT');
     expect(serialized).not.toContain('SECRET_RUBRIC_COMMENT');
     expect(serialized).not.toContain('SECRET_ASSISTANT');
+    expect(result.submission.document?.submissions?.[0]).not.toHaveProperty(
+      'numericPercentage'
+    );
+    expect(result.submission.document?.submissions?.[0]).not.toHaveProperty(
+      'overallScore'
+    );
   });
 
   test('student owner receives released grade and feedback in loader data', async () => {

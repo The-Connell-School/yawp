@@ -104,6 +104,7 @@ import {
   parseGradingQueueSort,
 } from '~/domain/grading/grading-queue';
 import { loadDocumentNavigationNeighbors } from '~/domain/grading/grading-queue.server';
+import { redactGradedAtFromStudentDocumentSubmissions } from '~/domain/submissions/student-submission-grade-visibility.server';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -494,6 +495,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     doc.html
   );
 
+  const submissionsForResponse =
+    isOwner &&
+    profile.role === 'STUDENT' &&
+    !hasEffectivePlatformAdmin(user?.isAdmin)
+      ? redactGradedAtFromStudentDocumentSubmissions(submissions)
+      : submissions;
+
   return dataResponse({
     doc: {
       ...doc,
@@ -501,7 +509,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       assignmentModuleSessions: orderedModuleSessions,
       comments: sortedComments,
     },
-    submissions,
+    submissions: submissionsForResponse,
     currentCms,
     currentCmsIdx,
     nextCmId,

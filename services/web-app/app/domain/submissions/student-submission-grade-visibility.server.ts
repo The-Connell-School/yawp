@@ -14,6 +14,19 @@ export function isSubmissionGradeReleasedToStudent(
   return submission?.releasedAt != null;
 }
 
+/** Fields students may see on list/summary rows while a grade is still withheld. */
+export const STUDENT_SUBMISSION_SUMMARY_ALLOWLIST = [
+  'id',
+  'title',
+  'submittedAt',
+  'releasedAt',
+  'archivedAt',
+  'unsubmittedAt',
+] as const;
+
+export type StudentSubmissionSummaryAllowlistField =
+  (typeof STUDENT_SUBMISSION_SUMMARY_ALLOWLIST)[number];
+
 /** Top-level submission columns that are grade or feedback (or grading metadata). */
 export const SUBMISSION_GRADE_AND_FEEDBACK_FIELDS = [
   'score',
@@ -32,16 +45,6 @@ export const SUBMISSION_GRADE_AND_FEEDBACK_FIELDS = [
 export type SubmissionGradeAndFeedbackField =
   (typeof SUBMISSION_GRADE_AND_FEEDBACK_FIELDS)[number];
 
-/** Per-version rows in document.submissions lists on the submission page. */
-export const SUBMISSION_VERSION_GRADE_FIELDS = [
-  'numericPercentage',
-  'letterGrade',
-  'score',
-] as const;
-
-export type SubmissionSummaryGradeField =
-  (typeof SUBMISSION_VERSION_GRADE_FIELDS)[number];
-
 function nullGradeFields<T extends Record<string, unknown>>(
   submission: T,
   fields: readonly string[]
@@ -55,8 +58,20 @@ function nullGradeFields<T extends Record<string, unknown>>(
   return next;
 }
 
+function pickAllowlistedSubmissionSummaryFields<
+  T extends Record<string, unknown>,
+>(submission: T): T {
+  const out: Record<string, unknown> = {};
+  for (const key of STUDENT_SUBMISSION_SUMMARY_ALLOWLIST) {
+    if (key in submission) {
+      out[key] = submission[key];
+    }
+  }
+  return out as T;
+}
+
 /**
- * Removes grade columns from a submission summary when the grade is not released.
+ * Fail-closed: unreleased list rows expose only lifecycle fields, never scores.
  */
 export function stripUnreleasedGradeFromSubmissionSummary<
   T extends SubmissionReleaseState & Record<string, unknown>,
@@ -64,7 +79,7 @@ export function stripUnreleasedGradeFromSubmissionSummary<
   if (isSubmissionGradeReleasedToStudent(submission)) {
     return submission;
   }
-  return nullGradeFields(submission, SUBMISSION_VERSION_GRADE_FIELDS);
+  return pickAllowlistedSubmissionSummaryFields(submission);
 }
 
 export function stripUnreleasedGradeFromSubmissionSummaries<
@@ -116,6 +131,13 @@ export function stripUnreleasedGradeFromStudentSubmissionPayload<
   }
 
   return next;
+}
+
+/** Student document route: never expose gradedAt (implies graded-before-release). */
+export function redactGradedAtFromStudentDocumentSubmissions<
+  T extends { gradedAt?: unknown },
+>(submissions: T[]): Omit<T, 'gradedAt'>[] {
+  return submissions.map(({ gradedAt: _gradedAt, ...rest }) => rest);
 }
 
 /** True when the viewer is the student (or group member) but not staff. */
