@@ -1,0 +1,1 @@
+-- History repair only; no schema rollback.
