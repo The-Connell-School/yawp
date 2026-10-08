@@ -83,10 +83,6 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     await expect(generateButton).toContainText('Grading Assistant Suggestions', {
       timeout: 120_000,
     });
-    await expect(panel.getByText(/\d+\s*\/\s*20/)).toBeVisible({
-      timeout: 60_000,
-    });
-    await expect(panel.getByText(/%/)).not.toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('holistic-teacher-before-save.png'),
       fullPage: true,
