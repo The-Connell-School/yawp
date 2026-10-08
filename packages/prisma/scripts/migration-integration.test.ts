@@ -867,6 +867,20 @@ describe('migration integration (real Postgres)', () => {
     });
   }, 120000);
 
+  test('20261008133000 e2e handle join activity cleanup extends immutability guard', () => {
+    const forward = readFileSync(
+      join(
+        PRISMA_DIR,
+        'migrations',
+        '20261008133000_e2e_handle_join_activity_cleanup',
+        'migration.sql'
+      ),
+      'utf8'
+    );
+    psql(forward);
+    psql(forward);
+  });
+
   test('20261008124500 repair free class join columns is re-runnable', () => {
     const repairSql = readFileSync(
       join(
