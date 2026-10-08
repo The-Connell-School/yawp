@@ -2,6 +2,7 @@ import { prisma } from '~/utils/db.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { getClientIp, ipHash } from '~/utils/ip.server';
 import { createHash } from 'node:crypto';
+import { hashLoginRateLimitTarget } from '~/utils/login-rate-limit-target';
 import { validationError } from '@rvf/react-router';
 import type { Prisma } from '@app/prisma';
 
@@ -407,6 +408,7 @@ export async function refundLoginAttemptRateLimits(
 // Public per-route helpers
 
 const MINUTE_MS = 60_000;
+const FIFTEEN_MINUTES_MS = 15 * MINUTE_MS;
 const TEN_MINUTES_MS = 600_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
@@ -573,7 +575,7 @@ function failedLoginTargetBuckets(params: {
   nowMs?: number;
 }) {
   const { route, targetKey, perTargetPerHour, nowMs } = params;
-  const targetBase = `target:${hashTarget(targetKey)}:${route}:failed`;
+  const targetBase = `target:${hashLoginRateLimitTarget(targetKey)}:${route}:failed`;
   const base = { route, nowMs };
   return [
     {
@@ -680,38 +682,24 @@ export async function recordFailedLoginIpSprayRateLimit(params: {
   return consumeAll(buckets.map((b) => windowBucket(b)));
 }
 
-function loginTargetHash(targetKey: string) {
-  return hashTarget(targetKey.trim().toLowerCase());
-}
-
 function failedLoginIpHandleBuckets(params: {
   request: Request;
   route: string;
   targetKey: string;
-  perIpPerMinute: number;
-  perIpPerHour: number;
+  perIpHandlePer15Minutes: number;
   nowMs?: number;
 }) {
-  const { request, route, targetKey, perIpPerMinute, perIpPerHour, nowMs } =
-    params;
+  const { request, route, targetKey, perIpHandlePer15Minutes, nowMs } = params;
   const ip = getClientIp(request);
-  const targetHash = loginTargetHash(targetKey);
+  const targetHash = hashLoginRateLimitTarget(targetKey);
   const ipKeyBase = `ip:${ipHash(ip)}:login:${targetHash}:${route}:attempt`;
   const base = { route, nowMs };
   return [
     {
       ...base,
-      key: `${ipKeyBase}:m`,
-      limit: perIpPerMinute,
-      windowMs: MINUTE_MS,
-      scope: 'ip' as const,
-      subjectKey: ipKeyBase,
-    },
-    {
-      ...base,
-      key: `${ipKeyBase}:h`,
-      limit: perIpPerHour,
-      windowMs: HOUR_MS,
+      key: `${ipKeyBase}:15m`,
+      limit: perIpHandlePer15Minutes,
+      windowMs: FIFTEEN_MINUTES_MS,
       scope: 'ip' as const,
       subjectKey: ipKeyBase,
     },
@@ -725,6 +713,7 @@ export async function consumeLoginAttemptRateLimits(params: {
   perIpPerMinute: number;
   perIpPerHour: number;
   perTargetPerHour: number;
+  perIpHandlePer15Minutes: number;
   perIpSprayPerHour: number;
   nowMs?: number;
 }): Promise<LoginAttemptConsumeResult> {
@@ -735,6 +724,7 @@ export async function consumeLoginAttemptRateLimits(params: {
     perIpPerMinute,
     perIpPerHour,
     perTargetPerHour,
+    perIpHandlePer15Minutes,
     perIpSprayPerHour,
     nowMs,
   } = params;
@@ -756,8 +746,7 @@ export async function consumeLoginAttemptRateLimits(params: {
       request,
       route,
       targetKey,
-      perIpPerMinute,
-      perIpPerHour,
+      perIpHandlePer15Minutes,
       nowMs,
     }).map((b) => windowBucket(b)),
     ...failedLoginTargetBuckets({
@@ -774,7 +763,7 @@ export async function clearFailedLoginRateLimitsForTarget(params: {
   route: string;
   targetKey: string;
 }) {
-  const targetHash = loginTargetHash(params.targetKey);
+  const targetHash = hashLoginRateLimitTarget(params.targetKey);
   const targetBase = `target:${targetHash}:${params.route}:failed`;
   const ipHandleFragment = `:login:${targetHash}:${params.route}:attempt`;
   await prisma.rateLimitBucket.deleteMany({

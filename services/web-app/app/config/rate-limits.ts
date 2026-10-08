@@ -83,9 +83,13 @@ export const RATE_LIMITS = {
       perEmailPerHour: 20,
     },
     login: {
-      perIpPerMinute: 30,
-      perIpPerHour: 120,
+      // Sized for ~35–40 students behind one school NAT signing in together
+      // (PostHog peak ~31 distinct people per IP per hour) with typo retries.
+      perIpPerMinute: 90,
+      perIpPerHour: 600,
       perEmailPerHour: 12,
+      /** Per IP + login identifier; slows guessing one account before the hourly cap. */
+      perIpHandlePer15Minutes: 5,
       /** Failed attempts from one IP across any login identifier (password spraying). */
       perIpFailedSprayPerHour: 300,
     },

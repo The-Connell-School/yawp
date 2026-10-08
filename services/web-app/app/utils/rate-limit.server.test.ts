@@ -2,6 +2,7 @@
 // RATE_LIMIT_DB_TESTS=1 and DATABASE_URL points at a migrated database:
 //   RATE_LIMIT_DB_TESTS=1 DATABASE_URL=postgresql://... bun test app/utils/rate-limit
 import { beforeEach, describe, expect, test } from 'bun:test';
+import { RATE_LIMITS } from '~/config/rate-limits';
 import { CLOUDFRONT_IPV4_RANGES } from './cloudfront-ranges.server';
 
 // The app trusts the address CloudFront appended (see ip.server.ts), so the tests
@@ -243,6 +244,103 @@ suite('login limits count only failed attempts', () => {
       nowMs: t0 + 13,
     });
     expect(afterClear.allowed).toBe(true);
+  });
+});
+
+suite('login consume limits (classroom + brute force)', () => {
+  const loginCfg = () => ({
+    perIpPerMinute: RATE_LIMITS.unauth.login.perIpPerMinute,
+    perIpPerHour: RATE_LIMITS.unauth.login.perIpPerHour,
+    perTargetPerHour: RATE_LIMITS.unauth.login.perEmailPerHour,
+    perIpHandlePer15Minutes: RATE_LIMITS.unauth.login.perIpHandlePer15Minutes,
+    perIpSprayPerHour: RATE_LIMITS.unauth.login.perIpFailedSprayPerHour,
+  });
+
+  const schoolLoginRequest = () =>
+    new Request('https://yawp.school/auth/login', {
+      headers: {
+        'x-forwarded-for': `198.31.${Math.floor(Math.random() * 250)}.4, ${EDGE_IP}`,
+      },
+    });
+
+  async function consumeLogin(
+    request: Request,
+    targetKey: string,
+    nowMs: number
+  ) {
+    return mod!.consumeLoginAttemptRateLimits({
+      request,
+      route: '/auth/login',
+      targetKey,
+      ...loginCfg(),
+      nowMs,
+    });
+  }
+
+  test('40 concurrent sign-in attempts from one IP are all allowed before password check', async () => {
+    const request = schoolLoginRequest();
+    const t0 = Date.now();
+    const results = await Promise.all(
+      Array.from({ length: 40 }, (_, i) =>
+        consumeLogin(request, `${run}-class-${i}`, t0)
+      )
+    );
+    expect(results.every((r) => r.allowed)).toBe(true);
+    for (const r of results) {
+      if (r.allowed) await mod!.refundLoginAttemptRateLimits(r.charged);
+    }
+  });
+
+  test('40 students within 10s with one typo each still pass the limiter', async () => {
+    const request = schoolLoginRequest();
+    const t0 = Date.now();
+    for (let i = 0; i < 40; i += 1) {
+      const target = `${run}-student-${i}@class.test`;
+      const first = await consumeLogin(request, target, t0 + i * 200);
+      expect(first.allowed).toBe(true);
+      if (i % 2 === 0) {
+        // failed password: keep the charge
+        continue;
+      }
+      if (first.allowed) await mod!.refundLoginAttemptRateLimits(first.charged);
+      const retry = await consumeLogin(request, target, t0 + i * 200 + 50);
+      expect(retry.allowed).toBe(true);
+      if (retry.allowed) await mod!.refundLoginAttemptRateLimits(retry.charged);
+    }
+  });
+
+  test('a teacher with the correct password is not blocked after a class of typos on the same IP', async () => {
+    const request = schoolLoginRequest();
+    const t0 = Date.now();
+    for (let i = 0; i < 20; i += 1) {
+      const failed = await consumeLogin(
+        request,
+        `${run}-typo-${i}@class.test`,
+        t0 + i * 100
+      );
+      expect(failed.allowed).toBe(true);
+    }
+    const teacher = await consumeLogin(
+      request,
+      `${run}-teacher@class.test`,
+      t0 + 2_000
+    );
+    expect(teacher.allowed).toBe(true);
+    if (teacher.allowed) await mod!.refundLoginAttemptRateLimits(teacher.charged);
+  });
+
+  test('brute force on one handle hits 429 and blocks even the correct password at the limit', async () => {
+    const request = schoolLoginRequest();
+    const victim = `${run}-victim@school.test`;
+    const t0 = Date.now();
+    for (let i = 0; i < loginCfg().perIpHandlePer15Minutes; i += 1) {
+      const attempt = await consumeLogin(request, victim, t0 + i * 50);
+      expect(attempt.allowed).toBe(true);
+    }
+    const blockedWrong = await consumeLogin(request, victim, t0 + 500);
+    expect(blockedWrong.allowed).toBe(false);
+    const blockedRight = await consumeLogin(request, victim, t0 + 550);
+    expect(blockedRight.allowed).toBe(false);
   });
 });
 

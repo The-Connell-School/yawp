@@ -1,6 +1,7 @@
 import { prisma } from '~/utils/db.server';
 import { getPasswordHash } from '~/utils/auth.server';
 import { clearFailedLoginRateLimitsForTarget } from '~/utils/rate-limit.server';
+import { normalizeLoginRateLimitTargetKey } from '~/utils/login-rate-limit-target';
 import {
   suggestAvailableUsernames,
   validateUsername,
@@ -320,11 +321,10 @@ export async function teacherResetStudentPassword({
     prisma.session.deleteMany({ where: { userId: student.userId } }),
   ]);
 
-  const loginTarget = student.user.username?.trim().toLowerCase();
-  if (loginTarget) {
+  if (student.user.username) {
     await clearFailedLoginRateLimitsForTarget({
       route: '/auth/login',
-      targetKey: loginTarget,
+      targetKey: normalizeLoginRateLimitTargetKey(student.user.username),
     });
   }
 
