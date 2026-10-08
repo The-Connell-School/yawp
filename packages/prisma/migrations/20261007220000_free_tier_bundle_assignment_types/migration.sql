@@ -1,9 +1,8 @@
 SET lock_timeout = '5s';
 
 -- Guarded, idempotent creation of free-classroom bundle assignment types.
--- Module content and rubric pins are completed by
--- `seed-free-tier-bundle-assignment-types` on deploy; this migration only
--- ensures the kind rows exist without linking them to existing organizations.
+-- Kind rows only; modules, rubrics, and tile images are completed by
+-- `seed-free-tier-bundle-assignment-types` in deploy.yml and migrate-remote.
 
 INSERT INTO "AssignmentType" (
   "id", "createdAt", "updatedAt", "title", "description", "position", "kind"

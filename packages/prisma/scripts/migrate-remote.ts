@@ -157,6 +157,15 @@ async function runProductionMigrations(env: NodeJS.ProcessEnv) {
     return gateCode;
   }
 
+  const bundleSeedCode = await runCommand(
+    'bun',
+    ['run', 'seed-free-tier-bundle-assignment-types'],
+    env
+  );
+  if (bundleSeedCode !== 0) {
+    return bundleSeedCode;
+  }
+
   // Always (idempotently) seed AP History assignment type + prompt library so
   // new prompts/sections are available after production deploys without
   // touching existing assignments or scores.

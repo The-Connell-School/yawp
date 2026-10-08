@@ -164,6 +164,11 @@ async function applyBundleRubricDefaults(
 ) {
   const defaults = RUBRIC_DEFAULTS_BY_KIND[kind];
   if (!defaults) return;
+  const existing = await prisma.assignmentType.findUnique({
+    where: { id: assignmentTypeId },
+    select: { rubricJson: true },
+  });
+  if (existing?.rubricJson) return;
   await prisma.assignmentType.update({
     where: { id: assignmentTypeId },
     data: {
@@ -271,12 +276,7 @@ async function upsertStandaloneType(
   const { mod, steps } = moduleFromProd(args.moduleId);
   const assignmentType = await prisma.assignmentType.upsert({
     where: { kind: args.kind },
-    update: {
-      title: args.title,
-      description: args.description,
-      position: args.position,
-      archivedAt: null,
-    },
+    update: {},
     create: {
       kind: args.kind,
       title: args.title,
@@ -323,7 +323,7 @@ async function upsertStandaloneType(
 export async function seedFreeTierBundleAssignmentTypes(prisma: PrismaClient) {
   const classStarter = await prisma.assignmentType.upsert({
     where: { kind: CLASS_STARTER_KIND },
-    update: { archivedAt: null },
+    update: {},
     create: {
       kind: CLASS_STARTER_KIND,
       title: 'Class Starter',

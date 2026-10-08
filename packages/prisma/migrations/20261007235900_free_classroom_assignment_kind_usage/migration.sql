@@ -1,6 +1,6 @@
 SET lock_timeout = '5s';
 
-CREATE TABLE "FreeClassroomAssignmentKindUsage" (
+CREATE TABLE IF NOT EXISTS "FreeClassroomAssignmentKindUsage" (
   "organizationId" TEXT NOT NULL,
   "kind" TEXT NOT NULL,
   "lifetimeCreatedCount" INTEGER NOT NULL DEFAULT 0,

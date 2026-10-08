@@ -824,7 +824,7 @@ describe('migration integration (real Postgres)', () => {
       join(
         PRISMA_DIR,
         'migrations',
-        '20261007240000_free_classroom_assignment_kind_usage',
+        '20261007235900_free_classroom_assignment_kind_usage',
         'rollback.sql'
       ),
       'utf8'
@@ -855,7 +855,7 @@ describe('migration integration (real Postgres)', () => {
       join(
         PRISMA_DIR,
         'migrations',
-        '20261007240000_free_classroom_assignment_kind_usage',
+        '20261007235900_free_classroom_assignment_kind_usage',
         'migration.sql'
       ),
       'utf8'
