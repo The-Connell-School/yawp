@@ -108,6 +108,44 @@ export function withFreeClassroomPreviewAccessSeat(
   ];
 }
 
+/** Preview-only org for Reporter sidebar QA (see seed-preview-free-classroom.ts). */
+export const PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID = 'preview-school-reporter-nav';
+export const PREVIEW_SCHOOL_REPORTER_NAV_ACCESS_LABEL = 'School reporter nav';
+
+export function withSchoolReporterNavPreviewAccessSeat(
+  seats: GeneratedPreviewAccessSeat[],
+  generateCode: () => string = generatePreviewAccessCode
+): GeneratedPreviewAccessSeat[] {
+  if (
+    seats.some(
+      (seat) => seat.organizationId === PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID
+    )
+  ) {
+    return seats;
+  }
+  const usedCodes = seats.map((seat) => seat.code);
+  const code = generateUniquePreviewAccessCode(usedCodes, generateCode);
+  return [
+    ...seats,
+    {
+      code,
+      organizationId: PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID,
+      label: PREVIEW_SCHOOL_REPORTER_NAV_ACCESS_LABEL,
+    },
+  ];
+}
+
+/** Dedicated preview access seats for QA fixture orgs (not master/local-dev). */
+export function withPreviewFixtureAccessSeats(
+  seats: GeneratedPreviewAccessSeat[],
+  generateCode: () => string = generatePreviewAccessCode
+): GeneratedPreviewAccessSeat[] {
+  return withSchoolReporterNavPreviewAccessSeat(
+    withFreeClassroomPreviewAccessSeat(seats, generateCode),
+    generateCode
+  );
+}
+
 function previewSeatIdentity(
   number: number,
   masterOrganizationId: string,

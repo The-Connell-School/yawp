@@ -4,7 +4,7 @@ import {
   ACCESS_CODE_ANIMALS,
   generatePreviewAccessCode,
   generatePreviewAccessSeats,
-  withFreeClassroomPreviewAccessSeat,
+  withPreviewFixtureAccessSeats,
 } from '../../packages/prisma/preview-access-code.ts';
 
 export {
@@ -37,7 +37,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const masterLabel = process.env.PREVIEW_ACCESS_MASTER_LABEL || 'Master';
     process.stdout.write(
       `${JSON.stringify(
-        withFreeClassroomPreviewAccessSeat(
+        withPreviewFixtureAccessSeats(
           generatePreviewAccessSeats({
             count,
             existingCodes,
