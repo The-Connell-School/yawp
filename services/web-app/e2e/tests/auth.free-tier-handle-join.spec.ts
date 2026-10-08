@@ -1,6 +1,9 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { createDeployedAssignment } from '../db-helpers';
+import {
+  createDeployedAssignment,
+  ensureDocumentUnsubmitted,
+} from '../db-helpers';
 import { generateStudentJoinToken } from '../../app/utils/student-join-token';
 import bcrypt from 'bcryptjs';
 
@@ -177,7 +180,7 @@ test.describe('Free-tier handle student', () => {
           select: { id: true },
         });
         for (const doc of documents) {
-          await prisma.submission.deleteMany({ where: { documentId: doc.id } });
+          await ensureDocumentUnsubmitted({ prisma, documentId: doc.id });
           await prisma.documentComment
             .deleteMany({ where: { documentId: doc.id } })
             .catch(() => {});
