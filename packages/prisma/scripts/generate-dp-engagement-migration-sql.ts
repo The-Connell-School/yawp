@@ -64,6 +64,15 @@ BEGIN
   SELECT id, "schemaJson", "currentRevisionId" INTO rub_row
   FROM "Rubric" WHERE id = engagement_id;
 
+  IF rub_row."schemaJson"->'outputSchema' ? 'teacherNotesEnabled' THEN
+    v2_schema := jsonb_set(
+      v2_schema,
+      '{outputSchema,teacherNotesEnabled}',
+      rub_row."schemaJson"->'outputSchema'->'teacherNotesEnabled',
+      true
+    );
+  END IF;
+
   SELECT "rubricId" INTO dp_prev_rubric FROM "AssignmentType" WHERE id = daily_pages_type_id;
   SELECT "rubricId" INTO sjp_prev_rubric FROM "AssignmentType" WHERE id = sjp_daily_pages_type_id;
 

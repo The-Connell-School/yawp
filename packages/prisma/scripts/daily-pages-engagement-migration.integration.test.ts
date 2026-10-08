@@ -272,4 +272,116 @@ describe('daily-pages-engagement migration (real Postgres)', () => {
     expect(afterReapply.newDpRevision).toBe(v2RevisionId);
     expect(afterReapply.newSjpRevision).toBe(v2RevisionId);
   }, 120000);
+
+  test('migration preserves teacherNotesEnabled when prod library has notes ON', () => {
+    const dbName = `yawp_dp_notes_on_${Date.now()}`;
+    const dbUrl = (() => {
+      const u = new URL(DB_BASE);
+      u.pathname = `/${dbName}`;
+      return u.toString();
+    })();
+    const psqlOn = (sql: string) => {
+      const res = run('psql', ['-v', 'ON_ERROR_STOP=1', dbUrl, '-c', sql]);
+      if (res.status !== 0) throw new Error(res.stderr);
+    };
+    const jsonOn = (sql: string) => {
+      const res = run('psql', ['-t', '-A', dbUrl, '-c', `SELECT to_jsonb((${sql}))::text;`]);
+      if (res.status !== 0) throw new Error(res.stderr);
+      return JSON.parse(res.stdout.trim().split('\n').pop() || 'null');
+    };
+
+    adminPsql(`CREATE DATABASE ${dbName}`);
+    const pre = setupWithoutDpMigration();
+    const deployRes = run('bun', ['run', 'prisma', 'migrate', 'deploy'], pre, {
+      PATH: PATH_WITH_ROOT_BIN,
+      NODE_PATH: NODE_PATH_WITH_ROOT,
+      DATABASE_URL: dbUrl,
+    });
+    if (deployRes.status !== 0) {
+      throw new Error(deployRes.stderr);
+    }
+
+    const v1Schema = v1EngagementSchema() as Record<string, unknown>;
+    const outputSchema = (v1Schema.outputSchema ?? {}) as Record<string, unknown>;
+    outputSchema.teacherNotesEnabled = true;
+    v1Schema.outputSchema = outputSchema;
+    const v1Literal = JSON.stringify(v1Schema).replaceAll("'", "''");
+
+    psqlOn(`
+      INSERT INTO "Rubric" ("id","createdAt","updatedAt","name","title","schemaJson","currentRevisionId")
+      VALUES (
+        '${ENGAGEMENT_ID}', now(), now(), 'daily-pages-engagement', 'Daily Pages engagement',
+        '${v1Literal}'::jsonb,
+        NULL
+      );
+      INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position","rubricId")
+      VALUES ('${DAILY_PAGES_TYPE_ID}', now(), now(), 'Daily Pages', 'daily_pages', 0, NULL);
+    `);
+
+    const migrateRes = run(
+      'psql',
+      ['-v', 'ON_ERROR_STOP=1', '-f', join(MIGRATION_DIR, 'migration.sql'), dbUrl]
+    );
+    if (migrateRes.status !== 0) throw new Error(migrateRes.stderr);
+
+    const notesEnabled = jsonOn(
+      `(SELECT "schemaJson"->'outputSchema'->'teacherNotesEnabled' FROM "Rubric" WHERE id='${ENGAGEMENT_ID}')`
+    );
+    expect(notesEnabled).toBe(true);
+  }, 120000);
+
+  test('migration leaves teacherNotesEnabled absent when not on the current rubric', () => {
+    const dbName = `yawp_dp_notes_off_${Date.now()}`;
+    const dbUrl = (() => {
+      const u = new URL(DB_BASE);
+      u.pathname = `/${dbName}`;
+      return u.toString();
+    })();
+    const psqlOn = (sql: string) => {
+      const res = run('psql', ['-v', 'ON_ERROR_STOP=1', dbUrl, '-c', sql]);
+      if (res.status !== 0) throw new Error(res.stderr);
+    };
+    const jsonOn = (sql: string) => {
+      const res = run('psql', ['-t', '-A', dbUrl, '-c', `SELECT (${sql})::text;`]);
+      if (res.status !== 0) throw new Error(res.stderr);
+      const line = res.stdout.trim().split('\n').pop();
+      return line === '' || line === undefined ? null : line;
+    };
+
+    adminPsql(`CREATE DATABASE ${dbName}`);
+    const pre = setupWithoutDpMigration();
+    const deployRes = run('bun', ['run', 'prisma', 'migrate', 'deploy'], pre, {
+      PATH: PATH_WITH_ROOT_BIN,
+      NODE_PATH: NODE_PATH_WITH_ROOT,
+      DATABASE_URL: dbUrl,
+    });
+    if (deployRes.status !== 0) {
+      throw new Error(deployRes.stderr);
+    }
+
+    const v1Schema = v1EngagementSchema();
+    const v1Literal = JSON.stringify(v1Schema).replaceAll("'", "''");
+
+    psqlOn(`
+      INSERT INTO "Rubric" ("id","createdAt","updatedAt","name","title","schemaJson","currentRevisionId")
+      VALUES (
+        '${ENGAGEMENT_ID}', now(), now(), 'daily-pages-engagement', 'Daily Pages engagement',
+        '${v1Literal}'::jsonb,
+        NULL
+      );
+      INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position","rubricId")
+      VALUES ('${DAILY_PAGES_TYPE_ID}', now(), now(), 'Daily Pages', 'daily_pages', 0, NULL);
+    `);
+
+    const migrateRes = run(
+      'psql',
+      ['-v', 'ON_ERROR_STOP=1', '-f', join(MIGRATION_DIR, 'migration.sql'), dbUrl]
+    );
+    if (migrateRes.status !== 0) throw new Error(migrateRes.stderr);
+
+    const hasKey = jsonOn(
+      `SELECT ("schemaJson"->'outputSchema' ? 'teacherNotesEnabled') FROM "Rubric" WHERE id='${ENGAGEMENT_ID}'`
+    );
+    expect(hasKey).toBe('f');
+  }, 120000);
 });

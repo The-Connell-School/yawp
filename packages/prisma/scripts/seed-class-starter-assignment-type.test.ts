@@ -21,9 +21,6 @@ function fakePrisma({ orgId = 'org-1' }: { orgId?: string | null } = {}) {
   };
 
   const prisma = {
-    rubric: {
-      findUnique: async () => null,
-    },
     organization: {
       findFirst: async () => (orgId ? { id: orgId } : null),
     },

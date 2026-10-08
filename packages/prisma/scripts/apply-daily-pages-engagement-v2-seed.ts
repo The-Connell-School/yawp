@@ -19,8 +19,6 @@ const SHORT_FORM_RUBRIC_ID = 'cmumlbxru000001jn1cjqkham';
 const REFLECTION_RUBRIC_ID = 'cmtuonqfw000101l3ntnz78sj';
 const ARCHIVED_RUBRIC_NAMES = ['daily-pages-short-form', 'daily-pages-reflection'];
 
-const v2Schema = engagementLibrary as Prisma.InputJsonValue;
-
 const DP_ENGAGEMENT_MIGRATION_NAME =
   '20261008121500_daily_pages_engagement_rubric_consolidation';
 
@@ -36,6 +34,28 @@ async function isDpEngagementMigrationApplied(
     LIMIT 1
   `;
   return rows.length > 0;
+}
+
+/** Matches migration SQL: library JSON plus preserved teacherNotesEnabled when set. */
+export function buildDailyPagesEngagementV2SchemaJson(
+  currentSchema: Record<string, unknown> | null | undefined
+): Prisma.InputJsonValue {
+  const v2 = JSON.parse(JSON.stringify(engagementLibrary)) as Record<
+    string,
+    unknown
+  >;
+  const currentOutput = currentSchema?.outputSchema as
+    | Record<string, unknown>
+    | undefined;
+  const output = v2.outputSchema as Record<string, unknown>;
+  if (
+    currentOutput &&
+    typeof currentOutput === 'object' &&
+    Object.prototype.hasOwnProperty.call(currentOutput, 'teacherNotesEnabled')
+  ) {
+    output.teacherNotesEnabled = currentOutput.teacherNotesEnabled;
+  }
+  return v2 as Prisma.InputJsonValue;
 }
 
 export type ApplyDailyPagesEngagementV2SeedOptions = {
@@ -80,7 +100,7 @@ export async function applyDailyPagesEngagementV2Seed(
     await prisma.rubric.update({
       where: { id: engagement.id },
       data: {
-        schemaJson: v2Schema,
+        schemaJson: buildDailyPagesEngagementV2SchemaJson(current),
         title: engagementLibrary.title,
       },
     });

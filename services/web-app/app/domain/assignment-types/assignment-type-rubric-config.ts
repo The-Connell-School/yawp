@@ -112,10 +112,7 @@ const thesisDefaultConfig: AssignmentTypeRubricConfig = {
  * A kind listed here needs no data migration: an existing row picks its default
  * up on the next grading run, and a row that saved its own rubric still wins.
  */
-/**
- * The soft assistant, under the name it is keeping. Class Starter is what
- * Daily Pages was: one engagement judgment, overall feedback, no markup.
- */
+/** Daily Pages: Brian 2026-10-02 engagement tiers with proportional point scaling. */
 const dailyPagesEngagementOutputSchema = {
   ...DEFAULT_OUTPUT_SCHEMA_JSON,
   assignmentPointScaling: DAILY_PAGES_ENGAGEMENT_SCALING_RULE,

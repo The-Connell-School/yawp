@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { buildDailyPagesEngagementV2SchemaJson } from './apply-daily-pages-engagement-v2-seed';
+
 const MIGRATION_DIR = join(
   import.meta.dir,
   '..',
@@ -32,10 +34,14 @@ describe('daily-pages-engagement migration SQL', () => {
     expect(sql).toContain('Brian 2026-10-02 merged Daily Pages rubric');
   });
 
-  test('v2 schema does not hard-code teacher notes (superadmin toggle in #415)', () => {
+  test('preserves teacherNotesEnabled from the current library row when publishing v2', () => {
     const sql = readFileSync(join(MIGRATION_DIR, 'migration.sql'), 'utf8');
 
-    expect(sql).not.toContain('"teacherNotesEnabled":true');
+    expect(sql).toContain("rub_row.\"schemaJson\"->'outputSchema' ? 'teacherNotesEnabled'");
+    expect(sql).toContain(
+      "rub_row.\"schemaJson\"->'outputSchema'->'teacherNotesEnabled'"
+    );
+    expect(sql).not.toMatch(/"teacherNotesEnabled":\s*true/);
   });
 
   test('backfills restore-table columns when an older preview table exists', () => {
@@ -56,5 +62,26 @@ describe('daily-pages-engagement migration SQL', () => {
     expect(rollback).toContain('dailyPagesTypePreviousRubricId');
     expect(rollback).toContain('sjpTypePreviousRubricId');
     expect(rollback).toContain('SET "rubricId" = dp_prev_rubric');
+  });
+});
+
+describe('daily-pages-engagement v2 teacherNotesEnabled preservation', () => {
+  test('carries true from the current rubric into consolidated outputSchema', () => {
+    const v2 = buildDailyPagesEngagementV2SchemaJson({
+      outputSchema: { schemaVersion: 1, teacherNotesEnabled: true },
+    }) as { outputSchema: Record<string, unknown> };
+
+    expect(v2.outputSchema.teacherNotesEnabled).toBe(true);
+    expect(v2.outputSchema.assignmentPointScaling).toBe(
+      'daily_pages_engagement_v2'
+    );
+  });
+
+  test('does not add teacherNotesEnabled when absent on the current rubric', () => {
+    const v2 = buildDailyPagesEngagementV2SchemaJson({
+      outputSchema: { schemaVersion: 1 },
+    }) as { outputSchema: Record<string, unknown> };
+
+    expect(v2.outputSchema).not.toHaveProperty('teacherNotesEnabled');
   });
 });
