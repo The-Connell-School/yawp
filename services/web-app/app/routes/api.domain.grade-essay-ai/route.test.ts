@@ -2638,6 +2638,8 @@ describe('api.domain.grade-essay-ai', () => {
       const pinnedSchema = structuredClone(schema);
       if (pin === 'legacy') {
         delete pinnedSchema.outputSchema.assignmentPointScaling;
+        delete pinnedSchema.outputSchema.scoringMode;
+        delete pinnedSchema.scoringMode;
         pinnedSchema.scoringScale.step = 10;
         pinnedSchema.scoringScale.maxScore = 30;
         pinnedSchema.scoringScale.compositeMax = 30;
