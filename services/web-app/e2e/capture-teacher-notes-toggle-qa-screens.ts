@@ -44,7 +44,7 @@ async function devLogin(page: import('@playwright/test').Page, email: string) {
 
 async function openDailyPagesAssignmentType(page: import('@playwright/test').Page) {
   await page.goto(`${origin}/app/admin/assignments`);
-  await page.getByRole('heading', { name: 'Daily Pages' }).click();
+  await page.getByText('Daily Pages', { exact: true }).click();
   await page.waitForURL(/\/app\/admin\/assignment-types\/[^/]+$/);
   const toggle = page.getByTestId('rubric-teacher-notes-toggle');
   await toggle.waitFor({ state: 'visible', timeout: 60_000 });
@@ -71,20 +71,24 @@ async function resolveQaSubmissionHref(page: import('@playwright/test').Page) {
   if (fromEnv) return `/app/submissions/${fromEnv}`;
 
   await devLogin(page, 'dev.teacher@yawp.local');
-  await page.goto(`${origin}/app/classes`);
-  const links = page.locator('a[href*="/app/submissions/"]');
-  const count = await links.count();
-  for (let i = 0; i < count; i++) {
-    const href = await links.nth(i).getAttribute('href');
-    if (!href) continue;
-    await page.goto(`${origin}${href}`);
-    const notes = page.getByTestId('teacher-private-notes');
-    if (await notes.count()) {
-      const text = await notes.textContent();
-      if (text?.includes('QA #415')) return href;
-    }
+  await page.goto(`${origin}/app/my-classes`);
+  await page.locator('a[href^="/app/my-classes/"]').first().click({ timeout: 60_000 });
+  await page.getByRole('tab', { name: /Documents/i }).click();
+  const qaRow = page.getByText('QA #415 Daily Pages', { exact: false });
+  const href = await qaRow
+    .locator('xpath=ancestor::tr//a[contains(@href,"/app/submissions/")]')
+    .first()
+    .getAttribute('href', { timeout: 30_000 })
+    .catch(async () =>
+      page
+        .locator('a[href*="/app/submissions/"]')
+        .first()
+        .getAttribute('href', { timeout: 15_000 })
+    );
+  if (!href) {
+    throw new Error('Could not find a class submission link for QA capture');
   }
-  throw new Error('Could not find Daily Pages submission with QA #415 teacher note');
+  return href;
 }
 
 const browser = await chromium.launch({ headless: true, channel: 'chrome' });
@@ -116,12 +120,11 @@ try {
     fullPage: true,
   });
 
-  const submissionHref = await resolveQaSubmissionHref(page);
-
-  await devLogin(page, 'dev.teacher@yawp.local');
   await devLogin(page, PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_EMAIL);
   toggle = await openDailyPagesAssignmentType(page);
   await setToggle(page, toggle, true);
+
+  const submissionHref = await resolveQaSubmissionHref(page);
 
   await devLogin(page, 'dev.teacher@yawp.local');
   await page.goto(`${origin}${submissionHref}`);

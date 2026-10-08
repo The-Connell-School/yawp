@@ -148,6 +148,16 @@ async function ensureTeacherNoteOnGradedDailyPagesSample(prisma: SeedClient) {
     },
   };
 
+  const qaTitlePrefix = 'QA #415 Daily Pages';
+  await prisma.submission.update({
+    where: { id: submission.id },
+    data: { title: qaTitlePrefix },
+  });
+  await prisma.document.update({
+    where: { id: submission.id },
+    data: { title: qaTitlePrefix },
+  });
+
   if (run) {
     await prisma.submissionGradingAssistantRun.update({
       where: { id: run.id },
