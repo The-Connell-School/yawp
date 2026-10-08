@@ -306,6 +306,7 @@ export async function action({ request }: ActionFunctionArgs) {
           custom: { key: `custom-${randomUUID()}`, ...parsed.data },
         }),
         classIds: deployClassIds,
+        organizationPlan: profile.organization.plan,
       });
 
       return dataResponse({
@@ -349,6 +350,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       classIds: deployClassIds,
       deployment: { postAt, dueAt },
+      organizationPlan: profile.organization.plan,
     });
 
     let nextStep: ReturnType<typeof groupSetupNextStep> = null;
@@ -431,6 +433,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       classIds: deployClassIds,
       deployment: { postAt, dueAt },
+      organizationPlan: profile.organization.plan,
     });
 
     // "Group them for me" and "one doc for the whole class" describe an

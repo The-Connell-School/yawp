@@ -26,7 +26,7 @@ import {
 import { StudentClassCard } from '~/components/student-class-card';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
-import { assertCanCreateClassInTransaction } from '~/utils/assignment-quota.server';
+import { assertCanCreateClassForOrganizationPlan } from '~/utils/assignment-quota.server';
 import { getEntitlements } from '~/utils/entitlements.server';
 import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
@@ -204,9 +204,7 @@ export async function action({ request }: ActionFunctionArgs) {
         profile.organization.id
       );
       await prisma.$transaction(async (tx) => {
-        if (profile.organization.plan === 'FREE_CLASSROOM') {
-          await assertCanCreateClassInTransaction(tx, profile.organization);
-        }
+        await assertCanCreateClassForOrganizationPlan(tx, profile.organization);
         await tx.class.create({
           data: {
             schoolId,

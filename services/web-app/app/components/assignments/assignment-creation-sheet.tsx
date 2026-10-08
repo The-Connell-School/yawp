@@ -674,18 +674,16 @@ export function AssignmentCreationSheetContent({
                   key={assignmentType.id}
                   value={assignmentType.id}
                   textValue={assignmentType.title}
+                  triggerLabel={assignmentType.title}
                   disabled={assignmentType.quotaExhausted}
                 >
-                  <span className="flex flex-col gap-0.5">
-                    <span>{assignmentType.title}</span>
-                    {assignmentType.quotaLabel ? (
-                      <span className="text-xs text-muted-foreground">
-                        {assignmentType.quotaExhausted
-                          ? assignmentType.quotaExhaustedMessage
-                          : assignmentType.quotaLabel}
-                      </span>
-                    ) : null}
-                  </span>
+                  {assignmentType.quotaLabel ? (
+                    <span className="text-xs text-muted-foreground">
+                      {assignmentType.quotaExhausted
+                        ? assignmentType.quotaExhaustedMessage
+                        : assignmentType.quotaLabel}
+                    </span>
+                  ) : null}
                 </SelectItem>
               ))}
             </SelectContent>

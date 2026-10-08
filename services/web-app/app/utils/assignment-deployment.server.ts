@@ -1,4 +1,4 @@
-import type { Prisma } from '@app/prisma';
+import type { OrganizationPlan, Prisma } from '@app/prisma';
 import { deleteAssignmentPromptAttachment } from '~/domain/assignments/assignment-prompt-attachment.server';
 import { lockClassAssignmentCollaboration } from '~/domain/collaboration/class-assignment-lock.server';
 import {
@@ -15,6 +15,7 @@ export async function createAssignmentDeployedToClasses(params: {
     'id' | 'createdAt' | 'updatedAt'
   >;
   classIds: string[];
+  organizationPlan?: OrganizationPlan;
   deployment?: {
     postAt?: Date | null;
     dueAt?: Date | null;
@@ -25,6 +26,7 @@ export async function createAssignmentDeployedToClasses(params: {
     await enforceFreeClassroomAssignmentCreateInTransaction(tx, {
       classIds: uniqueClassIds,
       assignmentTypeId: String(params.data.assignmentTypeId),
+      organizationPlan: params.organizationPlan,
     });
     const assignment = await tx.assignment.create({
       data: params.data,
@@ -48,6 +50,7 @@ export async function createAssignmentDeployedToClasses(params: {
 export async function updateAssignmentInClassDeployment(params: {
   assignmentId: string;
   classId: string;
+  organizationPlan?: OrganizationPlan;
   data: Prisma.AssignmentUncheckedUpdateInput;
 }) {
   return prisma.$transaction(async (tx) => {
@@ -70,6 +73,7 @@ export async function updateAssignmentInClassDeployment(params: {
         classIds: [params.classId],
         previousAssignmentTypeId: existing.assignmentTypeId,
         nextAssignmentTypeId: String(nextAssignmentTypeId),
+        organizationPlan: params.organizationPlan,
       });
     }
     return tx.assignment.update({

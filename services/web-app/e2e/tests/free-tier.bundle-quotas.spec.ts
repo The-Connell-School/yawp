@@ -29,9 +29,17 @@ test.describe('Free classroom bundle quotas', () => {
       .getByRole('button', { name: /new assignment|create assignment/i })
       .first()
       .click();
+    const typeTrigger = page
+      .locator('[role="combobox"]')
+      .filter({ hasText: /Class Starter|Prewriting|Thesis Statement/i })
+      .first();
+    await expect(typeTrigger).toBeVisible();
+    await expect(typeTrigger).not.toContainText(/\d+ of \d+/);
+    await typeTrigger.click();
     await expect(
-      page.locator('[role="combobox"]').filter({ hasText: /\d+ of \d+/ })
-    ).toBeVisible();
+      page.getByRole('option', { name: /Prewriting/i })
+    ).toContainText(/\d+ of \d+/);
+    await page.keyboard.press('Escape');
     const tileTitles = await page
       .getByTestId('teacher-assignments-grid')
       .locator('h3')

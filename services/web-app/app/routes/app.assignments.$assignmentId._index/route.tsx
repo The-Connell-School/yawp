@@ -524,6 +524,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             ...promptAttachmentData,
           },
           classIds: [classId],
+          organizationPlan: profile.organization.plan,
           deployment: {
             postAt: postAt ?? null,
             dueAt: dueAt ?? null,
@@ -610,6 +611,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       await updateAssignmentInClassDeployment({
         assignmentId: existingAssignment.id,
         classId,
+        organizationPlan: profile.organization.plan,
         data: {
           assignmentTypeId,
           title,

@@ -223,8 +223,12 @@ export async function enforceFreeClassroomAssignmentCreateInTransaction(
   params: {
     classIds: string[];
     assignmentTypeId: string;
+    organizationPlan?: OrganizationPlan;
   }
 ) {
+  if (params.organizationPlan && params.organizationPlan !== 'FREE_CLASSROOM') {
+    return;
+  }
   const organization = await resolveOrganizationForClassIds(tx, params.classIds);
   if (!organization || organization.plan !== 'FREE_CLASSROOM') return;
   const assignmentType = await tx.assignmentType.findUnique({
@@ -244,8 +248,12 @@ export async function enforceFreeClassroomAssignmentRetypeInTransaction(
     classIds: string[];
     previousAssignmentTypeId: string;
     nextAssignmentTypeId: string;
+    organizationPlan?: OrganizationPlan;
   }
 ) {
+  if (params.organizationPlan && params.organizationPlan !== 'FREE_CLASSROOM') {
+    return;
+  }
   const organization = await resolveOrganizationForClassIds(tx, params.classIds);
   if (!organization || organization.plan !== 'FREE_CLASSROOM') return;
   const types = await tx.assignmentType.findMany({
@@ -259,6 +267,15 @@ export async function enforceFreeClassroomAssignmentRetypeInTransaction(
     byId.get(params.previousAssignmentTypeId) ?? null,
     byId.get(params.nextAssignmentTypeId) ?? null
   );
+}
+
+/** No-op for SCHOOL and other plans; free classroom cap enforced in-transaction. */
+export async function assertCanCreateClassForOrganizationPlan(
+  tx: Prisma.TransactionClient,
+  organization: Pick<Organization, 'id' | 'plan'>
+) {
+  if (organization.plan !== 'FREE_CLASSROOM') return;
+  await assertCanCreateClassInTransaction(tx, organization);
 }
 
 export async function assertCanCreateClassInTransaction(

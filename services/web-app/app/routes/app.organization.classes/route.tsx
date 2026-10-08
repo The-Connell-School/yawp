@@ -42,7 +42,7 @@ import {
   setOrganizationClassesTableCookie,
   getOrganizationClassesTableCookieValue,
 } from '~/utils/cookies.server';
-import { assertCanCreateClassInTransaction } from '~/utils/assignment-quota.server';
+import { assertCanCreateClassForOrganizationPlan } from '~/utils/assignment-quota.server';
 import { prisma } from '~/utils/db.server';
 import { SearchInput } from '~/components/search-input';
 import {
@@ -352,9 +352,7 @@ export async function action({ request }: ActionFunctionArgs) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         await prisma.$transaction(async (tx) => {
-          if (profile.organization.plan === 'FREE_CLASSROOM') {
-            await assertCanCreateClassInTransaction(tx, profile.organization);
-          }
+          await assertCanCreateClassForOrganizationPlan(tx, profile.organization);
           await tx.class.create({
             data: {
               schoolId,
