@@ -178,6 +178,7 @@ async function redeemBypassToken(page, acqToken, teacherEmail) {
     ),
     page.getByRole('button', { name: /Continue/i }).click(),
   ]);
+  await page.waitForURL(/\/(free\/join|app\/free-tier)/, { timeout: 45_000 }).catch(() => {});
   await page.waitForTimeout(1500);
 }
 
