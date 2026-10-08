@@ -219,6 +219,7 @@ jobs:
           ./services/web-app/app/utils/internal-rubric-catalog-http.server.test.ts
           ./services/web-app/app/utils/ip.server.test.ts
           ./services/web-app/app/utils/rate-limit.server.test.ts
+          ./services/web-app/app/utils/login-rate-limit-target.test.ts
           ./services/web-app/app/utils/rate-limit.false-positive.test.ts
           ./services/web-app/app/utils/rate-limit.responses.test.ts
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
@@ -282,7 +283,14 @@ jobs:
           bun test app/utils/entitlements.server.test.ts
           bun test app/utils/reporter/reporter-access.server.test.ts
           bun test app/utils/auth.server.test.ts
+          bun test app/routes/auth.login/login.server.test.ts
           bun test app/utils/entitlements.db.test.ts
+
+      # Mocks prisma; must not share a bun process with real-DB rate limit tests.
+      - name: 🧪 Login limiter fail-closed timeout
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: bun test app/utils/login-rate-limit.fail-closed.test.ts
 
   typecheck-web-app:
     needs: [paths]
