@@ -134,7 +134,7 @@ describe('loginAction rate limits', () => {
     verifyUserPassword.mockResolvedValue(null);
 
     await loginAction({
-      request: loginRequest('teacher@example.com', 'wrong'),
+      request: loginRequest('teacher@example.com', 'wrong-password'),
     } as any);
 
     expect(refundLoginAttemptRateLimits).not.toHaveBeenCalled();
@@ -155,24 +155,24 @@ describe('loginAction rate limits', () => {
     expect(verifyUserPassword).not.toHaveBeenCalled();
   });
 
-  test('parallel attempts only verify passwords for requests that pass the limiter', async () => {
-    let allowed = 0;
-    consumeLoginAttemptRateLimits.mockImplementation(async () => {
-      allowed += 1;
-      if (allowed > 2) {
-        return { allowed: false, scope: 'ip', retryAfterSeconds: 30 };
-      }
-      return { allowed: true, charged: [] };
-    });
+  test('stops verifying passwords after the limiter exhausts on repeated attempts', async () => {
+    consumeLoginAttemptRateLimits
+      .mockResolvedValueOnce({ allowed: true, charged: [] })
+      .mockResolvedValueOnce({ allowed: true, charged: [] })
+      .mockResolvedValue({
+        allowed: false,
+        scope: 'ip',
+        retryAfterSeconds: 30,
+      });
+    verifyUserPassword.mockResolvedValue(null);
 
-    await Promise.all(
-      Array.from({ length: 5 }, () =>
-        loginAction({
-          request: loginRequest('burst@example.com', 'pw'),
-        } as any)
-      )
-    );
+    for (let i = 0; i < 5; i += 1) {
+      await loginAction({
+        request: loginRequest('burst@example.com', 'password-burst'),
+      } as any);
+    }
 
     expect(verifyUserPassword).toHaveBeenCalledTimes(2);
+    expect(consumeLoginAttemptRateLimits).toHaveBeenCalledTimes(5);
   });
 });
