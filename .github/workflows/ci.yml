@@ -314,10 +314,13 @@ jobs:
             app/routes/api.domain.lesson-planner/route.test.ts \
             app/routes/api.domain.lesson-planner.packet/route.test.ts \
             app/domain/lesson-planner/artifact-from-reply.test.ts \
+            app/domain/lesson-planner/lesson-pdf.server.test.ts \
+            app/domain/lesson-planner/lesson-packet.test.ts \
             app/utils/lesson-planner/lesson-planner-access.server.test.ts \
             app/utils/lesson-planner/lesson-planner-quota.server.test.ts \
             app/utils/lesson-planner/lesson-planner-admission.server.test.ts \
-            ../../packages/prisma/scripts/bootstrap-exit-ticket-assignment-type.test.ts
+            ../../packages/prisma/scripts/bootstrap-exit-ticket-assignment-type.test.ts \
+            ../../packages/prisma/scripts/seed-preview-planner-qa.test.ts
           do
             bun test "$f"
           done

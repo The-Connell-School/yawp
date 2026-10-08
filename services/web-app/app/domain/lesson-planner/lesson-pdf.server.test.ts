@@ -563,8 +563,13 @@ ${JSON.stringify(
         },
         {
           id: 'mat-exit',
-          content:
-            '## Exit ticket\n\nIn your own words, explain what a comma splice is and how to fix one.',
+          content: `## Closing (3 min)\n\nHand this out with two minutes left.\n\n\`\`\`yawp-exit-ticket
+mode: specific
+focus: explain-concept
+topic: what a comma splice is and how to fix one
+answer: objective
+mustMention: Whether the material moves.
+\`\`\``,
           keptAudience: 'student',
           keptTitle: 'Exit ticket: comma splices',
           kind: 'handout',
@@ -578,7 +583,11 @@ ${JSON.stringify(
     expect(text).toContain('Fix comma splices');
     expect(text).toContain('Name the splice');
     expect(text).toContain('Cover Test');
-    expect(text).toContain('comma splice');
+    expect(text).toContain('Exit ticket: comma splices');
+    expect(text).toContain('what a comma splice is and how to fix one');
+    expect(text).toMatch(/in your own words/i);
     expect(text).not.toContain('yawp-slides');
+    expect(text).not.toContain('yawp-exit-ticket');
+    expect(text).not.toContain('mustMention');
   });
 });
