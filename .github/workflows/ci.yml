@@ -329,6 +329,8 @@ jobs:
             app/domain/rubrics/rubric-promotion.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
             app/domain/grading/gradeMath.test.ts \
+            app/routes/api.domain.update-submission/route.test.ts \
+            'app/routes/app_.submissions_.$submissionId/teacher-grading/view-panel.test.tsx' \
             app/domain/reporter/reporter-report.test.ts \
             app/routes/api.assignments.create/route.test.ts \
             app/routes/app.assignments._index/route.test.ts \
@@ -362,8 +364,10 @@ jobs:
     needs: [typecheck-web-app, validate-prisma-migrations, paths]
     name: 🧪 E2E Tests (Playwright)
     runs-on: ubuntu-22.04
-    # Smoke suite (~130 specs) normally finishes in ~25–30m. Cap below GitHub's
-    # six-hour default so wedged browser installs still fail fast.
+    # The browser download hung for five hours on 2026-08-18 and would have run
+    # to GitHub's six-hour default before failing. Nothing about this job is
+    # worth half a day of a runner: the tests themselves take about seven
+    # minutes, so anything past half an hour is wedged, not slow.
     timeout-minutes: 30
     services:
       postgres:

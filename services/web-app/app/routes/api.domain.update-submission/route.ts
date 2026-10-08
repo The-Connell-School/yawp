@@ -285,19 +285,26 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const assignmentTypeId = submission.document.assignmentTypeId;
   let holisticTier = scoringModeFromAiMeta(submission.aiMeta) === 'holistic_tier';
+  let holisticPointTotalFallback = 100;
   if (assignmentTypeId) {
-    const gradingConfig = await resolveAssignmentTypeGradingConfig({
-      assignmentTypeId,
-      assignmentId: submission.document.assignment?.id ?? undefined,
-    });
-    holisticTier =
-      isHolisticTierScoringMode(gradingConfig.scoringMode) || holisticTier;
+    try {
+      const gradingConfig = await resolveAssignmentTypeGradingConfig({
+        assignmentTypeId,
+        assignmentId: submission.document.assignment?.id ?? undefined,
+      });
+      holisticTier =
+        isHolisticTierScoringMode(gradingConfig.scoringMode) || holisticTier;
+      holisticPointTotalFallback =
+        gradingConfig.rubricTotalPoints ?? gradingConfig.maxScore ?? 100;
+    } catch {
+      // Type/assignment mismatch or missing context: rely on aiMeta when present.
+    }
   }
   if (holisticTier) {
     data.numericPercentage = null;
     data.letterGrade = null;
     const pointValue = submission.document.assignment?.pointValue;
-    const total = assignmentPointTotal(pointValue, 100);
+    const total = assignmentPointTotal(pointValue, holisticPointTotalFallback);
     const earned =
       typeof data.overallScore === 'number' && Number.isFinite(data.overallScore)
         ? Math.round(data.overallScore)

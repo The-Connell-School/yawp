@@ -1,10 +1,10 @@
 SET lock_timeout = '5s';
 
-SELECT set_config('yawp.rubric_revision_actor', 'migration:holistic-tier-hornbuckle', true);
+SELECT set_config('yawp.rubric_revision_actor', 'migration:holistic-tier-hornbuckle', false);
 SELECT set_config(
   'yawp.rubric_revision_reason',
   'Opt in Cristo Rey Hornbuckle in-class essay type to holistic tier scoring (PR #411)',
-  true
+  false
 );
 
 -- Opt-in holistic tier scoring for Mr. Hornbuckle's in-class essay/analysis assignment type.
@@ -27,3 +27,6 @@ WHERE id = 'cmur0glku00d401l1cg6ou25q'
   );
 
 RESET lock_timeout;
+
+SELECT set_config('yawp.rubric_revision_actor', '', false);
+SELECT set_config('yawp.rubric_revision_reason', '', false);
