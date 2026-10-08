@@ -12,6 +12,10 @@ import {
 } from './preview-seats';
 import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { attachApHistorySourceImages } from './local-dev/seed-ap-history';
+import {
+  assertPreviewPlannerQaTarget,
+  seedPreviewPlannerQa,
+} from './seed-preview-planner-qa';
 
 assertLocalSeedTarget();
 
