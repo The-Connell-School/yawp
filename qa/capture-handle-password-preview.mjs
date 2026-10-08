@@ -186,8 +186,15 @@ async function main() {
     await shot(studentPage, '06-duplicate-handle-rejected.png');
 
     await studentPage.goto(`${BASE}/auth/logout`).catch(() => {});
+    await studentPage.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
+    await studentPage.getByLabel('Email or handle').fill(studentHandle);
+    await studentPage.getByLabel('Password').fill('wrong-password-99');
+    await studentPage.getByRole('button', { name: 'Log in' }).click();
+    await studentPage.waitForTimeout(1500);
+    await shot(studentPage, '07-wrong-password-login.png');
+
     await login(studentPage, studentCtx, studentHandle, studentPassword);
-    await shot(studentPage, '07-handle-student-login.png');
+    await shot(studentPage, '08-handle-student-login.png');
 
     const cookies = await studentCtx.cookies();
     const sessionCookie = cookies.find((c) => c.name === 'sessionId' || c.name.includes('session'));
@@ -203,18 +210,18 @@ async function main() {
     await page.locator('input[name="temporaryPassword"]').fill('temp-preview-1');
     await page.getByRole('button', { name: /reset login/i }).click();
     await page.waitForTimeout(1500);
-    await shot(page, '08-teacher-reset-student-password.png');
+    await shot(page, '09-teacher-reset-student-password.png');
 
     const emailCtx = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 900 } });
     const emailPage = await emailCtx.newPage();
     await passPreviewGate(emailCtx);
     await login(emailPage, emailCtx, EMAIL_STUDENT, EMAIL_STUDENT_PASSWORD);
-    await shot(emailPage, '09-email-student-login.png');
+    await shot(emailPage, '10-email-student-login.png');
 
     await page.bringToFront();
     await page.goto(`${BASE}/auth/logout`).catch(() => {});
     await login(page, context, TEACHER_EMAIL, TEACHER_PASSWORD);
-    await shot(page, '10-teacher-email-login.png');
+    await shot(page, '11-teacher-email-login.png');
 
     const cap = Number(process.env.CLASS_FULL_FILL_COUNT ?? '35');
     const fullCtx = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -236,7 +243,7 @@ async function main() {
       password: studentPassword,
     });
     await fullPage.waitForTimeout(1500);
-    await shot(fullPage, '11-class-full-message.png');
+    await shot(fullPage, '12-class-full-seat-cap.png');
 
     await studentCtx.close();
     await emailCtx.close();

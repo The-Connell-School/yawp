@@ -1,0 +1,1 @@
+-- Repair migration is forward-only idempotent DDL; no rollback required.

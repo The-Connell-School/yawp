@@ -866,5 +866,28 @@ describe('migration integration (real Postgres)', () => {
       NODE_PATH: NODE_PATH_WITH_ROOT,
     });
   }, 120000);
+
+  test('20261008121500 repair free class join columns is re-runnable', () => {
+    const repairSql = readFileSync(
+      join(
+        PRISMA_DIR,
+        'migrations',
+        '20261008121500_repair_free_class_join_columns',
+        'migration.sql'
+      ),
+      'utf8'
+    );
+    psql(repairSql);
+    psql(repairSql);
+    const joinCol = jsonQuery(`
+      SELECT json_build_object(
+        'exists', EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'Class' AND column_name = 'studentJoinToken'
+        )
+      )
+    `);
+    expect(joinCol.exists).toBe(true);
+  });
 });
 

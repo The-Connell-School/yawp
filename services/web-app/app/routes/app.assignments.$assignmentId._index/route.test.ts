@@ -102,7 +102,11 @@ describe('app.assignments.$assignmentId loader', () => {
     requireUserId.mockReset().mockResolvedValue('user-1');
     requireMembership
       .mockReset()
-      .mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
+      .mockResolvedValue({
+        id: 'teacher-1',
+        role: 'TEACHER',
+        organization: { plan: 'SCHOOL' },
+      });
     prisma.classAssignment.findMany
       .mockReset()
       .mockResolvedValue([deployment()]);
@@ -248,6 +252,7 @@ describe('app.assignments.$assignmentId loader', () => {
     expect(updateAssignmentInClassDeployment).toHaveBeenCalledWith({
       assignmentId: 'assignment-1',
       classId: 'class-1',
+      organizationPlan: 'SCHOOL',
       data: expect.objectContaining({ writingTimeMinutes: 12 }),
     });
   });
