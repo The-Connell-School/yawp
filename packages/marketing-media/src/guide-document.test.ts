@@ -65,6 +65,12 @@ describe('renderGuideDocument', () => {
     expect(html.match(/<video/g)).toHaveLength(1);
   });
 
+  // `.shot img` is display:block, so a bare `.print-only` rule loses and the
+  // print still shows on screen under every clip.
+  test('hides the print still on screen with a rule that outranks .shot img', () => {
+    expect(render()).toContain('.shot .print-only{display:none}');
+  });
+
   test('lists the range and the moments teachers use it', () => {
     const html = render();
     expect(html).toContain('<li>Quick feedback on each entry</li>');

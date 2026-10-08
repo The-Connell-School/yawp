@@ -131,9 +131,9 @@ li{margin:4px 0}
 footer{border-top:1px solid var(--line);padding-top:28px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
 footer p{color:var(--muted);font-size:14px;max-width:60ch}
 .start{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;border-radius:999px;padding:10px 22px}
-.print-only{display:none}
-@media (prefers-reduced-motion:reduce){video{display:none}.print-only{display:block}}
-@media print{body{background:#fff}main{gap:36px;padding:0}video{display:none}.print-only{display:block}.shot{box-shadow:none;transform:none;break-inside:avoid}.step,.card{break-inside:avoid}}
+.shot .print-only{display:none}
+@media (prefers-reduced-motion:reduce){.shot video{display:none}.shot .print-only{display:block}}
+@media print{body{background:#fff}main{gap:36px;padding:0}.shot video{display:none}.shot .print-only{display:block}.shot{box-shadow:none;transform:none;break-inside:avoid}.step,.card{break-inside:avoid}}
 `;
 
 export function renderGuideDocument(params: GuideDocumentParams): string {
