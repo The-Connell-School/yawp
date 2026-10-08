@@ -3,8 +3,12 @@
  * the renderer reads them, so they live outside both.
  */
 
-/** What a job produces. Narrated clips are phase three and are not accepted yet. */
-export const MARKETING_JOB_KINDS = ['STILLS', 'CLIP'] as const;
+/**
+ * What a job produces. GUIDE is a how-to guide document (docs/how-to-guides.md)
+ * built from per-step stills and looping clips. Narrated clips are phase three
+ * and are not accepted yet.
+ */
+export const MARKETING_JOB_KINDS = ['STILLS', 'CLIP', 'GUIDE'] as const;
 export type MarketingJobKind = (typeof MARKETING_JOB_KINDS)[number];
 
 export const MARKETING_JOB_STATUSES = [
@@ -34,7 +38,8 @@ export const MARKETING_SUBJECT_TYPES = [
 ] as const;
 export type MarketingSubjectType = (typeof MARKETING_SUBJECT_TYPES)[number];
 
-export const MARKETING_OUTPUT_KINDS = ['IMAGE', 'VIDEO'] as const;
+/** DOCUMENT is a guide's self-contained HTML page. */
+export const MARKETING_OUTPUT_KINDS = ['IMAGE', 'VIDEO', 'DOCUMENT'] as const;
 export type MarketingOutputKind = (typeof MARKETING_OUTPUT_KINDS)[number];
 
 export type MarketingOutput = {

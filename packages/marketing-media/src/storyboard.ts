@@ -239,6 +239,55 @@ export const StoryboardStepSchema = z.discriminatedUnion('action', [
 
 export type StoryboardStep = z.infer<typeof StoryboardStepSchema>;
 
+/**
+ * Where a scene lands in a how-to guide. The order is the guide's, not the
+ * filming order: docs/how-to-guides.md puts the hero first, then the range of
+ * what the feature makes, then up to three numbered steps, then extras.
+ */
+export const GUIDE_SECTIONS = ['hero', 'range', 'step', 'extra'] as const;
+export type GuideSection = (typeof GUIDE_SECTIONS)[number];
+
+/** Guide copy for one scene. The caps keep a step to a heading and a line or two. */
+const SceneGuideSchema = z.object({
+  section: z.enum(GUIDE_SECTIONS),
+  heading: z.string().trim().min(1).max(80).optional(),
+  body: z.string().trim().min(1).max(260).optional(),
+});
+
+export type SceneGuide = z.infer<typeof SceneGuideSchema>;
+
+/**
+ * The words around the pictures in a how-to guide. Only GUIDE jobs need it;
+ * stills and clips ignore it, so storyboards written before guides existed
+ * parse unchanged.
+ */
+export const StoryboardGuideSchema = z
+  .object({
+    /** One headline that says what the feature does for a teacher. */
+    headline: z.string().trim().min(3).max(90),
+    /** The words in the headline to set in the accent colour. */
+    highlight: z.string().trim().min(1).max(40).optional(),
+    /** One or two sentences under the headline. */
+    lede: z.string().trim().min(1).max(240),
+    /** Heading over the numbered steps. Says what the workflow is for. */
+    workflowHeading: z.string().trim().min(1).max(80).optional(),
+    /** "What it can do": the range, as a list a skimmer can read. */
+    canDo: z.array(z.string().trim().min(1).max(120)).max(6).default([]),
+    /** Real moments a teacher would use the main workflow. */
+    useCases: z.array(z.string().trim().min(1).max(80)).max(5).default([]),
+    will: z.array(z.string().trim().min(1).max(160)).max(6).default([]),
+    wont: z.array(z.string().trim().min(1).max(160)).max(6).default([]),
+    /** The honest demo line: demo classes, and whether AI replies were scripted. */
+    footerNote: z.string().trim().max(240).default(''),
+    startLabel: z.string().trim().min(1).max(40).optional(),
+  })
+  .refine(
+    (guide) => !guide.highlight || guide.headline.includes(guide.highlight),
+    { message: 'highlight must be words from the headline', path: ['highlight'] }
+  );
+
+export type StoryboardGuide = z.infer<typeof StoryboardGuideSchema>;
+
 export const StoryboardSceneSchema = z
   .object({
     id: slug,
@@ -293,6 +342,8 @@ export const StoryboardSceneSchema = z
         message: 'focus needs a selector, a role, or text to aim at',
       })
       .optional(),
+    /** Where this scene appears in a how-to guide, and the words beside it. */
+    guide: SceneGuideSchema.optional(),
   })
   .superRefine((scene, ctx) => {
     scene.steps.forEach((step, index) => {
@@ -344,6 +395,7 @@ export const StoryboardSchema = z
     persona: z.enum(MARKETING_PERSONAS).default('teacher'),
     viewport,
     scenes: z.array(StoryboardSceneSchema).min(1).max(MAX_SCENES),
+    guide: StoryboardGuideSchema.optional(),
   })
   .superRefine((value, ctx) => {
     const ids = value.scenes.map((scene) => scene.id);

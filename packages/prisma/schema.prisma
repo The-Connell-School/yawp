@@ -2094,7 +2094,7 @@ model MarketingMediaJob {
   updatedAt    DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
   createdById  String
   createdBy    User      @relation("MarketingMediaJobAuthor", fields: [createdById], references: [id], onDelete: Cascade)
-  /// STILLS or CLIP. Narrated clips are not accepted yet.
+  /// STILLS, CLIP, or GUIDE. Narrated clips are not accepted yet.
   kind         String
   /// GENERATING, QUEUED, RENDERING, SUCCEEDED, FAILED, or CANCELLED.
   status       String
