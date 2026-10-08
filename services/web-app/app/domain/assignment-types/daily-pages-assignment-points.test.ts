@@ -50,9 +50,9 @@ describe('Daily Pages assignment points', () => {
     );
   });
 
-  test('keeps pinned band descriptions when scaling from the resolved schema', () => {
+  test('keeps pinned band narrative but rewrites configured range for the assignment total', () => {
     const original = config();
-    const pinnedDescription = 'Pinned Not Present copy from revision.';
+    const pinnedNarrative = 'Pinned Not Present copy from revision.';
     original.rubricCategories = [
       {
         ...original.rubricCategories[0],
@@ -61,16 +61,31 @@ describe('Daily Pages assignment points', () => {
           max: band.max,
           label: band.label,
           description:
-            band.label === 'Not Present' ? pinnedDescription : band.label,
+            band.label === 'Not Present'
+              ? `${pinnedNarrative}\n\nConfigured band for a 100-point assignment: 0–69.`
+              : band.label,
         })),
       },
     ];
     const scaled = scaleDailyPagesForAssignment(original, 12);
-    expect(
-      scaled.rubricCategories[0].bands?.find(
-        (band) => band.label === 'Not Present'
-      )?.description
-    ).toBe(pinnedDescription);
+    const notPresent = scaled.rubricCategories[0].bands?.find(
+      (band) => band.label === 'Not Present'
+    )?.description;
+    expect(notPresent).toContain(pinnedNarrative);
+    expect(notPresent).toContain('Configured band for a 12-point assignment');
+    expect(notPresent).not.toMatch(/100-point/);
+  });
+
+  test('scaled band text at 12 and 30 points never references the 100-point library', () => {
+    for (const total of [12, 30]) {
+      const scaled = scaleDailyPagesForAssignment(config(), total);
+      for (const band of scaled.rubricCategories[0].bands ?? []) {
+        expect(band.description).not.toMatch(/100-point/);
+        expect(band.description).toContain(
+          `Configured band for a ${total}-point assignment`
+        );
+      }
+    }
   });
 
   test('holistic tier manual grading offers one score per engagement tier', () => {

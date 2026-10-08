@@ -7,9 +7,30 @@ import type {
   ScoringScaleData,
 } from './assignment-type-rubric.shared';
 import {
+  type DailyPagesEngagementTierBand,
   dailyPagesEngagementTierBands,
   formatDailyPagesEngagementBandRange,
 } from './daily-pages-engagement-tier-bands';
+
+const CONFIGURED_BAND_LINE_PATTERN =
+  /\n*Configured band for a \d+-point assignment:[^\n]*(?:\n|$)/g;
+
+/**
+ * Strips any library reference-total "Configured band…" line and appends the
+ * range for the assignment's actual point total (student UI, teacher UI, AI).
+ */
+export function dailyPagesEngagementBandDescriptionForTotal(
+  sourceDescription: string | undefined,
+  total: number,
+  tierBand: DailyPagesEngagementTierBand
+): string {
+  const label = tierBand.label as keyof typeof TIER_DESCRIPTIONS;
+  const narrative =
+    sourceDescription?.replace(CONFIGURED_BAND_LINE_PATTERN, '').trimEnd() ||
+    TIER_DESCRIPTIONS[label] ||
+    tierBand.label;
+  return `${narrative}\n\nConfigured band for a ${total}-point assignment: ${formatDailyPagesEngagementBandRange(tierBand)}.`;
+}
 
 export const DAILY_PAGES_ENGAGEMENT_CATEGORY_KEY = 'engagement_with_prompt';
 export const DAILY_PAGES_ENGAGEMENT_SCALING_RULE = 'daily_pages_engagement_v2';
@@ -63,7 +84,11 @@ function engagementBandsForTotal(total: number): RubricScoreBand[] {
     min: band.min,
     max: band.max,
     label: band.label,
-    description: `${TIER_DESCRIPTIONS[band.label as keyof typeof TIER_DESCRIPTIONS]}\n\nConfigured band for a ${total}-point assignment: ${formatDailyPagesEngagementBandRange(band)}.`,
+    description: dailyPagesEngagementBandDescriptionForTotal(
+      TIER_DESCRIPTIONS[band.label as keyof typeof TIER_DESCRIPTIONS],
+      total,
+      band
+    ),
   }));
 }
 

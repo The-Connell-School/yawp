@@ -2,6 +2,7 @@ import type { ResolvedAssignmentTypeGradingConfig } from './assignment-type-grad
 import type { RubricScoreBand, RubricScoreLabel } from './assignment-type-rubric.shared';
 import {
   buildDailyPagesEngagementRubricCategory,
+  dailyPagesEngagementBandDescriptionForTotal,
   DAILY_PAGES_ENGAGEMENT_CATEGORY_KEY,
   DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL,
   DAILY_PAGES_ENGAGEMENT_SCALING_RULE,
@@ -94,9 +95,11 @@ export function scaleDailyPagesForAssignment(
                 min: tierBand.min,
                 max: tierBand.max,
                 label: tierBand.label,
-                description:
-                  sourceBand?.description ??
-                  `${tierBand.label} (${tierBand.min}–${tierBand.max})`,
+                description: dailyPagesEngagementBandDescriptionForTotal(
+                  sourceBand?.description,
+                  total,
+                  tierBand
+                ),
               };
             }),
           }
