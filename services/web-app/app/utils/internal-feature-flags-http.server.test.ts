@@ -18,7 +18,9 @@ const { featureFlagsList, featureFlagUpdate } = await import(
 );
 
 const key = 'k'.repeat(43);
-const FLAG = 'daily_pages_paragraph_type_and_writing_time';
+const FLAG = 'lesson_planner';
+/** Removed with its feature (Daily Pages paragraph type and writing time). */
+const REMOVED_FLAG = 'daily_pages_paragraph_type_and_writing_time';
 const NAME = `feature_flag.${FLAG}`;
 const BASE = 'https://yawp.test/api/internal/v1/feature-flags';
 
@@ -104,8 +106,24 @@ describe('internal feature-flag endpoints', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     const body = await response.json();
-    expect(body.flags).toHaveLength(2);
+    expect(body.flags).toHaveLength(1);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
+  });
+
+  test('no longer lists the removed writing-conditions flag, even if its row is still stored', async () => {
+    prisma.setting.findMany.mockResolvedValue([
+      {
+        name: `feature_flag.${REMOVED_FLAG}`,
+        value: 'true',
+        description: null,
+        updatedAt: new Date('2026-10-07T16:00:00Z'),
+      },
+    ]);
+    const response = await featureFlagsList(
+      new Request(BASE, { headers: { authorization: `Bearer ${key}` } })
+    );
+    const body = await response.json();
+    expect(body.flags.map((flag: { key: string }) => flag.key)).toEqual([FLAG]);
   });
 
   test('lists each flag with its mode, schools, and legacy enabled', async () => {
@@ -131,7 +149,6 @@ describe('internal feature-flag endpoints', () => {
       updatedAt: '2026-10-07T16:00:00.000Z',
       lastChangedBy: 'ops@yawp.school',
     });
-    expect(body.flags[1]).toMatchObject({ mode: 'off', orgIds: [], enabled: false });
   });
 
   test('legacy {enabled: true} turns a flag on for everyone and reports the change', async () => {
@@ -265,6 +282,16 @@ describe('internal feature-flag endpoints', () => {
   test('refuses an unknown flag', async () => {
     const response = await featureFlagUpdate(post({ enabled: true }, {}, 'nope'), 'nope');
     expect(response.status).toBe(404);
+    expect(prisma.setting.upsert).not.toHaveBeenCalled();
+  });
+
+  test('refuses the removed writing-conditions flag as unknown', async () => {
+    const response = await featureFlagUpdate(
+      post({ enabled: true }, {}, REMOVED_FLAG),
+      REMOVED_FLAG
+    );
+    expect(response.status).toBe(404);
+    expect(prisma.setting.findUnique).not.toHaveBeenCalled();
     expect(prisma.setting.upsert).not.toHaveBeenCalled();
   });
 

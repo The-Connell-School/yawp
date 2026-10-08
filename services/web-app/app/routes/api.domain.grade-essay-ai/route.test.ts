@@ -2096,12 +2096,6 @@ describe('api.domain.grade-essay-ai', () => {
       } as any);
     }
 
-    beforeEach(() => {
-      // Paragraph type and writing time are behind a flag; these tests
-      // describe it on. The flag-off tests below switch it off.
-      prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
-    });
-
     async function gradeTimed(
       id: string,
       writingTimeMinutes: number | null,
@@ -2163,76 +2157,53 @@ describe('api.domain.grade-essay-ai', () => {
       expect(grading.messages[0].content).toContain('Cold write:');
     });
 
-    test('tells the grading assistant the paragraph type the teacher chose', async () => {
-      const { grading } = await gradeTimed('sub-analyze', 15, true, 'analyze');
-
-      expect(grading.messages[0].content).toContain('Paragraph type: Analyze');
-    });
-
-    test('says nothing about a paragraph type when none was chosen', async () => {
-      const { grading } = await gradeTimed('sub-any', 15, true, null);
-
-      expect(grading.messages[0].content).not.toContain('Paragraph type');
-    });
-
     test('says nothing about a cold write when the tutor was on', async () => {
       const { grading } = await gradeTimed('sub-tutored', 15, true);
 
       expect(grading.messages[0].content).not.toContain('Cold write');
     });
 
-    test('tells both the grading assistant and the grammar checker how long the student had', async () => {
-      const { grading, grammar } = await gradeTimed('sub-timed', 10);
+    /**
+     * Daily Pages paragraph type and writing time were removed. An old
+     * assignment may still have both stored; neither the grading assistant
+     * nor the grammar checker is ever told about them.
+     */
+    test('the grading assistant ignores a stored paragraph type and writing time', async () => {
+      const { grading } = await gradeTimed('sub-stored', 10, true, 'analyze');
 
-      expect(grading.messages[0].content).toContain('Writing time:');
-      expect(grading.messages[0].content).toContain('10 minutes');
-      expect(grammar.system).toContain('written in 10 minutes');
-      expect(grammar.system).toMatch(/fragment used on purpose/);
-      expect(grammar.messages[0].content).toContain('Written in 10 minutes');
+      expect(grading.messages[0].content).not.toContain('Paragraph type');
+      expect(grading.messages[0].content).not.toContain('Writing time');
+      expect(grading.system).not.toContain('Paragraph type');
+      expect(grading.system).not.toContain('Writing time');
     });
 
-    test('without a writing time, both prompts are what they were before the setting', async () => {
+    test('the grammar checker reads the work as untimed, whatever is stored', async () => {
       const { buildGrammarCheckerSystemPrompt } = await import(
-        '~/domain/grading/writing-time'
+        '~/domain/grading/grammar-checker-prompts'
       );
-      const { grading, grammar } = await gradeTimed('sub-untimed', null);
+      const { grammar } = await gradeTimed('sub-stored-grammar', 10);
 
-      expect(grading.messages[0].content).not.toContain('Writing time');
-      expect(grammar.system).toBe(buildGrammarCheckerSystemPrompt(null));
+      expect(grammar.system).toBe(buildGrammarCheckerSystemPrompt());
       expect(grammar.messages[0].content).toMatch(
         /^Essay:\n[\s\S]*\n\nReturn up to 15 issues\.$/
       );
     });
 
-    describe('with the writing-conditions flag off', () => {
-      beforeEach(() => {
-        prisma.setting.findUnique.mockReset().mockResolvedValue(null);
-      });
+    test('a cold write with a stored writing time is still only a cold write', async () => {
+      const { grading } = await gradeTimed('sub-stored-cold', 10, false);
 
-      test('the grading assistant ignores a stored paragraph type and writing time', async () => {
-        const { grading } = await gradeTimed('sub-flag-off', 10, true, 'analyze');
+      expect(grading.messages[0].content).toContain('Cold write:');
+      expect(grading.messages[0].content).not.toContain('Writing time');
+    });
 
-        expect(grading.messages[0].content).not.toContain('Paragraph type');
-        expect(grading.messages[0].content).not.toContain('Writing time');
-      });
+    test('never reads the removed flag', async () => {
+      await gradeTimed('sub-no-flag', 10, true, 'analyze');
 
-      test('the grammar checker reads the work as untimed, exactly as before the setting', async () => {
-        const { buildGrammarCheckerSystemPrompt } = await import(
-          '~/domain/grading/writing-time'
-        );
-        const { grammar } = await gradeTimed('sub-flag-off-grammar', 10);
-
-        expect(grammar.system).toBe(buildGrammarCheckerSystemPrompt(null));
-        expect(grammar.messages[0].content).toMatch(
-          /^Essay:\n[\s\S]*\n\nReturn up to 15 issues\.$/
-        );
-      });
-
-      test('a cold write is still a cold write (not part of the flag)', async () => {
-        const { grading } = await gradeTimed('sub-flag-off-cold', 10, false);
-
-        expect(grading.messages[0].content).toContain('Cold write:');
-      });
+      expect(prisma.setting.findUnique).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { name: 'feature_flag.daily_pages_paragraph_type_and_writing_time' },
+        })
+      );
     });
 
     function grammarCallCount() {

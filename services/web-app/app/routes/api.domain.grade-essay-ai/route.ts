@@ -1,5 +1,3 @@
-import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { readableWritingConditions } from '~/domain/feature-flags/feature-flags';
 import {
   teacherNotesEnabled as hasTeacherNotes,
   normalizeTeacherNote,
@@ -43,7 +41,7 @@ import {
   buildGrammarCheckerRetryUserPrompt,
   buildGrammarCheckerSystemPrompt,
   buildGrammarCheckerUserPrompt,
-} from '~/domain/grading/writing-time';
+} from '~/domain/grading/grammar-checker-prompts';
 import {
   buildGradingPromptShape,
   buildGradingResponseSchemaText,
@@ -686,9 +684,7 @@ export async function action({ request }: ActionFunctionArgs) {
             id: true,
             gradingAssistantStrictnessLevel: true,
             grammarGradingEnabled: true,
-            writingTimeMinutes: true,
             tutorEnabled: true,
-            paragraphMode: true,
             apHistorySnapshot: true,
             prompt: true,
             pointValue: true,
@@ -1200,18 +1196,6 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  // Paragraph type and writing time are behind a per-school flag that starts
-  // off. Off, both read as unset for the grading assistant and the grammar
-  // checker (the prompts that ran before either existed), while the values
-  // stored on the assignment are left alone.
-  const writingConditions = readableWritingConditions(
-    {
-      writingTimeMinutes:
-        submission.document.assignment?.writingTimeMinutes ?? null,
-      paragraphMode: submission.document.assignment?.paragraphMode ?? null,
-    },
-    await isDailyPagesWritingConditionsEnabled(organizationId)
-  );
   const compiledInvocation = compileGradingAssistantInvocation({
     gradingConfig: resolvedGradingConfig,
     studentFirstName,
@@ -1219,9 +1203,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     documentText: submission.text,
     assignmentPrompt,
     gradingContext,
-    writingTimeMinutes: writingConditions.writingTimeMinutes,
     coldWrite: submission.document.assignment?.tutorEnabled === false,
-    paragraphMode: writingConditions.paragraphMode,
     assignmentPointTotal: submission.document.assignment?.pointValue ?? null,
   });
   const { system, maxTokens } = compiledInvocation;
@@ -1731,13 +1713,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     );
   } else {
     try {
-      const writingTimeMinutes = writingConditions.writingTimeMinutes ?? null;
-      const grammarSystem = buildGrammarCheckerSystemPrompt(writingTimeMinutes);
+      const grammarSystem = buildGrammarCheckerSystemPrompt();
 
-      const grammarUserPrompt = buildGrammarCheckerUserPrompt(
-        submission.text,
-        writingTimeMinutes
-      );
+      const grammarUserPrompt = buildGrammarCheckerUserPrompt(submission.text);
 
       let grammarResponseText = await getGradingLlmCompletion({
         model,
@@ -1765,10 +1743,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           messages: [
             {
               role: 'user',
-              content: buildGrammarCheckerRetryUserPrompt(
-                submission.text,
-                writingTimeMinutes
-              ),
+              content: buildGrammarCheckerRetryUserPrompt(submission.text),
             },
           ],
           maxTokens: 1600,
