@@ -1,4 +1,5 @@
 // FREE_TIER_DB_TESTS=1 DATABASE_URL=... bun test app/domain/free-tier/approval-flow.integration.test.ts
+// Release-join tests use bcrypt directly so auth.server mocks cannot break hashing.
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import bcrypt from 'bcryptjs';
 
