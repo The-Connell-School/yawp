@@ -17,7 +17,6 @@ import {
 } from '~/utils/schemas/invitation';
 import type { OrgMembership } from '@app/prisma';
 import { normalizeEmail } from '~/utils/normalize-email';
-import { requireUserId } from '~/utils/auth.server';
 import { enforceUnauthByIpAndTarget, rateLimitedFormResponse } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 
@@ -28,7 +27,6 @@ const Schema = z.object({
     'onboard-teacher',
     'onboard-owner',
     'password-reset',
-    'verify-account-email',
   ]),
   target: z.string(),
 });
@@ -38,8 +36,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (error) return validationError(error);
 
   const { target, type } = data;
-  const normalizedTarget =
-    type === 'verify-account-email' ? target : normalizeEmail(target);
+  const normalizedTarget = normalizeEmail(target);
   {
     const cfg = RATE_LIMITS.unauth.verify;
     const decision = await enforceUnauthByIpAndTarget({
@@ -302,36 +299,6 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
     }
-  } else if (type === 'verify-account-email') {
-    const userId = await requireUserId(request, { skipPasswordChangeGate: true });
-    const [targetUserId, rawEmail] = data.target.split(':');
-    const email = normalizeEmail(rawEmail ?? '');
-    if (!targetUserId || !email || targetUserId !== userId) {
-      return validationError({ fieldErrors: { code: 'Invalid code.' } });
-    }
-    const conflict = await prisma.user.findFirst({
-      where: {
-        email: { equals: email, mode: 'insensitive' },
-        NOT: { id: userId },
-      },
-      select: { id: true },
-    });
-    if (conflict) {
-      return validationError({
-        fieldErrors: {
-          code:
-            'That email belongs to another account. Choose a different email.',
-        },
-      });
-    }
-    await prisma.user.update({
-      where: { id: userId },
-      data: { email, emailVerifiedAt: new Date() },
-    });
-    return redirectWithToast('/app', {
-      title: 'Email verified',
-      description: 'Your email address is now linked to this account.',
-    });
   } else if (type === 'password-reset') {
     invitationCookie.set('email', normalizedTarget);
     return redirect('/auth/inv/forgot-password-reset', {
