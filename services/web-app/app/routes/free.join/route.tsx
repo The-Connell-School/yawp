@@ -92,8 +92,8 @@ export default function FreeJoinRoute() {
   if (!data.ok) {
     return (
       <main className="yawp-entry">
-        <section className="yawp-entry-shell">
-          <h1 className="text-2xl font-semibold">This link is not valid</h1>
+        <section className="yawp-entry-shell max-w-lg">
+          <FreeTierEntryHeader title="This link is not valid" />
           <p className="text-muted-foreground">Request a new invite from the YAWP team.</p>
         </section>
       </main>
