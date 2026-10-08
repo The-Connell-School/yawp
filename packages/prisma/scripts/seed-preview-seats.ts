@@ -62,13 +62,20 @@ try {
   }
   if (!isDemoPlannerQaEnvironment()) {
     for (const seat of seats) {
-      const plannerQa = await seedPreviewPlannerQa(prisma, {
-        organizationId: seat.organizationId,
-      });
-      console.log(
-        `preview planner QA seed (seat ${seat.number}):`,
-        JSON.stringify(plannerQa)
-      );
+      try {
+        const plannerQa = await seedPreviewPlannerQa(prisma, {
+          organizationId: seat.organizationId,
+        });
+        console.log(
+          `preview planner QA seed (seat ${seat.number}):`,
+          JSON.stringify(plannerQa)
+        );
+      } catch (error) {
+        console.warn(
+          'preview planner QA seed failed (non-fatal):',
+          error instanceof Error ? error.message : error
+        );
+      }
     }
   } else {
     console.log('preview planner QA seed skipped: demo environment');

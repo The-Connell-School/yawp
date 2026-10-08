@@ -70,7 +70,7 @@ export function buildLessonSeed({
     : '';
 
   const prompt = [
-    `Yawp's class summary${forClass} recommended this next teaching move: "${step.title}" — ${step.detail}`,
+    `YAWP!'s class summary${forClass} recommended this next teaching move: "${step.title}" — ${step.detail}`,
     `It targets the ${skill} rubric skill.${afterAssignment}`,
     '',
     'Build me a lesson that does it. Ask me anything you need to know about this class first.',

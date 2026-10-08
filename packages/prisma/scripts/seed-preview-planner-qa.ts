@@ -66,6 +66,19 @@ export function assertPreviewPlannerQaTarget(
   }
 }
 
+export async function resetPreviewPlannerQaExitTicketSubmission(
+  prisma: ReturnType<typeof createPrismaClient>
+) {
+  if (isDemoPlannerQaEnvironment()) {
+    throw new Error('preview planner QA reset refused on demo database');
+  }
+  assertPreviewPlannerQaTarget();
+  await prisma.submission.update({
+    where: { id: PREVIEW_PLANNER_QA_IDS.exitTicketSubmissionId },
+    data: { releasedAt: null },
+  });
+}
+
 export async function seedPreviewPlannerQa(
   prisma: ReturnType<typeof createPrismaClient>,
   options: { organizationId?: string } = {}
