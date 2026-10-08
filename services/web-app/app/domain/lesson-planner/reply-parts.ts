@@ -11,7 +11,11 @@
  * step that uses it, which means the reply has to keep its own order rather
  * than being sorted into prose and not-prose.
  */
-import { readLessonMaterials, type LessonMaterial } from './lesson-material';
+import {
+  EXIT_TICKET_BLOCK_KEY,
+  readLessonMaterials,
+  type LessonMaterial,
+} from './lesson-material';
 import {
   readDailyPagesExercises,
   type DailyPagesExercise,
@@ -27,7 +31,7 @@ export type ReplyPart =
   | { kind: 'markdown'; text: string }
   | { kind: 'material'; material: LessonMaterial }
   | { kind: 'daily-pages'; exercise: DailyPagesExercise }
-  | { kind: 'exit-ticket'; ticket: PlannedExitTicket }
+  | { kind: 'exit-ticket'; ticket: PlannedExitTicket; blockKey: string }
   | { kind: 'resource'; resource: LessonResource }
   | { kind: 'practice'; practice: PlannedPractice };
 
@@ -46,6 +50,7 @@ export function splitReplyParts(content: string): ReplyPart[] {
   const parts: ReplyPart[] = [];
   let cursor = 0;
   let materialCount = 0;
+  let exitTicketCount = 0;
 
   const pushText = (text: string) => {
     const trimmed = text.trim();
@@ -74,7 +79,14 @@ export function splitReplyParts(content: string): ReplyPart[] {
       if (exercise) parts.push({ kind: 'daily-pages', exercise });
     } else if (match[1] === 'yawp-exit-ticket') {
       const [ticket] = readPlannedExitTickets(block).tickets;
-      if (ticket) parts.push({ kind: 'exit-ticket', ticket });
+      if (ticket) {
+        const blockKey =
+          exitTicketCount === 0
+            ? EXIT_TICKET_BLOCK_KEY
+            : `${EXIT_TICKET_BLOCK_KEY}:${exitTicketCount}`;
+        parts.push({ kind: 'exit-ticket', ticket, blockKey });
+        exitTicketCount += 1;
+      }
     } else if (match[1] === 'yawp-practice') {
       const [practice] = readPlannedPractice(block).practices;
       if (practice) parts.push({ kind: 'practice', practice });

@@ -9,7 +9,8 @@
  * to watch for.
  */
 import { Link } from 'react-router';
-import { ClipboardCheck, Sparkles } from 'lucide-react';
+import { Check, ClipboardCheck, Plus, Sparkles } from 'lucide-react';
+import { cn } from '~/utils/misc';
 import {
   exitTicketCreateHref,
   type PlannedExitTicket,
@@ -26,6 +27,9 @@ export function ExitTicketCard({
   ticket,
   assignmentTypeId,
   conversationId,
+  added = false,
+  onToggle,
+  disabled,
 }: {
   ticket: PlannedExitTicket;
   /**
@@ -35,6 +39,9 @@ export function ExitTicketCard({
   assignmentTypeId: string | null;
   /** Travels with the teacher so they can get back to this lesson. */
   conversationId?: string | null;
+  added?: boolean;
+  onToggle?: ((added: boolean) => void) | null;
+  disabled?: boolean;
 }) {
   const { config } = ticket;
   const focus =
@@ -105,18 +112,35 @@ export function ExitTicketCard({
         </dl>
       ) : null}
 
-      {assignmentTypeId ? (
-        <div className="border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
+        {onToggle ? (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onToggle(!added)}
+            data-testid="exit-ticket-stack-toggle"
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50',
+              added
+                ? 'bg-primary/10 text-primary hover:bg-primary/15'
+                : 'bg-primary text-primary-foreground hover:opacity-90'
+            )}
+          >
+            {added ? <Check size={14} /> : <Plus size={14} />}
+            {added ? 'In the stack' : 'Add to stack'}
+          </button>
+        ) : null}
+        {assignmentTypeId ? (
           <Link
             to={exitTicketCreateHref(assignmentTypeId, ticket, conversationId)}
             data-testid="exit-ticket-create"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-background px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5"
           >
             <Sparkles size={13} />
             Create this exit ticket for your class
           </Link>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </div>
   );
 }

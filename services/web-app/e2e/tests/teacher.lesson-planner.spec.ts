@@ -2999,6 +2999,30 @@ test.describe('YAWP! Lesson Planner', () => {
     );
   });
 
+  test('files the planned exit ticket in the packet stack', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const { conversationId } = await seedPlannedExitTicket(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const toggle = page.getByTestId('exit-ticket-stack-toggle');
+    await expect(toggle).toContainText('Add to stack');
+    const save = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await toggle.click();
+    await save;
+    await expect(toggle).toContainText('In the stack');
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await expect(page.getByText(/exit ticket/i).first()).toBeVisible();
+  });
+
   test('hands over a graded reflection with its question and points', async ({
     page,
     signIn,

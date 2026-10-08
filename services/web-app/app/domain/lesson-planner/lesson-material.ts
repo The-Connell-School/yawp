@@ -35,6 +35,8 @@ export type MaterialKind = (typeof MATERIAL_KINDS)[number];
 
 /** A lesson has one deck, so every version of it claims the same slot. */
 export const DECK_SLOT = 'deck';
+/** Packet API materialKey max is 8 chars; one exit ticket per lesson. */
+export const EXIT_TICKET_BLOCK_KEY = 'ticket';
 export const DECK_KIND = 'slides';
 
 /**

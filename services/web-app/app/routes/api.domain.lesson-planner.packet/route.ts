@@ -13,11 +13,7 @@ import { prisma } from '~/utils/db.server';
 import { requireMutableRequest } from '~/utils/auth.server';
 import { requireLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { PACKET_AUDIENCES } from '~/domain/lesson-planner/lesson-packet';
-import {
-  deckAsMaterial,
-  DECK_SLOT,
-  readLessonMaterials,
-} from '~/domain/lesson-planner/lesson-material';
+import { artifactFromAssistantReply } from '~/domain/lesson-planner/artifact-from-reply';
 
 const MAX_PACKET_TITLE_CHARS = 120;
 const MAX_SECTION_TITLE_CHARS = 120;
@@ -257,11 +253,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Re-read the material from the reply rather than trusting the client with
     // its content: the body is what gets printed and handed to students.
-    const { materials } = readLessonMaterials(message.content);
-    const material =
-      data.materialKey === DECK_SLOT
-        ? deckAsMaterial(message.content)
-        : materials.find((item) => item.key === data.materialKey);
+    const material = artifactFromAssistantReply(
+      message.content,
+      data.materialKey!
+    );
     if (!material) {
       return dataResponse(
         { error: 'That material is not part of this lesson.' },

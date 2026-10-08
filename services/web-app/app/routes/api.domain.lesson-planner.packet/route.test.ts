@@ -72,7 +72,40 @@ beforeEach(() => {
 });
 
 describe('lesson packet action — one material at a time', () => {
+  test('adds a yawp-exit-ticket block as a student handout', async () => {
+    prisma.lessonPlanMessage.findFirst.mockReset().mockResolvedValue({
+      id: 'msg-exit',
+      createdAt: new Date('2026-08-05T10:00:01.000Z'),
+      content:
+        '## Closing\n\n```yawp-exit-ticket\nmode: specific\nfocus: explain-concept\ntopic: comma splices\nanswer: objective\nmustMention: Whether the material moves.\n```',
+    });
+
+    await action({
+      request: formRequest({
+        intent: 'add-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-exit',
+        materialKey: 'ticket',
+      }),
+    } as any);
+
+    const upsert = prisma.lessonPlanMaterial.upsert.mock.calls[0][0];
+    expect(upsert.create).toMatchObject({
+      kind: 'exit-ticket',
+      blockKey: 'ticket',
+      slot: 'ticket',
+      audience: 'student',
+    });
+    expect(upsert.create.content).toContain('comma splices');
+  });
+
   test('adds a single handout out of a reply, without the plan around it', async () => {
+    prisma.lessonPlanMessage.findFirst.mockReset().mockResolvedValue({
+      id: 'msg-1',
+      createdAt: new Date('2026-08-05T10:00:00.000Z'),
+      content:
+        'Here is the lesson.\n\n```yawp-material\nkind: handout\ntitle: Diagnose & Repair\n---\nRead each excerpt.\n```',
+    });
     const response = await action({
       request: formRequest({
         intent: 'add-material',

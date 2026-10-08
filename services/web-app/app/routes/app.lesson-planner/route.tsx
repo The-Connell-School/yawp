@@ -1119,6 +1119,17 @@ function MessageBubble({
                   ticket={part.ticket}
                   assignmentTypeId={exitTicketTypeId}
                   conversationId={conversationId}
+                  added={
+                    !!message.id &&
+                    addedMaterials.has(`${message.id}:${part.blockKey}`)
+                  }
+                  onToggle={
+                    message.id
+                      ? (added) =>
+                          onMaterial(message.id!, part.blockKey, added)
+                      : null
+                  }
+                  disabled={disabled}
                 />
               );
             }
