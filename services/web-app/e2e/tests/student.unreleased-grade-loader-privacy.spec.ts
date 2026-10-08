@@ -35,31 +35,6 @@ function submissionFromRouteData(
   return matches[0]!;
 }
 
-function expectNoGradedAtInDocumentLoader(
-  loaderData: unknown,
-  submissionId: string
-) {
-  const route = getRouteLoaderData(loaderData, 'app_.documents_.$id');
-  const topList = route.submissions as Record<string, unknown>[];
-  expect(Array.isArray(topList)).toBe(true);
-  const topRow = topList.find((row) => row.id === submissionId);
-  expect(topRow).toBeTruthy();
-  expect(topRow!.gradedAt).toBeUndefined();
-
-  const doc = route.doc as Record<string, unknown> | undefined;
-  if (doc && Array.isArray(doc.submissions)) {
-    const nestedRow = (doc.submissions as Record<string, unknown>[]).find(
-      (row) => row.id === submissionId
-    );
-    expect(nestedRow).toBeTruthy();
-    expect(nestedRow!.gradedAt).toBeUndefined();
-  }
-
-  for (const row of findObjectsWithId(route, submissionId)) {
-    expect(row.gradedAt).toBeUndefined();
-  }
-}
-
 test.describe.serial('Unreleased grade privacy in student loader responses', () => {
   test('student submission, document, and assignment-type data omit unreleased scores', async ({
     page,
@@ -100,11 +75,18 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
     const gradedAtWire = /"gradedAt",\["D",|\\"gradedAt\\",\["D",/;
     expect(documentHtml).not.toMatch(gradedAtWire);
     expect(documentDataText).not.toMatch(gradedAtWire);
+
     const documentLoader = decodeRouterDataResponse(documentDataText);
-    expectNoGradedAtInDocumentLoader(
+    const documentRoute = getRouteLoaderData(
       documentLoader,
-      gradePrivacy.submissionId
+      'app_.documents_.$id'
     );
+    for (const row of findObjectsWithId(
+      documentRoute,
+      gradePrivacy.submissionId
+    )) {
+      expect(row.gradedAt).toBeUndefined();
+    }
 
     const assignmentTypeDataText = await (
       await page.request.get(

@@ -25,7 +25,21 @@ function decodeTurboLine(line: unknown[], index: number): unknown {
 
   if (typeof value === 'object') {
     const record = value as Record<string, unknown>;
-    if (Object.keys(record).every((key) => key.startsWith('_'))) {
+    const keys = Object.keys(record);
+    if (keys.every((key) => key.startsWith('_'))) {
+      const arrayIndices = keys
+        .map((key) => Number(key.slice(1)))
+        .filter((index) => Number.isInteger(index));
+      const isDenseArray =
+        arrayIndices.length === keys.length &&
+        arrayIndices.length > 0 &&
+        arrayIndices.every((index, position) => index === position);
+      if (isDenseArray) {
+        return arrayIndices.map((index) =>
+          decodeTurboLine(line, record[`_${index}`] as number)
+        );
+      }
+
       const out: Record<string, unknown> = {};
       for (const [propRef, valRef] of Object.entries(record)) {
         const keyIndex = Number(propRef.slice(1));

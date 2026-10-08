@@ -31,4 +31,5 @@ describe('decodeRouterDataResponse', () => {
     expect(submission.releasedAt).toBeNull();
     expect(findObjectsWithId(loaderData, 'sub-abc')).toHaveLength(1);
   });
+
 });
