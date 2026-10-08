@@ -1,4 +1,7 @@
 -- Daily Pages engagement rubric v2 (Brian Connell 2026-10-02)
+-- If deploy fails with P3009 / lock_timeout on preview, recover with:
+-- 1) prisma migrate resolve --rolled-back 20261008121500_daily_pages_engagement_rubric_consolidation
+-- 2) prisma migrate deploy
 SET lock_timeout = '5s';
 
 ALTER TABLE "Rubric" ADD COLUMN IF NOT EXISTS "archivedAt" TIMESTAMPTZ(6);
