@@ -172,6 +172,10 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma migrate deploy
 
+      - name: 🧪 Free tier bundle seed connection (tunnel TLS)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        run: bun test ./packages/prisma/scripts/seed-free-tier-bundle-assignment-types.test.ts
+
       - name: 🌱 Seed free tier bundle assignment types
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:

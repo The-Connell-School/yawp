@@ -157,6 +157,8 @@ async function runProductionMigrations(env: NodeJS.ProcessEnv) {
     return gateCode;
   }
 
+  // Idempotent bundle seed: failure aborts deploy before the image push. Migrations
+  // are already applied; a retry re-runs this seed without rolling migrations back.
   const bundleSeedCode = await runCommand(
     'bun',
     ['run', 'seed-free-tier-bundle-assignment-types'],

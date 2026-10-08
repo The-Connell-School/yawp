@@ -9,9 +9,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { PrismaClient } from '../generated/prisma';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { isLocalDatabaseUrl } from './seed-overlay-connection';
+import type { PrismaClient } from '../generated/prisma';
+import { createPrismaClient } from './local-dev/connection';
 import {
   CLASS_STARTER_KIND,
   readClassStarterImage,
@@ -253,16 +252,6 @@ export async function assertFreeTierBundleAssignmentTypeParity(
   }
 }
 
-function buildPrismaClient() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error('DATABASE_URL is not set');
-  const isLocal = isLocalDatabaseUrl(connectionString);
-  const adapter = new PrismaPg(
-    { connectionString, ssl: isLocal ? false : { rejectUnauthorized: false } }
-  );
-  return new PrismaClient({ adapter });
-}
-
 async function upsertStandaloneType(
   prisma: PrismaClient,
   args: {
@@ -380,7 +369,7 @@ export async function seedFreeTierBundleAssignmentTypes(prisma: PrismaClient) {
 }
 
 if (import.meta.main) {
-  const prisma = buildPrismaClient();
+  const prisma = createPrismaClient();
   seedFreeTierBundleAssignmentTypes(prisma)
     .then((result) => {
       console.log('Free tier bundle assignment types ready:', result);
