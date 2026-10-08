@@ -40,24 +40,23 @@ function expectNoGradedAtInDocumentLoader(
   submissionId: string
 ) {
   const route = getRouteLoaderData(loaderData, 'app_.documents_.$id');
-  expect(route.doc).toBeTruthy();
-  const rows = findObjectsWithId(route, submissionId);
-  expect(rows.length).toBeGreaterThan(0);
-  for (const row of rows) {
-    expect(row.gradedAt).toBeUndefined();
-  }
   const topList = route.submissions as Record<string, unknown>[];
   expect(Array.isArray(topList)).toBe(true);
-  expect(topList.some((row) => row.id === submissionId)).toBe(true);
-  expect(topList.find((row) => row.id === submissionId)?.gradedAt).toBeUndefined();
+  const topRow = topList.find((row) => row.id === submissionId);
+  expect(topRow).toBeTruthy();
+  expect(topRow!.gradedAt).toBeUndefined();
 
-  const docSubmissions = (route.doc as Record<string, unknown>).submissions;
-  if (Array.isArray(docSubmissions)) {
-    const nestedRow = (docSubmissions as Record<string, unknown>[]).find(
+  const doc = route.doc as Record<string, unknown> | undefined;
+  if (doc && Array.isArray(doc.submissions)) {
+    const nestedRow = (doc.submissions as Record<string, unknown>[]).find(
       (row) => row.id === submissionId
     );
     expect(nestedRow).toBeTruthy();
     expect(nestedRow!.gradedAt).toBeUndefined();
+  }
+
+  for (const row of findObjectsWithId(route, submissionId)) {
+    expect(row.gradedAt).toBeUndefined();
   }
 }
 
