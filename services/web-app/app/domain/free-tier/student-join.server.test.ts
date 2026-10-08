@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   class: { findMany: mock(), findFirst: mock(), update: mock() },
@@ -20,6 +20,10 @@ const {
   registerFreeTierStudent,
   teacherResetStudentPassword,
 } = await import('./student-join.server');
+
+afterAll(() => {
+  mock.restore();
+});
 
 describe('student-join', () => {
   beforeEach(() => {
