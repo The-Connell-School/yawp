@@ -50,17 +50,16 @@ describe('buildStaticDailyPagesGradingConfig', () => {
 
 describe('runLiveGradingAssistantBenchmarkCase', () => {
   /**
-   * A timed piece has to be graded as a timed piece. The case carries the
-   * prompt and the writing time the way an assignment does, and both reach
-   * the grader exactly as they would in production.
+   * The case carries the prompt the way an assignment does, and it reaches
+   * the grader exactly as it would in production — with no writing time,
+   * which was removed from assignments.
    */
-  test('hands the case prompt and writing time to the grader', async () => {
+  test('hands the case prompt to the grader, and no writing time', async () => {
     const benchmarkCase = {
       ...gradingAssistantBenchmarkV1.cases[0],
       input: {
         ...gradingAssistantBenchmarkV1.cases[0].input,
         assignmentPrompt: 'Quote the line where the argument turns.',
-        writingTimeMinutes: 15,
       },
     };
     const gradingCalls: string[] = [];
@@ -91,7 +90,7 @@ describe('runLiveGradingAssistantBenchmarkCase', () => {
     expect(gradingCalls[0]).toContain(
       'Quote the line where the argument turns.'
     );
-    expect(gradingCalls[0]).toContain('the student had 15 minutes');
+    expect(gradingCalls[0]).not.toContain('Writing time');
   });
 
 

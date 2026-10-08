@@ -124,7 +124,7 @@ describe('app.assignments.$assignmentId loader', () => {
       .mockResolvedValue({ kind: null, rubric: null });
     prisma.assignmentType.findMany.mockReset().mockResolvedValue([]);
     prisma.documentGroup.findFirst.mockReset();
-    prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
+    prisma.setting.findUnique.mockReset().mockResolvedValue(null);
     updateAssignmentInClassDeployment.mockReset().mockResolvedValue(undefined);
   });
 
@@ -222,7 +222,9 @@ describe('app.assignments.$assignmentId loader', () => {
     });
   });
 
-  test('edits how long students have to write', async () => {
+  // Daily Pages writing time and paragraph type were removed: an edit never
+  // writes or rejects either, so a stored value is left exactly as it is.
+  test('an edit leaves a stored writing time alone, whatever is sent', async () => {
     prisma.class.findFirst.mockResolvedValue({
       id: 'class-1',
       school: { id: 'school-1', organizationId: 'org-1' },
@@ -244,9 +246,10 @@ describe('app.assignments.$assignmentId loader', () => {
     form.set('prompt', 'Write it.');
     form.set('submitForGrade', 'true');
     form.set('pointValue', '100');
-    form.set('writingTimeMinutes', '12');
+    form.set('writingTimeMinutes', 'ten');
+    form.set('paragraphMode', 'argue');
 
-    await action({
+    const response = await action({
       request: new Request(
         'https://example.com/app/assignments/assignment-1?classId=class-1',
         { method: 'POST', body: form }
@@ -254,46 +257,7 @@ describe('app.assignments.$assignmentId loader', () => {
       params: { assignmentId: 'assignment-1' },
     } as any);
 
-    expect(updateAssignmentInClassDeployment).toHaveBeenCalledWith({
-      assignmentId: 'assignment-1',
-      classId: 'class-1',
-      data: expect.objectContaining({ writingTimeMinutes: 12 }),
-    });
-  });
-
-  test('with the writing-conditions flag off, an edit leaves the stored writing time alone', async () => {
-    prisma.setting.findUnique.mockReset().mockResolvedValue(null);
-    prisma.class.findFirst.mockResolvedValue({
-      id: 'class-1',
-      school: { id: 'school-1', organizationId: 'org-1' },
-    });
-    getAvailableAssignmentTypesForScopes.mockResolvedValue([
-      { id: 'at-1', systemKey: null },
-    ]);
-    prisma.assignment.findFirst.mockResolvedValue({
-      id: 'assignment-1',
-      assignmentTypeId: 'at-1',
-      collaborationEnabled: false,
-      promptAttachmentKey: null,
-      assignmentType: { systemKey: null },
-    });
-    const form = new FormData();
-    form.set('intent', 'update-assignment');
-    form.set('assignmentId', 'assignment-1');
-    form.set('assignmentTypeId', 'at-1');
-    form.set('prompt', 'Write it.');
-    form.set('submitForGrade', 'true');
-    form.set('pointValue', '100');
-    form.set('writingTimeMinutes', '');
-
-    await action({
-      request: new Request(
-        'https://example.com/app/assignments/assignment-1?classId=class-1',
-        { method: 'POST', body: form }
-      ),
-      params: { assignmentId: 'assignment-1' },
-    } as any);
-
+    expect((response as any)?.status ?? (response as any)?.init?.status).not.toBe(400);
     expect(updateAssignmentInClassDeployment).toHaveBeenCalled();
     const data = updateAssignmentInClassDeployment.mock.calls.at(-1)?.[0].data;
     expect(data).not.toHaveProperty('writingTimeMinutes');

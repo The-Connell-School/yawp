@@ -60,10 +60,13 @@ describe('the Daily Pages calibration suite', () => {
     }
   });
 
-  /** A Daily Pages entry is graded as timed writing to a prompt, never untimed. */
-  test('grades every case as timed writing to a prompt', () => {
+  /**
+   * A Daily Pages entry is graded against its prompt, as production grades
+   * it. Writing time was removed from assignments, so no case carries one.
+   */
+  test('grades every case against a prompt, with no writing time', () => {
     for (const benchmarkCase of suite.cases) {
-      expect(benchmarkCase.input.writingTimeMinutes).toBeGreaterThan(0);
+      expect(benchmarkCase.input).not.toHaveProperty('writingTimeMinutes');
       expect(benchmarkCase.input.assignmentPrompt?.length).toBeGreaterThan(20);
     }
   });
