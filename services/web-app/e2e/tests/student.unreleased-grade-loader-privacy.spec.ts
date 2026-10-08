@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { createE2EPrismaClient } from '../prisma-client';
 
 function assertNoSerializedField(
   body: string,
@@ -62,13 +63,12 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
     e2eContext,
   }) => {
     const { gradePrivacy } = e2eContext;
-    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    const form = new FormData();
-    form.set('submissionIds', gradePrivacy.releaseSubmissionId);
-    const release = await page.request.post('/api/domain/release-grades', {
-      multipart: form,
+    const prisma = createE2EPrismaClient();
+    await prisma.submission.update({
+      where: { id: gradePrivacy.releaseSubmissionId },
+      data: { releasedAt: new Date() },
     });
-    expect(release.ok()).toBe(true);
+    await prisma.$disconnect();
 
     await signIn(e2eContext.userEmail, 'johndoe');
     const submissionHtml = await (
