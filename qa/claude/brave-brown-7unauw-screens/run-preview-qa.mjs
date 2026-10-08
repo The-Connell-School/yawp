@@ -4,7 +4,8 @@
  * Optional: QA_OUT_DIR (defaults to this directory)
  */
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { inflateSync } from 'node:zlib';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -58,6 +59,48 @@ async function waitPacketSave(page) {
   );
 }
 
+/** Pull printable text back out of a generated packet PDF. */
+function pdfText(bytes) {
+  const buffer = Buffer.from(bytes);
+  const raw = buffer.toString('latin1');
+  let text = '';
+  const streams = /stream\r?\n/g;
+  let match;
+  while ((match = streams.exec(raw))) {
+    const start = match.index + match[0].length;
+    const end = raw.indexOf('endstream', start);
+    if (end < 0) continue;
+    let content;
+    try {
+      content = inflateSync(buffer.subarray(start, end)).toString('latin1');
+    } catch {
+      continue;
+    }
+    for (const hex of content.matchAll(/<([0-9a-fA-F]+)>/g)) {
+      text += Buffer.from(hex[1], 'hex').toString('latin1');
+    }
+  }
+  return text;
+}
+
+function assertStackedPacketPdf(path) {
+  const text = pdfText(readFileSync(path));
+  const hasSlides =
+    /slide/i.test(text) &&
+    (text.includes('speaker') || text.includes('min') || /\d\./.test(text));
+  const hasHandout =
+    /handout|cover test|diagnose|repair/i.test(text) ||
+    text.includes('comma splice');
+  const hasExit =
+    /exit ticket/i.test(text) ||
+    (text.includes('your own words') && text.includes('comma'));
+  if (!hasSlides || !hasHandout || !hasExit) {
+    throw new Error(
+      `packet PDF missing stacked sections (slides=${hasSlides} handout=${hasHandout} exit=${hasExit})`
+    );
+  }
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true, channel: 'chrome' });
   const context = await browser.newContext({
@@ -96,11 +139,12 @@ async function main() {
     const conversationId = new URL(page.url()).searchParams.get('c');
     if (!conversationId) throw new Error('missing conversation id');
 
-    for (const toggle of [
-      deck.getByTestId('material-toggle'),
-      material.getByTestId('material-toggle'),
-      exitCard.getByTestId('exit-ticket-stack-toggle'),
+    for (const [card, testId] of [
+      [deck, 'deck-toggle'],
+      [material, 'material-toggle'],
+      [exitCard, 'exit-ticket-stack-toggle'],
     ]) {
+      const toggle = card.getByTestId(testId);
       if (!(await toggle.isVisible().catch(() => false))) continue;
       const save = waitPacketSave(page);
       await toggle.click();
@@ -133,7 +177,9 @@ async function main() {
       page.waitForEvent('download', { timeout: 120_000 }),
       page.getByTestId('packet-save-pdf').click(),
     ]);
-    await download.saveAs(shot('05-packet.pdf'));
+    const packetPdfPath = shot('05-packet.pdf');
+    await download.saveAs(packetPdfPath);
+    assertStackedPacketPdf(packetPdfPath);
 
     await page.goto(`${previewUrl}/app/lesson-planner?c=${conversationId}`);
     await exitCard.getByTestId('exit-ticket-create').click();
@@ -151,53 +197,56 @@ async function main() {
     await page.screenshot({ path: shot('07-reporter-home.png'), fullPage: true });
 
     const seededClassId = 'previewqa000class00001';
-    await page.goto(
-      `${previewUrl}/app/my-classes/${seededClassId}/summary/${QA.insightAssignmentId}`
-    );
-    await page.waitForLoadState('networkidle');
     let classId = seededClassId;
-    if (
-      await page
+
+    async function openClassSummary(targetClassId) {
+      await page.goto(
+        `${previewUrl}/app/my-classes/${targetClassId}/summary/${QA.insightAssignmentId}`
+      );
+      await page.waitForLoadState('networkidle');
+      return !(await page
         .getByText(/something didn't work|Class not found/i)
         .isVisible()
-        .catch(() => false)
-    ) {
-    await page.goto(`${previewUrl}/app/my-classes`);
-    await page.waitForLoadState('networkidle');
-    let qaAssignmentLink = page
-      .getByRole('link', { name: /\[QA\] Class summary insight/i })
-      .first();
-    if (!(await qaAssignmentLink.isVisible().catch(() => false))) {
-      const classCard = page.getByRole('link', { name: /English 10|Period 3/i }).first();
-      if (await classCard.isVisible().catch(() => false)) {
-        await classCard.click();
-        await page.waitForLoadState('networkidle');
-        const assignmentsTab = page.getByRole('tab', { name: /assignments/i });
-        if (await assignmentsTab.isVisible().catch(() => false)) {
-          await assignmentsTab.click();
-          await page.waitForLoadState('networkidle');
-        }
-      }
-      qaAssignmentLink = page
+        .catch(() => false));
+    }
+
+    if (!(await openClassSummary(seededClassId))) {
+      await page.goto(`${previewUrl}/app/my-classes`);
+      await page.waitForLoadState('networkidle');
+      let qaAssignmentLink = page
         .getByRole('link', { name: /\[QA\] Class summary insight/i })
         .first();
-    }
-    await qaAssignmentLink.waitFor({ state: 'visible', timeout: 120_000 });
-    const assignmentHref = await qaAssignmentLink.getAttribute('href');
-    const classIdMatch = assignmentHref?.match(/\/my-classes\/([^/]+)/);
-    if (!classIdMatch) throw new Error('could not resolve class id for QA insight');
-    const classId = classIdMatch[1];
-
-    await page.goto(
-      `${previewUrl}/app/my-classes/${classId}/summary/${QA.insightAssignmentId}`
-    );
-    await page.waitForLoadState('networkidle');
-    if (await page.getByText(/something didn't work|Class not found/i).isVisible().catch(() => false)) {
-      const html = await page.content();
-      writeFileSync(shot('07-class-summary-error.html'), html);
-      throw new Error(
-        'class summary route failed — preview seed-preview-planner-qa may not have run'
-      );
+      if (!(await qaAssignmentLink.isVisible().catch(() => false))) {
+        const classCard = page
+          .getByRole('link', { name: /\[QA\] Lesson planner preview class|English 10|Period 3/i })
+          .first();
+        if (await classCard.isVisible().catch(() => false)) {
+          await classCard.click();
+          await page.waitForLoadState('networkidle');
+          const assignmentsTab = page.getByRole('tab', { name: /assignments/i });
+          if (await assignmentsTab.isVisible().catch(() => false)) {
+            await assignmentsTab.click();
+            await page.waitForLoadState('networkidle');
+          }
+        }
+        qaAssignmentLink = page
+          .getByRole('link', { name: /\[QA\] Class summary insight/i })
+          .first();
+      }
+      await qaAssignmentLink.waitFor({ state: 'visible', timeout: 120_000 });
+      const assignmentHref = await qaAssignmentLink.getAttribute('href');
+      const classIdMatch = assignmentHref?.match(/\/my-classes\/([^/]+)/);
+      if (!classIdMatch) {
+        throw new Error('could not resolve class id for QA insight');
+      }
+      classId = classIdMatch[1];
+      if (!(await openClassSummary(classId))) {
+        const html = await page.content();
+        writeFileSync(shot('07-class-summary-error.html'), html);
+        throw new Error(
+          'class summary route failed — preview seed-preview-planner-qa may not have run'
+        );
+      }
     }
     await page.screenshot({
       path: shot('07b-class-summary-ready.png'),
