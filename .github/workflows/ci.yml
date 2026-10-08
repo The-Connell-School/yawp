@@ -1,4 +1,5 @@
 name: CI
+# Matrix runs on pull_request when services, packages, or scripts change.
 on:
   pull_request:
     branches:
