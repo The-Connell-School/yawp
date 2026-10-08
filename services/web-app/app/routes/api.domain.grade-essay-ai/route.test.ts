@@ -2411,8 +2411,6 @@ describe('api.domain.grade-essay-ai', () => {
   });
 
   describe('a Class Starter submission', () => {
-    const CLASS_STARTER_POINTS = 5;
-
     function mockClassStarterSubmission(id: string) {
       return mockSubmission({
         id,
@@ -2426,11 +2424,6 @@ describe('api.domain.grade-essay-ai', () => {
             kind: 'class_starter',
             title: 'Class Starter',
           },
-          assignment: {
-            id: `assignment-${id}`,
-            prompt: 'Write freely for ten minutes.',
-            pointValue: CLASS_STARTER_POINTS,
-          },
           classAssignment: { class: { schoolId: 'school-1' } },
           membership: {
             classesAsStudent: [],
@@ -2440,7 +2433,7 @@ describe('api.domain.grade-essay-ai', () => {
       });
     }
 
-    async function gradeClassStarter(id: string, engagementScore = 4) {
+    async function gradeClassStarter(id: string, engagementScore = 2) {
       prisma.assignmentType.findUnique.mockResolvedValue(
         mockAssignmentType({
           id: 'assignment-type-class-starter',
@@ -2451,16 +2444,10 @@ describe('api.domain.grade-essay-ai', () => {
       prisma.submission.findFirst.mockResolvedValue(
         mockClassStarterSubmission(id)
       );
-      prisma.assignment.findUnique.mockResolvedValue({
-        assignmentTypeId: 'assignment-type-class-starter',
-        rubricRevision: null,
-      });
       getLLMCompletion.mockReset();
       getLLMCompletion.mockResolvedValue(
         JSON.stringify({
-          categories: [
-            { key: 'engagement_with_prompt', score: engagementScore },
-          ],
+          categories: [{ key: 'engagement', score: engagementScore }],
           overallComment: 'Jordan, you stayed with the thought all the way.',
         })
       );
@@ -2493,26 +2480,27 @@ describe('api.domain.grade-essay-ai', () => {
         (
           run.assignmentTypeRubricSnapshot as { categories: { key: string }[] }
         ).categories.map((category) => category.key)
-      ).toEqual(['engagement_with_prompt']);
+      ).toEqual(['engagement']);
     });
 
-    test('asks the model for engagement tiers on the assignment point total', async () => {
+    test('asks the model for one engagement judgment on the 0-3 scale', async () => {
       await gradeClassStarter('sub-class-starter-prompt');
 
       const call = gradingCall();
-      expect(call.system).toContain('Engagement with Prompt');
-      expect(call.system).toContain(`"score": 0-${CLASS_STARTER_POINTS}`);
-      expect(call.messages[0].content).toContain('Excellent');
-      expect(call.messages[0].content).toContain('Good');
+      expect(call.system).toContain('Make one judgment: Engagement.');
+      expect(call.system).toContain('integers 0-3');
+      expect(call.messages[0].content).toContain(
+        'Score meanings: 0 = Absent; 1 = Hardly there; 2 = Showed up; 3 = All in'
+      );
     });
 
     test('asks for overall feedback only, never per-category feedback', async () => {
       await gradeClassStarter('sub-class-starter-feedback');
 
       const call = gradingCall();
-      expect(call.system).not.toMatch(/"comment": string/);
+      expect(call.system).not.toContain('"comment": string');
       expect(call.system).toContain(
-        'Do not write per-category feedback'
+        'Do not write per-category feedback. Every word of feedback belongs in overallComment.'
       );
       expect(call.system).toContain('"overallComment": string');
     });
@@ -2521,9 +2509,12 @@ describe('api.domain.grade-essay-ai', () => {
       await gradeClassStarter('sub-class-starter-grammar');
 
       const call = gradingCall();
-      expect(call.system.toLowerCase()).not.toContain('grammar-issues');
-      expect(call.system.toLowerCase()).not.toContain('syntax highlighting');
-      expect(call.messages[0].content).toContain('Never mention grammar');
+      expect(call.system.toLowerCase()).not.toContain('grammar');
+      expect(call.system.toLowerCase()).not.toContain('syntax');
+      expect(call.system.toLowerCase()).not.toContain('highlight');
+      expect(call.messages[0].content).toContain(
+        'Do not grade grammar, spelling, punctuation, or formatting'
+      );
       expect(
         getLLMCompletion.mock.calls.filter(
           (call: any[]) => call[0]?.metadata?.kind === 'grammar-issues'
@@ -2535,32 +2526,32 @@ describe('api.domain.grade-essay-ai', () => {
     });
 
     test('accepts a scored category with no comment and stores an empty one', async () => {
-      await gradeClassStarter('sub-class-starter-score', 5);
+      await gradeClassStarter('sub-class-starter-score', 3);
 
       const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
       expect(stored.rubricScores).toEqual({
-        engagement_with_prompt: { score: 5, comment: '', isAi: true },
+        engagement: { score: 3, comment: '', isAi: true },
       });
       expect(stored.overallComment).toBe(
         'Jordan, you stayed with the thought all the way.'
       );
     });
 
-    test('grades out of the configured points rather than as a percentage', async () => {
-      await gradeClassStarter('sub-class-starter-grade', 5);
+    test('grades out of 3 points rather than as a percentage', async () => {
+      await gradeClassStarter('sub-class-starter-grade', 3);
 
       const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
-      expect(stored.score).toBe(`5/${CLASS_STARTER_POINTS}`);
+      expect(stored.score).toBe('3/3');
       expect(stored.numericPercentage).toBeNull();
       expect(stored.letterGrade).toBeNull();
     });
 
-    test('grades Not Present as a real score rather than a missing one', async () => {
+    test('grades Absent as a real score rather than a missing one', async () => {
       await gradeClassStarter('sub-class-starter-absent', 0);
 
       const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
       expect(stored.rubricScores).toEqual({
-        engagement_with_prompt: { score: 0, comment: '', isAi: true },
+        engagement: { score: 0, comment: '', isAi: true },
       });
     });
   });
