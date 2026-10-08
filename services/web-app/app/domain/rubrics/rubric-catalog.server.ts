@@ -343,6 +343,41 @@ export class RubricCatalog {
     return { key, document, name };
   }
 
+  /**
+   * Step 1 of every write: make sure the live content exists as an immutable
+   * revision (capturing it as `capture-before-edit` when no revision holds it),
+   * point a library rubric's current revision at it, and pin any assignment of
+   * the rubric's types that is not pinned yet to it. The live content is
+   * unchanged, so what schools grade with does not move.
+   */
+  private async ensureLiveBaseline(tx: Tx, key: CatalogKey, name: string, live: NonNullable<Awaited<ReturnType<RubricCatalog['liveContent']>>>, actorEmail: string) {
+    const history = await tx.rubricRevision.findMany({ where: { rubricName: name }, select: revisionSelect, orderBy: { version: 'asc' } }) as RevisionRow[];
+    let baseline = [...history].reverse().find((revision) => sameContent(revision.schemaJson, live.content)) ?? null;
+    let captured: ReturnType<typeof publicRevision> | null = null;
+    if (!baseline) {
+      const version = (history[history.length - 1]?.version ?? 0) + 1;
+      baseline = await tx.rubricRevision.create({ select: revisionSelect, data: {
+        id: randomUUID(), rubricName: name, version, schemaJson: live.content as Prisma.InputJsonObject,
+        fingerprint: contentFingerprint(live.content), requestId: randomUUID(), requestHash: contentFingerprint(live.content),
+        createdBy: 'capture-before-edit', reason: `Live content captured before ${actorEmail} saved a new version`,
+      } }) as RevisionRow;
+      captured = publicRevision(baseline);
+    }
+    if (key.source === 'library') {
+      // The pin trigger only accepts a revision of the rubric's current
+      // pointer, so point at the revision that holds the live content first.
+      if (live.library!.currentRevisionId !== baseline.id) {
+        await tx.rubric.update({ where: { id: live.library!.id }, data: { currentRevisionId: baseline.id } });
+      }
+      const typeIds = (await tx.assignmentType.findMany({ where: { rubricId: live.library!.id }, select: { id: true } })).map((t) => t.id);
+      if (typeIds.length) await tx.assignment.updateMany({ where: { rubricRevisionId: null, assignmentTypeId: { in: typeIds } }, data: { rubricRevisionId: baseline.id } });
+    } else {
+      await tx.assignmentTypeRubricBaseline.upsert({ where: { assignmentTypeId: key.assignmentTypeId }, create: { assignmentTypeId: key.assignmentTypeId, rubricRevisionId: baseline.id }, update: { rubricRevisionId: baseline.id } });
+      await tx.assignment.updateMany({ where: { rubricRevisionId: null, assignmentTypeId: key.assignmentTypeId }, data: { rubricRevisionId: baseline.id } });
+    }
+    return { baseline, captured };
+  }
+
   async save(input: SaveInput) {
     const { key, document, name } = this.prepareWrite(input.key, input.document);
     const requestHash = contentFingerprint({ key: input.key, expectedFingerprint: input.expectedFingerprint, document, reason: input.reason, actorEmail: input.actorEmail });
@@ -367,30 +402,7 @@ export class RubricCatalog {
 
       // 1) Make sure the live content exists as an immutable revision, and pin
       //    any assignment that is not pinned yet to it, before anything moves.
-      const history = await tx.rubricRevision.findMany({ where: { rubricName: name }, select: revisionSelect, orderBy: { version: 'asc' } }) as RevisionRow[];
-      let baseline = [...history].reverse().find((revision) => sameContent(revision.schemaJson, live.content)) ?? null;
-      let captured: ReturnType<typeof publicRevision> | null = null;
-      if (!baseline) {
-        const version = (history[history.length - 1]?.version ?? 0) + 1;
-        baseline = await tx.rubricRevision.create({ select: revisionSelect, data: {
-          id: randomUUID(), rubricName: name, version, schemaJson: live.content as Prisma.InputJsonObject,
-          fingerprint: contentFingerprint(live.content), requestId: randomUUID(), requestHash: contentFingerprint(live.content),
-          createdBy: 'capture-before-edit', reason: `Live content captured before ${input.actorEmail} saved a new version`,
-        } }) as RevisionRow;
-        captured = publicRevision(baseline);
-      }
-      if (key.source === 'library') {
-        // The pin trigger only accepts a revision of the rubric's current
-        // pointer, so point at the revision that holds the live content first.
-        if (live.library!.currentRevisionId !== baseline.id) {
-          await tx.rubric.update({ where: { id: live.library!.id }, data: { currentRevisionId: baseline.id } });
-        }
-        const typeIds = (await tx.assignmentType.findMany({ where: { rubricId: live.library!.id }, select: { id: true } })).map((t) => t.id);
-        if (typeIds.length) await tx.assignment.updateMany({ where: { rubricRevisionId: null, assignmentTypeId: { in: typeIds } }, data: { rubricRevisionId: baseline.id } });
-      } else {
-        await tx.assignmentTypeRubricBaseline.upsert({ where: { assignmentTypeId: key.assignmentTypeId }, create: { assignmentTypeId: key.assignmentTypeId, rubricRevisionId: baseline.id }, update: { rubricRevisionId: baseline.id } });
-        await tx.assignment.updateMany({ where: { rubricRevisionId: null, assignmentTypeId: key.assignmentTypeId }, data: { rubricRevisionId: baseline.id } });
-      }
+      const { captured } = await this.ensureLiveBaseline(tx, key, name, live, input.actorEmail);
 
       // 2) Write the live row. The revision trigger records who and why.
       await tx.$executeRaw`SELECT set_config('yawp.rubric_revision_actor', ${input.actorEmail}, true), set_config('yawp.rubric_revision_reason', ${input.reason}, true), set_config('yawp.rubric_revision_request_id', ${input.requestId}, true), set_config('yawp.rubric_revision_request_hash', ${requestHash}, true)`;
@@ -424,17 +436,18 @@ export class RubricCatalog {
         if (replay.requestHash !== requestHash) throw new CatalogError('Request ID already used with different inputs', 409);
         return { revision: publicRevision(replay as RevisionRow), replayed: true };
       }
-      // Serialize version numbering with other stages of this rubric (advisory
-      // lock) and with saves, whose revision trigger runs under the row lock.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rubric-revision:${name}`}, 0))`;
-      if (key.source === 'library') await tx.$queryRaw`SELECT id FROM "Rubric" WHERE name = ${key.name} FOR SHARE`;
-      else await tx.$queryRaw`SELECT id FROM "AssignmentType" WHERE id = ${key.assignmentTypeId} FOR SHARE`;
+      // Same row lock as save: serializes baseline capture and version numbering
+      // with saves (whose revision trigger runs under it) and other stages.
+      if (key.source === 'library') await tx.$queryRaw`SELECT id FROM "Rubric" WHERE name = ${key.name} FOR UPDATE`;
+      else await tx.$queryRaw`SELECT id FROM "AssignmentType" WHERE id = ${key.assignmentTypeId} FOR UPDATE`;
       const live = await this.liveContent(tx, key);
       if (!live) throw new CatalogError('Unknown rubric', 404);
       const reason = readOnlyReason(key.source, key.source === 'library' ? key.name : '', live.content, live.type?.rubric?.name ?? null);
       if (reason) throw new CatalogError(reason, 403);
 
       const { next } = buildStoredContent(key, live, document);
+      // Exactly what a first save does: schools stay on the live content.
+      await this.ensureLiveBaseline(tx, key, name, live, input.actorEmail);
       const latest = await tx.rubricRevision.aggregate({ where: { rubricName: name }, _max: { version: true } });
       const created = await tx.rubricRevision.create({ select: revisionSelect, data: {
         id: randomUUID(), rubricName: name, version: (latest._max.version ?? 0) + 1,
