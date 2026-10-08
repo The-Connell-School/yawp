@@ -198,6 +198,8 @@ jobs:
           ./services/web-app/app/domain/free-tier/
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
           ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
+          ./services/web-app/app/domain/submissions/student-submission-grade-visibility.server.test.ts
+          './services/web-app/app/routes/app_.submissions_.$submissionId/route.loader.test.ts'
 
       - name: 🎨 Backfill class artwork keys
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
