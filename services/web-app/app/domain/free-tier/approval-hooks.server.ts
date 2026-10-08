@@ -33,9 +33,11 @@ export function ensureFreeTierProductionApprovalHooks(): Promise<void> {
   if (!productionHooksInstall) {
     productionHooksInstall = import('./provision-free-classroom.server').then(
       ({ provisionFreeClassroomFromApproval }) => {
+        const previousApproved = currentHooks.onApplicationApproved;
         setApprovalHooks({
           onApplicationApproved: async (application) => {
             await provisionFreeClassroomFromApproval(application.id);
+            await previousApproved(application);
           },
         });
       }
