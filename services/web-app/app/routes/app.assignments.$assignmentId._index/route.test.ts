@@ -252,7 +252,6 @@ describe('app.assignments.$assignmentId loader', () => {
     expect(updateAssignmentInClassDeployment).toHaveBeenCalledWith({
       assignmentId: 'assignment-1',
       classId: 'class-1',
-      organizationPlan: 'SCHOOL',
       data: expect.objectContaining({ writingTimeMinutes: 12 }),
     });
   });

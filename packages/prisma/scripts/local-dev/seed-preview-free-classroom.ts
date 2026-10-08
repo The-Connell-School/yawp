@@ -63,6 +63,7 @@ export async function ensurePreviewFreeClassroomFixture(
     return { status: 'created' as const };
   }
 
+  await repairPreviewFreeClassroomMembershipIfMissing(prisma, bundleTypes);
   await reconcilePreviewFreeClassroomDevPasswords(prisma);
   await topUpPreviewFreeClassroomAssignments(prisma, bundleTypes);
   await ensurePreviewShowcaseBundleAssignments(prisma, bundleTypes);
@@ -80,6 +81,7 @@ export async function ensurePreviewSchoolReporterNavFixture(
     select: { id: true },
   });
   if (existing) {
+    await repairPreviewSchoolReporterNavTeacherIfMissing(prisma);
     await reconcilePreviewSchoolReporterNavPassword(prisma);
     await prisma.organization.update({
       where: { id: PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID },
@@ -134,6 +136,101 @@ export async function ensurePreviewSchoolReporterNavFixture(
   return { status: 'created' as const };
 }
 
+async function repairPreviewFreeClassroomMembershipIfMissing(
+  prisma: PrismaClient,
+  bundleTypes: Array<{ id: string; kind: string | null }>
+) {
+  const teacher = await prisma.user.findUnique({
+    where: { email: PREVIEW_FREE_CLASSROOM_TEACHER_EMAIL },
+    select: { id: true },
+  });
+  if (teacher) return;
+
+  console.warn(
+    `Preview free classroom teacher missing; repairing ${PREVIEW_FREE_CLASSROOM_ORG_ID} membership.`
+  );
+  await prisma.$transaction(async (tx) => {
+    const school = await tx.school.findFirst({
+      where: { organizationId: PREVIEW_FREE_CLASSROOM_ORG_ID },
+      select: { id: true },
+    });
+    if (!school) {
+      throw new Error('preview_free_classroom_school_missing_for_repair');
+    }
+
+    const repairedTeacher = await tx.user.create({
+      data: {
+        email: PREVIEW_FREE_CLASSROOM_TEACHER_EMAIL,
+        name: 'Free Tier Teacher',
+        password: { create: createPassword(LOCAL_DEV_PASSWORD) },
+        memberships: {
+          create: {
+            organizationId: PREVIEW_FREE_CLASSROOM_ORG_ID,
+            role: 'TEACHER',
+            isOrgOwner: true,
+            schools: { connect: { id: school.id } },
+          },
+        },
+      },
+      include: { memberships: true },
+    });
+    const teacherMembershipId = repairedTeacher.memberships[0]?.id;
+    if (!teacherMembershipId) {
+      throw new Error('preview_free_classroom_teacher_membership_missing');
+    }
+
+    const student = await tx.user.findUnique({
+      where: { email: PREVIEW_FREE_CLASSROOM_STUDENT_EMAIL },
+      select: { id: true, memberships: { select: { id: true } } },
+    });
+    let studentMembershipId = student?.memberships[0]?.id;
+    if (!studentMembershipId) {
+      const repairedStudent = await tx.user.create({
+        data: {
+          email: PREVIEW_FREE_CLASSROOM_STUDENT_EMAIL,
+          name: 'Free Tier Student',
+          password: { create: createPassword(LOCAL_DEV_PASSWORD) },
+          memberships: {
+            create: {
+              organizationId: PREVIEW_FREE_CLASSROOM_ORG_ID,
+              role: 'STUDENT',
+            },
+          },
+        },
+        include: { memberships: true },
+      });
+      studentMembershipId = repairedStudent.memberships[0]?.id;
+    }
+    if (!studentMembershipId) {
+      throw new Error('preview_free_classroom_student_membership_missing');
+    }
+
+    const klass = await tx.class.findFirst({
+      where: {
+        isArchived: false,
+        school: { organizationId: PREVIEW_FREE_CLASSROOM_ORG_ID },
+      },
+      select: { id: true },
+    });
+    if (!klass) {
+      await tx.class.create({
+        data: {
+          code: 'FREE-CLASS-101',
+          schoolYear: currentSchoolYear(),
+          title: 'Free Classroom — Period 1',
+          grade: '11',
+          period: '1',
+          schoolId: school.id,
+          teachers: { connect: { id: teacherMembershipId } },
+          students: { connect: { id: studentMembershipId } },
+        },
+      });
+    }
+
+    void bundleTypes;
+  });
+}
+
 async function reconcilePreviewFreeClassroomDevPasswords(prisma: PrismaClient) {
   const hash = createPassword(LOCAL_DEV_PASSWORD).hash;
   for (const email of [
@@ -151,6 +248,43 @@ async function reconcilePreviewFreeClassroomDevPasswords(prisma: PrismaClient) {
       update: { hash },
     });
   }
+}
+
+async function repairPreviewSchoolReporterNavTeacherIfMissing(
+  prisma: PrismaClient
+) {
+  const teacher = await prisma.user.findUnique({
+    where: { email: PREVIEW_SCHOOL_REPORTER_NAV_TEACHER_EMAIL },
+    select: { id: true },
+  });
+  if (teacher) return;
+
+  const school = await prisma.school.findFirst({
+    where: { organizationId: PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID },
+    select: { id: true },
+  });
+  if (!school) {
+    throw new Error('preview_school_reporter_nav_school_missing_for_repair');
+  }
+
+  await prisma.user.create({
+    data: {
+      email: PREVIEW_SCHOOL_REPORTER_NAV_TEACHER_EMAIL,
+      name: 'School Reporter Nav Teacher',
+      password: { create: createPassword(LOCAL_DEV_PASSWORD) },
+      memberships: {
+        create: {
+          organizationId: PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID,
+          role: 'TEACHER',
+          isOrgOwner: true,
+          schools: { connect: { id: school.id } },
+        },
+      },
+    },
+  });
+  console.warn(
+    `Repaired missing school reporter nav teacher (${PREVIEW_SCHOOL_REPORTER_NAV_TEACHER_EMAIL}).`
+  );
 }
 
 async function reconcilePreviewSchoolReporterNavPassword(prisma: PrismaClient) {
@@ -350,25 +484,12 @@ async function seedClassStarterAssignments(
       },
     });
   }
-  const deployedCount = await client.assignment.count({
-    where: {
-      assignmentTypeId,
-      classAssignments: {
-        some: { class: { school: { organizationId } } },
-      },
-    },
-  });
-  await client.freeClassroomAssignmentKindUsage.upsert({
-    where: {
-      organizationId_kind: { organizationId, kind: 'class_starter' },
-    },
-    create: {
-      organizationId,
-      kind: 'class_starter',
-      lifetimeCreatedCount: deployedCount,
-    },
-    update: { lifetimeCreatedCount: deployedCount },
-  });
+  await syncFreeClassroomKindUsageFromAssignments(
+    client,
+    organizationId,
+    assignmentTypeId,
+    'class_starter'
+  );
   console.log(
     `Seeded ${count} class starter assignment(s) for ${organizationId}.`
   );
@@ -440,4 +561,45 @@ async function ensurePreviewShowcaseBundleAssignments(
       });
     }
   }
+
+  for (const { kind, typeId } of [
+    { kind: 'prewriting' as const, typeId: prewritingTypeId },
+    { kind: 'thesis_statement' as const, typeId: thesisTypeId },
+  ]) {
+    if (typeId) {
+      await syncFreeClassroomKindUsageFromAssignments(
+        client,
+        PREVIEW_FREE_CLASSROOM_ORG_ID,
+        typeId,
+        kind
+      );
+    }
+  }
+}
+
+async function syncFreeClassroomKindUsageFromAssignments(
+  client: SeedClient,
+  organizationId: string,
+  assignmentTypeId: string,
+  kind: 'class_starter' | 'prewriting' | 'thesis_statement'
+) {
+  const deployedCount = await client.assignment.count({
+    where: {
+      assignmentTypeId,
+      classAssignments: {
+        some: { class: { school: { organizationId } } },
+      },
+    },
+  });
+  await client.freeClassroomAssignmentKindUsage.upsert({
+    where: {
+      organizationId_kind: { organizationId, kind },
+    },
+    create: {
+      organizationId,
+      kind,
+      lifetimeCreatedCount: deployedCount,
+    },
+    update: { lifetimeCreatedCount: deployedCount },
+  });
 }
