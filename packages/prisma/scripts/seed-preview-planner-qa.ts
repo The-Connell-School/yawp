@@ -4,7 +4,10 @@
  * or the demo environment. Invoked from preview seat bootstrap on PR previews only.
  */
 import { Prisma } from '../generated/prisma';
-import { composeExitTicketPrompt } from '../../../services/web-app/app/domain/assignment-types/exit-ticket';
+import {
+  composeExitTicketPrompt,
+  type ExitTicketConfig,
+} from '../../../services/web-app/app/domain/assignment-types/exit-ticket';
 import { createPrismaClient } from './local-dev/connection';
 import { isLocalDatabaseUrl } from './local-dev/database-url';
 import {
@@ -241,12 +244,12 @@ export async function seedPreviewPlannerQa(
     };
   }
 
-  const exitConfig = {
+  const exitConfig: ExitTicketConfig = {
     schemaVersion: 1,
-    mode: 'specific' as const,
+    mode: 'specific',
     focus: 'explain-concept',
     topic: 'what a comma splice is and how to fix one',
-    answerType: 'objective' as const,
+    answerType: 'objective',
     lessonNotes: {
       mainPoints: 'A comma splice joins two sentences with only a comma.',
       mustMention: 'Whether the material moves.',
