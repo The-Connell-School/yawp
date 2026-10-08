@@ -28,4 +28,14 @@ test.describe('Free tier public flow', () => {
     await expect(page.getByText(/This link is not valid/i)).toBeVisible();
     await expect(page.getByText(/no longer valid/i)).not.toBeVisible();
   });
+
+  test('join page shows YAWP branding when token is valid shape', async ({ page }) => {
+    await page.goto('/free/join?t=not-a-real-signed-token');
+    await expect(page.getByRole('link', { name: /YAWP/i })).toBeVisible();
+  });
+
+  test('admin approve shows already-approved state copy on bare visit', async ({ page }) => {
+    await page.goto('/free/admin/approve');
+    await expect(page.getByRole('heading', { name: /expired|already used/i })).toBeVisible();
+  });
 });
