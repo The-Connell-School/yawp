@@ -8,7 +8,8 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
   e2eContext,
   signIn,
 }, testInfo) => {
-  test.setTimeout(360_000);
+  // Teacher grading + release + student/class checks can exceed 6m in CI.
+  test.setTimeout(600_000);
   await page.addInitScript(() => {
     globalThis.document.documentElement.setAttribute(
       'data-e2e-force-grading-fixture',
@@ -125,7 +126,8 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
       });
     }
 
-    await signIn('jdoe@brock.software', 'johndoe');
+    await page.request.post('/auth/logout');
+    await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto(`/app/submissions/${submission.id}`);
     await expect(page.getByText(/\d+\s*\/\s*20/)).toBeVisible();
     await expect(page.getByText(/%/)).not.toBeVisible();
@@ -134,6 +136,7 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
       fullPage: true,
     });
 
+    await page.request.post('/auth/logout');
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(
       `/app/my-classes/${e2eContext.classId}?tab=documents&status=released`
