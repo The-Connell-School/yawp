@@ -11,6 +11,14 @@ import {
 } from '@app/marketing-media';
 import { CURSOR_INIT_SCRIPT, setCursorVisibilityScript } from './cursor';
 import { frameClip, frameGeometry } from './frame';
+import {
+  GUIDE_START_URL,
+  assembleGuideDocument,
+  buildGuideSegmentArgs,
+  buildGuideStillArgs,
+  planGuideSegments,
+  type SceneMark,
+} from './guide';
 import { buildTranscodeArgs, shotFileName } from './jobs';
 import {
   fetchPreviewAccessCookies,
@@ -20,7 +28,7 @@ import {
 
 export type RenderedFile = {
   path: string;
-  kind: 'IMAGE' | 'VIDEO';
+  kind: 'IMAGE' | 'VIDEO' | 'DOCUMENT';
   label: string;
   contentType: string;
   width?: number;
@@ -450,14 +458,22 @@ async function transcode(
   outputPath: string,
   options: { trimStartSeconds?: number } = {}
 ): Promise<void> {
+  await runFfmpeg(
+    ffmpegPath,
+    buildTranscodeArgs(inputPath, outputPath, options),
+    outputPath
+  );
+}
+
+async function runFfmpeg(
+  ffmpegPath: string,
+  args: string[],
+  outputPath: string
+): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(
-      ffmpegPath,
-      buildTranscodeArgs(inputPath, outputPath, options),
-      {
-        stdio: ['ignore', 'ignore', 'pipe'],
-      }
-    );
+    const child = spawn(ffmpegPath, args, {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
     let stderr = '';
     // ffmpeg on a truncated or malformed recording can sit forever rather than
     // exiting; kill it instead of letting it consume the attempt.
@@ -490,14 +506,17 @@ async function transcode(
  * Stills are always produced. A CLIP job also records the session and
  * transcodes it to a silent MP4, because a WebM straight out of Playwright will
  * not play on an iPhone and marketing media that only plays on a laptop is not
- * finished.
+ * finished. A GUIDE job records the same way, then cuts one short loop per
+ * guide step and assembles the how-to guide page (see ./guide.ts).
  */
 export async function renderStoryboard(
   params: RenderParams
 ): Promise<RenderResult> {
   const { storyboard, baseUrl, outDir } = params;
   const loginPath = params.loginPath ?? '/auth/dev-login';
-  const wantsVideo = params.kind === 'CLIP';
+  // A guide is filmed like a clip, then cut into one loop per step.
+  const isGuide = params.kind === 'GUIDE';
+  const wantsVideo = params.kind === 'CLIP' || isGuide;
   const screenshotDir = path.join(outDir, 'screenshots');
   const videoDir = path.join(outDir, 'video');
 
@@ -577,6 +596,9 @@ export async function renderStoryboard(
     y: storyboard.viewport.height / 2,
   };
   const persona = { current: storyboard.persona };
+  // Guide bookkeeping: when each scene played, and the still it ended on.
+  const sceneMarks: SceneMark[] = [];
+  const sceneStills: Record<string, string> = {};
 
   const shoot = async (name: string, fullPage: boolean) => {
     shotIndex += 1;
@@ -695,7 +717,17 @@ export async function renderStoryboard(
 
       if (scene.hold > 0)
         await page.waitForTimeout(Math.round(scene.hold * 1000));
-      if (scene.screenshot) await shoot(scene.id, scene.fullPage);
+      const sceneEndedAt = Date.now();
+      if (scene.screenshot) {
+        await shoot(scene.id, scene.fullPage);
+        const still = files.at(-1);
+        if (still) sceneStills[scene.id] = still.path;
+      }
+      sceneMarks.push({
+        id: scene.id,
+        startMs: sceneStartedAt - startedAt,
+        endMs: sceneEndedAt - startedAt,
+      });
 
       const pendingZoom = zoomMarks.at(-1);
       if (pendingZoom && pendingZoom.endMs === 0) {
@@ -725,6 +757,66 @@ export async function renderStoryboard(
     await bounded('Browser close', TEARDOWN_TIMEOUT_MS, browser.close()).catch(
       () => {}
     );
+  }
+
+  if (isGuide && video) {
+    params.onStage?.('cutting the guide');
+    const recorded = await video.path();
+    const guideDir = path.join(outDir, 'guide');
+    fs.mkdirSync(guideDir, { recursive: true });
+    const ffmpeg = params.ffmpegPath ?? 'ffmpeg';
+    const titles = new Map(
+      storyboard.scenes.map((scene) => [
+        scene.id,
+        scene.guide?.heading ?? scene.id,
+      ])
+    );
+
+    const clips: Record<string, string> = {};
+    for (const segment of planGuideSegments(storyboard, sceneMarks)) {
+      const clipPath = path.join(guideDir, `${segment.sceneId}.mp4`);
+      await runFfmpeg(
+        ffmpeg,
+        buildGuideSegmentArgs(recorded, clipPath, segment),
+        clipPath
+      );
+      clips[segment.sceneId] = clipPath;
+      files.push({
+        path: clipPath,
+        kind: 'VIDEO',
+        label: titles.get(segment.sceneId) ?? segment.sceneId,
+        contentType: 'video/mp4',
+        durationMs: Math.round(segment.durationSeconds * 1000),
+      });
+    }
+    fs.rmSync(recorded, { force: true });
+
+    // Full-size PNGs ship as their own outputs; the page gets lighter copies.
+    const stills: Record<string, string> = {};
+    for (const scene of storyboard.scenes) {
+      const png = sceneStills[scene.id];
+      if (!scene.guide || !png) continue;
+      const jpg = path.join(guideDir, `${scene.id}.jpg`);
+      await runFfmpeg(ffmpeg, buildGuideStillArgs(png, jpg), jpg);
+      stills[scene.id] = jpg;
+    }
+
+    params.onStage?.('assembling the guide');
+    const guidePath = path.join(guideDir, `${storyboard.slug}.html`);
+    assembleGuideDocument({
+      storyboard,
+      stills,
+      clips,
+      outPath: guidePath,
+      startUrl: GUIDE_START_URL,
+    });
+    files.push({
+      path: guidePath,
+      kind: 'DOCUMENT',
+      label: storyboard.guide?.headline ?? storyboard.title,
+      contentType: 'text/html; charset=utf-8',
+    });
+    return { files, warnings };
   }
 
   if (wantsVideo && video) {
