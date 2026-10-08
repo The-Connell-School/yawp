@@ -39,7 +39,7 @@ function scaleScoreLabelsFromSource(
 }
 
 /**
- * Resolves Daily Pages / Class Starter engagement rubrics to the teacher's
+ * Resolves Daily Pages engagement rubrics to the teacher's
  * configured point total using bands from the resolved (or pinned) schema.
  */
 export function scaleDailyPagesForAssignment(

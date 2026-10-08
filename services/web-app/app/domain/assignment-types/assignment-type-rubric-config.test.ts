@@ -400,9 +400,9 @@ describe('the default rubric config for a Class Starter assignment type', () => 
 
     expect(config.source).toBe('class-starter-default');
     expect(config.rubric.categories.map((category) => category.key)).toEqual([
-      'engagement_with_prompt',
+      'engagement',
     ]);
-    expect(config.scoringScale).toMatchObject({ minScore: 0, maxScore: 100 });
+    expect(config.scoringScale).toMatchObject({ minScore: 0, maxScore: 3 });
     expect(config.defaultLabel).toBe('Class Starter engagement');
   });
 
@@ -438,7 +438,7 @@ describe('the default rubric config for a Daily Pages assignment type', () => {
     expect(config.outputSchema.assignmentPointScaling).toBe(
       'daily_pages_engagement_v2'
     );
-    expect(config.outputSchema.teacherNotesEnabled).toBe(true);
+    expect(config.outputSchema.teacherNotesEnabled).toBeUndefined();
     expect(config.defaultLabel).toBe('Daily Pages engagement');
   });
 

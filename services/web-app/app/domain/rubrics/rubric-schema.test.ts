@@ -133,7 +133,7 @@ describe('rubric schema', () => {
     expect(dailyPages.outputSchema?.assignmentPointScaling).toBe(
       'daily_pages_engagement_v2'
     );
-    expect(dailyPages.outputSchema?.teacherNotesEnabled).toBe(true);
+    expect(dailyPages.outputSchema?.teacherNotesEnabled).toBeUndefined();
     expect(dailyPages.rubric.categories[0].bands?.length).toBe(4);
     expect(dailyPages.rubric.categories[0].grammarHighlighting).toBe(false);
 

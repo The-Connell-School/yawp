@@ -135,5 +135,5 @@ export function assignmentTypeUsesDailyPagesEngagementRubric({
 }): boolean {
   if (rubricName === 'daily-pages-engagement') return true;
   if (usesDailyPagesEngagementPointScaling(outputSchema)) return true;
-  return kind === 'daily_pages' || kind === 'class_starter';
+  return kind === 'daily_pages';
 }

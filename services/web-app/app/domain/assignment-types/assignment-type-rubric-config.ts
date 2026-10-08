@@ -119,7 +119,6 @@ const thesisDefaultConfig: AssignmentTypeRubricConfig = {
 const dailyPagesEngagementOutputSchema = {
   ...DEFAULT_OUTPUT_SCHEMA_JSON,
   assignmentPointScaling: DAILY_PAGES_ENGAGEMENT_SCALING_RULE,
-  teacherNotesEnabled: true,
 };
 
 const dailyPagesEngagementConfig: AssignmentTypeRubricConfig = {
@@ -139,9 +138,9 @@ const classStarterConfig: AssignmentTypeRubricConfig = {
   scoringScale: CLASS_STARTER_SCORING_SCALE,
   rubric: CLASS_STARTER_RUBRIC,
   promptConfig: CLASS_STARTER_PROMPT_CONFIG,
-  outputSchema: dailyPagesEngagementOutputSchema,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
   calibrationNotes:
-    'Class Starter uses the same engagement rubric as Daily Pages: proportional tiers, overall feedback only, no grammar highlighting.',
+    'Class Starter judges engagement only — that the student wrote and reflected — with overall feedback and no grammar highlighting.',
   rubricIncomplete: false,
   defaultLabel: 'Class Starter engagement',
 };
