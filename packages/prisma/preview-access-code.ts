@@ -146,6 +146,86 @@ export function withPreviewFixtureAccessSeats(
   );
 }
 
+export function isPreviewFixtureAccessOrg(organizationId: string) {
+  return (
+    organizationId === PREVIEW_FREE_CLASSROOM_ORG_ID ||
+    organizationId === PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID
+  );
+}
+
+/** Seats that map to provisioned preview-seat-N orgs (not QA fixture orgs). */
+export function countProvisionedPreviewSeatOrgs(
+  seats: GeneratedPreviewAccessSeat[],
+  masterOrganizationId = 'local-dev-org'
+) {
+  let maxNumber = 0;
+  let hasMaster = false;
+  for (const seat of seats) {
+    if (seat.organizationId === masterOrganizationId) {
+      hasMaster = true;
+      continue;
+    }
+    if (isPreviewFixtureAccessOrg(seat.organizationId)) continue;
+    const match = /^preview-seat-([1-9][0-9]*)$/.exec(seat.organizationId);
+    if (match) maxNumber = Math.max(maxNumber, Number(match[1]));
+  }
+  if (maxNumber > 0) return maxNumber;
+  return hasMaster ? 1 : 0;
+}
+
+export function shouldAttachPreviewFixtureAccessSeats(
+  previewSlug?: string | null,
+  includePreviewFreeClassroomFixture?: string | null
+) {
+  if (previewSlug === 'demo') return false;
+  if (includePreviewFreeClassroomFixture === 'false') return false;
+  return true;
+}
+
+export function buildPreviewAccessSeatRegistry({
+  count = 1,
+  previewSlug,
+  includePreviewFreeClassroomFixture,
+  existingCodes = [],
+  existingSeats = [],
+  reservedCodes = [],
+  generateCode = generatePreviewAccessCode,
+  masterOrganizationId = 'local-dev-org',
+  masterLabel = 'Master',
+}: {
+  count?: number;
+  previewSlug?: string | null;
+  includePreviewFreeClassroomFixture?: string | null;
+  existingCodes?: string[];
+  existingSeats?: GeneratedPreviewAccessSeat[];
+  reservedCodes?: string[];
+  generateCode?: () => string;
+  masterOrganizationId?: string;
+  masterLabel?: string;
+} = {}): GeneratedPreviewAccessSeat[] {
+  const provisionedExisting = existingSeats.filter(
+    (seat) => !isPreviewFixtureAccessOrg(seat.organizationId)
+  );
+  const provisioned = generatePreviewAccessSeats({
+    count,
+    existingCodes,
+    existingSeats: provisionedExisting,
+    reservedCodes,
+    generateCode,
+    masterOrganizationId,
+    masterLabel,
+  });
+  if (
+    !shouldAttachPreviewFixtureAccessSeats(
+      previewSlug,
+      includePreviewFreeClassroomFixture
+    )
+  ) {
+    return provisioned;
+  }
+  return withPreviewFixtureAccessSeats(provisioned, generateCode);
+}
+
 function previewSeatIdentity(
   number: number,
   masterOrganizationId: string,
@@ -188,7 +268,7 @@ export function generatePreviewAccessSeats({
       return Math.max(maximum, 1);
     }
     return match ? Math.max(maximum, Number(match[1])) : maximum;
-  }, existingSeats.length);
+  }, 0);
   const effectiveCount = Math.max(count, retainedCount);
   const reserved = new Set(
     reservedCodes.map((code) => code.trim().toLowerCase()).filter(Boolean)

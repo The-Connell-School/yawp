@@ -157,6 +157,8 @@ load_or_create_access_config() {
     PREVIEW_ACCESS_SEATS="$(
       docker run --rm \
         -e PREVIEW_SEAT_COUNT="$PREVIEW_SEAT_COUNT" \
+        -e PREVIEW_SLUG="$SLUG" \
+        -e INCLUDE_PREVIEW_FREE_CLASSROOM_FIXTURE="${INCLUDE_PREVIEW_FREE_CLASSROOM_FIXTURE:-}" \
         -e PREVIEW_ACCESS_MASTER_ORGANIZATION_ID="$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID" \
         -e PREVIEW_ACCESS_MASTER_LABEL="$PREVIEW_ACCESS_MASTER_LABEL" \
         -e PREVIEW_EXISTING_ACCESS_SEATS="$existing_seats" \
@@ -177,8 +179,13 @@ load_or_create_access_config() {
   # A retained seat map may be larger than a subsequently lowered count. Never
   # orphan one of those worlds on a reset; seed through the full retained map.
   PREVIEW_SEAT_COUNT="$(
-    PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e \
-      "process.stdout.write(String(JSON.parse(process.env.PREVIEW_ACCESS_SEATS).length))"
+    docker run --rm \
+      -e PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" \
+      -e PREVIEW_ACCESS_MASTER_ORGANIZATION_ID="$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID" \
+      -v "$SOURCE_DIR:/app:ro" \
+      -w /app \
+      oven/bun:1.3.1 \
+      bun scripts/preview/provisioned-seat-count.mjs
   )"
 
   if [[ -z "${PREVIEW_ACCESS_SECRET:-}" ]]; then
