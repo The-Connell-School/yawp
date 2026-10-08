@@ -5,6 +5,10 @@ import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  releaseGradeFromSubmissionPage,
+  waitForReleasedGradeOnStudentSubmission,
+} from './release-grade-helpers.mjs';
 
 const previewUrl = process.env.PREVIEW_URL?.replace(/\/$/, '');
 const accessCode = process.env.PREVIEW_ACCESS_CODE;
@@ -28,11 +32,16 @@ const shot = (name) => join(outDir, name);
 mkdirSync(outDir, { recursive: true });
 
 async function enterPreview(page) {
-  await page.goto(`${previewUrl}/`);
-  await page.getByLabel('Access code').fill(accessCode);
-  await page.getByRole('button', { name: 'Open preview' }).click();
+  await page.goto(
+    `${previewUrl}/?code=${encodeURIComponent(accessCode)}`,
+    { waitUntil: 'domcontentloaded', timeout: 120_000 }
+  );
+  if (page.url().includes('/auth/preview-access')) {
+    await page.getByLabel('Access code').fill(accessCode, { timeout: 60_000 });
+    await page.getByRole('button', { name: 'Open preview' }).click();
+  }
   await page.waitForURL((url) => !url.pathname.includes('/auth/preview-access'), {
-    timeout: 60_000,
+    timeout: 120_000,
   });
 }
 
@@ -90,27 +99,16 @@ async function main() {
       path: shot('08c-teacher-graded-unreleased.png'),
       fullPage: true,
     });
-    const releaseGrade = page.getByRole('button', { name: /Release Grade/i });
-    if (await releaseGrade.isVisible().catch(() => false)) {
-      await releaseGrade.click();
-      await page.waitForLoadState('networkidle');
-    } else {
-      await page.goto(
-        `${previewUrl}/app/my-classes/${QA.classId}/assignments/${QA.exitAssignmentId}`
-      );
-      await page.waitForLoadState('networkidle');
-      const gradedTab = page.getByRole('button', { name: /graded/i });
-      if (await gradedTab.isVisible().catch(() => false)) {
-        await gradedTab.click();
-        await page.getByRole('checkbox').first().check();
-        await page.getByRole('button', { name: /release grades/i }).click();
-        await page.waitForLoadState('networkidle');
-      }
-    }
+    await releaseGradeFromSubmissionPage(page, {
+      previewUrl,
+      classId: QA.classId,
+      exitAssignmentId: QA.exitAssignmentId,
+    });
 
     await devLogin(page, 'dev.student@yawp.local');
     await page.goto(`${previewUrl}/app/submissions/${QA.exitSubmissionId}`);
     await page.waitForLoadState('networkidle');
+    await waitForReleasedGradeOnStudentSubmission(page);
     await page.screenshot({
       path: shot('08d-student-released-grade.png'),
       fullPage: true,

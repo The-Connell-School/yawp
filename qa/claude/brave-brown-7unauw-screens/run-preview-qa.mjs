@@ -4,10 +4,15 @@
  * Optional: QA_OUT_DIR (defaults to this directory)
  */
 import { chromium } from 'playwright';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  releaseGradeFromSubmissionPage,
+  waitForReleasedGradeOnStudentSubmission,
+} from './release-grade-helpers.mjs';
 
 const previewUrl = process.env.PREVIEW_URL?.replace(/\/$/, '');
 const accessCode = process.env.PREVIEW_ACCESS_CODE;
@@ -31,11 +36,16 @@ const shot = (name) => join(outDir, name);
 mkdirSync(outDir, { recursive: true });
 
 async function enterPreview(page) {
-  await page.goto(`${previewUrl}/`);
-  await page.getByLabel('Access code').fill(accessCode);
-  await page.getByRole('button', { name: 'Open preview' }).click();
+  await page.goto(
+    `${previewUrl}/?code=${encodeURIComponent(accessCode)}`,
+    { waitUntil: 'domcontentloaded', timeout: 120_000 }
+  );
+  if (page.url().includes('/auth/preview-access')) {
+    await page.getByLabel('Access code').fill(accessCode, { timeout: 60_000 });
+    await page.getByRole('button', { name: 'Open preview' }).click();
+  }
   await page.waitForURL((url) => !url.pathname.includes('/auth/preview-access'), {
-    timeout: 60_000,
+    timeout: 120_000,
   });
 }
 
@@ -83,8 +93,19 @@ function pdfText(bytes) {
   return text;
 }
 
+function pdfPageCount(bytes) {
+  const raw = Buffer.from(bytes).toString('latin1');
+  const matches = raw.match(/\/Type\s*\/Page\b/g);
+  return matches ? matches.length : 0;
+}
+
 function assertStackedPacketPdf(path) {
-  const text = pdfText(readFileSync(path));
+  const bytes = readFileSync(path);
+  const pages = pdfPageCount(bytes);
+  if (pages !== 5) {
+    throw new Error(`packet PDF expected 5 pages, got ${pages}`);
+  }
+  const text = pdfText(bytes);
   const hasSlides =
     /slide/i.test(text) &&
     (text.includes('speaker') || text.includes('min') || /\d\./.test(text));
@@ -99,6 +120,7 @@ function assertStackedPacketPdf(path) {
       `packet PDF missing stacked sections (slides=${hasSlides} handout=${hasHandout} exit=${hasExit})`
     );
   }
+  return createHash('md5').update(bytes).digest('hex');
 }
 
 async function main() {
@@ -179,7 +201,7 @@ async function main() {
     ]);
     const packetPdfPath = shot('05-packet.pdf');
     await download.saveAs(packetPdfPath);
-    assertStackedPacketPdf(packetPdfPath);
+    const packetPdfMd5 = assertStackedPacketPdf(packetPdfPath);
 
     await page.goto(`${previewUrl}/app/lesson-planner?c=${conversationId}`);
     await exitCard.getByTestId('exit-ticket-create').click();
@@ -294,23 +316,16 @@ async function main() {
       fullPage: true,
     });
 
-    const release = page.getByRole('button', { name: /^Release/i }).first();
-    if (await release.isVisible().catch(() => false)) {
-      await release.click();
-      await page.waitForLoadState('networkidle');
-    } else {
-      await page.goto(
-        `${previewUrl}/app/my-classes/${classId}/assignments/${QA.exitAssignmentId}`
-      );
-      await page.getByRole('button', { name: /graded/i }).click();
-      await page.getByRole('checkbox').first().check();
-      await page.getByRole('button', { name: /release grades/i }).click();
-      await page.waitForLoadState('networkidle');
-    }
+    await releaseGradeFromSubmissionPage(page, {
+      previewUrl,
+      classId,
+      exitAssignmentId: QA.exitAssignmentId,
+    });
 
     await devLogin(page, 'dev.student@yawp.local');
     await page.goto(`${previewUrl}/app/submissions/${QA.exitSubmissionId}`);
     await page.waitForLoadState('networkidle');
+    await waitForReleasedGradeOnStudentSubmission(page);
     await page.screenshot({
       path: shot('08d-student-released-grade.png'),
       fullPage: true,
@@ -371,6 +386,8 @@ async function main() {
         {
           ok: true,
           conversationId,
+          packetPdfPages: 5,
+          packetPdfMd5,
           costRows,
           inputTokens,
           outputTokens,
