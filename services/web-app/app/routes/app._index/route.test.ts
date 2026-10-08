@@ -266,7 +266,7 @@ describe('app index loader assignments', () => {
     expect(practice.classLabel.title).toBe('English 10');
   });
 
-  test('hides Composition assignments while their rollout flag is off', async () => {
+  test('still lists assigned practice on the dashboard when the composition rollout flag is off', async () => {
     process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
     getAssignedPracticeForStudent.mockResolvedValue([
       {
@@ -304,10 +304,10 @@ describe('app index loader assignments', () => {
       data.writingPracticeAssignments.map(
         (assignment: { id: string }) => assignment.id
       )
-    ).toEqual(['grammar-assignment']);
+    ).toEqual(['grammar-assignment', 'composition-assignment']);
   });
 
-  test('does not load assigned writing practice while the organization flag is off', async () => {
+  test('loads assigned writing practice for students even when the organization flag is off', async () => {
     requireMembership.mockResolvedValue({
       id: 'profile-1',
       role: 'STUDENT',
@@ -326,7 +326,7 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(getAssignedPracticeForStudent).not.toHaveBeenCalled();
+    expect(getAssignedPracticeForStudent).toHaveBeenCalledWith('profile-1');
     expect(data.writingPracticeAssignments).toEqual([]);
   });
 
