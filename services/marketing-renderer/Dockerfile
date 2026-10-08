@@ -18,7 +18,7 @@ ENV PATH="/root/.bun/bin:${PATH}"
 WORKDIR /app
 
 # Workspace manifests first, so dependency install caches across code changes.
-COPY package.json bun.lockb bunfig.toml ./
+COPY package.json bun.lock bunfig.toml ./
 COPY packages/prisma/package.json packages/prisma/
 COPY packages/marketing-media/package.json packages/marketing-media/
 COPY services/marketing-renderer/package.json services/marketing-renderer/
