@@ -7,6 +7,7 @@ import {
   getDraftDisplayTitle,
   type TeacherDocumentWorkRow,
 } from '~/utils/teacher-document-work-utils';
+import { formatUserDisplayName } from '~/utils/user-display';
 
 export const DOCUMENT_WORK_SORT_FIELDS = [
   'student',
@@ -128,8 +129,8 @@ export function compareTeacherDocumentWorkRows(
   switch (sort.field) {
     case 'student':
       result = compareText(
-        left.membership.user.name || left.membership.user.email,
-        right.membership.user.name || right.membership.user.email,
+        formatUserDisplayName(left.membership.user),
+        formatUserDisplayName(right.membership.user),
         collator,
         sort.direction
       );

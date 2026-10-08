@@ -72,7 +72,7 @@ try {
   await expect(table.getByText('Needs Grading', { exact: true }).first()).toBeVisible();
   assert.equal((await page.request.post(`${origin}/auth/dev-login`, { form: { email: 'dev.teacher@yawp.local' }, maxRedirects: 0 })).status(), 404);
   phase = 'paired marketing capture';
-  await captureMarketingPair({origin,organizationId:org.id,code:loginCode,teacherEmail:teacher.email,classroomId:classroom.id});
+  await captureMarketingPair({origin,organizationId:org.id,code:loginCode,teacherEmail:teacher.email!,classroomId:classroom.id});
   phase = 'reset and replacement users';
   await service.apply({ ...input, jobId: randomUUID(), mode: 'reset' });
   await page.goto(`${origin}/auth/login`);
@@ -83,7 +83,7 @@ try {
   const menu = await options.json();
   assert.equal(menu.options.length, 3, 'Reset should list only the replacement scenario users');
   assert(!menu.options.some((option: { email: string }) => option.email === teacher.email), 'Retired teacher must disappear from the menu');
-  assert.equal((await page.request.post(`${origin}/auth/dev-login`, { form: { email: teacher.email }, maxRedirects: 0 })).status(), 404);
+  assert.equal((await page.request.post(`${origin}/auth/dev-login`, { form: { email: teacher.email! }, maxRedirects: 0 })).status(), 404);
   console.log('PASS: seat code, beaker teacher login, real draft/submission classroom UI, cross-seat rejection and retired-user exclusion');
 } catch {
   const page = browser?.contexts()[0]?.pages()[0];

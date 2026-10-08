@@ -72,6 +72,7 @@ import {
 } from '~/components/class-manage-sheet';
 import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
+import { HandleStudentPasswordResetButton } from './handle-student-password-reset';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import { UnsubmitSubmissionsSheet } from '~/components/teacher-document-work/unsubmit-submissions-sheet';
 import {
@@ -154,6 +155,7 @@ import {
   lockStudentRosters,
 } from '~/domain/collaboration/class-assignment-lock.server';
 import { filterClassStudentsByQuery } from './class-students-search';
+import { formatUserContactLabel, formatUserDisplayName } from '~/utils/user-display';
 import {
   StudentGrowthPlansSheet,
   type StudentGrowthPlan,
@@ -169,6 +171,12 @@ import {
   summarizeStudentPasteActivity,
 } from './class-paste-alerts';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import {
+  ensureClassStudentJoinToken,
+  teacherResetStudentPassword,
+} from '~/domain/free-tier/student-join.server';
+import { FreeClassStudentJoinCard } from '~/components/free-class-student-join-card';
+import { getDomainUrl } from '~/utils/misc';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -799,6 +807,34 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
+  if (intent === 'reset-student-password') {
+    const studentMembershipId =
+      formData.get('studentMembershipId')?.toString() ?? '';
+    const temporaryPassword =
+      formData.get('temporaryPassword')?.toString() ?? '';
+    if (temporaryPassword.length < 6) {
+      return dataResponse(
+        { error: 'Temporary password must be at least 6 characters.' },
+        { status: 400 }
+      );
+    }
+    const result = await teacherResetStudentPassword({
+      studentMembershipId,
+      classId,
+      organizationId: classAccess.school.organizationId,
+      actorUserId: userId,
+      temporaryPassword,
+    });
+    if (result.status === 'error') {
+      return dataResponse({ error: result.error }, { status: 400 });
+    }
+    return dataResponse({
+      success: true,
+      message:
+        'Temporary password set. The student must change it at next login.',
+    });
+  }
+
   // Removes class enrollment only — student profiles and accounts stay intact.
   if (intent === 'remove-students') {
     const studentProfileIds = formData.getAll('studentProfileIds') as string[];
@@ -975,14 +1011,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             name: true,
             organizationId: true,
             organization: {
-              select: { classInsightsEnabled: true, reporterEnabled: true },
+              select: {
+                plan: true,
+                classInsightsEnabled: true,
+                reporterEnabled: true,
+              },
             },
           },
         },
         students: {
           select: {
             id: true,
-            user: { select: { name: true, email: true } },
+            user: { select: { name: true, email: true, username: true } },
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -1092,7 +1132,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   membership: {
                     select: {
                       id: true,
-                      user: { select: { id: true, name: true, email: true } },
+                      user: {
+                        select: { id: true, name: true, email: true, username: true },
+                      },
                     },
                   },
                 },
@@ -1360,9 +1402,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     { writingConditionsEnabled }
   );
 
+  let studentJoinUrl: string | null = null;
+  if (klass.school.organization.plan === 'FREE_CLASSROOM') {
+    const joinToken = await ensureClassStudentJoinToken(klass.id);
+    if (joinToken) {
+      const joinPath = new URL('/join', getDomainUrl(request));
+      joinPath.searchParams.set('t', joinToken);
+      studentJoinUrl = joinPath.toString();
+    }
+  }
+
   return dataResponse({
     role: 'TEACHER' as const,
     writingConditionsEnabled,
+    studentJoinUrl,
     klass,
     submissions,
     inProgressDocuments,
@@ -1418,7 +1471,7 @@ type ClassDocumentRow = {
   updatedAt: Date;
   membership: {
     id: string;
-    user: { name: string | null; email: string };
+    user: { name: string | null; email: string | null; username?: string | null };
   };
   group: TeacherDocumentWorkRow['group'];
   assignment: {
@@ -1706,11 +1759,14 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const sortedStudents = useMemo(() => {
     const direction = studentNameSortDirection === 'asc' ? 1 : -1;
     return [...students].sort((a, b) => {
-      const aName = a.user.name || a.user.email;
-      const bName = b.user.name || b.user.email;
+      const aName = formatUserDisplayName(a.user);
+      const bName = formatUserDisplayName(b.user);
       const primary = collator.compare(aName, bName);
       if (primary !== 0) return primary * direction;
-      return collator.compare(a.user.email, b.user.email);
+      return collator.compare(
+        formatUserContactLabel(a.user),
+        formatUserContactLabel(b.user)
+      );
     });
   }, [collator, studentNameSortDirection, students]);
 
@@ -2133,7 +2189,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           statusCounts={documentWorkStatusCounts}
           students={sortedStudents.map((student) => ({
             id: student.id,
-            label: student.user.name || student.user.email,
+            label: formatUserDisplayName(student.user),
           }))}
           assignments={data.assignments.map((assignment) => ({
             id: assignment.id,
@@ -2226,6 +2282,12 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
 
       return (
         <div className="space-y-4">
+          {data.studentJoinUrl ? (
+            <FreeClassStudentJoinCard
+              joinUrl={data.studentJoinUrl}
+              classCode={data.klass.code}
+            />
+          ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="relative min-w-0 w-full max-w-sm flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -2548,7 +2610,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                         )}
                       </Button>
                     </TableHead>
-                    <TableHead className="whitespace-nowrap">Email</TableHead>
+                    <TableHead className="whitespace-nowrap">Login</TableHead>
                     <TableHead className="whitespace-nowrap pr-4">
                       Documents
                     </TableHead>
@@ -2610,7 +2672,17 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                           {s.user.name ?? 'Unnamed Student'}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {s.user.email}
+                          <div className="flex flex-col gap-1">
+                            <span>{formatUserContactLabel(s.user)}</span>
+                            {!s.user.email ? (
+                              <HandleStudentPasswordResetButton
+                                studentMembershipId={s.id}
+                                studentName={
+                                  s.user.name?.trim() || 'this student'
+                                }
+                              />
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell className="pr-4">
                           <button

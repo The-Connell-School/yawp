@@ -82,6 +82,17 @@ export const RATE_LIMITS = {
       perIpPerHour: 600,
       perEmailPerHour: 20,
     },
+    login: {
+      perIpPerMinute: 30,
+      perIpPerHour: 120,
+      perEmailPerHour: 12,
+      /** Failed attempts from one IP across any login identifier (password spraying). */
+      perIpFailedSprayPerHour: 300,
+    },
+    joinLookup: {
+      perIpPerMinute: 60,
+      perIpPerHour: 600,
+    },
     // Free-tier waitlist / QR token redemption. A conference QR (NCTE) is
     // scanned by hundreds of teachers on one venue network, so per-IP budgets
     // are generous; the per-email budget stops hammering one address.

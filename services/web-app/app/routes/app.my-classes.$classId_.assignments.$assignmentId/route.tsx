@@ -247,7 +247,9 @@ export default function AssignmentSubmissionsRoute() {
 
   const backUrl = `/app/my-classes/${klass.id}?tab=assignments`;
   const artifactLabel = (document: {
-    membership: { user: { name: string | null; email: string } } | null;
+    membership: {
+      user: { name: string | null; email: string | null; username?: string | null };
+    } | null;
     group: { label: string } | null;
   }) =>
     document.group?.label ??

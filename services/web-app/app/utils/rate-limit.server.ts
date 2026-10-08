@@ -343,6 +343,67 @@ async function consumeAll(buckets: BucketSpec[]): Promise<LimitResult> {
   }
 }
 
+export type LoginAttemptCharge = BucketConsumeParams;
+
+export type LoginAttemptConsumeResult =
+  | { allowed: true; charged: LoginAttemptCharge[] }
+  | { allowed: false; scope: LimitScope; retryAfterSeconds: number };
+
+/** Like consumeAll, but limiter faults and timeouts deny the request. */
+async function consumeAllFailClosed(
+  buckets: BucketSpec[]
+): Promise<LoginAttemptConsumeResult> {
+  const charged: BucketSpec[] = [];
+  try {
+    return await withTimeout(
+      (async (): Promise<LoginAttemptConsumeResult> => {
+        for (const bucket of buckets) {
+          if (await tryTakeTokens(bucket)) {
+            charged.push(bucket);
+            continue;
+          }
+          const retryAfterSeconds = await secondsUntilAvailable(bucket);
+          for (const done of charged) {
+            await refundTokens(done).catch(() => {});
+          }
+          void logDecision({
+            route: bucket.route,
+            feature: bucket.feature,
+            scope: bucket.scope,
+            decision:
+              bucket.scope === 'user'
+                ? 'DENIED_USER'
+                : bucket.scope === 'org'
+                  ? 'DENIED_ORG'
+                  : bucket.scope === 'ip'
+                    ? 'DENIED_IP'
+                    : 'DENIED_GLOBAL',
+            subjectKey: bucket.subjectKey,
+            retryAfterSeconds,
+          });
+          return { allowed: false, scope: bucket.scope, retryAfterSeconds };
+        }
+        return { allowed: true, charged };
+      })(),
+      LIMITER_TIMEOUT_MS * 2
+    );
+  } catch (error) {
+    for (const done of charged) {
+      await refundTokens(done).catch(() => {});
+    }
+    console.warn('rate_limit_failed_closed', { error });
+    return { allowed: false, scope: 'ip', retryAfterSeconds: 60 };
+  }
+}
+
+export async function refundLoginAttemptRateLimits(
+  charged: LoginAttemptCharge[]
+) {
+  for (const bucket of charged) {
+    await refundTokens(bucket).catch(() => {});
+  }
+}
+
 // Public per-route helpers
 
 const MINUTE_MS = 60_000;
@@ -380,6 +441,34 @@ function windowBucket(spec: WindowSpec): BucketSpec {
     route: spec.route,
     feature: spec.feature,
   };
+}
+
+async function peekWindowBucket(spec: WindowSpec): Promise<boolean> {
+  const bucket = windowBucket(spec);
+  const now = Math.floor(spec.nowMs ?? Date.now());
+  const rows = await prisma.$queryRawUnsafe<
+    { tokens: number; capacity: number; refillPerMs: number; lastMs: number }[]
+  >(
+    `SELECT "tokens", "capacity", "refillPerMs", (EXTRACT(EPOCH FROM "lastRefillAt")::float8 * 1000) AS "lastMs"
+       FROM "RateLimitBucket" WHERE "key" = $1::text`,
+    bucket.key
+  );
+  const row = rows[0];
+  if (!row) return true;
+  const elapsed = Math.max(0, now - Number(row.lastMs));
+  const accrued = Math.floor(Number(row.refillPerMs) * elapsed);
+  const effective = Math.min(Number(row.capacity), Number(row.tokens) + accrued);
+  return effective >= bucket.cost;
+}
+
+async function peekConsumeAll(buckets: WindowSpec[]): Promise<LimitResult> {
+  for (const bucket of buckets) {
+    if (!(await peekWindowBucket(bucket))) {
+      const retryAfterSeconds = await secondsUntilAvailable(windowBucket(bucket));
+      return { allowed: false, scope: bucket.scope, retryAfterSeconds };
+    }
+  }
+  return { allowed: true };
 }
 
 export async function enforceTutorLimits(params: {
@@ -473,6 +562,309 @@ export async function enforceUnauthByIpAndTarget(params: {
     windowBucket({ ...base, key: `${ipKeyBase}:h`, limit: perIpPerHour, windowMs: HOUR_MS, scope: 'ip', subjectKey: ipKeyBase }),
     // Per-target (email): the budget that stops mail-bombing one address.
     windowBucket({ ...base, key: `${targetBase}:h`, limit: perTargetPerHour, windowMs: HOUR_MS, scope: 'ip', subjectKey: targetBase }),
+  ]);
+}
+
+/** Login: per-target and per-IP limits apply only after a failed login (successful logins do not consume budget). */
+function failedLoginTargetBuckets(params: {
+  route: string;
+  targetKey: string;
+  perTargetPerHour: number;
+  nowMs?: number;
+}) {
+  const { route, targetKey, perTargetPerHour, nowMs } = params;
+  const targetBase = `target:${hashTarget(targetKey)}:${route}:failed`;
+  const base = { route, nowMs };
+  return [
+    {
+      ...base,
+      key: `${targetBase}:h`,
+      limit: perTargetPerHour,
+      windowMs: HOUR_MS,
+      scope: 'ip' as const,
+      subjectKey: targetBase,
+    },
+  ];
+}
+
+export async function checkFailedLoginTargetRateLimit(params: {
+  route: string;
+  targetKey: string;
+  perTargetPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  return peekConsumeAll(failedLoginTargetBuckets(params));
+}
+
+export async function recordFailedLoginTargetRateLimit(params: {
+  route: string;
+  targetKey: string;
+  perTargetPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  const buckets = failedLoginTargetBuckets(params);
+  return consumeAll(buckets.map((b) => windowBucket(b)));
+}
+
+function failedLoginIpBuckets(params: {
+  request: Request;
+  route: string;
+  perIpPerMinute: number;
+  perIpPerHour: number;
+  nowMs?: number;
+}) {
+  const { request, route, perIpPerMinute, perIpPerHour, nowMs } = params;
+  const ip = getClientIp(request);
+  const ipKeyBase = `ip:${ipHash(ip)}:${route}:failed`;
+  const base = { route, nowMs };
+  return [
+    {
+      ...base,
+      key: `${ipKeyBase}:m`,
+      limit: perIpPerMinute,
+      windowMs: MINUTE_MS,
+      scope: 'ip' as const,
+      subjectKey: ipKeyBase,
+    },
+    {
+      ...base,
+      key: `${ipKeyBase}:h`,
+      limit: perIpPerHour,
+      windowMs: HOUR_MS,
+      scope: 'ip' as const,
+      subjectKey: ipKeyBase,
+    },
+  ];
+}
+
+function failedLoginIpSprayBuckets(params: {
+  request: Request;
+  route: string;
+  perIpSprayPerHour: number;
+  nowMs?: number;
+}) {
+  const { request, route, perIpSprayPerHour, nowMs } = params;
+  const ip = getClientIp(request);
+  const ipKeyBase = `ip:${ipHash(ip)}:${route}:failed-spray`;
+  const base = { route, nowMs };
+  return [
+    {
+      ...base,
+      key: `${ipKeyBase}:h`,
+      limit: perIpSprayPerHour,
+      windowMs: HOUR_MS,
+      scope: 'ip' as const,
+      subjectKey: ipKeyBase,
+    },
+  ];
+}
+
+export async function recordFailedLoginIpRateLimit(params: {
+  request: Request;
+  route: string;
+  perIpPerMinute: number;
+  perIpPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  const buckets = failedLoginIpBuckets(params);
+  return consumeAll(buckets.map((b) => windowBucket(b)));
+}
+
+export async function recordFailedLoginIpSprayRateLimit(params: {
+  request: Request;
+  route: string;
+  perIpSprayPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  const buckets = failedLoginIpSprayBuckets(params);
+  return consumeAll(buckets.map((b) => windowBucket(b)));
+}
+
+function loginTargetHash(targetKey: string) {
+  return hashTarget(targetKey.trim().toLowerCase());
+}
+
+function failedLoginIpHandleBuckets(params: {
+  request: Request;
+  route: string;
+  targetKey: string;
+  perIpPerMinute: number;
+  perIpPerHour: number;
+  nowMs?: number;
+}) {
+  const { request, route, targetKey, perIpPerMinute, perIpPerHour, nowMs } =
+    params;
+  const ip = getClientIp(request);
+  const targetHash = loginTargetHash(targetKey);
+  const ipKeyBase = `ip:${ipHash(ip)}:login:${targetHash}:${route}:attempt`;
+  const base = { route, nowMs };
+  return [
+    {
+      ...base,
+      key: `${ipKeyBase}:m`,
+      limit: perIpPerMinute,
+      windowMs: MINUTE_MS,
+      scope: 'ip' as const,
+      subjectKey: ipKeyBase,
+    },
+    {
+      ...base,
+      key: `${ipKeyBase}:h`,
+      limit: perIpPerHour,
+      windowMs: HOUR_MS,
+      scope: 'ip' as const,
+      subjectKey: ipKeyBase,
+    },
+  ];
+}
+
+export async function consumeLoginAttemptRateLimits(params: {
+  request: Request;
+  route: string;
+  targetKey: string;
+  perIpPerMinute: number;
+  perIpPerHour: number;
+  perTargetPerHour: number;
+  perIpSprayPerHour: number;
+  nowMs?: number;
+}): Promise<LoginAttemptConsumeResult> {
+  const {
+    request,
+    route,
+    targetKey,
+    perIpPerMinute,
+    perIpPerHour,
+    perTargetPerHour,
+    perIpSprayPerHour,
+    nowMs,
+  } = params;
+  const bucketSpecs: BucketSpec[] = [
+    ...failedLoginIpBuckets({
+      request,
+      route,
+      perIpPerMinute,
+      perIpPerHour,
+      nowMs,
+    }).map((b) => windowBucket(b)),
+    ...failedLoginIpSprayBuckets({
+      request,
+      route,
+      perIpSprayPerHour,
+      nowMs,
+    }).map((b) => windowBucket(b)),
+    ...failedLoginIpHandleBuckets({
+      request,
+      route,
+      targetKey,
+      perIpPerMinute,
+      perIpPerHour,
+      nowMs,
+    }).map((b) => windowBucket(b)),
+    ...failedLoginTargetBuckets({
+      route,
+      targetKey,
+      perTargetPerHour,
+      nowMs,
+    }).map((b) => windowBucket(b)),
+  ];
+  return consumeAllFailClosed(bucketSpecs);
+}
+
+export async function clearFailedLoginRateLimitsForTarget(params: {
+  route: string;
+  targetKey: string;
+}) {
+  const targetHash = loginTargetHash(params.targetKey);
+  const targetBase = `target:${targetHash}:${params.route}:failed`;
+  const ipHandleFragment = `:login:${targetHash}:${params.route}:attempt`;
+  await prisma.rateLimitBucket.deleteMany({
+    where: {
+      OR: [
+        { key: `${targetBase}:h` },
+        { key: { contains: ipHandleFragment } },
+      ],
+    },
+  });
+}
+
+export async function enforceUnauthByIpOnly(params: {
+  request: Request;
+  route: string;
+  perIpPerMinute: number;
+  perIpPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  const { request, route, perIpPerMinute, perIpPerHour, nowMs } = params;
+  const ip = getClientIp(request);
+  const ipKeyBase = `ip:${ipHash(ip)}:${route}`;
+  const base = { route, nowMs };
+  return consumeAll([
+    windowBucket({
+      ...base,
+      key: `${ipKeyBase}:m`,
+      limit: perIpPerMinute,
+      windowMs: MINUTE_MS,
+      scope: 'ip',
+      subjectKey: ipKeyBase,
+    }),
+    windowBucket({
+      ...base,
+      key: `${ipKeyBase}:h`,
+      limit: perIpPerHour,
+      windowMs: HOUR_MS,
+      scope: 'ip',
+      subjectKey: ipKeyBase,
+    }),
+  ]);
+}
+
+export async function enforceAuthenticatedUserAndIp(params: {
+  request: Request;
+  route: string;
+  userId: string;
+  perUserPerHour: number;
+  perIpPerMinute: number;
+  perIpPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  const {
+    request,
+    route,
+    userId,
+    perUserPerHour,
+    perIpPerMinute,
+    perIpPerHour,
+    nowMs,
+  } = params;
+  const ip = getClientIp(request);
+  const ipKeyBase = `ip:${ipHash(ip)}:${route}`;
+  const userKeyBase = `user:${userId}:${route}`;
+  const base = { route, nowMs };
+  return consumeAll([
+    windowBucket({
+      ...base,
+      key: `${userKeyBase}:h`,
+      limit: perUserPerHour,
+      windowMs: HOUR_MS,
+      scope: 'user',
+      subjectKey: userKeyBase,
+    }),
+    windowBucket({
+      ...base,
+      key: `${ipKeyBase}:m`,
+      limit: perIpPerMinute,
+      windowMs: MINUTE_MS,
+      scope: 'ip',
+      subjectKey: ipKeyBase,
+    }),
+    windowBucket({
+      ...base,
+      key: `${ipKeyBase}:h`,
+      limit: perIpPerHour,
+      windowMs: HOUR_MS,
+      scope: 'ip',
+      subjectKey: ipKeyBase,
+    }),
   ]);
 }
 

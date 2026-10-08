@@ -10,7 +10,7 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
     page,
   }) => {
     await page.goto('/auth/login');
-    await page.locator('input[type="email"]').fill(STUDENT_EMAIL);
+    await page.getByLabel('Email or handle').fill(STUDENT_EMAIL);
     await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
     await page.getByRole('button', { name: /log in/i }).click();
     await page.waitForURL('**/app**', { timeout: 15000 });
@@ -34,7 +34,7 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
     page,
   }) => {
     await page.goto('/auth/login');
-    await page.locator('input[type="email"]').fill(STUDENT_EMAIL);
+    await page.getByLabel('Email or handle').fill(STUDENT_EMAIL);
     await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
     await page.getByRole('button', { name: /log in/i }).click();
     await page.waitForURL('**/app**', { timeout: 15000 });
@@ -48,7 +48,7 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
     page,
   }) => {
     await page.goto('/auth/login');
-    await page.locator('input[type="email"]').fill(STUDENT_EMAIL);
+    await page.getByLabel('Email or handle').fill(STUDENT_EMAIL);
     await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
     await page.getByRole('button', { name: /log in/i }).click();
     await page.waitForURL('**/app**', { timeout: 15000 });
@@ -62,7 +62,7 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
     page,
   }) => {
     await page.goto('/auth/login');
-    await page.locator('input[type="email"]').fill(STUDENT_EMAIL);
+    await page.getByLabel('Email or handle').fill(STUDENT_EMAIL);
     await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
     await page.getByRole('button', { name: /log in/i }).click();
     await page.waitForURL('**/app**', { timeout: 15000 });
@@ -84,7 +84,7 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
       });
 
       await page.goto('/auth/login');
-      await page.locator('input[type="email"]').fill(STUDENT_EMAIL);
+      await page.getByLabel('Email or handle').fill(STUDENT_EMAIL);
       await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
       await page.getByRole('button', { name: /log in/i }).click();
       await page.waitForURL('**/app**', { timeout: 15000 });

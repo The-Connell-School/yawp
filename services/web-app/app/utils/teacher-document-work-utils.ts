@@ -36,7 +36,7 @@ export type TeacherDocumentWorkRow = {
   updatedAt: Date;
   membership: {
     id: string;
-    user: { id?: string; name: string | null; email: string };
+    user: { id?: string; name: string | null; email: string | null; username?: string | null };
   };
   group?: {
     id: string;
@@ -45,7 +45,7 @@ export type TeacherDocumentWorkRow = {
       membershipId: string;
       membership: {
         id: string;
-        user: { id?: string; name: string | null; email: string };
+        user: { id?: string; name: string | null; email: string | null; username?: string | null };
       };
     }>;
   } | null;
@@ -74,7 +74,8 @@ export type ReleaseGradeRow = {
     membership: {
       user: {
         name: string | null;
-        email: string;
+        email: string | null;
+        username?: string | null;
       };
     };
   };
@@ -90,7 +91,8 @@ export type TeacherUnsubmitRow = {
     membership: {
       user: {
         name: string | null;
-        email: string;
+        email: string | null;
+        username?: string | null;
       };
     };
   };
