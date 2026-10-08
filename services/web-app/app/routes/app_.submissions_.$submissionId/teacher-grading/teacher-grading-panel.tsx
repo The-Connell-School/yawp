@@ -799,6 +799,13 @@ export function TeacherGradingPanel({
         aiForm.append('documentId', documentId);
       }
       aiForm.append('gradingAssistantStrictnessLevel', level);
+      if (
+        typeof document !== 'undefined' &&
+        document.documentElement.getAttribute('data-e2e-force-grading-fixture') ===
+          'true'
+      ) {
+        aiForm.append('e2eForceGradingFixture', 'true');
+      }
       pendingAiFormRef.current = aiForm;
       hasRetriedAiFormRef.current = false;
       setIsAiRetrying(false);

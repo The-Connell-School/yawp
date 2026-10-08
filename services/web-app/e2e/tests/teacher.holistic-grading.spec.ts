@@ -9,8 +9,8 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
   signIn,
 }, testInfo) => {
   test.setTimeout(120_000);
-  await page.setExtraHTTPHeaders({
-    'x-e2e-force-grade-essay-ai-fixture': 'true',
+  await page.addInitScript(() => {
+    document.documentElement.setAttribute('data-e2e-force-grading-fixture', 'true');
   });
 
   const prisma = createE2EPrismaClient();

@@ -95,6 +95,7 @@ const POST = z.object({
   submissionId: z.string().optional(),
   gradingAssistantStrictnessLevel: z.string().optional(),
   llmRetry: z.enum(['fallback']).optional(),
+  e2eForceGradingFixture: z.literal('true').optional(),
 });
 
 function isPrismaRecordNotFoundError(error: unknown) {
@@ -340,14 +341,20 @@ const e2eRubricFixtures: Record<string, { score: number; comment: string }> = {
   },
 };
 
-function shouldUseE2EGradingFixture(request: Request) {
+function shouldUseE2EGradingFixture(
+  request: Request,
+  forceFromForm: boolean
+) {
   if (
     process.env.E2E !== 'true' ||
     process.env.E2E_GRADE_ESSAY_AI_FIXTURE !== 'true'
   ) {
     return false;
   }
-  if (request.headers.get('x-e2e-force-grade-essay-ai-fixture') === 'true') {
+  if (
+    forceFromForm ||
+    request.headers.get('x-e2e-force-grade-essay-ai-fixture') === 'true'
+  ) {
     return true;
   }
   return !process.env.ANTHROPIC_API_KEY;
@@ -943,7 +950,10 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
     });
-  const useE2EFixture = shouldUseE2EGradingFixture(request);
+  const useE2EFixture = shouldUseE2EGradingFixture(
+    request,
+    data.e2eForceGradingFixture === 'true'
+  );
   const documentContext = buildAiTextContextAudit({
     documentSource: 'submission-snapshot',
     documentId: submission.document.id,
