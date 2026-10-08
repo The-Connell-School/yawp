@@ -182,7 +182,10 @@ load_or_create_access_config() {
   # open PRs may lack older checkout-only seat-count helpers and must still preview-deploy.
   # shellcheck source=scripts/preview/resolve-provisioned-seat-count.sh
   source "$SCRIPT_DIR/resolve-provisioned-seat-count.sh"
-  PREVIEW_SEAT_COUNT="$(resolve_provisioned_preview_seat_count)"
+  PREVIEW_SEAT_COUNT="$(
+    PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" \
+      resolve_provisioned_preview_seat_count
+  )"
 
   if [[ -z "${PREVIEW_ACCESS_SECRET:-}" ]]; then
     if [[ -s "$ACCESS_SECRET_FILE" ]]; then
@@ -204,6 +207,13 @@ load_or_create_access_config() {
 
   export PREVIEW_ACCESS_CODES PREVIEW_ACCESS_SEATS PREVIEW_ACCESS_SECRET PREVIEW_MASTER_ACCESS_CODE PREVIEW_MASTER_ORG_GATE_ENABLED PREVIEW_SESSION_SECRET PREVIEW_SEAT_COUNT
 }
+
+if [[ "${YAWP_DEPLOY_STOP_AFTER:-}" == "access_config" ]]; then
+  load_or_create_access_config
+  printf 'YAWP_TEST_PREVIEW_SEAT_COUNT=%s\n' "$PREVIEW_SEAT_COUNT"
+  printf 'YAWP_TEST_PREVIEW_ACCESS_SEATS=%s\n' "$PREVIEW_ACCESS_SEATS"
+  exit 0
+fi
 
 load_or_create_access_config
 if [[ -n "${DIRECT_PORT:-}" || -f "$ROOT/ingress/current/ingress-server.mjs" ]]; then
