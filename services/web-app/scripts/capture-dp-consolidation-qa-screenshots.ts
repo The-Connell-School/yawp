@@ -36,17 +36,34 @@ async function passAccessGate(page: Page) {
 
 async function devLogin(page: Page, email: string) {
   await passAccessGate(page);
-  const loggedIn = await page.evaluate(async (loginEmail) => {
-    const response = await fetch('/auth/dev-login', {
-      method: 'POST',
-      body: new URLSearchParams({ email: loginEmail, password: 'yawp-dev' }),
-    });
-    return response.ok;
-  }, email);
-  if (!loggedIn) {
-    throw new Error(`Dev login failed for ${email}`);
+  await page.goto(`${baseUrl}/auth/login`);
+  await page.waitForLoadState('networkidle');
+
+  const beaker = page.getByRole('button', { name: /Open dev login menu/i });
+  if (await beaker.isVisible().catch(() => false)) {
+    await beaker.click();
+    const loginRow = page
+      .locator('form[action="/auth/dev-login"]')
+      .filter({ has: page.locator(`input[name="email"][value="${email}"]`) })
+      .getByRole('button');
+    await loginRow.click({ timeout: 60_000 });
+    await page.waitForURL(/\/app/, { timeout: 120_000 });
+  } else {
+    const loggedIn = await page.evaluate(async (loginEmail) => {
+      const response = await fetch('/auth/dev-login', {
+        method: 'POST',
+        body: new URLSearchParams({
+          email: loginEmail,
+          password: 'yawp-dev',
+        }),
+      });
+      return response.ok;
+    }, email);
+    if (!loggedIn) {
+      throw new Error(`Dev login failed for ${email}`);
+    }
+    await page.goto(`${baseUrl}/app/my-classes`);
   }
-  await page.goto(`${baseUrl}/app/my-classes`);
   await page.waitForLoadState('networkidle');
 }
 
