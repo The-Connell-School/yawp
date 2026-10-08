@@ -4,7 +4,7 @@
  * Optional: QA_OUT_DIR (defaults to this directory)
  */
 import { chromium } from 'playwright';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,6 +13,14 @@ const accessCode = process.env.PREVIEW_ACCESS_CODE;
 const outDir =
   process.env.QA_OUT_DIR ||
   join(fileURLToPath(new URL('.', import.meta.url)));
+
+/** Stable ids from packages/prisma/scripts/preview-planner-qa-ids.ts (preview seed). */
+const QA = {
+  classId: 'previewqa000class00001',
+  insightAssignmentId: 'previewqa000assignment01',
+  exitAssignmentId: 'previewqa000exitassign01',
+  exitSubmissionId: 'previewqa000exitsubm0001',
+};
 
 if (!previewUrl || !accessCode) {
   console.error('PREVIEW_URL and PREVIEW_ACCESS_CODE are required');
@@ -40,6 +48,15 @@ async function devLogin(page, email) {
     return response.ok;
   }, email);
   if (!ok) throw new Error(`dev-login failed for ${email}`);
+}
+
+async function waitPacketSave(page) {
+  return page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/domain/lesson-planner/packet') &&
+      response.request().method() === 'POST',
+    { timeout: 60_000 }
+  );
 }
 
 async function main() {
@@ -73,17 +90,23 @@ async function main() {
     await page.screenshot({ path: shot('02-plan-with-cards.png'), fullPage: true });
 
     const deck = page.getByTestId('slide-deck-card').first();
-    if (await deck.getByTestId('deck-toggle').isVisible().catch(() => false)) {
-      await deck.getByTestId('deck-toggle').click();
-    }
     const material = page.getByTestId('material-card').first();
-    if (await material.getByTestId('material-toggle').isVisible().catch(() => false)) {
-      await material.getByTestId('material-toggle').click();
-    }
     const exitCard = page.getByTestId('exit-ticket-card').first();
     await exitCard.waitFor({ state: 'visible', timeout: 60_000 });
 
     const conversationId = new URL(page.url()).searchParams.get('c');
+    if (!conversationId) throw new Error('missing conversation id');
+
+    for (const toggle of [
+      deck.getByTestId('material-toggle'),
+      material.getByTestId('material-toggle'),
+      exitCard.getByTestId('exit-ticket-stack-toggle'),
+    ]) {
+      if (!(await toggle.isVisible().catch(() => false))) continue;
+      const save = waitPacketSave(page);
+      await toggle.click();
+      await save;
+    }
 
     const presentLink = deck.getByRole('link', { name: 'Present' });
     const popupPromise = context.waitForEvent('page', { timeout: 5_000 }).catch(() => null);
@@ -101,8 +124,6 @@ async function main() {
     });
     if (popup) await presentPage.close();
     else await page.goBack();
-
-    if (!conversationId) throw new Error('missing conversation id');
 
     await page.goto(
       `${previewUrl}/app/lesson-planner/${conversationId}/packet`
@@ -128,30 +149,29 @@ async function main() {
 
     await page.goto(`${previewUrl}/app/reporter`);
     await page.waitForLoadState('networkidle');
-    let planLink = page.getByRole('link', { name: /plan this lesson/i }).first();
-    if (!(await planLink.isVisible().catch(() => false))) {
-      await page.goto(`${previewUrl}/app/classes`);
-      await page.waitForLoadState('networkidle');
-      const classLink = page.getByRole('link', { name: /period|grade|english/i }).first();
-      if (await classLink.isVisible().catch(() => false)) {
-        await classLink.click();
-        await page.waitForLoadState('networkidle');
-        planLink = page.getByRole('link', { name: /plan this lesson/i }).first();
-      }
+    await page.screenshot({ path: shot('07-reporter-home.png'), fullPage: true });
+
+    await page.goto(
+      `${previewUrl}/app/my-classes/${QA.classId}/summary/${QA.insightAssignmentId}`
+    );
+    await page.waitForLoadState('networkidle');
+    if (await page.getByText(/something didn't work/i).isVisible().catch(() => false)) {
+      const html = await page.content();
+      writeFileSync(shot('07-class-summary-error.html'), html);
+      throw new Error('class summary route crashed');
     }
-    if (await planLink.isVisible().catch(() => false)) {
-      await planLink.click();
-      await page.waitForLoadState('networkidle');
-      await page.screenshot({
-        path: shot('07-reporter-plan-this-lesson.png'),
-        fullPage: true,
-      });
-    } else {
-      await page.screenshot({
-        path: shot('07-reporter-missing-insight.png'),
-        fullPage: true,
-      });
-    }
+    await page.screenshot({
+      path: shot('07b-class-summary-ready.png'),
+      fullPage: true,
+    });
+
+    await page.getByRole('link', { name: /plan this lesson/i }).first().click();
+    await page.waitForURL(/\/app\/lesson-planner/, { timeout: 60_000 });
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({
+      path: shot('07c-planner-from-class-summary.png'),
+      fullPage: true,
+    });
 
     await devLogin(page, 'dev.student@yawp.local');
     await page.goto(`${previewUrl}/app`);
@@ -164,28 +184,49 @@ async function main() {
       throw new Error('student should not see Lesson Planner');
     }
 
-    await page.goto(`${previewUrl}/app/classes`);
+    await page.goto(`${previewUrl}/app/submissions/${QA.exitSubmissionId}`);
     await page.waitForLoadState('networkidle');
-    const workLink = page
-      .getByRole('link', { name: /submissions|assignments|view/i })
-      .first();
-    if (await workLink.isVisible().catch(() => false)) {
-      await workLink.click();
+    await page.screenshot({
+      path: shot('08b-student-unreleased-submission.png'),
+      fullPage: true,
+    });
+    if (await page.getByText(/85%/).isVisible().catch(() => false)) {
+      throw new Error('unreleased submission showed score to student');
+    }
+    const teacherContext = page.getByRole('region', { name: 'Teacher Context' });
+    if (await teacherContext.isVisible().catch(() => false)) {
+      throw new Error('unreleased submission leaked teacher context to student');
+    }
+
+    await devLogin(page, 'dev.teacher@yawp.local');
+    await page.goto(`${previewUrl}/app/submissions/${QA.exitSubmissionId}`);
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({
+      path: shot('08c-teacher-graded-unreleased.png'),
+      fullPage: true,
+    });
+
+    const release = page.getByRole('button', { name: /^Release/i }).first();
+    if (await release.isVisible().catch(() => false)) {
+      await release.click();
+      await page.waitForLoadState('networkidle');
+    } else {
+      await page.goto(
+        `${previewUrl}/app/my-classes/${QA.classId}/assignments/${QA.exitAssignmentId}`
+      );
+      await page.getByRole('button', { name: /graded/i }).click();
+      await page.getByRole('checkbox').first().check();
+      await page.getByRole('button', { name: /release grades/i }).click();
       await page.waitForLoadState('networkidle');
     }
-    const submissionLink = page.locator('a[href*="/app/submissions/"]').first();
-    if (await submissionLink.isVisible().catch(() => false)) {
-      await submissionLink.click();
-      await page.waitForLoadState('networkidle');
-      await page.screenshot({
-        path: shot('08b-student-unreleased-submission.png'),
-        fullPage: true,
-      });
-      const teacherContext = page.getByRole('region', { name: 'Teacher Context' });
-      if (await teacherContext.isVisible().catch(() => false)) {
-        throw new Error('unreleased submission leaked teacher context to student');
-      }
-    }
+
+    await devLogin(page, 'dev.student@yawp.local');
+    await page.goto(`${previewUrl}/app/submissions/${QA.exitSubmissionId}`);
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({
+      path: shot('08d-student-released-grade.png'),
+      fullPage: true,
+    });
 
     await devLogin(page, 'dev.admin@yawp.local');
     await page.goto(`${previewUrl}/app/admin/audit?feature=lesson-planner`);
@@ -220,6 +261,22 @@ async function main() {
         cacheCreate * 3.75) /
       1_000_000;
     await page.screenshot({ path: shot('09-admin-audit-tokens.png'), fullPage: true });
+
+    writeFileSync(
+      join(outDir, 'cost-measurement.json'),
+      JSON.stringify(
+        {
+          measuredAt: new Date().toISOString(),
+          inputTokens,
+          outputTokens,
+          cacheReadInputTokens: cacheRead,
+          cacheCreationInputTokens: cacheCreate,
+          measuredLessonCostUsd: Number(costUsd.toFixed(4)),
+        },
+        null,
+        2
+      )
+    );
 
     console.log(
       JSON.stringify(
