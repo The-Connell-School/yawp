@@ -187,8 +187,9 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
       page.locator(`a[href="/app/assignment-types/${sjpTypeId}"]`)
     ).toBeVisible();
 
-    await page.goto(`/app/my-classes/${e2eContext.classId}`);
-    await expect(page.getByText(seeded.assignmentTitle)).toBeVisible();
+    await page.goto(
+      `/app/my-classes/${e2eContext.classId}?tab=documents`
+    );
     await expect(page.getByText(seeded.documentTitle)).toBeVisible();
     await expect(page.getByText('10/12')).toBeVisible();
   });

@@ -118,9 +118,12 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
     await expect(page.getByTestId('grading-overall-comment')).toBeVisible();
 
     await engagementScore.click();
-    await expect(page.getByRole('listbox')).toBeVisible();
-    await expect(page.getByRole('option')).toHaveCount(4);
-    await page.getByRole('option', { name: 'Not Present', exact: true }).click();
+    const listbox = page.getByRole('listbox');
+    await expect(listbox).toBeVisible();
+    await expect(listbox.getByRole('option')).toHaveCount(4);
+    await listbox
+      .getByRole('option', { name: 'Not Present', exact: true })
+      .click();
     await expect(
       page.getByText(`Not Present (0/${CLASS_STARTER_POINTS})`)
     ).toBeVisible();

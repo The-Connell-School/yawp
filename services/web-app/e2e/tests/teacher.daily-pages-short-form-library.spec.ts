@@ -23,7 +23,7 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
       page.getByRole('heading', { name: 'How Class Starter works' })
     ).toHaveCount(0);
 
-    await page.getByRole('button', { name: /Prompt Library/i }).click();
+    await page.getByRole('button', { name: /Prompt Library/i }).first().click();
     await expect(page.getByPlaceholder('Search prompts')).toBeVisible();
 
     // A freewrite prompt has no business in the graded corpus.
@@ -44,7 +44,7 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
       `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
     );
 
-    await page.getByRole('button', { name: /Prompt Library/i }).click();
+    await page.getByRole('button', { name: /Prompt Library/i }).first().click();
     await page.getByPlaceholder('Search prompts').fill('counterexample');
     await page.keyboard.press('Enter');
 

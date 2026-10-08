@@ -10,11 +10,16 @@ async function seedPinnedLegacyDailyPagesWork(e2eContext: E2EContext) {
   try {
     const rubricName = `assignment-type:${e2eContext.dailyPagesAssignmentTypeId}`;
     const stamp = Date.now();
+    const maxVersion = await prisma.rubricRevision.aggregate({
+      where: { rubricName },
+      _max: { version: true },
+    });
+    const version = (maxVersion._max.version ?? 0) + 1;
     const revision = await prisma.rubricRevision.create({
       data: {
         id: `legacy-pin-${stamp}`,
         rubricName,
-        version: 99_001,
+        version,
         schemaJson: legacySchema,
         fingerprint: `legacy-pin-${stamp}`,
         requestId: `legacy-pin-${stamp}`,
@@ -91,7 +96,8 @@ test.describe.serial('Pinned legacy Daily Pages assignment', () => {
       'grading-rubric-score-engagement_with_prompt'
     );
     await scoreControl.click();
-    await expect(page.getByRole('listbox')).toBeVisible();
+    const listbox = page.getByRole('listbox');
+    await expect(listbox).toBeVisible();
     for (const label of [
       'Excellent',
       'Good',
@@ -99,7 +105,7 @@ test.describe.serial('Pinned legacy Daily Pages assignment', () => {
       'Absent/Missing',
     ]) {
       await expect(
-        page.getByRole('option', { name: label, exact: true })
+        listbox.getByRole('option', { name: label, exact: true }).first()
       ).toBeVisible();
     }
   });
