@@ -706,125 +706,76 @@ describe('migration integration (real Postgres)', () => {
     }
   }, 20000);
 
-  test('free tier bundle migration: deploy, seed parity, re-run, rollback (#414 usage table is separate)', () => {
+  test('free tier admin approval migration (#416): deploy, re-run, rollback', () => {
     try {
       adminPsql('DROP DATABASE IF EXISTS yawp_migration_integration WITH (FORCE)');
     } catch {}
     adminPsql('CREATE DATABASE yawp_migration_integration');
     prismaDeploy(PRISMA_DIR);
 
-    const bundleKinds = jsonQuery(`
+    const tables = jsonQuery(`
       SELECT json_build_object(
-        'count', (
-          SELECT COUNT(*)::int
-          FROM "AssignmentType"
-          WHERE "kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+        'signedLink', EXISTS (
+          SELECT 1 FROM information_schema.tables WHERE table_name = 'FreeTierSignedLink'
+        ),
+        'adminApproval', EXISTS (
+          SELECT 1 FROM information_schema.tables WHERE table_name = 'FreeTierAdminApproval'
+        ),
+        'emailLog', EXISTS (
+          SELECT 1 FROM information_schema.tables WHERE table_name = 'FreeTierEmailLog'
+        ),
+        'teacherNote', EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'FreeTierApplication' AND column_name = 'teacherPersonalNote'
         )
       )
     `);
-    expect(bundleKinds.count).toBe(3);
-
-    const seedOnce = run(
-      'bun',
-      ['run', 'seed-free-tier-bundle-assignment-types'],
-      PRISMA_DIR,
-      { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT }
-    );
-    expect(seedOnce.status).toBe(0);
-
-    const moduleCount = jsonQuery(`
-      SELECT json_build_object(
-        'count', (
-          SELECT COUNT(*)::int
-          FROM "AssignmentModule" am
-          JOIN "AssignmentType" at ON at.id = am."assignmentTypeId"
-          WHERE at."kind" IN ('class_starter', 'prewriting', 'thesis_statement')
-        )
-      )
-    `);
-    expect(moduleCount.count).toBeGreaterThanOrEqual(3);
-
-    const imageCount = jsonQuery(`
-      SELECT json_build_object(
-        'count', (
-          SELECT COUNT(*)::int
-          FROM "AssignmentTypeImage" img
-          JOIN "AssignmentType" at ON at.id = img."assignmentTypeId"
-          WHERE at."kind" IN ('class_starter', 'prewriting', 'thesis_statement')
-        )
-      )
-    `);
-    expect(imageCount.count).toBe(3);
-
-    const seedTwice = run(
-      'bun',
-      ['run', 'seed-free-tier-bundle-assignment-types'],
-      PRISMA_DIR,
-      { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT }
-    );
-    expect(seedTwice.status).toBe(0);
+    expect(tables.signedLink).toBe(true);
+    expect(tables.adminApproval).toBe(true);
+    expect(tables.emailLog).toBe(true);
+    expect(tables.teacherNote).toBe(true);
 
     prismaDeploy(PRISMA_DIR);
 
-    psql(`
-      INSERT INTO "Organization" ("id","createdAt","updatedAt","name","plan")
-      VALUES ('org-legacy-starter', now(), now(), 'Legacy Starter Org', 'SCHOOL');
-      INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position")
-      VALUES ('legacy-class-starter-keep', now(), now(), 'Legacy Class Starter', 'welcome', 99);
-      INSERT INTO "OrganizationAssignmentType" ("organizationId","assignmentTypeId")
-      VALUES ('org-legacy-starter', 'legacy-class-starter-keep');
-    `);
-
-    const bundleRollback = readFileSync(
+    const approvalRollback = readFileSync(
       join(
         PRISMA_DIR,
         'migrations',
-        '20261008140000_free_tier_bundle_assignment_types',
+        '20261009003000_free_tier_admin_approval_c',
         'rollback.sql'
       ),
       'utf8'
     );
-    psql(bundleRollback);
+    psql(approvalRollback);
 
-    const legacyKept = jsonQuery(`
+    const gone = jsonQuery(`
       SELECT json_build_object(
-        'exists', EXISTS (
-          SELECT 1 FROM "AssignmentType" WHERE id = 'legacy-class-starter-keep'
+        'signedLink', EXISTS (
+          SELECT 1 FROM information_schema.tables WHERE table_name = 'FreeTierSignedLink'
         )
       )
     `);
-    expect(legacyKept.exists).toBe(true);
+    expect(gone.signedLink).toBe(false);
 
-    const fixedRemoved = jsonQuery(`
-      SELECT json_build_object(
-        'count', (
-          SELECT COUNT(*)::int
-          FROM "AssignmentType"
-          WHERE id IN (
-            'cfreeclassstarter00000001',
-            'cfreeprewriting000000001',
-            'cfreethesisstatement00001'
-          )
-        )
-      )
-    `);
-    expect(fixedRemoved.count).toBe(0);
-
-    // Rollback SQL drops objects but leaves _prisma_migrations rows; re-apply forward SQL.
-    const bundleForward = readFileSync(
+    const approvalForward = readFileSync(
       join(
         PRISMA_DIR,
         'migrations',
-        '20261008140000_free_tier_bundle_assignment_types',
+        '20261009003000_free_tier_admin_approval_c',
         'migration.sql'
       ),
       'utf8'
     );
-    psql(bundleForward);
-    run('bun', ['run', 'seed-free-tier-bundle-assignment-types'], PRISMA_DIR, {
-      PATH: PATH_WITH_ROOT_BIN,
-      NODE_PATH: NODE_PATH_WITH_ROOT,
-    });
+    psql(approvalForward);
+
+    const back = jsonQuery(`
+      SELECT json_build_object(
+        'signedLink', EXISTS (
+          SELECT 1 FROM information_schema.tables WHERE table_name = 'FreeTierSignedLink'
+        )
+      )
+    `);
+    expect(back.signedLink).toBe(true);
   }, 120000);
 });
 
