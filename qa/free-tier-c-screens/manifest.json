@@ -1,46 +1,42 @@
 {
-  "capturedAt": "2026-10-08T02:09:57.201Z",
+  "capturedAt": "2026-10-08T16:18:02.375Z",
   "baseUrl": "https://pr-416.preview.yawp.school",
   "shots": [
     {
+      "file": "01-free-waitlist.png",
+      "md5": "63895aeededb71c0f5aa04dafc6384e7"
+    },
+    {
+      "file": "01-free-waitlist-mobile.png",
+      "md5": "fd7f3bbf06d1178c23b7860f44664228"
+    },
+    {
       "file": "01-free-waitlist-submitted.png",
-      "md5": "1fcf06a49086e9ab70e118af0c1e95a2"
+      "md5": "ba1e68d683bf3101876a6fb5a2c5bcb8"
+    },
+    {
+      "file": "01-free-waitlist-submitted-mobile.png",
+      "md5": "c4f35ceccc6c756482d4d676835c3aec"
     },
     {
       "file": "02-operator-free-tier-admin.png",
-      "md5": "5c5a41a3bb96e9a652f205c76426f4e0"
+      "md5": "101915feb3ff7f61095cdd775ef075b7"
     },
     {
       "file": "03-free-join-before-account.png",
-      "md5": "7222ddcd63e557c4e4baf9e2eb979c39"
+      "md5": "d7233b5905d1a31f8d9eb611f7af4b60"
     },
     {
       "file": "04-teacher-onboarding-form.png",
-      "md5": "c4690113d44796f73fb08e42a2f26996"
+      "md5": "731b14fb359d1bc73410c90bed14a03c"
     },
     {
       "file": "05-teacher-pending-approval.png",
-      "md5": "d61c959d5e9c1364e00bccb0d9c66d3f"
-    },
-    {
-      "file": "06-not-right-person-form.png",
-      "md5": "915fc475bd6dd34bb697652ca70855ce"
-    },
-    {
-      "file": "07-not-right-person-submitted.png",
-      "md5": "5cde050cd5fc256f20493d1da8907285"
+      "md5": "a31b0f99b5d4b0e6e0485233edfb1af5"
     },
     {
       "file": "08-admin-approve-landing.png",
-      "md5": "0ac510a18b21e00a0b8887a6812768c2"
-    },
-    {
-      "file": "09-admin-approve-success.png",
-      "md5": "9f3f84db3630ee56044efdb790dab347"
-    },
-    {
-      "file": "10-admin-already-approved.png",
-      "md5": "a65c0286bdd0a18214356c2865ada711"
+      "md5": "f307a86b237040559ec2177105c3bb30"
     },
     {
       "file": "11-teacher-class-created.png",
@@ -52,11 +48,11 @@
     },
     {
       "file": "13-self-approval-manual-review.png",
-      "md5": "2d18f434f21ffae04d7506a07266403c"
+      "md5": "ec99224b90ca9f302c0c07c04be92c06"
     },
     {
       "file": "14-paid-school-teacher-unchanged.png",
-      "md5": "b9059a9c3dc581cbe894c09b65e1d03d"
+      "md5": "7a9703bc01354c220d1cf9bd4ea3e87b"
     }
   ]
 }
