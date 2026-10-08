@@ -1,6 +1,16 @@
-export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-08-v3';
+export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-08-v4';
 
 const APPROVAL_LINK_DAYS = 14;
+
+function copyVersionLine(version: string) {
+  return `\n\nCopy version: ${version}`;
+}
+
+function adminApprovalGreeting(adminRecipientName?: string | null) {
+  const trimmed = adminRecipientName?.trim();
+  if (trimmed) return `Hi ${trimmed},`;
+  return 'Hi there,';
+}
 
 export function renderAdminApprovalEmailBody(args: {
   teacherName: string;
@@ -9,11 +19,17 @@ export function renderAdminApprovalEmailBody(args: {
   personalNote?: string | null;
   approveUrl: string;
   notRightPersonUrl: string;
+  adminRecipientName?: string | null;
+  reminderLead?: string | null;
+  copyVersion?: string;
 }) {
+  const version = args.copyVersion ?? ADMIN_APPROVAL_EMAIL_COPY_VERSION;
   const note = args.personalNote?.trim()
     ? `${args.personalNote.trim()}\n\n---\n\n`
     : '';
-  return `${note}Hello,
+  const reminder = args.reminderLead?.trim() ? `${args.reminderLead.trim()}\n\n` : '';
+  const greeting = adminApprovalGreeting(args.adminRecipientName);
+  return `${note}${reminder}${greeting}
 
 ${args.teacherName} (${args.teacherEmail}) at ${args.schoolName} would like to use YAWP in their classroom.
 
@@ -29,10 +45,11 @@ Approve YAWP for this school (link expires in ${APPROVAL_LINK_DAYS} days):
 ${args.approveUrl}
 
 I'm not the right person to approve this:
-${args.notRightPersonUrl}`;
+${args.notRightPersonUrl}${copyVersionLine(version)}`;
 }
 
-export function renderReleaseEmailBody(args: { name: string; joinUrl: string }) {
+export function renderReleaseEmailBody(args: { name: string; joinUrl: string; copyVersion?: string }) {
+  const version = args.copyVersion ?? ADMIN_APPROVAL_EMAIL_COPY_VERSION;
   return `Hi ${args.name},
 
 You're in — we'd love to have you try YAWP with your students.
@@ -42,14 +59,16 @@ ${args.joinUrl}
 
 This link is for you only and expires in 30 days.
 
-— The YAWP team`;
+— The YAWP team${copyVersionLine(version)}`;
 }
 
 export function renderCongratulationsEmailBody(args: {
   teacherName: string;
   adminName: string;
   signInUrl: string;
+  copyVersion?: string;
 }) {
+  const version = args.copyVersion ?? ADMIN_APPROVAL_EMAIL_COPY_VERSION;
   return `Hi ${args.teacherName},
 
 Great news — ${args.adminName} approved YAWP for your classroom.
@@ -57,5 +76,5 @@ Great news — ${args.adminName} approved YAWP for your classroom.
 Sign in to open your class and assign your Class Starter:
 ${args.signInUrl}
 
-— The YAWP team`;
+— The YAWP team${copyVersionLine(version)}`;
 }

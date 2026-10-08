@@ -510,7 +510,7 @@ resource "aws_apprunner_service" "web" {
           UA_PARTNER_HOSTNAME                       = var.ua_partner_hostname
           STRIPE_UA_2026_PRICE_ID                   = var.stripe_ua_2026_price_id
           YAWP_APP_ORIGIN                           = var.yawp_app_origin
-          PRIMARY_APP_URL                           = var.yawp_app_origin
+          PRIMARY_APP_URL                           = var.primary_app_url
         }, length(var.stripe_ua_existing_subscription_price_ids) > 0 ? {
           STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS = join(",", var.stripe_ua_existing_subscription_price_ids)
         } : {}, module.internal_platform_integration.variables)

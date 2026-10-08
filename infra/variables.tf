@@ -147,8 +147,14 @@ variable "ua_partner_hostname" {
 
 variable "yawp_app_origin" {
   type        = string
-  description = "Public origin for the production web app (also PRIMARY_APP_URL for signed free-tier links)."
+  description = "Public origin for UA Stripe checkout redirects (YAWP_APP_ORIGIN)."
   default     = "https://ua.yawp.school"
+}
+
+variable "primary_app_url" {
+  type        = string
+  description = "Canonical YAWP web origin for free-tier signed links and teacher emails (PRIMARY_APP_URL). Distinct from yawp_app_origin when UA uses a partner host."
+  default     = "https://yawp.school"
 }
 
 variable "free_tier_link_hmac_secret" {

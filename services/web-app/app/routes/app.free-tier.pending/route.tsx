@@ -10,16 +10,10 @@ import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
-import {
-  mintSignedLink,
-  FREE_TIER_LINK_TTL_MS,
-  invalidateOpenAdminApprovalLinks,
-} from '~/domain/free-tier/signed-link.server';
-import { sendFreeTierAdminReminderEmail } from '~/domain/free-tier/email.server';
-import { freeTierPublicAppOrigin } from '~/domain/free-tier/free-tier-public-url.server';
+import { resendFreeTierAdminApprovalReminder } from '~/domain/free-tier/approval-flow.server';
 import { adminApprovalEmailCopyVersionHash } from '~/domain/free-tier/email-copy.server';
 import { renderAdminApprovalEmailBody } from '~/domain/free-tier/email-copy';
-import { FreeTierAuthCard, FreeTierEmailPreview } from '../free-tier/FreeTierAuthCard';
+import { FreeTierAuthCard, FreeTierEmailPreview, FreeTierSignOut } from '../free-tier/FreeTierAuthCard';
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
 
 const LINK_PLACEHOLDER = '(link included in the email we sent)';
@@ -54,7 +48,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const intent = String((await request.formData()).get('intent'));
   const app = await prisma.freeTierApplication.findFirst({
     where: { userId, status: 'SENT' },
-    select: { id: true, name: true, schoolName: true, email: true },
+    select: { id: true },
   });
   if (!app || intent !== 'resend') return { ok: false as const, reason: 'not_allowed' as const };
 
@@ -69,59 +63,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!gate.allowed) return { ok: false as const, rateLimited: true as const };
 
   try {
-    const emailLinks = await prisma.$transaction(async (tx) => {
-      const pending = await tx.freeTierAdminApproval.findFirst({
-        where: { applicationId: app.id, status: 'PENDING' },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true, adminEmail: true, personalNote: true },
-      });
-      if (!pending) return null;
-
-      await invalidateOpenAdminApprovalLinks(tx, app.id);
-
-      const approveMint = await mintSignedLink({
-        applicationId: app.id,
-        purpose: 'ADMIN_APPROVE',
-        ttlMs: FREE_TIER_LINK_TTL_MS,
-        tx,
-      });
-      const declineMint = await mintSignedLink({
-        applicationId: app.id,
-        purpose: 'ADMIN_NOT_RIGHT_PERSON',
-        ttlMs: FREE_TIER_LINK_TTL_MS,
-        tx,
-      });
-
-      await tx.freeTierAdminApproval.update({
-        where: { id: pending.id },
-        data: { signedLinkId: approveMint.linkId },
-      });
-
-      const base = freeTierPublicAppOrigin();
-      return {
-        to: pending.adminEmail,
-        personalNote: pending.personalNote,
-        approveUrl: `${base}/free/admin/approve?t=${encodeURIComponent(approveMint.token)}`,
-        notRightPersonUrl: `${base}/free/admin/not-right-person?t=${encodeURIComponent(declineMint.token)}`,
-      };
-    });
-
-    if (!emailLinks) return { ok: false as const, reason: 'not_found' as const };
-
-    const emailResult = await sendFreeTierAdminReminderEmail({
-      applicationId: app.id,
-      to: emailLinks.to,
-      teacherEmail: app.email,
-      teacherName: app.name,
-      schoolName: app.schoolName,
-      personalNote: emailLinks.personalNote,
-      approveUrl: emailLinks.approveUrl,
-      notRightPersonUrl: emailLinks.notRightPersonUrl,
-    });
-    if (!emailResult.ok) {
-      return { ok: false as const, reason: 'email_failed' as const, error: emailResult.error };
-    }
-    return { ok: true as const };
+    return await resendFreeTierAdminApprovalReminder({ applicationId: app.id, request });
   } catch (error) {
     return { ok: false as const, reason: 'config' as const, message: freeTierConfigErrorMessage(error) };
   }
@@ -145,13 +87,13 @@ export default function FreeTierPendingRoute() {
     : '';
 
   return (
-    <FreeTierAuthCard title={`Waiting for ${adminName}`} showLogo={false}>
-      <p className="text-sm text-muted-foreground">
+    <FreeTierAuthCard title={`Waiting for ${adminName}`}>
+      <p className="text-sm text-foreground/80">
         We emailed {pending?.adminEmail ?? 'your school administrator'}. You will not have classes or AI tools until
         they approve YAWP for {app?.schoolName}.
       </p>
       {app?.status === 'MANUAL_REVIEW' ? (
-        <p className="text-sm rounded-md border p-3 bg-muted text-foreground">
+        <p className="text-sm rounded-md border border-border p-3 bg-muted text-foreground">
           Our team is reviewing this request manually. We will email you when it is ready.
         </p>
       ) : null}
@@ -159,9 +101,9 @@ export default function FreeTierPendingRoute() {
         <FreeTierEmailPreview body={preview} versionLabel={emailCopyVersionLabel} />
       ) : null}
       {actionData?.ok ? (
-        <p className="text-sm text-green-700" role="status">Reminder sent to {pending?.adminEmail}.</p>
+        <p className="text-sm text-green-800" role="status">Reminder sent to {pending?.adminEmail}.</p>
       ) : null}
-      {actionData && !actionData.ok && actionData.rateLimited ? (
+      {actionData && !actionData.ok && 'rateLimited' in actionData && actionData.rateLimited ? (
         <p className="text-sm text-destructive" role="alert">
           Too many resend attempts. Please wait a few minutes and try again.
         </p>
@@ -180,12 +122,13 @@ export default function FreeTierPendingRoute() {
           <button
             type="submit"
             disabled={resending}
-            className="yawp-entry-button yawp-entry-button-secondary text-sm"
+            className="yawp-entry-button yawp-entry-button-secondary text-sm w-full sm:w-auto"
           >
             {resending ? 'Sending…' : 'Resend reminder'}
           </button>
         </Form>
       ) : null}
+      <FreeTierSignOut />
     </FreeTierAuthCard>
   );
 }

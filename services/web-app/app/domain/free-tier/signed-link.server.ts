@@ -198,16 +198,30 @@ export async function supersededApproveLinkReason(
 
 export async function invalidateOpenAdminApprovalLinks(
   tx: Prisma.TransactionClient,
-  applicationId: string
+  applicationId: string,
+  options?: { exceptLinkIds?: string[] }
 ) {
   const now = new Date();
+  const exceptLinkIds = options?.exceptLinkIds?.filter(Boolean) ?? [];
   await tx.freeTierSignedLink.updateMany({
     where: {
       applicationId,
       purpose: { in: ['ADMIN_APPROVE', 'ADMIN_NOT_RIGHT_PERSON'] },
       usedAt: null,
       expiresAt: { gt: now },
+      ...(exceptLinkIds.length ? { id: { notIn: exceptLinkIds } } : {}),
     },
+    data: { usedAt: now },
+  });
+}
+
+/** Discard freshly minted links when an email send fails before commit. */
+export async function abandonMintedSignedLinks(linkIds: string[]) {
+  const ids = linkIds.filter(Boolean);
+  if (!ids.length) return;
+  const now = new Date();
+  await prisma.freeTierSignedLink.updateMany({
+    where: { id: { in: ids }, usedAt: null },
     data: { usedAt: now },
   });
 }

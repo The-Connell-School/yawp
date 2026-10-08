@@ -14,11 +14,13 @@ import {
   FREE_TIER_LINK_TTL_MS,
   peekSignedLink,
   invalidateOpenAdminApprovalLinks,
+  abandonMintedSignedLinks,
 } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { ensureFreeTierProductionApprovalHooks } from './approval-hooks.server';
 import {
   sendFreeTierAdminApprovalEmail,
+  sendFreeTierAdminReminderEmail,
   sendFreeTierCongratulationsEmail,
   sendFreeTierReleaseEmail,
 } from './email.server';
@@ -152,7 +154,10 @@ export async function submitAdminDetails(args: {
       manualReview: rules.manualReview,
       approveToken: approveMint.token,
       declineToken: declineMint.token,
+      approveLinkId: approveMint.linkId,
+      declineLinkId: declineMint.linkId,
       adminEmail,
+      sentStatus: nextStatus,
     };
   });
 
@@ -172,6 +177,17 @@ export async function submitAdminDetails(args: {
       notRightPersonUrl: declineUrl,
     });
     if (!emailResult.ok) {
+      await abandonMintedSignedLinks([result.approveLinkId, result.declineLinkId]);
+      await prisma.$transaction(async (tx) => {
+        await tx.freeTierAdminApproval.delete({ where: { id: result.approvalId } });
+        await tx.freeTierApplication.updateMany({
+          where: {
+            id: app.id,
+            status: result.sentStatus === 'MANUAL_REVIEW' ? 'MANUAL_REVIEW' : 'SENT',
+          },
+          data: { status: 'ADMIN_SUBMITTED' },
+        });
+      });
       return { ok: false as const, reason: 'email_failed' as const, error: emailResult.error };
     }
   }
@@ -294,6 +310,72 @@ export async function completeSchoolAdminApproval(args: {
   return result;
 }
 
+export async function resendFreeTierAdminApprovalReminder(args: {
+  applicationId: string;
+  request: Request;
+}) {
+  const app = await prisma.freeTierApplication.findFirst({
+    where: { id: args.applicationId, status: 'SENT' },
+    select: { id: true, name: true, schoolName: true, email: true },
+  });
+  if (!app) return { ok: false as const, reason: 'not_allowed' as const };
+
+  const pendingRow = await prisma.freeTierAdminApproval.findFirst({
+    where: { applicationId: app.id, status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, adminEmail: true, personalNote: true },
+  });
+  if (!pendingRow) return { ok: false as const, reason: 'not_found' as const };
+
+  const minted = await prisma.$transaction(async (tx) => {
+    const approveMint = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'ADMIN_APPROVE',
+      ttlMs: FREE_TIER_LINK_TTL_MS,
+      tx,
+    });
+    const declineMint = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'ADMIN_NOT_RIGHT_PERSON',
+      ttlMs: FREE_TIER_LINK_TTL_MS,
+      tx,
+    });
+    return { approveMint, declineMint, personalNote: pendingRow.personalNote };
+  });
+
+  const base = freeTierPublicAppOrigin();
+  const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(minted.approveMint.token)}`;
+  const notRightPersonUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(minted.declineMint.token)}`;
+
+  const emailResult = await sendFreeTierAdminReminderEmail({
+    applicationId: app.id,
+    to: pendingRow.adminEmail,
+    teacherEmail: app.email,
+    teacherName: app.name,
+    schoolName: app.schoolName,
+    personalNote: minted.personalNote,
+    approveUrl,
+    notRightPersonUrl,
+  });
+
+  if (!emailResult.ok) {
+    await abandonMintedSignedLinks([minted.approveMint.linkId, minted.declineMint.linkId]);
+    return { ok: false as const, reason: 'email_failed' as const, error: emailResult.error };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await invalidateOpenAdminApprovalLinks(tx, app.id, {
+      exceptLinkIds: [minted.approveMint.linkId, minted.declineMint.linkId],
+    });
+    await tx.freeTierAdminApproval.update({
+      where: { id: pendingRow.id },
+      data: { signedLinkId: minted.approveMint.linkId },
+    });
+  });
+
+  return { ok: true as const };
+}
+
 export async function redirectSchoolAdmin(args: {
   token: string;
   newAdminName: string;
@@ -334,6 +416,52 @@ export async function redirectSchoolAdmin(args: {
     schoolName: preApp.schoolName,
   });
 
+  const newAdminNameTrim = args.newAdminName.trim();
+
+  const minted = await prisma.$transaction(async (tx) => {
+    const approveMint = await mintSignedLink({
+      applicationId: preApp.id,
+      purpose: 'ADMIN_APPROVE',
+      ttlMs: FREE_TIER_LINK_TTL_MS,
+      tx,
+    });
+    const declineMint = await mintSignedLink({
+      applicationId: preApp.id,
+      purpose: 'ADMIN_NOT_RIGHT_PERSON',
+      ttlMs: FREE_TIER_LINK_TTL_MS,
+      tx,
+    });
+    return { approveMint, declineMint };
+  });
+
+  const base = freeTierPublicAppOrigin();
+  const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(minted.approveMint.token)}`;
+  const notRightPersonUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(minted.declineMint.token)}`;
+
+  if (!rules.manualReview) {
+    const emailResult = await sendFreeTierAdminApprovalEmail({
+      applicationId: preApp.id,
+      to: newEmail,
+      teacherEmail: preApp.email,
+      teacherName: preApp.name,
+      schoolName: preApp.schoolName,
+      personalNote: (
+        await prisma.freeTierAdminApproval.findFirst({
+          where: { applicationId: preApp.id, status: 'PENDING' },
+          orderBy: { createdAt: 'desc' },
+          select: { personalNote: true },
+        })
+      )?.personalNote,
+      approveUrl,
+      notRightPersonUrl,
+      adminRecipientName: newAdminNameTrim,
+    });
+    if (!emailResult.ok) {
+      await abandonMintedSignedLinks([minted.approveMint.linkId, minted.declineMint.linkId]);
+      return { ok: false as const, reason: 'email_failed' as const, error: emailResult.error };
+    }
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const app = await tx.freeTierApplication.findUnique({
       where: { id: peek.applicationId },
@@ -372,20 +500,21 @@ export async function redirectSchoolAdmin(args: {
       },
     });
 
-    const approveMint = await mintSignedLink({ applicationId: app.id, purpose: 'ADMIN_APPROVE', tx });
-    const declineMint = await mintSignedLink({ applicationId: app.id, purpose: 'ADMIN_NOT_RIGHT_PERSON', tx });
-
     await tx.freeTierAdminApproval.create({
       data: {
         applicationId: app.id,
-        adminName: args.newAdminName.trim(),
+        adminName: newAdminNameTrim,
         adminEmail: newEmail,
         status: 'PENDING',
-        signedLinkId: approveMint.linkId,
+        signedLinkId: minted.approveMint.linkId,
         emailCopyVersionHash: copyHash,
         redirectedFromId: pending.id,
         personalNote: pending.personalNote,
       },
+    });
+
+    await invalidateOpenAdminApprovalLinks(tx, app.id, {
+      exceptLinkIds: [minted.approveMint.linkId, minted.declineMint.linkId],
     });
 
     await tx.freeTierApplication.update({
@@ -396,34 +525,10 @@ export async function redirectSchoolAdmin(args: {
       },
     });
 
-    return {
-      ok: true as const,
-      app,
-      rules,
-      approveToken: approveMint.token,
-      declineToken: declineMint.token,
-      note: pending.personalNote,
-      to: newEmail,
-    };
+    return { ok: true as const };
   });
 
   if (!result.ok) return result;
-  if (result.app.status !== 'MANUAL_REVIEW' && !result.rules.manualReview) {
-    const base = freeTierPublicAppOrigin();
-    const emailResult = await sendFreeTierAdminApprovalEmail({
-      applicationId: result.app.id,
-      to: result.to,
-      teacherEmail: result.app.email,
-      teacherName: result.app.name,
-      schoolName: result.app.schoolName,
-      personalNote: result.note,
-      approveUrl: `${base}/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`,
-      notRightPersonUrl: `${base}/free/admin/not-right-person?t=${encodeURIComponent(result.declineToken)}`,
-    });
-    if (!emailResult.ok) {
-      return { ok: false as const, reason: 'email_failed' as const, error: emailResult.error };
-    }
-  }
   return { ok: true as const };
 }
 
