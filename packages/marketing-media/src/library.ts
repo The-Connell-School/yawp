@@ -123,7 +123,8 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
           screenshot: true,
           steps: [
             { action: 'click', role: 'tab', name: 'Assignments' },
-            { action: 'waitFor', text: 'Daily Pages - week 2', optional: true },
+            // Let the table fill; seeded assignment titles change too often to wait on.
+            { action: 'wait', seconds: 0.8 },
           ],
           guide: {
             section: 'step',
