@@ -64,8 +64,8 @@ function dailyPagesEngagementHolisticPickerIsCurrent(
   if (scoringMode !== 'holistic_tier') return true;
   const expected = dailyPagesEngagementHolisticPickerScores(total);
   const actual = category.allowedScores;
+  if (!actual?.length) return false;
   return (
-    Boolean(actual?.length) &&
     actual.length === expected.length &&
     expected.every((score, index) => actual[index] === score)
   );
