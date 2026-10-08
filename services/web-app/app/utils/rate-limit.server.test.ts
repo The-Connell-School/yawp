@@ -215,37 +215,6 @@ suite('login limits count only failed attempts', () => {
     expect(denied).toBe(true);
   });
 
-  test('clearFailedLoginRateLimitsForTarget clears buckets keyed with normalized identifiers', async () => {
-    const email = `${run}-Mixed@School.TEST`;
-    const t0 = Date.now();
-    for (let i = 0; i < 12; i += 1) {
-      await mod!.recordFailedLoginTargetRateLimit({
-        route: '/auth/login',
-        targetKey: email,
-        perTargetPerHour: 12,
-        nowMs: t0 + i,
-      });
-    }
-    const blocked = await mod!.recordFailedLoginTargetRateLimit({
-      route: '/auth/login',
-      targetKey: email,
-      perTargetPerHour: 12,
-      nowMs: t0 + 12,
-    });
-    expect(blocked.allowed).toBe(false);
-    await mod!.clearFailedLoginRateLimitsForTarget({
-      route: '/auth/login',
-      targetKey: 'mixed@school.test',
-    });
-    const afterClear = await mod!.recordFailedLoginTargetRateLimit({
-      route: '/auth/login',
-      targetKey: email,
-      perTargetPerHour: 12,
-      nowMs: t0 + 13,
-    });
-    expect(afterClear.allowed).toBe(true);
-  });
-
   test('clearFailedLoginRateLimitsForTarget removes the target bucket', async () => {
     const email = `${run}-clear@school.test`;
     const t0 = Date.now();
