@@ -36,6 +36,19 @@ describe('freeTierPublicAppOrigin', () => {
     expect(freeTierPublicAppOrigin()).toBe('https://pr-416.preview.yawp.school');
   });
 
+  test('preview fallback from DATABASE_URL when slug env vars are absent', () => {
+    for (const name of ['PRIMARY_APP_URL', 'YAWP_ENVIRONMENT', 'PREVIEW_SLUG', 'PREVIEW_DOMAIN', 'DATABASE_URL']) {
+      save(name);
+    }
+    delete process.env.PRIMARY_APP_URL;
+    delete process.env.PREVIEW_SLUG;
+    delete process.env.PREVIEW_DOMAIN;
+    process.env.YAWP_ENVIRONMENT = 'preview';
+    process.env.DATABASE_URL =
+      'postgresql://app:secret@preview-postgres:5432/yawp_pr_416?schema=public';
+    expect(freeTierPublicAppOrigin()).toBe('https://pr-416.preview.yawp.school');
+  });
+
   test('throws outside preview when PRIMARY_APP_URL is absent', () => {
     save('PRIMARY_APP_URL');
     save('YAWP_ENVIRONMENT');
