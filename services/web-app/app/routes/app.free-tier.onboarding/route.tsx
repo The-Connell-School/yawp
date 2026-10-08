@@ -3,7 +3,7 @@ import { Form } from 'react-router';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { submitAdminDetails } from '~/domain/free-tier/approval-flow.server';
-import { renderAdminApprovalEmailBody } from '~/domain/free-tier/email-copy.server';
+import { renderAdminApprovalEmailBody } from '~/domain/free-tier/email-copy';
 
 const MAX_NOTE = 500;
 const MAX_NAME = 200;

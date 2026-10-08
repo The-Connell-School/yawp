@@ -7,7 +7,8 @@ import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
 import { mintSignedLink, FREE_TIER_LINK_TTL_MS } from '~/domain/free-tier/signed-link.server';
 import { sendFreeTierAdminReminderEmail } from '~/domain/free-tier/email.server';
 import { freeTierPublicAppOrigin } from '~/domain/free-tier/free-tier-public-url.server';
-import { adminApprovalEmailCopyVersionHash, renderAdminApprovalEmailBody } from '~/domain/free-tier/email-copy.server';
+import { adminApprovalEmailCopyVersionHash } from '~/domain/free-tier/email-copy.server';
+import { renderAdminApprovalEmailBody } from '~/domain/free-tier/email-copy';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -26,7 +27,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
   const pending = app?.adminApprovals[0];
-  return { app, pending };
+  return {
+    app,
+    pending,
+    emailCopyVersionLabel: adminApprovalEmailCopyVersionHash().slice(0, 8),
+  };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -102,7 +107,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function FreeTierPendingRoute() {
-  const { app, pending } = useLoaderData<typeof loader>();
+  const { app, pending, emailCopyVersionLabel } = useLoaderData<typeof loader>();
   const adminName = pending?.adminName ?? 'your administrator';
   const preview = pending
     ? renderAdminApprovalEmailBody({
@@ -130,7 +135,7 @@ export default function FreeTierPendingRoute() {
       <div className="rounded-md border p-3 bg-muted text-sm">
         <p className="font-medium mb-2">Email preview</p>
         <pre className="whitespace-pre-wrap text-xs">{preview}</pre>
-        <p className="text-xs text-muted-foreground mt-1">Copy version {adminApprovalEmailCopyVersionHash().slice(0, 8)}</p>
+        <p className="text-xs text-muted-foreground mt-1">Copy version {emailCopyVersionLabel}</p>
       </div>
       {app?.status === 'SENT' ? (
         <Form method="post">
