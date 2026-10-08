@@ -16,6 +16,10 @@ import {
   ensurePreviewFreeClassroomFixture,
   ensurePreviewSchoolReporterNavFixture,
 } from './local-dev/seed-preview-free-classroom';
+import {
+  isDemoPlannerQaEnvironment,
+  seedPreviewPlannerQa,
+} from './seed-preview-planner-qa';
 
 assertLocalSeedTarget();
 
@@ -70,6 +74,26 @@ try {
         `Preview seat code ${result.organizationId}: ${result.status}`
       );
     }
+  }
+  if (!isDemoPlannerQaEnvironment()) {
+    for (const seat of seats) {
+      try {
+        const plannerQa = await seedPreviewPlannerQa(prisma, {
+          organizationId: seat.organizationId,
+        });
+        console.log(
+          `preview planner QA seed (seat ${seat.number}):`,
+          JSON.stringify(plannerQa)
+        );
+      } catch (error) {
+        console.warn(
+          'preview planner QA seed failed (non-fatal):',
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
+  } else {
+    console.log('preview planner QA seed skipped: demo environment');
   }
 } finally {
   await prisma.$disconnect();

@@ -21,6 +21,12 @@ import {
   CLASS_STARTER_RUBRIC,
   CLASS_STARTER_SCORING_SCALE,
 } from './class-starter-rubric';
+import { EXIT_TICKET_ASSIGNMENT_TYPE_KIND } from './exit-ticket';
+import {
+  EXIT_TICKET_PROMPT_CONFIG,
+  EXIT_TICKET_RUBRIC,
+  EXIT_TICKET_SCORING_SCALE,
+} from './exit-ticket-rubric';
 import {
   PREWRITING_ASSIGNMENT_TYPE_KIND,
   PREWRITING_PROMPT_CONFIG,
@@ -48,7 +54,8 @@ export type AssignmentTypeRubricConfigSource =
   | 'assignment-type'
   | 'thesis-default'
   | 'daily-pages-short-form-default'
-  | 'class-starter-default';
+  | 'class-starter-default'
+  | 'exit-ticket-default';
 
 export type AssignmentTypeRubricConfigInput = {
   /**
@@ -185,6 +192,17 @@ const dailyPagesShortFormConfig: AssignmentTypeRubricConfig = {
 const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
   [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: dailyPagesShortFormConfig,
   [CLASS_STARTER_ASSIGNMENT_TYPE_KIND]: classStarterConfig,
+  [EXIT_TICKET_ASSIGNMENT_TYPE_KIND]: {
+    source: 'exit-ticket-default',
+    scoringScale: EXIT_TICKET_SCORING_SCALE,
+    rubric: EXIT_TICKET_RUBRIC,
+    promptConfig: EXIT_TICKET_PROMPT_CONFIG,
+    outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+    calibrationNotes:
+      'Exit Tickets judge understanding only, scored inside written bands so the grade honors the point value, with overall feedback and no grammar highlighting.',
+    rubricIncomplete: false,
+    defaultLabel: 'Exit Ticket understanding',
+  },
   [PREWRITING_ASSIGNMENT_TYPE_KIND]: prewritingConfig,
   [THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND]: thesisStatementConfig,
 };
@@ -209,9 +227,9 @@ export type AssignmentTypeRubricCompleteness = 'none' | 'partial' | 'complete';
 function isCategoryComplete(category: RubricCategory) {
   return Boolean(
     category.key.trim() &&
-      category.label.trim() &&
-      category.description.trim() &&
-      Number.isFinite(category.weight)
+    category.label.trim() &&
+    category.description.trim() &&
+    Number.isFinite(category.weight)
   );
 }
 

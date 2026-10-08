@@ -9,6 +9,8 @@ import crypto from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
+import { parseStoredExitTicketConfig } from '~/domain/assignment-types/exit-ticket';
+import { buildExitTicketGradingContext } from '~/domain/assignment-types/exit-ticket-rubric';
 import { computeIpHash } from '~/utils/ai-usage-log.server';
 import {
   computeWeightedBandPercentage,
@@ -685,6 +687,7 @@ export async function action({ request }: ActionFunctionArgs) {
             apHistorySnapshot: true,
             prompt: true,
             pointValue: true,
+            exitTicketConfigJson: true,
           },
         },
         classAssignment: {
@@ -904,6 +907,16 @@ export async function action({ request }: ActionFunctionArgs) {
     teacherNotesEnabled,
     gradingMode: resolvedGradingConfig.gradingMode,
   });
+
+  const assignmentPrompt = submission.document.assignment?.prompt?.trim();
+  // How to read the rubric for this ticket, plus whatever the teacher said the
+  // lesson covered. Null for every other assignment, leaving the payload
+  // exactly as it was.
+  const gradingContext = buildExitTicketGradingContext(
+    parseStoredExitTicketConfig(
+      submission.document.assignment?.exitTicketConfigJson
+    )
+  );
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   // llmRetry=fallback is the client half of the provider-failover handshake
@@ -1196,7 +1209,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     studentFirstName,
     strictnessLevel: gradingAssistantStrictnessLevel,
     documentText: submission.text,
-    assignmentPrompt: submission.document.assignment?.prompt,
+    assignmentPrompt,
+    gradingContext,
     writingTimeMinutes: writingConditions.writingTimeMinutes,
     coldWrite: submission.document.assignment?.tutorEnabled === false,
     paragraphMode: writingConditions.paragraphMode,

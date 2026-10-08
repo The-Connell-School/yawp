@@ -2,11 +2,16 @@ import { prisma } from '~/utils/db.server';
 
 export class AiRateLimitError extends Error {
   readonly retryAfterSeconds: number;
+  readonly scope: 'membership' | 'organization';
 
-  constructor(retryAfterSeconds: number) {
+  constructor(
+    retryAfterSeconds: number,
+    scope: 'membership' | 'organization' = 'membership'
+  ) {
     super('AI request budget exhausted');
     this.name = 'AiRateLimitError';
     this.retryAfterSeconds = retryAfterSeconds;
+    this.scope = scope;
   }
 }
 
@@ -96,14 +101,52 @@ export async function reserveAiRequest({
     ]);
 
     if (membershipCount + units > policy.membershipLimit) {
-      throw new AiRateLimitError(
-        Math.max(1, Math.ceil(policy.membershipWindowMs / 1000))
-      );
+      const oldestMembership = await transaction.aiRequestReservation.findFirst({
+        where: {
+          membershipId,
+          organizationId,
+          feature,
+          createdAt: { gte: membershipSince },
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true },
+      });
+      const retryAfterSeconds = oldestMembership
+        ? Math.max(
+            1,
+            Math.ceil(
+              (oldestMembership.createdAt.getTime() +
+                policy.membershipWindowMs -
+                now.getTime()) /
+                1000
+            )
+          )
+        : Math.max(1, Math.ceil(policy.membershipWindowMs / 1000));
+      throw new AiRateLimitError(retryAfterSeconds, 'membership');
     }
     if (organizationCount + units > policy.organizationLimit) {
-      throw new AiRateLimitError(
-        Math.max(1, Math.ceil(policy.organizationWindowMs / 1000))
-      );
+      const oldestOrganization =
+        await transaction.aiRequestReservation.findFirst({
+          where: {
+            organizationId,
+            feature,
+            createdAt: { gte: organizationSince },
+          },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        });
+      const retryAfterSeconds = oldestOrganization
+        ? Math.max(
+            1,
+            Math.ceil(
+              (oldestOrganization.createdAt.getTime() +
+                policy.organizationWindowMs -
+                now.getTime()) /
+                1000
+            )
+          )
+        : Math.max(1, Math.ceil(policy.organizationWindowMs / 1000));
+      throw new AiRateLimitError(retryAfterSeconds, 'organization');
     }
 
     await transaction.aiRequestReservation.createMany({

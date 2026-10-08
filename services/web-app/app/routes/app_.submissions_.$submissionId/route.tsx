@@ -1460,7 +1460,13 @@ function SubmissionDetail({
                 {isPending ? (
                   <PendingViewPanel />
                 ) : (
-                  <ViewPanel submission={submissionForView} />
+                  <ViewPanel
+                    submission={{
+                      ...submissionForView,
+                      releasedAt: effectiveReleasedAt,
+                    }}
+                    viewer={isOwner ? 'student' : 'teacher'}
+                  />
                 )}
               </div>
             </>
