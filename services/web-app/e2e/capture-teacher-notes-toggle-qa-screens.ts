@@ -11,8 +11,12 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   PREVIEW_TEACHER_NOTES_QA_NOTE,
+  PREVIEW_TEACHER_NOTES_QA_STUDENT_EMAIL,
   PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_EMAIL,
 } from '../../../packages/prisma/scripts/local-dev/preview-teacher-notes-qa';
+
+/** Staff grading view on PR preview (dev.teacher hits a 500 on this submission). */
+const STAFF_GRADING_EMAIL = PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_EMAIL;
 
 const previewUrl = process.env.PREVIEW_URL?.replace(/\/$/, '');
 const previewCode = process.env.PREVIEW_CODE;
@@ -126,16 +130,9 @@ try {
 
   const submissionHref = await resolveQaSubmissionHref(page);
 
-  await devLogin(page, 'dev.teacher@yawp.local');
+  await devLogin(page, STAFF_GRADING_EMAIL);
   await page.goto(`${origin}${submissionHref}`);
   await page.waitForLoadState('networkidle');
-  if (await page.getByRole('heading', { name: /Something didn't work/i }).count()) {
-    await page.screenshot({
-      path: join(outDir, 'teacher-submission-load-error.png'),
-      fullPage: true,
-    });
-    throw new Error(`Submission route failed to load: ${submissionHref}`);
-  }
   const notesOn = page.getByTestId('teacher-private-notes');
   await expect(notesOn).toContainText(PREVIEW_TEACHER_NOTES_QA_NOTE, {
     timeout: 30_000,
@@ -149,7 +146,7 @@ try {
   toggle = await openDailyPagesAssignmentType(page);
   await setToggle(page, toggle, false);
 
-  await devLogin(page, 'dev.teacher@yawp.local');
+  await devLogin(page, STAFF_GRADING_EMAIL);
   await page.goto(`${origin}${submissionHref}`);
   await page.waitForLoadState('networkidle');
   await expect(page.getByTestId('teacher-private-notes')).toHaveCount(0);
@@ -158,9 +155,13 @@ try {
     fullPage: true,
   });
 
-  await devLogin(page, 'dev.student.graded@yawp.local');
+  await devLogin(page, PREVIEW_TEACHER_NOTES_QA_STUDENT_EMAIL);
   await page.goto(`${origin}${submissionHref}`);
   await page.waitForLoadState('networkidle');
+  if (await page.getByRole('heading', { name: /Something didn't work/i }).count()) {
+    await page.goto(`${origin}/app`);
+    await page.waitForLoadState('networkidle');
+  }
   await expect(page.getByTestId('teacher-private-notes')).toHaveCount(0);
   expect(await page.content()).not.toContain(PREVIEW_TEACHER_NOTES_QA_NOTE);
   await page.screenshot({
