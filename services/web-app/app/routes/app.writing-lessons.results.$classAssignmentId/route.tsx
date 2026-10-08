@@ -221,11 +221,6 @@ export default function WritingPracticeResultsRoute() {
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
-                        {hasComposition && row.masteredCount > 0 ? (
-                          <span className="hidden items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-900 sm:inline-flex">
-                            {row.masteredCount} mastered
-                          </span>
-                        ) : null}
                         {row.latestStatus ? (
                           <span
                             className={`hidden items-center rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-flex ${
@@ -239,9 +234,28 @@ export default function WritingPracticeResultsRoute() {
                             )}
                           </span>
                         ) : null}
-                        <span className="text-base tabular-nums text-muted-foreground sm:text-sm">
-                          {row.attemptCount}/{problemCount}
-                        </span>
+                        {/* The headline number is the score: problems answered
+                            correctly (ACT) or mastered (composition) — both
+                            recorded as `strong` — not just problems answered. */}
+                        <div className="text-right" data-testid="student-score">
+                          {row.attemptCount === 0 ? (
+                            <span className="text-base text-muted-foreground sm:text-sm">
+                              Not started
+                            </span>
+                          ) : (
+                            <>
+                              <span className="text-base font-medium tabular-nums sm:text-sm">
+                                {row.masteredCount}/{problemCount}{' '}
+                                {hasComposition ? 'mastered' : 'correct'}
+                              </span>
+                              {row.attemptCount < problemCount ? (
+                                <span className="block text-xs font-normal tabular-nums text-muted-foreground">
+                                  {row.attemptCount} of {problemCount} answered
+                                </span>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="bg-muted/30 px-4">
