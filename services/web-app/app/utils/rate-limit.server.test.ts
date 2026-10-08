@@ -140,6 +140,112 @@ suite('regressions found in review of the first version', () => {
   });
 });
 
+suite('login limits count only failed attempts', () => {
+  test('the 13th failed login for one target in an hour is denied', async () => {
+    const schoolIp = new Request('https://yawp.school/auth/login', {
+      headers: { 'x-forwarded-for': `198.22.${Math.floor(Math.random() * 250)}.5, ${EDGE_IP}` },
+    });
+    const cfg = { perIpPerMinute: 30, perIpPerHour: 120, perTargetPerHour: 12 };
+    const email = `${run}-brute@school.test`;
+    const t0 = Date.now();
+    for (let i = 0; i < 12; i += 1) {
+      const recorded = await mod!.recordFailedLoginTargetRateLimit({
+        route: '/auth/login',
+        targetKey: email,
+        perTargetPerHour: cfg.perTargetPerHour,
+        nowMs: t0 + i,
+      });
+      expect(recorded.allowed).toBe(true);
+      await mod!.recordFailedLoginIpRateLimit({
+        request: schoolIp,
+        route: '/auth/login',
+        perIpPerMinute: cfg.perIpPerMinute,
+        perIpPerHour: cfg.perIpPerHour,
+        nowMs: t0 + i,
+      });
+    }
+    const denied = await mod!.recordFailedLoginTargetRateLimit({
+      route: '/auth/login',
+      targetKey: email,
+      perTargetPerHour: cfg.perTargetPerHour,
+      nowMs: t0 + 12,
+    });
+    expect(denied.allowed).toBe(false);
+  });
+
+  test('concurrent failed attempts cannot exceed the per-target hourly cap', async () => {
+    const email = `${run}-concurrent-target@school.test`;
+    const cfg = { perTargetPerHour: 12 };
+    const t0 = Date.now();
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        mod!.recordFailedLoginTargetRateLimit({
+          route: '/auth/login',
+          targetKey: email,
+          perTargetPerHour: cfg.perTargetPerHour,
+          nowMs: t0 + i,
+        })
+      )
+    );
+    const allowed = results.filter((r) => r.allowed).length;
+    expect(allowed).toBe(12);
+    expect(results.filter((r) => !r.allowed).length).toBe(8);
+  });
+
+  test('one IP spraying many handles is throttled by the per-IP spray bucket', async () => {
+    const schoolIp = new Request('https://yawp.school/auth/login', {
+      headers: { 'x-forwarded-for': `198.23.${Math.floor(Math.random() * 250)}.6, ${EDGE_IP}` },
+    });
+    const sprayLimit = 300;
+    const t0 = Date.now();
+    let allowed = 0;
+    let denied = false;
+    for (let i = 0; i < sprayLimit + 5; i += 1) {
+      const result = await mod!.recordFailedLoginIpSprayRateLimit({
+        request: schoolIp,
+        route: '/auth/login',
+        perIpSprayPerHour: sprayLimit,
+        nowMs: t0 + i,
+      });
+      if (result.allowed) allowed += 1;
+      else denied = true;
+    }
+    expect(allowed).toBe(sprayLimit);
+    expect(denied).toBe(true);
+  });
+
+  test('clearFailedLoginRateLimitsForTarget removes the target bucket', async () => {
+    const email = `${run}-clear@school.test`;
+    const t0 = Date.now();
+    for (let i = 0; i < 12; i += 1) {
+      await mod!.recordFailedLoginTargetRateLimit({
+        route: '/auth/login',
+        targetKey: email,
+        perTargetPerHour: 12,
+        nowMs: t0 + i,
+      });
+    }
+    const blocked = await mod!.recordFailedLoginTargetRateLimit({
+      route: '/auth/login',
+      targetKey: email,
+      perTargetPerHour: 12,
+      nowMs: t0 + 12,
+    });
+    expect(blocked.allowed).toBe(false);
+    await mod!.clearFailedLoginRateLimitsForTarget({
+      route: '/auth/login',
+      targetKey: email,
+    });
+    const afterClear = await mod!.recordFailedLoginTargetRateLimit({
+      route: '/auth/login',
+      targetKey: email,
+      perTargetPerHour: 12,
+      nowMs: t0 + 13,
+    });
+    expect(afterClear.allowed).toBe(true);
+  });
+});
+
 suite('unauthenticated throttles tolerate a whole class behind one school IP', () => {
   const cfg = () => ({
     perIpPerMinute: 60,

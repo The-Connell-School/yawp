@@ -536,12 +536,12 @@ describe('the Exit Ticket default rubric', () => {
 
   test('leaves every other kind on the rubric it had', () => {
     expect(parseAssignmentTypeRubricConfig({}).source).toBe('thesis-default');
-    // Daily Pages grades on the short-form rubric since the split; registering
+    // Daily Pages defaults to the consolidated engagement rubric; registering
     // the exit ticket default must not disturb that.
     expect(
       parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'daily_pages' })
         .source
-    ).toBe('daily-pages-short-form-default');
+    ).toBe('daily-pages-engagement-default');
     expect(
       parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'class_starter' })
         .source

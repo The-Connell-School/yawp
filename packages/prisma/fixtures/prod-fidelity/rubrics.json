@@ -46,7 +46,7 @@
                 "min": 0,
                 "max": 69,
                 "label": "Not Present",
-                "description": "Not enough on the page to evaluate against the tiers.\n\nThis band is wide because it does two jobs. Place within it by asking whether any attempt was made, never whether the work is good: top of the band when something was genuinely submitted and attempted but there is not enough there to evaluate; middle for a fragment; 0 for blank or nothing submitted.\n\nA student who wrote two honest sentences and stopped is meaningfully different from one who submitted an empty document. The band is wide enough to say so; use it.\n\nConfigured band for a 100-point assignment: 0–69."
+                "description": "Not enough on the page to evaluate against the tiers.\n\n• Top of the band — something genuinely submitted and attempted, but not enough there to evaluate against Needs More or higher.\n• Middle — a fragment. A few words, an unfinished sentence, an answer that stops.\n• 0 — blank, or nothing submitted.\n\nThis band is wide because it does two jobs. Place within it by asking whether any attempt was made, never whether the work is good.\n\nA student who wrote two honest sentences and stopped is meaningfully different from one who submitted an empty document. The band is wide enough to say so; use it.\n\nConfigured band for a 100-point assignment: 0–69."
               },
               {
                 "min": 70,

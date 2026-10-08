@@ -1,6 +1,7 @@
 import { prisma } from '~/utils/db.server';
 import {
   DAILY_PAGES_WRITING_CONDITIONS_FLAG,
+  LESSON_PLANNER_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
   type FeatureFlagKey,
@@ -63,6 +64,11 @@ export async function isFeatureFlagEnabled(key: FeatureFlagKey): Promise<boolean
 /** Paragraph type and writing time on Daily Pages (and every assignment form). */
 export function isDailyPagesWritingConditionsEnabled(): Promise<boolean> {
   return isFeatureFlagEnabled(DAILY_PAGES_WRITING_CONDITIONS_FLAG);
+}
+
+/** YAWP! Lesson Planner for teachers (global rollout switch). */
+export function isLessonPlannerEnabled(): Promise<boolean> {
+  return isFeatureFlagEnabled(LESSON_PLANNER_FLAG);
 }
 
 /** Every registered flag with its current state. */

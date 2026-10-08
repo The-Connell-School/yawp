@@ -3,7 +3,10 @@ import authored from '~/domain/rubrics/library/daily-pages-engagement.json';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import type { ResolvedAssignmentTypeGradingConfig } from './assignment-type-grading-config.server';
 import { scaleDailyPagesForAssignment } from './daily-pages-assignment-points';
-import { dailyPagesEngagementTierBands } from './daily-pages-engagement-tier-bands';
+import {
+  dailyPagesEngagementHolisticPickerScores,
+  dailyPagesEngagementTierBands,
+} from './daily-pages-engagement-tier-bands';
 
 function config(): ResolvedAssignmentTypeGradingConfig {
   return {
@@ -68,6 +71,14 @@ describe('Daily Pages assignment points', () => {
         (band) => band.label === 'Not Present'
       )?.description
     ).toBe(pinnedDescription);
+  });
+
+  test('holistic tier manual grading offers one score per engagement tier', () => {
+    const original = { ...config(), scoringMode: 'holistic_tier' as const };
+    const scaled = scaleDailyPagesForAssignment(original, 12);
+    expect(scaled.rubricCategories[0].allowedScores).toEqual(
+      dailyPagesEngagementHolisticPickerScores(12)
+    );
   });
 
   test('scales bands to the teacher point total without touching prompt copy', () => {

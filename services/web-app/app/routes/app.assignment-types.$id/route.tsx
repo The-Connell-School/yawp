@@ -27,6 +27,8 @@ import {
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
 import { useUser } from '~/hooks/useUser.js';
+import { useRouteLoaderData } from 'react-router';
+import type { Route as RootRoute } from '../../+types/root';
 import {
   createDocumentForAssignmentType,
   DocumentCreationError,
@@ -739,6 +741,9 @@ export function showModulesAccordion(
 
 export default function AppAssignmentTypesIdRoute() {
   const user = useUser();
+  const lessonPlannerEnabled =
+    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
+      ?.lessonPlannerEnabled ?? false;
   const data = useLoaderData<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const hasModules = data.assignmentType.assignmentModules.length > 0;
@@ -845,7 +850,7 @@ export default function AppAssignmentTypesIdRoute() {
               planner embeds this page's creator inside a plan, so a teacher
               gets here mid-lesson and "Back to dashboard" strands them. */}
           <Button asChild variant="outline">
-            {fromLesson ? (
+            {fromLesson && lessonPlannerEnabled ? (
               <Link
                 to={`/app/lesson-planner?c=${fromLesson}`}
                 className="w-fit"

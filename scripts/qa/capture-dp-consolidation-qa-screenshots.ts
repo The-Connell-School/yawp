@@ -5,9 +5,20 @@ import { chromium, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+const PREVIEW_HOST_PATTERN = /^https:\/\/pr-[0-9]+\.preview\.yawp\.school$/;
+
 const baseUrl =
   process.env.PREVIEW_BASE_URL?.replace(/\/$/, '') ||
   `http://localhost:${process.env.DEV_PORT || '5173'}`;
+
+if (
+  process.env.PREVIEW_BASE_URL &&
+  !PREVIEW_HOST_PATTERN.test(baseUrl)
+) {
+  throw new Error(
+    'DP consolidation screenshots must target a PR preview host (pr-<number>.preview.yawp.school).'
+  );
+}
 const accessCode = process.env.PREVIEW_ACCESS_CODE;
 const outputDir =
   process.env.OUTPUT_DIR ||
@@ -68,6 +79,8 @@ async function devLogin(page: Page, email: string) {
 }
 
 async function shot(page: Page, name: string) {
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(400);
   const path = join(outputDir, `${name}.png`);
   await page.screenshot({ path, fullPage: true });
   console.log(`Wrote ${path}`);

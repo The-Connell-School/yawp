@@ -462,3 +462,46 @@ describe('September 14 Daily Pages library revision', () => {
     expect(grade).toEqual({ overallScore: 18, score: '18/30', numericPercentage: null, letterGrade: null });
   });
 });
+
+describe('thesis-driven essay revisions authored in Yawp Internal', () => {
+  beforeEach(() => {
+    prisma.assignmentType.findUnique.mockReset();
+    prisma.assignment.findUnique.mockReset();
+  });
+
+  async function thesisSetup(pinned: { sourceContentId: string | null }) {
+    const { THESIS_DRIVEN_ESSAY } = await import('~/domain/rubrics/thesis-driven-essay');
+    const authored = structuredClone(THESIS_DRIVEN_ESSAY) as any;
+    authored.scoringScale = { type: 'rubric_points', minScore: 0, maxScore: 40 };
+    authored.rubric = { categories: [{ key: 'claim', label: 'Claim (internal)', weight: 1, description: 'Authored in Yawp Internal.' }] };
+    authored.calibrationNotes = 'Internal calibration notes';
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'assignment-type-thesis', title: 'Thesis-driven Essay', kind: null,
+      scoringScaleJson: null, rubricJson: null, gradingPromptConfigJson: null, gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null, gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: null, gradingAssistantSourceTemplateSlug: null,
+      rubric: { name: 'thesis-driven-essay', schemaJson: THESIS_DRIVEN_ESSAY, currentRevision: { id: 'rev-current', version: 1, rubricName: 'thesis-driven-essay', schemaJson: THESIS_DRIVEN_ESSAY, sourceContentId: null } },
+    });
+    prisma.assignment.findUnique.mockResolvedValue({
+      assignmentTypeId: 'assignment-type-thesis', rubricTotalPoints: null, gradingMode: 'bands',
+      rubricRevision: { id: 'rev-pinned', version: 2, rubricName: 'thesis-driven-essay', schemaJson: authored, sourceContentId: pinned.sourceContentId },
+    });
+    return resolveAssignmentTypeGradingConfig({ assignmentTypeId: 'assignment-type-thesis', assignmentId: 'assignment-1' });
+  }
+
+  test('a pinned revision staged from Yawp Internal grades with its own content', async () => {
+    const config = await thesisSetup({ sourceContentId: '6f1f5b5e-7a39-4d4f-9a52-6a1b9d3b2c11' });
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubricName).toBe('thesis-driven-essay');
+    expect(config.maxScore).toBe(40);
+    expect(config.rubricCategories.map((category) => category.label)).toEqual(['Claim (internal)']);
+    expect(config.calibrationNotes).toBe('Internal calibration notes');
+  });
+
+  test('a pinned revision without Internal source keeps the production code default', async () => {
+    const config = await thesisSetup({ sourceContentId: null });
+    expect(config.source).toBe('thesis-default');
+    expect(config.scoringType).toBe('weighted_1_5');
+    expect(config.rubricCategories.map((category) => category.label)).not.toContain('Claim (internal)');
+  });
+});

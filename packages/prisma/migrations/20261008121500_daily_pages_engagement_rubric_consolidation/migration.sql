@@ -108,7 +108,7 @@ BEGIN
   END IF;
 
   UPDATE "Rubric"
-  SET "archivedAt" = COALESCE("archivedAt", CURRENT_TIMESTAMP), "updatedAt" = CURRENT_TIMESTAMP
+  SET "archivedAt" = COALESCE("archivedAt", CURRENT_TIMESTAMP)
   WHERE id IN (short_form_id, reflection_id)
      OR name IN ('daily-pages-short-form', 'daily-pages-reflection');
 

@@ -85,7 +85,7 @@ describe('internal feature-flag endpoints', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     const body = await response.json();
-    expect(body.flags).toHaveLength(1);
+    expect(body.flags).toHaveLength(2);
     expect(body.flags[0]).toMatchObject({ key: FLAG, enabled: false });
   });
 

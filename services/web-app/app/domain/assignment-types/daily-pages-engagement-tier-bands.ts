@@ -94,3 +94,10 @@ export function formatDailyPagesEngagementBandRange(
   if (band.min === band.max) return String(band.min);
   return `${band.min}–${band.max}`;
 }
+
+/** One picker value per tier for holistic manual grading (Excellent = full total). */
+export function dailyPagesEngagementHolisticPickerScores(total: number): number[] {
+  return dailyPagesEngagementTierBands(total).map((band) =>
+    band.tier === 'excellent' ? band.max : band.min
+  );
+}

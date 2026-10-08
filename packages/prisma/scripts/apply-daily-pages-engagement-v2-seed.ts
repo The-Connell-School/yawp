@@ -11,6 +11,7 @@ import type { Prisma } from '../generated/prisma';
 import { createPrismaClient } from './local-dev/connection';
 import { LOCAL_DEV_ORG_ID } from './local-dev/dev-personas';
 import engagementLibrary from '../../../services/web-app/app/domain/rubrics/library/daily-pages-engagement.json';
+import { dailyPagesEngagementTierBands } from '../../../services/web-app/app/domain/assignment-types/daily-pages-engagement-tier-bands';
 
 const ENGAGEMENT_RUBRIC_ID = 'cmsvqo8lf002801l60o74x8wr';
 const DAILY_PAGES_TYPE_ID = 'cmlgtyo8j01em0qjs6knw7cni';
@@ -21,6 +22,27 @@ const ARCHIVED_RUBRIC_NAMES = ['daily-pages-short-form', 'daily-pages-reflection
 
 const DP_ENGAGEMENT_MIGRATION_NAME =
   '20261008121500_daily_pages_engagement_rubric_consolidation';
+
+/** PR preview databases only (`yawp_pr_<number>`). Never demo or prod. */
+export const DP_PREVIEW_QA_DATABASE_PATTERN = /^yawp_pr_[0-9]+$/;
+
+export const DP_QA_PINNED_LEGACY_RUBRIC_NAME =
+  'dp-qa-pinned-legacy-engagement';
+
+export async function resolveCurrentDatabaseName(
+  prisma: ReturnType<typeof createPrismaClient>
+): Promise<string> {
+  const rows = await prisma.$queryRaw<{ current_database: string }[]>`
+    SELECT current_database()::text AS current_database`;
+  return rows[0]?.current_database ?? '';
+}
+
+export async function shouldIncludeDpPreviewQaFixtures(
+  prisma: ReturnType<typeof createPrismaClient>
+): Promise<boolean> {
+  const database = await resolveCurrentDatabaseName(prisma);
+  return DP_PREVIEW_QA_DATABASE_PATTERN.test(database);
+}
 
 async function isDpEngagementMigrationApplied(
   prisma: ReturnType<typeof createPrismaClient>
@@ -137,8 +159,13 @@ export async function applyDailyPagesEngagementV2Seed(
     });
   }
 
-  if (options.includePreviewQaFixtures) {
+  const previewQaAllowed = await shouldIncludeDpPreviewQaFixtures(prisma);
+  if (options.includePreviewQaFixtures && previewQaAllowed) {
     await seedDpConsolidationQaPreviewFixtures(prisma, engagement.id);
+  } else if (options.includePreviewQaFixtures && !previewQaAllowed) {
+    console.warn(
+      'apply-daily-pages-engagement-v2: DP QA fixtures skipped (database guard).'
+    );
   }
 
   return { applied: true, engagementRubricId: engagement.id };
@@ -149,6 +176,17 @@ export async function seedDpConsolidationQaPreviewFixtures(
   prisma: ReturnType<typeof createPrismaClient>,
   engagementRubricId: string
 ) {
+  if (!(await shouldIncludeDpPreviewQaFixtures(prisma))) {
+    console.warn('seedDpConsolidationQaPreviewFixtures: database guard rejected.');
+    return;
+  }
+
+  await prisma.rubricRevision.deleteMany({
+    where: {
+      rubricName: 'daily-pages-engagement',
+      reason: 'DP QA pinned legacy preview fixture',
+    },
+  });
   const teacher = await prisma.orgMembership.findFirst({
     where: {
       user: { email: 'dev.teacher@yawp.local' },
@@ -210,8 +248,8 @@ export async function seedDpConsolidationQaPreviewFixtures(
   }
 
   const legacySchema = {
-    name: 'daily-pages-engagement',
-    title: 'Daily Pages engagement',
+    name: DP_QA_PINNED_LEGACY_RUBRIC_NAME,
+    title: 'DP QA pinned legacy engagement (preview only)',
     scoringScale: {
       type: 'rubric_points',
       minScore: 0,
@@ -246,8 +284,8 @@ export async function seedDpConsolidationQaPreviewFixtures(
     legacyRevision = await prisma.rubricRevision.create({
       data: {
         id: randomUUID(),
-        rubricName: 'daily-pages-engagement',
-        version: 98_001,
+        rubricName: DP_QA_PINNED_LEGACY_RUBRIC_NAME,
+        version: 1,
         schemaJson: legacySchema,
         fingerprint: `dp-qa-legacy-${Date.now()}`,
         requestId: randomUUID(),
@@ -367,6 +405,9 @@ export async function seedDpConsolidationQaPreviewFixtures(
         classAssignmentId: classAssignment.id,
       },
     });
+    const swapGoodScore = dailyPagesEngagementTierBands(12).find(
+      (band) => band.tier === 'good'
+    )!.min;
     await prisma.submission.create({
       data: {
         documentId: document.id,
@@ -374,12 +415,28 @@ export async function seedDpConsolidationQaPreviewFixtures(
         text: document.text!,
         title: document.title,
         submittedAt: new Date(),
-        score: '10/12',
-        overallScore: 10,
+        score: `${swapGoodScore}/12`,
+        overallScore: swapGoodScore,
       },
     });
   } else {
     await ensureClassAssignment(swapAssignment.id);
+    await prisma.assignment.update({
+      where: { id: swapAssignment.id },
+      data: { pointValue: 12 },
+    });
+    const goodScore = dailyPagesEngagementTierBands(12).find(
+      (band) => band.tier === 'good'
+    )!.min;
+    await prisma.submission.updateMany({
+      where: {
+        document: { assignmentId: swapAssignment.id, title: 'DP QA swap persistence doc' },
+      },
+      data: {
+        overallScore: goodScore,
+        score: `${goodScore}/12`,
+      },
+    });
   }
 
   const notesTitle = 'DP QA Teacher Notes (Preview)';
@@ -419,6 +476,9 @@ export async function seedDpConsolidationQaPreviewFixtures(
     });
     const teacherNote =
       'Student mentioned sensory detail — worth praising in conference.';
+    const notesGoodScore = dailyPagesEngagementTierBands(12).find(
+      (band) => band.tier === 'good'
+    )!.min;
     await prisma.submission.create({
       data: {
         id: submissionId,
@@ -429,11 +489,15 @@ export async function seedDpConsolidationQaPreviewFixtures(
         submittedAt: new Date(),
         gradedAt: new Date(),
         gradedByMembershipId: teacher.id,
-        overallScore: 10,
-        score: '10/12',
+        overallScore: notesGoodScore,
+        score: `${notesGoodScore}/12`,
         overallComment: 'You stayed with the observation.',
         rubricScores: {
-          engagement_with_prompt: { score: 10, comment: '', isAi: true },
+          engagement_with_prompt: {
+            score: notesGoodScore,
+            comment: '',
+            isAi: true,
+          },
         },
       },
     });
@@ -453,15 +517,39 @@ export async function seedDpConsolidationQaPreviewFixtures(
         metadata: {
           teacherNote,
           output: {
-            rubricScores: { engagement_with_prompt: { score: 10 } },
+            rubricScores: {
+              engagement_with_prompt: { score: notesGoodScore },
+            },
             overallComment: 'You stayed with the observation.',
-            score: '10/12',
+            score: `${notesGoodScore}/12`,
           },
         },
       },
     });
   } else {
     await ensureClassAssignment(notesAssignment.id);
+    await prisma.assignment.update({
+      where: { id: notesAssignment.id },
+      data: { pointValue: 12 },
+    });
+    const goodScore = dailyPagesEngagementTierBands(12).find(
+      (band) => band.tier === 'good'
+    )!.min;
+    await prisma.submission.updateMany({
+      where: {
+        document: {
+          assignmentId: notesAssignment.id,
+          title: 'DP QA teacher notes doc',
+        },
+      },
+      data: {
+        overallScore: goodScore,
+        score: `${goodScore}/12`,
+        rubricScores: {
+          engagement_with_prompt: { score: goodScore, comment: '', isAi: true },
+        },
+      },
+    });
   }
 
   const classStarterType = await prisma.assignmentType.findFirst({
@@ -518,6 +606,16 @@ export async function seedDpConsolidationQaPreviewFixtures(
     } else {
       await ensureClassAssignment(csAssignment.id);
     }
+    const classStarterRubric = await prisma.rubric.findFirst({
+      where: { name: 'class-starter-engagement', archivedAt: null },
+      select: { id: true },
+    });
+    if (classStarterRubric) {
+      await prisma.assignmentType.update({
+        where: { id: classStarterType.id },
+        data: { rubricId: classStarterRubric.id },
+      });
+    }
   }
 
   await prisma.assignmentType.update({
@@ -537,10 +635,10 @@ export async function seedDpConsolidationQaPreviewFixtures(
 
 if (import.meta.main) {
   const prisma = createPrismaClient();
-  const includePreviewQaFixtures =
-    process.env.YAWP_INCLUDE_DP_PREVIEW_QA === '1' ||
-    process.env.LOCAL_DEV_INCLUDE_DP_QA_FIXTURES === 'true';
   try {
+    const includePreviewQaFixtures =
+      process.env.LOCAL_DEV_INCLUDE_DP_QA_FIXTURES === 'true' ||
+      (await shouldIncludeDpPreviewQaFixtures(prisma));
     const result = await applyDailyPagesEngagementV2Seed(prisma, {
       includePreviewQaFixtures,
     });

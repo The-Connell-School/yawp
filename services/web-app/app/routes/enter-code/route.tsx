@@ -15,6 +15,8 @@ import { FormInput } from '~/components/rvf-forms/form-input';
 import { FormSelect } from '~/components/rvf-forms/form-select';
 import { redirectWithToast } from '~/utils/toast.server';
 import { formatClassGradePeriod } from '~/utils/class-display';
+import { enrollStudentInClassWithSeatCap } from '~/domain/free-tier/class-seat-cap.server';
+import { FREE_CLASS_CLASS_FULL_MESSAGE } from '~/domain/free-tier/class-seat-cap';
 
 const CodeSchema = z.object({
   code: z.string().min(1, 'Code is required'),
@@ -55,11 +57,20 @@ function requireStudentMembership(membership: { role: string }) {
   }
 }
 
-async function connectMembershipToClass(membershipId: string, classId: string) {
-  await prisma.orgMembership.update({
-    where: { id: membershipId },
-    data: { classesAsStudent: { connect: { id: classId } } },
+async function connectMembershipToClass(
+  membershipId: string,
+  classId: string,
+  organizationId: string
+) {
+  const result = await enrollStudentInClassWithSeatCap({
+    membershipId,
+    classId,
+    organizationId,
   });
+  if (!result.ok) {
+    return result;
+  }
+  return { ok: true as const };
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -132,7 +143,18 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (classes.length === 1) {
-      await connectMembershipToClass(membership.id, classes[0]!.id);
+      const enrolled = await connectMembershipToClass(
+        membership.id,
+        classes[0]!.id,
+        membership.organization.id
+      );
+      if (!enrolled.ok) {
+        const message =
+          enrolled.code === 'class_full'
+            ? FREE_CLASS_CLASS_FULL_MESSAGE
+            : enrolled.error;
+        return validationError({ fieldErrors: { code: message } });
+      }
 
       if (isModal) return data({ status: 'enrolled' as const });
 
@@ -186,7 +208,18 @@ export async function action({ request }: ActionFunctionArgs) {
       return validationError({ fieldErrors: { classId: 'Class not found' } });
     }
 
-    await connectMembershipToClass(membership.id, klass.id);
+    const enrolled = await connectMembershipToClass(
+      membership.id,
+      klass.id,
+      membership.organization.id
+    );
+    if (!enrolled.ok) {
+      const message =
+        enrolled.code === 'class_full'
+          ? FREE_CLASS_CLASS_FULL_MESSAGE
+          : enrolled.error;
+      return validationError({ fieldErrors: { classId: message } });
+    }
 
     if (isModal) return data({ status: 'enrolled' as const });
 

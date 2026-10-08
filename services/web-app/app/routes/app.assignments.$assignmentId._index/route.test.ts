@@ -103,7 +103,11 @@ describe('app.assignments.$assignmentId loader', () => {
     requireUserId.mockReset().mockResolvedValue('user-1');
     requireMembership
       .mockReset()
-      .mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
+      .mockResolvedValue({
+        id: 'teacher-1',
+        role: 'TEACHER',
+        organization: { plan: 'SCHOOL' },
+      });
     prisma.classAssignment.findMany
       .mockReset()
       .mockResolvedValue([deployment()]);

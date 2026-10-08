@@ -21,6 +21,7 @@ import {
   isDemoPlannerQaEnvironment,
   seedPreviewPlannerQa,
 } from './seed-preview-planner-qa';
+import { ensureLessonPlannerEnabledForDemo } from './local-dev/seed-lesson-planner-feature-flag';
 
 assertLocalSeedTarget();
 
@@ -96,6 +97,7 @@ try {
     }
   } else {
     console.log('preview planner QA seed skipped: demo environment');
+    await ensureLessonPlannerEnabledForDemo(prisma);
   }
 } finally {
   await prisma.$disconnect();

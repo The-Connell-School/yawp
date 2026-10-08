@@ -7,7 +7,10 @@ import {
   DAILY_PAGES_ENGAGEMENT_SCALING_RULE,
   usesDailyPagesEngagementPointScaling,
 } from './daily-pages-engagement-rubric';
-import { dailyPagesEngagementTierBands } from './daily-pages-engagement-tier-bands';
+import {
+  dailyPagesEngagementHolisticPickerScores,
+  dailyPagesEngagementTierBands,
+} from './daily-pages-engagement-tier-bands';
 
 function scalePoint(value: number, sourceMax: number, targetMax: number) {
   if (sourceMax === targetMax) return value;
@@ -114,7 +117,18 @@ export function scaleDailyPagesForAssignment(
     description: `${category.description}\n\n${scaleContext}`,
   };
 
-  const rubricCategories = [categoryWithContext];
+  const holisticPickerScores =
+    config.scoringMode === 'holistic_tier'
+      ? dailyPagesEngagementHolisticPickerScores(total)
+      : undefined;
+  const rubricCategories = [
+    {
+      ...categoryWithContext,
+      ...(holisticPickerScores
+        ? { allowedScores: holisticPickerScores }
+        : {}),
+    },
+  ];
 
   return {
     ...config,

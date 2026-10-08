@@ -7,6 +7,9 @@ const prisma = {
   session: {
     findUnique: mock(),
   },
+  user: {
+    findUnique: mock(),
+  },
 };
 
 mock.module('../cookie-session-storages/authentication.server.ts', () => ({
@@ -37,6 +40,10 @@ describe('read-only impersonation auth contract', () => {
     getSession.mockReset();
     destroySession.mockReset();
     prisma.session.findUnique.mockReset();
+    prisma.user.findUnique.mockReset();
+    prisma.user.findUnique.mockResolvedValue({
+      mustChangePassword: false,
+    });
 
     getSession.mockResolvedValue(
       authSession({
@@ -46,7 +53,8 @@ describe('read-only impersonation auth contract', () => {
       })
     );
     prisma.session.findUnique.mockResolvedValue({
-      user: { id: 'target-user' },
+      expirationDate: new Date('2030-01-01'),
+      user: { id: 'target-user', email: 'target@example.com' },
     });
   });
 

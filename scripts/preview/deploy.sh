@@ -708,7 +708,7 @@ run_tooling_if_needed() {
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
       echo "Applying Daily Pages engagement v2 preview seed on existing database (skip path)."
-      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && YAWP_INCLUDE_DP_PREVIEW_QA=1 bun run scripts/apply-daily-pages-engagement-v2-seed.ts'
+      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && (bun run scripts/reset-dp-consolidation-pr-preview-database.ts || true) && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)'
     fi
     return 0
   fi
@@ -756,7 +756,7 @@ run_tooling_if_needed() {
     tooling_command+=' && (bun run seed-preview-planner-qa || { echo "Warning: preview planner QA seed failed; continuing deploy (non-fatal)." >&2; true; })'
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
-    tooling_command+=' && YAWP_INCLUDE_DP_PREVIEW_QA=1 bun run scripts/apply-daily-pages-engagement-v2-seed.ts'
+    tooling_command+=' && (bun run scripts/reset-dp-consolidation-pr-preview-database.ts || true) && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)'
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'

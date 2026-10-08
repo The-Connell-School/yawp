@@ -444,7 +444,7 @@ type CheckoutCreationDependencies = {
   expireCheckoutSession: (id: string) => Promise<void>;
   findMembership: (membershipId: string) => Promise<
     | (MembershipForLicense & {
-        user: { email: string };
+        user: { email: string | null };
       })
     | null
   >;
@@ -471,7 +471,7 @@ type CheckoutCreationDependencies = {
   }) => Promise<number>;
   createCheckoutSession: (args: {
     priceId: string;
-    membership: MembershipForLicense & { user: { email: string } };
+    membership: MembershipForLicense & { user: { email: string | null } };
     attempt: number;
     successUrl: string;
     cancelUrl: string;
@@ -604,7 +604,9 @@ function defaultCheckoutCreationDependencies(
         {
           mode: 'payment',
           line_items: [{ price: priceId, quantity: 1 }],
-          customer_email: membership.user.email,
+          ...(membership.user.email
+            ? { customer_email: membership.user.email }
+            : {}),
           client_reference_id: membership.id,
           metadata,
           payment_intent_data: { metadata },

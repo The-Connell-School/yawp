@@ -13,10 +13,14 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 const {
   isFeatureFlagEnabled,
   isDailyPagesWritingConditionsEnabled,
+  isLessonPlannerEnabled,
   listFeatureFlags,
   setFeatureFlag,
 } = await import('./feature-flags.server');
-const { DAILY_PAGES_WRITING_CONDITIONS_FLAG } = await import('./feature-flags');
+const {
+  DAILY_PAGES_WRITING_CONDITIONS_FLAG,
+  LESSON_PLANNER_FLAG,
+} = await import('./feature-flags');
 
 const NAME = 'feature_flag.daily_pages_paragraph_type_and_writing_time';
 
@@ -39,6 +43,7 @@ describe('feature flags (server)', () => {
   test('reads on from the stored row', async () => {
     prisma.setting.findUnique.mockResolvedValue({ value: 'true' });
     expect(await isDailyPagesWritingConditionsEnabled()).toBe(true);
+    expect(await isLessonPlannerEnabled()).toBe(true);
   });
 
   test('reads off from the stored row', async () => {
@@ -60,7 +65,7 @@ describe('feature flags (server)', () => {
   test('lists every registered flag, off when it has no row', async () => {
     prisma.setting.findMany.mockResolvedValue([]);
     const flags = await listFeatureFlags();
-    expect(flags).toHaveLength(1);
+    expect(flags).toHaveLength(2);
     expect(flags[0]).toMatchObject({
       key: DAILY_PAGES_WRITING_CONDITIONS_FLAG,
       enabled: false,

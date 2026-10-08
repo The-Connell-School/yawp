@@ -93,6 +93,12 @@ export type AssignmentTypeGradingRow = {
   gradingAssistantSourceTemplateId: string | null;
   gradingAssistantSourceTemplateSlug: string | null;
   selectedRubricName?: string | null;
+  /**
+   * True when the content comes from the assignment's pinned revision that was
+   * authored in Yawp Internal (`RubricRevision.sourceContentId` set). Such
+   * content is honored as-is, even for the thesis-driven essay rubric.
+   */
+  internalAuthoredRevision?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -339,8 +345,11 @@ export function buildResolvedAssignmentTypeGradingConfig({
   rubricTotalPoints?: number | null;
   gradingMode?: AssignmentGradingMode;
 }): ResolvedAssignmentTypeGradingConfig {
+  // The thesis-driven essay grades with the code default, except when the
+  // assignment is pinned to a revision authored in Yawp Internal.
   const usesProductionThesis =
-    row?.selectedRubricName === THESIS_DRIVEN_ESSAY_RUBRIC_NAME;
+    row?.selectedRubricName === THESIS_DRIVEN_ESSAY_RUBRIC_NAME &&
+    !row?.internalAuthoredRevision;
   const parsedConfig = parseAssignmentTypeRubricConfig({
     assignmentTypeKind: usesProductionThesis
       ? null
@@ -503,12 +512,13 @@ export async function resolveAssignmentTypeGradingConfig({
   let revision = assignmentType?.rubric?.currentRevision ?? null;
   let assignmentRubricTotalPoints: number | null = null;
   let assignmentGradingMode: AssignmentGradingMode | undefined;
+  let internalAuthoredRevision = false;
   if (assignmentId) {
     const assignment = await prisma.assignment.findUnique({ where: { id: assignmentId }, select: {
       assignmentTypeId: true,
       rubricTotalPoints: true,
       gradingMode: true,
-      rubricRevision: { select: { id: true, version: true, rubricName: true, schemaJson: true } },
+      rubricRevision: { select: { id: true, version: true, rubricName: true, schemaJson: true, sourceContentId: true } },
     } });
     if (!assignment || assignment.assignmentTypeId !== assignmentTypeId) throw new Error('Assignment grading context does not match');
     assignmentRubricTotalPoints = assignment.rubricTotalPoints;
@@ -520,12 +530,16 @@ export async function resolveAssignmentTypeGradingConfig({
         ? parseAssignmentGradingMode(assignment.gradingMode) ??
           DEFAULT_ASSIGNMENT_GRADING_MODE
         : 'bands';
-    if (assignment.rubricRevision) revision = assignment.rubricRevision;
+    if (assignment.rubricRevision) {
+      revision = assignment.rubricRevision;
+      internalAuthoredRevision = assignment.rubricRevision.sourceContentId != null;
+    }
   }
   const row = revision && assignmentType ? {
     ...assignmentType,
     gradingAssistantVersion: revision.version,
     rubric: { name: revision.rubricName, schemaJson: revision.schemaJson },
+    ...(internalAuthoredRevision ? { internalAuthoredRevision: true } : {}),
   } : assignmentType;
   return buildResolvedAssignmentTypeGradingConfig({
     assignmentTypeId,

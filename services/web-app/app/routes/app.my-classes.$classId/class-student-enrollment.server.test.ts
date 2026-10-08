@@ -3,11 +3,20 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   $transaction: mock(async (fn: any) => fn(prisma)),
   $queryRaw: mock(),
+  class: { findFirst: mock() },
   user: { findFirst: mock() },
   orgMembership: { update: mock(), create: mock() },
-  invitation: { findFirst: mock(), delete: mock(), create: mock() },
+  invitation: { findFirst: mock(), delete: mock(), create: mock(), count: mock() },
   organization: { findUnique: mock() },
 };
+
+function mockNonFreeClassSeatCap() {
+  prisma.$queryRaw.mockResolvedValue([{ id: 'class-1' }]);
+  prisma.class.findFirst.mockResolvedValue({
+    school: { organization: { plan: 'SCHOOL' } },
+  });
+  prisma.invitation.count.mockResolvedValue(0);
+}
 
 const generateTOTP = mock();
 const sendEmail = mock();
@@ -233,7 +242,10 @@ describe('enrollExistingStudentInClass', () => {
     prisma.$transaction
       .mockReset()
       .mockImplementation(async (fn: any) => fn(prisma));
-    prisma.$queryRaw.mockReset().mockResolvedValue([]);
+    prisma.$queryRaw.mockReset();
+    prisma.class.findFirst.mockReset();
+    prisma.invitation.count.mockReset();
+    mockNonFreeClassSeatCap();
     prisma.user.findFirst.mockReset();
     prisma.orgMembership.update.mockReset();
     prisma.orgMembership.create.mockReset();
@@ -404,6 +416,10 @@ describe('sendStudentClassInvite', () => {
     prisma.invitation.create.mockReset();
     prisma.organization.findUnique.mockReset();
     prisma.$transaction.mockReset();
+    prisma.$queryRaw.mockReset();
+    prisma.class.findFirst.mockReset();
+    prisma.invitation.count.mockReset();
+    mockNonFreeClassSeatCap();
     generateTOTP.mockReset();
     sendEmail.mockReset();
 
@@ -418,9 +434,7 @@ describe('sendStudentClassInvite', () => {
     prisma.user.findFirst.mockResolvedValue(null);
     prisma.invitation.findFirst.mockResolvedValue(null);
     prisma.invitation.create.mockResolvedValue({ id: 'inv-1' });
-    prisma.$transaction.mockImplementation(async (operations: unknown[]) =>
-      Promise.all(operations)
-    );
+    prisma.$transaction.mockImplementation(async (fn: any) => fn(prisma));
     prisma.organization.findUnique.mockResolvedValue({ name: 'E2E High' });
     sendEmail.mockResolvedValue({ status: 'success' });
   });
@@ -444,6 +458,7 @@ describe('sendStudentClassInvite', () => {
         type: 'onboard-student',
         target: 'new@example.com',
         metadata: JSON.stringify({ klassId: 'class-1' }),
+        studentClassId: 'class-1',
       }),
     });
     expect(sendEmail).toHaveBeenCalled();

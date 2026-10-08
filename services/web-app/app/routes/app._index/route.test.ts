@@ -741,6 +741,7 @@ describe('app index loader assignments', () => {
         // The mocked type has no kind, so no writing time is suggested.
         defaultWritingTimeMinutes: null,
         offersParagraphModes: false,
+        rubricName: null,
       },
     ]);
   });

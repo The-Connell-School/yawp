@@ -45,6 +45,7 @@ import {
 import { rubricScaleGradeFieldsFromScores } from '~/domain/grading/recorded-grade';
 import { isHolisticTierScoringMode } from '~/domain/grading/scoring-mode';
 import {
+  getCategoryScoreBand,
   getCategoryScoreLabel,
   getCategoryScoreBounds,
   isBandScoredRubric,
@@ -1273,7 +1274,9 @@ export function TeacherGradingPanel({
                 }
               };
               const configuredScoreLabel = hasScore
-                ? getCategoryScoreLabel(item, current.score)
+                ? getCategoryScoreLabel(item, current.score) ??
+                  getCategoryScoreBand(item, current.score)?.label ??
+                  null
                 : null;
               const categoryBounds = getCategoryScoreBounds(item);
               const categoryMaxScore =

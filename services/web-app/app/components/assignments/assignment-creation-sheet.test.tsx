@@ -885,7 +885,7 @@ describe('AssignmentCreationSheetContent', () => {
     });
 
     expect(inputByName('pointValue').getAttribute('min')).toBe('5');
-    expectText('require at least 5 points');
+    expectText('need at least 5 points when graded');
   });
 
   // The original builder, kept as the flag-off path. These pin it so

@@ -174,6 +174,7 @@ jobs:
         run: |
           bun test ./packages/prisma/scripts/daily-pages-engagement-migration.test.ts
           bun test ./packages/prisma/scripts/daily-pages-engagement-migration.integration.test.ts
+          bun test ./packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.test.ts
           bun test ./packages/prisma/scripts/seed-class-starter-assignment-type.test.ts
 
       - name: 🧱 Apply Prisma migrations
@@ -214,6 +215,7 @@ jobs:
           bun test
           ./services/web-app/app/domain/rubrics/rubric-catalog.test.ts
           ./services/web-app/app/domain/rubrics/rubric-catalog.integration.test.ts
+          ./services/web-app/app/domain/rubrics/internal-demo-rubrics.integration.test.ts
           ./services/web-app/app/utils/internal-rubric-catalog-http.server.test.ts
           ./services/web-app/app/utils/ip.server.test.ts
           ./services/web-app/app/utils/rate-limit.server.test.ts
@@ -221,7 +223,7 @@ jobs:
           ./services/web-app/app/utils/rate-limit.responses.test.ts
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
-          ./services/web-app/app/domain/free-tier/
+          $(find ./services/web-app/app/domain/free-tier -name '*.test.ts' ! -name 'student-join.server.test.ts')
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
           ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
           ./services/web-app/app/utils/free-tier-class-create-route.real-db.integration.test.ts
@@ -324,6 +326,7 @@ jobs:
         working-directory: services/web-app
         run: bun test app/utils/ai-usage-log.server.test.ts app/utils/getLLMCompletion/getLLMCompletion.test.ts
 
+      # Free-tier / enrollment suites also mock Prisma; run isolated like Daily Pages.
       # The Daily Pages paragraph-type / writing-time feature flag. These suites
       # replace modules with mocks, which leak across files in one bun process,
       # so each runs on its own.
@@ -338,12 +341,14 @@ jobs:
             app/utils/internal-feature-flags-http.server.test.ts \
             app/domain/rubrics/rubric-promotion.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
+            app/domain/assignment-types/assignment-type-rubric-config.test.ts \
             app/domain/grading/gradeMath.test.ts \
             app/routes/api.domain.update-submission/route.test.ts \
             'app/routes/app_.submissions_.$submissionId/teacher-grading/view-panel.test.tsx' \
             app/domain/reporter/reporter-report.test.ts \
             app/routes/api.assignments.create/route.test.ts \
             app/routes/app.assignments._index/route.test.ts \
+            app/routes/app._index/route.test.ts \
             app/routes/app.my-classes._index/route.test.ts \
             app/utils/assignment-quota.server.test.ts \
             app/domain/free-tier/provision-free-classroom.server.test.ts \
@@ -352,6 +357,10 @@ jobs:
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
             'app/routes/app.assignments.$assignmentId._index/route.test.ts' \
             'app/routes/app.my-classes.$classId/route.test.ts' \
+            'app/routes/app.my-classes.$classId/class-student-enrollment.server.test.ts' \
+            'app/utils/impersonation-read-only.server.test.ts' \
+            'app/utils/internal-management.server.test.ts' \
+            'app/domain/free-tier/student-join.server.test.ts' \
             'app/routes/app.assignment-types.$id/about-daily-pages/content.test.ts' \
             app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
             app/domain/assignment-types/daily-pages-assignment-points.test.ts \
@@ -466,6 +475,17 @@ jobs:
           CI: true
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
         run: bun run test:e2e:smoke
+
+      # HTML report + traces for smoke failures (see playwright.config.ts).
+      - name: Upload Playwright report on failure
+        if: failure() && (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true'))
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: |
+            services/web-app/playwright-report/
+            services/web-app/test-results/
+          retention-days: 7
 
       - name: 🔐 Run preview access gate tests
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}

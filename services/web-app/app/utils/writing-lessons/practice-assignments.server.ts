@@ -1,4 +1,5 @@
 import { prisma } from '~/utils/db.server';
+import { formatUserContactLabel } from '~/utils/user-display';
 
 import { getActPracticeQuestions } from './act-practice-bank';
 import { generateActPracticeQuestions } from './act-practice-generation.server';
@@ -796,7 +797,7 @@ export async function getWritingPracticeAssignmentsForTeacher(
 export type WritingPracticeStudentResult = {
   membershipId: string;
   name: string | null;
-  email: string;
+  email: string | null;
   /** Distinct problems the student has submitted at least once (revisions of
    *  the same prompt count once). */
   attemptCount: number;
@@ -875,7 +876,10 @@ export type WritingPracticeAttemptDetail = {
  * (so teachers can see who hasn't started), sorted by email.
  */
 export function summarizeWritingPracticeResults(params: {
-  students: Array<{ id: string; user: { name: string | null; email: string } }>;
+  students: Array<{
+    id: string;
+    user: { name: string | null; email: string | null; username?: string | null };
+  }>;
   attempts: Array<{
     membershipId: string;
     promptId: string;
@@ -929,7 +933,11 @@ export function summarizeWritingPracticeResults(params: {
         latestStatus: summary?.latestStatus ?? null,
       };
     })
-    .sort((a, b) => a.email.localeCompare(b.email));
+    .sort((a, b) =>
+      formatUserContactLabel({ email: a.email, username: null, name: a.name }).localeCompare(
+        formatUserContactLabel({ email: b.email, username: null, name: b.name })
+      )
+    );
 }
 
 /**

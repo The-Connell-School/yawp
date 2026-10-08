@@ -19,6 +19,10 @@ import {
   getTeacherDocumentStatus,
   type TeacherDocumentStatus,
 } from '~/utils/teacher-document-status';
+import {
+  formatUserContactLabel,
+  formatUserDisplayName,
+} from '~/utils/user-display';
 
 /**
  * Grading queue navigation ("next student" arrows in the grading header).
@@ -203,11 +207,11 @@ function matchesQuery(document: TeacherDocumentWorkRow, query: string) {
   const haystack = [
     document.title,
     document.assignment?.title,
-    document.membership.user.name,
-    document.membership.user.email,
+    formatUserDisplayName(document.membership.user),
+    formatUserContactLabel(document.membership.user),
     ...(document.group?.members.flatMap((member) => [
-      member.membership.user.name,
-      member.membership.user.email,
+      formatUserDisplayName(member.membership.user),
+      formatUserContactLabel(member.membership.user),
     ]) ?? []),
     document.latestSubmission?.title,
     document.resolvedClass ? formatClassLabel(document.resolvedClass) : null,
@@ -260,9 +264,7 @@ function toQueueEntry(
     documentId: document.id,
     studentName:
       document.group?.label ??
-      document.membership.user.name ??
-      document.membership.user.email ??
-      'Student',
+      formatUserDisplayName(document.membership.user),
     documentTitle: getDraftDisplayTitle(document),
     className: document.resolvedClass
       ? formatClassLabel(document.resolvedClass)
@@ -366,9 +368,7 @@ function toDocumentNavigationEntry(
     submissionId: document.latestSubmission?.id ?? null,
     studentName:
       document.group?.label ??
-      document.membership.user.name ??
-      document.membership.user.email ??
-      'Student',
+      formatUserDisplayName(document.membership.user),
     documentTitle: getDraftDisplayTitle(document),
     className: document.resolvedClass
       ? formatClassLabel(document.resolvedClass)
