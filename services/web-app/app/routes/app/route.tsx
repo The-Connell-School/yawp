@@ -250,6 +250,16 @@ export default function Route() {
     location.pathname
   );
 
+  const isFreeTierOnboardingShell = location.pathname.startsWith('/app/free-tier');
+
+  if (isFreeTierOnboardingShell) {
+    return (
+      <main className="min-h-screen bg-background">
+        <Outlet key={location.pathname} />
+      </main>
+    );
+  }
+
   return (
     <main
       className={cn(

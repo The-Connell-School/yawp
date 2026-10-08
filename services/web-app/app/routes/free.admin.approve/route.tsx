@@ -8,6 +8,11 @@ import { Form } from 'react-router';
 import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
 import { completeSchoolAdminApproval } from '~/domain/free-tier/approval-flow.server';
 import { prisma } from '~/utils/db.server';
+import {
+  FreeTierAuthCard,
+  FreeTierFieldLabel,
+  FreeTierTextInput,
+} from '../free-tier/FreeTierAuthCard';
 
 type LoaderData =
   | { ok: false; reason?: string }
@@ -18,8 +23,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!token) return { ok: false as const };
   const peek = await peekSignedLink({ token, expectedPurpose: 'ADMIN_APPROVE' });
   if (!peek.ok) {
-    const appId = token ? null : null;
-    if (peek.reason === 'used') {
+    if (peek.reason === 'used' || peek.reason === 'superseded') {
       const earlyId = await import('~/domain/free-tier/signed-link.server').then((m) =>
         m.applicationIdFromSignedToken(token)
       );
@@ -31,6 +35,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         if (app?.status === 'APPROVED') {
           return { ok: false as const, reason: 'already_approved' as const, schoolName: app.schoolName };
         }
+      }
+      if (peek.reason === 'superseded') {
+        return { ok: false as const, reason: 'superseded' as const };
       }
     }
     return { ok: false as const, reason: peek.reason };
@@ -70,26 +77,22 @@ export default function FreeAdminApproveRoute() {
 
   if (actionData && actionData.ok && 'idempotent' in actionData && actionData.idempotent) {
     return (
-      <main className="yawp-entry">
-        <section className="yawp-entry-shell max-w-lg text-center space-y-3">
-          <h1 className="text-2xl font-semibold">Already approved</h1>
-          <p className="text-muted-foreground">This school has already approved YAWP. No further action is needed.</p>
-        </section>
-      </main>
+      <FreeTierAuthCard title="Already approved" className="yawp-entry-status-card">
+        <p className="text-sm text-muted-foreground">
+          This school has already approved YAWP. No further action is needed.
+        </p>
+      </FreeTierAuthCard>
     );
   }
 
   if (actionData && actionData.ok && actionData.app) {
     return (
-      <main className="yawp-entry">
-        <section className="yawp-entry-shell max-w-lg text-center space-y-3">
-          <h1 className="text-2xl font-semibold">Thank you</h1>
-          <p className="text-muted-foreground">
-            YAWP is approved for {actionData.app.schoolName}. The teacher will receive an email to sign in and create
-            their first class.
-          </p>
-        </section>
-      </main>
+      <FreeTierAuthCard title="Thank you">
+        <p className="text-sm text-muted-foreground">
+          YAWP is approved for {actionData.app.schoolName}. The teacher will receive an email to sign in and open
+          their class.
+        </p>
+      </FreeTierAuthCard>
     );
   }
 
@@ -97,64 +100,65 @@ export default function FreeAdminApproveRoute() {
     const message =
       actionData.reason === 'email_failed'
         ? 'We recorded your approval but could not send the confirmation email. Our team will follow up.'
-        : actionData.reason === 'used'
-          ? 'This approval link was already used.'
-          : 'We could not complete this approval. The link may be invalid or expired.';
+        : actionData.reason === 'superseded'
+          ? 'A newer approval link was sent to your school administrator. Please use the most recent email from YAWP.'
+          : actionData.reason === 'used'
+            ? 'This approval link was already used.'
+            : 'We could not complete this approval. The link may be invalid or expired.';
     return (
-      <main className="yawp-entry">
-        <section className="yawp-entry-shell max-w-lg">
-          <h1 className="text-2xl font-semibold">Unable to approve</h1>
-          <p className="text-muted-foreground mt-2">{message}</p>
-        </section>
-      </main>
+      <FreeTierAuthCard title="Unable to approve">
+        <p className="text-sm text-muted-foreground">{message}</p>
+      </FreeTierAuthCard>
     );
   }
 
   if (!data.ok) {
     if (data.reason === 'already_approved') {
       return (
-        <main className="yawp-entry">
-          <section className="yawp-entry-shell max-w-lg text-center space-y-3">
-            <h1 className="text-2xl font-semibold">Already approved</h1>
-            <p className="text-muted-foreground">
-              YAWP is already approved for {(data as { schoolName?: string }).schoolName ?? 'this school'}.
-            </p>
-          </section>
-        </main>
+        <FreeTierAuthCard title="Already approved" className="yawp-entry-status-card">
+          <p className="text-sm text-muted-foreground">
+            YAWP is already approved for {(data as { schoolName?: string }).schoolName ?? 'this school'}.
+          </p>
+        </FreeTierAuthCard>
+      );
+    }
+    if (data.reason === 'superseded') {
+      return (
+        <FreeTierAuthCard title="Link replaced">
+          <p className="text-sm text-muted-foreground">
+            A newer approval link was sent to your school administrator. Please use the most recent email from YAWP.
+          </p>
+        </FreeTierAuthCard>
       );
     }
     return (
-      <main className="yawp-entry">
-        <section className="yawp-entry-shell">
-          <h1 className="text-2xl font-semibold">Link expired or already used</h1>
-        </section>
-      </main>
+      <FreeTierAuthCard title="Link expired or already used">
+        <p className="text-sm text-muted-foreground">This link is no longer valid.</p>
+      </FreeTierAuthCard>
     );
   }
 
   return (
-    <main className="yawp-entry">
-      <section className="yawp-entry-shell max-w-lg">
-        <h1 className="text-2xl font-semibold mb-2">Approve YAWP for {data.schoolName}</h1>
-        <p className="text-muted-foreground mb-6">
-          {data.teacherName} requested access for their classroom. Confirm you are authorized to approve classroom
-          software for your school or district.
-        </p>
-        <Form method="post" className="space-y-4">
-          <input type="hidden" name="token" value={data.token} />
-          <label className="block text-sm">
-            Your role (e.g. Principal, Technology Director)
-            <input name="adminRole" required className="mt-1 w-full rounded-md border px-3 py-2" />
-          </label>
-          <label className="flex gap-2 text-sm items-start">
-            <input type="checkbox" name="authorized" required className="mt-1" />
-            <span>I am authorized to approve this use for {data.schoolName}.</span>
-          </label>
-          <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
-            Approve YAWP
-          </button>
-        </Form>
-      </section>
-    </main>
+    <FreeTierAuthCard
+      title={`Approve YAWP for ${data.schoolName}`}
+      subtitle={`${data.teacherName} requested access for their classroom.`}
+    >
+      <p className="text-sm text-muted-foreground">
+        Confirm you are authorized to approve classroom software for your school or district.
+      </p>
+      <Form method="post" className="mt-4 flex flex-col gap-4">
+        <input type="hidden" name="token" value={data.token} />
+        <FreeTierFieldLabel label="Your role (e.g. Principal, Technology Director)" htmlFor="adminRole">
+          <FreeTierTextInput id="adminRole" name="adminRole" required />
+        </FreeTierFieldLabel>
+        <label className="flex gap-2 text-sm items-start text-left">
+          <input type="checkbox" name="authorized" required className="mt-1" />
+          <span>I am authorized to approve this use for {data.schoolName}.</span>
+        </label>
+        <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
+          Approve YAWP
+        </button>
+      </Form>
+    </FreeTierAuthCard>
   );
 }

@@ -2,6 +2,11 @@ import { type ActionFunctionArgs, type LoaderFunctionArgs, useActionData, useLoa
 import { Form } from 'react-router';
 import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
 import { redirectSchoolAdmin } from '~/domain/free-tier/approval-flow.server';
+import {
+  FreeTierAuthCard,
+  FreeTierFieldLabel,
+  FreeTierTextInput,
+} from '../free-tier/FreeTierAuthCard';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = new URL(request.url).searchParams.get('t') ?? '';
@@ -28,14 +33,11 @@ export default function FreeAdminNotRightPersonRoute() {
 
   if (actionData?.ok) {
     return (
-      <main className="yawp-entry">
-        <section className="yawp-entry-shell max-w-lg text-center space-y-3">
-          <h1 className="text-2xl font-semibold">Request forwarded</h1>
-          <p className="text-muted-foreground">
-            We emailed the administrator you named. The previous link is no longer active.
-          </p>
-        </section>
-      </main>
+      <FreeTierAuthCard title="Request forwarded">
+        <p className="text-sm text-muted-foreground">
+          We emailed the administrator you named. The previous link is no longer active.
+        </p>
+      </FreeTierAuthCard>
     );
   }
 
@@ -47,46 +49,36 @@ export default function FreeAdminNotRightPersonRoute() {
           ? 'This request has been forwarded too many times. Contact support@yawp.school.'
           : 'We could not forward this request. The link may be invalid or already used.';
     return (
-      <main className="yawp-entry">
-        <section className="yawp-entry-shell max-w-lg">
-          <h1 className="text-2xl font-semibold">Unable to forward</h1>
-          <p className="text-muted-foreground mt-2">{message}</p>
-        </section>
-      </main>
+      <FreeTierAuthCard title="Unable to forward">
+        <p className="text-sm text-muted-foreground">{message}</p>
+      </FreeTierAuthCard>
     );
   }
 
   if (!data.ok) {
     return (
-      <main className="yawp-entry">
-        <section className="yawp-entry-shell">
-          <h1 className="text-2xl font-semibold">Link expired or already used</h1>
-        </section>
-      </main>
+      <FreeTierAuthCard title="Link expired or already used">
+        <p className="text-sm text-muted-foreground">This link is no longer valid.</p>
+      </FreeTierAuthCard>
     );
   }
   return (
-    <main className="yawp-entry">
-      <section className="yawp-entry-shell max-w-lg">
-        <h1 className="text-2xl font-semibold mb-2">Send to the right person</h1>
-        <p className="text-muted-foreground mb-6">
-          Tell us who can approve classroom software for this school (site or district administrator).
-        </p>
-        <Form method="post" className="space-y-3">
-          <input type="hidden" name="token" value={data.token} />
-          <label className="block text-sm">
-            Administrator name
-            <input name="adminName" required className="mt-1 w-full rounded-md border px-3 py-2" />
-          </label>
-          <label className="block text-sm">
-            Administrator email
-            <input name="adminEmail" type="email" required className="mt-1 w-full rounded-md border px-3 py-2" />
-          </label>
-          <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
-            Forward request
-          </button>
-        </Form>
-      </section>
-    </main>
+    <FreeTierAuthCard
+      title="Send to the right person"
+      subtitle="Tell us who can approve classroom software for this school (site or district administrator)."
+    >
+      <Form method="post" className="flex flex-col gap-4">
+        <input type="hidden" name="token" value={data.token} />
+        <FreeTierFieldLabel label="Administrator name" htmlFor="adminName">
+          <FreeTierTextInput id="adminName" name="adminName" required />
+        </FreeTierFieldLabel>
+        <FreeTierFieldLabel label="Administrator email" htmlFor="adminEmail">
+          <FreeTierTextInput id="adminEmail" name="adminEmail" type="email" required />
+        </FreeTierFieldLabel>
+        <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
+          Forward request
+        </button>
+      </Form>
+    </FreeTierAuthCard>
   );
 }

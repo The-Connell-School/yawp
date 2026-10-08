@@ -17,6 +17,10 @@ import {
   isIsolatedPreviewSeatMode,
 } from '~/utils/preview-access.server';
 import { FreeTierEntryHeader } from './FreeTierEntryHeader';
+import {
+  FreeTierFieldLabel,
+  FreeTierTextInput,
+} from '../free-tier/FreeTierAuthCard';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = new URL(request.url).searchParams.get('t') ?? '';
@@ -101,32 +105,28 @@ export default function FreeJoinRoute() {
   }
 
   return (
-    <main className="yawp-entry">
-      <section className="yawp-entry-shell max-w-lg">
+    <main className="yawp-entry yawp-entry-auth">
+      <section className="yawp-entry-shell yawp-entry-auth-shell">
         <FreeTierEntryHeader title="Before we begin" subtitle="Create your free classroom account." />
-        <ul className="list-disc pl-5 text-sm space-y-2 mb-6 text-muted-foreground max-w-prose">
+        <ul className="yawp-entry-join-bullets">
           <li>Students&apos; drafts stay in your classroom. You decide what to assign and when work is final.</li>
           <li>The writing tutor gives feedback while students draft. You always review grades and submissions.</li>
           <li>Student writing is not used to train public AI models.</li>
         </ul>
-        <Form method="post" className="space-y-3">
+        <Form method="post" className="yawp-entry-auth-body">
           <input type="hidden" name="token" value={data.token} />
-          <label className="block text-sm">
-            Your name
-            <input name="name" defaultValue={data.name} required className="mt-1 w-full rounded-md border px-3 py-2" />
-          </label>
-          <label className="block text-sm">
-            School email
-            <input value={data.email} readOnly className="mt-1 w-full rounded-md border px-3 py-2 bg-muted" />
-          </label>
-          <label className="block text-sm">
-            Password
-            <input name="password" type="password" required className="mt-1 w-full rounded-md border px-3 py-2" />
-          </label>
-          <label className="block text-sm">
-            Confirm password
-            <input name="confirmPassword" type="password" required className="mt-1 w-full rounded-md border px-3 py-2" />
-          </label>
+          <FreeTierFieldLabel label="Your name" htmlFor="name">
+            <FreeTierTextInput id="name" name="name" defaultValue={data.name} required />
+          </FreeTierFieldLabel>
+          <FreeTierFieldLabel label="School email">
+            <FreeTierTextInput value={data.email} readOnly className="bg-muted" />
+          </FreeTierFieldLabel>
+          <FreeTierFieldLabel label="Password" htmlFor="password">
+            <FreeTierTextInput id="password" name="password" type="password" required />
+          </FreeTierFieldLabel>
+          <FreeTierFieldLabel label="Confirm password" htmlFor="confirmPassword">
+            <FreeTierTextInput id="confirmPassword" name="confirmPassword" type="password" required />
+          </FreeTierFieldLabel>
           <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
             Create account
           </button>
