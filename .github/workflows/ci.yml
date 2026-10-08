@@ -228,6 +228,18 @@ jobs:
           ./services/web-app/e2e/decode-router-data.test.ts
           # decode-router-data: turbo .data assertions in student.unreleased-grade-loader-privacy E2E
 
+      # The named list above runs real-SQL tests; nothing ran the rest of
+      # services/web-app/app/**, so the suite drifted to ~75 failures before
+      # anyone noticed. This runs every web-app unit test, one bun process per
+      # file (mock.module() is process-global in bun, so a single shared
+      # process lets one file's stubs leak into the next). The *_DB_TESTS flags
+      # stay unset: those real-database cases already ran in the step above.
+      - name: 🧪 Web app full unit suite (one process per file)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun run --cwd services/web-app test
+
       - name: 🎨 Backfill class artwork keys
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
