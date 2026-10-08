@@ -1,5 +1,3 @@
-import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -215,19 +213,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)
   );
-  // Paragraph type and writing time are behind a per-school flag (off by
-  // default); off, the form offers neither.
-  const writingConditionsEnabled =
-    await isDailyPagesWritingConditionsEnabled(profile.organization.id);
-  const creationTypeDefaults = await getCreationTypeDefaultsById(
-    creationTypeRows.map((type) => type.id),
-    { writingConditionsEnabled }
-  );
 
   return {
     assignments,
     savedAssignments,
-    writingConditionsEnabled,
     assignmentCreationClasses: teacherClasses.map((klass) => ({
       id: klass.id,
       name: formatClassLabel(klass),
@@ -248,10 +237,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         rubricName: type.rubric?.name ?? null,
         collaborationSupported: type.collaborationSupported,
         gradesGrammar: gradesGrammarIds.has(type.id),
-        defaultWritingTimeMinutes:
-          creationTypeDefaults.get(type.id)?.defaultWritingTimeMinutes ?? null,
-        offersParagraphModes:
-          creationTypeDefaults.get(type.id)?.offersParagraphModes ?? false,
         ...quotaByTypeId.get(type.id),
       }));
     })(),
@@ -483,7 +468,6 @@ export default function MyAssignmentsRoute() {
     savedAssignments,
     assignmentCreationClasses,
     assignmentCreationTypes,
-    writingConditionsEnabled,
   } = useLoaderData<typeof loader>();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -584,7 +568,6 @@ export default function MyAssignmentsRoute() {
           }}
           entryPoint="dashboard"
           assignmentTypes={assignmentCreationTypes}
-          writingConditionsEnabled={writingConditionsEnabled}
           teacherClasses={assignmentCreationClasses}
           initialAssignmentTypeId={reusedAssignment.assignmentTypeId}
           initialTitle={reusedAssignment.title}
@@ -790,7 +773,6 @@ export default function MyAssignmentsRoute() {
         onOpenChange={setIsCreateSheetOpen}
         entryPoint="dashboard"
         assignmentTypes={assignmentCreationTypes}
-        writingConditionsEnabled={writingConditionsEnabled}
         teacherClasses={assignmentCreationClasses}
       />
     </div>
