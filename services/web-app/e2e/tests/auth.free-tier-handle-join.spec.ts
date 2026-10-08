@@ -148,8 +148,18 @@ test.describe('Free-tier handle student', () => {
       });
 
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=students`);
-      await teacherPage.locator('input[name="temporaryPassword"]').fill(tempPassword);
-      await teacherPage.getByRole('button', { name: 'Reset login' }).click();
+      await teacherPage
+        .getByRole('button', { name: 'Reset login' })
+        .click();
+      const resetDialog = teacherPage.getByRole('dialog');
+      await resetDialog.getByLabel('Temporary password').fill(tempPassword);
+      await resetDialog
+        .getByRole('button', { name: 'Set temporary password' })
+        .click();
+      await expect(
+        resetDialog.getByText('Temporary password set')
+      ).toBeVisible();
+      await resetDialog.getByRole('button', { name: 'Done' }).click();
       await teacherContext.close();
 
       await page.request.post('/auth/logout');
