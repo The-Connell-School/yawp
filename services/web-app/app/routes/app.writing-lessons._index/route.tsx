@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react';
 import { Link, data as dataResponse, useLoaderData, type LoaderFunctionArgs } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
@@ -144,15 +145,20 @@ export default function WritingLessonsIndexRoute() {
             <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
               Writing practice
             </h2>
-            {/* One set, several skills: a teacher assigns mixed practice from
-                here, a student builds the same thing for themselves. */}
-            <Button
-              data-testid="writing-practice-create"
-              className="shrink-0 rounded-full"
-              onClick={() => setIsCreateOpen(true)}
-            >
-              {isTeacher ? 'Create assignment' : 'Create practice'}
-            </Button>
+            <div className="flex shrink-0 items-center gap-2">
+              {isTeacher ? (
+                <SeeHowItWorksLink to="/app/writing-lessons/how-it-works" />
+              ) : null}
+              {/* One set, several skills: a teacher assigns mixed practice from
+                  here, a student builds the same thing for themselves. */}
+              <Button
+                data-testid="writing-practice-create"
+                className="shrink-0 rounded-full"
+                onClick={() => setIsCreateOpen(true)}
+              >
+                {isTeacher ? 'Create assignment' : 'Create practice'}
+              </Button>
+            </div>
           </div>
           {isTeacher ? (
             <p className="mt-3 max-w-xl text-pretty text-base text-muted-foreground sm:text-sm">
