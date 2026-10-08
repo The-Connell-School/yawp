@@ -157,7 +157,7 @@ const thesisStatementConfig: AssignmentTypeRubricConfig = {
 const dailyPagesEngagementOutputSchema = {
   ...DEFAULT_OUTPUT_SCHEMA_JSON,
   assignmentPointScaling: DAILY_PAGES_ENGAGEMENT_SCALING_RULE,
-  scoringMode: 'holistic_tier',
+  scoringMode: 'holistic_tier' as const,
 };
 
 const dailyPagesEngagementConfig: AssignmentTypeRubricConfig = {

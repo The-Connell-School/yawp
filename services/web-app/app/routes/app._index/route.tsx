@@ -72,7 +72,6 @@ export type AssignmentTypeRow = {
   title: string;
   kind?: string | null;
   systemKey?: string | null;
-  kind?: string | null;
   collaborationSupported?: boolean;
   image?: { id: string } | null;
   rubric?: { name: string } | null;
@@ -313,7 +312,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     kind: type.kind ?? null,
     rubricName: type.rubric?.name ?? null,
     gradesGrammar: gradesGrammarIds.has(type.id),
-    kind: type.kind ?? null,
     defaultWritingTimeMinutes:
       creationTypeDefaults.get(type.id)?.defaultWritingTimeMinutes ?? null,
     offersParagraphModes:
