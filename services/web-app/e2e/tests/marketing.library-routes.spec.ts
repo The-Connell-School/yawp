@@ -2,7 +2,7 @@ import { test, expect } from '../test-setup';
 import {
   ALLOWED_ROUTES,
   MARKETING_LIBRARY,
-} from '../../../../packages/marketing-media';
+} from '../../../../packages/marketing-media/index.ts';
 
 /**
  * The curated marketing library names real routes and films them unattended,

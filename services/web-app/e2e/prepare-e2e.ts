@@ -208,6 +208,8 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
     MARKETING_STUDIO_ENABLED: 'on',
     MARKETING_RENDER_TARGET_URL: 'http://127.0.0.1:5173',
     MARKETING_RENDER_TARGET_IS_DEMO: 'confirmed',
+    // Disk storage, so a finished render's media serves without S3.
+    MARKETING_MEDIA_DIR: path.join(e2eDir, '.data/marketing-media'),
   };
 
   const lines = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);

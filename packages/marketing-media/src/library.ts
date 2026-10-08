@@ -18,11 +18,122 @@ export type MarketingLibraryEntry = {
   title: string;
   /** Why this moment matters pedagogically — shown to the admin, and good default copy. */
   description: string;
-  kind: 'CLIP' | 'STILLS';
+  kind: 'CLIP' | 'STILLS' | 'GUIDE';
   storyboard: MarketingStoryboard | Record<string, unknown>;
 };
 
 export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
+  {
+    slug: 'library-daily-pages-guide',
+    title: 'Daily Pages: see how it works',
+    description:
+      'A shareable how-to guide in the "See how it works" shape: a teacher goes from the dashboard to the prompt library, turns a prompt into an assignment, and finds it in their class. Built from the same verified targets as the Daily Pages clip.',
+    kind: 'GUIDE',
+    storyboard: {
+      slug: 'library-daily-pages-guide',
+      title: 'Daily Pages: see how it works',
+      audience: 'Teachers, department chairs, and curriculum leads',
+      goal: 'Get a teacher to try daily writing practice',
+      persona: 'teacher',
+      viewport: { width: 1280, height: 800 },
+      guide: {
+        headline: 'Get students writing every day.',
+        highlight: 'every day.',
+        lede: 'Daily Pages gives your classes short, regular writing practice from a library of prompts.',
+        workflowHeading: 'Assign daily writing to a class',
+        useCases: [
+          'The first minutes of class',
+          'Bell work',
+          'Practice between longer essays',
+        ],
+        will: [
+          'Turn a library prompt into an assignment for your class.',
+          'Keep each assignment in your class’s assignments list.',
+        ],
+        // Holds in the code: unreleased grades and feedback are stripped from
+        // the student's loaders (e2e student.unreleased-grade-loader-privacy).
+        wont: ['Show a student a grade or feedback before you release it.'],
+        footerNote: 'Screens and clips use demo classes.',
+        startLabel: 'Try YAWP!',
+      },
+      scenes: [
+        {
+          id: 'hero',
+          goto: '/app',
+          waitFor: 'main',
+          settle: 1,
+          hold: 1,
+          screenshot: true,
+          guide: { section: 'hero' },
+        },
+        {
+          id: 'open-daily-pages',
+          settle: 0.5,
+          hold: 0,
+          screenshot: false,
+          steps: [{ action: 'click', role: 'link', name: 'Daily Pages' }],
+        },
+        {
+          id: 'prompt-library',
+          settle: 0.8,
+          hold: 1.5,
+          screenshot: true,
+          steps: [
+            { action: 'waitFor', role: 'button', name: 'Prompt Library' },
+            { action: 'click', role: 'button', name: 'Prompt Library' },
+            { action: 'wait', seconds: 0.8 },
+            { action: 'scroll', y: 520, seconds: 3.5 },
+          ],
+          guide: {
+            section: 'range',
+            heading: 'Start from a library of prompts',
+            body: 'Pick a prompt instead of writing one from scratch.',
+          },
+        },
+        {
+          id: 'new-assignment',
+          settle: 0.8,
+          hold: 2,
+          screenshot: true,
+          steps: [
+            { action: 'click', role: 'button', name: 'New' },
+            { action: 'waitFor', role: 'menuitem', name: 'Assignment' },
+            { action: 'click', role: 'menuitem', name: 'Assignment' },
+            { action: 'wait', seconds: 0.5 },
+          ],
+          guide: {
+            section: 'step',
+            heading: 'Turn a prompt into an assignment',
+            body: 'Use New, then Assignment, to send it to a class.',
+          },
+        },
+        {
+          id: 'open-class',
+          goto: '/app/my-classes',
+          waitFor: 'main',
+          settle: 0.8,
+          hold: 0,
+          screenshot: false,
+          steps: [{ action: 'click', role: 'link', name: 'English 10 - Period 3' }],
+        },
+        {
+          id: 'class-assignments',
+          settle: 1,
+          hold: 2,
+          screenshot: true,
+          steps: [
+            { action: 'click', role: 'tab', name: 'Assignments' },
+            { action: 'waitFor', text: 'Daily Pages - week 2', optional: true },
+          ],
+          guide: {
+            section: 'step',
+            heading: 'Find it with the rest of your class work',
+            body: 'Daily Pages assignments sit in each class’s assignments list.',
+          },
+        },
+      ],
+    },
+  },
   {
     slug: 'library-daily-pages-prompt-library',
     title: 'Daily Pages: prompt to assignment in seconds',

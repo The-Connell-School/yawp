@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { MARKETING_LIBRARY } from './library';
 import { MAX_CLIP_SECONDS_HINT } from './library';
+import { lintGuideStoryboard, validateGuideStoryboard } from './guide';
 import { estimateRenderSeconds, safeParseStoryboard } from './storyboard';
 
 // The library exists so an admin can render known-good media with one click:
@@ -60,6 +61,20 @@ describe('MARKETING_LIBRARY', () => {
       for (const text of overlays) {
         expect(text.length).toBeLessThanOrEqual(60);
       }
+    }
+  });
+
+  // A library guide renders with one click and no model in the loop, so it
+  // has to meet the guide standard as written, copy included.
+  test('every guide meets the guide shape and the copy rules', () => {
+    const guides = MARKETING_LIBRARY.filter((entry) => entry.kind === 'GUIDE');
+    expect(guides.length).toBeGreaterThan(0);
+    for (const entry of guides) {
+      const parsed = safeParseStoryboard(entry.storyboard);
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) continue;
+      expect(validateGuideStoryboard(parsed.data)).toEqual([]);
+      expect(lintGuideStoryboard(parsed.data)).toEqual([]);
     }
   });
 
