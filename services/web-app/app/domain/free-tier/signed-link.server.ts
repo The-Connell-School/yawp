@@ -116,7 +116,7 @@ function parseSignedLinkToken(
   expectedPurpose: FreeTierSignedLinkPurpose
 ):
   | { ok: true; payload: SignedLinkPayload; tokenHash: string }
-  | { ok: false; reason: ConsumeLinkResult['reason'] } {
+  | { ok: false; reason: 'invalid' | 'expired' | 'used' | 'purpose_mismatch' } {
   const segments = token.split('.');
   if (segments.length !== 3) return { ok: false, reason: 'invalid' };
   const signedPart = `${segments[0]}.${segments[1]}`;

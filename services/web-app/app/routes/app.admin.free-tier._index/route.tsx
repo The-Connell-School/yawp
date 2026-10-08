@@ -64,7 +64,7 @@ export async function action({ request }: ActionFunctionArgs) {
       label: String(formData.get('label') ?? 'manual'),
       bypassWaitlist: formData.get('bypass') === 'on',
       count: 1,
-      createdBy: operator?.email,
+      createdBy: operator?.email ?? undefined,
     });
     return { ok: true, tokens };
   }

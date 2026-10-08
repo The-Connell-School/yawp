@@ -2,7 +2,6 @@ import { type ActionFunctionArgs, type LoaderFunctionArgs, useLoaderData } from 
 import { Form } from 'react-router';
 import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
 import { redirectSchoolAdmin } from '~/domain/free-tier/approval-flow.server';
-import { getDomainUrl } from '~/utils/misc';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const token = new URL(request.url).searchParams.get('t') ?? '';
@@ -19,7 +18,6 @@ export async function action({ request }: ActionFunctionArgs) {
     newAdminName: String(formData.get('adminName') ?? ''),
     newAdminEmail: String(formData.get('adminEmail') ?? ''),
     request,
-    requestBaseUrl: getDomainUrl(request),
   });
   return result;
 }

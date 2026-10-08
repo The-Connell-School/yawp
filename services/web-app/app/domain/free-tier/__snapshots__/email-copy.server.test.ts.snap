@@ -18,7 +18,9 @@ exports[`admin approval email includes note and links 1`] = `
 
 ---
 
-Ada at Example HS would like to use YAWP in their classroom.
+Hello,
+
+Ada (ada@example.edu) at Example HS would like to use YAWP in their classroom.
 
 YAWP is a classroom writing platform where students draft essays and receive AI-assisted feedback while teachers stay in control of assignments and grading.
 
@@ -28,7 +30,7 @@ Privacy: student writing is used to provide feedback in YAWP. It is not used to 
 
 Questions? Contact us at support@yawp.school.
 
-Approve YAWP for this school:
+Approve YAWP for this school (link expires in 14 days):
 https://yawp.school/a
 
 I'm not the right person to approve this:
