@@ -175,6 +175,7 @@ export async function resolveRubricConfigForSubmission({
     activeConfig != null &&
     Number.isSafeInteger(pointValue) &&
     pointValue === activeConfig.maxScore &&
+    pointValue !== 100 &&
     activeConfig.categories.some(
       (category) =>
         category.key === DAILY_PAGES_ENGAGEMENT_CATEGORY_KEY &&

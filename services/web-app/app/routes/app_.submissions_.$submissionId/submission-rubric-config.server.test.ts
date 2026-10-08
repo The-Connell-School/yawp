@@ -475,6 +475,26 @@ describe('fresh Daily Pages display uses the assignment total', () => {
     expect(resolveAssignmentTypeGradingConfig).not.toHaveBeenCalled();
   });
 
+  test('does not refresh a 100-point engagement snapshot when the assignment total is 100', async () => {
+    resolveAssignmentTypeGradingConfig.mockReset();
+    const snapshot = {
+      categories: authored.rubric.categories,
+      minScore: 0,
+      maxScore: 100,
+      step: 1,
+      scoringType: 'rubric_points',
+    };
+    const config = await resolveRubricConfigForSubmission({
+      assignmentTypeId: 'daily',
+      pointValue: 100,
+      latestGradingRun: { assignmentTypeRubricSnapshot: snapshot },
+      rubricScores: { engagement_with_prompt: { score: 89 } },
+    });
+    expect(config.maxScore).toBe(100);
+    expect(config.categories).toEqual(snapshot.categories);
+    expect(resolveAssignmentTypeGradingConfig).not.toHaveBeenCalled();
+  });
+
   test('a fresh assignment pinned to a legacy revision stays on the authored scale', async () => {
     resolveAssignmentTypeGradingConfig.mockResolvedValue({ ...revisedConfig(), outputSchemaSnapshot: {} });
     const config = await resolveRubricConfigForSubmission({ assignmentTypeId: 'daily', assignmentId: 'legacy-pin', pointValue: 90, latestGradingRun: null, rubricScores: null });
