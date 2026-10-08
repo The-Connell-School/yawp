@@ -3,12 +3,21 @@ export async function releaseGradeFromSubmissionPage(
   page,
   { previewUrl, classId, exitAssignmentId }
 ) {
+  if (
+    await page
+      .getByTestId('grade-summary-released-label')
+      .isVisible()
+      .catch(() => false)
+  ) {
+    return;
+  }
+
   const releaseTrigger = page.getByTestId('submission-lifecycle-release');
   if (await releaseTrigger.isVisible().catch(() => false)) {
     await releaseTrigger.click();
     const dialog = page.getByRole('alertdialog');
     await dialog.getByRole('button', { name: /^Release$/ }).click({ timeout: 15_000 });
-    await page.getByText('Released').first().waitFor({
+    await page.getByTestId('grade-summary-released-label').waitFor({
       state: 'visible',
       timeout: 60_000,
     });
@@ -20,7 +29,7 @@ export async function releaseGradeFromSubmissionPage(
     await releaseGrade.click();
     const dialog = page.getByRole('alertdialog');
     await dialog.getByRole('button', { name: /^Release$/ }).click({ timeout: 15_000 });
-    await page.getByText('Released').first().waitFor({
+    await page.getByTestId('grade-summary-released-label').waitFor({
       state: 'visible',
       timeout: 60_000,
     });
