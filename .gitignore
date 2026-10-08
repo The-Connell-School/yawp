@@ -219,3 +219,4 @@ scripts/production-sync.env
 !.cursor/environment.json
 !.cursor/install.sh
 !.cursor/start.sh
+qa-414-output/
