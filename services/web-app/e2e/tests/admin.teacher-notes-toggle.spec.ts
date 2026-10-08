@@ -192,15 +192,12 @@ test.describe.serial('Admin teacher notes output toggle', () => {
         await prisma.assignmentType.deleteMany({ where: { id: assignmentTypeId } });
       }
       if (rubricId) {
-        const rubricRow = await prisma.rubric.findUnique({
+        // RubricRevision rows are append-only (same guard as impersonation audit).
+        // Detach the live rubric row so CI can delete the test catalog entry.
+        await prisma.rubric.updateMany({
           where: { id: rubricId },
-          select: { name: true },
+          data: { currentRevisionId: null },
         });
-        if (rubricRow?.name) {
-          await prisma.rubricRevision.deleteMany({
-            where: { rubricName: rubricRow.name },
-          });
-        }
         await prisma.rubric.deleteMany({ where: { id: rubricId } });
       }
       await prisma.$disconnect();
