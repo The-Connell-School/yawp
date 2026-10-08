@@ -81,6 +81,7 @@ export async function ensurePreviewSchoolReporterNavFixture(
     select: { id: true },
   });
   if (existing) {
+    await repairPreviewSchoolReporterNavTeacherIfMissing(prisma);
     await reconcilePreviewSchoolReporterNavPassword(prisma);
     await prisma.organization.update({
       where: { id: PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID },
@@ -247,6 +248,43 @@ async function reconcilePreviewFreeClassroomDevPasswords(prisma: PrismaClient) {
       update: { hash },
     });
   }
+}
+
+async function repairPreviewSchoolReporterNavTeacherIfMissing(
+  prisma: PrismaClient
+) {
+  const teacher = await prisma.user.findUnique({
+    where: { email: PREVIEW_SCHOOL_REPORTER_NAV_TEACHER_EMAIL },
+    select: { id: true },
+  });
+  if (teacher) return;
+
+  const school = await prisma.school.findFirst({
+    where: { organizationId: PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID },
+    select: { id: true },
+  });
+  if (!school) {
+    throw new Error('preview_school_reporter_nav_school_missing_for_repair');
+  }
+
+  await prisma.user.create({
+    data: {
+      email: PREVIEW_SCHOOL_REPORTER_NAV_TEACHER_EMAIL,
+      name: 'School Reporter Nav Teacher',
+      password: { create: createPassword(LOCAL_DEV_PASSWORD) },
+      memberships: {
+        create: {
+          organizationId: PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID,
+          role: 'TEACHER',
+          isOrgOwner: true,
+          schools: { connect: { id: school.id } },
+        },
+      },
+    },
+  });
+  console.warn(
+    `Repaired missing school reporter nav teacher (${PREVIEW_SCHOOL_REPORTER_NAV_TEACHER_EMAIL}).`
+  );
 }
 
 async function reconcilePreviewSchoolReporterNavPassword(prisma: PrismaClient) {
