@@ -717,7 +717,7 @@ run_tooling_if_needed() {
   fi
 
   local tooling_command
-  tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy'
+  tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun run scripts/repair-lesson-planner-migration-history.ts && bun prisma migrate deploy'
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/backfill-class-art-key.ts" ]]; then
     tooling_command+=' && bun run scripts/backfill-class-art-key.ts'
   fi

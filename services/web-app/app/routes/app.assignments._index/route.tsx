@@ -178,7 +178,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
           title: string;
           kind: string | null;
           systemKey: string | null;
-          kind: string | null;
           collaborationSupported: boolean;
         }>({
           scopes: teacherClasses.map((klass) => ({
@@ -191,7 +190,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
             title: true,
             kind: true,
             systemKey: true,
-            kind: true,
             collaborationSupported: true,
           },
           orderBy: { position: 'asc' },
