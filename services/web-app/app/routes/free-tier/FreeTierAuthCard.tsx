@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Form } from 'react-router';
 import { FreeTierEntryHeader } from '../free.join/FreeTierEntryHeader';
 
 export function FreeTierAuthCard(props: {
@@ -8,10 +9,13 @@ export function FreeTierAuthCard(props: {
   showLogo?: boolean;
   className?: string;
 }) {
+  const showLogo = props.showLogo !== false;
   return (
     <main className="yawp-entry yawp-entry-auth">
-      <section className={`yawp-entry-shell yawp-entry-auth-shell ${props.className ?? ''}`}>
-        {props.showLogo !== false ? (
+      <section
+        className={`yawp-entry-shell yawp-entry-auth-shell yawp-entry-auth-shell-fit ${props.className ?? ''}`}
+      >
+        {showLogo ? (
           <FreeTierEntryHeader title={props.title} subtitle={props.subtitle} />
         ) : (
           <div className="yawp-entry-auth-heading">
@@ -24,6 +28,16 @@ export function FreeTierAuthCard(props: {
         <div className="yawp-entry-auth-body">{props.children}</div>
       </section>
     </main>
+  );
+}
+
+export function FreeTierSignOut() {
+  return (
+    <Form method="post" action="/auth/logout" className="pt-2">
+      <button type="submit" className="text-sm font-medium text-foreground/70 underline-offset-2 hover:underline">
+        Sign out
+      </button>
+    </Form>
   );
 }
 
@@ -64,9 +78,9 @@ export function FreeTierTextArea(props: React.TextareaHTMLAttributes<HTMLTextAre
 
 export function FreeTierEmailPreview(props: { body: string; versionLabel?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-muted/40 p-4 text-left text-sm text-foreground">
-      <p className="mb-2 font-medium">Email preview</p>
-      <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{props.body}</div>
+    <div className="rounded-xl border border-border bg-muted/50 p-4 text-left text-sm text-foreground">
+      <p className="mb-2 font-medium text-foreground">Email preview</p>
+      <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{props.body}</div>
       {props.versionLabel ? (
         <p className="mt-2 text-xs text-muted-foreground">Copy version {props.versionLabel}</p>
       ) : null}

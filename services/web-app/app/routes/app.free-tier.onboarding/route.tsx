@@ -14,6 +14,7 @@ import {
   FreeTierAuthCard,
   FreeTierEmailPreview,
   FreeTierFieldLabel,
+  FreeTierSignOut,
   FreeTierTextArea,
   FreeTierTextInput,
 } from '../free-tier/FreeTierAuthCard';
@@ -83,7 +84,6 @@ export default function FreeTierOnboardingRoute() {
     <FreeTierAuthCard
       title="Administrator approval"
       subtitle="Site- or district-level administrators can approve YAWP. Department chairs and classroom teachers cannot."
-      showLogo={false}
     >
       {errorMessage ? (
         <p className="text-sm text-destructive" role="alert">{errorMessage}</p>
@@ -102,10 +102,11 @@ export default function FreeTierOnboardingRoute() {
           <FreeTierTextArea id="personalNote" name="personalNote" maxLength={MAX_NOTE} rows={3} />
         </FreeTierFieldLabel>
         <FreeTierEmailPreview body={preview} />
-        <button type="submit" className="yawp-entry-button yawp-entry-button-primary">
+        <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
           Send approval request
         </button>
       </Form>
+      <FreeTierSignOut />
     </FreeTierAuthCard>
   );
 }

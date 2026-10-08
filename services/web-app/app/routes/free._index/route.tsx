@@ -8,6 +8,8 @@ import { checkTokenValidity, redeemToken, submitWaitlist, waitlistInputSchema } 
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
 import { z } from 'zod';
+import { FreeTierEntryHeader } from '../free.join/FreeTierEntryHeader';
+import { FreeTierFieldLabel, FreeTierTextInput } from '../free-tier/FreeTierAuthCard';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -93,58 +95,52 @@ export default function FreeTierLandingRoute() {
   const fetcher = useFetcher<typeof action>();
   const submitted = fetcher.data?.ok === true;
 
+  const title =
+    data.mode === 'token' ? 'Try YAWP with your students' : 'Try YAWP with your students';
+  const subtitle =
+    data.mode === 'token' ? 'Use your event link to continue.' : 'Join the waitlist or use your event link.';
+
   return (
-    <main className="yawp-entry">
-      <section className="yawp-entry-shell">
-        <a className="yawp-entry-logo" href="/" aria-label="YAWP! home">
-          <img src="/img/landing/yawp-logo-circle.jpg" alt="YAWP!" />
-        </a>
-        <div className="yawp-entry-copy">
-          <p className="yawp-entry-kicker">Free classroom</p>
-          <h1>
-            Try YAWP with your students
-            <span>Join the waitlist or use your event link.</span>
-          </h1>
-          <p className="yawp-entry-description">
-            YAWP helps students draft essays with AI-assisted feedback while teachers stay in control of
-            assignments and grading.
-          </p>
-        </div>
+    <main className="yawp-entry yawp-entry-auth">
+      <section className="yawp-entry-shell yawp-entry-auth-shell yawp-entry-auth-shell-fit">
+        <FreeTierEntryHeader title={title} subtitle={subtitle} kicker="Free classroom" />
+        <p className="text-sm text-foreground/80 -mt-1">
+          YAWP helps students draft essays with AI-assisted feedback while teachers stay in control of
+          assignments and grading.
+        </p>
 
         {submitted ? (
-          <div className="yawp-entry-actions" role="status">
-            <p className="text-lg font-medium">You&apos;re on the list.</p>
-            <p className="text-muted-foreground">We&apos;ll email you when a spot opens.</p>
+          <div className="yawp-entry-auth-body" role="status">
+            <p className="text-sm font-medium text-foreground">You&apos;re on the list.</p>
+            <p className="text-sm text-muted-foreground">We&apos;ll email you when a spot opens.</p>
           </div>
         ) : (
-          <fetcher.Form method="post" className="max-w-md w-full space-y-3">
+          <fetcher.Form method="post" className="yawp-entry-auth-body">
             <input type="hidden" name="intent" value={data.mode === 'token' ? 'redeem' : 'waitlist'} />
             {data.mode === 'token' && data.token ? (
               <input type="hidden" name="token" value={data.token} />
             ) : null}
             <input type="text" name="middleName" className="hidden" tabIndex={-1} autoComplete="off" aria-hidden />
-            <label className="block text-sm">
-              Your name
-              <input name="name" required className="mt-1 w-full rounded-md border px-3 py-2" />
-            </label>
-            <label className="block text-sm">
-              School email
-              <input name="email" type="email" required className="mt-1 w-full rounded-md border px-3 py-2" />
-            </label>
-            <label className="block text-sm">
-              School name
-              <input name="schoolName" required className="mt-1 w-full rounded-md border px-3 py-2" />
-            </label>
-            <label className="block text-sm">
-              Location
-              <input name="location" required className="mt-1 w-full rounded-md border px-3 py-2" />
-            </label>
-            <label className="block text-sm">
-              Grade level
-              <input name="gradeLevel" required className="mt-1 w-full rounded-md border px-3 py-2" />
-            </label>
+            <FreeTierFieldLabel label="Your name" htmlFor="name">
+              <FreeTierTextInput id="name" name="name" required />
+            </FreeTierFieldLabel>
+            <FreeTierFieldLabel label="School email" htmlFor="email">
+              <FreeTierTextInput id="email" name="email" type="email" required />
+            </FreeTierFieldLabel>
+            <FreeTierFieldLabel label="School name" htmlFor="schoolName">
+              <FreeTierTextInput id="schoolName" name="schoolName" required />
+            </FreeTierFieldLabel>
+            <FreeTierFieldLabel label="Location" htmlFor="location">
+              <FreeTierTextInput id="location" name="location" required />
+            </FreeTierFieldLabel>
+            <FreeTierFieldLabel label="Grade level" htmlFor="gradeLevel">
+              <FreeTierTextInput id="gradeLevel" name="gradeLevel" required />
+            </FreeTierFieldLabel>
             {data.mode === 'token' && data.tokenValid && !data.tokenValid.valid ? (
-              <p className="text-destructive text-sm">This link is no longer valid.</p>
+              <p className="text-sm text-destructive">This link is no longer valid.</p>
+            ) : null}
+            {fetcher.data?.ok === false && fetcher.data.error === 'rate_limited' ? (
+              <p className="text-sm text-destructive">Too many attempts. Please wait and try again.</p>
             ) : null}
             <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
               {data.mode === 'token' ? 'Continue' : 'Join the waitlist'}

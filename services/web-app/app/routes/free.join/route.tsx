@@ -95,10 +95,10 @@ export default function FreeJoinRoute() {
   const data = useLoaderData<typeof loader>();
   if (!data.ok) {
     return (
-      <main className="yawp-entry">
-        <section className="yawp-entry-shell max-w-lg">
+      <main className="yawp-entry yawp-entry-auth">
+        <section className="yawp-entry-shell yawp-entry-auth-shell yawp-entry-auth-shell-fit">
           <FreeTierEntryHeader title="This link is not valid" />
-          <p className="text-muted-foreground">Request a new invite from the YAWP team.</p>
+          <p className="text-sm text-muted-foreground">Request a new invite from the YAWP team.</p>
         </section>
       </main>
     );
@@ -106,7 +106,7 @@ export default function FreeJoinRoute() {
 
   return (
     <main className="yawp-entry yawp-entry-auth">
-      <section className="yawp-entry-shell yawp-entry-auth-shell">
+      <section className="yawp-entry-shell yawp-entry-auth-shell yawp-entry-auth-shell-fit">
         <FreeTierEntryHeader title="Before we begin" subtitle="Create your free classroom account." />
         <ul className="yawp-entry-join-bullets">
           <li>Students&apos; drafts stay in your classroom. You decide what to assign and when work is final.</li>

@@ -1030,6 +1030,15 @@ body:has(.yawp-public) > [data-state='closed'].fixed.bottom-4.right-4 {
   text-align: left;
 }
 
+.yawp-entry-auth-shell-fit {
+  width: 100%;
+  max-width: min(28rem, calc(100vw - 48px));
+}
+
+.yawp-entry-auth {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
 .yawp-entry-auth .yawp-entry-logo {
   height: 56px;
   margin: 0 auto 8px;
