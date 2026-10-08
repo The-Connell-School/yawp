@@ -204,7 +204,9 @@ export async function action({ request }: ActionFunctionArgs) {
         profile.organization.id
       );
       await prisma.$transaction(async (tx) => {
-        await assertCanCreateClassInTransaction(tx, profile.organization);
+        if (profile.organization.plan === 'FREE_CLASSROOM') {
+          await assertCanCreateClassInTransaction(tx, profile.organization);
+        }
         await tx.class.create({
           data: {
             schoolId,
@@ -482,6 +484,11 @@ function TeacherMyClassesView({
         editingClass={null}
         schools={data.manageSchools}
         classCreateBlockedMessage={data.classCreateBlockedMessage}
+        preferredSchoolYear={
+          data.selectedSchoolYear !== ALL_SCHOOL_YEARS
+            ? data.selectedSchoolYear
+            : null
+        }
       />
     </section>
   );

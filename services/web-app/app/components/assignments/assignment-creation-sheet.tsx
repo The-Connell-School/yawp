@@ -673,6 +673,7 @@ export function AssignmentCreationSheetContent({
                 <SelectItem
                   key={assignmentType.id}
                   value={assignmentType.id}
+                  textValue={assignmentType.title}
                   disabled={assignmentType.quotaExhausted}
                 >
                   <span className="flex flex-col gap-0.5">

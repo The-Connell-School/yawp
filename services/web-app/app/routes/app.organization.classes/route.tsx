@@ -352,7 +352,9 @@ export async function action({ request }: ActionFunctionArgs) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         await prisma.$transaction(async (tx) => {
-          await assertCanCreateClassInTransaction(tx, profile.organization);
+          if (profile.organization.plan === 'FREE_CLASSROOM') {
+            await assertCanCreateClassInTransaction(tx, profile.organization);
+          }
           await tx.class.create({
             data: {
               schoolId,

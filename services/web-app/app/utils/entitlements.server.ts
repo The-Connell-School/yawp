@@ -3,6 +3,7 @@ import type { Organization, OrganizationPlan } from '@app/prisma';
 // Spec §5.3: one primitive — Organization.plan — decides entitlements.
 // Default SCHOOL plan must short-circuit every check to preserve current behavior.
 
+/** Single source of truth for free-classroom student seat cap (#413 imports this). */
 export const FREE_CLASSROOM_STUDENT_SEAT_CAP = 35;
 export const FREE_CLASSROOM_TEACHER_SEAT_CAP = 1;
 export const FREE_CLASSROOM_ACTIVE_CLASS_CAP = 1;

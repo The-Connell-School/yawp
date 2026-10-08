@@ -172,6 +172,12 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma migrate deploy
 
+      - name: 🌱 Seed free tier bundle assignment types
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun run --cwd packages/prisma seed-free-tier-bundle-assignment-types
+
       # CI names every test file it runs, and nothing ran services/web-app/app/**
       # unit tests: the rate limiter, client-IP and free-tier tests were present but
       # never executed. These need the migrated database above (real SQL), so they
@@ -198,6 +204,11 @@ jobs:
           ./services/web-app/app/domain/free-tier/
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
           ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
+          ./services/web-app/app/routes/free-tier-class-create-route.real-db.integration.test.ts
+          ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
+          ./services/web-app/app/utils/assignment-quota.real-db.integration.test.ts
+          ./packages/prisma/preview-access-code.free-classroom.test.ts
+          ./packages/prisma/scripts/preview-seats.test.ts
           ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
 
       - name: 🎨 Backfill class artwork keys

@@ -63,11 +63,12 @@ test.describe('Free classroom bundle quotas', () => {
 
     await page.goto('/app/my-classes');
     await page.getByRole('button', { name: 'Create Class' }).first().click();
+    await expect(page.getByTestId('class-create-blocked-callout')).toBeVisible();
     await expect(
       page.getByText(/Free classroom accounts include one class/i)
     ).toBeVisible();
     await expect(
       page.getByRole('dialog').getByRole('button', { name: /^Create Class$/ })
-    ).toBeDisabled();
+    ).toHaveCount(0);
   });
 });

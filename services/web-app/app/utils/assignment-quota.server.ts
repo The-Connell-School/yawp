@@ -226,7 +226,7 @@ export async function enforceFreeClassroomAssignmentCreateInTransaction(
   }
 ) {
   const organization = await resolveOrganizationForClassIds(tx, params.classIds);
-  if (!organization) return;
+  if (!organization || organization.plan !== 'FREE_CLASSROOM') return;
   const assignmentType = await tx.assignmentType.findUnique({
     where: { id: params.assignmentTypeId },
     select: { kind: true },
@@ -247,7 +247,7 @@ export async function enforceFreeClassroomAssignmentRetypeInTransaction(
   }
 ) {
   const organization = await resolveOrganizationForClassIds(tx, params.classIds);
-  if (!organization) return;
+  if (!organization || organization.plan !== 'FREE_CLASSROOM') return;
   const types = await tx.assignmentType.findMany({
     where: { id: { in: [params.previousAssignmentTypeId, params.nextAssignmentTypeId] } },
     select: { id: true, kind: true },
