@@ -35,26 +35,6 @@ function submissionFromRouteData(
   return matches[0]!;
 }
 
-function expectDocumentLoaderSubmissionRowsLackGradedAt(
-  loaderData: unknown,
-  submissionId: string
-) {
-  const route = getRouteLoaderData(loaderData, 'app_.documents_.$id');
-  const topList = route.submissions as Record<string, unknown>[] | undefined;
-  const doc = route.doc as Record<string, unknown> | undefined;
-  const docList = doc?.submissions as Record<string, unknown>[] | undefined;
-
-  expect(Array.isArray(topList)).toBe(true);
-  expect(Array.isArray(docList)).toBe(true);
-
-  const topRow = topList!.find((row) => row.id === submissionId);
-  const docRow = docList!.find((row) => row.id === submissionId);
-  expect(topRow).toBeTruthy();
-  expect(docRow).toBeTruthy();
-  expect(topRow!.gradedAt).toBeUndefined();
-  expect(docRow!.gradedAt).toBeUndefined();
-}
-
 test.describe.serial('Unreleased grade privacy in student loader responses', () => {
   test('student submission, document, and assignment-type data omit unreleased scores', async ({
     page,
@@ -102,20 +82,23 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
     expect(documentDataText).not.toMatch(gradedAtWire);
 
     expect(documentDataText).not.toContain(gradePrivacy.probeComment);
+    expect(documentDataText).not.toMatch(
+      new RegExp(
+        `overallScore",${gradePrivacy.unreleasedOverallScore}|overallScore\\\\",${gradePrivacy.unreleasedOverallScore}`
+      )
+    );
 
     const documentLoader = decodeRouterDataResponse(documentDataText);
-    expectDocumentLoaderSubmissionRowsLackGradedAt(
-      documentLoader,
-      gradePrivacy.submissionId
-    );
     const documentRoute = getRouteLoaderData(
       documentLoader,
       'app_.documents_.$id'
     );
-    for (const row of findObjectsWithId(
+    const documentSubmissionRows = findObjectsWithId(
       documentRoute,
       gradePrivacy.submissionId
-    )) {
+    );
+    expect(documentSubmissionRows.length).toBeGreaterThan(0);
+    for (const row of documentSubmissionRows) {
       expect(row.gradedAt).toBeUndefined();
       expect(row.overallScore).toBeUndefined();
       expect(row.numericPercentage).toBeUndefined();
