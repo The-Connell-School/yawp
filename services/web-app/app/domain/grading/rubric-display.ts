@@ -57,6 +57,8 @@ export type RubricDisplayConfig = {
    * Surfaced to the teacher instead of quietly falling back to a default.
    */
   rubricIncomplete?: boolean;
+  /** When holistic_tier, overall grades are points-only (no % / letter). */
+  scoringMode?: 'weighted_categories' | 'holistic_tier';
 };
 
 const rubricDisplaySources = new Set<string>([

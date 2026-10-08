@@ -12,8 +12,12 @@ const canManageGrades = mock();
 const isGradingOwnDocument = mock();
 const buildTeacherClassWhere = mock();
 const buildGradeWriteSubjectWhere = mock();
+const resolveAssignmentTypeGradingConfig = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
+mock.module('~/domain/assignment-types/assignment-type-grading-config.server', () => ({
+  resolveAssignmentTypeGradingConfig,
+}));
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
   canManageGrades,
@@ -106,6 +110,9 @@ describe('api.domain.update-submission', () => {
         (actorUserId != null && actorUserId === ownerUserId)
     );
     buildTeacherClassWhere.mockReturnValue({});
+    resolveAssignmentTypeGradingConfig.mockResolvedValue({
+      scoringMode: 'weighted_categories',
+    });
     prisma.submission.updateMany.mockResolvedValue({ count: 1 });
     prisma.user.findUnique.mockResolvedValue({
       name: 'Teacher One',
@@ -114,6 +121,45 @@ describe('api.domain.update-submission', () => {
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma)
     );
+  });
+
+  test('clears percent and letter for holistic tier even when the client sends them', async () => {
+    resolveAssignmentTypeGradingConfig.mockResolvedValue({
+      scoringMode: 'holistic_tier',
+    });
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-holistic',
+      gradedAt: new Date(),
+      gradedByMembershipId: 'teacher-1',
+      numericPercentage: 30,
+      letterGrade: 'F',
+      score: '6/20',
+      overallScore: 6,
+      aiMeta: { scoringMode: 'holistic_tier' },
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignmentTypeId: 'type-cristo',
+        assignment: { id: 'asgn-1', submitForGrade: true, pointValue: 20 },
+        membership: { classesAsStudent: [] },
+      },
+    });
+    const response = await action({
+      request: makeRequest({
+        submissionId: 'sub-holistic',
+        overallScore: 6,
+        score: '6/20',
+        numericPercentage: 30,
+        letterGrade: 'F',
+      }),
+    } as any) as Response;
+    expect(response.status).toBe(200);
+    expect(prisma.submission.updateMany.mock.calls[0][0].data).toMatchObject({
+      score: '6/20',
+      overallScore: 6,
+      numericPercentage: null,
+      letterGrade: null,
+    });
   });
 
   test('clears stale percent and letter when saving a raw point grade', async () => {

@@ -128,6 +128,7 @@ export function compileGradingAssistantInvocation({
   writingTimeMinutes,
   coldWrite,
   paragraphMode,
+  assignmentPointTotal,
 }: {
   gradingConfig: Pick<
     ResolvedAssignmentTypeGradingConfig,
@@ -140,7 +141,7 @@ export function compileGradingAssistantInvocation({
   > & Partial<
     Pick<
       ResolvedAssignmentTypeGradingConfig,
-      'outputSchemaSnapshot' | 'gradingMode' | 'rubricTotalPoints'
+      'outputSchemaSnapshot' | 'gradingMode' | 'rubricTotalPoints' | 'scoringMode'
     >
   >;
   studentFirstName: string;
@@ -160,6 +161,8 @@ export function compileGradingAssistantInvocation({
   coldWrite?: boolean | null;
   /** The Daily Pages paragraph type the teacher chose; absent changes nothing. */
   paragraphMode?: string | null;
+  /** The assignment's point total, for holistic scoring prompts. */
+  assignmentPointTotal?: number | null;
 }): CompiledGradingAssistantInvocation {
   const { minScore, maxScore } = gradingConfig;
   const promptShape = buildGradingPromptShape({
@@ -169,6 +172,8 @@ export function compileGradingAssistantInvocation({
     studentFirstName,
     teacherNotesEnabled: teacherNotesEnabled(gradingConfig.outputSchemaSnapshot),
     gradingMode: gradingConfig.gradingMode,
+    scoringMode: gradingConfig.scoringMode,
+    assignmentPointTotal: assignmentPointTotal ?? null,
   });
   const strictnessLabel = getGradingAssistantStrictnessLabel(strictnessLevel);
   const strictnessInstructions =

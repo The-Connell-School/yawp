@@ -6,6 +6,7 @@
  * summaries, per-student growth series). Keeping them free of Prisma makes the
  * grading math independently unit-testable.
  */
+import { parsePointScore } from '~/domain/grading/gradeMath';
 import { rubricCategories } from '~/domain/grading/rubric';
 
 export type GradedSubmissionRow = {
@@ -16,6 +17,8 @@ export type GradedSubmissionRow = {
   submittedAt: Date;
   numericPercentage: number | null;
   letterGrade: string | null;
+  /** Stored display score, e.g. `18/20` for holistic points-only grades. */
+  score?: string | null;
   /** Per-rubric-category scores (typically 1–5), keyed by category. */
   rubricScores?: Record<string, number> | null;
   /** The teacher's / assistant's overall written comment on the submission. */
@@ -104,6 +107,21 @@ export type GrowthSeries = {
  * Average of the defined numeric values, rounded to the nearest integer.
  * Returns null when there is nothing to average.
  */
+/** Use stored percent when present; otherwise derive from an X/Y score string. */
+export function numericPercentageForReporting(
+  row: Pick<GradedSubmissionRow, 'numericPercentage' | 'score'>
+): number | null {
+  if (
+    typeof row.numericPercentage === 'number' &&
+    !Number.isNaN(row.numericPercentage)
+  ) {
+    return row.numericPercentage;
+  }
+  const parsed = parsePointScore(row.score ?? null);
+  if (!parsed) return null;
+  return Math.round((parsed.earned / parsed.possible) * 100);
+}
+
 export function averagePercentage(
   values: Array<number | null | undefined>
 ): number | null {
@@ -163,16 +181,16 @@ export function summarizeStudentGrades(
       studentName: chronological[0]?.studentName ?? 'Unknown student',
       gradedCount: studentRows.length,
       averagePercentage: averagePercentage(
-        studentRows.map((row) => row.numericPercentage)
+        studentRows.map((row) => numericPercentageForReporting(row))
       ),
       latestLetterGrade: latestWithLetter?.letterGrade ?? null,
       coldGradedCount: cold.length,
       coldAveragePercentage: averagePercentage(
-        cold.map((row) => row.numericPercentage)
+        cold.map((row) => numericPercentageForReporting(row))
       ),
       warmGradedCount: warm.length,
       warmAveragePercentage: averagePercentage(
-        warm.map((row) => row.numericPercentage)
+        warm.map((row) => numericPercentageForReporting(row))
       ),
     });
   }
@@ -312,23 +330,30 @@ export function buildGrowthSeries(rows: GradedSubmissionRow[]): GrowthSeries {
     writeMode: writeModeForTutorEnabled(row.tutorEnabled),
   }));
 
-  const scored = chronological.filter(
-    (row): row is GradedSubmissionRow & { numericPercentage: number } =>
-      typeof row.numericPercentage === 'number'
-  );
+  const scored = chronological
+    .map((row) => ({
+      row,
+      percentage: numericPercentageForReporting(row),
+    }))
+    .filter(
+      (
+        entry
+      ): entry is { row: GradedSubmissionRow; percentage: number } =>
+        typeof entry.percentage === 'number'
+    );
 
   if (scored.length < 2) {
     return {
       points,
-      firstPercentage: scored[0]?.numericPercentage ?? null,
-      latestPercentage: scored[0]?.numericPercentage ?? null,
+      firstPercentage: scored[0]?.percentage ?? null,
+      latestPercentage: scored[0]?.percentage ?? null,
       deltaPercentage: null,
       trend: 'insufficient',
     };
   }
 
-  const firstPercentage = scored[0].numericPercentage;
-  const latestPercentage = scored[scored.length - 1].numericPercentage;
+  const firstPercentage = scored[0].percentage;
+  const latestPercentage = scored[scored.length - 1].percentage;
   const deltaPercentage = latestPercentage - firstPercentage;
   const trend: GrowthTrend =
     deltaPercentage > 2
@@ -389,7 +414,7 @@ function summarizeWriteMode(
     label: WRITE_MODE_LABELS[mode],
     gradedCount: modeRows.length,
     averagePercentage: averagePercentage(
-      modeRows.map((row) => row.numericPercentage)
+      modeRows.map((row) => numericPercentageForReporting(row))
     ),
     firstPercentage: growth.firstPercentage,
     latestPercentage: growth.latestPercentage,
