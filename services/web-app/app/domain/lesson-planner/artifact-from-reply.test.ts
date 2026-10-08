@@ -3,12 +3,14 @@ import {
   artifactFromAssistantReply,
   exitTicketAsMaterial,
 } from './artifact-from-reply';
+import { EXIT_TICKET_CONFIG_SCHEMA_VERSION } from '~/domain/assignment-types/exit-ticket';
 import { EXIT_TICKET_BLOCK_KEY } from './lesson-material';
 
 describe('exitTicketAsMaterial', () => {
   test('files the student prompt as an exit-ticket handout', () => {
     const material = exitTicketAsMaterial({
       config: {
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
         mode: 'specific',
         focus: 'explain-concept',
         topic: 'comma splices',
