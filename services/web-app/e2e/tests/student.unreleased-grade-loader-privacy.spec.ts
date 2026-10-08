@@ -94,6 +94,10 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
       )
     ).text();
     const gradedAtWire = /"gradedAt",\["D",|\\"gradedAt\\",\["D",/;
+    const myDocumentsDataText = await (
+      await page.request.get('/app/my-documents.data')
+    ).text();
+    expect(myDocumentsDataText).not.toMatch(gradedAtWire);
     expect(documentHtml).not.toMatch(gradedAtWire);
     expect(documentDataText).not.toMatch(gradedAtWire);
 
