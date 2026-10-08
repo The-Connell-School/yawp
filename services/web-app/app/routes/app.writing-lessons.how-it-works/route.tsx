@@ -170,13 +170,13 @@ export default function WritingPracticeHowItWorksRoute() {
         <GuideRow
           media={clip(
             'results',
-            'The teacher clicks View results. A list shows each student’s progress, then the teacher opens one student to see every answer and draft.'
+            'The teacher clicks View results. Each student’s row shows a score, such as 5/6 correct, and the teacher opens one student to see every answer and draft.'
           )}
         >
           <GuideStep n={3}>Check the results</GuideStep>
           <GuideH3>See who’s done and who’s stuck</GuideH3>
           <GuideCopy>
-            Every student’s progress, answers, and drafts, in one place.
+            Every student’s score, answers, and drafts, in one place.
           </GuideCopy>
         </GuideRow>
 
