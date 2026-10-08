@@ -645,25 +645,26 @@ export async function backfillLegacyPreviewSeatCodes(
       continue;
     }
 
-    const updated = await prisma.organization.updateMany({
-      where: { id: seat.organizationId, previewSeatCode: null },
-      data: { previewSeatCode: code },
-    });
-    if (updated.count > 0) {
-      results.push({
-        organizationId: seat.organizationId,
-        status: 'backfilled',
-      });
-      continue;
-    }
-
     const existing = await prisma.organization.findUnique({
       where: { id: seat.organizationId },
       select: { id: true, previewSeatCode: true },
     });
+    if (!existing) {
+      results.push({ organizationId: seat.organizationId, status: 'missing' });
+      continue;
+    }
+    const storedCode = existing.previewSeatCode?.trim().toLowerCase() ?? null;
+    if (storedCode === code) {
+      results.push({ organizationId: seat.organizationId, status: 'existing' });
+      continue;
+    }
+    await prisma.organization.update({
+      where: { id: seat.organizationId },
+      data: { previewSeatCode: code },
+    });
     results.push({
       organizationId: seat.organizationId,
-      status: existing ? 'existing' : 'missing',
+      status: 'backfilled',
     });
   }
 

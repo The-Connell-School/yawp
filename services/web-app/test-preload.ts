@@ -58,6 +58,9 @@ if (isWebAppTestFile()) {
     '~/utils/assignment-type-access.server': await snapshot(
       '~/utils/assignment-type-access.server'
     ),
+    '~/utils/assignment-deployment.server': await snapshot(
+      '~/utils/assignment-deployment.server'
+    ),
     '~/domain/thesis-prompts/saved-prompts.server': await snapshot(
       '~/domain/thesis-prompts/saved-prompts.server'
     ),
