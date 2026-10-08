@@ -62,12 +62,19 @@ async function passwordLogin(page, email, redirectTo = '/app') {
 }
 
 async function waitForPostApprovalApp(page, email) {
-  const deadline = Date.now() + 120_000;
+  const deadline = Date.now() + 180_000;
   while (Date.now() < deadline) {
+    await passwordLogin(page, email, '/app');
+    await page.waitForLoadState('networkidle').catch(() => {});
     await passwordLogin(page, email, '/app/my-classes');
+    await page.waitForLoadState('networkidle').catch(() => {});
     const url = page.url();
     if (/\/app\/my-classes/.test(url)) return url;
     if (/\/app\/free-tier\/pending/.test(url)) {
+      await page.waitForTimeout(4000);
+      continue;
+    }
+    if (/\/no-membership/.test(url)) {
       await page.waitForTimeout(4000);
       continue;
     }
@@ -212,7 +219,7 @@ async function main() {
   await mkdir(outDir, { recursive: true });
   const browser = await chromium.launch({ headless: true });
   const manifest = { capturedAt: new Date().toISOString(), baseUrl, shots: [] };
-  const teacherFlowEmail = `shipreview.flow.${Date.now()}@shipreview-high.edu`;
+  const teacherFlowEmail = `shipreview.flow.${Date.now()}@yawp.invalid`;
 
   try {
     {

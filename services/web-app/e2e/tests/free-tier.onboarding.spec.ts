@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import { expect, test } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
@@ -245,9 +246,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     const prisma = createE2EPrismaClient();
     const stamp = Date.now();
     const teacherEmail = `ft-archived-${stamp}@${ADMIN_DOMAIN}`;
-    const passwordHash = await import('~/utils/auth.server').then((m) =>
-      m.getPasswordHash(JOIN_PASSWORD)
-    );
+    const passwordHash = bcrypt.hashSync(JOIN_PASSWORD, 10);
     const user = await prisma.user.create({
       data: {
         email: teacherEmail,
