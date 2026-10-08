@@ -18,8 +18,21 @@ export const PREVIEW_FREE_CLASSROOM_STUDENT_EMAIL =
   'dev.student.free@yawp.local';
 export const PREVIEW_FREE_CLASSROOM_SCHOOL_CODE = 'FREE-PREVIEW-1';
 
+/** SCHOOL org for sidebar Reporter QA (flag off, link still shown). */
+export const PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID = 'preview-school-reporter-nav';
+export const PREVIEW_SCHOOL_REPORTER_NAV_ORG_NAME =
+  'Yawp Preview — School Reporter Nav';
+export const PREVIEW_SCHOOL_REPORTER_NAV_TEACHER_EMAIL =
+  'dev.teacher.school-reporter@yawp.local';
+export const PREVIEW_SCHOOL_REPORTER_NAV_SCHOOL_CODE = 'SCHOOL-REPORTER-NAV';
+
 /** Leave one Class Starter slot for UI create → exhausted screenshot. */
 export const PREVIEW_FREE_CLASSROOM_SEEDED_CLASS_STARTERS = 11;
+
+const PREVIEW_PREWRITING_PROMPT =
+  'Read the passage about community gardens. In your notebook, list three tensions the author raises between access and ownership, then circle the tension you want to explore in your essay.';
+const PREVIEW_THESIS_PROMPT =
+  'Draft one arguable thesis sentence that answers whether cities should require community gardens in new developments. Your thesis must take a clear position and preview your main reasons.';
 
 type SeedClient = PrismaClient | Prisma.TransactionClient;
 
@@ -50,11 +63,108 @@ export async function ensurePreviewFreeClassroomFixture(
     return { status: 'created' as const };
   }
 
+  await reconcilePreviewFreeClassroomDevPasswords(prisma);
   await topUpPreviewFreeClassroomAssignments(prisma, bundleTypes);
+  await ensurePreviewShowcaseBundleAssignments(prisma, bundleTypes);
   console.log(
     `Preview free classroom fixture reconciled (${PREVIEW_FREE_CLASSROOM_ORG_ID}).`
   );
   return { status: 'existing' as const };
+}
+
+export async function ensurePreviewSchoolReporterNavFixture(
+  prisma: PrismaClient
+) {
+  const existing = await prisma.organization.findUnique({
+    where: { id: PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID },
+    select: { id: true },
+  });
+  if (existing) {
+    await reconcilePreviewSchoolReporterNavPassword(prisma);
+    await prisma.organization.update({
+      where: { id: PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID },
+      data: { reporterEnabled: false, plan: 'SCHOOL' },
+    });
+    return { status: 'existing' as const };
+  }
+
+  const passwordHash = createPassword(LOCAL_DEV_PASSWORD).hash;
+  await prisma.$transaction(async (tx) => {
+    await tx.organization.create({
+      data: {
+        id: PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID,
+        name: PREVIEW_SCHOOL_REPORTER_NAV_ORG_NAME,
+        plan: 'SCHOOL',
+        reporterEnabled: false,
+        classInsightsEnabled: true,
+        revisionFlowEnabled: true,
+        writingPracticeEnabled: false,
+        numOfStudentSeats: 120,
+        numOfTeacherSeats: 12,
+      },
+    });
+    const school = await tx.school.create({
+      data: {
+        organizationId: PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID,
+        name: 'School Reporter Nav Preview',
+        code: PREVIEW_SCHOOL_REPORTER_NAV_SCHOOL_CODE,
+      },
+      select: { id: true },
+    });
+    const teacher = await tx.user.create({
+      data: {
+        email: PREVIEW_SCHOOL_REPORTER_NAV_TEACHER_EMAIL,
+        name: 'School Reporter Nav Teacher',
+        password: { create: { hash: passwordHash } },
+        memberships: {
+          create: {
+            organizationId: PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID,
+            role: 'TEACHER',
+            isOrgOwner: true,
+            schools: { connect: { id: school.id } },
+          },
+        },
+      },
+    });
+    void teacher;
+  });
+  console.log(
+    `Preview school reporter nav fixture created (${PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID}).`
+  );
+  return { status: 'created' as const };
+}
+
+async function reconcilePreviewFreeClassroomDevPasswords(prisma: PrismaClient) {
+  const hash = createPassword(LOCAL_DEV_PASSWORD).hash;
+  for (const email of [
+    PREVIEW_FREE_CLASSROOM_TEACHER_EMAIL,
+    PREVIEW_FREE_CLASSROOM_STUDENT_EMAIL,
+  ]) {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (!user) continue;
+    await prisma.password.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, hash },
+      update: { hash },
+    });
+  }
+}
+
+async function reconcilePreviewSchoolReporterNavPassword(prisma: PrismaClient) {
+  const hash = createPassword(LOCAL_DEV_PASSWORD).hash;
+  const user = await prisma.user.findUnique({
+    where: { email: PREVIEW_SCHOOL_REPORTER_NAV_TEACHER_EMAIL },
+    select: { id: true },
+  });
+  if (!user) return;
+  await prisma.password.upsert({
+    where: { userId: user.id },
+    create: { userId: user.id, hash },
+    update: { hash },
+  });
 }
 
 async function createPreviewFreeClassroomOrg(
@@ -176,6 +286,7 @@ async function createPreviewFreeClassroomOrg(
     klass.id,
     PREVIEW_FREE_CLASSROOM_SEEDED_CLASS_STARTERS
   );
+  await ensurePreviewShowcaseBundleAssignments(tx, bundleTypes, klass.id);
 }
 
 async function topUpPreviewFreeClassroomAssignments(
@@ -261,4 +372,72 @@ async function seedClassStarterAssignments(
   console.log(
     `Seeded ${count} class starter assignment(s) for ${organizationId}.`
   );
+}
+
+async function ensurePreviewShowcaseBundleAssignments(
+  client: SeedClient,
+  bundleTypes: Array<{ id: string; kind: string | null }>,
+  classId?: string
+) {
+  const resolvedClassId =
+    classId ??
+    (
+      await client.class.findFirst({
+        where: {
+          isArchived: false,
+          school: { organizationId: PREVIEW_FREE_CLASSROOM_ORG_ID },
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      })
+    )?.id;
+  if (!resolvedClassId) return;
+
+  const prewritingTypeId = bundleTypes.find((row) => row.kind === 'prewriting')
+    ?.id;
+  const thesisTypeId = bundleTypes.find(
+    (row) => row.kind === 'thesis_statement'
+  )?.id;
+
+  if (prewritingTypeId) {
+    const hasPrewriting = await client.assignment.findFirst({
+      where: {
+        assignmentTypeId: prewritingTypeId,
+        classAssignments: { some: { classId: resolvedClassId } },
+      },
+      select: { id: true },
+    });
+    if (!hasPrewriting) {
+      await client.assignment.create({
+        data: {
+          assignmentTypeId: prewritingTypeId,
+          title: 'Community Gardens — Prewriting',
+          prompt: PREVIEW_PREWRITING_PROMPT,
+          submitForGrade: true,
+          classAssignments: { create: { classId: resolvedClassId } },
+        },
+      });
+    }
+  }
+
+  if (thesisTypeId) {
+    const hasThesis = await client.assignment.findFirst({
+      where: {
+        assignmentTypeId: thesisTypeId,
+        classAssignments: { some: { classId: resolvedClassId } },
+      },
+      select: { id: true },
+    });
+    if (!hasThesis) {
+      await client.assignment.create({
+        data: {
+          assignmentTypeId: thesisTypeId,
+          title: 'Community Gardens — Thesis',
+          prompt: PREVIEW_THESIS_PROMPT,
+          submitForGrade: true,
+          classAssignments: { create: { classId: resolvedClassId } },
+        },
+      });
+    }
+  }
 }
