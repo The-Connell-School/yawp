@@ -43,8 +43,8 @@ async function devLogin(page: import('@playwright/test').Page, email: string) {
 }
 
 async function openDailyPagesAssignmentType(page: import('@playwright/test').Page) {
-  await page.goto(`${origin}/app/admin/assignment-types`);
-  await page.getByRole('heading', { name: 'Daily Pages', level: 3 }).click();
+  await page.goto(`${origin}/app/admin/assignments`);
+  await page.getByRole('heading', { name: 'Daily Pages' }).click();
   await page.waitForURL(/\/app\/admin\/assignment-types\/[^/]+$/);
   const toggle = page.getByTestId('rubric-teacher-notes-toggle');
   await toggle.waitFor({ state: 'visible', timeout: 60_000 });

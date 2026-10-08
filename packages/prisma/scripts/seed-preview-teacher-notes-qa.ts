@@ -67,10 +67,10 @@ async function ensurePreviewSuperAdmin(
   });
 
   if (existing) {
-    if (!existing.isSuperAdmin) {
+    if (!existing.isSuperAdmin || !existing.isAdmin) {
       await prisma.user.update({
         where: { id: existing.id },
-        data: { isSuperAdmin: true },
+        data: { isSuperAdmin: true, isAdmin: true },
       });
     }
     if (existing.memberships.length === 0) {
@@ -90,7 +90,7 @@ async function ensurePreviewSuperAdmin(
     data: {
       email: PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_EMAIL,
       name: 'Preview QA Superadmin',
-      isAdmin: false,
+      isAdmin: true,
       isSuperAdmin: true,
       password: { create: createPassword(LOCAL_DEV_PASSWORD) },
       memberships: {
