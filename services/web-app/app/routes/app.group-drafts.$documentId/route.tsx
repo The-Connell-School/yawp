@@ -31,6 +31,7 @@ import {
 import { suggestMemberGrades } from '~/domain/collaboration/member-grade-suggestions.server';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { formatUserDisplayName } from '~/utils/user-display';
 import { prisma } from '~/utils/db.server';
 import {
   documentReadWhere,
@@ -120,8 +121,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const roster = (doc.group?.members ?? []).map((member) => ({
     membershipId: member.membershipId,
-    name:
-      member.membership.user.name?.trim() || member.membership.user.email,
+    name: formatUserDisplayName(member.membership.user),
   }));
 
   const [breakdown, grades, groupGrade, comments] = await Promise.all([
@@ -276,7 +276,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
     const roster = doc.group.members.map((member) => ({
       membershipId: member.membershipId,
-      name: member.membership.user.name?.trim() || member.membership.user.email,
+      name: formatUserDisplayName(member.membership.user),
     }));
 
     const [breakdown, groupGrade] = await Promise.all([

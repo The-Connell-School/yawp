@@ -671,8 +671,9 @@ run_tooling_if_needed() {
   fi
 
   if [[ "$DATABASE_CREATED" == "0" && "$fingerprint" == "$previous_fingerprint" && -z "$missing_artifacts" ]]; then
-    echo "Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate."
+    echo "Tooling fingerprint unchanged and database already existed; running migrate deploy on skip path."
     TOOLING_CHANGED=0
+    "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && cd packages/prisma && bun prisma migrate deploy'
     # Even when skipping full tooling, always run idempotent seeds that must
     # keep preview data current with the codebase (e.g., AP History library).
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
@@ -750,7 +751,7 @@ ensure_preview_seats() {
     return 0
   fi
   "${compose[@]}" run --rm toolbox bash -lc \
-    'cd packages/prisma && bun run seed-preview-seats'
+    'bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run seed-preview-seats'
 }
 
 remove_legacy_project_postgres() {

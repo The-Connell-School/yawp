@@ -11,6 +11,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { Pagination } from '~/components/table/pagination';
+import { formatUserDisplayName } from '~/utils/user-display';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
@@ -503,16 +504,13 @@ export function TeacherDocumentWorkPanel({
                 rowClasses?.cell,
                 rowClasses?.textCell
               )}
-              title={
-                document.membership.user.name || document.membership.user.email
-              }
+              title={formatUserDisplayName(document.membership.user)}
             >
               <span className="inline-flex items-center gap-1.5">
                 {document.group ? (
                   <Users className="h-4 w-4 text-primary" aria-hidden="true" />
                 ) : null}
-                {document.membership.user.name ||
-                  document.membership.user.email}
+                {formatUserDisplayName(document.membership.user)}
               </span>
             </TableCell>
           ) : null}

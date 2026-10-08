@@ -44,6 +44,8 @@ try {
   // idempotent AP catalog on every seed-mode deploy, including existing seats.
   await seedApHistoryLibrary(prisma, seats[0].organizationId);
   await attachApHistorySourceImages(prisma);
+  const freeClassroom = await ensurePreviewFreeClassroomFixture(prisma);
+  console.log(`Preview free-classroom fixture: ${freeClassroom.status}`);
   for (const seat of seats) {
     const result = results.find(
       ({ organizationId }) => organizationId === seat.organizationId

@@ -30,6 +30,7 @@ import { assertCanCreateClassInTransaction } from '~/utils/assignment-quota.serv
 import { getEntitlements } from '~/utils/entitlements.server';
 import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
+import { studentJoinTokenForClassCreate } from '~/utils/class-student-join-token.server';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
@@ -200,9 +201,7 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!code) code = generateClassCode();
 
     try {
-      const classArtKey = await pickClassArtKeyForOrganization(
-        profile.organization.id
-      );
+      const classArtKey = await pickClassArtKeyForOrganization(profile.organization.id);
       await prisma.$transaction(async (tx) => {
         await assertCanCreateClassInTransaction(tx, profile.organization);
         await tx.class.create({
@@ -213,6 +212,7 @@ export async function action({ request }: ActionFunctionArgs) {
             period,
             title,
             code,
+            studentJoinToken: studentJoinTokenForClassCreate(profile.organization.plan),
             cardGradientKey: generateClassCardGradientKey(code),
             classArtKey,
             teachers: { connect: [{ id: profile.id }] },

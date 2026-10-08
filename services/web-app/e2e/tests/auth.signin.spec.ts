@@ -45,7 +45,7 @@ test.describe('Authentication - real sign in', () => {
       });
 
       await page.goto('/auth/login');
-      await page.locator('input[type="email"]').fill(TEST_USER.email);
+      await page.getByLabel('Email or handle').fill(TEST_USER.email);
       await page.locator('input[type="password"]').fill(TEST_USER.password);
       await page.getByRole('button', { name: /log in/i }).click();
 

@@ -16,14 +16,18 @@ export function resolveDocumentOrganizationId(document: {
   );
 }
 
+import { formatUserDisplayName } from '~/utils/user-display';
+
 export function resolveDocumentActorLabel(document: {
-  membership?: { user: { name: string | null; email?: string } } | null;
+  membership?: {
+    user: { name: string | null; email?: string | null; username?: string | null };
+  } | null;
   group?: { label: string } | null;
 }): string {
   return (
     document.group?.label ??
-    document.membership?.user.name ??
-    document.membership?.user.email ??
-    'Student'
+    (document.membership?.user
+      ? formatUserDisplayName(document.membership.user)
+      : 'Student')
   );
 }

@@ -140,6 +140,35 @@ suite('regressions found in review of the first version', () => {
   });
 });
 
+suite('login IP limits count only failed attempts', () => {
+  test('200 successful-login target checks from one IP do not consume failed-IP budget', async () => {
+    const schoolIp = new Request('https://yawp.school/auth/login', {
+      headers: { 'x-forwarded-for': `198.20.${Math.floor(Math.random() * 250)}.3, ${EDGE_IP}` },
+    });
+    const cfg = { perIpPerMinute: 5, perIpPerHour: 10, perTargetPerHour: 12 };
+    const t0 = Date.now();
+    for (let i = 0; i < 200; i += 1) {
+      const target = await mod!.enforceLoginTargetRateLimit({
+        request: schoolIp,
+        route: '/auth/login',
+        targetKey: `${run}-ok-user-${i}`,
+        perTargetPerHour: cfg.perTargetPerHour,
+        nowMs: t0 + i,
+      });
+      expect(target.allowed).toBe(true);
+      const ipCheck = await mod!.checkFailedLoginIpRateLimit({
+        request: schoolIp,
+        route: '/auth/login',
+        loginIdentifier: `${run}-ok-user-${i}@school.test`,
+        perIpPerMinute: cfg.perIpPerMinute,
+        perIpPerHour: cfg.perIpPerHour,
+        nowMs: t0 + i,
+      });
+      expect(ipCheck.allowed).toBe(true);
+    }
+  });
+});
+
 suite('unauthenticated throttles tolerate a whole class behind one school IP', () => {
   const cfg = () => ({
     perIpPerMinute: 60,

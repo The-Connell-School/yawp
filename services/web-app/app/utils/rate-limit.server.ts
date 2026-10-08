@@ -382,6 +382,34 @@ function windowBucket(spec: WindowSpec): BucketSpec {
   };
 }
 
+async function peekWindowBucket(spec: WindowSpec): Promise<boolean> {
+  const bucket = windowBucket(spec);
+  const now = Math.floor(spec.nowMs ?? Date.now());
+  const rows = await prisma.$queryRawUnsafe<
+    { tokens: number; capacity: number; refillPerMs: number; lastMs: number }[]
+  >(
+    `SELECT "tokens", "capacity", "refillPerMs", (EXTRACT(EPOCH FROM "lastRefillAt")::float8 * 1000) AS "lastMs"
+       FROM "RateLimitBucket" WHERE "key" = $1::text`,
+    bucket.key
+  );
+  const row = rows[0];
+  if (!row) return true;
+  const elapsed = Math.max(0, now - Number(row.lastMs));
+  const accrued = Math.floor(Number(row.refillPerMs) * elapsed);
+  const effective = Math.min(Number(row.capacity), Number(row.tokens) + accrued);
+  return effective >= bucket.cost;
+}
+
+async function peekConsumeAll(buckets: WindowSpec[]): Promise<LimitResult> {
+  for (const bucket of buckets) {
+    if (!(await peekWindowBucket(bucket))) {
+      const retryAfterSeconds = await secondsUntilAvailable(windowBucket(bucket));
+      return { allowed: false, scope: bucket.scope, retryAfterSeconds };
+    }
+  }
+  return { allowed: true };
+}
+
 export async function enforceTutorLimits(params: {
   request: Request;
   membershipId: string;
@@ -473,6 +501,167 @@ export async function enforceUnauthByIpAndTarget(params: {
     windowBucket({ ...base, key: `${ipKeyBase}:h`, limit: perIpPerHour, windowMs: HOUR_MS, scope: 'ip', subjectKey: ipKeyBase }),
     // Per-target (email): the budget that stops mail-bombing one address.
     windowBucket({ ...base, key: `${targetBase}:h`, limit: perTargetPerHour, windowMs: HOUR_MS, scope: 'ip', subjectKey: targetBase }),
+  ]);
+}
+
+/** Login: per-handle limits apply to every attempt; per-IP limits apply only after a failed login. */
+export async function enforceLoginTargetRateLimit(params: {
+  request: Request;
+  route: string;
+  targetKey: string;
+  perTargetPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  const { request, route, targetKey, perTargetPerHour, nowMs } = params;
+  const targetBase = `target:${hashTarget(targetKey)}:${route}`;
+  const base = { route, nowMs };
+  return consumeAll([
+    windowBucket({
+      ...base,
+      key: `${targetBase}:h`,
+      limit: perTargetPerHour,
+      windowMs: HOUR_MS,
+      scope: 'ip',
+      subjectKey: targetBase,
+    }),
+  ]);
+}
+
+function failedLoginIpBuckets(params: {
+  request: Request;
+  route: string;
+  loginIdentifier: string;
+  perIpPerMinute: number;
+  perIpPerHour: number;
+  nowMs?: number;
+}) {
+  const { request, route, loginIdentifier, perIpPerMinute, perIpPerHour, nowMs } =
+    params;
+  const ip = getClientIp(request);
+  const normalizedLogin = loginIdentifier.trim().toLowerCase();
+  const ipKeyBase = `ip:${ipHash(ip)}:login:${ipHash(normalizedLogin)}:${route}:failed`;
+  const base = { route, nowMs };
+  return [
+    {
+      ...base,
+      key: `${ipKeyBase}:m`,
+      limit: perIpPerMinute,
+      windowMs: MINUTE_MS,
+      scope: 'ip' as const,
+      subjectKey: ipKeyBase,
+    },
+    {
+      ...base,
+      key: `${ipKeyBase}:h`,
+      limit: perIpPerHour,
+      windowMs: HOUR_MS,
+      scope: 'ip' as const,
+      subjectKey: ipKeyBase,
+    },
+  ];
+}
+
+export async function checkFailedLoginIpRateLimit(params: {
+  request: Request;
+  route: string;
+  loginIdentifier: string;
+  perIpPerMinute: number;
+  perIpPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  return peekConsumeAll(failedLoginIpBuckets(params));
+}
+
+export async function recordFailedLoginIpRateLimit(params: {
+  request: Request;
+  route: string;
+  loginIdentifier: string;
+  perIpPerMinute: number;
+  perIpPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  const buckets = failedLoginIpBuckets(params);
+  return consumeAll(buckets.map((b) => windowBucket(b)));
+}
+
+export async function enforceUnauthByIpOnly(params: {
+  request: Request;
+  route: string;
+  perIpPerMinute: number;
+  perIpPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  const { request, route, perIpPerMinute, perIpPerHour, nowMs } = params;
+  const ip = getClientIp(request);
+  const ipKeyBase = `ip:${ipHash(ip)}:${route}`;
+  const base = { route, nowMs };
+  return consumeAll([
+    windowBucket({
+      ...base,
+      key: `${ipKeyBase}:m`,
+      limit: perIpPerMinute,
+      windowMs: MINUTE_MS,
+      scope: 'ip',
+      subjectKey: ipKeyBase,
+    }),
+    windowBucket({
+      ...base,
+      key: `${ipKeyBase}:h`,
+      limit: perIpPerHour,
+      windowMs: HOUR_MS,
+      scope: 'ip',
+      subjectKey: ipKeyBase,
+    }),
+  ]);
+}
+
+export async function enforceAuthenticatedUserAndIp(params: {
+  request: Request;
+  route: string;
+  userId: string;
+  perUserPerHour: number;
+  perIpPerMinute: number;
+  perIpPerHour: number;
+  nowMs?: number;
+}): Promise<LimitResult> {
+  const {
+    request,
+    route,
+    userId,
+    perUserPerHour,
+    perIpPerMinute,
+    perIpPerHour,
+    nowMs,
+  } = params;
+  const ip = getClientIp(request);
+  const ipKeyBase = `ip:${ipHash(ip)}:${route}`;
+  const userKeyBase = `user:${userId}:${route}`;
+  const base = { route, nowMs };
+  return consumeAll([
+    windowBucket({
+      ...base,
+      key: `${userKeyBase}:h`,
+      limit: perUserPerHour,
+      windowMs: HOUR_MS,
+      scope: 'user',
+      subjectKey: userKeyBase,
+    }),
+    windowBucket({
+      ...base,
+      key: `${ipKeyBase}:m`,
+      limit: perIpPerMinute,
+      windowMs: MINUTE_MS,
+      scope: 'ip',
+      subjectKey: ipKeyBase,
+    }),
+    windowBucket({
+      ...base,
+      key: `${ipKeyBase}:h`,
+      limit: perIpPerHour,
+      windowMs: HOUR_MS,
+      scope: 'ip',
+      subjectKey: ipKeyBase,
+    }),
   ]);
 }
 
