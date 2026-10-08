@@ -233,7 +233,9 @@ export default function LessonPacketRoute() {
             <Button type="button" size="sm" asChild>
               <a
                 data-testid="packet-save-pdf"
-                href={fullPacketPdfHref()}
+                href={
+                  view === 'handout' ? pdfHref() : fullPacketPdfHref()
+                }
                 download
                 aria-disabled={packet.sections.length === 0}
               >
