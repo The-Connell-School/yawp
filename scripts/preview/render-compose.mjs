@@ -149,6 +149,7 @@ ${tlsLabels}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
       NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
       YAWP_ENVIRONMENT: "preview"
+      PRIMARY_APP_URL: ${q(env.url)}
       PREVIEW_DATA_MODE: ${q(env.dataMode)}
       PREVIEW_ACCESS_GATE: "on"
       PREVIEW_ACCESS_SEATS: ${q(previewAccessSeats)}
