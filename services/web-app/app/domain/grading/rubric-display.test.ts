@@ -219,6 +219,25 @@ describe('buildScoreOptions', () => {
       ]).map((option) => option.label)
     ).toEqual(['Absent', 'Hardly there', 'Hardly there', 'All in', 'All in', 'All in']);
   });
+
+  test('prefers configured score labels over a single full-range band (Strode ENG 101)', () => {
+    const strodeScoreLabels = [
+      { value: 55, label: 'Misses' },
+      { value: 72, label: 'Satisfactory' },
+      { value: 85, label: 'Somewhat better than satisfactory' },
+      { value: 95, label: 'Does them very well' },
+    ];
+    const strodeBands = [
+      { min: 0, max: 100, label: 'Full range', description: '' },
+    ];
+    const options = buildScoreOptions(0, 100, strodeScoreLabels, 1, strodeBands);
+    expect(options.find((option) => option.value === '72')?.label).toBe(
+      'Satisfactory'
+    );
+    expect(options.find((option) => option.value === '72')?.label).not.toBe(
+      'Full range'
+    );
+  });
 });
 
 describe('an unscored value on a scale that starts below 1', () => {

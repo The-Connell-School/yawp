@@ -401,8 +401,8 @@ export function buildScoreOptions(
       ? getCategoryScoreBand({ bands }, score)?.label ?? null
       : null;
     const suffix =
-      bandLabel ??
       configured ??
+      bandLabel ??
       (optionMax === 5 && optionMin === 1 ? legacyScoreLabels[score] : null);
     return {
       value: score.toString(),
