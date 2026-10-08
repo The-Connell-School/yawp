@@ -42,6 +42,7 @@ export async function loginAction({ request }: ActionFunctionArgs) {
       perIpPerMinute: cfg.perIpPerMinute,
       perIpPerHour: cfg.perIpPerHour,
       perTargetPerHour: cfg.perEmailPerHour,
+      perIpHandlePer15Minutes: cfg.perIpHandlePer15Minutes,
       perIpSprayPerHour: cfg.perIpFailedSprayPerHour,
     });
     if (!limitDecision.allowed) {
