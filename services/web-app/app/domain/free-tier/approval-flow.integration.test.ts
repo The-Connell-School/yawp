@@ -137,10 +137,14 @@ describe('free-tier approval flow', () => {
         request: req,
       }),
     ]);
-    const winners = [first, second].filter((r) => r.ok && !('idempotent' in r && r.idempotent));
-    const idempotent = [first, second].filter((r) => r.ok && 'idempotent' in r && r.idempotent);
-    expect(winners.length + idempotent.length).toBe(2);
-    expect(winners.length).toBeLessThanOrEqual(1);
+    const outcomes = [first, second];
+    const freshApprovals = outcomes.filter(
+      (r) => r.ok && 'app' in r && r.app && !('idempotent' in r && r.idempotent)
+    );
+    const idempotent = outcomes.filter((r) => r.ok && 'idempotent' in r && r.idempotent);
+    const linkLost = outcomes.filter((r) => !r.ok && r.reason === 'used');
+    expect(freshApprovals.length).toBe(1);
+    expect(idempotent.length + linkLost.length).toBe(1);
     const finalApp = await prisma.freeTierApplication.findUnique({ where: { id: app.id } });
     expect(finalApp?.status).toBe('APPROVED');
   });
