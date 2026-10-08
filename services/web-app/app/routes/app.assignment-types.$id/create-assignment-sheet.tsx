@@ -36,6 +36,7 @@ type Props = {
   assignmentTypeId: string;
   assignmentTypeTitle: string;
   assignmentTypeKind?: string | null;
+  assignmentTypeRubricName?: string | null;
   /** Whether this kind of writing is in the collaborative-drafts pilot. */
   assignmentTypeCollaborationSupported?: boolean;
   /** Whether this type's rubric grades grammar, so the toggle is worth showing. */
@@ -69,6 +70,7 @@ export function CreateAssignmentSheet({
   assignmentTypeId,
   assignmentTypeTitle,
   assignmentTypeKind = null,
+  assignmentTypeRubricName = null,
   assignmentTypeCollaborationSupported = false,
   assignmentTypeGradesGrammar = false,
   assignmentTypeDefaultWritingTimeMinutes = null,
@@ -124,6 +126,7 @@ export function CreateAssignmentSheet({
             id: assignmentTypeId,
             title: assignmentTypeTitle,
             kind: assignmentTypeKind,
+            rubricName: assignmentTypeRubricName,
             collaborationSupported: assignmentTypeCollaborationSupported,
             gradesGrammar: assignmentTypeGradesGrammar,
             defaultWritingTimeMinutes: assignmentTypeDefaultWritingTimeMinutes,

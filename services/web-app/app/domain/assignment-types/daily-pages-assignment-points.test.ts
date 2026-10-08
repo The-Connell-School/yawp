@@ -47,6 +47,29 @@ describe('Daily Pages assignment points', () => {
     );
   });
 
+  test('keeps pinned band descriptions when scaling from the resolved schema', () => {
+    const original = config();
+    const pinnedDescription = 'Pinned Not Present copy from revision.';
+    original.rubricCategories = [
+      {
+        ...original.rubricCategories[0],
+        bands: dailyPagesEngagementTierBands(100).map((band) => ({
+          min: band.min,
+          max: band.max,
+          label: band.label,
+          description:
+            band.label === 'Not Present' ? pinnedDescription : band.label,
+        })),
+      },
+    ];
+    const scaled = scaleDailyPagesForAssignment(original, 12);
+    expect(
+      scaled.rubricCategories[0].bands?.find(
+        (band) => band.label === 'Not Present'
+      )?.description
+    ).toBe(pinnedDescription);
+  });
+
   test('scales bands to the teacher point total without touching prompt copy', () => {
     const original = config();
     const before = JSON.stringify(original);

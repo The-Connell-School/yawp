@@ -156,7 +156,19 @@ describe('submission loader — unsubmitted redirect', () => {
     prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1', title: 'Daily Pages', kind: 'daily_pages', rubric: { name: authored.name, schemaJson: authored } });
     const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
     expect(result.submission.rubricConfig.maxScore).toBe(90);
-    expect(result.submission.rubricConfig.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual([[0, 0], [21, 39], [51, 69], [84, 90]]);
+    const { dailyPagesEngagementTierBands } = await import(
+      '~/domain/assignment-types/daily-pages-engagement-tier-bands'
+    );
+    const expected = dailyPagesEngagementTierBands(90).map((band) => [
+      band.min,
+      band.max,
+    ]);
+    expect(
+      result.submission.rubricConfig.categories[0].bands.map((band: any) => [
+        band.min,
+        band.max,
+      ])
+    ).toEqual(expected);
   });
 
   test('loads grading queue navigation without an organization rollout flag', async () => {

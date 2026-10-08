@@ -799,6 +799,31 @@ describe('AssignmentCreationSheetContent', () => {
       ).toBe(false);
     });
   });
+
+  it('requires at least five points for SJP Daily Pages (null kind, engagement rubric)', () => {
+    root = renderSheet({
+      entryPoint: 'assignment-type',
+      fixedAssignmentTypeId: 'sjp-daily-pages',
+      assignmentTypes: [
+        ...assignmentTypes,
+        {
+          id: 'sjp-daily-pages',
+          title: 'SJP Daily Pages',
+          kind: null,
+          rubricName: 'daily-pages-engagement',
+          collaborationSupported: false,
+          gradesGrammar: false,
+        },
+      ],
+    }).root;
+
+    act(() => {
+      controlById('assignment-create-change-grading').click();
+    });
+
+    expect(inputByName('pointValue').getAttribute('min')).toBe('5');
+    expectText('require at least 5 points');
+  });
 });
 
 describe('AssignmentCreationSheetContent writing time', () => {

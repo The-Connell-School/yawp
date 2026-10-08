@@ -173,7 +173,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
           id: string;
           title: string;
           systemKey: string | null;
+          kind: string | null;
           collaborationSupported: boolean;
+          rubric: { name: string } | null;
         }>({
           scopes: teacherClasses.map((klass) => ({
             organizationId: klass.school.organizationId,
@@ -183,8 +185,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             title: true,
+            kind: true,
             systemKey: true,
             collaborationSupported: true,
+            rubric: { select: { name: true } },
           },
           orderBy: { position: 'asc' },
         })
@@ -223,6 +227,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     assignmentCreationTypes: creationTypeRows.map((type) => ({
       id: type.id,
       title: type.title,
+      kind: type.kind,
+      rubricName: type.rubric?.name ?? null,
       collaborationSupported: type.collaborationSupported,
       gradesGrammar: gradesGrammarIds.has(type.id),
       defaultWritingTimeMinutes:

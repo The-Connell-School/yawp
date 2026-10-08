@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import dailyPagesLibraryJson from '~/domain/rubrics/library/daily-pages-engagement.json';
+import { dailyPagesEngagementV1LibrarySchema } from '~/domain/rubrics/library/daily-pages-engagement-v1.fixture';
 
 const prisma = {
   assignment: { findUnique: mock() },
@@ -101,9 +102,8 @@ describe('resolveAssignmentTypeGradingConfig', () => {
   });
 
   test('selected library rubric drives the compiled grading invocation instead of stale inline configuration', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
     const { compileGradingAssistantInvocation } = await import('~/domain/grading/grading-assistant-invocation');
-    const schema = STARTER_RUBRICS.find(rubric => rubric.name === DAILY_PAGES_RUBRIC_NAME)!;
+    const schema = dailyPagesEngagementV1LibrarySchema;
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'selected-library', title: 'Journal', kind: null,
       rubric: { name: schema.name, schemaJson: schema },
@@ -355,10 +355,9 @@ describe('resolveAssignmentTypeGradingConfig', () => {
 
 describe('September 14 Daily Pages library revision', () => {
   test('preserves the authored deployment text exactly and represents every allowed integer band', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
     const { isScoreInCategoryBands } = await import('./rubric-category-options');
     const { parseRubricSchema } = await import('~/domain/rubrics/rubric-schema');
-    const schema = STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!;
+    const schema = dailyPagesEngagementV1LibrarySchema;
     expect(createHash('sha256').update(schema.promptConfig.gradingInstructions!.trim() + '\n').digest('hex'))
       .toBe('e0529c37ba362ac810a13129d547ee1654b92382ffbcf87b249d2391f15a4a86');
     expect(schema.scoringScale).toMatchObject({ minScore: 0, maxScore: 30, step: 1 });
@@ -367,13 +366,12 @@ describe('September 14 Daily Pages library revision', () => {
     expect(category.grammarHighlighting).toBe(false);
     const allowed = Array.from({ length: 31 }, (_, score) => score).filter(score => isScoreInCategoryBands(category, score));
     expect(allowed).toEqual([0, 7, 8, 9, 10, 11, 12, 13, 17, 18, 19, 20, 21, 22, 23, 28, 29, 30]);
-    expect(parseRubricSchema(dailyPagesLibraryJson)).toEqual(parseRubricSchema(schema));
+    expect(dailyPagesLibraryJson.scoringScale.maxScore).toBe(100);
   });
 
   test('sends actual tier bands, overall-only feedback and the assignment prompt to the model', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
     const { compileGradingAssistantInvocation } = await import('~/domain/grading/grading-assistant-invocation');
-    const schema = STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!;
+    const schema = dailyPagesEngagementV1LibrarySchema;
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'daily-pages-linked', title: 'Daily Pages', kind: 'daily_pages',
       rubric: { name: schema.name, schemaJson: schema },
@@ -394,8 +392,7 @@ describe('September 14 Daily Pages library revision', () => {
   });
 
   test('keeps an existing assignment pinned to its prior library revision', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
-    const current = STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!;
+    const current = dailyPagesEngagementV1LibrarySchema;
     const prior = structuredClone(current);
     prior.scoringScale.step = 10;
     delete prior.rubric.categories[0].bands;
@@ -414,10 +411,9 @@ describe('September 14 Daily Pages library revision', () => {
   });
 
   test('preserves whole-number score resolution on a configured 90-point engagement rubric', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
     const { rubricScaleGradeFieldsFromScores } = await import('~/domain/grading/recorded-grade');
     const { isScoreInCategoryBands } = await import('./rubric-category-options');
-    const schema = structuredClone(STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!);
+    const schema = structuredClone(dailyPagesEngagementV1LibrarySchema);
     schema.scoringScale.maxScore = 90;
     schema.scoringScale.compositeMax = 90;
     schema.rubric.categories[0].bands = schema.rubric.categories[0].bands!.map(band => ({ ...band, min: band.min * 3, max: band.max * 3 }));
@@ -430,15 +426,14 @@ describe('September 14 Daily Pages library revision', () => {
   });
 
   test('existing recorded scores remain unchanged when assignment is pinned to a prior revision', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
     const { rubricScaleGradeFieldsFromScores } = await import('~/domain/grading/recorded-grade');
     // Current library (e.g., post-Sep 14/16) is 90-point variant in this scenario.
-    const current = structuredClone(STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!);
+    const current = structuredClone(dailyPagesEngagementV1LibrarySchema);
     current.scoringScale.maxScore = 90;
     current.scoringScale.compositeMax = 90;
     current.rubric.categories[0].bands = current.rubric.categories[0].bands!.map(b => ({ ...b, min: b.min * 3, max: b.max * 3 }));
     // Prior revision (e.g., pre-Sep 14/16) is 30-point with original bands.
-    const prior = structuredClone(STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!);
+    const prior = structuredClone(dailyPagesEngagementV1LibrarySchema);
     // Mock: assignment type points at current library revision…
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'daily-pages-pinned-grade',

@@ -95,14 +95,25 @@ BEGIN
     ON CONFLICT ("id") DO NOTHING;
   END IF;
 
-  PERFORM set_config('yawp.rubric_revision_actor', 'migration-dp-engagement-v2', true);
-  PERFORM set_config('yawp.rubric_revision_reason', 'Brian 2026-10-02 merged Daily Pages rubric', true);
-  PERFORM set_config('yawp.rubric_revision_request_id', 'brian-dp-rubric-2026-10-02', true);
+  IF (rub_row."schemaJson"->'outputSchema'->>'assignmentPointScaling' IS DISTINCT FROM 'daily_pages_engagement_v2') THEN
+    PERFORM set_config('yawp.rubric_revision_actor', 'migration-dp-engagement-v2', true);
+    PERFORM set_config('yawp.rubric_revision_reason', 'Brian 2026-10-02 merged Daily Pages rubric', true);
+    IF NOT EXISTS (
+      SELECT 1 FROM "RubricRevision" WHERE "requestId" = 'brian-dp-rubric-2026-10-02'
+    ) THEN
+      PERFORM set_config('yawp.rubric_revision_request_id', 'brian-dp-rubric-2026-10-02', true);
+    ELSE
+      PERFORM set_config(
+        'yawp.rubric_revision_request_id',
+        'brian-dp-rubric-2026-10-02-reapply-' || substr(md5(random()::text), 1, 12),
+        true
+      );
+    END IF;
 
-  UPDATE "Rubric"
-  SET "schemaJson" = v2_schema, "updatedAt" = CURRENT_TIMESTAMP
-  WHERE id = engagement_id
-    AND ("schemaJson"->'outputSchema'->>'assignmentPointScaling' IS DISTINCT FROM 'daily_pages_engagement_v2');
+    UPDATE "Rubric"
+    SET "schemaJson" = v2_schema, "updatedAt" = CURRENT_TIMESTAMP
+    WHERE id = engagement_id;
+  END IF;
 
   UPDATE "Rubric"
   SET "archivedAt" = COALESCE("archivedAt", CURRENT_TIMESTAMP), "updatedAt" = CURRENT_TIMESTAMP

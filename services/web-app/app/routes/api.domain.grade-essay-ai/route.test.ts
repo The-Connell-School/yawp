@@ -2640,6 +2640,22 @@ describe('api.domain.grade-essay-ai', () => {
       expect(prisma.submission.update).not.toHaveBeenCalled();
     });
 
+    test('12-point totals expose Brian tier bands (0–7 / 8–9 / 10 / 12) to the model', async () => {
+      await gradeRevisedDailyPages(10, 12, 'current');
+      const snapshot =
+        prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data
+          .assignmentTypeRubricSnapshot;
+      expect(snapshot.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual(
+        [[0, 7], [8, 9], [10, 10], [12, 12]]
+      );
+      const call = getLLMCompletion.mock.calls.find(
+        (entry: any[]) => entry[0]?.metadata?.kind === 'rubric-evaluation'
+      )?.[0];
+      expect(call.messages[0].content).toContain('0-7');
+      expect(call.messages[0].content).toContain('8-9');
+      expect(call.messages[0].content).toContain('12');
+    });
+
     test('does not rescale an explicitly pinned legacy rubric on a 90-point assignment', async () => {
       const response = await gradeRevisedDailyPages(20, 90, 'legacy');
       expect((response as any).data).toMatchObject({ score: '20/30', rubricConfig: { maxScore: 30, step: 10 } });

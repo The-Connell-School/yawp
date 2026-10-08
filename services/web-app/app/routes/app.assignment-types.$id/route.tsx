@@ -128,6 +128,7 @@ type AssignmentTypeDetailRow = {
   title: string;
   description: string | null;
   kind: string | null;
+  rubric: { name: string } | null;
   systemKey: string | null;
   collaborationSupported: boolean;
   image: { id: string } | null;
@@ -411,6 +412,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title: true,
         description: true,
         kind: true,
+        rubric: { select: { name: true } },
         systemKey: true,
         collaborationSupported: true,
         image: { select: { id: true } },
@@ -701,12 +703,13 @@ export default function AppAssignmentTypesIdRoute() {
     sources?: ApHistorySourceCardData[];
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
+  const showShortFormLibrary = data.shortFormPromptLibrary != null;
   const showDailyPagesAbout = data.assignmentType.kind === 'daily_pages';
   // Daily Pages carries one module, whose blurb is freewrite-era copy telling
   // students to throw ideas around — which the about section directly above it
   // now contradicts. The module row itself stays: documents are created inside
   // it, and `hasModules` still gates New → Document.
-  const showModules = hasModules && !showDailyPagesAbout;
+  const showModules = hasModules && !showShortFormLibrary;
   const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -801,6 +804,7 @@ export default function AppAssignmentTypesIdRoute() {
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
                 assignmentTypeKind={data.assignmentType.kind}
+                assignmentTypeRubricName={data.assignmentType.rubric?.name ?? null}
                 assignmentTypeCollaborationSupported={
                   data.assignmentType.collaborationSupported
                 }

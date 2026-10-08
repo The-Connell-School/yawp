@@ -30,8 +30,13 @@ const NODE_PATH_WITH_ROOT = `${join(ROOT, 'node_modules')}${process.env.NODE_PAT
 
 const ENGAGEMENT_ID = 'cmsvqo8lf002801l60o74x8wr';
 const DAILY_PAGES_TYPE_ID = 'cmlgtyo8j01em0qjs6knw7cni';
-const PINNED_REVISION_ID = 'dp-engagement-fixture-pinned-revision';
+const SJP_DAILY_PAGES_TYPE_ID = 'cmtk7cy2r017y01l8r5ix4kxf';
+const BASELINE_REVISION_ID = 'dp-engagement-fixture-baseline-revision';
 const PINNED_ASSIGNMENT_ID = 'dp-pinned-assignment-prod-shape';
+const NEW_DP_ASSIGNMENT_ID = 'dp-new-assignment-post-migration';
+const NEW_SJP_ASSIGNMENT_ID = 'sjp-new-assignment-post-migration';
+const SUBMISSION_ID = 'dp-pinned-submission-prod-shape';
+const DOCUMENT_ID = 'dp-pinned-document-prod-shape';
 
 function run(
   cmd: string,
@@ -98,20 +103,20 @@ function prismaDeploy(cwd: string) {
 }
 
 function v1EngagementSchema() {
-  const current = JSON.parse(
+  const schema = JSON.parse(
     readFileSync(
       join(
         ROOT,
-        'services/web-app/app/domain/rubrics/library/daily-pages-engagement.json'
+        'services/web-app/app/domain/rubrics/library/daily-pages-engagement-v1.fixture.json'
       ),
       'utf8'
     )
   ) as Record<string, unknown>;
-  const schema = structuredClone(current);
-  const outputSchema = schema.outputSchema as Record<string, unknown>;
-  delete outputSchema.assignmentPointScaling;
-  delete outputSchema.teacherNotesEnabled;
-  (schema.scoringScale as { step: number }).step = 10;
+  const outputSchema = schema.outputSchema as Record<string, unknown> | undefined;
+  if (outputSchema) {
+    delete outputSchema.assignmentPointScaling;
+    delete outputSchema.teacherNotesEnabled;
+  }
   return schema;
 }
 
@@ -125,37 +130,54 @@ describe('daily-pages-engagement migration (real Postgres)', () => {
     const v1Schema = v1EngagementSchema();
     const v1Literal = JSON.stringify(v1Schema).replaceAll("'", "''");
 
+    const baselineRubricName = `assignment-type:${DAILY_PAGES_TYPE_ID}`;
     psql(`
-      INSERT INTO "RubricRevision" (
-        "id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason","createdAt"
-      ) VALUES (
-        '${PINNED_REVISION_ID}', 'daily-pages-engagement', 5, '${v1Literal}'::jsonb,
-        encode(sha256(convert_to(canonical_json('${v1Literal}'::jsonb),'UTF8')),'hex'),
-        'dp-engagement-fixture-pinned-revision-req', encode(sha256(convert_to(canonical_json('${v1Literal}'::jsonb),'UTF8')),'hex'),
-        'fixture', 'Prod-shaped pinned revision', now()
-      );
       INSERT INTO "Rubric" ("id","createdAt","updatedAt","name","title","schemaJson","currentRevisionId")
       VALUES (
         '${ENGAGEMENT_ID}', now(), now(), 'daily-pages-engagement', 'Daily Pages engagement',
         '${v1Literal}'::jsonb,
-        '${PINNED_REVISION_ID}'
+        NULL
+      );
+      INSERT INTO "RubricRevision" (
+        "id","rubricName","version","schemaJson","fingerprint","requestId","requestHash","createdBy","reason","createdAt"
+      ) VALUES (
+        '${BASELINE_REVISION_ID}', '${baselineRubricName}', 3, '${v1Literal}'::jsonb,
+        encode(sha256(convert_to(canonical_json('${v1Literal}'::jsonb),'UTF8')),'hex'),
+        'dp-engagement-fixture-baseline-req', encode(sha256(convert_to(canonical_json('${v1Literal}'::jsonb),'UTF8')),'hex'),
+        'fixture', '${baselineRubricName}', now()
       );
       INSERT INTO "AssignmentType" ("id","createdAt","updatedAt","title","kind","position","rubricId")
-      VALUES ('${DAILY_PAGES_TYPE_ID}', now(), now(), 'Daily Pages', 'daily_pages', 0, NULL);
+      VALUES
+        ('${DAILY_PAGES_TYPE_ID}', now(), now(), 'Daily Pages', 'daily_pages', 0, NULL),
+        ('${SJP_DAILY_PAGES_TYPE_ID}', now(), now(), 'SJP Daily Pages', NULL, 1, NULL);
+      INSERT INTO "AssignmentTypeRubricBaseline" ("assignmentTypeId","rubricRevisionId")
+      VALUES ('${DAILY_PAGES_TYPE_ID}', '${BASELINE_REVISION_ID}');
       ALTER TABLE "Assignment" DISABLE TRIGGER "internal_assignment_rubric_pin";
       INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt","rubricRevisionId")
-      VALUES ('${PINNED_ASSIGNMENT_ID}', now(), now(), '${DAILY_PAGES_TYPE_ID}', 'Pinned prompt', '${PINNED_REVISION_ID}');
+      VALUES ('${PINNED_ASSIGNMENT_ID}', now(), now(), '${DAILY_PAGES_TYPE_ID}', 'Pinned prompt', '${BASELINE_REVISION_ID}');
       ALTER TABLE "Assignment" ENABLE TRIGGER "internal_assignment_rubric_pin";
+      INSERT INTO "InternalAssignmentRubricPinBackfill" ("assignmentId","selectedRevisionId","reason")
+      VALUES ('${PINNED_ASSIGNMENT_ID}', '${BASELINE_REVISION_ID}', NULL);
+      INSERT INTO "Document" ("id","createdAt","updatedAt","title","text","html","assignmentTypeId","assignmentId")
+      VALUES (
+        '${DOCUMENT_ID}', now(), now(), 'Pinned doc', 'hello', '<p>hello</p>',
+        '${DAILY_PAGES_TYPE_ID}', '${PINNED_ASSIGNMENT_ID}'
+      );
+      INSERT INTO "Submission" ("id","createdAt","updatedAt","documentId","html","text","title","submittedAt","overallScore","score")
+      VALUES (
+        '${SUBMISSION_ID}', now(), now(), '${DOCUMENT_ID}', '<p>hello</p>', 'hello', 'Pinned doc', now(), 18, '18/30'
+      );
     `);
 
     const before = jsonQuery(`
       SELECT json_build_object(
         'assignmentRevision', (SELECT "rubricRevisionId" FROM "Assignment" WHERE id='${PINNED_ASSIGNMENT_ID}'),
-        'revisionSchema', (SELECT "schemaJson" FROM "RubricRevision" WHERE id='${PINNED_REVISION_ID}'),
+        'revisionSchema', (SELECT "schemaJson" FROM "RubricRevision" WHERE id='${BASELINE_REVISION_ID}'),
+        'submissionScore', (SELECT score FROM "Submission" WHERE id='${SUBMISSION_ID}'),
         'libraryScaling', (SELECT "schemaJson"->'outputSchema'->>'assignmentPointScaling' FROM "Rubric" WHERE id='${ENGAGEMENT_ID}')
       )
     `);
-    expect(before.assignmentRevision).toBe(PINNED_REVISION_ID);
+    expect(before.assignmentRevision).toBe(BASELINE_REVISION_ID);
     expect(before.libraryScaling).toBeNull();
 
     psqlFile(join(MIGRATION_DIR, 'migration.sql'));
@@ -163,28 +185,30 @@ describe('daily-pages-engagement migration (real Postgres)', () => {
     const afterFirst = jsonQuery(`
       SELECT json_build_object(
         'assignmentRevision', (SELECT "rubricRevisionId" FROM "Assignment" WHERE id='${PINNED_ASSIGNMENT_ID}'),
-        'revisionSchema', (SELECT "schemaJson" FROM "RubricRevision" WHERE id='${PINNED_REVISION_ID}'),
+        'revisionSchema', (SELECT "schemaJson" FROM "RubricRevision" WHERE id='${BASELINE_REVISION_ID}'),
+        'submissionScore', (SELECT score FROM "Submission" WHERE id='${SUBMISSION_ID}'),
         'libraryScaling', (SELECT "schemaJson"->'outputSchema'->>'assignmentPointScaling' FROM "Rubric" WHERE id='${ENGAGEMENT_ID}'),
         'typeRubricId', (SELECT "rubricId" FROM "AssignmentType" WHERE id='${DAILY_PAGES_TYPE_ID}'),
-        'pinBackfill', (SELECT COUNT(*) FROM "InternalAssignmentRubricPinBackfill" WHERE "assignmentId"='${PINNED_ASSIGNMENT_ID}' AND reason='dp_engagement_v2_pre_publish')
+        'pinBackfillReason', (SELECT reason FROM "InternalAssignmentRubricPinBackfill" WHERE "assignmentId"='${PINNED_ASSIGNMENT_ID}')
       )
     `);
-    expect(afterFirst.assignmentRevision).toBe(PINNED_REVISION_ID);
+    expect(afterFirst.assignmentRevision).toBe(BASELINE_REVISION_ID);
     expect(afterFirst.revisionSchema).toEqual(before.revisionSchema);
+    expect(afterFirst.submissionScore).toBe('18/30');
     expect(afterFirst.libraryScaling).toBe('daily_pages_engagement_v2');
     expect(afterFirst.typeRubricId).toBe(ENGAGEMENT_ID);
-    expect(Number(afterFirst.pinBackfill)).toBe(1);
+    expect(afterFirst.pinBackfillReason).toBeNull();
 
     psqlFile(join(MIGRATION_DIR, 'migration.sql'));
 
     const afterSecond = jsonQuery(`
       SELECT json_build_object(
         'assignmentRevision', (SELECT "rubricRevisionId" FROM "Assignment" WHERE id='${PINNED_ASSIGNMENT_ID}'),
-        'revisionCount', (SELECT COUNT(*) FROM "RubricRevision" WHERE id='${PINNED_REVISION_ID}'),
+        'revisionCount', (SELECT COUNT(*) FROM "RubricRevision" WHERE id='${BASELINE_REVISION_ID}'),
         'libraryScaling', (SELECT "schemaJson"->'outputSchema'->>'assignmentPointScaling' FROM "Rubric" WHERE id='${ENGAGEMENT_ID}')
       )
     `);
-    expect(afterSecond.assignmentRevision).toBe(PINNED_REVISION_ID);
+    expect(afterSecond.assignmentRevision).toBe(BASELINE_REVISION_ID);
     expect(Number(afterSecond.revisionCount)).toBe(1);
     expect(afterSecond.libraryScaling).toBe('daily_pages_engagement_v2');
 
@@ -205,7 +229,39 @@ describe('daily-pages-engagement migration (real Postgres)', () => {
       jsonQuery(
         `(SELECT "rubricRevisionId" FROM "Assignment" WHERE id='${PINNED_ASSIGNMENT_ID}')`
       )
-    ).toBe(PINNED_REVISION_ID);
+    ).toBe(BASELINE_REVISION_ID);
     expect(Number(afterRollback.pinBackfill)).toBe(0);
+
+    psqlFile(join(MIGRATION_DIR, 'migration.sql'));
+
+    const v2RevisionId = jsonQuery(
+      `(SELECT id FROM "RubricRevision" WHERE "requestId" LIKE 'brian-dp-rubric-2026-10-02%' ORDER BY "createdAt" DESC LIMIT 1)`
+    ) as string;
+
+    psql(`
+      ALTER TABLE "Assignment" DISABLE TRIGGER "internal_assignment_rubric_pin";
+      INSERT INTO "Assignment" ("id","createdAt","updatedAt","assignmentTypeId","prompt")
+      VALUES
+        ('${NEW_DP_ASSIGNMENT_ID}', now(), now(), '${DAILY_PAGES_TYPE_ID}', 'New DP after migration'),
+        ('${NEW_SJP_ASSIGNMENT_ID}', now(), now(), '${SJP_DAILY_PAGES_TYPE_ID}', 'New SJP after migration');
+      ALTER TABLE "Assignment" ENABLE TRIGGER "internal_assignment_rubric_pin";
+    `);
+
+    const afterReapply = jsonQuery(`
+      SELECT json_build_object(
+        'libraryScaling', (SELECT "schemaJson"->'outputSchema'->>'assignmentPointScaling' FROM "Rubric" WHERE id='${ENGAGEMENT_ID}'),
+        'assignmentRevision', (SELECT "rubricRevisionId" FROM "Assignment" WHERE id='${PINNED_ASSIGNMENT_ID}'),
+        'submissionScore', (SELECT score FROM "Submission" WHERE id='${SUBMISSION_ID}'),
+        'newDpRevision', (SELECT "rubricRevisionId" FROM "Assignment" WHERE id='${NEW_DP_ASSIGNMENT_ID}'),
+        'newSjpRevision', (SELECT "rubricRevisionId" FROM "Assignment" WHERE id='${NEW_SJP_ASSIGNMENT_ID}'),
+        'sjpTypeRubricId', (SELECT "rubricId" FROM "AssignmentType" WHERE id='${SJP_DAILY_PAGES_TYPE_ID}')
+      )
+    `);
+    expect(afterReapply.libraryScaling).toBe('daily_pages_engagement_v2');
+    expect(afterReapply.assignmentRevision).toBe(BASELINE_REVISION_ID);
+    expect(afterReapply.submissionScore).toBe('18/30');
+    expect(afterReapply.sjpTypeRubricId).toBe(ENGAGEMENT_ID);
+    expect(afterReapply.newDpRevision).toBe(v2RevisionId);
+    expect(afterReapply.newSjpRevision).toBe(v2RevisionId);
   }, 120000);
 });

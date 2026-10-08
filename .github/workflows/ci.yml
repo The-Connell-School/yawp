@@ -166,6 +166,15 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./packages/prisma/scripts/teacher-training-assignment-migration.test.ts
 
+      - name: 🧪 Daily Pages engagement migration + Class Starter seed
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          bun test ./packages/prisma/scripts/daily-pages-engagement-migration.test.ts
+          bun test ./packages/prisma/scripts/daily-pages-engagement-migration.integration.test.ts
+          bun test ./packages/prisma/scripts/seed-class-starter-assignment-type.test.ts
+
       - name: 🧱 Apply Prisma migrations
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
@@ -304,7 +313,15 @@ jobs:
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
             'app/routes/app.assignments.$assignmentId._index/route.test.ts' \
             'app/routes/app.my-classes.$classId/route.test.ts' \
-            'app/routes/app.assignment-types.$id/about-daily-pages/content.test.ts'
+            'app/routes/app.assignment-types.$id/about-daily-pages/content.test.ts' \
+            app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
+            app/domain/assignment-types/daily-pages-assignment-points.test.ts \
+            app/domain/assignment-types/daily-pages-engagement-tier-bands.test.ts \
+            app/domain/ai-evaluation/grading-assistant-benchmark-run.server.test.ts \
+            'app/routes/app.admin.assignment-types.$id_.prompt/route.test.ts' \
+            app/routes/api.domain.assignment-type-evaluations/route.test.ts \
+            'app/routes/app_.submissions_.$submissionId/route.loader.test.ts' \
+            'app/routes/app.assignment-types.$id/prompts-library/library-variant.test.ts'
           do
             bun test "$f"
           done
