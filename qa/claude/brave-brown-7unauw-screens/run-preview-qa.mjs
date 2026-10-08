@@ -151,14 +151,26 @@ async function main() {
     await page.waitForLoadState('networkidle');
     await page.screenshot({ path: shot('07-reporter-home.png'), fullPage: true });
 
+    let classId = QA.classId;
+    await page.goto(`${previewUrl}/app/my-classes`);
+    await page.waitForLoadState('networkidle');
+    const qaClassLink = page.getByRole('link', { name: /\[QA\] Lesson planner preview/i });
+    if (await qaClassLink.isVisible().catch(() => false)) {
+      const href = await qaClassLink.getAttribute('href');
+      const match = href?.match(/\/my-classes\/([^/]+)/);
+      if (match) classId = match[1];
+    }
+
     await page.goto(
-      `${previewUrl}/app/my-classes/${QA.classId}/summary/${QA.insightAssignmentId}`
+      `${previewUrl}/app/my-classes/${classId}/summary/${QA.insightAssignmentId}`
     );
     await page.waitForLoadState('networkidle');
-    if (await page.getByText(/something didn't work/i).isVisible().catch(() => false)) {
+    if (await page.getByText(/something didn't work|Class not found/i).isVisible().catch(() => false)) {
       const html = await page.content();
       writeFileSync(shot('07-class-summary-error.html'), html);
-      throw new Error('class summary route crashed');
+      throw new Error(
+        'class summary route failed — preview seed-preview-planner-qa may not have run'
+      );
     }
     await page.screenshot({
       path: shot('07b-class-summary-ready.png'),
