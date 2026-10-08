@@ -6,7 +6,10 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  assertStudentSubmissionUnreleased,
+  assertTeacherSubmissionUnreleased,
   releaseGradeFromSubmissionPage,
+  resetPreviewPlannerQaExitTicket,
   waitForReleasedGradeOnStudentSubmission,
 } from './release-grade-helpers.mjs';
 
@@ -61,6 +64,7 @@ async function main() {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   try {
     await enterPreview(page);
+    await resetPreviewPlannerQaExitTicket(page);
     await devLogin(page, 'dev.teacher@yawp.local');
     await page.goto(
       `${previewUrl}/app/my-classes/${QA.classId}/summary/${QA.insightAssignmentId}`
@@ -87,6 +91,7 @@ async function main() {
     await devLogin(page, 'dev.student@yawp.local');
     await page.goto(`${previewUrl}/app/submissions/${QA.exitSubmissionId}`);
     await page.waitForLoadState('networkidle');
+    await assertStudentSubmissionUnreleased(page);
     await page.screenshot({
       path: shot('08b-student-unreleased-submission.png'),
       fullPage: true,
@@ -95,6 +100,7 @@ async function main() {
     await devLogin(page, 'dev.teacher@yawp.local');
     await page.goto(`${previewUrl}/app/submissions/${QA.exitSubmissionId}`);
     await page.waitForLoadState('networkidle');
+    await assertTeacherSubmissionUnreleased(page);
     await page.screenshot({
       path: shot('08c-teacher-graded-unreleased.png'),
       fullPage: true,

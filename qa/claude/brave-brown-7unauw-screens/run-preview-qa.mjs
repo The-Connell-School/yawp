@@ -10,7 +10,10 @@ import { inflateSync } from 'node:zlib';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  assertStudentSubmissionUnreleased,
+  assertTeacherSubmissionUnreleased,
   releaseGradeFromSubmissionPage,
+  resetPreviewPlannerQaExitTicket,
   waitForReleasedGradeOnStudentSubmission,
 } from './release-grade-helpers.mjs';
 
@@ -133,6 +136,7 @@ async function main() {
 
   try {
     await enterPreview(page);
+    await resetPreviewPlannerQaExitTicket(page);
     await devLogin(page, 'dev.teacher@yawp.local');
     await page.goto(`${previewUrl}/app/lesson-planner`);
     await page.waitForLoadState('networkidle');
@@ -296,21 +300,16 @@ async function main() {
 
     await page.goto(`${previewUrl}/app/submissions/${QA.exitSubmissionId}`);
     await page.waitForLoadState('networkidle');
+    await assertStudentSubmissionUnreleased(page);
     await page.screenshot({
       path: shot('08b-student-unreleased-submission.png'),
       fullPage: true,
     });
-    if (await page.getByText(/85%/).isVisible().catch(() => false)) {
-      throw new Error('unreleased submission showed score to student');
-    }
-    const teacherContext = page.getByRole('region', { name: 'Teacher Context' });
-    if (await teacherContext.isVisible().catch(() => false)) {
-      throw new Error('unreleased submission leaked teacher context to student');
-    }
 
     await devLogin(page, 'dev.teacher@yawp.local');
     await page.goto(`${previewUrl}/app/submissions/${QA.exitSubmissionId}`);
     await page.waitForLoadState('networkidle');
+    await assertTeacherSubmissionUnreleased(page);
     await page.screenshot({
       path: shot('08c-teacher-graded-unreleased.png'),
       fullPage: true,
