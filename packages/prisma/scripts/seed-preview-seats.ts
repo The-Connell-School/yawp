@@ -39,7 +39,11 @@ try {
   await seedApHistoryLibrary(prisma, seats[0].organizationId);
   await attachApHistorySourceImages(prisma);
   if (shouldRunPreviewTeacherNotesQaSeed()) {
-    await seedPreviewTeacherNotesQa(prisma);
+    try {
+      await seedPreviewTeacherNotesQa(prisma);
+    } catch (error) {
+      console.error('seed-preview-teacher-notes-qa: failed (non-fatal)', error);
+    }
   }
   for (const seat of seats) {
     const result = results.find(

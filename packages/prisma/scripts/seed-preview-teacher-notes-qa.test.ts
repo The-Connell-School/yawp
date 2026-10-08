@@ -14,6 +14,10 @@ describe('seed-preview-teacher-notes-qa', () => {
     expect(script).not.toContain('MANAGEMENT');
     expect(script).not.toContain('LOCAL_DEV_PASSWORD');
     expect(script).toContain('PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_PASSWORD');
+    expect(script).toContain('Engagement Check (Preview)');
+    expect(script).toContain('PREVIEW_TEACHER_NOTES_QA_ENGAGEMENT_SUBMISSION_TITLE');
+    expect(script).toContain('restoreEssayGradedSamplesMutatedByLegacyQaSeed');
+    expect(script).toContain('failed (non-fatal)');
   });
 
   test('preview deploy runs the seed after class starter', () => {

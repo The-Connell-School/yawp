@@ -94,7 +94,9 @@ async function resolveQaSubmissionHref(page: import('@playwright/test').Page) {
   await page.goto(`${origin}/app/my-classes`);
   await page.locator('a[href^="/app/my-classes/"]').first().click({ timeout: 60_000 });
   await page.getByRole('tab', { name: /Documents/i }).click();
-  const qaRow = page.getByText('QA #415 Daily Pages', { exact: false });
+  const qaRow = page.getByText('QA #415 Daily Pages engagement', {
+    exact: true,
+  });
   const href = await qaRow
     .locator('xpath=ancestor::tr//a[contains(@href,"/app/submissions/")]')
     .first()
