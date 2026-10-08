@@ -35,7 +35,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (releasePayload?.joinUrl) out.joinUrl = releasePayload.joinUrl;
 
   const approvalLog = await prisma.freeTierEmailLog.findFirst({
-    where: { applicationId: app.id, kind: { in: ['admin_approval', 'admin_reminder'] }, success: true },
+    where: {
+      applicationId: app.id,
+      kind: { in: ['admin_approval', 'admin_approval_reminder'] },
+      success: true,
+    },
     orderBy: { createdAt: 'desc' },
     select: { payload: true },
   });
