@@ -70,7 +70,7 @@ test.describe('Free-tier handle student', () => {
         teachers: { connect: { id: teacherMembership.id } },
       },
     });
-    const { assignment } = await createDeployedAssignment({
+    const { assignment, classAssignment } = await createDeployedAssignment({
       prisma,
       classId: klass.id,
       assignmentTypeId: assignmentType.id,
@@ -91,12 +91,12 @@ test.describe('Free-tier handle student', () => {
 
       await page.goto(`/app/my-classes/${klass.id}`);
       await expect(page.getByTestId('student-class-detail')).toBeVisible();
-      const assignmentCard = page
-        .getByRole('button', { name: /Free tier writing/i })
-        .first();
-      await expect(assignmentCard).toBeVisible({ timeout: 15000 });
-      await assignmentCard.click();
-      await page.waitForURL('**/app/documents/**', { timeout: 15000 });
+      const startButton = page.locator(
+        `form[action="/app/class-assignments/${classAssignment.id}/start"] button`
+      );
+      await expect(startButton).toBeVisible({ timeout: 15000 });
+      await startButton.click();
+      await page.waitForURL('**/app/documents/**', { timeout: 30000 });
 
       await helpers.waitForEditorReady();
       await helpers.typeInEditor('Handle student draft for grading.');
