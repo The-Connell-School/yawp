@@ -23,8 +23,11 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
       page.getByRole('heading', { name: 'How Class Starter works' })
     ).toHaveCount(0);
 
-    await page.getByRole('button', { name: /Prompt Library/i }).first().click();
-    await expect(page.getByPlaceholder(/Search prompts/)).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Prompt Library', exact: true })
+      .first()
+      .click();
+    await expect(page.getByText('Honest and kind at once')).toBeVisible();
 
     // A freewrite prompt has no business in the graded corpus.
     await expect(

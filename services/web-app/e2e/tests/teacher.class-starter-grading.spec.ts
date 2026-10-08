@@ -122,6 +122,7 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
     await expect(listbox).toBeVisible();
     await listbox
       .getByRole('option', { name: 'Not Present', exact: true })
+      .first()
       .click();
     await expect(
       page.getByText(`Not Present (0/${CLASS_STARTER_POINTS})`)
