@@ -35,19 +35,7 @@ async function enterPreview(page) {
 }
 
 async function devLogin(page, email) {
-  const status = await page.evaluate(async (loginEmail) => {
-    const response = await fetch('/auth/dev-login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ email: loginEmail, redirectTo: '/app' }),
-      credentials: 'same-origin',
-    });
-    return response.status;
-  }, email);
-  if (status >= 400) {
-    throw new Error(`dev login failed for ${email}: HTTP ${status}`);
-  }
-  await page.goto(`${baseUrl}/app`, { waitUntil: 'networkidle' });
+  await passwordLogin(page, email, '/app');
 }
 
 async function passwordLogin(page, email, redirectTo = '/app') {
