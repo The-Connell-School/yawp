@@ -46,7 +46,7 @@ const WONT = [
   'Change, give, or release grades.',
   'See unreleased grades, drafts, or ungraded work.',
   'See other teachers’ classes.',
-  'Make up grades, averages or student names.',
+  'Make up grades, averages, or student names.',
   'Save a growth plan unless you click Save.',
   'Talk to students. It’s for teachers only.',
 ];
@@ -74,9 +74,9 @@ export default function ReporterHowItWorksRoute() {
         lede="Reporter turns your released grades into class reports, student growth reports, and growth plans."
         image={{
           src: `${MEDIA}/hero.jpg`,
-          alt: 'A Reporter growth report for one student: an 89% average, a table of exit ticket scores that climb from a C to mostly As, and the start of a section called The Writing.',
+          alt: 'A Reporter growth report for one student. It says Casey has been steadily improving since the beginning of the year, with the most improvement in Daily Pages, from 68% to 95%. A table lists Daily Pages entries and exit tickets with scores and whether the Tutor was on or off, and a section called The Writing quotes the teacher’s own comments.',
           width: 1120,
-          height: 940,
+          height: 1064,
           caption: 'A growth report for one student in English 10',
         }}
       />
@@ -205,7 +205,7 @@ export default function ReporterHowItWorksRoute() {
       <WillWont will={WILL} wont={WONT} />
 
       <GuideFooter
-        note="Clips use demo classes. Reporter’s replies in them were scripted for the recording from the demo class’s real numbers."
+        note="Clips and screenshots use demo classes. Reporter’s replies in them were scripted for the recording."
         startTo="/app/reporter"
         startLabel="Ask Reporter"
       />
