@@ -16,7 +16,6 @@ const outDir =
 
 /** Stable ids from packages/prisma/scripts/preview-planner-qa-ids.ts (preview seed). */
 const QA = {
-  classId: 'previewqa000class00001',
   insightAssignmentId: 'previewqa000assignment01',
   exitAssignmentId: 'previewqa000exitassign01',
   exitSubmissionId: 'previewqa000exitsubm0001',
@@ -151,15 +150,16 @@ async function main() {
     await page.waitForLoadState('networkidle');
     await page.screenshot({ path: shot('07-reporter-home.png'), fullPage: true });
 
-    let classId = QA.classId;
     await page.goto(`${previewUrl}/app/my-classes`);
     await page.waitForLoadState('networkidle');
-    const qaClassLink = page.getByRole('link', { name: /\[QA\] Lesson planner preview/i });
-    if (await qaClassLink.isVisible().catch(() => false)) {
-      const href = await qaClassLink.getAttribute('href');
-      const match = href?.match(/\/my-classes\/([^/]+)/);
-      if (match) classId = match[1];
-    }
+    const qaAssignmentLink = page
+      .getByRole('link', { name: /\[QA\] Class summary insight/i })
+      .first();
+    await qaAssignmentLink.waitFor({ state: 'visible', timeout: 120_000 });
+    const assignmentHref = await qaAssignmentLink.getAttribute('href');
+    const classIdMatch = assignmentHref?.match(/\/my-classes\/([^/]+)/);
+    if (!classIdMatch) throw new Error('could not resolve class id for QA insight');
+    const classId = classIdMatch[1];
 
     await page.goto(
       `${previewUrl}/app/my-classes/${classId}/summary/${QA.insightAssignmentId}`
@@ -224,7 +224,7 @@ async function main() {
       await page.waitForLoadState('networkidle');
     } else {
       await page.goto(
-        `${previewUrl}/app/my-classes/${QA.classId}/assignments/${QA.exitAssignmentId}`
+        `${previewUrl}/app/my-classes/${classId}/assignments/${QA.exitAssignmentId}`
       );
       await page.getByRole('button', { name: /graded/i }).click();
       await page.getByRole('checkbox').first().check();
