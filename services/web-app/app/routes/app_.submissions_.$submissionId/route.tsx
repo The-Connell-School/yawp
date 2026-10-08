@@ -369,7 +369,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         submission.document.assignment?.grammarGradingEnabled
       ),
       assignmentTypeId
-        ? resolveAssignmentTypeGradingConfig(assignmentTypeId)
+        ? resolveAssignmentTypeGradingConfig(assignmentTypeId).catch((error) => {
+            console.error(
+              'Failed to resolve assignment type grading config for submission view',
+              { assignmentTypeId, error }
+            );
+            return null;
+          })
         : Promise.resolve(null),
     ]);
 
