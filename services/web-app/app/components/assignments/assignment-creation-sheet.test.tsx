@@ -32,6 +32,12 @@ const { AssignmentCreationSheetContent, assignmentCreationClassLabel } =
   await import('./assignment-creation-sheet');
 const { SAVED_ASSIGNMENTS_ENABLED } =
   await import('~/domain/assignments/saved-assignments');
+const {
+  BASIC_EXIT_TICKET_PROMPT,
+  EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+  EXIT_TICKET_ELABORATION_NOTE,
+  EXIT_TICKET_FOCUS_OPTIONS,
+} = await import('~/domain/assignment-types/exit-ticket');
 
 describe('assignmentCreationClassLabel', () => {
   it('shows grade and period when both are present', () => {
@@ -91,12 +97,26 @@ const assignmentTypes = [
     title: 'Literary Analysis',
     collaborationSupported: true,
     gradesGrammar: true,
+    kind: null,
   },
   {
     id: 'type-2',
     title: 'Class Starter',
     collaborationSupported: false,
     gradesGrammar: false,
+    kind: 'class_starter',
+  },
+];
+
+const exitTicketAssignmentTypes = [
+  {
+    id: 'exit-1',
+    title: 'Exit Ticket',
+    collaborationSupported: false,
+    // An exit ticket is read for understanding, not marked for grammar, so the
+    // toggle has nothing to offer here.
+    gradesGrammar: false,
+    kind: EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
   },
 ];
 
@@ -127,7 +147,9 @@ function cleanup(root: Root | null) {
 }
 
 function expectText(text: string) {
-  expect(document.body.textContent).toContain(text);
+  expect(document.body.textContent?.toLowerCase()).toContain(
+    text.toLowerCase()
+  );
 }
 
 function expectNoText(text: string) {
@@ -154,6 +176,18 @@ function allInputsByName(name: string) {
   return Array.from(
     document.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`)
   );
+}
+
+// happy-dom does not deliver a synthetic input event React will treat as a
+// change, so this calls the textarea's own onChange the way a keystroke would.
+// Real typing is covered by the e2e spec.
+function setTextareaValue(textarea: HTMLTextAreaElement, value: string) {
+  textarea.value = value;
+  const propsKey = Object.keys(textarea).find((key) =>
+    key.startsWith('__reactProps$')
+  );
+  const props = (textarea as unknown as Record<string, any>)[propsKey!];
+  props.onChange({ target: textarea, currentTarget: textarea });
 }
 
 function controlById(id: string) {
@@ -853,6 +887,451 @@ describe('AssignmentCreationSheetContent', () => {
     expect(inputByName('pointValue').getAttribute('min')).toBe('5');
     expectText('require at least 5 points');
   });
+
+  // The original builder, kept as the flag-off path. These pin it so
+  // switching the new builder off always lands on exactly what shipped.
+  describe('exit tickets (quick builder)', () => {
+    function renderQuickExitTicketSheet(
+      props: Partial<Parameters<typeof AssignmentCreationSheetContent>[0]> = {}
+    ) {
+      return renderSheet({
+        assignmentTypes: exitTicketAssignmentTypes,
+        fixedAssignmentTypeId: 'exit-1',
+        ...props,
+      });
+    }
+
+    function submitButton() {
+      return document.querySelector<HTMLButtonElement>(
+        'button[type="submit"]'
+      )!;
+    }
+
+    it('opens on an ungraded reflection that can be created straight away', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-kind-reflection'))
+      ).toBe(true);
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-kind-check'))
+      ).toBe(false);
+      expectText(BASIC_EXIT_TICKET_PROMPT);
+      // Dual-write: the kind rides beside the mode the original form posts.
+      expect(inputByName('exitTicketKind').value).toBe('reflection');
+      expect(inputByName('exitTicketMode').value).toBe('basic');
+      expect(inputByName('prompt').value).toInclude(BASIC_EXIT_TICKET_PROMPT);
+      expect(submitButton().disabled).toBe(false);
+      // No prompt box and none of the original builder's wording.
+      expect(document.querySelector('textarea[name="prompt"]')).toBeNull();
+      expectNoText('Basic exit ticket');
+    });
+
+    it('asks what to check for once the teacher picks a check', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+      expectNoText('What are you checking for?');
+
+      act(() => {
+        controlById('assignment-create-exit-ticket-kind-check').click();
+      });
+
+      expectText('What are you checking for?');
+      expectText('What specifically?');
+      expectText('Is there a correct answer?');
+      expect(inputByName('exitTicketKind').value).toBe('check');
+      expect(inputByName('exitTicketMode').value).toBe('specific');
+      // No topic, no answer: nothing to create yet.
+      expect(submitButton().disabled).toBe(true);
+    });
+
+    it('reopens a stored check as a check', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'explain-concept',
+        initialExitTicketTopic: 'the causes of World War I',
+        initialExitTicketAnswerType: 'objective',
+      }).root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-kind-check'))
+      ).toBe(true);
+      expect(inputByName('exitTicketTopic').value).toBe(
+        'the causes of World War I'
+      );
+      expect(inputByName('exitTicketAnswerType').value).toBe('objective');
+      expectText('the causes of World War I');
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('offers suggested reflection prompts and composes the chosen one', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      expect(
+        isChecked(
+          controlById('assignment-create-exit-ticket-reflection-learned')
+        )
+      ).toBe(true);
+      // The default posts nothing extra, so it stores exactly what v1 did.
+      expect(
+        document.querySelector('input[name="exitTicketReflectionPrompt"]')
+      ).toBeNull();
+
+      act(() => {
+        controlById(
+          'assignment-create-exit-ticket-reflection-wondering'
+        ).click();
+      });
+
+      expect(inputByName('exitTicketReflectionPrompt').value).toBe('wondering');
+      expect(inputByName('prompt').value).toInclude(
+        'What is one question you still have'
+      );
+      expect(inputByName('prompt').value).not.toInclude(
+        BASIC_EXIT_TICKET_PROMPT
+      );
+    });
+
+    it('lets the teacher write their own reflection question', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      act(() => {
+        controlById('assignment-create-exit-ticket-reflection-custom').click();
+      });
+
+      const box = textareaByName('exitTicketReflectionPromptText');
+      expect(box).not.toBeNull();
+      // Nothing written yet, nothing to create.
+      expect(submitButton().disabled).toBe(true);
+
+      act(() => {
+        setTextareaValue(box!, 'What surprised you today?');
+      });
+
+      expect(inputByName('exitTicketReflectionPrompt').value).toBe('custom');
+      expect(inputByName('prompt').value).toInclude(
+        'What surprised you today?'
+      );
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('reopens a stored reflection on the prompt it was given', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketReflectionPrompt: {
+          id: 'custom',
+          text: 'What surprised you today?',
+        },
+      }).root;
+
+      expect(
+        isChecked(
+          controlById('assignment-create-exit-ticket-reflection-custom')
+        )
+      ).toBe(true);
+      expect(textareaByName('exitTicketReflectionPromptText')!.value).toBe(
+        'What surprised you today?'
+      );
+    });
+
+    function turnGradingOn() {
+      act(() => {
+        controlById('assignment-create-exit-ticket-graded').click();
+      });
+    }
+
+    function lastValue(name: string) {
+      return allInputsByName(name).at(-1)?.value;
+    }
+
+    it('starts ungraded and asks for nothing about grading', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-graded'))
+      ).toBe(false);
+      expect(lastValue('submitForGrade')).toBe('false');
+      expectNoText('How many points?');
+      // The original builder's grading radio is gone from this one.
+      expect(
+        document.getElementById('assignment-create-exit-ticket-for-points')
+      ).toBeNull();
+    });
+
+    it('grading a reflection asks for points and defaults to completion', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+      turnGradingOn();
+
+      expect(lastValue('submitForGrade')).toBe('true');
+      expect(
+        (
+          controlById(
+            'assignment-create-exit-ticket-points'
+          ) as HTMLInputElement
+        ).value
+      ).toBe('10');
+      // Posted exactly once, from the builder, not also from the grading panel.
+      expect(allInputsByName('pointValue')).toHaveLength(1);
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-basis-completion'))
+      ).toBe(true);
+      expect(inputByName('exitTicketGradingBasis').value).toBe('completion');
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('a quality-graded reflection needs the main points or a length', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+      turnGradingOn();
+      act(() => {
+        controlById('assignment-create-exit-ticket-basis-bands').click();
+      });
+
+      expect(submitButton().disabled).toBe(true);
+      act(() => {
+        setTextareaValue(
+          textareaByName('exitTicketLessonMainPoints')!,
+          'A theme makes a claim.'
+        );
+      });
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('a graded check with a right answer asks for that answer', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'explain-concept',
+        initialExitTicketTopic: 'erosion',
+        initialExitTicketAnswerType: 'objective',
+      }).root;
+      turnGradingOn();
+
+      expectText('Correct answer or key points');
+      expect(submitButton().disabled).toBe(true);
+      act(() => {
+        setTextareaValue(
+          textareaByName('exitTicketLessonMustMention')!,
+          'Weathering breaks rock; erosion moves it.'
+        );
+      });
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('a graded check without one asks what to assess', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'understand-text',
+        initialExitTicketTopic: 'the second stanza',
+        initialExitTicketAnswerType: 'subjective',
+      }).root;
+      turnGradingOn();
+
+      expectText('What should be assessed?');
+      expect(submitButton().disabled).toBe(true);
+      act(() => {
+        setTextareaValue(
+          textareaByName('exitTicketAssessFor')!,
+          'Points to a specific line'
+        );
+      });
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('is always graded in bands, with no steps option to pick', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialGradingMode: 'step',
+      }).root;
+      turnGradingOn();
+
+      expect(inputByName('gradingMode').value).toBe('bands');
+      expectText('in bands');
+      act(() => {
+        controlById('assignment-create-change-grading').click();
+      });
+      expect(
+        document.getElementById('assignment-create-grading-mode-step')
+      ).toBeNull();
+      // Strictness is still the teacher's call.
+      expectText('Grading assistance');
+    });
+
+    it('opens graded when the lesson planner planned a graded ticket', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketGradebook: { submitForGrade: true, pointValue: 4 },
+        initialExitTicketGrading: { basis: 'completion' },
+      }).root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-graded'))
+      ).toBe(true);
+      expect(
+        (
+          controlById(
+            'assignment-create-exit-ticket-points'
+          ) as HTMLInputElement
+        ).value
+      ).toBe('4');
+      expect(submitButton().disabled).toBe(false);
+    });
+
+    it('reopens a graded ticket on the criteria it was given', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        editingAssignment: { id: 'a-1' },
+        initialSubmitForGrade: true,
+        initialPointValue: 5,
+        initialExitTicketGrading: { basis: 'bands', minSentences: 3 },
+      }).root;
+
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-graded'))
+      ).toBe(true);
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-basis-bands'))
+      ).toBe(true);
+      expect(inputByName('exitTicketMinSentences').value).toBe('3');
+      expect(
+        (
+          controlById(
+            'assignment-create-exit-ticket-points'
+          ) as HTMLInputElement
+        ).value
+      ).toBe('5');
+    });
+
+    function elementWithText(text: string) {
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT
+      );
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (node.textContent?.includes(text)) return node.parentElement!;
+      }
+      throw new Error(`No element with text: ${text}`);
+    }
+
+    function buttonByText(text: string) {
+      const button = Array.from(document.querySelectorAll('button')).find(
+        (candidate) => candidate.textContent?.trim() === text
+      );
+      expect(button).toBeDefined();
+      return button!;
+    }
+
+    function isTuckedAway(element: Element) {
+      const details = element.closest('details');
+      return (
+        Boolean(details && !details.open) ||
+        Boolean(element.closest('[hidden]'))
+      );
+    }
+
+    it('keeps tutor, groups and lesson notes under a closed "More options"', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      const more = controlById('assignment-create-exit-ticket-more-options');
+      expect(more.tagName).toBe('DETAILS');
+      expect((more as HTMLDetailsElement).open).toBe(false);
+      for (const id of [
+        'assignment-create-tutor-enabled',
+        'assignment-create-collaboration-enabled',
+        'assignment-create-exit-ticket-lesson-notes',
+      ]) {
+        expect(more.contains(controlById(id))).toBe(true);
+      }
+      // Tucked away is not switched off: the tutor still posts its value.
+      expect(allInputsByName('tutorEnabled').length).toBeGreaterThan(0);
+    });
+
+    it('opens "More options" when there are lesson notes to show', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketLessonNotes: {
+          mainPoints: 'Weathering breaks rock down.',
+          mustMention: '',
+          watchFor: '',
+        },
+      }).root;
+
+      expect(
+        (
+          controlById(
+            'assignment-create-exit-ticket-more-options'
+          ) as HTMLDetailsElement
+        ).open
+      ).toBe(true);
+    });
+
+    it('puts the long explanations behind "Why?"', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+      }).root;
+
+      // Present for anyone who wants them, but not on screen by default.
+      expect(isTuckedAway(elementWithText('Judged on the reasoning'))).toBe(
+        true
+      );
+      expect(
+        isTuckedAway(elementWithText('a tutor in the document would answer'))
+      ).toBe(true);
+      expect(
+        isTuckedAway(elementWithText('nothing to lose by admitting'))
+      ).toBe(true);
+    });
+
+    it('can walk the teacher through it one step at a time', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+
+      act(() => {
+        buttonByText('Walk me through it').click();
+      });
+      expectText('Step 1 of 3');
+      expect(
+        isTuckedAway(controlById('assignment-create-exit-ticket-graded'))
+      ).toBe(true);
+
+      act(() => {
+        buttonByText('Next').click();
+      });
+      expectText('Step 2 of 3');
+      act(() => {
+        buttonByText('Next').click();
+      });
+      expectText('Step 3 of 3');
+      expect(
+        isTuckedAway(controlById('assignment-create-exit-ticket-graded'))
+      ).toBe(false);
+
+      // Same state underneath: what posts is what the full form would post.
+      expect(inputByName('exitTicketKind').value).toBe('reflection');
+      expect(submitButton().disabled).toBe(false);
+
+      act(() => {
+        buttonByText('Show everything').click();
+      });
+      expectNoText('Step 1 of 3');
+      expectNoText('Step 3 of 3');
+    });
+
+    it('will not create a check until the right-answer question is answered', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'explain-concept',
+        initialExitTicketTopic: 'the causes of World War I',
+      }).root;
+
+      expect(submitButton().disabled).toBe(true);
+      act(() => {
+        controlById('assignment-create-exit-ticket-answer-objective').click();
+      });
+      expect(submitButton().disabled).toBe(false);
+    });
+  });
 });
 
 describe('AssignmentCreationSheetContent writing time', () => {
@@ -867,6 +1346,7 @@ describe('AssignmentCreationSheetContent writing time', () => {
     {
       id: 'daily-pages',
       title: 'Daily Pages',
+      kind: null,
       collaborationSupported: true,
       gradesGrammar: true,
       defaultWritingTimeMinutes: 15,
@@ -874,6 +1354,7 @@ describe('AssignmentCreationSheetContent writing time', () => {
     {
       id: 'essay',
       title: 'Thesis Essay',
+      kind: null,
       collaborationSupported: true,
       gradesGrammar: true,
       defaultWritingTimeMinutes: null,
@@ -945,6 +1426,7 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
     {
       id: 'daily-pages',
       title: 'Daily Pages',
+      kind: null,
       collaborationSupported: true,
       gradesGrammar: true,
       offersParagraphModes: true,
@@ -952,6 +1434,7 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
     {
       id: 'essay',
       title: 'Thesis Essay',
+      kind: null,
       collaborationSupported: true,
       gradesGrammar: true,
     },
@@ -1039,6 +1522,7 @@ describe('AssignmentCreationSheetContent with the writing-conditions flag off', 
     {
       id: 'daily-pages',
       title: 'Daily Pages',
+      kind: null,
       collaborationSupported: true,
       gradesGrammar: true,
       defaultWritingTimeMinutes: 15,

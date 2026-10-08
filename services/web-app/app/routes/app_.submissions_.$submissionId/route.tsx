@@ -95,6 +95,10 @@ import {
   resolveGrammarHighlightingForAssignmentType,
   resolveRubricConfigForSubmission,
 } from './submission-rubric-config.server';
+import {
+  shouldHideUnreleasedGradeFromStudent,
+  stripUnreleasedGradeFromStudentSubmissionPayload,
+} from '~/domain/submissions/student-submission-grade-visibility.server';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -467,21 +471,37 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })
     : null;
 
+  const hideUnreleasedGrade = shouldHideUnreleasedGradeFromStudent({
+    isOwner,
+    isTeacher,
+    isAdmin,
+  });
+
+  const submissionPayload = {
+    ...publicSubmission,
+    comments: sortedComments,
+    rubricConfig,
+    grammarHighlightingEnabled,
+    // What the Grading Assistant last suggested, so a teacher who has since
+    // edited the grade can put the suggestions back.
+    ...(hideUnreleasedGrade
+      ? {}
+      : {
+          assistantSuggestion: parseAssistantSuggestion(
+            submission.gradingAssistantRuns[0] ?? null
+          ),
+        }),
+  };
+
+  const submissionForResponse = hideUnreleasedGrade
+    ? stripUnreleasedGradeFromStudentSubmissionPayload(submissionPayload)
+    : submissionPayload;
+
   return {
     revisionFlowEnabled: profile.organization.revisionFlowEnabled === true,
     gradingQueue,
     documentNavigation,
-    submission: {
-      ...publicSubmission,
-      comments: sortedComments,
-      rubricConfig,
-      grammarHighlightingEnabled,
-      // What the Grading Assistant last suggested, so a teacher who has since
-      // edited the grade can put the suggestions back.
-      assistantSuggestion: parseAssistantSuggestion(
-        submission.gradingAssistantRuns[0] ?? null
-      ),
-    },
+    submission: submissionForResponse,
     ...(!isOwner && (isTeacher || isAdmin)
       ? { teacherNote: readTeacherNote(gradingAssistantRuns[0] ?? null) }
       : {}),
@@ -1258,12 +1278,14 @@ function SubmissionDetail({
               {submissionVersions.map((version, index) => {
                 const versionNumber = submissionVersions.length - index;
                 const isCurrent = version.id === submission.id;
-                const gradeLabel =
-                  version.numericPercentage != null
-                    ? `${version.numericPercentage}%${
-                        version.letterGrade ? ` (${version.letterGrade})` : ''
-                      }`
-                    : version.score?.trim() || null;
+                const gradeLabel = formatAssignmentGrade({
+                  submitForGrade:
+                    submission.document.assignment?.submitForGrade,
+                  numericPercentage: version.numericPercentage,
+                  letterGrade: version.letterGrade,
+                  pointValue: submission.document.assignment?.pointValue,
+                  score: version.score,
+                });
                 const lifecycleLabel = version.releasedAt
                   ? gradeLabel
                     ? `Graded · ${gradeLabel}`
@@ -1438,7 +1460,13 @@ function SubmissionDetail({
                 {isPending ? (
                   <PendingViewPanel />
                 ) : (
-                  <ViewPanel submission={submissionForView} />
+                  <ViewPanel
+                    submission={{
+                      ...submissionForView,
+                      releasedAt: effectiveReleasedAt,
+                    }}
+                    viewer={isOwner ? 'student' : 'teacher'}
+                  />
                 )}
               </div>
             </>

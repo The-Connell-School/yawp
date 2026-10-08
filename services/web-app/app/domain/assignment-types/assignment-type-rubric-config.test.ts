@@ -438,6 +438,7 @@ describe('the default rubric config for a Daily Pages assignment type', () => {
     expect(config.outputSchema.assignmentPointScaling).toBe(
       'daily_pages_engagement_v2'
     );
+    expect(config.outputSchema.scoringMode).toBe('holistic_tier');
     expect(config.outputSchema.teacherNotesEnabled).toBeUndefined();
     expect(config.defaultLabel).toBe('Daily Pages engagement');
   });
@@ -498,5 +499,52 @@ describe('the default rubric config for a Daily Pages assignment type', () => {
     expect(dailyPages.rubric.categories.length).toBe(
       classStarter.rubric.categories.length
     );
+  });
+});
+
+describe('the Exit Ticket default rubric', () => {
+  test('is chosen by kind, and only when the type saved none of its own', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'exit_ticket',
+    });
+
+    expect(config.source).toBe('exit-ticket-default');
+    expect(config.rubric.categories[0].key).toBe('understanding');
+    expect(config.rubricIncomplete).toBe(false);
+  });
+
+  test('never displaces a rubric an admin actually configured', () => {
+    // Registering a default for a kind must not change what an existing row
+    // grades with. Its own rubric still wins.
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'exit_ticket',
+      rubricJson: {
+        categories: [
+          {
+            key: 'custom',
+            label: 'Custom',
+            description: 'Configured by an admin.',
+            weight: 1,
+          },
+        ],
+      },
+    });
+
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubric.categories[0].key).toBe('custom');
+  });
+
+  test('leaves every other kind on the rubric it had', () => {
+    expect(parseAssignmentTypeRubricConfig({}).source).toBe('thesis-default');
+    // Daily Pages grades on the short-form rubric since the split; registering
+    // the exit ticket default must not disturb that.
+    expect(
+      parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'daily_pages' })
+        .source
+    ).toBe('daily-pages-short-form-default');
+    expect(
+      parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'class_starter' })
+        .source
+    ).toBe('class-starter-default');
   });
 });

@@ -1,4 +1,7 @@
+import { ensureFreeTierProductionApprovalHooks } from './domain/free-tier/approval-hooks.server';
 import { startImpersonationEndDelivery } from './utils/internal-impersonation-runtime.server';
+
+void ensureFreeTierProductionApprovalHooks();
 import { reportImpersonationError } from './utils/internal-impersonation-error.server';
 import { PassThrough } from 'node:stream';
 import type { EntryContext, HandleErrorFunction } from 'react-router';

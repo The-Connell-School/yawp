@@ -172,6 +172,9 @@ export async function resolveRubricConfigForSubmission({
       scoringType: assignmentTypeConfig.scoringType,
       source: parseRubricDisplaySource(assignmentTypeConfig.source),
       rubricIncomplete: assignmentTypeConfig.rubricIncomplete,
+      ...(assignmentTypeConfig.scoringMode
+        ? { scoringMode: assignmentTypeConfig.scoringMode }
+        : {}),
     };
   }
 

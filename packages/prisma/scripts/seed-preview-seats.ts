@@ -13,6 +13,14 @@ import {
 import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { attachApHistorySourceImages } from './local-dev/seed-ap-history';
 import { applyDailyPagesEngagementV2Seed } from './apply-daily-pages-engagement-v2-seed';
+import {
+  ensurePreviewFreeClassroomFixture,
+  ensurePreviewSchoolReporterNavFixture,
+} from './local-dev/seed-preview-free-classroom';
+import {
+  isDemoPlannerQaEnvironment,
+  seedPreviewPlannerQa,
+} from './seed-preview-planner-qa';
 
 assertLocalSeedTarget();
 
@@ -24,6 +32,17 @@ const prisma = createPrismaClient();
 
 try {
   const results = await ensurePreviewSeats(prisma, seats);
+  const includeFreeClassroomFixture =
+    process.env.PREVIEW_SLUG !== 'demo' &&
+    process.env.INCLUDE_PREVIEW_FREE_CLASSROOM_FIXTURE !== 'false';
+  if (includeFreeClassroomFixture) {
+    const freeClassroom = await ensurePreviewFreeClassroomFixture(prisma);
+    console.log(`Preview free classroom fixture: ${freeClassroom.status}`);
+    const schoolReporterNav = await ensurePreviewSchoolReporterNavFixture(prisma);
+    console.log(`Preview school reporter nav fixture: ${schoolReporterNav.status}`);
+  } else {
+    console.log('Preview free classroom fixture: skipped');
+  }
   const writingPractice = await enableWritingPracticeForPreviewOrganizations(
     prisma,
     seats.map(({ organizationId }) => organizationId)
@@ -57,6 +76,26 @@ try {
         `Preview seat code ${result.organizationId}: ${result.status}`
       );
     }
+  }
+  if (!isDemoPlannerQaEnvironment()) {
+    for (const seat of seats) {
+      try {
+        const plannerQa = await seedPreviewPlannerQa(prisma, {
+          organizationId: seat.organizationId,
+        });
+        console.log(
+          `preview planner QA seed (seat ${seat.number}):`,
+          JSON.stringify(plannerQa)
+        );
+      } catch (error) {
+        console.warn(
+          'preview planner QA seed failed (non-fatal):',
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
+  } else {
+    console.log('preview planner QA seed skipped: demo environment');
   }
 } finally {
   await prisma.$disconnect();

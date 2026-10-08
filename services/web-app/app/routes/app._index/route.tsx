@@ -19,6 +19,10 @@ import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import {
+  filterAssignmentTypesForOrganizationPlan,
+  loadAssignmentCreationQuotasForTypes,
+} from '~/utils/assignment-quota.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import type { TeacherClassCardData } from '~/components/teacher-class-card';
@@ -66,6 +70,7 @@ function formatAssignmentDueDate(iso: string): string {
 export type AssignmentTypeRow = {
   id: string;
   title: string;
+  kind?: string | null;
   systemKey?: string | null;
   kind?: string | null;
   collaborationSupported?: boolean;
@@ -271,9 +276,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const enabledTeacherClasses =
     !useStudentExperience && assignmentsEnabled ? teacherClassesOrdered : [];
   const assignmentCreationClasses = enabledTeacherClasses;
-  const creationTypeRows = teacherAssignmentTypes.filter(
-    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+  const creationTypeRows = filterAssignmentTypesForOrganizationPlan<AssignmentTypeRow>(
+    profile.organization,
+    teacherAssignmentTypes.filter(
+      (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+    )
   );
+  const teacherAssignmentTypesForGlance =
+    filterAssignmentTypesForOrganizationPlan<AssignmentTypeRow>(
+      profile.organization,
+      teacherAssignmentTypes
+    );
   // One query for the whole list, so the creation sheet knows which types can
   // offer the teacher's grammar-grading toggle.
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
@@ -287,6 +300,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     creationTypeRows.map((type) => type.id),
     { writingConditionsEnabled }
   );
+  const quotaByTypeId = await loadAssignmentCreationQuotasForTypes(
+    profile.organization,
+    creationTypeRows.map((type) => ({ id: type.id, kind: type.kind ?? null }))
+  );
   const assignmentCreationTypes = creationTypeRows.map((type) => ({
     id: type.id,
     title: type.title,
@@ -296,10 +313,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     kind: type.kind ?? null,
     rubricName: type.rubric?.name ?? null,
     gradesGrammar: gradesGrammarIds.has(type.id),
+    kind: type.kind ?? null,
     defaultWritingTimeMinutes:
       creationTypeDefaults.get(type.id)?.defaultWritingTimeMinutes ?? null,
     offersParagraphModes:
       creationTypeDefaults.get(type.id)?.offersParagraphModes ?? false,
+    ...quotaByTypeId.get(type.id),
   }));
 
   // A student's assigned Writing Fundamentals practice, surfaced on their
@@ -352,7 +371,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherClassCards,
     totalTeacherClassCount: teacherClasses.length,
     teacherWorkspaceClassStats,
-    teacherAssignmentTypes,
+    teacherAssignmentTypes: teacherAssignmentTypesForGlance,
     assignmentCreationClasses: assignmentCreationClasses.map((klass) => ({
       id: klass.id,
       name: formatClassLabel(klass),

@@ -28,6 +28,7 @@ const input = z.object({
     scoreInstructions: z.string().optional(), rubricInstructions: z.string().optional(),
   }).strict().optional(),
   outputSchema: z.record(json).optional(), calibrationNotes: z.string().nullable().optional(),
+  scoringMode: z.enum(['weighted_categories', 'holistic_tier']).optional(),
 }).strict();
 export type RubricValidationIssue = { path: string; message: string };
 export type RubricPromotionValidation = { ok: true; schema: RubricSchema } | { ok: false; issues: RubricValidationIssue[] };

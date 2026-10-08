@@ -79,8 +79,10 @@
         "responseShape": "categories_overall_comment",
         "schemaVersion": 1,
         "assignmentPointScaling": "daily_pages_engagement_v2",
+        "scoringMode": "holistic_tier",
         "teacherNotesEnabled": true
       },
+      "scoringMode": "holistic_tier",
       "calibrationNotes": null
     }
   },

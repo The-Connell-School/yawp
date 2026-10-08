@@ -182,6 +182,22 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma migrate deploy
 
+      - name: 🧪 Exit ticket bootstrap migration idempotency
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./packages/prisma/scripts/exit-ticket-bootstrap-migration.test.ts
+
+      - name: 🧪 Free tier bundle seed connection (tunnel TLS)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        run: bun test ./packages/prisma/scripts/seed-free-tier-bundle-assignment-types.test.ts
+
+      - name: 🌱 Seed free tier bundle assignment types
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun run --cwd packages/prisma seed-free-tier-bundle-assignment-types
+
       # CI names every test file it runs, and nothing ran services/web-app/app/**
       # unit tests: the rate limiter, client-IP and free-tier tests were present but
       # never executed. These need the migrated database above (real SQL), so they
@@ -207,7 +223,19 @@ jobs:
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
           ./services/web-app/app/domain/free-tier/
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
+          ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
+          ./services/web-app/app/utils/free-tier-class-create-route.real-db.integration.test.ts
+          ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
+          ./services/web-app/app/utils/assignment-quota.real-db.integration.test.ts
+          ./packages/prisma/preview-access-code.free-classroom.test.ts
+          ./packages/prisma/scripts/preview-seats.test.ts
           ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
+          ./services/web-app/app/domain/submissions/student-submission-grade-visibility.server.test.ts
+          './services/web-app/app/routes/app_.submissions_.$submissionId/route.loader.test.ts'
+          './services/web-app/app/routes/app.assignment-types.$id/route.test.ts'
+          './services/web-app/app/routes/app_.documents_.$id/route.test.ts'
+          ./services/web-app/e2e/decode-router-data.test.ts
+          # decode-router-data: turbo .data assertions in student.unreleased-grade-loader-privacy E2E
 
       - name: 🎨 Backfill class artwork keys
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -308,7 +336,17 @@ jobs:
             app/domain/feature-flags/feature-flags.test.ts \
             app/domain/feature-flags/feature-flags.server.test.ts \
             app/utils/internal-feature-flags-http.server.test.ts \
+            app/domain/rubrics/rubric-promotion.test.ts \
+            app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
+            app/domain/grading/gradeMath.test.ts \
+            app/routes/api.domain.update-submission/route.test.ts \
+            'app/routes/app_.submissions_.$submissionId/teacher-grading/view-panel.test.tsx' \
+            app/domain/reporter/reporter-report.test.ts \
             app/routes/api.assignments.create/route.test.ts \
+            app/routes/app.assignments._index/route.test.ts \
+            app/routes/app.my-classes._index/route.test.ts \
+            app/utils/assignment-quota.server.test.ts \
+            app/domain/free-tier/provision-free-classroom.server.test.ts \
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/routes/api.domain.grade-essay-ai/route.test.ts \
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
@@ -322,7 +360,20 @@ jobs:
             'app/routes/app.admin.assignment-types.$id_.prompt/route.test.ts' \
             app/routes/api.domain.assignment-type-evaluations/route.test.ts \
             'app/routes/app_.submissions_.$submissionId/route.loader.test.ts' \
-            'app/routes/app.assignment-types.$id/prompts-library/library-variant.test.ts'
+            'app/routes/app.assignment-types.$id/prompts-library/library-variant.test.ts' \
+            app/routes/api.domain.lesson-planner/route.test.ts \
+            app/routes/api.domain.lesson-planner.packet/route.test.ts \
+            app/domain/lesson-planner/artifact-from-reply.test.ts \
+            app/domain/lesson-planner/lesson-pdf.server.test.ts \
+            app/domain/lesson-planner/lesson-packet.test.ts \
+            app/utils/lesson-planner/lesson-planner-access.server.test.ts \
+            app/utils/lesson-planner/lesson-planner-quota.server.test.ts \
+            app/utils/lesson-planner/lesson-planner-admission.server.test.ts \
+            ../../packages/prisma/scripts/bootstrap-exit-ticket-assignment-type.test.ts \
+            ../../packages/prisma/scripts/seed-preview-planner-qa.test.ts \
+            ../../packages/prisma/scripts/exit-ticket-migration-image.test.ts \
+            ../../packages/prisma/scripts/preview-seats.test.ts \
+            app/domain/lesson-planner/lesson-seed.test.ts
           do
             bun test "$f"
           done
@@ -382,6 +433,7 @@ jobs:
       - name: 🔖 Resolve Playwright version
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         id: playwright-version
+        working-directory: services/web-app
         run: |
           echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
 
@@ -393,22 +445,19 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
 
-      # Chromium only. `test:e2e:smoke` runs `--project=chromium` and the
-      # preview-access config defines a single chromium project, so Firefox was
-      # downloaded on every run and never launched.
-      - name: Install Playwright browsers
-        if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true')) && steps.playwright-cache.outputs.cache-hit != 'true' }}
+      # Chromium only. On a browser cache hit, install the binary only — apt deps
+      # are already on the runner and `install-deps` has timed out on cache hits.
+      - name: Install Playwright chromium
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
-        timeout-minutes: 10
-        run: npx --yes playwright install --with-deps chromium
-
-      # The cache holds the browsers, not the apt packages they link against, so
-      # a restored cache still needs the system libraries putting back.
-      - name: Install Playwright system dependencies
-        if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true')) && steps.playwright-cache.outputs.cache-hit == 'true' }}
-        working-directory: services/web-app
-        timeout-minutes: 10
-        run: npx --yes playwright install-deps chromium
+        timeout-minutes: 15
+        run: |
+          version=$(node -p "require('@playwright/test/package.json').version")
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            bunx --package "@playwright/test@${version}" playwright install chromium
+          else
+            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
+          fi
 
       - name: 🧪 Run Playwright tests
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}

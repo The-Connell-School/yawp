@@ -48,6 +48,18 @@ describe('formatAssignmentGrade', () => {
     ).toBeNull();
   });
 
+  test('prefers exact X/Y over legacy percent after holistic teacher save', () => {
+    expect(
+      formatAssignmentGrade({
+        submitForGrade: true,
+        numericPercentage: 90,
+        letterGrade: 'A',
+        pointValue: 20,
+        score: '18/20',
+      })
+    ).toBe('18 / 20');
+  });
+
   test('prefers point display and falls back to existing grade strings', () => {
     expect(
       formatAssignmentGrade({

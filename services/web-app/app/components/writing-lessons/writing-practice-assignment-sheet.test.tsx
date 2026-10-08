@@ -175,6 +175,56 @@ describe('WritingPracticeAssignmentSheetContent — mixed practice', () => {
   });
 });
 
+describe('WritingPracticeAssignmentSheetContent — opened from a lesson plan', () => {
+  function renderPlanned() {
+    render(
+      <WritingPracticeAssignmentSheetContent
+        skillOptions={SKILLS}
+        initial={{
+          slugs: ['fixing-comma-splices', 'passive-voice'],
+          title: 'Sentence repair',
+          problemCount: 8,
+          instructions: 'Fix each one two ways.',
+        }}
+        teacherClasses={TEACHER_CLASSES}
+        onOpenChange={() => {}}
+      />
+    );
+  }
+
+  it('opens on what the planner chose, still editable', () => {
+    renderPlanned();
+
+    expect(submittedSlugs()).toEqual(['fixing-comma-splices', 'passive-voice']);
+    expect(
+      document.querySelector<HTMLInputElement>('input[name="title"]')!.value
+    ).toBe('Sentence repair');
+    expect(
+      document.querySelector<HTMLInputElement>('input[name="problemCount"]')!
+        .value
+    ).toBe('8');
+    expect(
+      document.querySelector<HTMLTextAreaElement>('textarea[name="instructions"]')!
+        .value
+    ).toBe('Fix each one two ways.');
+    // The skills stay a choice: the teacher can still drop one.
+    expect(
+      document.querySelector('[data-testid="practice-skill-passive-voice"]')
+    ).not.toBeNull();
+  });
+
+  it('keeps the planner’s title when the skills change', () => {
+    renderPlanned();
+
+    click('[data-testid="practice-skill-passive-voice"]');
+
+    expect(submittedSlugs()).toEqual(['fixing-comma-splices']);
+    expect(
+      document.querySelector<HTMLInputElement>('input[name="title"]')!.value
+    ).toBe('Sentence repair');
+  });
+});
+
 describe('suggestWritingPracticeTitle', () => {
   it('names a single-skill set after its skill', () => {
     expect(suggestWritingPracticeTitle(['Passive Voice'])).toBe(

@@ -1,5 +1,6 @@
 import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { randomUUID } from 'node:crypto';
+import type { Prisma } from '@app/prisma';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { z } from 'zod';
 import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/daily-pages-rubric';
@@ -29,6 +30,7 @@ import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-
 import { autoArrangeNewAssignment } from '~/domain/collaboration/auto-arrange.server';
 import { groupSetupNextStep } from '~/domain/collaboration/next-step';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
+import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -39,6 +41,10 @@ import {
 import { parseAssignmentCollaboration } from '~/utils/assignment-collaboration.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 import { parseAssignmentGrammarGrading } from '~/utils/assignment-grammar-grading.server';
+import {
+  exitTicketGradingModeFor,
+  resolveAssignmentPrompt,
+} from '~/utils/assignment-exit-ticket.server';
 import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -223,14 +229,6 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 400 }
     );
   }
-  const rubricOverrideData = {
-    ...(formData.has('rubricTotalPoints')
-      ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
-      : {}),
-    ...(formData.has('gradingMode')
-      ? { gradingMode: rubricOverrides.data.gradingMode }
-      : {}),
-  };
 
   const assignmentTypeAvailable = await isAssignmentTypeAvailableForEveryScope({
     assignmentTypeId,
@@ -264,6 +262,22 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  // Read once the type is known: a quick-builder exit ticket is always graded
+  // in bands, whatever mode the form carried.
+  const rubricOverrideData = {
+    ...(formData.has('rubricTotalPoints')
+      ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
+      : {}),
+    ...(formData.has('gradingMode')
+      ? {
+          gradingMode: exitTicketGradingModeFor({
+            assignmentTypeKind: assignmentType.kind,
+            formData,
+            gradingMode: rubricOverrides.data.gradingMode,
+          }),
+        }
+      : {}),
+  };
   // A paragraph type only means something on Daily Pages; anything sent for
   // another type is dropped rather than stored where nothing reads it.
   const paragraphMode =
@@ -403,7 +417,26 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
-  if (!prompt) {
+  // Exit tickets do not carry a teacher-written prompt. The teacher answered
+  // the form instead, and the prompt is composed from those answers here —
+  // not taken from the request — so what a student reads is the product's
+  // wording. Every other assignment type keeps the prompt it posted.
+  const resolvedPrompt = resolveAssignmentPrompt({
+    assignmentTypeKind: assignmentType.kind,
+    postedPrompt: prompt,
+    formData,
+  });
+  if (!resolvedPrompt.success) {
+    return dataResponse(
+      { success: false, message: resolvedPrompt.message },
+      { status: 400 }
+    );
+  }
+  const assignmentPrompt = resolvedPrompt.prompt;
+  const exitTicketConfigJson =
+    resolvedPrompt.exitTicketConfigJson as Prisma.InputJsonValue | null;
+
+  if (!assignmentPrompt) {
     return dataResponse(
       { success: false, message: 'Prompt is required.' },
       { status: 400 }
@@ -412,7 +445,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const promptAttachment = formData.get('promptAttachment');
   let promptAttachmentData:
-    Awaited<ReturnType<typeof uploadAssignmentPromptAttachment>> | undefined;
+    | Awaited<ReturnType<typeof uploadAssignmentPromptAttachment>>
+    | undefined;
   if (promptAttachment instanceof File && promptAttachment.size > 0) {
     try {
       promptAttachmentData =
@@ -435,7 +469,7 @@ export async function action({ request }: ActionFunctionArgs) {
       data: {
         assignmentTypeId: assignmentType.id,
         title,
-        prompt,
+        prompt: assignmentPrompt,
         gradingAssistantStrictnessLevel,
         ...rubricOverrideData,
         tutorEnabled,
@@ -444,6 +478,7 @@ export async function action({ request }: ActionFunctionArgs) {
         paragraphMode,
         ...collaboration,
         ...promptAttachmentData,
+        ...(exitTicketConfigJson ? { exitTicketConfigJson } : {}),
         ...(gradingIntent?.success
           ? {
               submitForGrade: gradingIntent.data.submitForGrade,
@@ -489,6 +524,12 @@ export async function action({ request }: ActionFunctionArgs) {
         promptAttachmentData.promptAttachmentKey
       ).catch(() => {});
     }
+    if (error instanceof FreeClassroomAssignmentQuotaError) {
+      return dataResponse(
+        { success: false, message: error.message },
+        { status: 403 }
+      );
+    }
     throw error;
   }
 
@@ -505,7 +546,7 @@ export async function action({ request }: ActionFunctionArgs) {
         membershipId: profile.id,
         assignmentTypeId: assignmentType.id,
         title: title ?? '',
-        prompt,
+        prompt: assignmentPrompt,
         submitForGrade: gradingIntent?.success
           ? gradingIntent.data.submitForGrade
           : true,

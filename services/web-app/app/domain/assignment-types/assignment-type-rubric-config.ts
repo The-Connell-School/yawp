@@ -16,12 +16,30 @@ import {
   CLASS_STARTER_RUBRIC,
   CLASS_STARTER_SCORING_SCALE,
 } from './class-starter-rubric';
+import { EXIT_TICKET_ASSIGNMENT_TYPE_KIND } from './exit-ticket';
+import {
+  EXIT_TICKET_PROMPT_CONFIG,
+  EXIT_TICKET_RUBRIC,
+  EXIT_TICKET_SCORING_SCALE,
+} from './exit-ticket-rubric';
 import {
   DAILY_PAGES_ENGAGEMENT_PROMPT_CONFIG,
   DAILY_PAGES_ENGAGEMENT_RUBRIC,
   DAILY_PAGES_ENGAGEMENT_SCALING_RULE,
   DAILY_PAGES_ENGAGEMENT_SCORING_SCALE,
 } from './daily-pages-engagement-rubric';
+import {
+  PREWRITING_ASSIGNMENT_TYPE_KIND,
+  PREWRITING_PROMPT_CONFIG,
+  PREWRITING_RUBRIC,
+  PREWRITING_SCORING_SCALE,
+} from './prewriting-assignment-type';
+import {
+  THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND,
+  THESIS_STATEMENT_PROMPT_CONFIG,
+  THESIS_STATEMENT_RUBRIC,
+  THESIS_STATEMENT_SCORING_SCALE,
+} from './thesis-statement-assignment-type';
 
 export const MODULE_RUBRIC_RELATIONSHIPS = [
   'primary',
@@ -38,7 +56,8 @@ export type AssignmentTypeRubricConfigSource =
   | 'thesis-default'
   | 'daily-pages-short-form-default'
   | 'daily-pages-engagement-default'
-  | 'class-starter-default';
+  | 'class-starter-default'
+  | 'exit-ticket-default';
 
 export type AssignmentTypeRubricConfigInput = {
   /**
@@ -112,10 +131,33 @@ const thesisDefaultConfig: AssignmentTypeRubricConfig = {
  * A kind listed here needs no data migration: an existing row picks its default
  * up on the next grading run, and a row that saved its own rubric still wins.
  */
+const prewritingConfig: AssignmentTypeRubricConfig = {
+  source: 'assignment-type',
+  scoringScale: PREWRITING_SCORING_SCALE,
+  rubric: PREWRITING_RUBRIC,
+  promptConfig: PREWRITING_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'Standalone pre-writing: exploratory effort and movement toward a specific focus.',
+  rubricIncomplete: false,
+};
+
+const thesisStatementConfig: AssignmentTypeRubricConfig = {
+  source: 'assignment-type',
+  scoringScale: THESIS_STATEMENT_SCORING_SCALE,
+  rubric: THESIS_STATEMENT_RUBRIC,
+  promptConfig: THESIS_STATEMENT_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'Standalone thesis statement: one arguable sentence with observation and analysis.',
+  rubricIncomplete: false,
+};
+
 /** Daily Pages: Brian 2026-10-02 engagement tiers with proportional point scaling. */
 const dailyPagesEngagementOutputSchema = {
   ...DEFAULT_OUTPUT_SCHEMA_JSON,
   assignmentPointScaling: DAILY_PAGES_ENGAGEMENT_SCALING_RULE,
+  scoringMode: 'holistic_tier',
 };
 
 const dailyPagesEngagementConfig: AssignmentTypeRubricConfig = {
@@ -145,6 +187,19 @@ const classStarterConfig: AssignmentTypeRubricConfig = {
 const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
   [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: dailyPagesEngagementConfig,
   [CLASS_STARTER_ASSIGNMENT_TYPE_KIND]: classStarterConfig,
+  [EXIT_TICKET_ASSIGNMENT_TYPE_KIND]: {
+    source: 'exit-ticket-default',
+    scoringScale: EXIT_TICKET_SCORING_SCALE,
+    rubric: EXIT_TICKET_RUBRIC,
+    promptConfig: EXIT_TICKET_PROMPT_CONFIG,
+    outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+    calibrationNotes:
+      'Exit Tickets judge understanding only, scored inside written bands so the grade honors the point value, with overall feedback and no grammar highlighting.',
+    rubricIncomplete: false,
+    defaultLabel: 'Exit Ticket understanding',
+  },
+  [PREWRITING_ASSIGNMENT_TYPE_KIND]: prewritingConfig,
+  [THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND]: thesisStatementConfig,
 };
 
 function getDefaultRubricConfig(

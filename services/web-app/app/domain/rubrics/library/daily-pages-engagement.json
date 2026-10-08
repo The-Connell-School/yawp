@@ -71,7 +71,9 @@
   "outputSchema": {
     "responseShape": "categories_overall_comment",
     "schemaVersion": 1,
-    "assignmentPointScaling": "daily_pages_engagement_v2"
+    "assignmentPointScaling": "daily_pages_engagement_v2",
+    "scoringMode": "holistic_tier"
   },
+  "scoringMode": "holistic_tier",
   "calibrationNotes": null
 }

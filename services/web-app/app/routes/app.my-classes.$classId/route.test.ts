@@ -400,6 +400,7 @@ describe('class detail loader document visibility', () => {
         title: true,
         kind: true,
         systemKey: true,
+        kind: true,
         collaborationSupported: true,
         rubric: { select: { name: true } },
       },
@@ -718,6 +719,8 @@ describe('class detail loader document visibility', () => {
         prompt: 'Updated prompt',
         submitForGrade: true,
         pointValue: 100,
+        // Not an exit ticket, so any stored ticket config is cleared.
+        exitTicketConfigJson: expect.anything(),
       },
     });
   });

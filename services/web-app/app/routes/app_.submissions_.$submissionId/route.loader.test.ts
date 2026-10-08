@@ -602,6 +602,144 @@ describe('submission loader — unsubmitted redirect', () => {
     expect(result).not.toHaveProperty('teacherNote');
   });
 
+  test('student owner does not receive unreleased grade or feedback in loader data', async () => {
+    requireMembership.mockResolvedValue(
+      membership(STUDENT_MEMBERSHIP_ID, 'STUDENT')
+    );
+    const submission = buildSubmission() as any;
+    submission.releasedAt = null;
+    submission.gradedAt = new Date('2026-08-02T00:00:00Z');
+    submission.numericPercentage = 80;
+    submission.letterGrade = 'B';
+    submission.score = '80% (B)';
+    submission.feedback = 'SECRET_OVERALL_FEEDBACK';
+    submission.overallComment = 'SECRET_OVERALL_COMMENT';
+    submission.rubricScores = {
+      thesis: { score: 4, comment: 'SECRET_RUBRIC_COMMENT' },
+    };
+    submission.grammarIssues = {
+      issues: [{ id: 'g1', excerpt: 'SECRET_GRAMMAR' }],
+    };
+    submission.comments = [
+      {
+        id: 'comment-1',
+        content: 'SECRET_INLINE_COMMENT',
+        excerpt: 'body',
+        occurrence: 1,
+        createdAt: new Date(),
+        membership: { user: { name: 'Teacher', email: 't@example.test' } },
+      },
+    ];
+    submission.document.submissions = [
+      {
+        id: 'sub-1',
+        title: 'Essay',
+        submittedAt: new Date(),
+        releasedAt: null,
+        numericPercentage: 80,
+        letterGrade: 'B',
+        score: '80% (B)',
+      },
+    ];
+    submission.gradingAssistantRuns = [
+      {
+        status: 'succeeded',
+        metadata: {
+          output: {
+            rubricScores: { thesis: { score: 4 } },
+            overallComment: 'SECRET_ASSISTANT',
+            numericPercentage: 80,
+          },
+        },
+      },
+    ];
+    prisma.submission.findFirst.mockResolvedValue(submission);
+
+    const result = (await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    })) as any;
+
+    const serialized = JSON.stringify(result);
+    expect(result.submission.numericPercentage).toBeNull();
+    expect(result.submission.feedback).toBeNull();
+    expect(result.submission.comments).toEqual([]);
+    expect(result.submission).not.toHaveProperty('assistantSuggestion');
+    expect(serialized).not.toContain('SECRET_OVERALL_FEEDBACK');
+    expect(serialized).not.toContain('SECRET_INLINE_COMMENT');
+    expect(serialized).not.toContain('SECRET_RUBRIC_COMMENT');
+    expect(serialized).not.toContain('SECRET_ASSISTANT');
+    expect(result.submission.document?.submissions?.[0]).not.toHaveProperty(
+      'numericPercentage'
+    );
+    expect(result.submission.document?.submissions?.[0]).not.toHaveProperty(
+      'overallScore'
+    );
+  });
+
+  test('student owner receives released grade and feedback in loader data', async () => {
+    requireMembership.mockResolvedValue(
+      membership(STUDENT_MEMBERSHIP_ID, 'STUDENT')
+    );
+    const submission = buildSubmission() as any;
+    submission.releasedAt = new Date('2026-08-03T00:00:00Z');
+    submission.gradedAt = new Date('2026-08-02T00:00:00Z');
+    submission.numericPercentage = 77;
+    submission.letterGrade = 'C+';
+    submission.feedback = 'Released feedback.';
+    submission.comments = [
+      {
+        id: 'comment-1',
+        content: 'Released inline comment.',
+        excerpt: 'body',
+        occurrence: 1,
+        createdAt: new Date(),
+        membership: { user: { name: 'Teacher', email: 't@example.test' } },
+      },
+    ];
+    prisma.submission.findFirst.mockResolvedValue(submission);
+
+    const result = (await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    })) as any;
+
+    expect(result.submission.numericPercentage).toBe(77);
+    expect(result.submission.feedback).toBe('Released feedback.');
+    expect(result.submission.comments).toHaveLength(1);
+  });
+
+  test('teacher still receives unreleased grade and feedback in loader data', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue(
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
+    );
+    const submission = buildSubmission() as any;
+    submission.releasedAt = null;
+    submission.numericPercentage = 80;
+    submission.feedback = 'Teacher-visible feedback.';
+    submission.comments = [
+      {
+        id: 'comment-1',
+        content: 'Teacher-visible inline.',
+        excerpt: 'body',
+        occurrence: 1,
+        createdAt: new Date(),
+        membership: { user: { name: 'Teacher', email: 't@example.test' } },
+      },
+    ];
+    prisma.submission.findFirst.mockResolvedValue(submission);
+
+    const result = (await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    })) as any;
+
+    expect(result.submission.numericPercentage).toBe(80);
+    expect(result.submission.feedback).toBe('Teacher-visible feedback.');
+    expect(result.submission.comments).toHaveLength(1);
+  });
+
   test('group-owner and cross-organization viewers receive no private note', async () => {
     for (const groupOwner of [true, false]) {
       requireUserId.mockResolvedValue('other-user');

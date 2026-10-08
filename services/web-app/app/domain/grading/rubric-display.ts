@@ -35,7 +35,8 @@ export type RubricDisplaySource =
   | 'daily-pages-default'
   | 'daily-pages-engagement-default'
   | 'daily-pages-short-form-default'
-  | 'class-starter-default';
+  | 'class-starter-default'
+  | 'exit-ticket-default';
 
 export type RubricDisplayConfig = {
   categories: RubricDisplayCategory[];
@@ -57,6 +58,8 @@ export type RubricDisplayConfig = {
    * Surfaced to the teacher instead of quietly falling back to a default.
    */
   rubricIncomplete?: boolean;
+  /** When holistic_tier, overall grades are points-only (no % / letter). */
+  scoringMode?: 'weighted_categories' | 'holistic_tier';
 };
 
 const rubricDisplaySources = new Set<string>([
@@ -66,6 +69,7 @@ const rubricDisplaySources = new Set<string>([
   'daily-pages-engagement-default',
   'daily-pages-short-form-default',
   'class-starter-default',
+  'exit-ticket-default',
 ]);
 
 /**

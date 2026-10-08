@@ -293,7 +293,7 @@ describe('api.domain.unsubmit-submission', () => {
 
     expect(response.init?.status).toBe(409);
     expect(response.data.message).toBe(
-      'This submission can no longer be unsubmitted because it has been graded.'
+      "This submission can't be unsubmitted right now. Ask your teacher if you need to make changes."
     );
     expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });
@@ -309,7 +309,7 @@ describe('api.domain.unsubmit-submission', () => {
 
     expect(response.init?.status).toBe(409);
     expect(response.data.message).toBe(
-      'This submission can no longer be unsubmitted because it has been graded.'
+      "This submission can't be unsubmitted right now. Ask your teacher if you need to make changes."
     );
     expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });
