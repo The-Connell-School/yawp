@@ -340,12 +340,17 @@ const e2eRubricFixtures: Record<string, { score: number; comment: string }> = {
   },
 };
 
-function shouldUseE2EGradingFixture() {
-  return (
-    process.env.E2E === 'true' &&
-    process.env.E2E_GRADE_ESSAY_AI_FIXTURE === 'true' &&
-    !process.env.ANTHROPIC_API_KEY
-  );
+function shouldUseE2EGradingFixture(request: Request) {
+  if (
+    process.env.E2E !== 'true' ||
+    process.env.E2E_GRADE_ESSAY_AI_FIXTURE !== 'true'
+  ) {
+    return false;
+  }
+  if (request.headers.get('x-e2e-force-grade-essay-ai-fixture') === 'true') {
+    return true;
+  }
+  return !process.env.ANTHROPIC_API_KEY;
 }
 
 function buildE2EGradingFixtureResponse({
@@ -938,7 +943,7 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
     });
-  const useE2EFixture = shouldUseE2EGradingFixture();
+  const useE2EFixture = shouldUseE2EGradingFixture(request);
   const documentContext = buildAiTextContextAudit({
     documentSource: 'submission-snapshot',
     documentId: submission.document.id,
@@ -1534,8 +1539,16 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       score = `${overallScore}/${assignmentTotal}`;
       ltiPassbackPercentage =
         assignmentTotal > 0 ? Math.round((overallScore / assignmentTotal) * 100) : null;
+    } else if (assignmentTotalCandidate == null) {
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'Holistic grading needs a positive assignment point total. Set point value on the assignment or rubric total points on the type.',
+        },
+        { status: 422 }
+      );
     } else {
-      // Holistic configured, but invalid. Fall back to weighted without crashing.
       holisticFallbackReason = holisticFallbackReason ?? 'invalid_output';
       const baseGradeFields = buildDynamicGradeFields({
         categories: parsed.categories,
@@ -1550,11 +1563,38 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         scoringType,
         gradingAssistantStrictnessLevel,
       });
-      overallScore = adjusted.overallScore;
-      numericPercentage = adjusted.numericPercentage;
-      letterGrade = adjusted.letterGrade;
-      score = adjusted.score ?? '';
-      ltiPassbackPercentage = adjusted.numericPercentage;
+      const pct =
+        typeof adjusted.numericPercentage === 'number' &&
+        Number.isFinite(adjusted.numericPercentage)
+          ? adjusted.numericPercentage
+          : null;
+      const pointsFromPercent =
+        pct != null
+          ? Math.round((pct / 100) * assignmentTotal)
+          : Number.isFinite(adjusted.overallScore) && maxScore > 0
+            ? Math.round((adjusted.overallScore / maxScore) * assignmentTotal)
+            : Number.NaN;
+      if (!Number.isFinite(pointsFromPercent)) {
+        return dataResponse(
+          {
+            success: false,
+            message:
+              'Holistic grading could not interpret the model output. Try generating again.',
+          },
+          { status: 422 }
+        );
+      }
+      overallScore = Math.min(
+        assignmentTotal,
+        Math.max(0, pointsFromPercent)
+      );
+      numericPercentage = null;
+      letterGrade = null;
+      score = `${overallScore}/${assignmentTotal}`;
+      ltiPassbackPercentage =
+        assignmentTotal > 0
+          ? Math.round((overallScore / assignmentTotal) * 100)
+          : null;
     }
   } else {
     const baseGradeFields = buildDynamicGradeFields({
@@ -1766,7 +1806,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         ? {
             holisticFallback: {
               reason: holisticFallbackReason,
-              usedWeightedScore: true,
+              usedPointsFallback: true,
             },
           }
         : {}),

@@ -241,7 +241,8 @@ export async function action({ request }: ActionFunctionArgs) {
       select: { id: true, numericPercentage: true, score: true },
     });
     for (const s of releasedSubs) {
-      // Prefer stored percentage when present; otherwise derive one from X/Y points.
+      // LTI passback only: when a submission stores points-only (X/Y) with no
+      // numericPercentage, derive a percent for the mock AGS endpoint.
       const pct =
         typeof s.numericPercentage === 'number'
           ? s.numericPercentage

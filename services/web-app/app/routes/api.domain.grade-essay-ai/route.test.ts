@@ -3073,13 +3073,16 @@ describe('api.domain.grade-essay-ai', () => {
       } as any);
 
       const payload = (response as { data: Record<string, unknown> }).data;
-      // Fell back to weighted percentage path
-      expect(payload.numericPercentage).not.toBeNull();
-      expect(payload.letterGrade).not.toBeNull();
+      expect(payload.numericPercentage).toBeNull();
+      expect(payload.letterGrade).toBeNull();
+      expect(payload.score).toMatch(/^\d+\/20$/);
       const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.numericPercentage).toBeNull();
+      expect(stored.letterGrade).toBeNull();
+      expect(stored.score).toMatch(/^\d+\/20$/);
       expect(stored.aiMeta.holisticFallback).toMatchObject({
         reason: 'invalid_output',
-        usedWeightedScore: true,
+        usedPointsFallback: true,
       });
     });
   });

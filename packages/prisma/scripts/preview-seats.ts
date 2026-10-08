@@ -403,13 +403,18 @@ export async function seedCollaborationDemoForSeat(
       unknown
     >;
     const holisticTitle = 'In-class Essay/Analysis (Cristo Rey)';
+    const holisticOutputSchema = {
+      ...(cristo.outputSchema as Record<string, unknown>),
+      scoringMode: 'holistic_tier',
+      teacherNotesEnabled: true,
+    } as Prisma.InputJsonValue;
     let holisticType = await prisma.assignmentType.findFirst({
       where: {
         title: holisticTitle,
         ownerOrgId: seat.organizationId,
         archivedAt: null,
       },
-      select: { id: true },
+      select: { id: true, gradingOutputSchemaJson: true },
     });
     if (!holisticType) {
       holisticType = await prisma.assignmentType.create({
@@ -422,11 +427,7 @@ export async function seedCollaborationDemoForSeat(
           scoringScaleJson: cristo.scoringScale as Prisma.InputJsonValue,
           rubricJson: cristo.rubric as Prisma.InputJsonValue,
           gradingPromptConfigJson: cristo.promptConfig as Prisma.InputJsonValue,
-          gradingOutputSchemaJson: {
-            ...(cristo.outputSchema as Record<string, unknown>),
-            scoringMode: 'holistic_tier',
-            teacherNotesEnabled: true,
-          } as Prisma.InputJsonValue,
+          gradingOutputSchemaJson: holisticOutputSchema,
           gradingCalibrationNotes: String(cristo.calibrationNotes ?? ''),
           organizationAssignments: {
             create: { organizationId: seat.organizationId },
@@ -456,6 +457,26 @@ export async function seedCollaborationDemoForSeat(
       console.log(
         `Holistic Cristo Rey assignment type created for ${seat.label} (${seat.organizationId}).`
       );
+    } else {
+      const current = (holisticType.gradingOutputSchemaJson ?? {}) as Record<
+        string,
+        unknown
+      >;
+      if (current.scoringMode !== 'holistic_tier') {
+        await prisma.assignmentType.update({
+          where: { id: holisticType.id },
+          data: {
+            gradingOutputSchemaJson: {
+              ...current,
+              ...(holisticOutputSchema as Record<string, unknown>),
+            } as Prisma.InputJsonValue,
+          },
+        });
+        console.log(
+          `Holistic Cristo Rey assignment type updated with scoringMode for ${seat.label} (${seat.organizationId}).`
+        );
+      }
+      holisticType = { id: holisticType.id };
     }
 
     const demoTitle = 'Holistic Tier Demo (Preview)';

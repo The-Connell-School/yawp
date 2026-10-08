@@ -8,7 +8,11 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
   e2eContext,
   signIn,
 }, testInfo) => {
-  test.setTimeout(180_000);
+  test.setTimeout(120_000);
+  await page.setExtraHTTPHeaders({
+    'x-e2e-force-grade-essay-ai-fixture': 'true',
+  });
+
   const prisma = createE2EPrismaClient();
   const title = `Holistic E2E ${Date.now()}`;
   const { assignment, classAssignment } = await createDeployedAssignment({
@@ -58,17 +62,12 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
         response.url().includes('/api/domain/grade-essay-ai') &&
         response.request().method() === 'POST' &&
         response.status() === 200,
-      { timeout: 120_000 }
+      { timeout: 60_000 }
     );
     await page.getByTestId('grading-assistant-generate').click();
     await gradingResponse;
 
-    const afterAssistant = await prisma.submission.findUniqueOrThrow({
-      where: { id: submission.id },
-    });
-    expect(afterAssistant.score).toMatch(/^\d+\/20$/);
-    expect(afterAssistant.numericPercentage).toBeNull();
-    const pointsLabel = afterAssistant.score!.replace('/', ' / ');
+    const pointsLabel = '18 / 20';
     await expect(panel.getByText(pointsLabel, { exact: true })).toBeVisible({
       timeout: 30_000,
     });
@@ -93,12 +92,14 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     const aiMeta = graded.aiMeta as Record<string, unknown>;
     expect(aiMeta.scoringMode).toBe('holistic_tier');
     expect(graded.numericPercentage).toBeNull();
-    expect(graded.score).toMatch(/^\d+\/20$/);
-    const holistic = aiMeta.holistic as Record<string, unknown>;
-    expect(holistic.totalPoints).toBe(20);
-    expect(holistic.storedPoints).toBe(
-      Number.parseInt(graded.score!.split('/')[0]!, 10)
-    );
+    expect(graded.letterGrade).toBeNull();
+    expect(graded.score).toBe('18/20');
+    expect(aiMeta.holistic).toMatchObject({
+      tier: 'excellent',
+      requestedPoints: 18,
+      storedPoints: 18,
+      totalPoints: 20,
+    });
 
     await signIn('jdoe@brock.software', 'johndoe');
     await page.goto(`/app/submissions/${submission.id}`);
@@ -112,9 +113,7 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     await page.goto(
       `/app/my-classes/${e2eContext.classId}?tab=documents&status=released`
     );
-    await expect(
-      page.getByText(new RegExp(pointsLabel.replace(' / ', '\\s*/\\s*')))
-    ).toBeVisible();
+    await expect(page.getByText(/18\s*\/\s*20/)).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('holistic-gradebook-row.png'),
       fullPage: true,
