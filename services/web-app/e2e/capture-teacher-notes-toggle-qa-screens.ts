@@ -66,6 +66,7 @@ async function setToggle(
     await expect
       .poll(async () => toggle.isChecked(), { timeout: 30_000 })
       .toBe(checked);
+    await page.waitForTimeout(400);
   }
 }
 

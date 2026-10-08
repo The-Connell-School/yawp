@@ -275,7 +275,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             parsedOutputSchema as Record<string, unknown>,
             existingOutputSchema,
             Boolean(superAdmin)
-          ),
+          ) as Prisma.InputJsonValue,
           gradingAssistantVersion: { increment: 1 },
         }
       : gradingInstructionsOverrideChanged

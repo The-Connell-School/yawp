@@ -37,6 +37,7 @@ export async function readLiveRubricOutputOptionsForAssignmentType(
     where: { id: assignmentTypeId },
     select: {
       id: true,
+      title: true,
       rubricId: true,
       rubricJson: true,
       scoringScaleJson: true,

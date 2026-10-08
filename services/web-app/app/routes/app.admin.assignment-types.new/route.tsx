@@ -11,6 +11,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
 import { requireAdmin, requireUserId } from '~/utils/auth.server';
 import { authorizeOutputSchemaTeacherNotes } from '~/domain/grading/teacher-notes';
+import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import {
   DEFAULT_OUTPUT_SCHEMA_JSON,
@@ -63,7 +64,7 @@ function parseGradingConfig(
             DEFAULT_OUTPUT_SCHEMA_JSON) as Record<string, unknown>,
           DEFAULT_OUTPUT_SCHEMA_JSON,
           canEditTeacherNotesToggle
-        ),
+        ) as Prisma.InputJsonValue,
       }
     : {};
 }
