@@ -1,3 +1,5 @@
+-- #416: deploy after stack migrations including #412 `20261008121500` and
+-- #413 `20261008124500_repair_free_class_join_columns` (timestamp order).
 SET lock_timeout = '5s';
 
 DO $$ BEGIN

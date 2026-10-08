@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { renderAdminApprovalEmailBody, renderReleaseEmailBody } from './email-copy.server';
+import { renderAdminApprovalEmailBody, renderReleaseEmailBody } from './email-copy';
 
 test('release email snapshot', () => {
   expect(renderReleaseEmailBody({ name: 'Ada', joinUrl: 'https://yawp.school/join' })).toMatchSnapshot();
