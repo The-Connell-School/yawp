@@ -83,7 +83,7 @@ export async function loginAction({ request }: ActionFunctionArgs) {
           data
         );
       }
-      previewMembershipId = seatMembership.id;
+      previewMembershipId = seatMembership?.id ?? null;
     }
 
     await refundLoginAttemptRateLimits(charged);

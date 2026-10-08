@@ -12,7 +12,8 @@ const NAME = featureFlagSettingName(LESSON_PLANNER_FLAG);
 const URL_BASE = 'https://yawp.school/api/internal/v1/feature-flags';
 const auth = { authorization: `Bearer ${KEY}` };
 
-let prisma: import('~/utils/db.server').prisma | null = null;
+type DbPrisma = typeof import('~/utils/db.server').prisma;
+let prisma: DbPrisma | null = null;
 let flags: typeof import('./feature-flags.server') | null = null;
 let http: typeof import('~/utils/internal-feature-flags-http.server') | null = null;
 
