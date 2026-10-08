@@ -67,6 +67,7 @@ import {
 } from '~/components/class-manage-sheet';
 import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
+import { HandleStudentPasswordResetButton } from './handle-student-password-reset';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import { UnsubmitSubmissionsSheet } from '~/components/teacher-document-work/unsubmit-submissions-sheet';
 import {
@@ -2631,44 +2632,12 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                           <div className="flex flex-col gap-1">
                             <span>{formatUserContactLabel(s.user)}</span>
                             {!s.user.email ? (
-                              <studentFetcher.Form
-                                method="post"
-                                className="flex flex-wrap items-end gap-2"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <input
-                                  type="hidden"
-                                  name="intent"
-                                  value="reset-student-password"
-                                />
-                                <input
-                                  type="hidden"
-                                  name="studentMembershipId"
-                                  value={s.id}
-                                />
-                                <div className="flex flex-col gap-1">
-                                  <Label className="text-xs">Temp password</Label>
-                                  <Input
-                                    name="temporaryPassword"
-                                    type="text"
-                                    className="h-8 w-36 text-xs"
-                                    minLength={6}
-                                    required
-                                  />
-                                </div>
-                                <Button type="submit" size="sm" variant="outline">
-                                  Reset login
-                                </Button>
-                                {studentFetcher.data &&
-                                'success' in studentFetcher.data &&
-                                studentFetcher.data.success &&
-                                'message' in studentFetcher.data &&
-                                studentFetcher.data.message ? (
-                                  <p className="w-full text-xs text-green-700">
-                                    {studentFetcher.data.message}
-                                  </p>
-                                ) : null}
-                              </studentFetcher.Form>
+                              <HandleStudentPasswordResetButton
+                                studentMembershipId={s.id}
+                                studentName={
+                                  s.user.name?.trim() || 'this student'
+                                }
+                              />
                             ) : null}
                           </div>
                         </TableCell>

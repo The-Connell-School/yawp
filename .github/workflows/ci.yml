@@ -348,7 +348,7 @@ jobs:
     # to GitHub's six-hour default before failing. Nothing about this job is
     # worth half a day of a runner: the tests themselves take about seven
     # minutes, so anything past half an hour is wedged, not slow.
-    timeout-minutes: 45
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16

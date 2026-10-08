@@ -189,7 +189,7 @@ export default function JoinRoute() {
 
   return (
     <AuthPageShell>
-    <div className="mx-auto w-full max-w-md rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
+    <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
       <h1 className="text-lg font-semibold">Create your student account</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Join {data.klass.school.name} ({data.klass.schoolYear}) with{' '}
