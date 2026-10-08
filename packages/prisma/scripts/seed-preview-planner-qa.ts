@@ -3,12 +3,12 @@
  * Preview-only QA fixtures for Lesson Planner ship review. Never run on production
  * or the demo environment. Invoked from preview seat bootstrap on PR previews only.
  */
-import { Prisma } from '../generated/prisma';
+import type { Prisma } from '../generated/prisma';
 import {
   composeExitTicketPrompt,
   type ExitTicketConfig,
 } from '../../../services/web-app/app/domain/assignment-types/exit-ticket';
-import { createPrismaClient } from './local-dev/connection';
+import type { createPrismaClient } from './local-dev/connection';
 import { isLocalDatabaseUrl } from './local-dev/database-url';
 import {
   PREVIEW_PLANNER_QA_IDS,
@@ -380,6 +380,9 @@ if (import.meta.main) {
     );
     process.exit(0);
   }
+  // Loaded here, not at the top: the app imports this module, and the
+  // generated client must stay out of its bundle.
+  const { createPrismaClient } = await import('./local-dev/connection');
   const prisma = createPrismaClient();
   seedPreviewPlannerQa(prisma)
     .then((result) => {
