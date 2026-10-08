@@ -138,7 +138,6 @@ export function CreateAssignmentSheet({
             rubricName: assignmentTypeRubricName,
             collaborationSupported: assignmentTypeCollaborationSupported,
             gradesGrammar: assignmentTypeGradesGrammar,
-            kind: assignmentTypeKind,
             defaultWritingTimeMinutes: assignmentTypeDefaultWritingTimeMinutes,
             offersParagraphModes: assignmentTypeOffersParagraphModes,
           },

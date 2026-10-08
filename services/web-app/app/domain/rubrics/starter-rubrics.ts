@@ -43,7 +43,8 @@ export const DAILY_PAGES_RUBRIC_NAME = 'daily-pages-engagement';
  * also the seed definition, so publication and local verification use one copy.
  * The separate built-in 0–3 fallback and reflection rubric remain independent.
  */
-const dailyPagesEngagement: RubricSchema = dailyPagesEngagementSchema;
+const dailyPagesEngagement: RubricSchema =
+  dailyPagesEngagementSchema as RubricSchema;
 
 export const CLASS_STARTER_RUBRIC_NAME = 'class-starter-engagement';
 export const DAILY_PAGES_SHORT_FORM_RUBRIC_NAME = 'daily-pages-short-form';

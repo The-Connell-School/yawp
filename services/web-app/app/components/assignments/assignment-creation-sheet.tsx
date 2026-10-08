@@ -232,8 +232,6 @@ export type AssignmentCreationAssignmentType = {
    * selector, no paragraph type, grading and tutoring as before.
    */
   offersParagraphModes?: boolean;
-  /** AssignmentType.kind — drives engagement point minimums for Daily Pages / Class Starter. */
-  kind?: string | null;
   /** Library rubric name when the type points at a shared rubric (e.g. SJP Daily Pages). */
   rubricName?: string | null;
   /** Free classroom bundle: assignments remaining for this kind. */

@@ -400,7 +400,6 @@ describe('class detail loader document visibility', () => {
         title: true,
         kind: true,
         systemKey: true,
-        kind: true,
         collaborationSupported: true,
         rubric: { select: { name: true } },
       },

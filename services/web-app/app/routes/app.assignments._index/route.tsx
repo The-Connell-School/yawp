@@ -178,7 +178,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
           title: string;
           kind: string | null;
           systemKey: string | null;
-          kind: string | null;
           collaborationSupported: boolean;
           rubric: { name: string } | null;
         }>({

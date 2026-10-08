@@ -1224,7 +1224,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title: true,
         kind: true,
         systemKey: true,
-        kind: true,
         collaborationSupported: true,
         rubric: { select: { name: true } },
       },

@@ -143,7 +143,6 @@ type AssignmentTypeDetailRow = {
   kind: string | null;
   rubric: { name: string } | null;
   systemKey: string | null;
-  kind: string | null;
   collaborationSupported: boolean;
   image: { id: string } | null;
   assignmentModules: Array<{
@@ -428,7 +427,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         kind: true,
         rubric: { select: { name: true } },
         systemKey: true,
-        kind: true,
         collaborationSupported: true,
         image: { select: { id: true } },
         assignmentModules: {
@@ -942,7 +940,6 @@ export default function AppAssignmentTypesIdRoute() {
                   data.assignmentType.collaborationSupported
                 }
                 assignmentTypeGradesGrammar={data.assignmentTypeGradesGrammar}
-                assignmentTypeKind={data.assignmentType.kind}
                 assignmentTypeDefaultWritingTimeMinutes={
                   data.assignmentTypeDefaultWritingTimeMinutes
                 }
