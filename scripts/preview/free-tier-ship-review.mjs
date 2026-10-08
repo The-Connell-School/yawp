@@ -234,8 +234,19 @@ async function main() {
           teacherFlowEmailResolved = teacherFlowEmail;
           const redeem = await freshContext(browser);
           await redeemBypassToken(redeem.page, acqToken, teacherFlowEmailResolved);
+          releaseManifest = await pollJoinManifest(page, teacherFlowEmailResolved, 40).catch(() => null);
+          if (!releaseManifest?.joinUrl) {
+            const joinPath = redeem.page.url();
+            if (/\/free\/join/.test(joinPath)) {
+              releaseManifest = { joinUrl: joinPath };
+            } else {
+              await redeem.context.close();
+              throw new Error(
+                `No joinUrl for ${teacherFlowEmailResolved} (last URL: ${joinPath})`
+              );
+            }
+          }
           await redeem.context.close();
-          releaseManifest = await pollJoinManifest(page, teacherFlowEmailResolved, 60);
         }
       } else {
         teacherFlowEmailResolved = RELEASE_EMAIL;

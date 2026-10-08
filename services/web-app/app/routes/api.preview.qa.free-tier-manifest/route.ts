@@ -32,7 +32,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
     select: { payload: true },
   });
   const releasePayload = releaseLog?.payload as { joinUrl?: string } | null;
-  if (releasePayload?.joinUrl) out.joinUrl = releasePayload.joinUrl;
+  if (releasePayload?.joinUrl) {
+    out.joinUrl = releasePayload.joinUrl;
+  } else if (app.status === 'INVITED' || app.status === 'LEAD') {
+    const joinLink = await prisma.freeTierSignedLink.findFirst({
+      where: {
+        applicationId: app.id,
+        purpose: 'JOIN',
+        usedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { token: true },
+    });
+    if (joinLink?.token) {
+      const base = process.env.PRIMARY_APP_URL?.replace(/\/$/, '') || new URL(request.url).origin;
+      out.joinUrl = `${base}/free/join?t=${encodeURIComponent(joinLink.token)}`;
+    }
+  }
 
   const approvalLog = await prisma.freeTierEmailLog.findFirst({
     where: {
