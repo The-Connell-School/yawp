@@ -1192,7 +1192,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  // Paragraph type and writing time are behind a global flag that starts
+  // Paragraph type and writing time are behind a per-school flag that starts
   // off. Off, both read as unset for the grading assistant and the grammar
   // checker (the prompts that ran before either existed), while the values
   // stored on the assignment are left alone.
@@ -1202,7 +1202,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         submission.document.assignment?.writingTimeMinutes ?? null,
       paragraphMode: submission.document.assignment?.paragraphMode ?? null,
     },
-    await isDailyPagesWritingConditionsEnabled()
+    await isDailyPagesWritingConditionsEnabled(organizationId)
   );
   const compiledInvocation = compileGradingAssistantInvocation({
     gradingConfig: resolvedGradingConfig,

@@ -1452,7 +1452,7 @@ describe('AssignmentCreationSheetContent paragraph type', () => {
 });
 
 /**
- * Paragraph type and writing time sit behind a global flag that starts off.
+ * Paragraph type and writing time sit behind a per-school flag that starts off.
  * Off, the form shows neither and submits neither, on create or on edit, so a
  * teacher sees the form as it was before either setting shipped.
  */
