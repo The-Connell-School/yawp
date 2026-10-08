@@ -115,6 +115,48 @@ export function validateEditable(document: unknown, validationName: string) {
   return validateRubricPromotion({ ...document, name: validationName });
 }
 
+type LiveContent = {
+  content: JsonRecord;
+  type: (TypeColumns & { rubric?: { name: string } | null }) | null;
+};
+
+/**
+ * Builds the stored content for an edited document from the live content:
+ * prompt-config keys and top-level keys the editor does not own are carried
+ * over untouched. Shared by `save` (which writes the live row) and `stage`
+ * (which only appends a revision). For per-type rubrics it also returns the
+ * column update that `save` writes.
+ */
+function buildStoredContent(key: CatalogKey, live: LiveContent, document: JsonRecord) {
+  const livePrompt = isRecord(live.content.promptConfig) ? live.content.promptConfig : {};
+  const preservedPrompt = Object.fromEntries(Object.entries(livePrompt).filter(([k]) => !(PROMPT_CONFIG_KEYS as readonly string[]).includes(k)));
+  const editedPrompt = isRecord(document.promptConfig) ? document.promptConfig : {};
+  const promptConfig = { ...preservedPrompt, ...editedPrompt };
+
+  if (key.source === 'library') {
+    const preservedTop = Object.fromEntries(Object.entries(live.content).filter(([k]) => !['name', 'title', 'scoringScale', 'rubric', 'promptConfig', 'outputSchema', 'calibrationNotes'].includes(k)));
+    const next: JsonRecord = {
+      ...preservedTop, name: key.name, title: String(document.title).trim(),
+      ...(document.scoringScale !== undefined ? { scoringScale: document.scoringScale } : live.content.scoringScale !== undefined ? { scoringScale: live.content.scoringScale } : {}),
+      rubric: document.rubric,
+      ...(Object.keys(promptConfig).length || live.content.promptConfig !== undefined ? { promptConfig } : {}),
+      ...(document.outputSchema !== undefined ? { outputSchema: document.outputSchema } : live.content.outputSchema !== undefined ? { outputSchema: live.content.outputSchema } : {}),
+      calibrationNotes: typeof document.calibrationNotes === 'string' && document.calibrationNotes.trim() ? document.calibrationNotes : null,
+    };
+    return { next, typeUpdate: null };
+  }
+  const type = live.type!;
+  const typeUpdate: Prisma.AssignmentTypeUpdateInput = {
+    scoringScaleJson: (document.scoringScale ?? type.scoringScaleJson ?? undefined) as Prisma.InputJsonValue,
+    rubricJson: document.rubric as Prisma.InputJsonValue,
+    gradingPromptConfigJson: promptConfig as Prisma.InputJsonValue,
+    gradingOutputSchemaJson: (document.outputSchema ?? type.gradingOutputSchemaJson ?? undefined) as Prisma.InputJsonValue,
+    gradingCalibrationNotes: typeof document.calibrationNotes === 'string' && document.calibrationNotes.trim() ? document.calibrationNotes : null,
+  };
+  const next = perTypeContent({ ...type, ...(typeUpdate as unknown as TypeColumns), id: type.id, title: type.title });
+  return { next, typeUpdate };
+}
+
 export class CatalogError extends Error {
   constructor(message: string, readonly statusCode: number, readonly issues?: RubricValidationIssue[]) { super(message); }
 }
@@ -125,6 +167,13 @@ type Tx = Prisma.TransactionClient;
 export type SaveInput = {
   key: string; requestId: string; actorEmail: string; reason: string;
   expectedFingerprint: string; document: unknown;
+};
+
+/** Identity of the Yawp Internal draft a staged revision was built from. */
+export type StageSource = { contentId: string; version: number; fingerprint: string };
+export type StageInput = {
+  key: string; requestId: string; actorEmail: string; reason: string;
+  document: unknown; source: StageSource;
 };
 
 const revisionSelect = { id: true, rubricName: true, version: true, schemaJson: true, fingerprint: true, createdBy: true, reason: true, createdAt: true, requestId: true, requestHash: true } as const;
@@ -281,15 +330,21 @@ export class RubricCatalog {
     return { content: perTypeContent(type), library: null, type };
   }
 
-  async save(input: SaveInput) {
-    const key = parseCatalogKey(input.key);
+  /** Parses the key and validates an operator document exactly as every write must. */
+  private prepareWrite(rawKey: string, rawDocument: unknown) {
+    const key = parseCatalogKey(rawKey);
     if (!key) throw new CatalogError('Unknown rubric', 404);
     const validationName = key.source === 'library' ? key.name : 'assignment-type-rubric';
-    const validation = validateEditable(input.document, validationName);
+    const validation = validateEditable(rawDocument, validationName);
     if (!validation.ok) throw new CatalogError('Rubric validation failed', 422, validation.issues);
-    const document = clone(input.document) as JsonRecord;
+    const document = clone(rawDocument) as JsonRecord;
     if (key.source === 'library' && document.name !== key.name) throw new CatalogError('The rubric name cannot change; it identifies the rubric across environments', 422, [{ path: '/name', message: 'The rubric name cannot change.' }]);
     const name = key.source === 'library' ? key.name : perTypeKey(key.assignmentTypeId);
+    return { key, document, name };
+  }
+
+  async save(input: SaveInput) {
+    const { key, document, name } = this.prepareWrite(input.key, input.document);
     const requestHash = contentFingerprint({ key: input.key, expectedFingerprint: input.expectedFingerprint, document, reason: input.reason, actorEmail: input.actorEmail });
 
     return this.db.$transaction(async (tx) => {
@@ -307,34 +362,7 @@ export class RubricCatalog {
       if (reason) throw new CatalogError(reason, 403);
       if (contentFingerprint(live.content) !== input.expectedFingerprint) throw new CatalogError('This rubric changed since you opened it. Reload to see the latest version, then reapply your edit.', 409);
 
-      const livePrompt = isRecord(live.content.promptConfig) ? live.content.promptConfig : {};
-      const preservedPrompt = Object.fromEntries(Object.entries(livePrompt).filter(([k]) => !(PROMPT_CONFIG_KEYS as readonly string[]).includes(k)));
-      const editedPrompt = isRecord(document.promptConfig) ? document.promptConfig : {};
-      const promptConfig = { ...preservedPrompt, ...editedPrompt };
-
-      let next: JsonRecord;
-      let typeUpdate: Prisma.AssignmentTypeUpdateInput | null = null;
-      if (key.source === 'library') {
-        const preservedTop = Object.fromEntries(Object.entries(live.content).filter(([k]) => !['name', 'title', 'scoringScale', 'rubric', 'promptConfig', 'outputSchema', 'calibrationNotes'].includes(k)));
-        next = {
-          ...preservedTop, name: key.name, title: String(document.title).trim(),
-          ...(document.scoringScale !== undefined ? { scoringScale: document.scoringScale } : live.content.scoringScale !== undefined ? { scoringScale: live.content.scoringScale } : {}),
-          rubric: document.rubric,
-          ...(Object.keys(promptConfig).length || live.content.promptConfig !== undefined ? { promptConfig } : {}),
-          ...(document.outputSchema !== undefined ? { outputSchema: document.outputSchema } : live.content.outputSchema !== undefined ? { outputSchema: live.content.outputSchema } : {}),
-          calibrationNotes: typeof document.calibrationNotes === 'string' && document.calibrationNotes.trim() ? document.calibrationNotes : null,
-        };
-      } else {
-        const type = live.type!;
-        typeUpdate = {
-          scoringScaleJson: (document.scoringScale ?? type.scoringScaleJson ?? undefined) as Prisma.InputJsonValue,
-          rubricJson: document.rubric as Prisma.InputJsonValue,
-          gradingPromptConfigJson: promptConfig as Prisma.InputJsonValue,
-          gradingOutputSchemaJson: (document.outputSchema ?? type.gradingOutputSchemaJson ?? undefined) as Prisma.InputJsonValue,
-          gradingCalibrationNotes: typeof document.calibrationNotes === 'string' && document.calibrationNotes.trim() ? document.calibrationNotes : null,
-        };
-        next = perTypeContent({ ...type, ...(typeUpdate as unknown as TypeColumns), id: type.id, title: type.title });
-      }
+      const { next, typeUpdate } = buildStoredContent(key, live, document);
       if (sameContent(next, live.content)) throw new CatalogError('No changes to save', 422, [{ path: '/', message: 'Nothing changed compared with the live rubric.' }]);
 
       // 1) Make sure the live content exists as an immutable revision, and pin
@@ -374,6 +402,47 @@ export class RubricCatalog {
       const created = await tx.rubricRevision.findUnique({ where: { requestId: input.requestId }, select: revisionSelect });
       if (!created || !sameContent(created.schemaJson, next)) throw new CatalogError('Revision was not recorded', 500);
       return { revision: publicRevision(created as RevisionRow), replayed: false, captured };
+    });
+  }
+
+  /**
+   * Stages a Yawp Internal draft as an immutable revision without publishing
+   * it: the revision is appended (with its Internal source identity) but the
+   * live rubric row, its current pointer, per-type columns/baseline and every
+   * assignment are left exactly as they were. Schools keep grading with the
+   * current revision; only an explicit pin (demo-org rollout) uses it.
+   */
+  async stage(input: StageInput) {
+    const { key, document, name } = this.prepareWrite(input.key, input.document);
+    const source = { contentId: input.source.contentId, version: input.source.version, fingerprint: input.source.fingerprint };
+    const requestHash = contentFingerprint({ key: input.key, document, reason: input.reason, actorEmail: input.actorEmail, source });
+
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rubric-request:${input.requestId}`}, 0))`;
+      const replay = await tx.rubricRevision.findUnique({ where: { requestId: input.requestId }, select: revisionSelect });
+      if (replay) {
+        if (replay.requestHash !== requestHash) throw new CatalogError('Request ID already used with different inputs', 409);
+        return { revision: publicRevision(replay as RevisionRow), replayed: true };
+      }
+      // Serialize version numbering with other stages of this rubric (advisory
+      // lock) and with saves, whose revision trigger runs under the row lock.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rubric-revision:${name}`}, 0))`;
+      if (key.source === 'library') await tx.$queryRaw`SELECT id FROM "Rubric" WHERE name = ${key.name} FOR SHARE`;
+      else await tx.$queryRaw`SELECT id FROM "AssignmentType" WHERE id = ${key.assignmentTypeId} FOR SHARE`;
+      const live = await this.liveContent(tx, key);
+      if (!live) throw new CatalogError('Unknown rubric', 404);
+      const reason = readOnlyReason(key.source, key.source === 'library' ? key.name : '', live.content, live.type?.rubric?.name ?? null);
+      if (reason) throw new CatalogError(reason, 403);
+
+      const { next } = buildStoredContent(key, live, document);
+      const latest = await tx.rubricRevision.aggregate({ where: { rubricName: name }, _max: { version: true } });
+      const created = await tx.rubricRevision.create({ select: revisionSelect, data: {
+        id: randomUUID(), rubricName: name, version: (latest._max.version ?? 0) + 1,
+        schemaJson: next as Prisma.InputJsonObject, fingerprint: contentFingerprint(next),
+        requestId: input.requestId, requestHash, createdBy: input.actorEmail, reason: input.reason,
+        sourceContentId: source.contentId, sourceVersion: source.version, sourceFingerprint: source.fingerprint,
+      } });
+      return { revision: publicRevision(created as RevisionRow), replayed: false };
     });
   }
 }

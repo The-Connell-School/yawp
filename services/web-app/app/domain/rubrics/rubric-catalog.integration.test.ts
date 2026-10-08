@@ -239,7 +239,7 @@ run('staging keeps non-editable prompt keys and validates like save', async () =
   expect(await db.assignmentTypeRubricBaseline.findUnique({ where: { assignmentTypeId: type.id } })).toBeNull();
 
   await expect(catalog.stage({ key, requestId: randomUUID(), actorEmail: actor, reason: 'Broken', document: { ...document, rubric: { categories: [] } }, source: source() })).rejects.toMatchObject({ statusCode: 422 });
-  await expect(catalog.stage({ key: 'does-not-exist', requestId: randomUUID(), actorEmail: actor, reason: 'Missing', document, source: source() })).rejects.toMatchObject({ statusCode: 404 });
+  await expect(catalog.stage({ key: 'does-not-exist', requestId: randomUUID(), actorEmail: actor, reason: 'Missing', document: { ...document, name: 'does-not-exist' }, source: source() })).rejects.toMatchObject({ statusCode: 404 });
   const { name } = await libraryRubric(db, 'daily-pages-engagement');
   const libDetail = await catalog.get(name);
   await expect(catalog.stage({ key: name, requestId: randomUUID(), actorEmail: actor, reason: 'Rename', document: { ...(libDetail.live.editable as object), name: 'renamed' }, source: source() })).rejects.toMatchObject({ statusCode: 422 });
