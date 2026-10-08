@@ -716,6 +716,12 @@ run_tooling_if_needed() {
     "${compose[@]}" pull --quiet toolbox web || true
   fi
 
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/repair-lesson-planner-migration-history.sql" ]]; then
+    echo "Repairing lesson-planner migration history in Postgres before migrate deploy..."
+    docker exec -i "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d "$DATABASE_NAME" \
+      < "$SOURCE_DIR/packages/prisma/scripts/repair-lesson-planner-migration-history.sql"
+  fi
+
   local tooling_command
   tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun run scripts/repair-lesson-planner-migration-history.ts && bun prisma migrate deploy'
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/backfill-class-art-key.ts" ]]; then
