@@ -140,24 +140,18 @@ async function ensurePreviewSuperAdmin(
 async function ensureTeacherNoteOnGradedDailyPagesSample(prisma: SeedClient) {
   const submission = await prisma.submission.findFirst({
     where: {
-      OR: [
-        { title: 'Honest and kind — Casey' },
-        { document: { title: 'Honest and kind — Casey' } },
-      ],
       document: {
         assignmentType: { kind: 'daily_pages', archivedAt: null },
         membership: {
           user: { email: PREVIEW_TEACHER_NOTES_QA_STUDENT_EMAIL },
         },
       },
-      gradingAssistantRuns: {
-        some: {
-          OR: [
-            { source: 'daily-pages-short-form-default' },
-            { source: 'preview-teacher-notes-qa' },
-          ],
-        },
-      },
+      OR: [
+        { title: { startsWith: 'QA #415 Daily Pages' } },
+        { title: 'Honest and kind — Casey' },
+        { document: { title: { startsWith: 'QA #415 Daily Pages' } } },
+        { document: { title: 'Honest and kind — Casey' } },
+      ],
       gradedAt: { not: null },
     },
     orderBy: { submittedAt: 'desc' },
