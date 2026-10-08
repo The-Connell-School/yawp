@@ -3,8 +3,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { EDITOR_SELECTOR } from '../test-helpers';
 import type { Page } from '@playwright/test';
 import { assignTeacherToClass, createTeacherInvitation } from '../db-helpers';
-
-const E2E_BASE_URL = 'http://127.0.0.1:5173';
+import { E2E_BASE_URL } from '../constants';
 
 async function openVerifyPage(page: Page, verifySearch: string) {
   await page.goto('about:blank');

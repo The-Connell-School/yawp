@@ -2,7 +2,12 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { generateTOTP } from '../../app/utils/totp.server';
-import { E2E_STRIPE_BASE_URL, E2E_UA_PARTNER_CODE } from '../constants';
+import {
+  E2E_BASE_URL,
+  E2E_STRIPE_BASE_URL,
+  E2E_UA_APP_ORIGIN,
+  E2E_UA_PARTNER_CODE,
+} from '../constants';
 import {
   createPrismaReconciliationDependencies,
   reconcileUaExistingSubscriptions,
@@ -10,8 +15,8 @@ import {
 
 const LICENSE_COHORT = 'ua-2026';
 const LICENSE_CUTOFF = new Date('2027-01-01T06:00:00.000Z');
-const APP_ORIGIN = 'http://127.0.0.1:5173';
-const UA_APP_ORIGIN = 'http://ua.localhost:5173';
+const APP_ORIGIN = E2E_BASE_URL;
+const UA_APP_ORIGIN = E2E_UA_APP_ORIGIN;
 
 async function signIn(
   page: Page,
@@ -730,7 +735,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       });
 
       const invalidWebhook = await page.request.post(
-        'http://127.0.0.1:5173/api/stripe/webhook',
+        `${E2E_BASE_URL}/api/stripe/webhook`,
         {
           headers: {
             'content-type': 'application/json',

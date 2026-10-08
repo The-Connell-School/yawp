@@ -1,12 +1,12 @@
 import Stripe from 'stripe';
 import {
+  E2E_BASE_URL,
   E2E_STRIPE_BASE_URL,
   E2E_STRIPE_PORT,
   E2E_STRIPE_WEBHOOK_SECRET,
+  E2E_UA_APP_ORIGIN,
   E2E_UA_ORGANIZATION_ID,
 } from './constants';
-
-const E2E_UA_APP_ORIGIN = 'http://ua.localhost:5173';
 
 type FakeSession = {
   id: string;
@@ -146,7 +146,7 @@ async function deliverWebhook(args: {
 
   const responses = await Promise.all(
     Array.from({ length: args.repeat ?? 1 }, async () => {
-      const response = await fetch('http://127.0.0.1:5173/api/stripe/webhook', {
+      const response = await fetch(`${E2E_BASE_URL}/api/stripe/webhook`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',

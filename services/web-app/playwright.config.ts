@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { E2E_BASE_URL, E2E_PORT } from './e2e/constants';
 
 /**
  * @see https://playwright.dev/docs/test-configuration
@@ -15,7 +16,7 @@ export default defineConfig({
     trace: process.env.CI ? 'retain-on-failure' : 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: E2E_BASE_URL,
     launchOptions: process.env.PW_EXECUTABLE_PATH
       ? { executablePath: process.env.PW_EXECUTABLE_PATH }
       : undefined,
@@ -44,9 +45,8 @@ export default defineConfig({
       timeout: 30 * 1000,
     },
     {
-      command:
-        "bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a && E2E=true bun run dev -- --port 5173 --host 127.0.0.1 --strictPort'",
-      url: 'http://127.0.0.1:5173',
+      command: `bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a && E2E=true bun run dev -- --port ${E2E_PORT} --host 127.0.0.1 --strictPort'`,
+      url: E2E_BASE_URL,
       reuseExistingServer: !process.env.CI,
       timeout: 240 * 1000,
     },
