@@ -19,8 +19,54 @@ import {
 } from './local-dev/preview-teacher-notes-qa';
 import { sampleRubricSnapshot } from './local-dev/seed-daily-pages-samples';
 import { DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG } from '../../../services/web-app/app/domain/assignment-types/daily-pages-short-form-rubric.ts';
+import dailyPagesEngagementSchema from '../../../services/web-app/app/domain/rubrics/library/daily-pages-engagement.json';
 
 type SeedClient = PrismaClient;
+
+const DAILY_PAGES_ENGAGEMENT_RUBRIC_NAME = 'daily-pages-engagement';
+
+async function ensureDailyPagesEngagementTeacherNotesEnabled(
+  prisma: SeedClient,
+  enabled: boolean
+) {
+  const rubric = await prisma.rubric.findUnique({
+    where: { name: DAILY_PAGES_ENGAGEMENT_RUBRIC_NAME },
+    include: { currentRevision: true },
+  });
+  if (!rubric?.schemaJson || typeof rubric.schemaJson !== 'object') return;
+
+  const base = rubric.schemaJson as Record<string, unknown>;
+  const outputSchema = {
+    ...(typeof base.outputSchema === 'object' && base.outputSchema
+      ? (base.outputSchema as Record<string, unknown>)
+      : (dailyPagesEngagementSchema as { outputSchema?: Record<string, unknown> })
+          .outputSchema ?? {}),
+  };
+  if (enabled) outputSchema.teacherNotesEnabled = true;
+  else delete outputSchema.teacherNotesEnabled;
+
+  const nextSchema = { ...base, outputSchema };
+  await prisma.rubric.update({
+    where: { id: rubric.id },
+    data: { schemaJson: nextSchema },
+  });
+  if (rubric.currentRevision) {
+    const revisionSchema =
+      rubric.currentRevision.schemaJson &&
+      typeof rubric.currentRevision.schemaJson === 'object'
+        ? (rubric.currentRevision.schemaJson as Record<string, unknown>)
+        : {};
+    await prisma.rubricRevision.update({
+      where: { id: rubric.currentRevision.id },
+      data: {
+        schemaJson: {
+          ...revisionSchema,
+          outputSchema,
+        },
+      },
+    });
+  }
+}
 
 export function shouldRunPreviewTeacherNotesQaSeed() {
   const mode = process.env.PREVIEW_DATA_MODE;
@@ -45,6 +91,7 @@ export async function seedPreviewTeacherNotesQa(prisma: SeedClient) {
   }
 
   await ensurePreviewSuperAdmin(prisma, teacherMembership.organizationId);
+  await ensureDailyPagesEngagementTeacherNotesEnabled(prisma, true);
   const submissionId = await ensureTeacherNoteOnGradedDailyPagesSample(prisma);
   const result = {
     status: 'ok' as const,

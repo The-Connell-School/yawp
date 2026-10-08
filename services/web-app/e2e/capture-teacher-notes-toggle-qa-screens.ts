@@ -15,8 +15,7 @@ import {
   PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_EMAIL,
 } from '../../../packages/prisma/scripts/local-dev/preview-teacher-notes-qa';
 
-/** Staff grading view on PR preview (dev.teacher hits a 500 on this submission). */
-const STAFF_GRADING_EMAIL = PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_EMAIL;
+const STAFF_GRADING_EMAIL = 'dev.teacher@yawp.local';
 
 const previewUrl = process.env.PREVIEW_URL?.replace(/\/$/, '');
 const previewCode = process.env.PREVIEW_CODE;
