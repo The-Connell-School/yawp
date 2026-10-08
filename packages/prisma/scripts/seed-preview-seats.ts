@@ -12,7 +12,10 @@ import {
 } from './preview-seats';
 import { seedApHistoryLibrary } from './seed-ap-history-library';
 import { attachApHistorySourceImages } from './local-dev/seed-ap-history';
-import { ensurePreviewFreeClassroomFixture } from './local-dev/seed-free-classroom-preview';
+import {
+  ensurePreviewFreeClassroomFixture,
+  ensurePreviewSchoolReporterNavFixture,
+} from './local-dev/seed-preview-free-classroom';
 
 assertLocalSeedTarget();
 
@@ -24,6 +27,17 @@ const prisma = createPrismaClient();
 
 try {
   const results = await ensurePreviewSeats(prisma, seats);
+  const includeFreeClassroomFixture =
+    process.env.PREVIEW_SLUG !== 'demo' &&
+    process.env.INCLUDE_PREVIEW_FREE_CLASSROOM_FIXTURE !== 'false';
+  if (includeFreeClassroomFixture) {
+    const freeClassroom = await ensurePreviewFreeClassroomFixture(prisma);
+    console.log(`Preview free classroom fixture: ${freeClassroom.status}`);
+    const schoolReporterNav = await ensurePreviewSchoolReporterNavFixture(prisma);
+    console.log(`Preview school reporter nav fixture: ${schoolReporterNav.status}`);
+  } else {
+    console.log('Preview free classroom fixture: skipped');
+  }
   const writingPractice = await enableWritingPracticeForPreviewOrganizations(
     prisma,
     seats.map(({ organizationId }) => organizationId)
@@ -35,8 +49,6 @@ try {
   // idempotent AP catalog on every seed-mode deploy, including existing seats.
   await seedApHistoryLibrary(prisma, seats[0].organizationId);
   await attachApHistorySourceImages(prisma);
-  const freeClassroom = await ensurePreviewFreeClassroomFixture(prisma);
-  console.log(`Preview free-classroom fixture: ${freeClassroom.status}`);
   for (const seat of seats) {
     const result = results.find(
       ({ organizationId }) => organizationId === seat.organizationId

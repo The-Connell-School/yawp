@@ -1355,4 +1355,99 @@ describe('api.assignments.create', () => {
       expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
     });
   });
+
+  describe('free classroom assignment quotas', () => {
+    beforeEach(() => {
+      requireMembership.mockResolvedValue({
+        id: 'teacher-1',
+        role: 'TEACHER',
+        organization: { id: 'org-free', name: 'Free Org', plan: 'FREE_CLASSROOM' },
+      });
+      prisma.organization.findMany.mockResolvedValue([
+        { id: 'org-free', apHistoryEnabled: false },
+      ]);
+      prisma.class.findMany.mockResolvedValue([
+        {
+          id: 'class-1',
+          school: { id: 'school-1', organizationId: 'org-free' },
+        },
+      ]);
+      mockAssignmentTypeAvailable({ kind: 'class_starter' });
+    });
+
+    test('creates through the shared deployment helper for a free classroom org', async () => {
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Start class.',
+          title: 'Starter',
+        }),
+        params: {},
+      } as any);
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classIds: ['class-1'],
+          data: expect.objectContaining({ assignmentTypeId: 'at-1' }),
+        })
+      );
+    });
+
+    test('returns 403 when the bundle quota is exhausted', async () => {
+      const { FreeClassroomAssignmentQuotaError } = await import(
+        '~/utils/assignment-quota.server'
+      );
+      createAssignmentDeployedToClasses.mockRejectedValue(
+        new FreeClassroomAssignmentQuotaError(
+          "You've used all 12 free Class Starters.",
+          'quota_exhausted',
+          'class_starter'
+        )
+      );
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Start class.',
+          title: 'Starter',
+        }),
+        params: {},
+      } as any);
+      const body = await readBody(response);
+
+      expect(responseStatus(response)).toBe(403);
+      expect(body.success).toBe(false);
+      expect(body.message).toMatch(/used all 12 free Class Starters/i);
+    });
+
+    test('does not pass quota options for a school org', async () => {
+      requireMembership.mockResolvedValue({
+        id: 'teacher-1',
+        role: 'TEACHER',
+        organization: { id: 'org-1', name: 'School Org', plan: 'SCHOOL' },
+      });
+      mockAssignmentTypeAvailable({ kind: 'class_starter' });
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Start class.',
+          title: 'Starter',
+        }),
+        params: {},
+      } as any);
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          quotaOrganization: expect.anything(),
+        })
+      );
+    });
+  });
 });

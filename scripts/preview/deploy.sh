@@ -712,6 +712,9 @@ run_tooling_if_needed() {
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-class-starter-assignment-type.ts" ]]; then
     tooling_command+=' && bun run seed-class-starter-assignment-type'
   fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts" ]]; then
+    tooling_command+=' && bun run seed-free-tier-bundle-assignment-types'
+  fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
   fi

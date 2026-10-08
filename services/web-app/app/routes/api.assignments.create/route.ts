@@ -28,6 +28,7 @@ import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-
 import { autoArrangeNewAssignment } from '~/domain/collaboration/auto-arrange.server';
 import { groupSetupNextStep } from '~/domain/collaboration/next-step';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
+import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -305,6 +306,7 @@ export async function action({ request }: ActionFunctionArgs) {
           custom: { key: `custom-${randomUUID()}`, ...parsed.data },
         }),
         classIds: deployClassIds,
+        organizationPlan: profile.organization.plan,
       });
 
       return dataResponse({
@@ -348,6 +350,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       classIds: deployClassIds,
       deployment: { postAt, dueAt },
+      organizationPlan: profile.organization.plan,
     });
 
     let nextStep: ReturnType<typeof groupSetupNextStep> = null;
@@ -430,6 +433,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       classIds: deployClassIds,
       deployment: { postAt, dueAt },
+      organizationPlan: profile.organization.plan,
     });
 
     // "Group them for me" and "one doc for the whole class" describe an
@@ -465,6 +469,12 @@ export async function action({ request }: ActionFunctionArgs) {
       await deleteAssignmentPromptAttachment(
         promptAttachmentData.promptAttachmentKey
       ).catch(() => {});
+    }
+    if (error instanceof FreeClassroomAssignmentQuotaError) {
+      return dataResponse(
+        { success: false, message: error.message },
+        { status: 403 }
+      );
     }
     throw error;
   }

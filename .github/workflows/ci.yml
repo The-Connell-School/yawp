@@ -172,6 +172,16 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma migrate deploy
 
+      - name: 🧪 Free tier bundle seed connection (tunnel TLS)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        run: bun test ./packages/prisma/scripts/seed-free-tier-bundle-assignment-types.test.ts
+
+      - name: 🌱 Seed free tier bundle assignment types
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun run --cwd packages/prisma seed-free-tier-bundle-assignment-types
+
       # CI names every test file it runs, and nothing ran services/web-app/app/**
       # unit tests: the rate limiter, client-IP and free-tier tests were present but
       # never executed. These need the migrated database above (real SQL), so they
@@ -197,6 +207,12 @@ jobs:
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
           $(find ./services/web-app/app/domain/free-tier -name '*.test.ts' ! -name 'student-join.server.test.ts')
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
+          ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
+          ./services/web-app/app/utils/free-tier-class-create-route.real-db.integration.test.ts
+          ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
+          ./services/web-app/app/utils/assignment-quota.real-db.integration.test.ts
+          ./packages/prisma/preview-access-code.free-classroom.test.ts
+          ./packages/prisma/scripts/preview-seats.test.ts
           ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
 
       - name: 🎨 Backfill class artwork keys
@@ -300,6 +316,10 @@ jobs:
             app/domain/feature-flags/feature-flags.server.test.ts \
             app/utils/internal-feature-flags-http.server.test.ts \
             app/routes/api.assignments.create/route.test.ts \
+            app/routes/app.assignments._index/route.test.ts \
+            app/routes/app.my-classes._index/route.test.ts \
+            app/utils/assignment-quota.server.test.ts \
+            app/domain/free-tier/provision-free-classroom.server.test.ts \
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/routes/api.domain.grade-essay-ai/route.test.ts \
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
@@ -369,6 +389,7 @@ jobs:
       - name: 🔖 Resolve Playwright version
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         id: playwright-version
+        working-directory: services/web-app
         run: |
           echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
 
@@ -380,22 +401,19 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
 
-      # Chromium only. `test:e2e:smoke` runs `--project=chromium` and the
-      # preview-access config defines a single chromium project, so Firefox was
-      # downloaded on every run and never launched.
-      - name: Install Playwright browsers
-        if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true')) && steps.playwright-cache.outputs.cache-hit != 'true' }}
+      # Chromium only. On a browser cache hit, install the binary only — apt deps
+      # are already on the runner and `install-deps` has timed out on cache hits.
+      - name: Install Playwright chromium
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
-        timeout-minutes: 10
-        run: npx --yes playwright install --with-deps chromium
-
-      # The cache holds the browsers, not the apt packages they link against, so
-      # a restored cache still needs the system libraries putting back.
-      - name: Install Playwright system dependencies
-        if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true')) && steps.playwright-cache.outputs.cache-hit == 'true' }}
-        working-directory: services/web-app
-        timeout-minutes: 10
-        run: npx --yes playwright install-deps chromium
+        timeout-minutes: 15
+        run: |
+          version=$(node -p "require('@playwright/test/package.json').version")
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            bunx --package "@playwright/test@${version}" playwright install chromium
+          else
+            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
+          fi
 
       - name: 🧪 Run Playwright tests
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}

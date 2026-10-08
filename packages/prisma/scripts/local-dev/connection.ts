@@ -10,6 +10,27 @@ function getSchemaFromDatabaseUrl(url: string): string | undefined {
   return decodeURIComponent(match[1]);
 }
 
+export function buildPrismaPgPoolConfig(
+  databaseUrl: string,
+  env: NodeJS.ProcessEnv = process.env
+) {
+  const schema =
+    env.DATABASE_SCHEMA?.trim() || getSchemaFromDatabaseUrl(databaseUrl);
+  const isRemoteMigrateTunnel = env.REMOTE_MIGRATE_TUNNEL === '1';
+  const isLocal = isLocalDatabaseUrl(databaseUrl) && !isRemoteMigrateTunnel;
+  const isSimpleLocal =
+    !schema && isLocalDatabaseUrl(databaseUrl) && !isRemoteMigrateTunnel;
+
+  if (isSimpleLocal) {
+    return { connectionString: databaseUrl, ssl: false as const };
+  }
+
+  return {
+    connectionString: databaseUrl,
+    ...(isLocal ? {} : { ssl: { rejectUnauthorized: false as const } }),
+  };
+}
+
 export function createPrismaClient(databaseUrl = process.env.DATABASE_URL) {
   if (!databaseUrl?.trim()) {
     throw new Error('DATABASE_URL environment variable is not set');
@@ -18,19 +39,15 @@ export function createPrismaClient(databaseUrl = process.env.DATABASE_URL) {
   const schema =
     process.env.DATABASE_SCHEMA?.trim() ||
     getSchemaFromDatabaseUrl(databaseUrl);
-  const isRemoteMigrateTunnel = process.env.REMOTE_MIGRATE_TUNNEL === '1';
-  const isLocal = isLocalDatabaseUrl(databaseUrl) && !isRemoteMigrateTunnel;
-  const isSimpleLocal =
-    !schema &&
-    isLocalDatabaseUrl(databaseUrl) &&
-    !isRemoteMigrateTunnel;
+  const poolConfig = buildPrismaPgPoolConfig(databaseUrl);
 
-  const adapter = isSimpleLocal
-    ? new PrismaPg({ connectionString: databaseUrl, ssl: false })
-    : new PrismaPg(
-        { connectionString: databaseUrl, ssl: isLocal ? false : { rejectUnauthorized: false } },
-        schema ? { schema } : undefined
-      );
+  const adapter =
+    poolConfig.ssl === false && !schema
+      ? new PrismaPg(poolConfig)
+      : new PrismaPg(
+          poolConfig,
+          schema ? { schema } : undefined
+        );
 
   return new PrismaClient({ adapter });
 }
