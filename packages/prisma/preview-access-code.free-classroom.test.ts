@@ -95,6 +95,40 @@ describe('preview access seat registry (deploy.sh contract)', () => {
     );
   });
 
+  test('second deploy keeps existing fixture access seat codes', () => {
+    const fixtureCodes = ['calm-panda-8127', 'nimble-fox-4512'];
+    let index = 0;
+    const nextCode = () => fixtureCodes[index++] ?? 'wise-wren-9999';
+    const first = buildPreviewAccessSeatRegistry({
+      count: 1,
+      previewSlug: 'pr-414',
+      generateCode: nextCode,
+    });
+    const freeCode = first.find(
+      (seat) => seat.organizationId === PREVIEW_FREE_CLASSROOM_ORG_ID
+    )?.code;
+    const reporterCode = first.find(
+      (seat) => seat.organizationId === PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID
+    )?.code;
+    expect(freeCode).toBeDefined();
+    expect(reporterCode).toBeDefined();
+
+    const second = buildPreviewAccessSeatRegistry({
+      count: 1,
+      previewSlug: 'pr-414',
+      existingSeats: first,
+      generateCode: () => 'should-not-replace-fixtures-9001',
+    });
+    expect(
+      second.find((seat) => seat.organizationId === PREVIEW_FREE_CLASSROOM_ORG_ID)?.code
+    ).toBe(freeCode);
+    expect(
+      second.find(
+        (seat) => seat.organizationId === PREVIEW_SCHOOL_REPORTER_NAV_ORG_ID
+      )?.code
+    ).toBe(reporterCode);
+  });
+
   test('fixture seats in a retained map do not inflate provisioned seat count', () => {
     const codes = [
       'brave-otter-4193',

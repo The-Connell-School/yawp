@@ -223,7 +223,20 @@ export function buildPreviewAccessSeatRegistry({
   ) {
     return provisioned;
   }
-  return withPreviewFixtureAccessSeats(provisioned, generateCode);
+  const existingFixtures = existingSeats.filter((seat) =>
+    isPreviewFixtureAccessOrg(seat.organizationId)
+  );
+  let withRetainedFixtures = provisioned;
+  for (const fixture of existingFixtures) {
+    if (
+      !withRetainedFixtures.some(
+        (seat) => seat.organizationId === fixture.organizationId
+      )
+    ) {
+      withRetainedFixtures = [...withRetainedFixtures, fixture];
+    }
+  }
+  return withPreviewFixtureAccessSeats(withRetainedFixtures, generateCode);
 }
 
 function previewSeatIdentity(
