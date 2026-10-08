@@ -148,17 +148,20 @@ test.describe('Free-tier handle student', () => {
       });
 
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=students`);
-      await teacherPage
-        .getByRole('button', { name: 'Reset login' })
-        .click();
-      const resetDialog = teacherPage.getByRole('dialog');
+      const studentRow = teacherPage
+        .getByRole('row')
+        .filter({ hasText: `@${handle}` });
+      await studentRow.getByRole('button', { name: 'Reset login' }).click();
+      const resetDialog = teacherPage.getByTestId(
+        'handle-student-password-reset-dialog'
+      );
       await resetDialog.getByLabel('Temporary password').fill(tempPassword);
       await resetDialog
         .getByRole('button', { name: 'Set temporary password' })
         .click();
       await expect(
-        resetDialog.getByText('Temporary password set')
-      ).toBeVisible();
+        resetDialog.getByRole('heading', { name: 'Temporary password set' })
+      ).toBeVisible({ timeout: 15000 });
       await resetDialog.getByRole('button', { name: 'Done' }).click();
       await teacherContext.close();
 

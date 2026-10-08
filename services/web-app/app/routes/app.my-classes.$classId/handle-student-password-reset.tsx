@@ -66,6 +66,7 @@ export function HandleStudentPasswordResetButton({
       >
         <DialogContent
           className="sm:max-w-md"
+          data-testid="handle-student-password-reset-dialog"
           onClick={(e) => e.stopPropagation()}
         >
           {revealedPassword ? (
