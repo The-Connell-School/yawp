@@ -60,6 +60,16 @@ try {
       );
     }
   }
+  try {
+    assertPreviewPlannerQaTarget();
+    const plannerQa = await seedPreviewPlannerQa(prisma);
+    console.log('preview planner QA seed:', JSON.stringify(plannerQa));
+  } catch (error) {
+    console.log(
+      'preview planner QA seed skipped:',
+      error instanceof Error ? error.message : error
+    );
+  }
 } finally {
   await prisma.$disconnect();
 }
