@@ -14,7 +14,7 @@ import {
   resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
-import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
+import { postGradeToBlackboardInBackground } from '~/integrations/blackboard-ags.server';
 import { scoringModeFromAiMeta } from '~/domain/grading/scoring-mode';
 
 const POST = z.object({
@@ -270,8 +270,7 @@ export async function action({ request }: ActionFunctionArgs) {
         }
       }
       if (pct == null) continue;
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      maybePostGradeToBlackboard({ numericPercentage: pct });
+      void postGradeToBlackboardInBackground({ numericPercentage: pct });
     }
   } catch (err) {
     // eslint-disable-next-line no-console
