@@ -1278,8 +1278,8 @@ export function TeacherGradingPanel({
                 }
               };
               const configuredScoreLabel = hasScore
-                ? getCategoryScoreLabel(item, current.score) ??
-                  getCategoryScoreBand(item, current.score)?.label ??
+                ? getCategoryScoreBand(item, current.score)?.label ??
+                  getCategoryScoreLabel(item, current.score) ??
                   null
                 : null;
               const categoryBounds = getCategoryScoreBounds(item);

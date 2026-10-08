@@ -101,3 +101,13 @@ export function dailyPagesEngagementHolisticPickerScores(total: number): number[
     band.tier === 'excellent' ? band.max : band.min
   );
 }
+
+/** Score labels aligned to holistic picker values — tier names come from bands, not scaled library anchors. */
+export function dailyPagesEngagementHolisticScoreLabels(
+  total: number
+): { value: number; label: string }[] {
+  return dailyPagesEngagementTierBands(total).map((band) => ({
+    value: band.tier === 'excellent' ? band.max : band.min,
+    label: band.label,
+  }));
+}

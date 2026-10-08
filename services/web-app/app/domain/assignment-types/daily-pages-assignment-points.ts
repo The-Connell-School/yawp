@@ -10,6 +10,7 @@ import {
 } from './daily-pages-engagement-rubric';
 import {
   dailyPagesEngagementHolisticPickerScores,
+  dailyPagesEngagementHolisticScoreLabels,
   dailyPagesEngagementTierBands,
 } from './daily-pages-engagement-tier-bands';
 
@@ -62,12 +63,22 @@ function dailyPagesEngagementHolisticPickerIsCurrent(
   scoringMode: ResolvedAssignmentTypeGradingConfig['scoringMode']
 ): boolean {
   if (scoringMode !== 'holistic_tier') return true;
-  const expected = dailyPagesEngagementHolisticPickerScores(total);
-  const actual = category.allowedScores;
-  if (!actual?.length) return false;
-  return (
-    actual.length === expected.length &&
-    expected.every((score, index) => actual[index] === score)
+  const expectedScores = dailyPagesEngagementHolisticPickerScores(total);
+  const actualScores = category.allowedScores;
+  if (!actualScores?.length) return false;
+  if (
+    actualScores.length !== expectedScores.length ||
+    !expectedScores.every((score, index) => actualScores[index] === score)
+  ) {
+    return false;
+  }
+  const expectedLabels = dailyPagesEngagementHolisticScoreLabels(total);
+  const actualLabels = category.scoreLabels;
+  if (!actualLabels?.length) return false;
+  return expectedLabels.every((entry) =>
+    actualLabels.some(
+      (label) => label.value === entry.value && label.label === entry.label
+    )
   );
 }
 
@@ -128,11 +139,16 @@ export function scaleDailyPagesForAssignment(
       ? useEngagementTierBands
         ? {
             ...category,
-            scoreLabels: scaleScoreLabelsFromSource(
-              category.scoreLabels,
-              sourceMax === total ? DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL : sourceMax,
-              total
-            ),
+            scoreLabels:
+              config.scoringMode === 'holistic_tier'
+                ? dailyPagesEngagementHolisticScoreLabels(total)
+                : scaleScoreLabelsFromSource(
+                    category.scoreLabels,
+                    sourceMax === total
+                      ? DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL
+                      : sourceMax,
+                    total
+                  ),
             bands: dailyPagesEngagementTierBands(total).map((tierBand) => {
               const sourceBand = sourceBands.find(
                 (band) => band.label === tierBand.label
