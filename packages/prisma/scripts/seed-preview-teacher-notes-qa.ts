@@ -146,6 +146,14 @@ async function ensureTeacherNoteOnGradedDailyPagesSample(prisma: SeedClient) {
           user: { email: PREVIEW_TEACHER_NOTES_QA_STUDENT_EMAIL },
         },
       },
+      gradingAssistantRuns: {
+        some: {
+          OR: [
+            { source: 'daily-pages-short-form-default' },
+            { source: 'preview-teacher-notes-qa' },
+          ],
+        },
+      },
       gradedAt: { not: null },
     },
     orderBy: { submittedAt: 'desc' },
