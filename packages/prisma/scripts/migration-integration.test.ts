@@ -867,12 +867,12 @@ describe('migration integration (real Postgres)', () => {
     });
   }, 120000);
 
-  test('20261008121500 repair free class join columns is re-runnable', () => {
+  test('20261008124500 repair free class join columns is re-runnable', () => {
     const repairSql = readFileSync(
       join(
         PRISMA_DIR,
         'migrations',
-        '20261008121500_repair_free_class_join_columns',
+        '20261008124500_repair_free_class_join_columns',
         'migration.sql'
       ),
       'utf8'
