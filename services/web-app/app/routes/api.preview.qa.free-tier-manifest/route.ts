@@ -11,7 +11,7 @@ function notFound() {
   return new Response('Not Found', { status: 404, headers: { 'cache-control': 'no-store' } });
 }
 
-/** Preview-only: read last emailed signed URLs for ship-review Playwright (no minting). */
+/** Preview-only: read emailed URLs for ship-review; may mint RELEASE links when none were logged. */
 export async function loader({ request }: LoaderFunctionArgs) {
   if (process.env.YAWP_ENVIRONMENT !== 'preview') return notFound();
   await requireSuperAdmin(request);

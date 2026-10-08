@@ -37,6 +37,17 @@ export class AiLockedForFreeTierError extends Error {
   }
 }
 
+export function aiLockedForFreeTierMessage() {
+  return 'AI tools unlock after your school administrator approves YAWP for your classroom.';
+}
+
+export function aiAdmissionErrorResponse(error: unknown): Response | null {
+  if (error instanceof AiLockedForFreeTierError) {
+    return Response.json({ error: 'ai_locked', message: aiLockedForFreeTierMessage() }, { status: 403 });
+  }
+  return null;
+}
+
 export async function reserveAiRequest({
   membershipId,
   organizationId,

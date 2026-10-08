@@ -27,12 +27,6 @@ mock.module('~/utils/auth.server', () => ({
   sessionKey: 'sessionId',
   verifyUserPassword,
 }));
-mock.module('~/utils/rate-limit.server', () => ({
-  enforceLoginTargetRateLimit: async () => ({ allowed: true }),
-  checkFailedLoginIpRateLimit: async () => ({ allowed: true }),
-  recordFailedLoginIpRateLimit: async () => ({ allowed: true }),
-  rateLimitedFormResponse: () => new Response(null, { status: 429 }),
-}));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/cookie-session-storages/authentication.server', () => ({
   authSessionStorage: {

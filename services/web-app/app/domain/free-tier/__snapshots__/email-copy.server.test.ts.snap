@@ -10,9 +10,7 @@ https://yawp.school/join
 
 This link is for you only and expires in 30 days.
 
-— The YAWP team
-
-Copy version: 2026-10-08-v4"
+— The YAWP team"
 `;
 
 exports[`admin approval email includes note and links 1`] = `
@@ -36,7 +34,5 @@ Approve YAWP for this school (link expires in 14 days):
 https://yawp.school/a
 
 I'm not the right person to approve this:
-https://yawp.school/n
-
-Copy version: 2026-10-08-v4"
+https://yawp.school/n"
 `;

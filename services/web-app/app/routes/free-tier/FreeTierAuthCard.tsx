@@ -81,9 +81,6 @@ export function FreeTierEmailPreview(props: { body: string; versionLabel?: strin
     <div className="rounded-xl border border-border bg-muted/50 p-4 text-left text-sm text-foreground">
       <p className="mb-2 font-medium text-foreground">Email preview</p>
       <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{props.body}</div>
-      {props.versionLabel ? (
-        <p className="mt-2 text-xs text-muted-foreground">Copy version {props.versionLabel}</p>
-      ) : null}
     </div>
   );
 }

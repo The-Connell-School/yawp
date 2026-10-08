@@ -235,6 +235,75 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     expect(finalApp?.status).toBe('MANUAL_REVIEW');
   });
 
+  test('approved teacher with only archived class reaches my-classes without redirect loop', async ({
+    page,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const stamp = Date.now();
+    const teacherEmail = `ft-archived-${stamp}@${ADMIN_DOMAIN}`;
+    const passwordHash = await import('~/utils/auth.server').then((m) =>
+      m.getPasswordHash(JOIN_PASSWORD)
+    );
+    const user = await prisma.user.create({
+      data: {
+        email: teacherEmail,
+        name: 'Archived Class Teacher',
+        password: { create: { hash: passwordHash } },
+      },
+    });
+    const org = await prisma.organization.create({
+      data: {
+        name: 'FT Archived Org',
+        plan: 'FREE_CLASSROOM',
+        planActivatedAt: new Date(),
+        numOfStudentSeats: 35,
+        numOfTeacherSeats: 1,
+      },
+    });
+    const school = await prisma.school.create({
+      data: { organizationId: org.id, name: 'Archived High', code: `ft-arch-${stamp}` },
+    });
+    const membership = await prisma.orgMembership.create({
+      data: {
+        userId: user.id,
+        organizationId: org.id,
+        role: 'TEACHER',
+        isOrgOwner: true,
+        schools: { connect: { id: school.id } },
+      },
+    });
+    await prisma.class.create({
+      data: {
+        schoolId: school.id,
+        schoolYear: '2025-2026',
+        title: 'Archived Class',
+        code: `ARC${stamp}`.slice(0, 12),
+        isArchived: true,
+        teachers: { connect: { id: membership.id } },
+      },
+    });
+    await prisma.freeTierApplication.create({
+      data: {
+        email: teacherEmail,
+        name: 'Archived Class Teacher',
+        schoolName: 'Archived High',
+        location: 'E2E',
+        gradeLevel: '10',
+        status: 'APPROVED',
+        userId: user.id,
+        organizationId: org.id,
+        releasedAt: new Date(),
+      },
+    });
+
+    await signIn(teacherEmail, JOIN_PASSWORD);
+    const response = await page.goto('/app/my-classes', { waitUntil: 'domcontentloaded' });
+    expect(response?.ok()).toBe(true);
+    await expect(page).toHaveURL(/\/app\/my-classes/);
+    await expect(page.getByText(/too many redirects/i)).not.toBeVisible();
+  });
+
   test('paid-school teacher regression: no free-tier gate', async ({ page, signIn, e2eContext }) => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/my-classes');

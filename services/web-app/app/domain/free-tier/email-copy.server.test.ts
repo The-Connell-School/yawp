@@ -42,5 +42,5 @@ test('reminder email includes reminder lead and copy version', () => {
     reminderLead: 'This is a reminder about the approval request below.',
   });
   expect(body).toContain('This is a reminder about the approval request below.');
-  expect(body).toContain('Copy version: 2026-10-08-v4');
+  expect(body).not.toContain('Copy version:');
 });

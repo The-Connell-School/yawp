@@ -83,13 +83,12 @@ export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const pathname = new URL(request.url).pathname;
-  const freeTierApplication = await prisma.freeTierApplication.findFirst({
-    where: { userId },
-    select: { id: true },
-  });
+  const { loadFreeTierGateApplication, enforceFreeTierTeacherGate } = await import(
+    '~/domain/free-tier/free-tier-gate.server'
+  );
+  const freeTierApplication = await loadFreeTierGateApplication(userId);
 
   if (freeTierApplication) {
-    const { enforceFreeTierTeacherGate } = await import('~/domain/free-tier/free-tier-gate.server');
     const { retryFreeClassroomProvisioningForUser } = await import(
       '~/domain/free-tier/provision-free-classroom.server'
     );
@@ -98,6 +97,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       userId,
       pathname,
       organizationPlan: 'FREE_CLASSROOM',
+      application: freeTierApplication,
     });
     if (pathname.startsWith('/app/free-tier')) {
       return data({
@@ -112,11 +112,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const profile = await requireMembership(request, userId);
   if (profile.role === 'TEACHER') {
-    const { enforceFreeTierTeacherGate } = await import('~/domain/free-tier/free-tier-gate.server');
     await enforceFreeTierTeacherGate({
       userId,
       pathname,
       organizationPlan: profile.organization.plan,
+      application: freeTierApplication,
     });
   }
 

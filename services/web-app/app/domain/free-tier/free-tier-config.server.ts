@@ -31,13 +31,6 @@ export function assertFreeTierRuntimeConfigured() {
   }
 }
 
-export function freeTierConfigErrorMessage(error: unknown) {
-  if (error instanceof FreeTierConfigError) return error.message;
-  if (error instanceof Error && error.message.includes('PRIMARY_APP_URL')) {
-    return error.message;
-  }
-  if (error instanceof Error && error.message.includes('FREE_TIER_LINK_HMAC_SECRET')) {
-    return error.message;
-  }
+export function freeTierConfigErrorMessage(_error: unknown) {
   return 'Free-tier links are temporarily unavailable. Please contact support@yawp.school.';
 }

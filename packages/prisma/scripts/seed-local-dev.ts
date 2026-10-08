@@ -108,9 +108,15 @@ try {
   });
   console.timeEnd('collaboration');
 
-  console.time('free-tier-ship-review');
-  await seedFreeTierShipReview(prisma);
-  console.timeEnd('free-tier-ship-review');
+  const databaseName = process.env.DATABASE_URL?.split('/').pop()?.split('?')[0] ?? '';
+  const { shouldRunFreeTierShipReviewSeed } = await import(
+    '../../scripts/preview/free-tier-ship-review-seed-guard.mjs'
+  );
+  if (shouldRunFreeTierShipReviewSeed(databaseName)) {
+    console.time('free-tier-ship-review');
+    await seedFreeTierShipReview(prisma);
+    console.timeEnd('free-tier-ship-review');
+  }
 
   console.log('🌱 Local dev seed complete.');
   console.log(

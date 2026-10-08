@@ -1035,6 +1035,19 @@ body:has(.yawp-public) > [data-state='closed'].fixed.bottom-4.right-4 {
   max-width: min(28rem, calc(100vw - 48px));
 }
 
+.yawp-entry-auth-shell-fit-auto {
+  width: 100%;
+  max-width: min(28rem, calc(100vw - 48px));
+  align-self: center;
+  min-height: auto;
+}
+
+@media (max-width: 640px) {
+  .yawp-entry-auth-shell-fit-auto {
+    margin-block: auto;
+  }
+}
+
 .yawp-entry-auth {
   font-family: ui-sans-serif, system-ui, sans-serif;
 }

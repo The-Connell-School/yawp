@@ -2,8 +2,8 @@ export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-08-v4';
 
 const APPROVAL_LINK_DAYS = 14;
 
-function copyVersionLine(version: string) {
-  return `\n\nCopy version: ${version}`;
+function copyVersionLine(_version: string) {
+  return '';
 }
 
 function adminApprovalGreeting(adminRecipientName?: string | null) {
