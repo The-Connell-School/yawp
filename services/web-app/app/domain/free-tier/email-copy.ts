@@ -1,4 +1,4 @@
-export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-08-v2';
+export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-08-v3';
 
 const APPROVAL_LINK_DAYS = 14;
 
@@ -54,7 +54,7 @@ export function renderCongratulationsEmailBody(args: {
 
 Great news — ${args.adminName} approved YAWP for your classroom.
 
-Sign in to create your first class and assign your Class Starter:
+Sign in to open your class and assign your Class Starter:
 ${args.signInUrl}
 
 — The YAWP team`;

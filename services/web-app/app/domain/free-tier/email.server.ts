@@ -7,7 +7,9 @@ import {
 } from './email-copy.server';
 import { mintSignedLink, RELEASE_LINK_TTL_MS } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
-import { escapeHtml } from './html-escape.server';
+import { plainTextEmailToHtml } from './email-html.server';
+import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
+import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
 
 export type EmailSendResult = { ok: true } | { ok: false; error: string };
 
@@ -27,7 +29,7 @@ async function logEmail(args: {
         toEmail: args.toEmail,
         success: args.success,
         error: args.error ?? null,
-        payload: args.payload ?? undefined,
+        payload: sanitizeFreeTierEmailLogPayload(args.payload) ?? undefined,
       },
     });
   } catch {
@@ -44,8 +46,9 @@ export interface ReleaseEmailPayload {
 }
 
 export async function sendFreeTierReleaseEmail(payload: ReleaseEmailPayload): Promise<EmailSendResult> {
-  const base = freeTierPublicAppOrigin();
   try {
+    assertFreeTierRuntimeConfigured();
+    const base = freeTierPublicAppOrigin();
     const minted = await mintSignedLink({
       applicationId: payload.applicationId,
       purpose: 'RELEASE',
@@ -53,10 +56,7 @@ export async function sendFreeTierReleaseEmail(payload: ReleaseEmailPayload): Pr
     });
     const joinUrl = `${base}/free/join?t=${encodeURIComponent(minted.token)}`;
     const text = renderReleaseEmailBody({ name: payload.name, joinUrl });
-    const html = text
-      .split('\n')
-      .map((line) => `<p>${escapeHtml(line)}</p>`)
-      .join('');
+    const html = plainTextEmailToHtml(text);
     await sendEmail({
       to: payload.email,
       subject: "You're in — start your YAWP classroom",
@@ -103,10 +103,8 @@ export async function sendFreeTierAdminApprovalEmail(args: {
     notRightPersonUrl: args.notRightPersonUrl,
   });
   try {
-    const html = text
-      .split('\n')
-      .map((line) => `<p>${escapeHtml(line)}</p>`)
-      .join('');
+    assertFreeTierRuntimeConfigured();
+    const html = plainTextEmailToHtml(text);
     await sendEmail({
       to: args.to,
       subject: `Approve YAWP for ${args.schoolName}`,
@@ -147,10 +145,8 @@ export async function sendFreeTierCongratulationsEmail(args: {
     signInUrl: args.signInUrl,
   });
   try {
-    const html = text
-      .split('\n')
-      .map((line) => `<p>${escapeHtml(line)}</p>`)
-      .join('');
+    assertFreeTierRuntimeConfigured();
+    const html = plainTextEmailToHtml(text);
     await sendEmail({
       to: args.teacherEmail,
       subject: `${args.adminName} approved YAWP for your classroom`,

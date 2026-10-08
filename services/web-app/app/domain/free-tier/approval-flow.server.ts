@@ -12,6 +12,8 @@ import {
   claimSignedLinkInTransaction,
   applicationIdFromSignedToken,
   FREE_TIER_LINK_TTL_MS,
+  peekSignedLink,
+  invalidateOpenAdminApprovalLinks,
 } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { ensureFreeTierProductionApprovalHooks } from './approval-hooks.server';
@@ -214,11 +216,22 @@ export async function completeSchoolAdminApproval(args: {
     }
 
     const pending = await tx.freeTierAdminApproval.findFirst({
-      where: { applicationId: app.id, signedLinkId: consumed.linkId, status: 'PENDING' },
+      where: {
+        applicationId: app.id,
+        signedLinkId: consumed.linkId,
+        status: 'PENDING',
+      },
       orderBy: { createdAt: 'desc' },
       select: { id: true, adminName: true, adminEmail: true },
     });
-    if (!pending) return { ok: false as const, reason: 'not_found' as const };
+    if (!pending) {
+      const stillPending = await tx.freeTierAdminApproval.findFirst({
+        where: { applicationId: app.id, status: 'PENDING' },
+        select: { id: true },
+      });
+      if (stillPending) return { ok: false as const, reason: 'superseded' as const };
+      return { ok: false as const, reason: 'not_found' as const };
+    }
 
     await tx.freeTierAdminApproval.update({
       where: { id: pending.id },
@@ -291,15 +304,39 @@ export async function redirectSchoolAdmin(args: {
   const meta = hashRequestMeta(args.request);
   const copyHash = adminApprovalEmailCopyVersionHash();
 
-  const result = await prisma.$transaction(async (tx) => {
-    const consumed = await claimSignedLinkInTransaction(tx, {
-      token: args.token,
-      expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
-    });
-    if (!consumed.ok) return consumed;
+  const peek = await peekSignedLink({
+    token: args.token,
+    expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+  });
+  if (!peek.ok) return peek;
 
+  const preApp = await prisma.freeTierApplication.findUnique({
+    where: { id: peek.applicationId },
+    select: { id: true, email: true, name: true, schoolName: true, status: true, adminRedirectCount: true },
+  });
+  if (!preApp || (preApp.status !== 'SENT' && preApp.status !== 'MANUAL_REVIEW')) {
+    return { ok: false as const, reason: 'illegal_state' as const };
+  }
+  if (preApp.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP) {
+    return { ok: false as const, reason: 'chain_cap' as const };
+  }
+
+  const prePending = await prisma.freeTierAdminApproval.findFirst({
+    where: { applicationId: preApp.id, status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+  if (!prePending) return { ok: false as const, reason: 'not_found' as const };
+
+  const rules = evaluateAdminEmail({
+    teacherEmail: preApp.email,
+    adminEmail: newEmail,
+    schoolName: preApp.schoolName,
+  });
+
+  const result = await prisma.$transaction(async (tx) => {
     const app = await tx.freeTierApplication.findUnique({
-      where: { id: consumed.applicationId },
+      where: { id: peek.applicationId },
       select: { id: true, email: true, name: true, schoolName: true, status: true, adminRedirectCount: true },
     });
     if (!app || (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW')) {
@@ -309,13 +346,21 @@ export async function redirectSchoolAdmin(args: {
       return { ok: false as const, reason: 'chain_cap' as const };
     }
 
-    const rules = evaluateAdminEmail({ teacherEmail: app.email, adminEmail: newEmail, schoolName: app.schoolName });
-
     const pending = await tx.freeTierAdminApproval.findFirst({
-      where: { applicationId: app.id, signedLinkId: consumed.linkId, status: 'PENDING' },
+      where: { applicationId: app.id, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
       select: { id: true, personalNote: true },
     });
     if (!pending) return { ok: false as const, reason: 'not_found' as const };
+
+    const consumed = await claimSignedLinkInTransaction(tx, {
+      token: args.token,
+      expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+    });
+    if (!consumed.ok) return consumed;
+    if (consumed.applicationId !== app.id) {
+      return { ok: false as const, reason: 'invalid' as const };
+    }
 
     await tx.freeTierAdminApproval.update({
       where: { id: pending.id },

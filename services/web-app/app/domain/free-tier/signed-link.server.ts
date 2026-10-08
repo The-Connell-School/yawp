@@ -3,6 +3,7 @@ import type { FreeTierSignedLinkPurpose } from '@app/prisma';
 import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { hashToken } from './service.server';
+import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
 
 export const FREE_TIER_LINK_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 export const RELEASE_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -78,6 +79,7 @@ export async function mintSignedLink(args: {
   ttlMs?: number;
   tx?: Prisma.TransactionClient;
 }) {
+  assertFreeTierRuntimeConfigured();
   const secrets = linkSecrets();
   if (!secrets.length) throw new Error('FREE_TIER_LINK_HMAC_SECRET is not configured');
   const secret = secrets[0]!;
@@ -109,7 +111,10 @@ export async function mintSignedLink(args: {
 
 export type ConsumeLinkResult =
   | { ok: true; applicationId: string; purpose: FreeTierSignedLinkPurpose; linkId: string }
-  | { ok: false; reason: 'invalid' | 'expired' | 'used' | 'purpose_mismatch' };
+  | {
+      ok: false;
+      reason: 'invalid' | 'expired' | 'used' | 'purpose_mismatch' | 'superseded';
+    };
 
 function parseSignedLinkToken(
   token: string,
@@ -178,6 +183,35 @@ export async function consumeSignedLink(args: {
 }
 
 /** Validate without consuming (for GET loaders). */
+export async function supersededApproveLinkReason(
+  applicationId: string,
+  linkId: string
+): Promise<'superseded' | null> {
+  const pending = await prisma.freeTierAdminApproval.findFirst({
+    where: { applicationId, status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+    select: { signedLinkId: true },
+  });
+  if (!pending?.signedLinkId || pending.signedLinkId === linkId) return null;
+  return 'superseded';
+}
+
+export async function invalidateOpenAdminApprovalLinks(
+  tx: Prisma.TransactionClient,
+  applicationId: string
+) {
+  const now = new Date();
+  await tx.freeTierSignedLink.updateMany({
+    where: {
+      applicationId,
+      purpose: { in: ['ADMIN_APPROVE', 'ADMIN_NOT_RIGHT_PERSON'] },
+      usedAt: null,
+      expiresAt: { gt: now },
+    },
+    data: { usedAt: now },
+  });
+}
+
 export async function peekSignedLink(args: {
   token: string;
   expectedPurpose: FreeTierSignedLinkPurpose;
@@ -201,6 +235,20 @@ export async function peekSignedLink(args: {
   }
   if (row.tokenHash !== tokenHash) return { ok: false, reason: 'invalid' };
   if (row.expiresAt.getTime() < Date.now()) return { ok: false, reason: 'expired' };
-  if (row.usedAt) return { ok: false, reason: 'used' };
+  if (row.usedAt) {
+    if (
+      args.expectedPurpose === 'ADMIN_APPROVE' &&
+      (await supersededApproveLinkReason(row.applicationId, row.id)) === 'superseded'
+    ) {
+      return { ok: false, reason: 'superseded' };
+    }
+    return { ok: false, reason: 'used' };
+  }
+  if (
+    args.expectedPurpose === 'ADMIN_APPROVE' &&
+    (await supersededApproveLinkReason(row.applicationId, row.id)) === 'superseded'
+  ) {
+    return { ok: false, reason: 'superseded' };
+  }
   return { ok: true, applicationId: row.applicationId, purpose: row.purpose, linkId: row.id };
 }
