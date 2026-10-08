@@ -300,7 +300,7 @@ export async function action({ request }: ActionFunctionArgs) {
           // Behind the writing-conditions flag: off, a stored paragraph type
           // is not read and the tutor coaches as it did before it existed.
           paragraphModeInstructions: buildParagraphModeTutorInstructions(
-            (await isDailyPagesWritingConditionsEnabled())
+            (await isDailyPagesWritingConditionsEnabled(profile.organization.id))
               ? cms.document?.assignment?.paragraphMode ?? null
               : null
           ),

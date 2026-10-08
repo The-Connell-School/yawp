@@ -241,10 +241,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     assignmentTypes.map((assignmentType) => assignmentType.id)
   );
-  // Paragraph type and writing time are behind a global flag (off by
+  // Paragraph type and writing time are behind a per-school flag (off by
   // default); off, the form offers neither.
   const writingConditionsEnabled =
-    await isDailyPagesWritingConditionsEnabled();
+    await isDailyPagesWritingConditionsEnabled(profile.organization.id);
   const creationTypeDefaults = await getCreationTypeDefaultsById(
     assignmentTypes.map((assignmentType) => assignmentType.id),
     { writingConditionsEnabled }
@@ -340,7 +340,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       // Only where the planner is on; the step is not an index, so it can
       // never be read as a Class Summary next step.
       exitTicketPlanHref:
-        exitTicketClassRead && (await isLessonPlannerEnabled())
+        exitTicketClassRead && (await isLessonPlannerEnabled(profile.organization.id))
           ? `/app/lesson-planner?from=${active.id}&step=${EXIT_TICKET_SEED_STEP}`
           : null,
     },
@@ -496,7 +496,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
     // Behind the writing-conditions flag: off, a sent writing time is ignored
     // and the stored one is left exactly as it is.
-    const writingTimeResult = (await isDailyPagesWritingConditionsEnabled())
+    const writingTimeResult = (await isDailyPagesWritingConditionsEnabled(profile.organization.id))
       ? parseWritingTimeMinutes(formData)
       : ({ success: true, sent: false, value: null } as const);
     if (!writingTimeResult.success) {

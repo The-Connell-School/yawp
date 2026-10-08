@@ -187,11 +187,49 @@ describe('preview access gate', () => {
     expect(next).toHaveBeenCalledTimes(4);
 
     const gated = await previewAccessMiddleware(
-      middlewareArgs(request('/api/internal/v1/feature-flags')),
+      middlewareArgs(request('/api/internal/v1/users')),
       next
     );
     expect((gated as Response).status).toBe(401);
     expect(next).toHaveBeenCalledTimes(4);
+  });
+
+  test('lets Yawp Internal reach feature flags and the school list without a preview cookie', async () => {
+    const next = mock(async () => new Response('ok'));
+    const open = [
+      ['GET', '/api/internal/v1/feature-flags'],
+      ['POST', '/api/internal/v1/feature-flags/lesson_planner'],
+      ['POST', '/api/internal/v1/feature-flags/daily_pages_paragraph_type_and_writing_time'],
+      ['GET', '/api/internal/v1/organizations'],
+    ] as const;
+
+    for (const [method, path] of open) {
+      const response = await previewAccessMiddleware(
+        middlewareArgs(request(path, { method })),
+        next
+      );
+      expect(await response?.text()).toBe('ok');
+    }
+    expect(next).toHaveBeenCalledTimes(open.length);
+
+    for (const [method, path] of [
+      ['GET', '/api/internal/v1/users'],
+      ['POST', '/api/internal/v1/free-tier/release'],
+      ['GET', '/api/internal/v1/feature-flags/'],
+      ['POST', '/api/internal/v1/feature-flags/a/b'],
+      ['POST', '/api/internal/v1/feature-flags/lesson_planner/'],
+      ['POST', '/api/internal/v1/feature-flags/..%2Fusers'],
+      ['GET', '/api/internal/v1/feature-flags-x'],
+      ['GET', '/api/internal/v1/organizations/other'],
+      ['POST', '/api/internal/v1/organizations/search'],
+    ] as const) {
+      const gated = await previewAccessMiddleware(
+        middlewareArgs(request(path, { method })),
+        next
+      );
+      expect((gated as Response).status).toBe(401);
+    }
+    expect(next).toHaveBeenCalledTimes(open.length);
   });
 
   test('fails closed when no access codes are configured', async () => {

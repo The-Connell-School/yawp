@@ -36,3 +36,23 @@ export function createOrganizationManagementHandler(directory: { findMany(args: 
     } catch { return response({ error: 'Organization directory unavailable' }, 503); }
   };
 }
+
+/**
+ * Every organization as `{ id, name }`, sorted by name, for pickers in the
+ * internal app (feature-flag targeting). Same management-key bearer auth as
+ * the search endpoint; one unpaginated read of two columns.
+ */
+export function createOrganizationListHandler(directory: { findMany(args: Prisma.OrganizationFindManyArgs): Promise<{ id: string; name: string }[]> }, credential: () => string | undefined) {
+  return async (request: Request) => {
+    const key = credential();
+    if (!key) return response({ error: 'Not found' }, 404);
+    if (!/^[A-Za-z0-9_-]{43,}$/.test(key)) return response({ error: 'Integration unavailable' }, 503);
+    const supplied = request.headers.get('authorization') ?? '';
+    if (supplied.length > 512 || !timingSafeEqual(digest(supplied), digest(`Bearer ${key}`))) return response({ error: 'Unauthorized' }, 401);
+    if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
+    try {
+      const rows = await directory.findMany({ select: { id: true, name: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] });
+      return response({ organizations: rows.map(({ id, name }) => ({ id, name })) });
+    } catch { return response({ error: 'Organization directory unavailable' }, 503); }
+  };
+}

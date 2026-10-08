@@ -1,8 +1,8 @@
 /**
  * Access gate for the YAWP! Lesson Planner.
  *
- * Teacher-only, and gated by the global Lesson Planner feature flag (same
- * mechanism as Daily Pages writing conditions). Students get a 404 so the
+ * Teacher-only, and gated by the Lesson Planner feature flag for the
+ * teacher's school (same mechanism as Daily Pages writing conditions). Students get a 404 so the
  * feature stays invisible to them.
  */
 import { data } from 'react-router';
@@ -27,7 +27,7 @@ export async function getLessonPlannerAccess(
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
   const isTeacher = membership.role === 'TEACHER';
-  const enabled = await isLessonPlannerEnabled();
+  const enabled = await isLessonPlannerEnabled(membership.organization.id);
 
   return {
     userId,

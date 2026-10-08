@@ -154,7 +154,7 @@ function writingConditions(
   },
   writingConditionsEnabled: boolean
 ) {
-  // Paragraph type and writing time are behind a global flag; off, the
+  // Paragraph type and writing time are behind a per-school flag; off, the
   // summary reads them as unset, as it did before either existed.
   const assignment = readableWritingConditions(stored, writingConditionsEnabled);
   return {
@@ -305,7 +305,9 @@ export async function generateClassAssignmentInsight(input: {
     }
   }
 
-  const writingConditionsEnabled = await isDailyPagesWritingConditionsEnabled();
+  const writingConditionsEnabled = await isDailyPagesWritingConditionsEnabled(
+    input.organizationId
+  );
   let generated: Awaited<ReturnType<typeof generateClassInsight>>;
   try {
     generated = await generateClassInsight({

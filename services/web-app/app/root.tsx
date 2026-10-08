@@ -171,6 +171,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                   id: true,
                   role: true,
                   isOrgOwner: true,
+                  organizationId: true,
                   organization: {
                     select: {
                       name: true,
@@ -218,7 +219,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     bannerWarning,
     localDevAuthEnabled: isLocalDevAuthEnabled(),
   });
-  const lessonPlannerEnabled = userId ? await isLessonPlannerEnabled() : false;
+  const lessonPlannerEnabled = userId
+    ? await isLessonPlannerEnabled(membership?.organizationId ?? null)
+    : false;
 
   return data(
     {
