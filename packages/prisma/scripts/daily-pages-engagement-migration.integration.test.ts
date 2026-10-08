@@ -165,8 +165,8 @@ describe('daily-pages-engagement migration (real Postgres)', () => {
       VALUES ('${FIXTURE_ORG_ID}', now(), now(), 'DP engagement fixture org');
       INSERT INTO "User" ("id","createdAt","updatedAt","email","name")
       VALUES ('${FIXTURE_USER_ID}', now(), now(), 'dp-fixture@example.test', 'DP Fixture');
-      INSERT INTO "OrgMembership" ("id","createdAt","updatedAt","userId","organizationId","role")
-      VALUES ('${FIXTURE_MEMBERSHIP_ID}', now(), now(), '${FIXTURE_USER_ID}', '${FIXTURE_ORG_ID}', 'STUDENT');
+      INSERT INTO "OrgMembership" ("id","createdAt","userId","organizationId","role")
+      VALUES ('${FIXTURE_MEMBERSHIP_ID}', now(), '${FIXTURE_USER_ID}', '${FIXTURE_ORG_ID}', 'STUDENT');
       INSERT INTO "Document" ("id","createdAt","updatedAt","title","text","html","membershipId","assignmentTypeId","assignmentId")
       VALUES (
         '${DOCUMENT_ID}', now(), now(), 'Pinned doc', 'hello', '<p>hello</p>',
