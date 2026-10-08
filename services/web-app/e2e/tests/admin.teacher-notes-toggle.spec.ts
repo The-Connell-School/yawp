@@ -125,13 +125,29 @@ test.describe.serial('Admin teacher notes output toggle', () => {
     try {
       await switchUser(e2eContext.superAdminEmail, 'admin-e2e-password');
       await page.goto(`/app/admin/assignment-types/${assignmentType.id}`);
-      await page.waitForLoadState('domcontentloaded');
+      await page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/admin/rubric-output-options') &&
+          response.request().method() === 'GET' &&
+          response.ok(),
+        { timeout: 30_000 }
+      );
 
       const toggle = page.getByTestId('rubric-teacher-notes-toggle');
+      await expect(page.getByText('Loading private note settings')).toHaveCount(0);
       await expect(toggle).toBeVisible({ timeout: 30_000 });
       await expect(toggle).toBeEnabled();
       await expect(toggle).not.toBeChecked();
-      await toggle.click();
+      await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.url().includes('/api/admin/rubric-output-options') &&
+            response.request().method() === 'POST' &&
+            response.ok(),
+          { timeout: 30_000 }
+        ),
+        toggle.click(),
+      ]);
       await expect(toggle).toBeChecked({ timeout: 15_000 });
       await expect
         .poll(async () => {
@@ -146,6 +162,7 @@ test.describe.serial('Admin teacher notes output toggle', () => {
 
       await switchUser(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/submissions/${submissionId}`);
+      await page.waitForLoadState('domcontentloaded');
       await expect(page.getByTestId('teacher-private-notes')).toBeVisible({
         timeout: 30_000,
       });
