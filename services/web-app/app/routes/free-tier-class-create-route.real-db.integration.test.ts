@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, mock, test } from 'bun:test';
-import { PrismaClient } from '@app/prisma';
+import { type OrganizationPlan, PrismaClient } from '@app/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { seedFreeTierBundleAssignmentTypes } from '../../../../packages/prisma/scripts/seed-free-tier-bundle-assignment-types';
 
@@ -15,7 +15,7 @@ type TestProfile = {
   id: string;
   role: 'TEACHER';
   isOrgOwner: boolean;
-  organization: { id: string; plan: 'SCHOOL' | 'FREE_CLASSROOM' };
+  organization: { id: string; plan: OrganizationPlan };
 };
 
 let currentUserId = '';

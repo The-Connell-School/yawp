@@ -17,7 +17,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
-import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert';
 import { generateClassCode } from '~/utils/class';
 import {
   currentSchoolYear,
@@ -133,10 +132,15 @@ export function ClassManageSheet({
         ) : null}
 
         {createBlocked ? (
-          <Alert className="mt-6" data-testid="class-create-blocked-callout">
-            <AlertTitle>One class per free account</AlertTitle>
-            <AlertDescription>{classCreateBlockedMessage}</AlertDescription>
-          </Alert>
+          <div
+            className="mt-6 rounded-md border border-border bg-muted/40 p-4"
+            data-testid="class-create-blocked-callout"
+          >
+            <p className="text-sm font-medium">One class per free account</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {classCreateBlockedMessage}
+            </p>
+          </div>
         ) : (
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div className="space-y-2">
