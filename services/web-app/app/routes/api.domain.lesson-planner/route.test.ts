@@ -74,6 +74,7 @@ mock.module('~/utils/getLLMCompletion', () => ({
 }));
 mock.module('~/utils/ai-admission.server', () => ({
   AiRateLimitError,
+  aiAdmissionErrorResponse: () => null,
   reserveAiRequest,
 }));
 
