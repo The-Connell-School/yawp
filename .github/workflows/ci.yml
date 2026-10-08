@@ -202,6 +202,8 @@ jobs:
           PRIMARY_APP_URL: https://yawp.test
           MOCKS: 'true'
           RESEND_API_KEY: ''
+          RESEND_FROM_EMAIL: ''
+          EMAIL_PROVIDER: resend
           RUBRIC_CATALOG_DB_TESTS: '1'
           FEATURE_FLAG_DB_TESTS: '1'
         run: >-
@@ -471,6 +473,8 @@ jobs:
           PRIMARY_APP_URL: http://127.0.0.1:5173
           MOCKS: 'true'
           RESEND_API_KEY: ''
+          RESEND_FROM_EMAIL: ''
+          EMAIL_PROVIDER: resend
         run: bun run test:e2e:smoke
 
       # HTML report + traces for smoke failures (see playwright.config.ts).
