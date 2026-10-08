@@ -148,12 +148,7 @@ try {
   try {
     await seedClassStarterAssignmentType(prisma);
     console.log('Class Starter assignment type ready.');
-    const includeDpQaFixtures =
-      process.env.LOCAL_DEV_INCLUDE_DP_QA_FIXTURES === '1' ||
-      process.env.LOCAL_DEV_INCLUDE_DP_QA_FIXTURES === 'true';
-    const engagementV2 = await applyDailyPagesEngagementV2Seed(prisma, {
-      includePreviewQaFixtures: includeDpQaFixtures,
-    });
+    const engagementV2 = await applyDailyPagesEngagementV2Seed(prisma);
     console.log('Daily Pages engagement v2 seed:', engagementV2);
   } catch (error) {
     // Never fail a whole seed run over the one case that is legitimately absent.

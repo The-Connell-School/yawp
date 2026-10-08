@@ -6,12 +6,12 @@
  * engagement migration's data block often no-ops (library row not inserted yet).
  * This script applies the same outcome by name/id once fixtures exist.
  */
-import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../generated/prisma';
 import { createPrismaClient } from './local-dev/connection';
-import { LOCAL_DEV_ORG_ID } from './local-dev/dev-personas';
 import engagementLibrary from '../../../services/web-app/app/domain/rubrics/library/daily-pages-engagement.json';
-import { dailyPagesEngagementTierBands } from '../../../services/web-app/app/domain/assignment-types/daily-pages-engagement-tier-bands';
+
+const CLASS_STARTER_RUBRIC_NAME = 'class-starter-engagement';
+const CLASS_STARTER_KIND = 'class_starter';
 
 const ENGAGEMENT_RUBRIC_ID = 'cmsvqo8lf002801l60o74x8wr';
 const DAILY_PAGES_TYPE_ID = 'cmlgtyo8j01em0qjs6knw7cni';
@@ -22,27 +22,6 @@ const ARCHIVED_RUBRIC_NAMES = ['daily-pages-short-form', 'daily-pages-reflection
 
 const DP_ENGAGEMENT_MIGRATION_NAME =
   '20261008121500_daily_pages_engagement_rubric_consolidation';
-
-/** PR preview databases only (`yawp_pr_<number>`). Never demo or prod. */
-export const DP_PREVIEW_QA_DATABASE_PATTERN = /^yawp_pr_[0-9]+$/;
-
-export const DP_QA_PINNED_LEGACY_RUBRIC_NAME =
-  'dp-qa-pinned-legacy-engagement';
-
-export async function resolveCurrentDatabaseName(
-  prisma: ReturnType<typeof createPrismaClient>
-): Promise<string> {
-  const rows = await prisma.$queryRaw<{ current_database: string }[]>`
-    SELECT current_database()::text AS current_database`;
-  return rows[0]?.current_database ?? '';
-}
-
-export async function shouldIncludeDpPreviewQaFixtures(
-  prisma: ReturnType<typeof createPrismaClient>
-): Promise<boolean> {
-  const database = await resolveCurrentDatabaseName(prisma);
-  return DP_PREVIEW_QA_DATABASE_PATTERN.test(database);
-}
 
 async function isDpEngagementMigrationApplied(
   prisma: ReturnType<typeof createPrismaClient>
@@ -80,14 +59,44 @@ export function buildDailyPagesEngagementV2SchemaJson(
   return v2 as Prisma.InputJsonValue;
 }
 
-export type ApplyDailyPagesEngagementV2SeedOptions = {
-  /** Preview QA rows for screenshot capture; off by default on shared previews. */
-  includePreviewQaFixtures?: boolean;
-};
+async function relinkClassStarterToEngagementRubric(
+  prisma: ReturnType<typeof createPrismaClient>,
+  dailyPagesEngagementRubricId: string
+) {
+  const classStarterType = await prisma.assignmentType.findFirst({
+    where: { kind: CLASS_STARTER_KIND, archivedAt: null },
+    select: { id: true, rubricId: true },
+  });
+  if (!classStarterType) return;
+
+  const classStarterRubric = await prisma.rubric.findFirst({
+    where: { name: CLASS_STARTER_RUBRIC_NAME, archivedAt: null },
+    select: { id: true },
+  });
+  if (!classStarterRubric) {
+    console.warn(
+      'apply-daily-pages-engagement-v2: class-starter-engagement rubric missing; skipping Class Starter relink.'
+    );
+    return;
+  }
+
+  if (classStarterType.rubricId === dailyPagesEngagementRubricId) {
+    await prisma.assignmentType.update({
+      where: { id: classStarterType.id },
+      data: { rubricId: classStarterRubric.id },
+    });
+    console.log('Relinked Class Starter assignment type to class-starter-engagement.');
+  } else if (classStarterType.rubricId !== classStarterRubric.id) {
+    await prisma.assignmentType.update({
+      where: { id: classStarterType.id },
+      data: { rubricId: classStarterRubric.id },
+    });
+    console.log('Set Class Starter assignment type rubric to class-starter-engagement.');
+  }
+}
 
 export async function applyDailyPagesEngagementV2Seed(
-  prisma: ReturnType<typeof createPrismaClient>,
-  options: ApplyDailyPagesEngagementV2SeedOptions = {}
+  prisma: ReturnType<typeof createPrismaClient>
 ) {
   if (!(await isDpEngagementMigrationApplied(prisma))) {
     console.warn(
@@ -159,489 +168,15 @@ export async function applyDailyPagesEngagementV2Seed(
     });
   }
 
-  const previewQaAllowed = await shouldIncludeDpPreviewQaFixtures(prisma);
-  if (options.includePreviewQaFixtures && previewQaAllowed) {
-    await seedDpConsolidationQaPreviewFixtures(prisma, engagement.id);
-  } else if (options.includePreviewQaFixtures && !previewQaAllowed) {
-    console.warn(
-      'apply-daily-pages-engagement-v2: DP QA fixtures skipped (database guard).'
-    );
-  }
+  await relinkClassStarterToEngagementRubric(prisma, engagement.id);
 
   return { applied: true, engagementRubricId: engagement.id };
-}
-
-/** Preview-only rows for the seven QA screenshots (idempotent). */
-export async function seedDpConsolidationQaPreviewFixtures(
-  prisma: ReturnType<typeof createPrismaClient>,
-  engagementRubricId: string
-) {
-  if (!(await shouldIncludeDpPreviewQaFixtures(prisma))) {
-    console.warn('seedDpConsolidationQaPreviewFixtures: database guard rejected.');
-    return;
-  }
-
-  await prisma.rubricRevision.deleteMany({
-    where: {
-      rubricName: 'daily-pages-engagement',
-      reason: 'DP QA pinned legacy preview fixture',
-    },
-  });
-  const teacher = await prisma.orgMembership.findFirst({
-    where: {
-      user: { email: 'dev.teacher@yawp.local' },
-      role: 'TEACHER',
-      organizationId: LOCAL_DEV_ORG_ID,
-    },
-    select: { id: true, organizationId: true },
-  });
-  const classWithStudent = await prisma.class.findFirst({
-    where: {
-      isArchived: false,
-      teachers: {
-        some: {
-          user: { email: 'dev.teacher@yawp.local' },
-          organizationId: LOCAL_DEV_ORG_ID,
-        },
-      },
-      students: { some: { user: { email: 'dev.student@yawp.local' } } },
-    },
-    orderBy: { createdAt: 'asc' },
-    select: {
-      id: true,
-      title: true,
-      students: {
-        where: { user: { email: 'dev.student@yawp.local' } },
-        take: 1,
-        select: { id: true },
-      },
-    },
-  });
-  const klass = classWithStudent ? { id: classWithStudent.id } : null;
-  const student = classWithStudent?.students[0] ?? null;
-  const dailyPagesType = await prisma.assignmentType.findFirst({
-    where: { kind: 'daily_pages', archivedAt: null },
-    orderBy: { position: 'asc' },
-    select: { id: true },
-  });
-  if (!teacher || !student || !klass || !dailyPagesType) {
-    console.warn(
-      'DP QA preview fixtures skipped:',
-      JSON.stringify({
-        teacher: Boolean(teacher),
-        student: Boolean(student),
-        klass: Boolean(klass),
-        dailyPagesType: Boolean(dailyPagesType),
-      })
-    );
-    return;
-  }
-
-  async function ensureClassAssignment(assignmentId: string) {
-    await prisma.classAssignment.upsert({
-      where: {
-        assignmentId_classId: { assignmentId, classId: klass!.id },
-      },
-      create: { assignmentId, classId: klass!.id },
-      update: {},
-    });
-  }
-
-  const legacySchema = {
-    name: DP_QA_PINNED_LEGACY_RUBRIC_NAME,
-    title: 'DP QA pinned legacy engagement (preview only)',
-    scoringScale: {
-      type: 'rubric_points',
-      minScore: 0,
-      maxScore: 30,
-      step: 10,
-      compositeMin: 0,
-      compositeMax: 30,
-    },
-    rubric: {
-      categories: [
-        {
-          key: 'engagement_with_prompt',
-          label: 'Engagement with Prompt',
-          weight: 1,
-          scoreLabels: [
-            { value: 0, label: 'Not Present' },
-            { value: 10, label: 'Needs More' },
-            { value: 20, label: 'Good' },
-            { value: 30, label: 'Excellent' },
-          ],
-        },
-      ],
-    },
-    outputSchema: { responseShape: 'categories_overall_comment', schemaVersion: 1 },
-  };
-
-  let legacyRevision = await prisma.rubricRevision.findFirst({
-    where: { reason: 'DP QA pinned legacy preview fixture' },
-    select: { id: true },
-  });
-  if (!legacyRevision) {
-    legacyRevision = await prisma.rubricRevision.create({
-      data: {
-        id: randomUUID(),
-        rubricName: DP_QA_PINNED_LEGACY_RUBRIC_NAME,
-        version: 1,
-        schemaJson: legacySchema,
-        fingerprint: `dp-qa-legacy-${Date.now()}`,
-        requestId: randomUUID(),
-        requestHash: `dp-qa-legacy-${Date.now()}`,
-        createdBy: 'dp-qa-preview-seed',
-        reason: 'DP QA pinned legacy preview fixture',
-      },
-      select: { id: true },
-    });
-  }
-
-  const pinnedTitle = 'DP QA Pinned Legacy (Preview)';
-  let pinnedAssignment = await prisma.assignment.findFirst({
-    where: { title: pinnedTitle, assignmentTypeId: dailyPagesType.id },
-    select: { id: true },
-  });
-  if (!pinnedAssignment) {
-    pinnedAssignment = await prisma.assignment.create({
-      data: {
-        assignmentTypeId: dailyPagesType.id,
-        title: pinnedTitle,
-        prompt: 'Describe a place that matters to you.',
-        pointValue: 30,
-        rubricRevisionId: legacyRevision.id,
-        submitForGrade: true,
-      },
-      select: { id: true },
-    });
-    await ensureClassAssignment(pinnedAssignment.id);
-  } else {
-    await ensureClassAssignment(pinnedAssignment.id);
-    await prisma.assignment.update({
-      where: { id: pinnedAssignment.id },
-      data: {
-        rubricRevisionId: legacyRevision.id,
-        pointValue: 30,
-      },
-    });
-  }
-
-  const pinnedDocTitle = 'DP QA pinned legacy submission';
-  const existingPinnedDoc = await prisma.document.findFirst({
-    where: { title: pinnedDocTitle, assignmentId: pinnedAssignment.id },
-    select: { id: true },
-  });
-  if (!existingPinnedDoc) {
-    const classAssignment = await prisma.classAssignment.findFirstOrThrow({
-      where: { assignmentId: pinnedAssignment.id, classId: klass.id },
-      select: { id: true },
-    });
-    const submissionId = randomUUID();
-    const text =
-      'Pinned legacy QA entry. I wrote about the kitchen table where we ate breakfast.';
-    await prisma.document.create({
-      data: {
-        id: submissionId,
-        title: pinnedDocTitle,
-        text,
-        html: `<p>${text}</p>`,
-        membershipId: student.id,
-        assignmentTypeId: dailyPagesType.id,
-        assignmentId: pinnedAssignment.id,
-        classAssignmentId: classAssignment.id,
-      },
-    });
-    await prisma.submission.create({
-      data: {
-        id: submissionId,
-        documentId: submissionId,
-        html: `<p>${text}</p>`,
-        text,
-        title: pinnedDocTitle,
-        submittedAt: new Date(),
-        gradedAt: new Date(),
-        gradedByMembershipId: teacher.id,
-        overallScore: 20,
-        score: '20/30',
-        overallComment: 'Legacy tier labels preserved on pinned revision.',
-        rubricScores: {
-          engagement_with_prompt: { score: 20, comment: '', isAi: true },
-        },
-      },
-    });
-  }
-
-  const swapTitle = 'DP QA Swap Persistence (Preview)';
-  let swapAssignment = await prisma.assignment.findFirst({
-    where: { title: swapTitle, assignmentTypeId: dailyPagesType.id },
-    select: { id: true },
-  });
-  if (!swapAssignment) {
-    swapAssignment = await prisma.assignment.create({
-      data: {
-        assignmentTypeId: dailyPagesType.id,
-        title: swapTitle,
-        prompt: 'Write about a habit you are trying to build.',
-        pointValue: 12,
-        submitForGrade: true,
-      },
-      select: { id: true },
-    });
-    await ensureClassAssignment(swapAssignment.id);
-    const classAssignment = await prisma.classAssignment.findFirstOrThrow({
-      where: { assignmentId: swapAssignment.id, classId: klass.id },
-      select: { id: true },
-    });
-    const text =
-      'I kept writing even when I did not know where it was going.';
-    const document = await prisma.document.create({
-      data: {
-        title: 'DP QA swap persistence doc',
-        text,
-        html: `<p>${text}</p>`,
-        membershipId: student.id,
-        assignmentTypeId: dailyPagesType.id,
-        assignmentId: swapAssignment.id,
-        classAssignmentId: classAssignment.id,
-      },
-    });
-    const swapGoodScore = dailyPagesEngagementTierBands(12).find(
-      (band) => band.tier === 'good'
-    )!.min;
-    await prisma.submission.create({
-      data: {
-        documentId: document.id,
-        html: document.html!,
-        text: document.text!,
-        title: document.title,
-        submittedAt: new Date(),
-        score: `${swapGoodScore}/12`,
-        overallScore: swapGoodScore,
-      },
-    });
-  } else {
-    await ensureClassAssignment(swapAssignment.id);
-    await prisma.assignment.update({
-      where: { id: swapAssignment.id },
-      data: { pointValue: 12 },
-    });
-    const goodScore = dailyPagesEngagementTierBands(12).find(
-      (band) => band.tier === 'good'
-    )!.min;
-    await prisma.submission.updateMany({
-      where: {
-        document: { assignmentId: swapAssignment.id, title: 'DP QA swap persistence doc' },
-      },
-      data: {
-        overallScore: goodScore,
-        score: `${goodScore}/12`,
-      },
-    });
-  }
-
-  const notesTitle = 'DP QA Teacher Notes (Preview)';
-  let notesAssignment = await prisma.assignment.findFirst({
-    where: { title: notesTitle, assignmentTypeId: dailyPagesType.id },
-    select: { id: true },
-  });
-  if (!notesAssignment) {
-    notesAssignment = await prisma.assignment.create({
-      data: {
-        assignmentTypeId: dailyPagesType.id,
-        title: notesTitle,
-        prompt: 'What did you notice on the way to class today?',
-        pointValue: 12,
-        submitForGrade: true,
-      },
-      select: { id: true },
-    });
-    await ensureClassAssignment(notesAssignment.id);
-    const classAssignment = await prisma.classAssignment.findFirstOrThrow({
-      where: { assignmentId: notesAssignment.id, classId: klass.id },
-      select: { id: true },
-    });
-    const submissionId = randomUUID();
-    const text = 'The air smelled like rain even though the sky was clear.';
-    await prisma.document.create({
-      data: {
-        id: submissionId,
-        title: 'DP QA teacher notes doc',
-        text,
-        html: `<p>${text}</p>`,
-        membershipId: student.id,
-        assignmentTypeId: dailyPagesType.id,
-        assignmentId: notesAssignment.id,
-        classAssignmentId: classAssignment.id,
-      },
-    });
-    const teacherNote =
-      'Student mentioned sensory detail — worth praising in conference.';
-    const notesGoodScore = dailyPagesEngagementTierBands(12).find(
-      (band) => band.tier === 'good'
-    )!.min;
-    await prisma.submission.create({
-      data: {
-        id: submissionId,
-        documentId: submissionId,
-        html: `<p>${text}</p>`,
-        text,
-        title: 'DP QA teacher notes submission',
-        submittedAt: new Date(),
-        gradedAt: new Date(),
-        gradedByMembershipId: teacher.id,
-        overallScore: notesGoodScore,
-        score: `${notesGoodScore}/12`,
-        overallComment: 'You stayed with the observation.',
-        rubricScores: {
-          engagement_with_prompt: {
-            score: notesGoodScore,
-            comment: '',
-            isAi: true,
-          },
-        },
-      },
-    });
-    await prisma.submissionGradingAssistantRun.create({
-      data: {
-        submissionId,
-        source: 'assignment-type',
-        status: 'succeeded',
-        assignmentTypeRubricSnapshot: {
-          categories: (engagementLibrary as { rubric: { categories: unknown } })
-            .rubric.categories,
-          minScore: 0,
-          maxScore: 12,
-          step: 1,
-          scoringType: 'rubric_points',
-        },
-        metadata: {
-          teacherNote,
-          output: {
-            rubricScores: {
-              engagement_with_prompt: { score: notesGoodScore },
-            },
-            overallComment: 'You stayed with the observation.',
-            score: `${notesGoodScore}/12`,
-          },
-        },
-      },
-    });
-  } else {
-    await ensureClassAssignment(notesAssignment.id);
-    await prisma.assignment.update({
-      where: { id: notesAssignment.id },
-      data: { pointValue: 12 },
-    });
-    const goodScore = dailyPagesEngagementTierBands(12).find(
-      (band) => band.tier === 'good'
-    )!.min;
-    await prisma.submission.updateMany({
-      where: {
-        document: {
-          assignmentId: notesAssignment.id,
-          title: 'DP QA teacher notes doc',
-        },
-      },
-      data: {
-        overallScore: goodScore,
-        score: `${goodScore}/12`,
-        rubricScores: {
-          engagement_with_prompt: { score: goodScore, comment: '', isAi: true },
-        },
-      },
-    });
-  }
-
-  const classStarterType = await prisma.assignmentType.findFirst({
-    where: { kind: 'class_starter', archivedAt: null },
-    select: { id: true },
-  });
-  const csTitle = 'DP QA Class Starter Grading (Preview)';
-  if (classStarterType) {
-    let csAssignment = await prisma.assignment.findFirst({
-      where: { title: csTitle, assignmentTypeId: classStarterType.id },
-      select: { id: true },
-    });
-    if (!csAssignment) {
-      csAssignment = await prisma.assignment.create({
-        data: {
-          assignmentTypeId: classStarterType.id,
-          title: csTitle,
-          prompt: 'Write freely for ten minutes about something you noticed today.',
-          pointValue: 5,
-          submitForGrade: true,
-        },
-        select: { id: true },
-      });
-      await ensureClassAssignment(csAssignment.id);
-      const classAssignment = await prisma.classAssignment.findFirstOrThrow({
-        where: { assignmentId: csAssignment.id, classId: klass.id },
-        select: { id: true },
-      });
-      const submissionId = randomUUID();
-      const text =
-        'Class Starter QA entry. I kept writing past the point where I wanted to stop.';
-      await prisma.document.create({
-        data: {
-          id: submissionId,
-          title: 'DP QA class starter doc',
-          text,
-          html: `<p>${text}</p>`,
-          membershipId: student.id,
-          assignmentTypeId: classStarterType.id,
-          assignmentId: csAssignment.id,
-          classAssignmentId: classAssignment.id,
-        },
-      });
-      await prisma.submission.create({
-        data: {
-          id: submissionId,
-          documentId: submissionId,
-          html: `<p>${text}</p>`,
-          text,
-          title: 'DP QA class starter submission',
-          submittedAt: new Date(),
-        },
-      });
-    } else {
-      await ensureClassAssignment(csAssignment.id);
-    }
-    const classStarterRubric = await prisma.rubric.findFirst({
-      where: { name: 'class-starter-engagement', archivedAt: null },
-      select: { id: true },
-    });
-    if (classStarterRubric) {
-      await prisma.assignmentType.update({
-        where: { id: classStarterType.id },
-        data: { rubricId: classStarterRubric.id },
-      });
-    }
-  }
-
-  await prisma.assignmentType.update({
-    where: { id: dailyPagesType.id },
-    data: { rubricId: engagementRubricId },
-  });
-
-  console.log(
-    'DP QA preview fixtures ready:',
-    JSON.stringify({
-      classId: klass.id,
-      classTitle: classWithStudent?.title,
-      dailyPagesTypeId: dailyPagesType.id,
-    })
-  );
 }
 
 if (import.meta.main) {
   const prisma = createPrismaClient();
   try {
-    const includePreviewQaFixtures =
-      process.env.LOCAL_DEV_INCLUDE_DP_QA_FIXTURES === 'true' ||
-      (await shouldIncludeDpPreviewQaFixtures(prisma));
-    const result = await applyDailyPagesEngagementV2Seed(prisma, {
-      includePreviewQaFixtures,
-    });
+    const result = await applyDailyPagesEngagementV2Seed(prisma);
     console.log(JSON.stringify(result, null, 2));
   } finally {
     await prisma.$disconnect();
