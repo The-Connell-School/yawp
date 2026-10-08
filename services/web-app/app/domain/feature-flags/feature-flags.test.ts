@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  DAILY_PAGES_WRITING_CONDITIONS_FLAG,
   LESSON_PLANNER_FLAG,
   FEATURE_FLAG_KEYS,
   featureFlagSettingName,
@@ -9,15 +8,17 @@ import {
   isFeatureFlagKey,
   normalizeFeatureFlagValue,
   parseFeatureFlagValue,
-  readableWritingConditions,
   serializeFeatureFlagValue,
   type FeatureFlagValue,
 } from './feature-flags';
 
 describe('feature flag registry', () => {
-  test('has the Daily Pages writing-conditions flag', () => {
-    expect(FEATURE_FLAG_KEYS).toContain(DAILY_PAGES_WRITING_CONDITIONS_FLAG);
-    expect(isFeatureFlagKey(DAILY_PAGES_WRITING_CONDITIONS_FLAG)).toBe(true);
+  test('no longer has the removed Daily Pages writing-conditions flag', () => {
+    // Paragraph type and writing time were removed with their flag. Its old
+    // Setting row may still exist; it is simply no longer a registered flag.
+    const removed = 'daily_pages_paragraph_type_and_writing_time';
+    expect(FEATURE_FLAG_KEYS as readonly string[]).not.toContain(removed);
+    expect(isFeatureFlagKey(removed)).toBe(false);
   });
 
   test('has the Lesson Planner flag', () => {
@@ -37,8 +38,8 @@ describe('feature flag registry', () => {
   });
 
   test('stores each flag under its own namespaced Setting row', () => {
-    expect(featureFlagSettingName(DAILY_PAGES_WRITING_CONDITIONS_FLAG)).toBe(
-      'feature_flag.daily_pages_paragraph_type_and_writing_time'
+    expect(featureFlagSettingName(LESSON_PLANNER_FLAG)).toBe(
+      'feature_flag.lesson_planner'
     );
   });
 
@@ -133,43 +134,5 @@ describe('evaluateFeatureFlag', () => {
     expect(evaluateFeatureFlag(targeted, '')).toBe(false);
     expect(evaluateFeatureFlag(targeted, null)).toBe(false);
     expect(evaluateFeatureFlag(targeted, undefined)).toBe(false);
-  });
-});
-
-describe('readableWritingConditions', () => {
-  const stored: {
-    id: string;
-    paragraphMode: string | null;
-    writingTimeMinutes: number | null;
-    tutorEnabled: boolean;
-  } = {
-    id: 'assignment-1',
-    paragraphMode: 'analyze',
-    writingTimeMinutes: 15,
-    tutorEnabled: false,
-  };
-
-  test('flag on: the stored paragraph type and writing time are read as stored', () => {
-    expect(readableWritingConditions(stored, true)).toEqual(stored);
-  });
-
-  test('flag off: both read as unset, everything else untouched', () => {
-    expect(readableWritingConditions(stored, false)).toEqual({
-      id: 'assignment-1',
-      paragraphMode: null,
-      writingTimeMinutes: null,
-      tutorEnabled: false,
-    });
-  });
-
-  test('flag off never mutates the stored record', () => {
-    const copy = { ...stored };
-    readableWritingConditions(copy, false);
-    expect(copy).toEqual(stored);
-  });
-
-  test('passes a missing assignment through', () => {
-    expect(readableWritingConditions(null, false)).toBeNull();
-    expect(readableWritingConditions(undefined, true)).toBeUndefined();
   });
 });

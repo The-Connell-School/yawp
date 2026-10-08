@@ -98,15 +98,6 @@ export const HOW_TO_USE: string[] = [
   'Put the prompt where students can see it; the assistant anchors engagement to that prompt when it is available.',
 ];
 
-export function howToUse(writingConditionsEnabled: boolean): string[] {
-  if (writingConditionsEnabled) return HOW_TO_USE;
-  return HOW_TO_USE.filter(
-    (item) =>
-      !item.includes('Paragraph type') &&
-      !item.includes('Time students have to write')
-  );
-}
-
 export const WRITE_YOUR_OWN_HEADING = 'Writing your own prompt';
 
 export const WRITE_YOUR_OWN_INTRO =

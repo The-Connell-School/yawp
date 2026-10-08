@@ -368,17 +368,11 @@ model Assignment {
   /// composite renormalizes over what is left. Offered only for assignment
   /// types whose rubric grades grammar at all.
   grammarGradingEnabled           Boolean?
-  /// How long students have to write this, in minutes. The grading assistant
-  /// and grammar checker calibrate to it, so a ten-minute paragraph is not read
-  /// as a revised essay. Null means no time was given and both read the work
-  /// as they did before this existed. Editable after creation: it changes how
-  /// future grading reads the work, not a grade already given.
+  /// Unused since 2026-10-08: Daily Pages writing conditions were removed; kept for data.
+  /// (Was "Time students have to write", in minutes.)
   writingTimeMinutes              Int?
-  /// The kind of paragraph a Daily Pages entry practices (analyze, argue, …),
-  /// chosen at creation. Layers the type's guidance onto the grading assistant
-  /// and the tutor. Null means no type was chosen, which is every assignment
-  /// that predates this column, and then nothing changes. A string rather than
-  /// an enum so a type can be switched on without a migration.
+  /// Unused since 2026-10-08: Daily Pages writing conditions were removed; kept for data.
+  /// (Was the Daily Pages "Paragraph type", e.g. "analyze".)
   paragraphMode                   String?
   /// The teacher's per-assignment toggle: are students writing one shared
   /// draft per group. Gated at runtime by Organization.collaborativeDraftsEnabled.

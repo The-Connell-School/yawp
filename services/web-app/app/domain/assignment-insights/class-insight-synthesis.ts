@@ -1,4 +1,3 @@
-import { describeWritingTime } from '~/domain/grading/writing-time';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import type { ClassRubricAggregate } from './aggregate-rubric-performance';
 import {
@@ -40,15 +39,12 @@ export type InsightPromptContext = {
   assignmentTitle?: string | null;
   className?: string | null;
   /**
-   * The conditions the class wrote under. A fifteen-minute cold write and a
-   * revised essay should not get the same next steps, and without these the
-   * summary reads every assignment as the second. All optional: absent, the
-   * prompt is exactly what it was.
+   * The conditions the class wrote under. A cold write and a revised essay
+   * should not get the same next steps, and without these the summary reads
+   * every assignment as the second. All optional: absent, the prompt is
+   * exactly what it was.
    */
   assignmentTypeTitle?: string | null;
-  /** The Daily Pages paragraph type the teacher chose, e.g. "Analyze". */
-  paragraphModeLabel?: string | null;
-  writingTimeMinutes?: number | null;
   /** True when the tutor was off. */
   coldWrite?: boolean | null;
   /** False when the teacher switched grammar grading off for the assignment. */
@@ -59,12 +55,6 @@ function writingConditionLines(context: InsightPromptContext): string[] {
   return [
     context.assignmentTypeTitle
       ? `Assignment type: ${context.assignmentTypeTitle}`
-      : null,
-    context.paragraphModeLabel
-      ? `Paragraph type: ${context.paragraphModeLabel}`
-      : null,
-    context.writingTimeMinutes
-      ? `Writing time: ${describeWritingTime(context.writingTimeMinutes)}, written in one sitting and not revised`
       : null,
     context.coldWrite
       ? 'Tutor: off — this was a cold write, written without tutor support'
@@ -120,10 +110,9 @@ export function buildInsightPrompt(
   // prompted exactly as before.
   const conditionRules = conditionLines.length
     ? `
-- Read the scores in light of the writing conditions given with the assignment. A short timed piece is not a revised essay: recommend moves that fit it, such as modeling or practicing the paragraph type in class, rather than revision work.
+- Read the scores in light of the writing conditions given with the assignment.
 - If it was a cold write, the students had no tutor: do not recommend relying on the tutor to fix what the scores show.
-- If grammar was not graded, do not target grammar in next steps.
-- If a paragraph type is named, speak to that skill (for Analyze, for example, whether students explained their evidence or only quoted it).`
+- If grammar was not graded, do not target grammar in next steps.`
     : '';
 
   const system = `You are an instructional coach helping a teacher understand how their whole class performed on a single writing assignment. You are given aggregate rubric data (not individual students). Identify class-wide strengths and gaps and recommend concrete next teaching moves.

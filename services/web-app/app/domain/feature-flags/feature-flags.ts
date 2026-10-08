@@ -14,26 +14,12 @@
  */
 
 /**
- * The Daily Pages "Paragraph type" and "Time students have to write" settings
- * (PR #382 and PR #355). Off: the assignment form hides both, the server
- * ignores both, and the tutor, grading assistant, grammar checker and class
- * summary read every assignment as if neither were set.
- */
-export const DAILY_PAGES_WRITING_CONDITIONS_FLAG =
-  'daily_pages_paragraph_type_and_writing_time' as const;
-
-/**
  * YAWP! Lesson Planner (#374). Off: nav and deep links are hidden and every
  * planner route/API returns 404. Existing lesson data is kept.
  */
 export const LESSON_PLANNER_FLAG = 'lesson_planner' as const;
 
 export const FEATURE_FLAGS = {
-  [DAILY_PAGES_WRITING_CONDITIONS_FLAG]: {
-    label: 'Daily Pages: paragraph type and writing time',
-    description:
-      'Shows "Paragraph type" and "Time students have to write" on the assignment form, and lets the tutor, grading assistant, grammar checker and class summary use them. Off: both are hidden and ignored; values already saved are kept and come back when it is turned on.',
-  },
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
     description:
@@ -153,32 +139,4 @@ export function sameFeatureFlagValue(
   const left = new Set(a.orgIds);
   const right = new Set(b.orgIds);
   return left.size === right.size && [...left].every((id) => right.has(id));
-}
-
-/**
- * An assignment's paragraph type and writing time as the AI features may read
- * them. With the flag off both read as null (exactly how an assignment
- * created before either setting existed reads), while the stored record is left
- * untouched.
- */
-export function readableWritingConditions<
-  T extends {
-    paragraphMode?: string | null;
-    writingTimeMinutes?: number | null;
-  },
->(assignment: T, enabled: boolean): T;
-export function readableWritingConditions<
-  T extends {
-    paragraphMode?: string | null;
-    writingTimeMinutes?: number | null;
-  },
->(assignment: T | null | undefined, enabled: boolean): T | null | undefined;
-export function readableWritingConditions<
-  T extends {
-    paragraphMode?: string | null;
-    writingTimeMinutes?: number | null;
-  },
->(assignment: T | null | undefined, enabled: boolean): T | null | undefined {
-  if (!assignment || enabled) return assignment;
-  return { ...assignment, paragraphMode: null, writingTimeMinutes: null };
 }

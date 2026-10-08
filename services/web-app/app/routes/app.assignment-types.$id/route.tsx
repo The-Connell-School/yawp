@@ -1,5 +1,3 @@
-import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -577,19 +575,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentTypeGradesGrammar = (
     await getGrammarGradingAssignmentTypeIds([assignmentType.id])
   ).has(assignmentType.id);
-  // Paragraph type and writing time are behind a per-school flag (off by
-  // default); off, the form offers neither.
-  const writingConditionsEnabled =
-    await isDailyPagesWritingConditionsEnabled(profile.organization.id);
-  const creationTypeDefaults = (
-    await getCreationTypeDefaultsById([assignmentType.id], {
-      writingConditionsEnabled,
-    })
-  ).get(assignmentType.id);
-  const assignmentTypeDefaultWritingTimeMinutes =
-    creationTypeDefaults?.defaultWritingTimeMinutes ?? null;
-  const assignmentTypeOffersParagraphModes =
-    creationTypeDefaults?.offersParagraphModes ?? false;
 
   const sanitizeDocumentListForStudents = <
     T extends {
@@ -610,11 +595,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isStudent = profile.role === 'STUDENT';
 
   return dataResponse({
-    writingConditionsEnabled,
     assignmentType,
     assignmentTypeGradesGrammar,
-    assignmentTypeDefaultWritingTimeMinutes,
-    assignmentTypeOffersParagraphModes,
     documents: isStudent
       ? sanitizeDocumentListForStudents(documents)
       : documents,
@@ -945,13 +927,6 @@ export default function AppAssignmentTypesIdRoute() {
                   data.assignmentType.collaborationSupported
                 }
                 assignmentTypeGradesGrammar={data.assignmentTypeGradesGrammar}
-                assignmentTypeDefaultWritingTimeMinutes={
-                  data.assignmentTypeDefaultWritingTimeMinutes
-                }
-                writingConditionsEnabled={data.writingConditionsEnabled}
-                assignmentTypeOffersParagraphModes={
-                  data.assignmentTypeOffersParagraphModes
-                }
                 teacherClasses={assignmentSheetClasses}
                 initialClassId={initialApHistoryClassId}
                 open={isAssignmentSheetOpen}
@@ -1019,11 +994,7 @@ export default function AppAssignmentTypesIdRoute() {
         {data.promptLibrary ? (
           <TeacherDirections variant={data.promptLibrary.variant} />
         ) : null}
-        {showDailyPagesAbout ? (
-          <AboutDailyPages
-            writingConditionsEnabled={data.writingConditionsEnabled}
-          />
-        ) : null}
+        {showDailyPagesAbout ? <AboutDailyPages /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {data.apHistoryLibrary?.mode === 'teacher' ? (
           <ApHistoryTeacherDirections />

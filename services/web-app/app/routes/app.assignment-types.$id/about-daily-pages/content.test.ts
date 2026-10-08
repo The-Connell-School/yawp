@@ -10,7 +10,8 @@ import {
   SCORE_SCALE_LABELS,
   WHAT_IT_IS,
   WHAT_IT_IS_NOT,
-  howToUse,
+  HOW_TO_USE,
+  REGISTER_NOTE,
 } from './content';
 
 describe('Daily Pages about copy', () => {
@@ -38,8 +39,17 @@ describe('Daily Pages about copy', () => {
     expect(WHAT_IT_IS.join(' ').toLowerCase()).not.toContain('thesis');
   });
 
-  test('howToUse ignores retired writing-conditions lines when flag is off', () => {
-    const items = howToUse(false);
-    expect(items.every((item) => !item.includes('Paragraph type'))).toBe(true);
+  // Paragraph type and writing time were removed from the assignment sheet,
+  // so the guide must not tell a teacher to use them.
+  test('names neither removed setting: paragraph type nor writing time', () => {
+    const copy = [
+      ABOUT_LEDE,
+      ...WHAT_IT_IS,
+      ...WHAT_IT_IS_NOT.map((item) => `${item.claim} ${item.detail}`),
+      ...HOW_TO_USE,
+      REGISTER_NOTE,
+    ].join(' ');
+    expect(copy).not.toContain('Paragraph type');
+    expect(copy).not.toContain('Time students have to write');
   });
 });

@@ -1,8 +1,6 @@
-import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
-import { buildParagraphModeTutorInstructions } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import crypto from 'node:crypto';
@@ -193,7 +191,6 @@ export async function action({ request }: ActionFunctionArgs) {
 	                prompt: true,
 	                tutorEnabled: true,
 	                apHistorySnapshot: true,
-	                paragraphMode: true,
 	              },
 	            },
 	          },
@@ -297,13 +294,6 @@ export async function action({ request }: ActionFunctionArgs) {
             cms.assignmentModule.assignmentType?.tutorInstructions,
           tutorInstructions: cms.assignmentModule.tutorInstructions,
           instructionTutorInstructions: instruction.tutorInstructions,
-          // Behind the writing-conditions flag: off, a stored paragraph type
-          // is not read and the tutor coaches as it did before it existed.
-          paragraphModeInstructions: buildParagraphModeTutorInstructions(
-            (await isDailyPagesWritingConditionsEnabled(profile.organization.id))
-              ? cms.document?.assignment?.paragraphMode ?? null
-              : null
-          ),
           moduleRubricGuidance,
         });
 

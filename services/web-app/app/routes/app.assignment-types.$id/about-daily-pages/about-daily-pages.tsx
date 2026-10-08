@@ -15,8 +15,8 @@ import {
   GRADING_SUMMARY,
   HOW_ITS_GRADED_HEADING,
   HOW_ITS_GRADED_INTRO,
+  HOW_TO_USE,
   HOW_TO_USE_HEADING,
-  howToUse,
   PROMPT_RECIPE,
   PROMPT_RECIPE_SOURCE_NOTE,
   PROMPT_REWRITES,
@@ -88,12 +88,7 @@ function MinorHeading({ children }: { children: ReactNode }) {
  * whichever order they are in, and "how to browse the corpus" is the narrowest
  * question here, not the first one.
  */
-export function AboutDailyPages({
-  writingConditionsEnabled = false,
-}: {
-  /** The writing-conditions flag; off, the guide leaves out paragraph type and writing time. */
-  writingConditionsEnabled?: boolean;
-} = {}) {
+export function AboutDailyPages() {
   return (
     <section className="mb-6 rounded-lg border bg-muted/40 p-4">
       <h2 className="text-base font-semibold">{ABOUT_HEADING}</h2>
@@ -171,7 +166,7 @@ export function AboutDailyPages({
 
         <AboutSection value="how-to-use" heading={HOW_TO_USE_HEADING}>
           <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-            {howToUse(writingConditionsEnabled).map((item) => (
+            {HOW_TO_USE.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>

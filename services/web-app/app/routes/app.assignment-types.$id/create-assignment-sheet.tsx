@@ -43,12 +43,6 @@ type Props = {
   assignmentTypeCollaborationSupported?: boolean;
   /** Whether this type's rubric grades grammar, so the toggle is worth showing. */
   assignmentTypeGradesGrammar?: boolean;
-  /** The writing time the form suggests for this type; null leaves it blank. */
-  assignmentTypeDefaultWritingTimeMinutes?: number | null;
-  /** Whether this type takes a paragraph type (Daily Pages). */
-  assignmentTypeOffersParagraphModes?: boolean;
-  /** The Daily Pages writing-conditions flag; off hides paragraph type and writing time. */
-  writingConditionsEnabled?: boolean;
   teacherClasses: TeacherClass[];
   initialClassId?: string;
   open: boolean;
@@ -81,9 +75,6 @@ export function CreateAssignmentSheet({
   assignmentTypeRubricName = null,
   assignmentTypeCollaborationSupported = false,
   assignmentTypeGradesGrammar = false,
-  assignmentTypeDefaultWritingTimeMinutes = null,
-  assignmentTypeOffersParagraphModes = false,
-  writingConditionsEnabled = false,
   teacherClasses,
   initialClassId,
   open,
@@ -138,11 +129,8 @@ export function CreateAssignmentSheet({
             rubricName: assignmentTypeRubricName,
             collaborationSupported: assignmentTypeCollaborationSupported,
             gradesGrammar: assignmentTypeGradesGrammar,
-            defaultWritingTimeMinutes: assignmentTypeDefaultWritingTimeMinutes,
-            offersParagraphModes: assignmentTypeOffersParagraphModes,
           },
         ]}
-        writingConditionsEnabled={writingConditionsEnabled}
         teacherClasses={teacherClasses}
         initialPrompt={initialPrompt}
         initialExitTicketMode={plannedExitTicket?.mode}

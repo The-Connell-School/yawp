@@ -15,18 +15,16 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 
 const {
   isFeatureFlagEnabled,
-  isDailyPagesWritingConditionsEnabled,
   isLessonPlannerEnabled,
   listFeatureFlags,
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const {
-  DAILY_PAGES_WRITING_CONDITIONS_FLAG,
-  LESSON_PLANNER_FLAG,
-} = await import('./feature-flags');
+const { LESSON_PLANNER_FLAG } = await import('./feature-flags');
 
-const NAME = 'feature_flag.daily_pages_paragraph_type_and_writing_time';
+const NAME = 'feature_flag.lesson_planner';
+/** Removed with its feature; its Setting row may still exist in a database. */
+const REMOVED_NAME = 'feature_flag.daily_pages_paragraph_type_and_writing_time';
 
 describe('feature flags (server)', () => {
   beforeEach(() => {
@@ -40,7 +38,7 @@ describe('feature flags (server)', () => {
 
   test('defaults off when no row exists', async () => {
     prisma.setting.findUnique.mockResolvedValue(null);
-    expect(await isFeatureFlagEnabled(DAILY_PAGES_WRITING_CONDITIONS_FLAG)).toBe(false);
+    expect(await isFeatureFlagEnabled(LESSON_PLANNER_FLAG)).toBe(false);
     expect(prisma.setting.findUnique).toHaveBeenCalledWith({
       where: { name: NAME },
       select: { value: true },
@@ -49,7 +47,6 @@ describe('feature flags (server)', () => {
 
   test('legacy "true" is on for every school, and with no school', async () => {
     prisma.setting.findUnique.mockResolvedValue({ value: 'true' });
-    expect(await isDailyPagesWritingConditionsEnabled('org-1')).toBe(true);
     expect(await isLessonPlannerEnabled('org-1')).toBe(true);
     expect(await isLessonPlannerEnabled(null)).toBe(true);
     expect(await isFeatureFlagEnabled(LESSON_PLANNER_FLAG)).toBe(true);
@@ -57,7 +54,7 @@ describe('feature flags (server)', () => {
 
   test('legacy "false" is off', async () => {
     prisma.setting.findUnique.mockResolvedValue({ value: 'false' });
-    expect(await isDailyPagesWritingConditionsEnabled('org-1')).toBe(false);
+    expect(await isLessonPlannerEnabled('org-1')).toBe(false);
   });
 
   test('everyone is on for every school', async () => {
@@ -80,7 +77,7 @@ describe('feature flags (server)', () => {
       value: '{"mode":"targeted","orgIds":["org-1","org-2"]}',
     });
     expect(await isFeatureFlagEnabled(LESSON_PLANNER_FLAG, 'org-1')).toBe(true);
-    expect(await isDailyPagesWritingConditionsEnabled('org-2')).toBe(true);
+    expect(await isLessonPlannerEnabled('org-2')).toBe(true);
     expect(await isLessonPlannerEnabled('org-3')).toBe(false);
     expect(await isLessonPlannerEnabled(null)).toBe(false);
     expect(await isFeatureFlagEnabled(LESSON_PLANNER_FLAG)).toBe(false);
@@ -101,7 +98,7 @@ describe('feature flags (server)', () => {
     const error = console.error;
     console.error = () => {};
     try {
-      expect(await isDailyPagesWritingConditionsEnabled('org-1')).toBe(false);
+      expect(await isLessonPlannerEnabled('org-1')).toBe(false);
     } finally {
       console.error = error;
     }
@@ -110,9 +107,9 @@ describe('feature flags (server)', () => {
   test('lists every registered flag, off when it has no row', async () => {
     prisma.setting.findMany.mockResolvedValue([]);
     const flags = await listFeatureFlags();
-    expect(flags).toHaveLength(2);
+    expect(flags).toHaveLength(1);
     expect(flags[0]).toMatchObject({
-      key: DAILY_PAGES_WRITING_CONDITIONS_FLAG,
+      key: LESSON_PLANNER_FLAG,
       mode: 'off',
       orgIds: [],
       enabled: false,
@@ -120,6 +117,17 @@ describe('feature flags (server)', () => {
       lastChangedBy: null,
     });
     expect(flags[0].label.length).toBeGreaterThan(0);
+  });
+
+  test('never lists the removed writing-conditions flag, even with its row still stored', async () => {
+    prisma.setting.findMany.mockResolvedValue([
+      { name: REMOVED_NAME, value: 'true', description: null, updatedAt: new Date() },
+    ]);
+    const flags = await listFeatureFlags();
+    expect(flags.map((flag) => flag.key)).toEqual([LESSON_PLANNER_FLAG]);
+    expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
+    const where = prisma.setting.findMany.mock.calls[0]?.[0].where;
+    expect(where.name.in).not.toContain(REMOVED_NAME);
   });
 
   test('lists the stored state and who last changed it', async () => {
@@ -162,7 +170,7 @@ describe('feature flags (server)', () => {
     });
 
     const result = await setFeatureFlag(
-      DAILY_PAGES_WRITING_CONDITIONS_FLAG,
+      LESSON_PLANNER_FLAG,
       { mode: 'everyone', orgIds: [] },
       'ops@yawp.school'
     );
@@ -182,7 +190,7 @@ describe('feature flags (server)', () => {
       previous: { mode: 'off', orgIds: [] },
       changed: true,
       flag: {
-        key: DAILY_PAGES_WRITING_CONDITIONS_FLAG,
+        key: LESSON_PLANNER_FLAG,
         mode: 'everyone',
         orgIds: [],
         enabled: true,
@@ -241,7 +249,7 @@ describe('feature flags (server)', () => {
       updatedAt: new Date(),
     });
     const result = await setFeatureFlag(
-      DAILY_PAGES_WRITING_CONDITIONS_FLAG,
+      LESSON_PLANNER_FLAG,
       { mode: 'off', orgIds: [] },
       'ops@yawp.school'
     );
