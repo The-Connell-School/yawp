@@ -11,7 +11,6 @@ import { prisma } from '~/utils/db.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
 import { resendFreeTierAdminApprovalReminder } from '~/domain/free-tier/approval-flow.server';
-import { adminApprovalEmailCopyVersionHash } from '~/domain/free-tier/email-copy.server';
 import { renderAdminApprovalEmailBody } from '~/domain/free-tier/email-copy';
 import { FreeTierAuthCard, FreeTierEmailPreview, FreeTierSignOut } from '../free-tier/FreeTierAuthCard';
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
@@ -23,6 +22,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const app = await prisma.freeTierApplication.findFirst({
     where: { userId },
     select: {
+      id: true,
       status: true,
       schoolName: true,
       email: true,
@@ -36,10 +36,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
   const pending = app?.adminApprovals[0];
+  const lastFailedEmail = app
+    ? await prisma.freeTierEmailLog.findFirst({
+        where: { applicationId: app.id, kind: 'admin_approval', success: false },
+        orderBy: { createdAt: 'desc' },
+        select: { error: true },
+      })
+    : null;
   return {
     app,
     pending,
-    emailCopyVersionLabel: adminApprovalEmailCopyVersionHash().slice(0, 8),
+    lastFailedEmail,
   };
 }
 
@@ -70,7 +77,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function FreeTierPendingRoute() {
-  const { app, pending, emailCopyVersionLabel } = useLoaderData<typeof loader>();
+  const { app, pending, lastFailedEmail } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const resending = navigation.state === 'submitting';
@@ -88,17 +95,30 @@ export default function FreeTierPendingRoute() {
 
   return (
     <FreeTierAuthCard title={`Waiting for ${adminName}`}>
-      <p className="text-sm text-foreground/80">
-        We emailed {pending?.adminEmail ?? 'your school administrator'}. You will not have classes or AI tools until
-        they approve YAWP for {app?.schoolName}.
-      </p>
+      {pending && app?.status === 'SENT' ? (
+        <p className="text-sm text-foreground/80">
+          We emailed {pending.adminEmail}. You will not have classes or AI tools until they approve YAWP for{' '}
+          {app.schoolName}.
+        </p>
+      ) : (
+        <p className="text-sm text-foreground/80">
+          Your approval request is being processed. You will not have classes or AI tools until an administrator
+          approves YAWP for {app?.schoolName}.
+        </p>
+      )}
+      {lastFailedEmail && !pending ? (
+        <p className="text-sm text-destructive" role="alert">
+          We could not send the approval email. Use onboarding to update the administrator and try again, or contact
+          support@yawp.school.
+        </p>
+      ) : null}
       {app?.status === 'MANUAL_REVIEW' ? (
         <p className="text-sm rounded-md border border-border p-3 bg-muted text-foreground">
           Our team is reviewing this request manually. We will email you when it is ready.
         </p>
       ) : null}
       {pending ? (
-        <FreeTierEmailPreview body={preview} versionLabel={emailCopyVersionLabel} />
+        <FreeTierEmailPreview body={preview} />
       ) : null}
       {actionData?.ok ? (
         <p className="text-sm text-green-800" role="status">Reminder sent to {pending?.adminEmail}.</p>

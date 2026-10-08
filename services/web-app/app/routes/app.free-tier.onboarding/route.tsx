@@ -30,7 +30,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
     where: { userId },
     select: { id: true, schoolName: true, name: true, email: true, status: true },
   });
-  return { app };
+  const lastFailedEmail = app
+    ? await prisma.freeTierEmailLog.findFirst({
+        where: { applicationId: app.id, kind: 'admin_approval', success: false },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+    : null;
+  const pending = app
+    ? await prisma.freeTierAdminApproval.findFirst({
+        where: { applicationId: app.id, status: 'PENDING' },
+        orderBy: { createdAt: 'desc' },
+        select: { adminName: true, adminEmail: true, adminRole: true, personalNote: true },
+      })
+    : null;
+  return { app, lastFailedEmail, pending };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -58,7 +72,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function FreeTierOnboardingRoute() {
-  const { app } = useLoaderData<typeof loader>();
+  const { app, lastFailedEmail, pending } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const preview = renderAdminApprovalEmailBody({
     teacherName: app?.name ?? 'You',
@@ -88,18 +102,48 @@ export default function FreeTierOnboardingRoute() {
       {errorMessage ? (
         <p className="text-sm text-destructive" role="alert">{errorMessage}</p>
       ) : null}
+      {lastFailedEmail && app?.status === 'ADMIN_SUBMITTED' ? (
+        <p className="text-sm text-destructive" role="alert">
+          We could not send the approval email last time. Update the administrator details below and send again.
+        </p>
+      ) : null}
       <Form method="post" className="flex flex-col gap-4">
         <FreeTierFieldLabel label="Administrator name" htmlFor="adminName">
-          <FreeTierTextInput id="adminName" name="adminName" required maxLength={MAX_NAME} />
+          <FreeTierTextInput
+            id="adminName"
+            name="adminName"
+            required
+            maxLength={MAX_NAME}
+            defaultValue={pending?.adminName ?? ''}
+          />
         </FreeTierFieldLabel>
         <FreeTierFieldLabel label="Administrator email" htmlFor="adminEmail">
-          <FreeTierTextInput id="adminEmail" name="adminEmail" type="email" required maxLength={320} />
+          <FreeTierTextInput
+            id="adminEmail"
+            name="adminEmail"
+            type="email"
+            required
+            maxLength={320}
+            defaultValue={pending?.adminEmail ?? ''}
+          />
         </FreeTierFieldLabel>
         <FreeTierFieldLabel label="Administrator role" htmlFor="adminRole">
-          <FreeTierTextInput id="adminRole" name="adminRole" required maxLength={100} />
+          <FreeTierTextInput
+            id="adminRole"
+            name="adminRole"
+            required
+            maxLength={100}
+            defaultValue={pending?.adminRole ?? ''}
+          />
         </FreeTierFieldLabel>
         <FreeTierFieldLabel label="Personal note (optional, shown at top of email)" htmlFor="personalNote">
-          <FreeTierTextArea id="personalNote" name="personalNote" maxLength={MAX_NOTE} rows={3} />
+          <FreeTierTextArea
+            id="personalNote"
+            name="personalNote"
+            maxLength={MAX_NOTE}
+            rows={3}
+            defaultValue={pending?.personalNote ?? ''}
+          />
         </FreeTierFieldLabel>
         <FreeTierEmailPreview body={preview} />
         <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
