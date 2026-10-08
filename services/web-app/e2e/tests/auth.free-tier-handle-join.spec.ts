@@ -162,10 +162,17 @@ test.describe('Free-tier handle student', () => {
       await page.getByRole('button', { name: 'Log in' }).click();
       await expect(page).toHaveURL(/\/app/);
     } finally {
-      const student = await prisma.user.findFirst({ where: { username: handle } });
-      if (student) {
+      const student = await prisma.user.findFirst({
+        where: { username: handle },
+        select: {
+          id: true,
+          memberships: { where: { organizationId: org.id }, select: { id: true } },
+        },
+      });
+      const studentMembershipId = student?.memberships[0]?.id;
+      if (student && studentMembershipId) {
         const documents = await prisma.document.findMany({
-          where: { authorId: student.id },
+          where: { membershipId: studentMembershipId },
           select: { id: true },
         });
         for (const doc of documents) {
@@ -174,7 +181,7 @@ test.describe('Free-tier handle student', () => {
             .deleteMany({ where: { documentId: doc.id } })
             .catch(() => {});
         }
-        await prisma.document.deleteMany({ where: { authorId: student.id } });
+        await prisma.document.deleteMany({ where: { membershipId: studentMembershipId } });
         await prisma.session.deleteMany({ where: { userId: student.id } });
         await prisma.password.deleteMany({ where: { userId: student.id } }).catch(() => {});
         await prisma.orgMembership.deleteMany({ where: { userId: student.id } });
