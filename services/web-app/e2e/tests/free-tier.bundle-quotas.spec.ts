@@ -1,18 +1,22 @@
-import { expect, test } from '../test-setup';
-
-const FREE_CLASSROOM_PASSWORD = 'yawp-dev';
+import { expect, test } from '@playwright/test';
 
 test.describe('Free classroom bundle quotas', () => {
   test('teacher sees assignment type counters in the creation sheet', async ({
     page,
-    signIn,
   }) => {
     const email =
       process.env.E2E_FREE_CLASSROOM_TEACHER_EMAIL ??
       'dev.teacher.free@yawp.local';
-    await signIn(email, FREE_CLASSROOM_PASSWORD);
+    const login = await page.request.post('/auth/dev-login', {
+      form: { email },
+      maxRedirects: 0,
+    });
+    expect(login.ok()).toBeTruthy();
     await page.goto('/app');
-    await page.getByRole('button', { name: /create assignment/i }).click();
+    await page
+      .getByRole('button', { name: /new assignment|create assignment/i })
+      .first()
+      .click();
     await expect(
       page.locator('[role="combobox"]').filter({ hasText: /\d+ of \d+/ })
     ).toBeVisible();
