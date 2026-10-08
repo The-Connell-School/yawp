@@ -86,16 +86,27 @@ export async function seedPreviewPlannerQa(
     select: { id: true },
   });
 
-  const thesisType = await prisma.assignmentType.findFirst({
-    where: { kind: 'thesis_driven_essay' },
-    select: { id: true },
-  });
-  if (!thesisType) {
-    console.log('preview planner QA: thesis assignment type missing; skipping');
-    return { skipped: true as const };
-  }
-
-  const insightAssignment = await prisma.assignment.upsert({
+  const insightType =
+    (await prisma.assignmentType.findFirst({
+      where: {
+        kind: {
+          in: ['thesis_driven_essay', 'literary_analysis', 'argumentative_essay'],
+        },
+      },
+      orderBy: { position: 'asc' },
+      select: { id: true },
+    })) ??
+    (await prisma.assignmentType.findFirst({
+      where: { kind: { not: 'exit_ticket' } },
+      orderBy: { position: 'asc' },
+      select: { id: true },
+    }));
+  let insightAssignment: { id: string } | null = null;
+  let insightClassAssignment: { id: string } | null = null;
+  if (!insightType) {
+    console.log('preview planner QA: no essay assignment type for class summary');
+  } else {
+  const insightAssignmentRow = await prisma.assignment.upsert({
     where: { id: PREVIEW_PLANNER_QA_IDS.insightAssignmentId },
     update: {
       title: '[QA] Class summary insight assignment',
@@ -104,7 +115,7 @@ export async function seedPreviewPlannerQa(
     },
     create: {
       id: PREVIEW_PLANNER_QA_IDS.insightAssignmentId,
-      assignmentTypeId: thesisType.id,
+      assignmentTypeId: insightType.id,
       title: '[QA] Class summary insight assignment',
       prompt:
         'Write a short paragraph arguing whether schools should require community service.',
@@ -113,25 +124,27 @@ export async function seedPreviewPlannerQa(
     },
     select: { id: true },
   });
+  insightAssignment = insightAssignmentRow;
 
-  const insightClassAssignment = await prisma.classAssignment.upsert({
+  const insightClassAssignmentRow = await prisma.classAssignment.upsert({
     where: { id: PREVIEW_PLANNER_QA_IDS.insightClassAssignmentId },
     update: {
       classId: klass.id,
-      assignmentId: insightAssignment.id,
+      assignmentId: insightAssignmentRow.id,
     },
     create: {
       id: PREVIEW_PLANNER_QA_IDS.insightClassAssignmentId,
       classId: klass.id,
-      assignmentId: insightAssignment.id,
+      assignmentId: insightAssignmentRow.id,
     },
     select: { id: true },
   });
+  insightClassAssignment = insightClassAssignmentRow;
 
   await prisma.classAssignmentInsight.upsert({
-    where: { classAssignmentId: insightClassAssignment.id },
+    where: { classAssignmentId: insightClassAssignmentRow.id },
     create: {
-      classAssignmentId: insightClassAssignment.id,
+      classAssignmentId: insightClassAssignmentRow.id,
       status: 'ready',
       submissionCount: 8,
       generatedAt: new Date(),
@@ -145,6 +158,7 @@ export async function seedPreviewPlannerQa(
       summaryJson: INSIGHT_SUMMARY as Prisma.InputJsonValue,
     },
   });
+  }
 
   const exitTicketType = await prisma.assignmentType.findFirst({
     where: { kind: 'exit_ticket' },
@@ -156,8 +170,8 @@ export async function seedPreviewPlannerQa(
     return {
       skipped: false as const,
       classId: klass.id,
-      assignmentId: insightAssignment.id,
-      classAssignmentId: insightClassAssignment.id,
+      assignmentId: insightAssignment?.id ?? null,
+      classAssignmentId: insightClassAssignment?.id ?? null,
     };
   }
 
@@ -312,8 +326,8 @@ export async function seedPreviewPlannerQa(
   return {
     skipped: false as const,
     classId: klass.id,
-    assignmentId: insightAssignment.id,
-    classAssignmentId: insightClassAssignment.id,
+    assignmentId: insightAssignment?.id ?? null,
+    classAssignmentId: insightClassAssignment?.id ?? null,
     exitTicketSubmissionId: PREVIEW_PLANNER_QA_IDS.exitTicketSubmissionId,
   };
 }
