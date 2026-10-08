@@ -1,20 +1,5 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-
-afterAll(() => {
-  mock.restore();
-});
-
-const findFirst = mock();
-const classCount = mock();
-
-mock.module('~/utils/db.server', () => ({
-  prisma: {
-    freeTierApplication: { findFirst },
-    class: { count: classCount },
-  },
-}));
-
-const { enforceFreeTierTeacherGate } = await import('./free-tier-gate.server');
+import { describe, expect, test } from 'bun:test';
+import { enforceFreeTierTeacherGate } from './free-tier-gate.server';
 
 function app(overrides: Partial<{
   status: string;
@@ -47,17 +32,11 @@ async function expectRedirect(
 }
 
 describe('enforceFreeTierTeacherGate', () => {
-  beforeEach(() => {
-    findFirst.mockReset();
-    classCount.mockReset();
-    classCount.mockResolvedValue(0);
-  });
-
   test('no application returns null', async () => {
-    findFirst.mockResolvedValue(null);
     const result = await enforceFreeTierTeacherGate({
       userId: 'u1',
       pathname: '/app/my-classes',
+      application: null,
     });
     expect(result).toBeNull();
   });
@@ -70,7 +49,6 @@ describe('enforceFreeTierTeacherGate', () => {
       application: row,
     });
     expect(result).toBe(row);
-    expect(classCount).not.toHaveBeenCalled();
   });
 
   test('REJECTED redirects to status outside free-tier routes', async () => {
