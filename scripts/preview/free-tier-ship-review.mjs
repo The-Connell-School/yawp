@@ -123,6 +123,32 @@ async function releaseWaitlistEmail(page, email) {
   return await pollJoinManifest(page, normalized);
 }
 
+async function approvalLinksFromOperatorQueue(page, teacherEmail) {
+  const normalized = teacherEmail.trim().toLowerCase();
+  await page.goto(`${baseUrl}/app/admin/free-tier?view=queue`, { waitUntil: 'networkidle' });
+  const card = page.locator('.border.rounded-lg').filter({ hasText: normalized });
+  const raw = await card.locator('pre').textContent({ timeout: 60_000 });
+  if (!raw) return {};
+  const parsed = JSON.parse(raw);
+  const emails = parsed.emails ?? [];
+  const log =
+    emails.find((e) => e.kind === 'admin_approval_reminder' && e.payload) ??
+    emails.find((e) => e.kind === 'admin_approval' && e.payload);
+  const payload = log?.payload ?? {};
+  return {
+    approveUrl: payload.approveUrl,
+    declineUrl: payload.notRightPersonUrl,
+  };
+}
+
+async function operatorApproveFromQueue(page, teacherEmail) {
+  const normalized = teacherEmail.trim().toLowerCase();
+  await page.goto(`${baseUrl}/app/admin/free-tier?view=queue`, { waitUntil: 'networkidle' });
+  const card = page.locator('.border.rounded-lg').filter({ hasText: normalized });
+  await card.getByRole('button', { name: /^Approve$/i }).click({ timeout: 60_000 });
+  await page.waitForTimeout(4000);
+}
+
 async function fetchManifest(page, email) {
   const result = await page.evaluate(async (em) => {
     const res = await fetch(
@@ -219,39 +245,21 @@ async function main() {
       await page.waitForLoadState('networkidle');
       await shot(page, '02-operator-free-tier-admin', manifest);
 
-      releaseManifest = await fetchManifest(page, RELEASE_EMAIL).catch(() => null);
+      const acqToken = await createBypassToken(page);
+      teacherFlowEmailResolved = teacherFlowEmail;
+      const redeem = await freshContext(browser);
+      await redeemBypassToken(redeem.page, acqToken, teacherFlowEmailResolved);
+      releaseManifest = await pollJoinManifest(page, teacherFlowEmailResolved, 40).catch(() => null);
       if (!releaseManifest?.joinUrl) {
-        await page.goto(`${baseUrl}/app/admin/free-tier?view=waitlist`, { waitUntil: 'networkidle' });
-        const releaseRow = page.locator('tr').filter({ hasText: RELEASE_EMAIL });
-        const hasWaitlistRow = await releaseRow.locator('input[type="checkbox"]').count();
-        if (hasWaitlistRow > 0) {
-          await releaseRow.locator('input[type="checkbox"]').check();
-          await page.getByRole('button', { name: /Release selected/i }).click();
-          await page.waitForTimeout(3000);
-          teacherFlowEmailResolved = RELEASE_EMAIL;
-          releaseManifest = await releaseWaitlistEmail(page, RELEASE_EMAIL);
+        const joinPath = redeem.page.url();
+        if (/\/free\/join/.test(joinPath)) {
+          releaseManifest = { joinUrl: joinPath };
         } else {
-          const acqToken = await createBypassToken(page);
-          teacherFlowEmailResolved = teacherFlowEmail;
-          const redeem = await freshContext(browser);
-          await redeemBypassToken(redeem.page, acqToken, teacherFlowEmailResolved);
-          releaseManifest = await pollJoinManifest(page, teacherFlowEmailResolved, 40).catch(() => null);
-          if (!releaseManifest?.joinUrl) {
-            const joinPath = redeem.page.url();
-            if (/\/free\/join/.test(joinPath)) {
-              releaseManifest = { joinUrl: joinPath };
-            } else {
-              await redeem.context.close();
-              throw new Error(
-                `No joinUrl for ${teacherFlowEmailResolved} (last URL: ${joinPath})`
-              );
-            }
-          }
           await redeem.context.close();
+          throw new Error(`No joinUrl for ${teacherFlowEmailResolved} (last URL: ${joinPath})`);
         }
-      } else {
-        teacherFlowEmailResolved = RELEASE_EMAIL;
       }
+      await redeem.context.close();
       await context.close();
     }
 
@@ -279,13 +287,16 @@ async function main() {
       await teacher.page.fill('input[name="adminRole"]', 'Principal');
       await Promise.all([
         teacher.page.waitForURL(/\/app\/free-tier\/pending/, { timeout: 45_000 }),
-        teacher.page.locator('button[type="submit"]').click(),
+        teacher.page.getByRole('button', { name: /Send approval request/i }).click(),
       ]);
       await shot(teacher.page, '05-teacher-pending-approval', manifest);
 
       const admin = await freshContext(browser);
       await devLogin(admin.page, 'dev.admin@yawp.local');
-      const approvalLinks = await fetchManifest(admin.page, teacherFlowEmailResolved);
+      let approvalLinks = await fetchManifest(admin.page, teacherFlowEmailResolved).catch(() => ({}));
+      if (!approvalLinks.approveUrl && !approvalLinks.declineUrl) {
+        approvalLinks = await approvalLinksFromOperatorQueue(admin.page, teacherFlowEmailResolved);
+      }
 
       if (approvalLinks.declineUrl) {
         const redirectCtx = await freshContext(browser);
@@ -296,10 +307,11 @@ async function main() {
         await redirectCtx.page.fill('input[name="adminEmail"]', 'district@shipreview-high.edu');
         await Promise.all([
           redirectCtx.page.waitForLoadState('networkidle'),
-          redirectCtx.page.locator('button[type="submit"]').click(),
+          redirectCtx.page.getByRole('button', { name: /Forward request/i }).click(),
         ]);
         await shot(redirectCtx.page, '07-not-right-person-submitted', manifest);
         await redirectCtx.context.close();
+        Object.assign(approvalLinks, await fetchManifest(admin.page, teacherFlowEmailResolved));
       }
 
       if (approvalLinks.approveUrl) {
@@ -316,7 +328,7 @@ async function main() {
               res.url().includes('/free/admin/approve') && res.request().method() === 'POST',
             { timeout: 45_000 }
           ),
-          approveCtx.page.locator('button[type="submit"]').click(),
+          approveCtx.page.getByRole('button', { name: /Approve YAWP/i }).click(),
         ]);
         await approveCtx.page.waitForLoadState('networkidle');
         await shot(approveCtx.page, '09-admin-approve-success', manifest);
@@ -325,6 +337,8 @@ async function main() {
         await approveCtx.page.waitForLoadState('networkidle');
         await shot(approveCtx.page, '10-admin-already-approved', manifest);
         await approveCtx.context.close();
+      } else {
+        await operatorApproveFromQueue(admin.page, teacherFlowEmailResolved);
       }
       await admin.context.close();
       await teacher.context.close();
@@ -363,7 +377,7 @@ async function main() {
       const [local, domain] = selfEmail.split('@');
       await self.page.fill('input[name="adminEmail"]', `${local}+alias@${domain}`);
       await self.page.fill('input[name="adminRole"]', 'Principal');
-      await self.page.locator('button[type="submit"]').click();
+      await self.page.getByRole('button', { name: /Send approval request/i }).click();
       await self.page.waitForURL(/\/app\/free-tier\/pending/, { timeout: 45_000 });
       await shot(self.page, '13-self-approval-manual-review', manifest);
       await self.context.close();

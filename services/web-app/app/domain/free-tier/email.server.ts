@@ -154,6 +154,7 @@ export async function sendFreeTierAdminApprovalEmail(args: {
         toEmail: args.to,
         success: false,
         error: delivered.error,
+        payload: { approveUrl: args.approveUrl, notRightPersonUrl: args.notRightPersonUrl },
       });
       return delivered;
     }

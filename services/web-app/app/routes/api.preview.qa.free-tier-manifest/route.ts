@@ -52,7 +52,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     where: {
       applicationId: app.id,
       kind: { in: ['admin_approval', 'admin_approval_reminder'] },
-      success: true,
     },
     orderBy: { createdAt: 'desc' },
     select: { payload: true },
