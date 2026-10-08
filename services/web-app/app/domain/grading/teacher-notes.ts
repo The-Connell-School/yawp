@@ -1,7 +1,7 @@
 /**
  * Teacher Notes are document observations, not an authorship detector. Keep
- * this contract in the shared prompt so every rubric that opts in gets the
- * same conservative behavior.
+ * this contract in the shared prompt so every rubric gets the same conservative
+ * behavior.
  */
 export const TEACHER_NOTES_EVIDENCE_RULE = [
   'Teacher Note rules:',
@@ -19,18 +19,6 @@ export const TEACHER_NOTES_EVIDENCE_RULE = [
 
 export function overallCommentWriterRules(_teacherNotesEnabled: boolean): string {
   return '- Do not include private observations, notes for the teacher, or speculation about authorship. Write only student feedback and obey the supplied grading constraints.';
-}
-
-/** Strip teacherNotesEnabled changes from non-superadmin assignment-type saves. */
-export function authorizeOutputSchemaTeacherNotes(
-  submitted: Record<string, unknown> | null,
-  existingOutputSchema: unknown,
-  canEditTeacherNotesToggle: boolean
-): Record<string, unknown> | null {
-  if (!submitted) return submitted;
-  if (canEditTeacherNotesToggle) return submitted;
-  const preserveEnabled = teacherNotesEnabled(existingOutputSchema);
-  return withTeacherNotesEnabled(submitted, preserveEnabled);
 }
 
 /**
@@ -67,6 +55,7 @@ export function gradingRepairPrivateObservationRules(
   ].join('\n');
 }
 
+/** @deprecated Legacy output-schema flag; teacher notes are always on for staff. */
 export function withTeacherNotesEnabled(
   outputSchema: Record<string, unknown>,
   enabled: boolean
@@ -77,10 +66,9 @@ export function withTeacherNotesEnabled(
   return next;
 }
 
-/** Private observations belong to the teacher, never to released feedback. */
-export function teacherNotesEnabled(outputSchema: unknown): boolean {
-  return Boolean(outputSchema && typeof outputSchema === 'object' &&
-    (outputSchema as Record<string, unknown>).teacherNotesEnabled === true);
+/** Teacher notes are released for all orgs; ignore legacy outputSchema.teacherNotesEnabled. */
+export function teacherNotesEnabled(_outputSchema: unknown): boolean {
+  return true;
 }
 
 export function normalizeTeacherNote(value: unknown): string | null {
@@ -94,15 +82,13 @@ export function readTeacherNote(run: { status?: string | null; metadata?: unknow
   return normalizeTeacherNote((run.metadata as Record<string, unknown>).teacherNote);
 }
 
-/** Loader field for staff-only teacher notes, gated on the rubric output toggle. */
+/** Loader field for staff-only teacher notes (never exposed to students). */
 export function staffTeacherNoteLoaderField(options: {
   isOwner: boolean;
   isTeacher: boolean;
   isAdmin: boolean;
-  outputSchemaSnapshot: unknown;
   run: { status?: string | null; metadata?: unknown } | null;
 }): { teacherNote: string | null } | Record<string, never> {
   if (options.isOwner || (!options.isTeacher && !options.isAdmin)) return {};
-  if (!teacherNotesEnabled(options.outputSchemaSnapshot)) return {};
   return { teacherNote: readTeacherNote(options.run) };
 }

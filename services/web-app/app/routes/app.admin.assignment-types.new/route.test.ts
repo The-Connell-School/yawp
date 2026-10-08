@@ -296,7 +296,7 @@ describe('admin assignment type new action', () => {
     }
   );
 
-  test('plain admin cannot enable teacher notes on create', async () => {
+  test('plain admin may persist legacy teacherNotesEnabled on create', async () => {
     const form = new FormData();
     form.set('title', 'Sneaky notes');
     form.set(
@@ -324,9 +324,10 @@ describe('admin assignment type new action', () => {
     } as never);
     expect(prisma.assignmentType.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        gradingOutputSchemaJson: expect.not.objectContaining({
+        gradingOutputSchemaJson: {
+          schemaVersion: 1,
           teacherNotesEnabled: true,
-        }),
+        },
       }),
     });
   });

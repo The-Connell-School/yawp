@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import {
   TEACHER_NOTES_EVIDENCE_RULE,
-  authorizeOutputSchemaTeacherNotes,
   existingOutputSchemaForAssignmentTypeSave,
   gradingRepairPrivateObservationRules,
   normalizeTeacherNote,
   overallCommentWriterRules,
   staffTeacherNoteLoaderField,
+  teacherNotesEnabled,
 } from './teacher-notes';
 
 const dailyPagesOnlyPhrases = [
@@ -19,7 +19,6 @@ describe('teacher-notes', () => {
   test('TEACHER_NOTES_EVIDENCE_RULE uses real newlines, not literal backslash-n', () => {
     expect(TEACHER_NOTES_EVIDENCE_RULE.includes('\\n')).toBe(false);
     expect(TEACHER_NOTES_EVIDENCE_RULE.includes('\n')).toBe(true);
-    // Sanity: multi-line content
     const lines = TEACHER_NOTES_EVIDENCE_RULE.split('\n');
     expect(lines.length).toBeGreaterThan(1);
   });
@@ -38,6 +37,11 @@ describe('teacher-notes', () => {
     expect(gradingRepairPrivateObservationRules(true)).toContain('Teacher Note rules:');
   });
 
+  test('teacherNotesEnabled is always true regardless of legacy outputSchema flag', () => {
+    expect(teacherNotesEnabled({ teacherNotesEnabled: false })).toBe(true);
+    expect(teacherNotesEnabled({})).toBe(true);
+  });
+
   test('existingOutputSchemaForAssignmentTypeSave ignores library output when detaching rubric', () => {
     expect(
       existingOutputSchemaForAssignmentTypeSave({
@@ -51,36 +55,15 @@ describe('teacher-notes', () => {
     ).toEqual({ schemaVersion: 1 });
   });
 
-  test('authorizeOutputSchemaTeacherNotes ignores crafted toggle from plain admins', () => {
-    expect(
-      authorizeOutputSchemaTeacherNotes(
-        { schemaVersion: 1, teacherNotesEnabled: true },
-        { schemaVersion: 1 },
-        false
-      )
-    ).toEqual({ schemaVersion: 1 });
-    expect(
-      authorizeOutputSchemaTeacherNotes(
-        { schemaVersion: 1, teacherNotesEnabled: false },
-        { schemaVersion: 1, teacherNotesEnabled: true },
-        false
-      )
-    ).toEqual({ schemaVersion: 1, teacherNotesEnabled: true });
-  });
-
   test('normalizeTeacherNote trims and enforces max length', () => {
     expect(normalizeTeacherNote('  hello  ')).toBe('hello');
     expect(normalizeTeacherNote('')).toBeNull();
     expect(normalizeTeacherNote(null)).toBeNull();
-    expect(
-      normalizeTeacherNote('a'.repeat(2001)),
-    ).toBeNull();
-    expect(
-      normalizeTeacherNote('a'.repeat(2000)),
-    ).toBe('a'.repeat(2000));
+    expect(normalizeTeacherNote('a'.repeat(2001))).toBeNull();
+    expect(normalizeTeacherNote('a'.repeat(2000))).toBe('a'.repeat(2000));
   });
 
-  test('staffTeacherNoteLoaderField respects the output toggle and staff role', () => {
+  test('staffTeacherNoteLoaderField exposes notes to staff only', () => {
     const run = {
       status: 'succeeded',
       metadata: { teacherNote: 'PRIVATE: vocabulary shift.' },
@@ -90,7 +73,6 @@ describe('teacher-notes', () => {
         isOwner: false,
         isTeacher: true,
         isAdmin: false,
-        outputSchemaSnapshot: { teacherNotesEnabled: true },
         run,
       })
     ).toEqual({ teacherNote: 'PRIVATE: vocabulary shift.' });
@@ -99,19 +81,16 @@ describe('teacher-notes', () => {
         isOwner: false,
         isTeacher: true,
         isAdmin: false,
-        outputSchemaSnapshot: { teacherNotesEnabled: false },
         run,
       })
-    ).toEqual({});
+    ).toEqual({ teacherNote: 'PRIVATE: vocabulary shift.' });
     expect(
       staffTeacherNoteLoaderField({
         isOwner: true,
         isTeacher: false,
         isAdmin: false,
-        outputSchemaSnapshot: { teacherNotesEnabled: true },
         run,
       })
     ).toEqual({});
   });
 });
-

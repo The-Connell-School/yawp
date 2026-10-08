@@ -296,7 +296,7 @@ describe('admin assignment type detail action', () => {
     expect(updateData.gradingOutputSchemaJson).toBeUndefined();
   });
 
-  test('plain admin cannot enable teacher notes via crafted outputSchemaJson', async () => {
+  test('plain admin may persist legacy teacherNotesEnabled in outputSchemaJson (ignored for gating)', async () => {
     prisma.user.findFirst.mockResolvedValue(null);
     const form = new FormData();
     form.set('intent', 'updateCourse');
@@ -331,7 +331,10 @@ describe('admin assignment type detail action', () => {
     expect(prisma.assignmentType.update).toHaveBeenCalledWith({
       where: { id: 'at-1' },
       data: expect.objectContaining({
-        gradingOutputSchemaJson: { schemaVersion: 1 },
+        gradingOutputSchemaJson: {
+          schemaVersion: 1,
+          teacherNotesEnabled: true,
+        },
       }),
     });
   });

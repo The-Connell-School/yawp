@@ -24,11 +24,16 @@ import {
   DAILY_PAGES_SAMPLE_ENTRIES,
 } from '../../../services/web-app/app/domain/assignment-types/daily-pages-sample-entries.ts';
 import dailyPagesEngagementSchema from '../../../services/web-app/app/domain/rubrics/library/daily-pages-engagement.json';
+import type { ResolvedAssignmentTypeGradingConfig } from '../../../services/web-app/app/domain/assignment-types/assignment-type-grading-config.server';
+import { scaleDailyPagesForAssignment } from '../../../services/web-app/app/domain/assignment-types/daily-pages-assignment-points';
+import { getCategoryScoreBand } from '../../../services/web-app/app/domain/assignment-types/rubric-category-options';
 import {
   sampleEntryHtml,
   sampleRubricSnapshot,
   sampleSubmissionGradeData,
 } from './local-dev/seed-daily-pages-samples';
+
+const ENGAGEMENT_QA_POINT_TOTAL = 30;
 
 type SeedClient = PrismaClient;
 
@@ -56,8 +61,9 @@ export function previewTeacherNotesQaDatabaseAllowed(
   }
 }
 
-function dailyPagesEngagementRubricSnapshot() {
-  const schema = dailyPagesEngagementSchema as {
+function dailyPagesEngagementGradingConfig(): ResolvedAssignmentTypeGradingConfig {
+  const authored = dailyPagesEngagementSchema as {
+    name: string;
     rubric: { categories: unknown[] };
     scoringScale: {
       type: string;
@@ -65,13 +71,65 @@ function dailyPagesEngagementRubricSnapshot() {
       maxScore: number;
       step?: number;
     };
+    promptConfig: Record<string, unknown>;
+    outputSchema: Record<string, unknown>;
   };
   return {
-    categories: schema.rubric.categories,
-    minScore: schema.scoringScale.minScore,
-    maxScore: schema.scoringScale.maxScore,
-    step: schema.scoringScale.step ?? 1,
-    scoringType: schema.scoringScale.type,
+    source: 'assignment-type',
+    rubricName: authored.name,
+    rubricIncomplete: false,
+    assignmentTypeId: 'preview-qa',
+    assignmentTypeKind: 'daily_pages',
+    assignmentTypeTitle: 'Daily Pages',
+    label: 'Daily Pages',
+    version: 1,
+    scoringType: authored.scoringScale.type,
+    minScore: authored.scoringScale.minScore,
+    maxScore: authored.scoringScale.maxScore,
+    step: authored.scoringScale.step ?? 1,
+    rubricCategories: structuredClone(authored.rubric.categories) as ResolvedAssignmentTypeGradingConfig['rubricCategories'],
+    instructions: {
+      mode: 'unified',
+      gradingInstructions: String(
+        (authored.promptConfig as { gradingInstructions?: string }).gradingInstructions ?? ''
+      ),
+    },
+    rubricSnapshot: {
+      categories: structuredClone(authored.rubric.categories),
+      minScore: authored.scoringScale.minScore,
+      maxScore: authored.scoringScale.maxScore,
+      step: authored.scoringScale.step ?? 1,
+      scoringType: authored.scoringScale.type,
+    },
+    promptConfigSnapshot: structuredClone(authored.promptConfig),
+    outputSchemaSnapshot: { ...authored.outputSchema },
+    calibrationNotes: null,
+    sourceTemplateId: null,
+    sourceTemplateSlug: null,
+  };
+}
+
+/** Bands scaled to the preview engagement assignment point total (30). */
+export function dailyPagesEngagementRubricSnapshot() {
+  const scaled = scaleDailyPagesForAssignment(
+    dailyPagesEngagementGradingConfig(),
+    ENGAGEMENT_QA_POINT_TOTAL
+  );
+  const category = scaled.rubricCategories[0];
+  const band = category
+    ? getCategoryScoreBand(category, ENGAGEMENT_QA_SCORE)
+    : null;
+  if (band?.label !== 'Good') {
+    throw new Error(
+      `Expected engagement QA score ${ENGAGEMENT_QA_SCORE} to map to Good, got ${band?.label ?? 'no band'}`
+    );
+  }
+  return {
+    categories: scaled.rubricCategories,
+    minScore: scaled.minScore,
+    maxScore: scaled.maxScore,
+    step: scaled.step,
+    scoringType: scaled.scoringType,
   };
 }
 
@@ -80,34 +138,6 @@ function previewQaSuperadminPassword(): string {
     process.env.PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_PASSWORD?.trim() ?? '';
   if (configured.length >= 16) return configured;
   return randomBytes(24).toString('base64url');
-}
-
-async function ensureDailyPagesEngagementTeacherNotesEnabled(
-  prisma: SeedClient,
-  enabled: boolean
-) {
-  const rubric = await prisma.rubric.findUnique({
-    where: { name: DAILY_PAGES_ENGAGEMENT_RUBRIC_NAME },
-  });
-  if (!rubric?.schemaJson || typeof rubric.schemaJson !== 'object') return;
-
-  const base = rubric.schemaJson as Record<string, unknown>;
-  const outputSchema = {
-    ...(typeof base.outputSchema === 'object' && base.outputSchema
-      ? (base.outputSchema as Record<string, unknown>)
-      : (dailyPagesEngagementSchema as { outputSchema?: Record<string, unknown> })
-          .outputSchema ?? {}),
-  };
-  if (enabled) outputSchema.teacherNotesEnabled = true;
-  else delete outputSchema.teacherNotesEnabled;
-
-  const nextSchema = { ...base, outputSchema };
-  // Preview QA only: update the rubric row. Do not mutate rubricRevision rows —
-  // the impersonation audit trigger rejects revision updates outside the catalog API.
-  await prisma.rubric.update({
-    where: { id: rubric.id },
-    data: { schemaJson: nextSchema },
-  });
 }
 
 export function shouldRunPreviewTeacherNotesQaSeed() {
@@ -144,7 +174,6 @@ export async function seedPreviewTeacherNotesQa(prisma: SeedClient) {
     }
 
     await ensurePreviewSuperAdmin(prisma, teacherMembership.organizationId);
-    await ensureDailyPagesEngagementTeacherNotesEnabled(prisma, true);
     await restoreEssayGradedSamplesMutatedByLegacyQaSeed(prisma, {
       organizationId: teacherMembership.organizationId,
       teacherMembershipId: teacherMembership.id,

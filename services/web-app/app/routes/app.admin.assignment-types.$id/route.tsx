@@ -16,10 +16,6 @@ import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assi
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { computePromptVersionLabels } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 import { isPromptVersionControlEnabled } from '~/domain/ai-evaluation/prompt-version-control.server';
-import {
-  authorizeOutputSchemaTeacherNotes,
-  existingOutputSchemaForAssignmentTypeSave,
-} from '~/domain/grading/teacher-notes';
 
 const PROMPT_PREVIEW_INPUTS = {
   studentFirstName: 'Jordan',
@@ -109,7 +105,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return dataResponse({
       course,
       rubrics,
-      canEditRubricOutputOptions: Boolean(superAdmin),
       gradingAssistantPromptPreview: null,
       gradingAssistantPromptPreviewUnavailableReason:
         'The AP History prompt is built from the assignment snapshot. Open a graded submission to inspect the full prompt.',
@@ -130,7 +125,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     course,
     rubrics,
-    canEditRubricOutputOptions: Boolean(superAdmin),
     gradingAssistantPromptPreview: {
       ...compiledInvocation,
       version: resolvedGradingConfig.version,
@@ -256,12 +250,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         readGradingInstructionsOverride(existing.gradingPromptConfigJson);
 
     const hasOutputSchemaField = formData.has('outputSchemaJson');
-    const existingOutputSchema = existingOutputSchemaForAssignmentTypeSave({
-      hasRubricIdField,
-      nextRubricId: hasRubricIdField ? rubricId : null,
-      libraryRubricSchemaJson: existing.rubric?.schemaJson ?? null,
-      gradingOutputSchemaJson: existing.gradingOutputSchemaJson,
-    });
     const gradingConfigData = hasGradingConfigFields
       ? {
           scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
@@ -274,12 +262,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
             : parseJsonFormField(formData, 'promptConfigJson'),
           ...(hasOutputSchemaField
             ? {
-                gradingOutputSchemaJson: authorizeOutputSchemaTeacherNotes(
-                  (parseJsonFormField(formData, 'outputSchemaJson') ??
-                    DEFAULT_OUTPUT_SCHEMA_JSON) as Record<string, unknown>,
-                  existingOutputSchema,
-                  Boolean(superAdmin)
-                ) as Prisma.InputJsonValue,
+                gradingOutputSchemaJson: (parseJsonFormField(
+                  formData,
+                  'outputSchemaJson'
+                ) ?? DEFAULT_OUTPUT_SCHEMA_JSON) as Prisma.InputJsonValue,
               }
             : {}),
           gradingAssistantVersion: { increment: 1 },
@@ -401,12 +387,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AssignmentTypeRoute() {
-  const {
-    course,
-    rubrics,
-    currentPromptLabel,
-    canEditRubricOutputOptions,
-  } = useLoaderData<typeof loader>();
+  const { course, rubrics, currentPromptLabel } = useLoaderData<typeof loader>();
 
   return (
     <AssignmentTypeEditorForm
@@ -422,7 +403,6 @@ export default function AssignmentTypeRoute() {
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}
       currentPromptLabel={currentPromptLabel}
-      canEditRubricOutputOptions={canEditRubricOutputOptions}
     />
   );
 }

@@ -2,19 +2,19 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 
-test.describe.serial('Admin teacher notes output toggle', () => {
+test.describe.serial('Staff teacher notes (always on)', () => {
   test.setTimeout(120_000);
 
-  test('superadmin enables private notes; teacher sees persisted note and student does not', async ({
+  test('teacher sees persisted note when rubric never had teacherNotesEnabled', async ({
     page,
     signIn,
     e2eContext,
   }) => {
     const prisma = createE2EPrismaClient();
     const suffix = Date.now();
-    const rubricName = `teacher-notes-e2e-${suffix}`;
+    const rubricName = `staff-teacher-notes-${suffix}`;
     const note =
-      'The closing paragraph shifts into formal vocabulary unlike the rest.';
+      'Observable shift: the closing paragraph uses formal vocabulary unlike the rest.';
     let submissionId: string | null = null;
     let rubricId: string | null = null;
     let assignmentTypeId: string | null = null;
@@ -22,7 +22,7 @@ test.describe.serial('Admin teacher notes output toggle', () => {
 
     const schema = {
       name: rubricName,
-      title: `Teacher notes E2E ${suffix}`,
+      title: `Staff notes E2E ${suffix}`,
       scoringScale: { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 },
       rubric: {
         categories: [
@@ -46,8 +46,8 @@ test.describe.serial('Admin teacher notes output toggle', () => {
 
     const assignmentType = await prisma.assignmentType.create({
       data: {
-        title: `Teacher notes type ${suffix}`,
-        position: 98000 + (suffix % 1000),
+        title: `Staff notes type ${suffix}`,
+        position: 97000 + (suffix % 1000),
         rubricId: rubric.id,
         ownerOrgId: e2eContext.organizationId,
       },
@@ -65,9 +65,9 @@ test.describe.serial('Admin teacher notes output toggle', () => {
 
     const document = await prisma.document.create({
       data: {
-        title: 'Teacher notes submission',
-        text: 'My kitchen smells like bread. Therefore one must conclude the ontological status of yeast is paramount.',
-        html: '<p>My kitchen smells like bread. Therefore one must conclude the ontological status of yeast is paramount.</p>',
+        title: 'Staff teacher notes submission',
+        text: 'My kitchen smells like bread every morning.',
+        html: '<p>My kitchen smells like bread every morning.</p>',
         membershipId: e2eContext.membershipId,
         assignmentTypeId: assignmentType.id,
         assignmentId: assignment.id,
@@ -121,44 +121,6 @@ test.describe.serial('Admin teacher notes output toggle', () => {
     }
 
     try {
-      await switchUser(e2eContext.superAdminEmail, 'admin-e2e-password');
-      const optionsLoaded = page.waitForResponse(
-        (response) =>
-          response.url().includes('/api/admin/rubric-output-options') &&
-          response.request().method() === 'GET' &&
-          response.ok(),
-        { timeout: 30_000 }
-      );
-      await page.goto(`/app/admin/assignment-types/${assignmentType.id}`);
-      await optionsLoaded;
-
-      const toggle = page.getByTestId('rubric-teacher-notes-toggle');
-      await expect(page.getByText('Loading private note settings')).toHaveCount(0);
-      await expect(toggle).toBeVisible({ timeout: 30_000 });
-      await expect(toggle).toBeEnabled();
-      await expect(toggle).not.toBeChecked();
-      await Promise.all([
-        page.waitForResponse(
-          (response) =>
-            response.url().includes('/api/admin/rubric-output-options') &&
-            response.request().method() === 'POST' &&
-            response.ok(),
-          { timeout: 30_000 }
-        ),
-        toggle.click(),
-      ]);
-      await expect(toggle).toBeChecked({ timeout: 15_000 });
-      await expect
-        .poll(async () => {
-          const row = await prisma.rubric.findUnique({
-            where: { id: rubric.id },
-            select: { schemaJson: true },
-          });
-          return (row?.schemaJson as { outputSchema?: { teacherNotesEnabled?: boolean } })
-            ?.outputSchema?.teacherNotesEnabled;
-        })
-        .toBe(true);
-
       await switchUser(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/submissions/${submissionId}`);
       await page.waitForLoadState('domcontentloaded');
@@ -171,10 +133,6 @@ test.describe.serial('Admin teacher notes output toggle', () => {
       await page.goto(`/app/submissions/${submissionId}`);
       await expect(page.getByTestId('teacher-private-notes')).toHaveCount(0);
       expect(await page.content()).not.toContain(note);
-
-      await switchUser(e2eContext.adminEmail, 'admin-e2e-password');
-      await page.goto(`/app/admin/assignment-types/${assignmentType.id}`);
-      await expect(page.getByTestId('rubric-teacher-notes-toggle')).toBeDisabled();
     } finally {
       if (submissionId) {
         await prisma.submissionGradingAssistantRun.deleteMany({
@@ -190,8 +148,6 @@ test.describe.serial('Admin teacher notes output toggle', () => {
         await prisma.assignmentType.deleteMany({ where: { id: assignmentTypeId } });
       }
       if (rubricId) {
-        // RubricRevision rows are append-only (same guard as impersonation audit).
-        // Detach the live rubric row so CI can delete the test catalog entry.
         await prisma.rubric.updateMany({
           where: { id: rubricId },
           data: { currentRevisionId: null },

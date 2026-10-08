@@ -386,8 +386,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         : Promise.resolve(null),
     ]);
 
-  const teacherNoteOutputSchema = gradingConfig?.outputSchemaSnapshot ?? null;
-
   const activityPage =
     !isOwner && (isTeacher || isAdmin)
       ? await prisma.submissionActivity.findMany({
@@ -523,7 +521,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       isOwner,
       isTeacher,
       isAdmin,
-      outputSchemaSnapshot: teacherNoteOutputSchema,
       run: gradingAssistantRuns[0] ?? null,
     }),
     isOwner,

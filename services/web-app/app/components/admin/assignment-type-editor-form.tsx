@@ -17,7 +17,6 @@ import {
   RubricLibrarySection,
   type RubricOption,
 } from '~/components/admin/rubric-library-section';
-import { RubricTeacherNotesToggle } from '~/components/admin/rubric-teacher-notes-toggle';
 import {
   AssignmentTypeModulesSection,
   type AssignmentTypeModuleRow,
@@ -40,7 +39,6 @@ type AssignmentTypeEditorFormProps = {
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
-  canEditRubricOutputOptions?: boolean;
 };
 
 function formSnapshot(values: {
@@ -119,7 +117,6 @@ export function AssignmentTypeEditorForm({
   modules = [],
   rubrics = [],
   selectedRubricId = null,
-  canEditRubricOutputOptions = false,
 }: AssignmentTypeEditorFormProps) {
   const fetcher = useFetcher<{ error?: string }>();
   const navigation = useNavigation();
@@ -369,16 +366,6 @@ export function AssignmentTypeEditorForm({
               gradingInstructions={gradingInstructions}
               onGradingInstructionsChange={setGradingInstructions}
             />
-          <RubricTeacherNotesToggle
-            assignmentTypeId={assignmentTypeId}
-            canEdit={canEditRubricOutputOptions}
-            disabled={rubricSelectionDirty}
-            disabledReason={
-              rubricSelectionDirty
-                ? 'Save the assignment type after changing the rubric before toggling private notes.'
-                : null
-            }
-          />
         </Section>
 
         {assignmentTypeId ? (

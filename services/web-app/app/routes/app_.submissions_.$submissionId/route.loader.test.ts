@@ -775,7 +775,7 @@ describe('submission loader — unsubmitted redirect', () => {
     }
   });
 
-  test('uses live rubric output toggle even when pinned grading config omits teacherNotesEnabled', async () => {
+  test('exposes teacher note to staff even when output schema omits legacy teacherNotesEnabled', async () => {
     requireUserId.mockResolvedValue('user-teacher');
     requireMembership.mockResolvedValue(membership(TEACHER_MEMBERSHIP_ID, 'TEACHER'));
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
@@ -795,7 +795,7 @@ describe('submission loader — unsubmitted redirect', () => {
       rubric: {
         name: 'daily-pages-engagement',
         schemaJson: {
-          outputSchema: { schemaVersion: 1, teacherNotesEnabled: true },
+          outputSchema: { schemaVersion: 1, teacherNotesEnabled: false },
         },
         currentRevision: null,
       },
