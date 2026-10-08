@@ -41,9 +41,9 @@ const teacher = (user: User) =>
 const student = (user: User) => user.selectedMembership?.role === 'STUDENT';
 const owner = (user: User) => user.selectedMembership?.isOrgOwner;
 const admin = (user: User) => user.isAdmin;
-const reporterEnabled = (user: User) =>
+const reporterNavVisible = (user: User) =>
   teacher(user) &&
-  user.selectedMembership?.organization?.reporterEnabled !== false;
+  user.selectedMembership?.organization?.plan !== 'FREE_CLASSROOM';
 const writingPracticeEnabled = (user: User) => teacher(user) || student(user);
 
 const icons = {
@@ -108,7 +108,7 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         to: '/app/reporter',
         label: 'Reporter',
         icon: icons.reporter,
-        requires: reporterEnabled,
+        requires: reporterNavVisible,
       },
       {
         to: '/app/organization',
