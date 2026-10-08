@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useFetcher, useRouteLoaderData } from 'react-router';
-import type { Route as RootRoute } from '../../../+types/root';
+import type { Route as RootRoute } from '../../+types/root';
 import {
   ArrowUpRight,
   BarChart3,
