@@ -88,6 +88,30 @@ describe('Daily Pages assignment points', () => {
     }
   });
 
+  test('rewrites 100-point band copy when maxScore already matches the assignment total', () => {
+    const total = 12;
+    const original = scaleDailyPagesForAssignment(config(), total);
+    const staleSnapshot = {
+      ...original,
+      rubricCategories: [
+        {
+          ...original.rubricCategories[0],
+          bands: original.rubricCategories[0].bands?.map((band) => ({
+            ...band,
+            description: `${band.description}\n\nConfigured band for a 100-point assignment: 80–89.`,
+          })),
+        },
+      ],
+    };
+    const rescaled = scaleDailyPagesForAssignment(staleSnapshot, total);
+    for (const band of rescaled.rubricCategories[0].bands ?? []) {
+      expect(band.description).not.toMatch(/100-point/);
+      expect(band.description).toContain(
+        `Configured band for a ${total}-point assignment`
+      );
+    }
+  });
+
   test('holistic tier manual grading offers one score per engagement tier', () => {
     const original = { ...config(), scoringMode: 'holistic_tier' as const };
     const scaled = scaleDailyPagesForAssignment(original, 12);

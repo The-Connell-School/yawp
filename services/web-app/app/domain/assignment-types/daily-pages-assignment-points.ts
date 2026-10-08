@@ -42,6 +42,35 @@ function scaleScoreLabelsFromSource(
   }));
 }
 
+function dailyPagesEngagementBandDescriptionsAreCurrent(
+  bands: RubricScoreBand[] | undefined,
+  total: number
+): boolean {
+  if (!bands?.length) return false;
+  const footer = `Configured band for a ${total}-point assignment`;
+  return bands.every((band) => {
+    const description = band.description ?? '';
+    if (!description.includes(footer)) return false;
+    if (total === DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL) return true;
+    return !/100-point/.test(description);
+  });
+}
+
+function dailyPagesEngagementHolisticPickerIsCurrent(
+  category: ResolvedAssignmentTypeGradingConfig['rubricCategories'][number],
+  total: number,
+  scoringMode: ResolvedAssignmentTypeGradingConfig['scoringMode']
+): boolean {
+  if (scoringMode !== 'holistic_tier') return true;
+  const expected = dailyPagesEngagementHolisticPickerScores(total);
+  const actual = category.allowedScores;
+  return (
+    Boolean(actual?.length) &&
+    actual.length === expected.length &&
+    expected.every((score, index) => actual[index] === score)
+  );
+}
+
 /**
  * Resolves Daily Pages engagement rubrics to the teacher's
  * configured point total using bands from the resolved (or pinned) schema.
@@ -59,13 +88,23 @@ export function scaleDailyPagesForAssignment(
     config.rubricCategories.length !== 1 ||
     category?.key !== DAILY_PAGES_ENGAGEMENT_CATEGORY_KEY ||
     !Number.isSafeInteger(pointValue) ||
-    pointValue! < 5 ||
-    pointValue === config.maxScore
+    pointValue! < 5
   ) {
     return config;
   }
 
   const total = pointValue!;
+  if (
+    config.maxScore === total &&
+    dailyPagesEngagementBandDescriptionsAreCurrent(category.bands, total) &&
+    dailyPagesEngagementHolisticPickerIsCurrent(
+      category,
+      total,
+      config.scoringMode
+    )
+  ) {
+    return config;
+  }
   const snapshotScaling = config.rubricSnapshot?.assignmentPointScaling as
     | { sourceMaxScore?: number }
     | undefined;
@@ -77,14 +116,21 @@ export function scaleDailyPagesForAssignment(
     DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL;
 
   const sourceBands = category.bands;
+  const libraryBandCopyNeedsRewrite = sourceBands?.some((band) =>
+    /100-point/.test(band.description ?? '')
+  );
+  const useEngagementTierBands =
+    sourceMax === DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL ||
+    config.maxScore === total ||
+    libraryBandCopyNeedsRewrite;
   const scaledCategory =
     sourceBands && sourceBands.length > 0
-      ? sourceMax === DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL
+      ? useEngagementTierBands
         ? {
             ...category,
             scoreLabels: scaleScoreLabelsFromSource(
               category.scoreLabels,
-              sourceMax,
+              sourceMax === total ? DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL : sourceMax,
               total
             ),
             bands: dailyPagesEngagementTierBands(total).map((tierBand) => {
