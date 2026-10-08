@@ -950,10 +950,17 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
     });
-  const useE2EFixture = shouldUseE2EGradingFixture(
-    request,
-    data.e2eForceGradingFixture === 'true'
-  );
+  const holisticE2eFixture =
+    process.env.E2E === 'true' &&
+    process.env.E2E_GRADE_ESSAY_AI_FIXTURE === 'true' &&
+    (resolvedGradingConfig.scoringMode ?? 'weighted_categories') ===
+      'holistic_tier';
+  const useE2EFixture =
+    holisticE2eFixture ||
+    shouldUseE2EGradingFixture(
+      request,
+      data.e2eForceGradingFixture === 'true'
+    );
   const documentContext = buildAiTextContextAudit({
     documentSource: 'submission-snapshot',
     documentId: submission.document.id,
