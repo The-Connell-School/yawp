@@ -1,0 +1,10 @@
+bun test v1.3.14 (0d9b296a)
+
+app/utils/auth.server.test.ts:
+(pass) session expiry > getSessionExpirationDateForUser uses 12h for handle-only accounts [0.09ms]
+
+ 1 pass
+ 17 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [297.00ms]

@@ -49,6 +49,8 @@ const {
   isStudentMembership,
   getUserId,
   getAuthSessionCookieExpiresAt,
+  getSessionExpirationDateForUser,
+  HANDLE_ONLY_SESSION_EXPIRATION_TIME,
 } = await import('./auth.server.ts');
 
 const membershipFixture = {
@@ -106,6 +108,14 @@ describe('session expiry', () => {
       userEmail: 'teacher@example.com',
     });
     expect(expires.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  test('getSessionExpirationDateForUser uses 12h for handle-only accounts', () => {
+    const before = Date.now();
+    const expires = getSessionExpirationDateForUser({ email: null });
+    const deltaMs = expires.getTime() - before;
+    expect(deltaMs).toBeGreaterThanOrEqual(HANDLE_ONLY_SESSION_EXPIRATION_TIME - 2_000);
+    expect(deltaMs).toBeLessThanOrEqual(HANDLE_ONLY_SESSION_EXPIRATION_TIME + 2_000);
   });
 });
 
