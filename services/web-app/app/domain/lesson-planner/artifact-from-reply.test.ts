@@ -9,6 +9,7 @@ describe('exitTicketAsMaterial', () => {
   test('files the student prompt as an exit-ticket handout', () => {
     const material = exitTicketAsMaterial({
       config: {
+        schemaVersion: 1,
         mode: 'specific',
         focus: 'explain-concept',
         topic: 'comma splices',
