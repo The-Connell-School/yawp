@@ -240,10 +240,6 @@ describe('admin assignment type detail action', () => {
           systemInstructions: 'Act as an ACT Writing evaluator.',
           gradingInstructions: 'Grade this as ACT Writing.',
         },
-        gradingOutputSchemaJson: {
-          schemaVersion: 1,
-          responseShape: 'categories_overall_comment',
-        },
         gradingAssistantVersion: { increment: 1 },
       }),
     });
