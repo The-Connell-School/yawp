@@ -63,11 +63,9 @@ test.describe('Thesis-Driven Essay: See how it works', () => {
     e2eContext,
   }) => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-    await page.goto(
-      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
-    );
+    await page.goto(`/app/assignment-types/${e2eContext.assignmentTypeId}`);
     await expect(
-      page.getByRole('heading', { level: 1, name: 'Daily Pages' })
+      page.getByRole('heading', { level: 1, name: 'E2E Course' })
     ).toBeVisible();
     await expect(
       page.getByRole('link', { name: 'See how it works' })
@@ -75,12 +73,10 @@ test.describe('Thesis-Driven Essay: See how it works', () => {
 
     // And the guide's address sends a teacher back to the type's own page.
     await page.goto(
-      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}/how-it-works`
+      `/app/assignment-types/${e2eContext.assignmentTypeId}/how-it-works`
     );
     await expect(page).toHaveURL(
-      new RegExp(
-        `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}$`
-      )
+      new RegExp(`/app/assignment-types/${e2eContext.assignmentTypeId}$`)
     );
   });
 

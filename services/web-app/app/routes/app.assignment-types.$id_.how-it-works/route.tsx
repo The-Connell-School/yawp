@@ -1,5 +1,9 @@
 /**
- * "See how it works": a short, teacher-facing tour of The Thesis-Driven Essay.
+ * "See how it works": a short, teacher-facing tour of an assignment type. The
+ * Thesis-Driven Essay's guide is below; Daily Pages and Class Starter have
+ * their own files beside this one.
+ *
+ * The Thesis-Driven Essay guide:
  *
  * It says what the essay does in a line or two per step and lets a clip show
  * the rest. The will / won't section is written for the reader deciding
@@ -25,10 +29,12 @@ import {
   GuideStep,
   WillWont,
 } from '~/components/how-it-works/guide';
-import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
+import { howItWorksGuideFor } from '~/domain/assignment-types/how-it-works-guide';
 import { isAssignmentTypeAvailableForAnyScope } from '~/utils/assignment-type-access.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { ClassStarterGuide } from './class-starter-guide';
+import { DailyPagesGuide } from './daily-pages-guide';
 import { TransferChart } from './transfer-chart';
 
 const MEDIA = '/img/thesis-essay-guide';
@@ -70,12 +76,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: { id: assignmentTypeId, archivedAt: null },
     select: { id: true, title: true },
   });
-  // Only The Thesis-Driven Essay has a guide so far.
-  if (!assignmentType || !isThesisDrivenEssayTitle(assignmentType.title)) {
-    throw redirect(pagePath);
-  }
+  // Types without a guide go back to their own page.
+  const guide = assignmentType
+    ? howItWorksGuideFor(assignmentType.title)
+    : null;
+  if (!guide) throw redirect(pagePath);
 
-  return { pagePath };
+  return { pagePath, guide };
 }
 
 const TUTOR_POINTS = [
@@ -140,9 +147,16 @@ function clip(name: string, label: string) {
   );
 }
 
-export default function ThesisEssayHowItWorksRoute() {
-  const { pagePath } = useLoaderData<typeof loader>();
+export default function AssignmentTypeHowItWorksRoute() {
+  const { pagePath, guide } = useLoaderData<typeof loader>();
+  if (guide === 'daily-pages') return <DailyPagesGuide pagePath={pagePath} />;
+  if (guide === 'class-starter') {
+    return <ClassStarterGuide pagePath={pagePath} />;
+  }
+  return <ThesisEssayGuide pagePath={pagePath} />;
+}
 
+function ThesisEssayGuide({ pagePath }: { pagePath: string }) {
   return (
     <GuidePage backTo={pagePath} backLabel="Back to The Thesis-Driven Essay">
       <GuideHero
