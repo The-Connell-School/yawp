@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   BarChart3,
   ChevronDown,
+  Lightbulb,
   Minus,
   TrendingUp,
   TriangleAlert,
@@ -499,6 +500,15 @@ function InsightBody({
                     <p className="text-base/7 text-muted-foreground [overflow-wrap:anywhere] @sm:text-sm/6">
                       {step.detail}
                     </p>
+                    <Link
+                      // Ids only: the planner rebuilds the ask from the
+                      // stored insight rather than trusting URL text.
+                      to={`/app/lesson-planner?from=${classAssignmentId}&step=${index}`}
+                      className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-md text-sm font-medium text-primary hover:underline"
+                    >
+                      <Lightbulb size={14} className="shrink-0" />
+                      Plan this lesson
+                    </Link>
                   </div>
                 </li>
               );

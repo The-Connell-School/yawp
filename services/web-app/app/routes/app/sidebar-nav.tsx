@@ -5,6 +5,7 @@ import {
   CogIcon,
   FileText,
   GaugeIcon,
+  Lightbulb,
   LockIcon,
   Microscope,
   MonitorPlay,
@@ -25,10 +26,7 @@ export type SidebarNavLink = {
   label: string;
   end?: boolean;
   icon: React.ReactNode;
-  requires?:
-    | { OR: RequiresFn[] }
-    | { AND: RequiresFn[] }
-    | RequiresFn;
+  requires?: { OR: RequiresFn[] } | { AND: RequiresFn[] } | RequiresFn;
 };
 
 export type SidebarNavSection = {
@@ -44,6 +42,7 @@ const admin = (user: User) => user.isAdmin;
 const reporterNavVisible = (user: User) =>
   teacher(user) &&
   user.selectedMembership?.organization?.plan !== 'FREE_CLASSROOM';
+const lessonPlannerEnabled = (user: User) => teacher(user);
 const writingPracticeEnabled = (user: User) => teacher(user) || student(user);
 
 const icons = {
@@ -54,6 +53,7 @@ const icons = {
   myDocuments: <FileText size={20} className="shrink-0" />,
   lounge: <MonitorPlay size={20} className="shrink-0" />,
   reporter: <Microscope size={20} className="shrink-0" />,
+  lessonPlanner: <Lightbulb size={20} className="shrink-0" />,
   writingPractice: <BookOpenIcon size={20} className="shrink-0" />,
   organization: <CogIcon size={20} className="shrink-0" />,
   admin: <LockIcon size={20} className="shrink-0" />,
@@ -109,6 +109,12 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         label: 'Reporter',
         icon: icons.reporter,
         requires: reporterNavVisible,
+      },
+      {
+        to: '/app/lesson-planner',
+        label: 'Lesson Planner',
+        icon: icons.lessonPlanner,
+        requires: lessonPlannerEnabled,
       },
       {
         to: '/app/organization',

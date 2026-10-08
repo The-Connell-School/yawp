@@ -627,12 +627,16 @@ compute_tooling_fingerprint() {
         packages/prisma/prisma.config.ts \
         packages/prisma/scripts/assignment-type-release-gate.ts \
         packages/prisma/scripts/backfill-class-art-key.ts \
+        packages/prisma/scripts/exit-ticket-assignment-type-data.ts \
+        packages/prisma/scripts/seed-exit-ticket-assignment-type.ts \
         packages/prisma/scripts/seed-local-dev.ts \
         packages/prisma/scripts/seed-class-starter-assignment-type.ts \
         packages/prisma/scripts/assets/class-starter.jpg \
         packages/prisma/scripts/sync-prod-fidelity-fixtures.ts \
         packages/prisma/scripts/preview-seats.ts \
         packages/prisma/scripts/seed-preview-seats.ts \
+        packages/prisma/scripts/seed-preview-planner-qa.ts \
+        packages/prisma/scripts/preview-planner-qa-ids.ts \
         packages/prisma/scripts/local-dev/class-insights.ts \
         packages/prisma/scripts/local-dev/dev-personas.ts \
         packages/prisma/scripts/local-dev/seed-synthetic-data.ts \
@@ -688,9 +692,18 @@ run_tooling_if_needed() {
     TOOLING_CHANGED=0
     # Even when skipping full tooling, always run idempotent seeds that must
     # keep preview data current with the codebase (e.g., AP History library).
+    local skip_path_seeds='bun prisma generate'
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
-      echo "Running AP History library seed on existing preview database (skip path)."
-      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && bun run seed-ap-history-library'
+      skip_path_seeds+=' && bun run seed-ap-history-library'
+    fi
+    if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-planner-qa.ts" ]]; then
+      skip_path_seeds+=' && bun run seed-preview-planner-qa'
+    fi
+    if [[ "$skip_path_seeds" != 'bun prisma generate' ]]; then
+      echo "Running idempotent preview seeds on existing database (skip path)."
+      if ! "${compose[@]}" run --rm toolbox bash -lc "$skip_path_seeds"; then
+        echo "Warning: idempotent preview seeds failed; continuing deploy (non-fatal)." >&2
+      fi
     fi
     return 0
   fi
@@ -719,13 +732,23 @@ run_tooling_if_needed() {
   fi
   # After whichever data path above created an organization, and before the gate
   # that validates assignment type data. `kind` is not settable through the admin
-  # UI, so without this a preview has no Class Starter to click on. The seed is
-  # idempotent, so it runs on every data mode and on every deploy.
+  # UI, so without these a preview has no Class Starter and no Exit Ticket to
+  # click on. Both seeds are idempotent, so they run on every data mode and on
+  # every deploy.
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-class-starter-assignment-type.ts" ]]; then
     tooling_command+=' && bun run seed-class-starter-assignment-type'
   fi
+  # A preview database is a throwaway per-PR copy, so the exit ticket seed takes
+  # --all-orgs: there is nothing to roll out to slowly, and without it the type
+  # never appears in the assignment picker.
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-exit-ticket-assignment-type.ts" ]]; then
+    tooling_command+=' && bun run scripts/seed-exit-ticket-assignment-type.ts --all-orgs'
+  fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts" ]]; then
     tooling_command+=' && bun run seed-free-tier-bundle-assignment-types'
+  fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-planner-qa.ts" ]]; then
+    tooling_command+=' && (bun run seed-preview-planner-qa || { echo "Warning: preview planner QA seed failed; continuing deploy (non-fatal)." >&2; true; })'
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'

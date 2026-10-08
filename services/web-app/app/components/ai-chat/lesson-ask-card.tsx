@@ -1,0 +1,296 @@
+/**
+ * The planner's two standing questions, as controls instead of typing.
+ *
+ * A period length is a point on a spectrum and a set of activities is a list to
+ * tick, so neither should cost a teacher a sentence between classes. Both
+ * answers leave as one ordinary chat message, so nothing downstream has to know
+ * this control exists.
+ */
+import { useState } from 'react';
+import {
+  ChevronRight,
+  Clock,
+  CornerDownRight,
+  Send,
+  Shapes,
+} from 'lucide-react';
+import {
+  composeAskReply,
+  LESSON_ACTIVITIES,
+  LESSON_MINUTES_MAX,
+  LESSON_MINUTES_MIN,
+  LESSON_MINUTES_STEP,
+  PLANNER_PICKS_ACTIVITIES,
+  type LessonAsk,
+} from '~/domain/lesson-planner/lesson-ask';
+import { cn } from '~/utils/misc';
+
+/** "50 min", "1 hr 15 min" — how a teacher says the number out loud. */
+function describeMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours} hr` : `${hours} hr ${rest} min`;
+}
+
+const ACTIVITY_GROUPS = ['whole class', 'small group', 'independent'] as const;
+
+export function LessonAskCard({
+  asks,
+  suggestions = [],
+  onSend,
+  disabled,
+}: {
+  asks: LessonAsk[];
+  /**
+   * The reply's own options. They live inside the card rather than beside it:
+   * a teacher answering "what should this be about?" and "how long is your
+   * period?" is answering one question, and two separate send buttons meant
+   * whichever they touched first threw the other answer away.
+   */
+  suggestions?: string[];
+  onSend: (message: string) => void;
+  disabled?: boolean;
+}) {
+  const minutesAsk = asks.find((ask) => ask.kind === 'minutes');
+  const wantsActivities = asks.some((ask) => ask.kind === 'activities');
+
+  const [note, setNote] = useState<string | null>(null);
+  const [minutes, setMinutes] = useState(
+    minutesAsk?.kind === 'minutes' ? minutesAsk.defaultMinutes : null
+  );
+  const [activityIds, setActivityIds] = useState<string[]>([]);
+
+  /**
+   * One question at a time.
+   *
+   * Options, a slider and sixteen checkboxes arriving together is a form, and
+   * a teacher between classes reads a form as work. Each step appears once the
+   * one above it has been answered, so the card is only ever asking for one
+   * thing — and the button says "Next" until the last of them, so nobody is
+   * stuck behind a step they had no opinion about.
+   */
+  const steps = [
+    suggestions.length > 0 ? 'note' : null,
+    minutes !== null ? 'minutes' : null,
+    wantsActivities ? 'activities' : null,
+  ].filter(Boolean) as Array<'note' | 'minutes' | 'activities'>;
+
+  const [reached, setReached] = useState(0);
+  const showing = (step: 'note' | 'minutes' | 'activities') => {
+    const index = steps.indexOf(step);
+    return index !== -1 && index <= reached;
+  };
+  const onLastStep = reached >= steps.length - 1;
+  const advance = () => setReached((at) => Math.min(at + 1, steps.length - 1));
+
+  function toggleActivity(id: string) {
+    setActivityIds((prev) => {
+      if (prev.includes(id)) return prev.filter((other) => other !== id);
+      // Handing the choice back and choosing are mutually exclusive.
+      if (id === PLANNER_PICKS_ACTIVITIES) return [id];
+      return [
+        ...prev.filter((other) => other !== PLANNER_PICKS_ACTIVITIES),
+        id,
+      ];
+    });
+  }
+
+  const message = composeAskReply({
+    note: note ?? undefined,
+    minutes,
+    activityIds,
+  });
+  const plannerPicks = activityIds.includes(PLANNER_PICKS_ACTIVITIES);
+
+  return (
+    <div
+      data-testid="lesson-ask-card"
+      className="mt-3 overflow-hidden rounded-xl border border-primary/25 bg-primary/[0.03]"
+    >
+      {showing('note') ? (
+        <div className="border-b border-primary/15 px-4 py-3.5">
+          {/* The reply's own question sits right above this card, so the label
+              says what to do with the options rather than restating it. */}
+          <div className="mb-2.5 flex items-center gap-2">
+            <CornerDownRight size={15} className="shrink-0 text-primary" />
+            <span className="text-sm font-medium">Pick an answer</span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              or type your own below
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((suggestion) => {
+              const chosen = note === suggestion;
+              return (
+                <button
+                  key={suggestion}
+                  type="button"
+                  aria-pressed={chosen}
+                  disabled={disabled}
+                  // Tapping the chosen one again clears it, so a teacher who
+                  // picked the wrong option is not stuck with it.
+                  onClick={() => {
+                    setNote(chosen ? null : suggestion);
+                    // Picking one is a decision; the next question can come.
+                    if (!chosen) advance();
+                  }}
+                  className={cn(
+                    'rounded-full border px-3 py-1.5 text-left text-sm transition disabled:opacity-50',
+                    chosen
+                      ? 'border-primary bg-primary/10 font-medium text-primary'
+                      : 'border-border hover:bg-foreground/[0.03]'
+                  )}
+                >
+                  {suggestion}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {showing('minutes') && minutes !== null ? (
+        <div className="border-b border-primary/15 px-4 py-3.5">
+          <div className="mb-3 flex items-center gap-2">
+            <Clock size={15} className="shrink-0 text-primary" />
+            <span className="text-sm font-medium">How long is the lesson?</span>
+            <span
+              data-testid="lesson-minutes-value"
+              className="ml-auto rounded-md bg-primary/10 px-2 py-0.5 text-sm font-semibold tabular-nums text-primary"
+            >
+              {describeMinutes(minutes)}
+            </span>
+          </div>
+          <input
+            type="range"
+            aria-label="Lesson length in minutes"
+            min={LESSON_MINUTES_MIN}
+            max={LESSON_MINUTES_MAX}
+            step={LESSON_MINUTES_STEP}
+            value={minutes}
+            disabled={disabled}
+            onChange={(event) => setMinutes(Number(event.target.value))}
+            className="w-full accent-primary"
+          />
+          <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
+            <span>{LESSON_MINUTES_MIN} min</span>
+            <span>{describeMinutes(LESSON_MINUTES_MAX)}</span>
+          </div>
+        </div>
+      ) : null}
+
+      {showing('activities') ? (
+        <div className="px-4 py-3.5">
+          <div className="mb-2.5 flex items-center gap-2">
+            <Shapes size={15} className="shrink-0 text-primary" />
+            <span className="text-sm font-medium">
+              What kinds of activities do you want?
+            </span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              Check all that apply
+            </span>
+          </div>
+
+          {/* Offered first and always: a teacher who does not want to choose
+              should not have to read the list to find that out. */}
+          <label
+            className={cn(
+              'mb-3 flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition',
+              plannerPicks
+                ? 'border-primary bg-primary/10 font-medium text-primary'
+                : 'border-border hover:bg-foreground/[0.03]'
+            )}
+          >
+            <input
+              type="checkbox"
+              checked={plannerPicks}
+              disabled={disabled}
+              onChange={() => toggleActivity(PLANNER_PICKS_ACTIVITIES)}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            You pick the ones that fit this lesson best
+          </label>
+
+          <div
+            className={cn(
+              'flex flex-col gap-3 transition-opacity',
+              plannerPicks && 'pointer-events-none opacity-40'
+            )}
+          >
+            {ACTIVITY_GROUPS.map((group) => (
+              <div key={group}>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {group}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {LESSON_ACTIVITIES.filter(
+                    (activity) => activity.group === group
+                  ).map((activity) => {
+                    const checked = activityIds.includes(activity.id);
+                    return (
+                      <label
+                        key={activity.id}
+                        className={cn(
+                          'relative inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition',
+                          // The input carries the focus, so the chip has to show
+                          // it — a hidden checkbox is otherwise invisible to
+                          // anyone tabbing through.
+                          'focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-1',
+                          checked
+                            ? 'border-primary bg-primary/10 font-medium text-primary'
+                            : 'border-border hover:bg-foreground/[0.03]'
+                        )}
+                      >
+                        {/* Transparent but full-size, so the whole chip is the
+                            real control rather than a label standing in front
+                            of a 1px checkbox nothing can actually hit. */}
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={disabled || plannerPicks}
+                          onChange={() => toggleActivity(activity.id)}
+                          className="absolute inset-0 h-full w-full cursor-pointer appearance-none rounded-full opacity-0"
+                        />
+                        {activity.label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex items-center gap-3 border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
+        <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {message || 'Pick an option, set the length, choose some activities.'}
+        </p>
+        {onLastStep ? (
+          <button
+            type="button"
+            data-testid="lesson-ask-send"
+            disabled={disabled || !message}
+            onClick={() => onSend(message)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
+          >
+            <Send size={13} />
+            Send
+          </button>
+        ) : (
+          <button
+            type="button"
+            data-testid="lesson-ask-next"
+            disabled={disabled}
+            onClick={advance}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
+          >
+            Next
+            <ChevronRight size={13} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

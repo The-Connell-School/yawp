@@ -152,3 +152,56 @@ describe('grading request', () => {
     ).toBeGreaterThan(100);
   });
 });
+
+describe('per-assignment grading context in the request', () => {
+  const base = {
+    promptShape: {
+      categoryFeedbackEnabled: false,
+      bandScored: true,
+      systemPrompt: 'system',
+      rubricText: 'rubric',
+    },
+    instructions: {
+      mode: 'unified' as const,
+      gradingInstructions: 'grade it',
+    },
+    label: 'Exit Ticket understanding',
+    studentFirstName: 'Sam',
+    assignmentPrompt: 'In your own words, explain erosion.',
+    essayText: 'Erosion is when the material moves.',
+  };
+
+  test('are placed with the prompt, so the grader judges against them', () => {
+    const request = buildGradingRequest({
+      ...base,
+      gradingContext: 'Should mention: the material moves.',
+    });
+
+    expect(request.userPrompt).toInclude('Should mention: the material moves.');
+    // After the prompt and before the student's writing.
+    expect(request.userPrompt.indexOf('Should mention')).toBeGreaterThan(
+      request.userPrompt.indexOf('Assignment prompt:')
+    );
+    expect(request.userPrompt.indexOf('Should mention')).toBeLessThan(
+      request.userPrompt.indexOf('Essay:')
+    );
+  });
+
+  test('change nothing for an assignment that has none', () => {
+    // Every existing assignment type supplies no notes, so its payload must
+    // be exactly what it was before this existed.
+    const without = buildGradingRequest(base);
+    const explicitlyEmpty = buildGradingRequest({
+      ...base,
+      gradingContext: '',
+    });
+    const explicitlyNull = buildGradingRequest({
+      ...base,
+      gradingContext: null,
+    });
+
+    expect(explicitlyEmpty).toEqual(without);
+    expect(explicitlyNull).toEqual(without);
+    expect(without.userPrompt).toInclude('Assignment prompt:');
+  });
+});

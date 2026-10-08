@@ -726,9 +726,9 @@ describe('app index loader assignments', () => {
       },
     ]);
     expect(data.assignmentCreationTypes).toEqual([
-      // Defaulted rather than omitted: the sheet reads this to decide whether to
-      // offer collaborative drafts, and an absent flag would read as supported
-      // nowhere but be indistinguishable from a select that forgot to ask.
+      // Defaulted rather than omitted: the sheet reads these to decide whether
+      // to offer collaborative drafts and which form to show, and an absent
+      // value would be indistinguishable from a select that forgot to ask.
       {
         id: 'type-1',
         title: 'Daily Pages',
@@ -737,6 +737,7 @@ describe('app index loader assignments', () => {
         // grammar-grading toggle, and the mocked type has no rubric to grade
         // grammar with.
         gradesGrammar: false,
+        kind: null,
         // The mocked type has no kind, so no writing time is suggested.
         defaultWritingTimeMinutes: null,
         offersParagraphModes: false,
