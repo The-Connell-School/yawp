@@ -720,6 +720,9 @@ run_tooling_if_needed() {
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-exit-ticket-assignment-type.ts" ]]; then
     tooling_command+=' && bun run scripts/seed-exit-ticket-assignment-type.ts --all-orgs'
   fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-planner-qa.ts" ]]; then
+    tooling_command+=' && bun run seed-preview-planner-qa'
+  fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
   fi
