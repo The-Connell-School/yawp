@@ -21,9 +21,39 @@ const ARCHIVED_RUBRIC_NAMES = ['daily-pages-short-form', 'daily-pages-reflection
 
 const v2Schema = engagementLibrary as Prisma.InputJsonValue;
 
-export async function applyDailyPagesEngagementV2Seed(
+const DP_ENGAGEMENT_MIGRATION_NAME =
+  '20261008121500_daily_pages_engagement_rubric_consolidation';
+
+async function isDpEngagementMigrationApplied(
   prisma: ReturnType<typeof createPrismaClient>
+): Promise<boolean> {
+  const rows = await prisma.$queryRaw<{ applied: number }[]>`
+    SELECT 1 AS applied
+    FROM "_prisma_migrations"
+    WHERE migration_name = ${DP_ENGAGEMENT_MIGRATION_NAME}
+      AND finished_at IS NOT NULL
+      AND rolled_back_at IS NULL
+    LIMIT 1
+  `;
+  return rows.length > 0;
+}
+
+export type ApplyDailyPagesEngagementV2SeedOptions = {
+  /** Preview QA rows for screenshot capture; off by default on shared previews. */
+  includePreviewQaFixtures?: boolean;
+};
+
+export async function applyDailyPagesEngagementV2Seed(
+  prisma: ReturnType<typeof createPrismaClient>,
+  options: ApplyDailyPagesEngagementV2SeedOptions = {}
 ) {
+  if (!(await isDpEngagementMigrationApplied(prisma))) {
+    console.warn(
+      'apply-daily-pages-engagement-v2: migration not applied; skipping.'
+    );
+    return { applied: false, reason: 'migration-not-applied' };
+  }
+
   const engagement =
     (await prisma.rubric.findUnique({ where: { id: ENGAGEMENT_RUBRIC_ID } })) ??
     (await prisma.rubric.findUnique({
@@ -87,7 +117,9 @@ export async function applyDailyPagesEngagementV2Seed(
     });
   }
 
-  await seedDpConsolidationQaPreviewFixtures(prisma, engagement.id);
+  if (options.includePreviewQaFixtures) {
+    await seedDpConsolidationQaPreviewFixtures(prisma, engagement.id);
+  }
 
   return { applied: true, engagementRubricId: engagement.id };
 }

@@ -21,7 +21,7 @@ const migrationDir = join(
 );
 
 const sql = `-- Daily Pages engagement rubric v2 (Brian Connell 2026-10-02)
-SET lock_timeout = '5s';
+SET LOCAL lock_timeout = '5s';
 
 ALTER TABLE "Rubric" ADD COLUMN IF NOT EXISTS "archivedAt" TIMESTAMPTZ(6);
 CREATE INDEX IF NOT EXISTS "Rubric_archivedAt_idx" ON "Rubric"("archivedAt");
@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS "InternalDpEngagementRubricRestore" (
   "archivedReflectionRubricId" TEXT,
   "restoredAt" TIMESTAMPTZ(6)
 );
+
+ALTER TABLE "InternalDpEngagementRubricRestore"
+  ADD COLUMN IF NOT EXISTS "dailyPagesTypePreviousRubricId" TEXT;
+ALTER TABLE "InternalDpEngagementRubricRestore"
+  ADD COLUMN IF NOT EXISTS "sjpTypePreviousRubricId" TEXT;
 
 DO $$
 DECLARE

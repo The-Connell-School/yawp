@@ -4,9 +4,8 @@ import { createDeployedAssignment } from '../db-helpers';
 import type { E2EContext } from '../seed-e2e';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
-const CLASS_STARTER_POINTS = 5;
 
-async function createClassStarterSubmission(e2eContext: E2EContext) {
+async function createDailyPagesSubmission(e2eContext: E2EContext) {
   const prisma = createE2EPrismaClient();
   try {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -16,7 +15,6 @@ async function createClassStarterSubmission(e2eContext: E2EContext) {
       assignmentTypeId: e2eContext.classStarterAssignmentTypeId,
       title: `Class Starter e2e ${suffix}`,
       prompt: 'Write freely for ten minutes about something you noticed today.',
-      pointValue: CLASS_STARTER_POINTS,
     });
 
     const text = `Class Starter entry ${suffix}. I kept writing past the point where I wanted to stop, and the thought went somewhere I did not expect.`;
@@ -93,7 +91,7 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
     e2eContext,
     signIn,
   }) => {
-    const fixture = await createClassStarterSubmission(e2eContext);
+    const fixture = await createDailyPagesSubmission(e2eContext);
     documentId = fixture.documentId;
     submissionId = fixture.submissionId;
 
@@ -101,37 +99,42 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
     await page.goto(`/app/submissions/${submissionId}`);
     await page.waitForLoadState('networkidle');
 
-    const engagementScore = page.getByTestId(
-      'grading-rubric-score-engagement_with_prompt'
-    );
+    // One category, and it is engagement.
+    const engagementScore = page.getByTestId('grading-rubric-score-engagement');
+    // The accordion trigger reads "Engagement" plus its current score.
     const engagementTrigger = page.getByRole('button', {
-      name: /^Engagement with Prompt/,
+      name: /^Engagement/,
     });
     await expect(engagementTrigger).toContainText('Not scored');
     await engagementTrigger.click();
     await expect(engagementScore).toBeVisible();
     await expect(page.getByTestId(/^grading-rubric-score-/)).toHaveCount(1);
 
+    // Overall feedback only: engagement has no feedback box of its own.
     await expect(
-      page.getByTestId('grading-rubric-comment-engagement_with_prompt')
+      page.getByTestId('grading-rubric-comment-engagement')
     ).toHaveCount(0);
     await expect(page.getByTestId('grading-overall-comment')).toBeVisible();
 
+    // The four words Class Starter scores on, including Absent as a real 0.
+    // The grading panel names each band by its word alone.
     await engagementScore.click();
-    const listbox = page.getByRole('listbox');
-    await expect(listbox).toBeVisible();
-    await listbox
-      .getByRole('option', { name: 'Not Present', exact: true })
-      .first()
-      .click();
-    await expect(
-      page.getByText(`Not Present (0/${CLASS_STARTER_POINTS})`)
-    ).toBeVisible();
+    for (const label of ['Absent', 'Hardly there', 'Showed up', 'All in']) {
+      await expect(
+        page.getByRole('option', { name: label, exact: true })
+      ).toBeVisible();
+    }
+    await page.getByRole('option', { name: 'Absent', exact: true }).click();
+    // Absent is a judgment, not a blank.
+    await expect(page.getByText('Absent (0/3)')).toBeVisible();
 
+    // No grammar or syntax markup anywhere on the panel.
     await expect(page.getByText(/grammar\/syntax issues/i)).toHaveCount(0);
     await expect(page.getByText(/AI grammar issues:/i)).toHaveCount(0);
 
     await page.getByTestId('grading-assistant-generate').click();
+    // The Absent chosen above is teacher feedback, so the assistant asks
+    // before replacing it.
     await page.getByRole('button', { name: 'Replace', exact: true }).click();
     await page.waitForResponse(
       (response) =>
@@ -145,26 +148,24 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
       '',
       { timeout: 30000 }
     );
-    await expect(
-      page.getByText(`Excellent (${CLASS_STARTER_POINTS}/${CLASS_STARTER_POINTS})`)
-    ).toBeVisible({
+    await expect(page.getByText('All in (3/3)')).toBeVisible({
       timeout: 30000,
     });
     await expect(page.getByText(/AI grammar issues:/i)).toHaveCount(0);
 
     const grade = await readGrade(submissionId);
     expect(grade.rubricScores).toMatchObject({
-      engagement_with_prompt: { score: CLASS_STARTER_POINTS, isAi: true },
+      engagement: { score: 3, isAi: true },
     });
-    expect(
-      Object.keys(grade.rubricScores as Record<string, unknown>)
-    ).toEqual(['engagement_with_prompt']);
+    expect(Object.keys(grade.rubricScores as Record<string, unknown>)).toEqual([
+      'engagement',
+    ]);
     expect(grade.overallComment).toBeTruthy();
-    expect(grade.score).toBe(
-      `${CLASS_STARTER_POINTS}/${CLASS_STARTER_POINTS}`
-    );
+    // Points out of three, never a percentage or a letter.
+    expect(grade.score).toBe('3/3');
     expect(grade.numericPercentage).toBeNull();
     expect(grade.letterGrade).toBeNull();
+    // The grammar pass never ran, so it left an empty issue set behind.
     expect(grade.grammarIssues).toEqual({ version: 1, issues: [] });
   });
 });

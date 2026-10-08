@@ -77,15 +77,9 @@ type SeedablePrisma = Pick<
   | 'assignmentType'
   | 'organizationAssignmentType'
   | 'assignmentTypeImage'
-  | 'rubric'
 >;
 
 export async function seedClassStarterAssignmentType(prisma: SeedablePrisma) {
-  const engagementRubric = await prisma.rubric.findUnique({
-    where: { name: 'daily-pages-engagement' },
-    select: { id: true },
-  });
-
   const org = await prisma.organization.findFirst({
     orderBy: { createdAt: 'asc' },
     select: { id: true },
@@ -106,12 +100,10 @@ export async function seedClassStarterAssignmentType(prisma: SeedablePrisma) {
     update: {
       ...CLASS_STARTER_ASSIGNMENT_TYPE_DATA,
       archivedAt: null,
-      ...(engagementRubric ? { rubricId: engagementRubric.id } : {}),
     },
     create: {
       ...CLASS_STARTER_ASSIGNMENT_TYPE_DATA,
       kind: CLASS_STARTER_KIND,
-      rubricId: engagementRubric?.id ?? null,
       ownerOrgId: org.id,
       organizationAssignments: {
         create: { organizationId: org.id },

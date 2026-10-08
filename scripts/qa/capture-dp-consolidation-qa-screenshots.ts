@@ -11,7 +11,7 @@ const baseUrl =
 const accessCode = process.env.PREVIEW_ACCESS_CODE;
 const outputDir =
   process.env.OUTPUT_DIR ||
-  join(import.meta.dir, '../../../qa/dp-consolidation-screens');
+  join(import.meta.dir, '../../qa/dp-consolidation-screens');
 const dailyPagesTypeId =
   process.env.DAILY_PAGES_TYPE_ID || 'cmlgtyo8j01em0qjs6knw7cni';
 const teacherEmail =

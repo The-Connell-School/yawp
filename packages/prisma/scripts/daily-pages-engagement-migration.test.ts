@@ -32,10 +32,22 @@ describe('daily-pages-engagement migration SQL', () => {
     expect(sql).toContain('Brian 2026-10-02 merged Daily Pages rubric');
   });
 
-  test('v2 schema keeps teacher notes enabled (only prod rubric with teacher notes)', () => {
+  test('v2 schema does not hard-code teacher notes (superadmin toggle in #415)', () => {
     const sql = readFileSync(join(MIGRATION_DIR, 'migration.sql'), 'utf8');
 
-    expect(sql).toContain('"teacherNotesEnabled":true');
+    expect(sql).not.toContain('"teacherNotesEnabled":true');
+  });
+
+  test('backfills restore-table columns when an older preview table exists', () => {
+    const sql = readFileSync(join(MIGRATION_DIR, 'migration.sql'), 'utf8');
+
+    expect(sql).toContain(
+      'ADD COLUMN IF NOT EXISTS "dailyPagesTypePreviousRubricId"'
+    );
+    expect(sql).toContain(
+      'ADD COLUMN IF NOT EXISTS "sjpTypePreviousRubricId"'
+    );
+    expect(sql).toContain('SET LOCAL lock_timeout');
   });
 
   test('rollback restores rubricId pointers on both assignment types', () => {
