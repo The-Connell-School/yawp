@@ -1,12 +1,21 @@
 import { describe, expect, test } from 'bun:test';
 import authored from '~/domain/rubrics/library/daily-pages-engagement.json';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
+import { getCategoryScoreBand } from '~/domain/assignment-types/rubric-category-options';
+import { buildScoreOptions } from '~/domain/grading/rubric-display';
 import type { ResolvedAssignmentTypeGradingConfig } from './assignment-type-grading-config.server';
 import { scaleDailyPagesForAssignment } from './daily-pages-assignment-points';
 import {
   dailyPagesEngagementHolisticPickerScores,
   dailyPagesEngagementTierBands,
 } from './daily-pages-engagement-tier-bands';
+
+const ENGAGEMENT_TIER_LABELS = [
+  'Not Present',
+  'Needs More',
+  'Good',
+  'Excellent',
+] as const;
 
 function config(): ResolvedAssignmentTypeGradingConfig {
   return {
@@ -118,6 +127,32 @@ describe('Daily Pages assignment points', () => {
     expect(scaled.rubricCategories[0].allowedScores).toEqual(
       dailyPagesEngagementHolisticPickerScores(12)
     );
+  });
+
+  test('holistic picker and edit labels match engagement bands for totals 5..100', () => {
+    const original = { ...config(), scoringMode: 'holistic_tier' as const };
+    for (let total = 5; total <= 100; total++) {
+      const scaled = scaleDailyPagesForAssignment(original, total);
+      const category = scaled.rubricCategories[0];
+      const options = buildScoreOptions(
+        scaled.minScore,
+        scaled.maxScore,
+        category.scoreLabels,
+        scaled.step,
+        category.bands,
+        category.allowedScores
+      );
+      expect(options.map((option) => option.label)).toEqual([
+        ...ENGAGEMENT_TIER_LABELS,
+      ]);
+      for (const score of category.allowedScores ?? []) {
+        const bandLabel = getCategoryScoreBand(category, score)?.label;
+        expect(bandLabel).toBeTruthy();
+        expect(
+          options.find((option) => option.value === String(score))?.label
+        ).toBe(bandLabel);
+      }
+    }
   });
 
   test('scales bands to the teacher point total without touching prompt copy', () => {
