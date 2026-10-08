@@ -42,4 +42,32 @@ test.describe('Free classroom bundle quotas', () => {
       'Thesis Statement',
     ]);
   });
+
+  test('teacher cannot create a second class from My Classes', async ({
+    page,
+  }) => {
+    const email =
+      process.env.E2E_FREE_CLASSROOM_TEACHER_EMAIL ??
+      'dev.teacher.free@yawp.local';
+
+    await page.goto('/auth/login');
+    await page.waitForLoadState('networkidle');
+    await page.locator('input[type="email"]').fill(email);
+    await page.locator('input[type="password"]').fill(FREE_CLASSROOM_PASSWORD);
+    await page.getByRole('button', { name: /log in/i }).click();
+    await page.waitForURL(
+      (url) =>
+        url.pathname.startsWith('/app') || url.pathname === '/enter-code',
+      { timeout: 15000 }
+    );
+
+    await page.goto('/app/my-classes');
+    await page.getByRole('button', { name: 'Create Class' }).first().click();
+    await expect(
+      page.getByText(/Free classroom accounts include one class/i)
+    ).toBeVisible();
+    await expect(
+      page.getByRole('dialog').getByRole('button', { name: /^Create Class$/ })
+    ).toBeDisabled();
+  });
 });

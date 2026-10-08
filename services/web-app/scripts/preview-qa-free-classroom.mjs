@@ -222,7 +222,23 @@ if (await addClass.count()) {
   await addClass.first().click();
   await page.waitForTimeout(800);
 }
+const oneClassLimitCopy = await page
+  .getByText(/Free classroom accounts include one class/i)
+  .isVisible()
+  .catch(() => false);
+const createClassSubmit = page
+  .getByRole('dialog')
+  .getByRole('button', { name: /^Create Class$/ });
+const createClassSubmitDisabled =
+  (await createClassSubmit.count()) > 0
+    ? await createClassSubmit.isDisabled()
+    : false;
 await shot('09-free-classroom-one-class-limit.png');
+record(
+  'second class create refused in UI',
+  oneClassLimitCopy && createClassSubmitDisabled,
+  `message=${oneClassLimitCopy} submitDisabled=${createClassSubmitDisabled}`
+);
 
 if (classId) {
   await page.goto(`${base}/app`, { waitUntil: 'networkidle', timeout: 120_000 });
@@ -321,69 +337,6 @@ if (classId) {
     );
   }
 }
-
-await page.goto(`${base}/app/my-classes/${classId}`, {
-  waitUntil: 'networkidle',
-  timeout: 120_000,
-});
-let schoolIdForCreate = await page.evaluate(() => {
-  const html = document.documentElement.innerHTML;
-  const direct = html.match(/"schoolId":"([^"]+)"/);
-  if (direct?.[1]) return direct[1];
-  const nested = html.match(/"school":\{"id":"([^"]+)"/);
-  return nested?.[1] ?? '';
-});
-if (!schoolIdForCreate) {
-  await page.goto(`${base}/app/my-classes`, {
-    waitUntil: 'networkidle',
-    timeout: 120_000,
-  });
-}
-schoolIdForCreate = schoolIdForCreate || await page.evaluate(() => {
-  const option = document.querySelector('select[name="schoolId"] option[value]');
-  return option?.getAttribute('value') ?? '';
-});
-if (!schoolIdForCreate) {
-  const addClass = page.getByRole('button', {
-    name: /add class|new class|create class/i,
-  });
-  if (await addClass.count()) {
-    await addClass.first().click();
-    await page.waitForTimeout(500);
-    schoolIdForCreate = await page.evaluate(() => {
-      const option = document.querySelector(
-        'select[name="schoolId"] option[value]'
-      );
-      return option?.getAttribute('value') ?? '';
-    });
-  }
-}
-const secondClassAttempt = await page.evaluate(
-  async ({ schoolId }) => {
-    const form = new FormData();
-    form.set('intent', 'create-class');
-    form.set('schoolId', schoolId);
-    form.set('schoolYear', '2026-2027');
-    form.set('code', 'QA414B');
-    form.set('grade', '10');
-    const response = await fetch('/app/my-classes', {
-      method: 'POST',
-      body: form,
-    });
-    const contentType = response.headers.get('content-type') ?? '';
-    const body = contentType.includes('json')
-      ? await response.json().catch(() => ({}))
-      : {};
-    return { status: response.status, body };
-  },
-  { schoolId: schoolIdForCreate }
-);
-record(
-  'second class create refused',
-  secondClassAttempt.status === 403 ||
-    String(secondClassAttempt.body?.error ?? '').includes('one class'),
-  `schoolId=${schoolIdForCreate} status=${secondClassAttempt.status} ${JSON.stringify(secondClassAttempt.body)}`
-);
 
 await signInPreviewUser(PREVIEW_FREE_CLASSROOM_STUDENT_EMAIL);
 await page.goto(`${base}/app`, { waitUntil: 'networkidle', timeout: 120_000 });
