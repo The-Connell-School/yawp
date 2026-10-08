@@ -108,12 +108,17 @@ export type E2EContext = {
   /** Isolated fixture for grade-privacy smoke (safe to release in that spec only) */
   gradePrivacy: {
     assignmentTypeId: string;
+    documentId: string;
     /** Never released; used for unreleased loader privacy assertions */
     submissionId: string;
     /** Released only by grade-privacy E2E; separate from submissionId so retries stay isolated */
     releaseSubmissionId: string;
+    unreleasedOverallScore: number;
+    unreleasedNumericPercentage: number;
+    probeComment: string;
     releaseComment: string;
     dailyPagesAssignmentTypeId: string;
+    dailyPagesDocumentId: string;
     dailyPagesUnreleasedOverallScore: number;
   };
   ua: {
@@ -898,6 +903,8 @@ export async function seedE2E(): Promise<E2EContext> {
     },
   });
 
+  const gradePrivacyProbeComment =
+    'GRADE_PRIVACY_PROBE_COMMENT must stay hidden until release.';
   const gradePrivacyReleaseComment =
     'GRADE_PRIVACY_RELEASE_COMMENT visible only after release.';
   const { assignment: gradePrivacyAssignment } = await createDeployedAssignment({
@@ -924,6 +931,8 @@ export async function seedE2E(): Promise<E2EContext> {
     },
     select: { id: true },
   });
+  const gradePrivacyUnreleasedOverallScore = 80;
+  const gradePrivacyUnreleasedNumericPercentage = 80;
   const gradePrivacySubmission = await prisma.submission.create({
     data: {
       documentId: gradePrivacyDoc.id,
@@ -933,12 +942,21 @@ export async function seedE2E(): Promise<E2EContext> {
       submittedAt: new Date(),
       gradedByMembershipId: seededTeacherMembership.id,
       gradedAt: new Date(),
-      overallScore: 80,
-      numericPercentage: 80,
+      overallScore: gradePrivacyUnreleasedOverallScore,
+      numericPercentage: gradePrivacyUnreleasedNumericPercentage,
       score: '80/100',
       releasedAt: null,
     },
     select: { id: true },
+  });
+  await prisma.submissionComment.create({
+    data: {
+      submissionId: gradePrivacySubmission.id,
+      membershipId: seededTeacherMembership.id,
+      content: gradePrivacyProbeComment,
+      excerpt: 'GRADE_PRIVACY_PROBE',
+      occurrence: 1,
+    },
   });
   const gradePrivacyReleaseDocText =
     'GRADE_PRIVACY_RELEASE_MARKER body for release-only smoke test.';
@@ -1201,10 +1219,15 @@ export async function seedE2E(): Promise<E2EContext> {
     unreleasedGradedSubmissionId: unreleasedGradedSubmission.id,
     gradePrivacy: {
       assignmentTypeId: assignmentType.id,
+      documentId: gradePrivacyDoc.id,
       submissionId: gradePrivacySubmission.id,
       releaseSubmissionId: gradePrivacyReleaseSubmission.id,
+      unreleasedOverallScore: gradePrivacyUnreleasedOverallScore,
+      unreleasedNumericPercentage: gradePrivacyUnreleasedNumericPercentage,
+      probeComment: gradePrivacyProbeComment,
       releaseComment: gradePrivacyReleaseComment,
       dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
+      dailyPagesDocumentId: dailyPagesPrivacyDoc.id,
       dailyPagesUnreleasedOverallScore: dailyPagesPrivacyOverallScore,
     },
     ua: {
