@@ -706,7 +706,7 @@ describe('migration integration (real Postgres)', () => {
     }
   }, 20000);
 
-  test('free tier bundle + usage migrations: deploy, seed parity, re-run, rollback', () => {
+  test('free tier bundle migration: deploy, seed parity, re-run, rollback (#414 usage table is separate)', () => {
     try {
       adminPsql('DROP DATABASE IF EXISTS yawp_migration_integration WITH (FORCE)');
     } catch {}
@@ -723,16 +723,6 @@ describe('migration integration (real Postgres)', () => {
       )
     `);
     expect(bundleKinds.count).toBe(3);
-
-    const usageTable = jsonQuery(`
-      SELECT json_build_object(
-        'exists', EXISTS (
-          SELECT 1 FROM information_schema.tables
-          WHERE table_name = 'FreeClassroomAssignmentKindUsage'
-        )
-      )
-    `);
-    expect(usageTable.exists).toBe(true);
 
     const seedOnce = run(
       'bun',
@@ -789,7 +779,7 @@ describe('migration integration (real Postgres)', () => {
       join(
         PRISMA_DIR,
         'migrations',
-        '20261007220000_free_tier_bundle_assignment_types',
+        '20261008140000_free_tier_bundle_assignment_types',
         'rollback.sql'
       ),
       'utf8'
@@ -820,47 +810,17 @@ describe('migration integration (real Postgres)', () => {
     `);
     expect(fixedRemoved.count).toBe(0);
 
-    const usageRollback = readFileSync(
-      join(
-        PRISMA_DIR,
-        'migrations',
-        '20261007240000_free_classroom_assignment_kind_usage',
-        'rollback.sql'
-      ),
-      'utf8'
-    );
-    psql(usageRollback);
-    const usageGone = jsonQuery(`
-      SELECT json_build_object(
-        'exists', EXISTS (
-          SELECT 1 FROM information_schema.tables
-          WHERE table_name = 'FreeClassroomAssignmentKindUsage'
-        )
-      )
-    `);
-    expect(usageGone.exists).toBe(false);
-
     // Rollback SQL drops objects but leaves _prisma_migrations rows; re-apply forward SQL.
     const bundleForward = readFileSync(
       join(
         PRISMA_DIR,
         'migrations',
-        '20261007220000_free_tier_bundle_assignment_types',
+        '20261008140000_free_tier_bundle_assignment_types',
         'migration.sql'
       ),
       'utf8'
     );
     psql(bundleForward);
-    const usageForward = readFileSync(
-      join(
-        PRISMA_DIR,
-        'migrations',
-        '20261007240000_free_classroom_assignment_kind_usage',
-        'migration.sql'
-      ),
-      'utf8'
-    );
-    psql(usageForward);
     run('bun', ['run', 'seed-free-tier-bundle-assignment-types'], PRISMA_DIR, {
       PATH: PATH_WITH_ROOT_BIN,
       NODE_PATH: NODE_PATH_WITH_ROOT,
