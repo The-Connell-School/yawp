@@ -96,6 +96,12 @@ export async function seedFreeTierShipReview(prisma: PrismaClient) {
       status: 'LEAD',
       releasedAt: null,
     },
-    update: { status: 'LEAD', releasedAt: null },
+    update: {
+      status: 'LEAD',
+      releasedAt: null,
+      userId: null,
+      name: 'Ship Review Released',
+      schoolName: 'Ship Review High',
+    },
   });
 }
