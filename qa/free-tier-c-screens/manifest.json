@@ -1,0 +1,62 @@
+{
+  "capturedAt": "2026-10-08T02:09:57.201Z",
+  "baseUrl": "https://pr-416.preview.yawp.school",
+  "shots": [
+    {
+      "file": "01-free-waitlist-submitted.png",
+      "md5": "1fcf06a49086e9ab70e118af0c1e95a2"
+    },
+    {
+      "file": "02-operator-free-tier-admin.png",
+      "md5": "5c5a41a3bb96e9a652f205c76426f4e0"
+    },
+    {
+      "file": "03-free-join-before-account.png",
+      "md5": "7222ddcd63e557c4e4baf9e2eb979c39"
+    },
+    {
+      "file": "04-teacher-onboarding-form.png",
+      "md5": "c4690113d44796f73fb08e42a2f26996"
+    },
+    {
+      "file": "05-teacher-pending-approval.png",
+      "md5": "d61c959d5e9c1364e00bccb0d9c66d3f"
+    },
+    {
+      "file": "06-not-right-person-form.png",
+      "md5": "915fc475bd6dd34bb697652ca70855ce"
+    },
+    {
+      "file": "07-not-right-person-submitted.png",
+      "md5": "5cde050cd5fc256f20493d1da8907285"
+    },
+    {
+      "file": "08-admin-approve-landing.png",
+      "md5": "0ac510a18b21e00a0b8887a6812768c2"
+    },
+    {
+      "file": "09-admin-approve-success.png",
+      "md5": "9f3f84db3630ee56044efdb790dab347"
+    },
+    {
+      "file": "10-admin-already-approved.png",
+      "md5": "a65c0286bdd0a18214356c2865ada711"
+    },
+    {
+      "file": "11-teacher-class-created.png",
+      "md5": "07ef03bba1999673af585046dcab0ebd"
+    },
+    {
+      "file": "12-teacher-ai-unlocked-assignments.png",
+      "md5": "2070ae438dfb71d069ceee604a494151"
+    },
+    {
+      "file": "13-self-approval-manual-review.png",
+      "md5": "2d18f434f21ffae04d7506a07266403c"
+    },
+    {
+      "file": "14-paid-school-teacher-unchanged.png",
+      "md5": "b9059a9c3dc581cbe894c09b65e1d03d"
+    }
+  ]
+}
