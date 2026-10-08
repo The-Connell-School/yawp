@@ -1,3 +1,4 @@
+import { Prisma } from '@app/prisma';
 import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
@@ -24,6 +25,10 @@ import {
   parseAssignmentRubricOverrides,
 } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
+import {
+  exitTicketGradingModeFor,
+  resolveAssignmentPrompt,
+} from '~/utils/assignment-exit-ticket.server';
 import {
   formatClassLabel,
   type ClassDisplayFields,
@@ -67,6 +72,7 @@ import {
 } from '~/components/class-manage-sheet';
 import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
+import { HandleStudentPasswordResetButton } from './handle-student-password-reset';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import { UnsubmitSubmissionsSheet } from '~/components/teacher-document-work/unsubmit-submissions-sheet';
 import {
@@ -244,6 +250,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const allowedAssignmentTypes = await getAvailableAssignmentTypesForScopes<{
     id: string;
     systemKey: string | null;
+    kind: string | null;
   }>({
     scopes: [
       {
@@ -252,7 +259,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         teacherProfileId: profile.id,
       },
     ],
-    select: { id: true, systemKey: true },
+    select: { id: true, systemKey: true, kind: true },
   });
   const allowedAssignmentTypeIds = new Set(
     allowedAssignmentTypes
@@ -466,7 +473,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    if (!prompt) {
+    // An exit ticket's prompt is composed from the form answers, here as well
+    // as on the create API, so editing one cannot replace a composed prompt
+    // with whatever the browser happened to post.
+    const resolvedPrompt = resolveAssignmentPrompt({
+      assignmentTypeKind: selectedAssignmentType?.kind,
+      postedPrompt: prompt,
+      formData,
+    });
+    if (!resolvedPrompt.success) {
+      return dataResponse(
+        { success: false, message: resolvedPrompt.message },
+        { status: 400 }
+      );
+    }
+    const assignmentPrompt = resolvedPrompt.prompt;
+    const exitTicketConfigJson = resolvedPrompt.exitTicketConfigJson;
+
+    if (!assignmentPrompt) {
       return dataResponse(
         { success: false, message: 'Prompt is required.' },
         { status: 400 }
@@ -517,7 +541,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
         : {}),
       ...(formData.has('gradingMode')
-        ? { gradingMode: rubricOverrides.data.gradingMode }
+        ? {
+            gradingMode: exitTicketGradingModeFor({
+              assignmentTypeKind: selectedAssignmentType?.kind,
+              formData,
+              gradingMode: rubricOverrides.data.gradingMode,
+            }),
+          }
         : {}),
     };
 
@@ -593,7 +623,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
           data: {
             assignmentTypeId,
             title,
-            prompt,
+            prompt: assignmentPrompt,
+            ...(exitTicketConfigJson ? { exitTicketConfigJson } : {}),
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
             ...rubricOverrideData,
@@ -635,14 +666,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           assignmentTypeId,
           title,
-          prompt,
+          prompt: assignmentPrompt,
+          // Cleared rather than left alone: a type changed away from Exit
+          // Ticket must not keep a config describing a prompt it no longer
+          // has. Prisma.DbNull is how a nullable Json column is set to null.
+          exitTicketConfigJson: exitTicketConfigJson ?? Prisma.DbNull,
           submitForGrade: gradingIntent.data.submitForGrade,
           pointValue: gradingIntent.data.pointValue,
           ...(formData.has('rubricTotalPoints')
             ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
             : {}),
           ...(formData.has('gradingMode')
-            ? { gradingMode: rubricOverrides.data.gradingMode }
+            ? {
+                gradingMode: exitTicketGradingModeFor({
+                  assignmentTypeKind: selectedAssignmentType?.kind,
+                  formData,
+                  gradingMode: rubricOverrides.data.gradingMode,
+                }),
+              }
             : {}),
           // Both controls now live on the edit form as well as the create
           // form. Only write them when the form actually sent them, so an
@@ -1209,6 +1250,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: string;
       title: string;
       systemKey: string | null;
+      kind: string | null;
       collaborationSupported: boolean;
     }>({
       scopes: [
@@ -1222,6 +1264,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         id: true,
         title: true,
         systemKey: true,
+        kind: true,
         collaborationSupported: true,
       },
       orderBy: { position: 'asc' },
@@ -1378,11 +1421,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     inProgressDocuments,
     assignments,
     assignmentTypes: creationTypeRows.map(
-      ({ id, title, collaborationSupported }) => ({
+      ({ id, title, collaborationSupported, kind }) => ({
         id,
         title,
         collaborationSupported,
         gradesGrammar: gradesGrammarIds.has(id),
+        kind,
         defaultWritingTimeMinutes:
           creationTypeDefaults.get(id)?.defaultWritingTimeMinutes ?? null,
         offersParagraphModes:
@@ -2631,44 +2675,12 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                           <div className="flex flex-col gap-1">
                             <span>{formatUserContactLabel(s.user)}</span>
                             {!s.user.email ? (
-                              <studentFetcher.Form
-                                method="post"
-                                className="flex flex-wrap items-end gap-2"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <input
-                                  type="hidden"
-                                  name="intent"
-                                  value="reset-student-password"
-                                />
-                                <input
-                                  type="hidden"
-                                  name="studentMembershipId"
-                                  value={s.id}
-                                />
-                                <div className="flex flex-col gap-1">
-                                  <Label className="text-xs">Temp password</Label>
-                                  <Input
-                                    name="temporaryPassword"
-                                    type="text"
-                                    className="h-8 w-36 text-xs"
-                                    minLength={6}
-                                    required
-                                  />
-                                </div>
-                                <Button type="submit" size="sm" variant="outline">
-                                  Reset login
-                                </Button>
-                                {studentFetcher.data &&
-                                'success' in studentFetcher.data &&
-                                studentFetcher.data.success &&
-                                'message' in studentFetcher.data &&
-                                studentFetcher.data.message ? (
-                                  <p className="w-full text-xs text-green-700">
-                                    {studentFetcher.data.message}
-                                  </p>
-                                ) : null}
-                              </studentFetcher.Form>
+                              <HandleStudentPasswordResetButton
+                                studentMembershipId={s.id}
+                                studentName={
+                                  s.user.name?.trim() || 'this student'
+                                }
+                              />
                             ) : null}
                           </div>
                         </TableCell>

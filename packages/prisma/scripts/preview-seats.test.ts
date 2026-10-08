@@ -161,6 +161,16 @@ describe('writing practice preview enablement', () => {
       'seats.map(({ organizationId }) => organizationId)'
     );
   });
+
+  test('preview planner QA seed failures are non-fatal inside preview seat bootstrap', async () => {
+    const seedSource = await Bun.file(
+      new URL('./seed-preview-seats.ts', import.meta.url)
+    ).text();
+
+    expect(seedSource).toContain('preview planner QA seed failed (non-fatal)');
+    expect(seedSource).toContain('try {');
+    expect(seedSource).toContain('seedPreviewPlannerQa');
+  });
 });
 
 describe('create-only preview seat seeding', () => {

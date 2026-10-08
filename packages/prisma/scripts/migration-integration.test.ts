@@ -938,5 +938,28 @@ describe('migration integration (real Postgres)', () => {
     `);
     expect(back.signedLink).toBe(true);
   }, 120000);
+
+  test('20261008140000 user handle accounts is re-runnable', () => {
+    const forward = readFileSync(
+      join(
+        PRISMA_DIR,
+        'migrations',
+        '20261008140000_user_handle_accounts',
+        'migration.sql'
+      ),
+      'utf8'
+    );
+    psql(forward);
+    psql(forward);
+    const joinCol = jsonQuery(`
+      SELECT json_build_object(
+        'exists', EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'Class' AND column_name = 'studentJoinToken'
+        )
+      )
+    `);
+    expect(joinCol.exists).toBe(true);
+  });
 });
 

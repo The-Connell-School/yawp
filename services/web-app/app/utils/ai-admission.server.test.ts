@@ -6,6 +6,7 @@ const transaction = {
     count: mock(),
     createMany: mock(),
     deleteMany: mock(),
+    findFirst: mock(),
   },
 };
 const prisma = {
@@ -33,6 +34,9 @@ beforeEach(() => {
   transaction.aiRequestReservation.deleteMany
     .mockReset()
     .mockResolvedValue({ count: 0 });
+  transaction.aiRequestReservation.findFirst
+    .mockReset()
+    .mockResolvedValue(null);
   prisma.$transaction
     .mockReset()
     .mockImplementation(

@@ -9,6 +9,8 @@ import crypto from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
+import { parseStoredExitTicketConfig } from '~/domain/assignment-types/exit-ticket';
+import { buildExitTicketGradingContext } from '~/domain/assignment-types/exit-ticket-rubric';
 import { computeIpHash } from '~/utils/ai-usage-log.server';
 import {
   computeWeightedBandPercentage,
@@ -95,6 +97,7 @@ const POST = z.object({
   submissionId: z.string().optional(),
   gradingAssistantStrictnessLevel: z.string().optional(),
   llmRetry: z.enum(['fallback']).optional(),
+  e2eForceGradingFixture: z.literal('true').optional(),
 });
 
 function isPrismaRecordNotFoundError(error: unknown) {
@@ -340,12 +343,23 @@ const e2eRubricFixtures: Record<string, { score: number; comment: string }> = {
   },
 };
 
-function shouldUseE2EGradingFixture() {
-  return (
-    process.env.E2E === 'true' &&
-    process.env.E2E_GRADE_ESSAY_AI_FIXTURE === 'true' &&
-    !process.env.ANTHROPIC_API_KEY
-  );
+function shouldUseE2EGradingFixture(
+  request: Request,
+  forceFromForm: boolean
+) {
+  if (
+    process.env.E2E !== 'true' ||
+    process.env.E2E_GRADE_ESSAY_AI_FIXTURE !== 'true'
+  ) {
+    return false;
+  }
+  if (
+    forceFromForm ||
+    request.headers.get('x-e2e-force-grade-essay-ai-fixture') === 'true'
+  ) {
+    return true;
+  }
+  return !process.env.ANTHROPIC_API_KEY;
 }
 
 function buildE2EGradingFixtureResponse({
@@ -354,14 +368,18 @@ function buildE2EGradingFixtureResponse({
   maxScore,
   studentFirstName,
   categoryFeedbackEnabled,
+  scoringMode = 'weighted_categories',
+  assignmentPointTotal = null,
 }: {
   rubricCategories: GradingRubricCategory[];
   minScore: number;
   maxScore: number;
   studentFirstName: string;
   categoryFeedbackEnabled: boolean;
+  scoringMode?: 'weighted_categories' | 'holistic_tier';
+  assignmentPointTotal?: number | null;
 }) {
-  return JSON.stringify({
+  const payload: Record<string, unknown> = {
     categories: rubricCategories.map((category) => {
       const fixture = e2eRubricFixtures[category.key] ?? {
         score: maxScore,
@@ -376,7 +394,43 @@ function buildE2EGradingFixtureResponse({
       };
     }),
     overallComment: `${studentFirstName}, these legacy grading assistant suggestions still apply.`,
-  });
+  };
+  if (
+    scoringMode === 'holistic_tier' &&
+    typeof assignmentPointTotal === 'number' &&
+    Number.isFinite(assignmentPointTotal) &&
+    assignmentPointTotal > 0
+  ) {
+    payload.overallTier = 'excellent';
+    payload.overallPoints = Math.round(0.9 * assignmentPointTotal);
+  }
+  return JSON.stringify(payload);
+}
+
+function extractHolisticFieldsFromRecord(value: unknown) {
+  if (!isRecord(value)) return null;
+  const maybePoints = value.overallPoints;
+  const maybeTier = value.overallTier;
+  if (
+    (typeof maybePoints === 'number' || typeof maybePoints === 'string') &&
+    typeof maybeTier === 'string'
+  ) {
+    const points = Number(maybePoints);
+    if (!Number.isFinite(points)) return null;
+    return { overallPoints: points, overallTier: maybeTier };
+  }
+  return null;
+}
+
+function withPreservedHolisticFields<T extends object>(
+  base: T,
+  ...sources: unknown[]
+) {
+  for (const source of sources) {
+    const holistic = extractHolisticFieldsFromRecord(source);
+    if (holistic) return { ...base, ...holistic };
+  }
+  return base;
 }
 
 function computeWeightedPercentageForCategories({
@@ -633,6 +687,7 @@ export async function action({ request }: ActionFunctionArgs) {
             apHistorySnapshot: true,
             prompt: true,
             pointValue: true,
+            exitTicketConfigJson: true,
           },
         },
         classAssignment: {
@@ -853,6 +908,16 @@ export async function action({ request }: ActionFunctionArgs) {
     gradingMode: resolvedGradingConfig.gradingMode,
   });
 
+  const assignmentPrompt = submission.document.assignment?.prompt?.trim();
+  // How to read the rubric for this ticket, plus whatever the teacher said the
+  // lesson covered. Null for every other assignment, leaving the payload
+  // exactly as it was.
+  const gradingContext = buildExitTicketGradingContext(
+    parseStoredExitTicketConfig(
+      submission.document.assignment?.exitTicketConfigJson
+    )
+  );
+
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   // llmRetry=fallback is the client half of the provider-failover handshake
   // (the server answers 202 {retrying:true}, the client re-posts with it). It
@@ -898,7 +963,17 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
     });
-  const useE2EFixture = shouldUseE2EGradingFixture();
+  const holisticE2eFixture =
+    process.env.E2E === 'true' &&
+    process.env.E2E_GRADE_ESSAY_AI_FIXTURE === 'true' &&
+    (resolvedGradingConfig.scoringMode ?? 'weighted_categories') ===
+      'holistic_tier';
+  const useE2EFixture =
+    holisticE2eFixture ||
+    shouldUseE2EGradingFixture(
+      request,
+      data.e2eForceGradingFixture === 'true'
+    );
   const documentContext = buildAiTextContextAudit({
     documentSource: 'submission-snapshot',
     documentId: submission.document.id,
@@ -1134,10 +1209,12 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     studentFirstName,
     strictnessLevel: gradingAssistantStrictnessLevel,
     documentText: submission.text,
-    assignmentPrompt: submission.document.assignment?.prompt,
+    assignmentPrompt,
+    gradingContext,
     writingTimeMinutes: writingConditions.writingTimeMinutes,
     coldWrite: submission.document.assignment?.tutorEnabled === false,
     paragraphMode: writingConditions.paragraphMode,
+    assignmentPointTotal: submission.document.assignment?.pointValue ?? null,
   });
   const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
@@ -1153,6 +1230,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       maxScore,
       studentFirstName,
       categoryFeedbackEnabled,
+      scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
+      assignmentPointTotal: submission.document.assignment?.pointValue ?? null,
     });
   } else {
     try {
@@ -1252,15 +1331,29 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   const parseAiResponse = async (rawResponseText: string) => {
     const parsedJson = parseFirstJsonValue(rawResponseText);
     const parsed = tryParseAiResponse(parsedJson);
-    if (parsed?.overallComment) return parsed;
+    if (parsed?.overallComment) {
+      return withPreservedHolisticFields(parsed, parsedJson) as typeof parsed;
+    }
     if (parsed?.categories) {
-      return buildAiResponseFromCategories(parsed.categories, parsed.teacherNote);
+      const built = await buildAiResponseFromCategories(
+        parsed.categories,
+        parsed.teacherNote
+      );
+      return withPreservedHolisticFields(built, parsedJson) as typeof built;
     }
 
     const repairedResponseText = await getGradingLlmCompletion({
       model,
       system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n${buildGradingResponseSchemaText(
-        { minScore, maxScore, categoryFeedbackEnabled, teacherNotesEnabled }
+        {
+          minScore,
+          maxScore,
+          categoryFeedbackEnabled,
+          teacherNotesEnabled,
+          scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
+          assignmentPointTotal:
+            submission.document.assignment?.pointValue ?? null,
+        }
       )}\nCategory-specific score bands:\n${promptShape.rubricText}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Every score must fall inside one declared band for its category.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Private observations belong only in teacherNote when the schema permits it. Never put them in overallComment or category comments. Do not infer AI authorship or penalize suspicion.\n- ${TEACHER_NOTES_EVIDENCE_RULE}\n- Do not include markdown or explanation.`,
       messages: [
         {
@@ -1279,9 +1372,23 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
     const repairedParsedJson = parseFirstJsonValue(repairedResponseText);
     const repairedParsed = tryParseAiResponse(repairedParsedJson);
-    if (repairedParsed?.overallComment) return repairedParsed;
+    if (repairedParsed?.overallComment) {
+      return withPreservedHolisticFields(
+        repairedParsed,
+        repairedParsedJson,
+        parsedJson
+      ) as typeof repairedParsed;
+    }
     if (repairedParsed?.categories) {
-      return buildAiResponseFromCategories(repairedParsed.categories, repairedParsed.teacherNote);
+      const built = await buildAiResponseFromCategories(
+        repairedParsed.categories,
+        repairedParsed.teacherNote
+      );
+      return withPreservedHolisticFields(
+        built,
+        repairedParsedJson,
+        parsedJson
+      ) as typeof built;
     }
 
     throw new Error('Malformed grading assistant response');
@@ -1316,20 +1423,230 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   }, {});
 
   const overallComment = parsed.overallComment;
-  const baseGradeFields = buildDynamicGradeFields({
-    categories: parsed.categories,
-    rubricScores,
-    scoringType,
-    maxScore,
-    rubricCategories,
-    bandScored: promptShape.bandScored,
-  });
-  const { overallScore, numericPercentage, letterGrade, score } =
-    applyStrictnessToGradeFields({
+  // Compute overall grading fields, honoring holistic mode when selected.
+  let overallScore: number;
+  let numericPercentage: number | null;
+  let letterGrade: string | null;
+  let score: string;
+  // Blackboard/LTI needs a percent even when holistic mode stores points-only.
+  let ltiPassbackPercentage: number | null = null;
+  const holisticSelected =
+    (resolvedGradingConfig.scoringMode ?? 'weighted_categories') ===
+    'holistic_tier';
+  // Track when holistic mode was configured but we had to fall back to weighted.
+  let holisticFallbackReason:
+    | null
+    | 'missing_total'
+    | 'invalid_output' = null;
+
+  if (holisticSelected) {
+    // Prefer the assignment's point total; if missing/invalid, fall back to the
+    // rubric's configured total points when available.
+    const totalRaw =
+      submission.document.assignment?.pointValue == null
+        ? null
+        : Number(submission.document.assignment?.pointValue);
+    const rubricTotalRaw =
+      resolvedGradingConfig.rubricTotalPoints == null
+        ? null
+        : Number(resolvedGradingConfig.rubricTotalPoints);
+    const assignmentTotalCandidate =
+      totalRaw != null && Number.isFinite(totalRaw) && totalRaw > 0
+        ? totalRaw
+        : rubricTotalRaw != null &&
+            Number.isFinite(rubricTotalRaw) &&
+            rubricTotalRaw > 0
+          ? rubricTotalRaw
+          : null;
+    if (assignmentTotalCandidate == null) {
+      console.warn(
+        'Holistic grading fallback: missing/invalid assignment total and rubric total points',
+        {
+          assignmentPointValue: submission.document.assignment?.pointValue ??
+            null,
+          rubricTotalPoints: resolvedGradingConfig.rubricTotalPoints ?? null,
+        }
+      );
+      holisticFallbackReason = 'missing_total';
+    }
+    const assignmentTotal = assignmentTotalCandidate ?? 0;
+    const round = (n: number) => Math.round(n);
+    const lowerExcellent = round(0.9 * assignmentTotal);
+    const lowerGood = round(0.8 * assignmentTotal);
+    const lowerNeedsMore = round(0.7 * assignmentTotal);
+    const bandByTier = {
+      excellent: { min: lowerExcellent, max: assignmentTotal },
+      good: { min: lowerGood, max: lowerExcellent - 1 },
+      needs_more: { min: lowerNeedsMore, max: lowerGood - 1 },
+      not_present: { min: 0, max: lowerNeedsMore - 1 },
+    } as const;
+    const parseHolisticTuple = (p: unknown) => {
+      const t =
+        (((p as any)?.overallTier as
+        | 'excellent'
+        | 'good'
+        | 'needs_more'
+        | 'not_present') ?? null);
+      const r = (p as any)?.overallPoints;
+      const pts =
+        typeof r === 'number'
+          ? r
+          : typeof r === 'string'
+            ? Number.parseInt(r, 10)
+            : Number.NaN;
+      return { tier: t, requestedPoints: pts };
+    };
+    const allowedTiers = new Set([
+      'excellent',
+      'good',
+      'needs_more',
+      'not_present',
+    ]);
+
+    const validateAndClamp = (p: unknown) => {
+      const { tier, requestedPoints } = parseHolisticTuple(p);
+      if (
+        !tier ||
+        !allowedTiers.has(tier as string) ||
+        !Number.isFinite(requestedPoints)
+      ) {
+        return { ok: false as const };
+      }
+      const band = bandByTier[tier as keyof typeof bandByTier] ??
+        bandByTier.not_present;
+      const clamped =
+        requestedPoints < band.min
+          ? band.min
+          : requestedPoints > band.max
+            ? band.max
+            : requestedPoints;
+      if (requestedPoints !== clamped) {
+        console.warn('Holistic grading points adjusted to band', {
+          requestedPoints,
+          adjustedPoints: clamped,
+          tier,
+          band,
+          assignmentTotal,
+        });
+      }
+      return { ok: true as const, clamped };
+    };
+
+    let useHolistic = assignmentTotalCandidate != null;
+    let validated =
+      assignmentTotalCandidate != null ? validateAndClamp(parsed) : { ok: false as const };
+
+    // Retry once when invalid holistic fields are returned.
+    if (useHolistic && !validated.ok) {
+      try {
+        const retryText = await getGradingLlmCompletion({
+          model,
+          system,
+          messages: compiledInvocation.messages,
+          maxTokens,
+          metadata: {
+            feature: 'grading',
+            kind: 'rubric-evaluation',
+            retry: 'holistic-retry',
+            gradingConfigSource: resolvedGradingConfig.source,
+            ...gradingAiContextMetadata,
+            assignmentTypeGradingLabel: resolvedGradingConfig.label,
+          },
+        });
+        parsed = await parseAiResponse(retryText);
+        validated = validateAndClamp(parsed);
+      } catch (error) {
+        if (isGradingRequestDeadlineError(error)) {
+          return gradingDeadlineResponse();
+        }
+        if (isLlmFallbackRetrySignal(error)) return retryResponse();
+      }
+    }
+
+    if (useHolistic && validated.ok) {
+      overallScore = validated.clamped;
+      numericPercentage = null;
+      letterGrade = null;
+      score = `${overallScore}/${assignmentTotal}`;
+      ltiPassbackPercentage =
+        assignmentTotal > 0 ? Math.round((overallScore / assignmentTotal) * 100) : null;
+    } else if (assignmentTotalCandidate == null) {
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'Holistic grading needs a positive assignment point total. Set point value on the assignment or rubric total points on the type.',
+        },
+        { status: 422 }
+      );
+    } else {
+      holisticFallbackReason = holisticFallbackReason ?? 'invalid_output';
+      const baseGradeFields = buildDynamicGradeFields({
+        categories: parsed.categories,
+        rubricScores,
+        scoringType,
+        maxScore,
+        rubricCategories,
+        bandScored: promptShape.bandScored,
+      });
+      const adjusted = applyStrictnessToGradeFields({
+        ...baseGradeFields,
+        scoringType,
+        gradingAssistantStrictnessLevel,
+      });
+      const pct =
+        typeof adjusted.numericPercentage === 'number' &&
+        Number.isFinite(adjusted.numericPercentage)
+          ? adjusted.numericPercentage
+          : null;
+      const pointsFromPercent =
+        pct != null
+          ? Math.round((pct / 100) * assignmentTotal)
+          : Number.isFinite(adjusted.overallScore) && maxScore > 0
+            ? Math.round((adjusted.overallScore / maxScore) * assignmentTotal)
+            : Number.NaN;
+      if (!Number.isFinite(pointsFromPercent)) {
+        return dataResponse(
+          {
+            success: false,
+            message:
+              'Holistic grading could not interpret the model output. Try generating again.',
+          },
+          { status: 422 }
+        );
+      }
+      overallScore = Math.min(
+        assignmentTotal,
+        Math.max(0, pointsFromPercent)
+      );
+      numericPercentage = null;
+      letterGrade = null;
+      score = `${overallScore}/${assignmentTotal}`;
+      ltiPassbackPercentage =
+        assignmentTotal > 0
+          ? Math.round((overallScore / assignmentTotal) * 100)
+          : null;
+    }
+  } else {
+    const baseGradeFields = buildDynamicGradeFields({
+      categories: parsed.categories,
+      rubricScores,
+      scoringType,
+      maxScore,
+      rubricCategories,
+      bandScored: promptShape.bandScored,
+    });
+    const adjusted = applyStrictnessToGradeFields({
       ...baseGradeFields,
       scoringType,
       gradingAssistantStrictnessLevel,
     });
+    overallScore = adjusted.overallScore;
+    numericPercentage = adjusted.numericPercentage;
+    letterGrade = adjusted.letterGrade;
+    score = adjusted.score ?? '';
+    ltiPassbackPercentage = adjusted.numericPercentage;
+  }
 
   // Grammar/syntax highlighting has always run for every non-AP-History
   // rubric, so a rubric whose categories say nothing about it keeps running it.
@@ -1497,6 +1814,33 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
       rubricCategoryKeys: rubricKeys,
       documentContext,
+      scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
+      ...(holisticSelected
+        ? {
+            holistic: {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+              tier: (parsed as any).overallTier ?? null,
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+              requestedPoints:
+                typeof (parsed as any).overallPoints === 'number'
+                  ? (parsed as any).overallPoints
+                  : null,
+              storedPoints: overallScore,
+              totalPoints:
+                submission.document.assignment?.pointValue ??
+                resolvedGradingConfig.rubricTotalPoints ??
+                null,
+            },
+          }
+        : {}),
+      ...(holisticSelected && holisticFallbackReason
+        ? {
+            holisticFallback: {
+              reason: holisticFallbackReason,
+              usedPointsFallback: true,
+            },
+          }
+        : {}),
     } satisfies Prisma.InputJsonValue,
     ...(!submission.gradedAt
       ? { gradedAt: now, gradedByMembershipId: gradeActorMembershipId }
@@ -1572,6 +1916,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
               rubricCategoryKeys: rubricKeys,
               gradedAt: now.toISOString(),
               documentContext,
+              scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
             } satisfies Prisma.InputJsonValue,
           },
           select: { id: true },
@@ -1605,7 +1950,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
   // Dev-only: attempt Blackboard mock AGS passback when configured
   try {
-    await maybePostGradeToBlackboard({ numericPercentage });
+    await maybePostGradeToBlackboard({ numericPercentage: ltiPassbackPercentage });
   } catch (error) {
     console.warn('Blackboard AGS passback (mock) failed', { error });
   }

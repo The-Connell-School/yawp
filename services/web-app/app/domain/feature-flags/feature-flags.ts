@@ -22,11 +22,22 @@
 export const DAILY_PAGES_WRITING_CONDITIONS_FLAG =
   'daily_pages_paragraph_type_and_writing_time' as const;
 
+/**
+ * YAWP! Lesson Planner (#374). Off: nav and deep links are hidden and every
+ * planner route/API returns 404. Existing lesson data is kept.
+ */
+export const LESSON_PLANNER_FLAG = 'lesson_planner' as const;
+
 export const FEATURE_FLAGS = {
   [DAILY_PAGES_WRITING_CONDITIONS_FLAG]: {
     label: 'Daily Pages: paragraph type and writing time',
     description:
       'Shows "Paragraph type" and "Time students have to write" on the assignment form, and lets the tutor, grading assistant, grammar checker and class summary use them. Off: both are hidden and ignored; values already saved are kept and come back when it is turned on.',
+  },
+  [LESSON_PLANNER_FLAG]: {
+    label: 'Lesson Planner',
+    description:
+      'Shows the Lesson Planner in the teacher nav and allows planner pages, exports, and AI generation. Off: entry points are hidden and direct URLs are blocked; saved lessons are not deleted.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

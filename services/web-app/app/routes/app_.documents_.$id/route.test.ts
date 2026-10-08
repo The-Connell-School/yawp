@@ -53,6 +53,7 @@ const requireMembership = mock();
 const requireMutableRequest = mock();
 const redirectWithToast = mock();
 const ensureAssignmentModuleSessionsForDocument = mock();
+const loadDocumentNavigationNeighbors = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -65,6 +66,9 @@ mock.module('~/utils/toast.server', () => ({
 }));
 mock.module('~/domain/documents.server', () => ({
   ensureAssignmentModuleSessionsForDocument,
+}));
+mock.module('~/domain/grading/grading-queue.server', () => ({
+  loadDocumentNavigationNeighbors,
 }));
 
 mock.module('./comments', () => ({ Comments: () => null }));
@@ -253,8 +257,10 @@ describe('app_.documents_.$id loader', () => {
     requireMutableRequest.mockReset();
     redirectWithToast.mockReset();
     ensureAssignmentModuleSessionsForDocument.mockReset();
+    loadDocumentNavigationNeighbors.mockReset();
 
     ensureAssignmentModuleSessionsForDocument.mockResolvedValue(false);
+    loadDocumentNavigationNeighbors.mockResolvedValue(null);
     requireUserId.mockResolvedValue('user-1');
     requireMutableRequest.mockResolvedValue(undefined);
     requireMembership.mockResolvedValue({
@@ -456,6 +462,79 @@ describe('app_.documents_.$id loader', () => {
       })
     );
     expect(response.redirectedTo).toBe('/app');
+  });
+
+  test('redacts gradedAt from doc.submissions and submissions for student owners', async () => {
+    const gradedAt = new Date('2026-08-03T12:00:00.000Z');
+    const submissionRow = {
+      id: 'sub-with-grade',
+      title: 'In progress',
+      submittedAt: gradedAt,
+      gradedAt,
+      releasedAt: null,
+      archivedAt: null,
+      unsubmittedAt: null,
+    };
+    documentOnce({
+      ...makeDocument({ includeSnapshot: false }),
+      submissions: [submissionRow],
+    });
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'STUDENT',
+      teacherProfile: null,
+      organization: { id: 'org-1' },
+    });
+
+    const response = (await loader({
+      request: new Request(
+        'https://example.test/app/documents/doc-1?revise=1'
+      ),
+      params: { id: 'doc-1' },
+    } as never)) as any;
+
+    expect(response.data.submissions[0]).not.toHaveProperty('gradedAt');
+    expect(response.data.doc.submissions[0]).not.toHaveProperty('gradedAt');
+    expect(response.data.doc.submissions).toEqual(response.data.submissions);
+  });
+
+  test('keeps gradedAt on doc.submissions and submissions for teachers', async () => {
+    const gradedAt = new Date('2026-08-03T12:00:00.000Z');
+    const submissionRow = {
+      id: 'sub-with-grade',
+      title: 'In progress',
+      submittedAt: gradedAt,
+      gradedAt,
+      releasedAt: null,
+      archivedAt: null,
+      unsubmittedAt: null,
+    };
+    documentOnce({
+      ...makeDocument({ includeSnapshot: false }),
+      membership: {
+        id: 'student-profile',
+        userId: 'student-user',
+        user: { name: 'Student' },
+        classesAsStudent: [],
+      },
+      submissions: [submissionRow],
+    });
+    requireMembership.mockResolvedValue({
+      id: 'teacher-profile',
+      role: 'TEACHER',
+      teacherProfile: { id: 'teacher-profile' },
+      organization: { id: 'org-1' },
+    });
+
+    const response = (await loader({
+      request: new Request(
+        'https://example.test/app/documents/doc-1?revise=1'
+      ),
+      params: { id: 'doc-1' },
+    } as never)) as any;
+
+    expect(response.data.submissions[0].gradedAt).toEqual(gradedAt);
+    expect(response.data.doc.submissions[0].gradedAt).toEqual(gradedAt);
   });
 });
 

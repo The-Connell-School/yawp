@@ -8,6 +8,7 @@ import { AP_HISTORY_SEED_MODULES } from '../../../packages/prisma/scripts/ap-his
 import { UNIVERSAL_TUTOR_BLOCK } from '../../../packages/prisma/scripts/universal-tutor-block';
 import bcrypt from 'bcryptjs';
 import { E2E_UA_ORGANIZATION_ID } from './constants';
+import cristoReyHornbuckleRubric from '../app/domain/rubrics/library/cristo-rey-hornbuckle-five-paragraph-essay.json' with { type: 'json' };
 
 let prisma: E2EPrismaClient | null = null;
 
@@ -84,7 +85,10 @@ export type E2EContext = {
   assignmentTypeId: string;
   dailyPagesAssignmentTypeId: string;
   classStarterAssignmentTypeId: string;
+  exitTicketAssignmentTypeId: string;
   thesisEssayAssignmentTypeId: string;
+  /** Cristo Rey Hornbuckle holistic tier rubric (6 categories, 1–4 bands). */
+  holisticEssayAssignmentTypeId: string;
   apHistoryAssignmentTypeId: string;
   /** Assignment type with allowsImageUploads on (the GBA 300 expansion rollout). */
   imageUploadAssignmentTypeId: string;
@@ -105,6 +109,22 @@ export type E2EContext = {
   gradeId: string;
   /** Graded but not released; has inline comment (student must not see highlights until release) */
   unreleasedGradedSubmissionId: string;
+  /** Isolated fixture for grade-privacy smoke (safe to release in that spec only) */
+  gradePrivacy: {
+    assignmentTypeId: string;
+    documentId: string;
+    /** Never released; used for unreleased loader privacy assertions */
+    submissionId: string;
+    /** Released only by grade-privacy E2E; separate from submissionId so retries stay isolated */
+    releaseSubmissionId: string;
+    unreleasedOverallScore: number;
+    unreleasedNumericPercentage: number;
+    probeComment: string;
+    releaseComment: string;
+    dailyPagesAssignmentTypeId: string;
+    dailyPagesDocumentId: string;
+    dailyPagesUnreleasedOverallScore: number;
+  };
   ua: {
     organizationId: string;
     schoolId: string;
@@ -509,6 +529,85 @@ export async function seedE2E(): Promise<E2EContext> {
     select: { id: true },
   });
 
+  const holisticEssayAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'In-class Essay/Analysis (Cristo Rey)',
+      description:
+        'Holy Family Cristo Rey five-paragraph essay with holistic tier scoring.',
+      position: 5,
+      ownerOrgId: org.id,
+      scoringScaleJson: cristoReyHornbuckleRubric.scoringScale,
+      rubricJson: cristoReyHornbuckleRubric.rubric,
+      gradingPromptConfigJson: cristoReyHornbuckleRubric.promptConfig,
+      gradingOutputSchemaJson: {
+        ...cristoReyHornbuckleRubric.outputSchema,
+        scoringMode: 'holistic_tier',
+        teacherNotesEnabled: true,
+      },
+      gradingCalibrationNotes: cristoReyHornbuckleRubric.calibrationNotes,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: [
+          {
+            title: 'In-class Essay/Analysis',
+            position: 1,
+            description: 'Five-paragraph essay or literary analysis.',
+            instructions: {
+              create: [
+                {
+                  title: 'Draft',
+                  prompt:
+                    'Write a five-paragraph essay that answers the prompt with a clear thesis and evidence.',
+                  position: 1,
+                  showChatButton: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  const exitTicketAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'Exit Ticket',
+      // The web app keys every exit ticket behaviour off this, not the title.
+      kind: 'exit_ticket',
+      description:
+        'A short piece of writing at the end of a lesson that shows whether it landed.',
+      position: 4,
+      ownerOrgId: org.id,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: [
+          {
+            title: 'Exit Ticket',
+            position: 1,
+            description: 'Answer the exit ticket in your own words.',
+            instructions: {
+              create: [
+                {
+                  title: 'Write',
+                  prompt:
+                    'Answer the prompt in your own words, and explain your thinking.',
+                  position: 1,
+                  showChatButton: false,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
   const thesisEssayAssignmentType = await prisma.assignmentType.create({
     data: {
       title: 'The Thesis-Driven Essay',
@@ -887,6 +986,171 @@ export async function seedE2E(): Promise<E2EContext> {
     },
   });
 
+  const gradePrivacyProbeComment =
+    'GRADE_PRIVACY_PROBE_COMMENT must stay hidden until release.';
+  const gradePrivacyReleaseComment =
+    'GRADE_PRIVACY_RELEASE_COMMENT visible only after release.';
+  const { assignment: gradePrivacyAssignment } = await createDeployedAssignment({
+    prisma,
+    classId: seededClass.id,
+    assignmentTypeId: assignmentType.id,
+    title: 'E2E grade privacy release',
+    prompt: 'Write for the isolated grade-privacy smoke test.',
+    pointValue: 100,
+  });
+  const gradePrivacyDocText =
+    'GRADE_PRIVACY_MARKER body for isolated release test.';
+  const gradePrivacyDocHtml = `<p>${gradePrivacyDocText}</p>`;
+  const gradePrivacyDoc = await prisma.document.create({
+    data: {
+      title: 'Grade privacy release doc',
+      text: gradePrivacyDocText,
+      html: gradePrivacyDocHtml,
+      revision: 1,
+      membershipId: membership.id,
+      assignmentTypeId: assignmentType.id,
+      assignmentId: gradePrivacyAssignment.id,
+      classAssignmentId: seededClassAssignment.id,
+    },
+    select: { id: true },
+  });
+  const gradePrivacyUnreleasedOverallScore = 80;
+  const gradePrivacyUnreleasedNumericPercentage = 80;
+  const gradePrivacySubmission = await prisma.submission.create({
+    data: {
+      documentId: gradePrivacyDoc.id,
+      html: gradePrivacyDocHtml,
+      text: gradePrivacyDocText,
+      title: 'Grade privacy release submission',
+      submittedAt: new Date(),
+      gradedByMembershipId: seededTeacherMembership.id,
+      gradedAt: new Date(),
+      overallScore: gradePrivacyUnreleasedOverallScore,
+      numericPercentage: gradePrivacyUnreleasedNumericPercentage,
+      score: '80/100',
+      releasedAt: null,
+    },
+    select: { id: true },
+  });
+  await prisma.submissionComment.create({
+    data: {
+      submissionId: gradePrivacySubmission.id,
+      membershipId: seededTeacherMembership.id,
+      content: gradePrivacyProbeComment,
+      excerpt: 'GRADE_PRIVACY_PROBE',
+      occurrence: 1,
+    },
+  });
+  const gradePrivacyReleaseDocText =
+    'GRADE_PRIVACY_RELEASE_MARKER body for release-only smoke test.';
+  const gradePrivacyReleaseDocHtml = `<p>${gradePrivacyReleaseDocText}</p>`;
+  const gradePrivacyReleaseDoc = await prisma.document.create({
+    data: {
+      title: 'Grade privacy release-only doc',
+      text: gradePrivacyReleaseDocText,
+      html: gradePrivacyReleaseDocHtml,
+      revision: 1,
+      membershipId: membership.id,
+      assignmentTypeId: assignmentType.id,
+      assignmentId: gradePrivacyAssignment.id,
+      classAssignmentId: seededClassAssignment.id,
+    },
+    select: { id: true },
+  });
+  const gradePrivacyReleaseSubmission = await prisma.submission.create({
+    data: {
+      documentId: gradePrivacyReleaseDoc.id,
+      html: gradePrivacyReleaseDocHtml,
+      text: gradePrivacyReleaseDocText,
+      title: 'Grade privacy release-only submission',
+      submittedAt: new Date(),
+      gradedByMembershipId: seededTeacherMembership.id,
+      gradedAt: new Date(),
+      overallScore: 80,
+      numericPercentage: 80,
+      score: '80/100',
+      releasedAt: null,
+    },
+    select: { id: true },
+  });
+  await prisma.submissionComment.create({
+    data: {
+      submissionId: gradePrivacyReleaseSubmission.id,
+      membershipId: seededTeacherMembership.id,
+      content: gradePrivacyReleaseComment,
+      excerpt: 'GRADE_PRIVACY_RELEASE_MARKER',
+      occurrence: 1,
+    },
+  });
+  await prisma.assignmentModuleSession.create({
+    data: {
+      assignmentModuleId: modulesByPosition[0].id,
+      documentId: gradePrivacyDoc.id,
+      title: 'E2E Grade Privacy Session',
+      instructionsCompleted: 0,
+    },
+  });
+  await prisma.assignmentModuleSession.create({
+    data: {
+      assignmentModuleId: modulesByPosition[0].id,
+      documentId: gradePrivacyReleaseDoc.id,
+      title: 'E2E Grade Privacy Release Session',
+      instructionsCompleted: 0,
+    },
+  });
+
+  const dailyPagesModule = await prisma.assignmentModule.findFirst({
+    where: { assignmentTypeId: dailyPagesAssignmentType.id },
+    select: { id: true },
+  });
+  const { assignment: dailyPagesPrivacyAssignment } =
+    await createDeployedAssignment({
+      prisma,
+      classId: seededClass.id,
+      assignmentTypeId: dailyPagesAssignmentType.id,
+      title: 'E2E Daily Pages grade privacy',
+      prompt: 'Daily Pages row for overallScore leak checks.',
+    });
+  const dailyPagesPrivacyText = 'Daily Pages grade privacy marker paragraph.';
+  const dailyPagesPrivacyHtml = `<p>${dailyPagesPrivacyText}</p>`;
+  const dailyPagesPrivacyDoc = await prisma.document.create({
+    data: {
+      title: 'Daily Pages grade privacy doc',
+      text: dailyPagesPrivacyText,
+      html: dailyPagesPrivacyHtml,
+      revision: 1,
+      membershipId: membership.id,
+      assignmentTypeId: dailyPagesAssignmentType.id,
+      assignmentId: dailyPagesPrivacyAssignment.id,
+      classAssignmentId: seededClassAssignment.id,
+    },
+    select: { id: true },
+  });
+  const dailyPagesPrivacyOverallScore = 44;
+  await prisma.submission.create({
+    data: {
+      documentId: dailyPagesPrivacyDoc.id,
+      html: dailyPagesPrivacyHtml,
+      text: dailyPagesPrivacyText,
+      title: 'Daily Pages grade privacy submission',
+      submittedAt: new Date(),
+      gradedByMembershipId: seededTeacherMembership.id,
+      gradedAt: new Date(),
+      overallScore: dailyPagesPrivacyOverallScore,
+      releasedAt: null,
+    },
+  });
+  if (dailyPagesModule) {
+    await prisma.assignmentModuleSession.create({
+      data: {
+        assignmentModuleId: dailyPagesModule.id,
+        documentId: dailyPagesPrivacyDoc.id,
+        title: 'E2E Daily Pages Privacy Session',
+        instructionsCompleted: 0,
+      },
+    });
+  }
+
   // 5. E2E context metadata
   // 6. Link the edited doc to module session (module 1; submitted doc uses module 2)
   await prisma.assignmentModuleSession.create({
@@ -1005,6 +1269,17 @@ export async function seedE2E(): Promise<E2EContext> {
 
   await seedFreeClassroomForE2E(prisma);
 
+  await prisma.setting.upsert({
+    where: { name: 'feature_flag.lesson_planner' },
+    create: {
+      name: 'feature_flag.lesson_planner',
+      value: 'true',
+      valueType: 'boolean',
+      description: 'Enabled for E2E',
+    },
+    update: { value: 'true', updatedAt: new Date() },
+  });
+
   return {
     organizationId: org.id,
     schoolId: school.id,
@@ -1022,7 +1297,9 @@ export async function seedE2E(): Promise<E2EContext> {
     assignmentTypeId: assignmentType.id,
     dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
     classStarterAssignmentTypeId: classStarterAssignmentType.id,
+    exitTicketAssignmentTypeId: exitTicketAssignmentType.id,
     thesisEssayAssignmentTypeId: thesisEssayAssignmentType.id,
+    holisticEssayAssignmentTypeId: holisticEssayAssignmentType.id,
     apHistoryAssignmentTypeId: apHistoryAssignmentType.id,
     imageUploadAssignmentTypeId: imageUploadAssignmentType.id,
     imageUploadDocumentId: imageUploadDoc.id,
@@ -1038,6 +1315,19 @@ export async function seedE2E(): Promise<E2EContext> {
     snapshotId: gradedSubmission.id,
     gradeId: gradedSubmission.id,
     unreleasedGradedSubmissionId: unreleasedGradedSubmission.id,
+    gradePrivacy: {
+      assignmentTypeId: assignmentType.id,
+      documentId: gradePrivacyDoc.id,
+      submissionId: gradePrivacySubmission.id,
+      releaseSubmissionId: gradePrivacyReleaseSubmission.id,
+      unreleasedOverallScore: gradePrivacyUnreleasedOverallScore,
+      unreleasedNumericPercentage: gradePrivacyUnreleasedNumericPercentage,
+      probeComment: gradePrivacyProbeComment,
+      releaseComment: gradePrivacyReleaseComment,
+      dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
+      dailyPagesDocumentId: dailyPagesPrivacyDoc.id,
+      dailyPagesUnreleasedOverallScore: dailyPagesPrivacyOverallScore,
+    },
     ua: {
       organizationId: uaOrganization.id,
       schoolId: uaSchool.id,

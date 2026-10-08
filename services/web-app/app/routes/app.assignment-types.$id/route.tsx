@@ -1,6 +1,6 @@
 import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
@@ -27,6 +27,8 @@ import {
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
 import { useUser } from '~/hooks/useUser.js';
+import { useRouteLoaderData } from 'react-router';
+import type { Route as RootRoute } from '../../+types/root';
 import {
   createDocumentForAssignmentType,
   DocumentCreationError,
@@ -35,6 +37,7 @@ import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server'
 import { listSavedThesisPrompts } from '~/domain/thesis-prompts/saved-prompts.server';
 import { listSavedDailyPagesPrompts } from '~/domain/daily-pages-prompts/saved-prompts.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { stripUnreleasedGradeFromSubmissionSummaries } from '~/domain/submissions/student-submission-grade-visibility.server';
 import {
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
@@ -58,6 +61,8 @@ import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
+import { AboutExitTicket } from './about-exit-ticket/about-exit-ticket';
+import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
 import {
   resolvePromptLibraryVariant,
   usesOpenEndedLibrary,
@@ -91,6 +96,12 @@ import {
   toLibraryEntries,
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
+import { FROM_LESSON_PARAM } from '~/domain/lesson-planner/daily-pages-block';
+import {
+  EXIT_TICKET_PARAMS,
+  readExitTicketPrefill,
+  type ExitTicketPrefill,
+} from '~/domain/lesson-planner/exit-ticket-block';
 import { ThesisPromptsLibrary } from './thesis-prompts-library/thesis-prompts-library';
 import { ThesisPromptGenerator } from './thesis-prompts-library/thesis-prompt-generator';
 import { ThesisTeacherDirections } from './thesis-prompts-library/thesis-teacher-directions';
@@ -107,6 +118,9 @@ import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
 import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
+
+/** How the Lesson Planner hands a written warm-up to this page. */
+const NEW_PROMPT_PARAM = 'newPrompt';
 
 const ALL_PROMPTS = toLibraryEntries(promptsRaw as LibraryPrompt[]);
 const ALL_THESIS_PROMPTS = toThesisLibraryEntries(
@@ -129,6 +143,7 @@ type AssignmentTypeDetailRow = {
   title: string;
   description: string | null;
   systemKey: string | null;
+  kind: string | null;
   collaborationSupported: boolean;
   image: { id: string } | null;
   assignmentModules: Array<{
@@ -411,6 +426,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title: true,
         description: true,
         systemKey: true,
+        kind: true,
         collaborationSupported: true,
         image: { select: { id: true } },
         assignmentModules: {
@@ -512,21 +528,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // "My prompts": prompts this teacher generated and kept, shown in the same
   // library alongside the fixed corpus and filterable on their own.
   const savedThesisPrompts =
-    profile.role === "TEACHER" && isThesisEssay
+    profile.role === 'TEACHER' && isThesisEssay
       ? await listSavedThesisPrompts({
           membershipId: profile.id,
           assignmentTypeId: assignmentType.id,
         })
       : [];
   const thesisLibraryEntries =
-    profile.role === "TEACHER" && isThesisEssay
+    profile.role === 'TEACHER' && isThesisEssay
       ? [
           ...savedThesisPrompts.map(savedThesisPromptToLibraryEntry),
           ...ALL_THESIS_PROMPTS,
         ]
       : [];
   const thesisPromptLibrary =
-    profile.role === "TEACHER" && isThesisEssay
+    profile.role === 'TEACHER' && isThesisEssay
       ? {
           prompts: applyThesisFilters(
             thesisLibraryEntries,
@@ -573,19 +589,46 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentTypeOffersParagraphModes =
     creationTypeDefaults?.offersParagraphModes ?? false;
 
+  const sanitizeDocumentListForStudents = <
+    T extends {
+      submissions: Array<
+        { releasedAt?: Date | string | null } & Record<string, unknown>
+      >;
+    },
+  >(
+    rows: T[]
+  ) =>
+    rows.map((document) => ({
+      ...document,
+      submissions: stripUnreleasedGradeFromSubmissionSummaries(
+        document.submissions
+      ),
+    }));
+
+  const isStudent = profile.role === 'STUDENT';
+
   return dataResponse({
     writingConditionsEnabled,
     assignmentType,
     assignmentTypeGradesGrammar,
     assignmentTypeDefaultWritingTimeMinutes,
     assignmentTypeOffersParagraphModes,
-    documents,
-    archivedDocuments,
+    documents: isStudent
+      ? sanitizeDocumentListForStudents(documents)
+      : documents,
+    archivedDocuments: isStudent
+      ? sanitizeDocumentListForStudents(archivedDocuments)
+      : archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
     shortFormPromptLibrary,
     thesisPromptLibrary,
     apHistoryLibrary,
+    // Teacher-facing guidance, so it follows the same role gate the other
+    // assignment types' directions do.
+    showAboutExitTicket:
+      profile.role === 'TEACHER' &&
+      isExitTicketAssignmentType(assignmentType),
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -677,12 +720,35 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
 }
 
+/**
+ * Whether the modules accordion earns its place on this page.
+ *
+ * Every assignment type carries at least one module — it is what a direct
+ * document is created from — but an exit ticket's is a single row whose
+ * description restates the prompt, sitting directly under directions that
+ * already explain the whole thing. Hidden there rather than deleted, because
+ * the module itself is still what New -> Document builds from.
+ */
+export function showModulesAccordion(
+  assignmentType: { kind?: string | null },
+  moduleCount: number
+): boolean {
+  if (moduleCount === 0) return false;
+  return !isExitTicketAssignmentType(assignmentType);
+}
+
 export default function AppAssignmentTypesIdRoute() {
   const user = useUser();
-  const [searchParams] = useSearchParams();
+  const lessonPlannerEnabled =
+    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
+      ?.lessonPlannerEnabled ?? false;
   const data = useLoaderData<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const hasModules = data.assignmentType.assignmentModules.length > 0;
+  const modulesVisible = showModulesAccordion(
+    data.assignmentType,
+    data.assignmentType.assignmentModules.length
+  );
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
@@ -691,6 +757,8 @@ export default function AppAssignmentTypesIdRoute() {
   const [customEssayType, setCustomEssayType] =
     useState<CustomEssayType | null>(null);
   const [libraryPrompt, setLibraryPrompt] = useState('');
+  const [plannedExitTicket, setPlannedExitTicket] =
+    useState<ExitTicketPrefill | null>(null);
   const [apHistoryEntry, setApHistoryEntry] = useState<{
     externalKey: string;
     title: string;
@@ -699,12 +767,63 @@ export default function AppAssignmentTypesIdRoute() {
     sources?: ApHistorySourceCardData[];
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
+
+  // The Lesson Planner sends a teacher here with a warm-up it wrote, to be
+  // assigned rather than retyped. Open the sheet on it once, then drop the
+  // param so a refresh (or the back button) does not reopen it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const incomingPrompt = searchParams.get(NEW_PROMPT_PARAM);
+  // Kept in the URL after the prompt is consumed: a teacher who followed a
+  // button out of a half-finished lesson needs the way back to still be there
+  // once the sheet has done its job.
+  const fromLesson = searchParams.get(FROM_LESSON_PARAM);
+  useEffect(() => {
+    if (!incomingPrompt) return;
+    setLibraryPrompt(incomingPrompt);
+    setApHistoryEntry(null);
+    setIsAssignmentSheetOpen(true);
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete(NEW_PROMPT_PARAM);
+        return next;
+      },
+      { replace: true, preventScrollReset: true }
+    );
+  }, [incomingPrompt, setSearchParams]);
+
   const showShortFormLibrary = data.shortFormPromptLibrary != null;
   // Daily Pages carries one module, whose blurb is freewrite-era copy telling
   // students to throw ideas around — which the about section directly above it
   // now contradicts. The module row itself stays: documents are created inside
   // it, and `hasModules` still gates New → Document.
-  const showModules = hasModules && !showShortFormLibrary;
+  const showModules = modulesVisible && !showShortFormLibrary;
+  // The same door, for the other end of the lesson: the planner sends a
+  // teacher here with the exit ticket its plan ended on, already answered.
+  // They still read the composed prompt in the sheet before a class sees it.
+  const incomingExitTicketMode = searchParams.get(EXIT_TICKET_PARAMS.mode);
+  const incomingExitTicket = useMemo(
+    () => (incomingExitTicketMode ? readExitTicketPrefill(searchParams) : null),
+    [incomingExitTicketMode, searchParams]
+  );
+  useEffect(() => {
+    if (!incomingExitTicketMode) return;
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        for (const key of Object.values(EXIT_TICKET_PARAMS)) next.delete(key);
+        return next;
+      },
+      { replace: true, preventScrollReset: true }
+    );
+    // A hand-edited link that describes no ticket we can build opens nothing,
+    // rather than a sheet answered with something nobody chose.
+    if (!incomingExitTicket) return;
+    setPlannedExitTicket(incomingExitTicket);
+    setApHistoryEntry(null);
+    setIsAssignmentSheetOpen(true);
+  }, [incomingExitTicketMode, incomingExitTicket, setSearchParams]);
+
   const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -723,10 +842,23 @@ export default function AppAssignmentTypesIdRoute() {
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
       <div className="mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5">
         <div className="mb-4 flex justify-between gap-2">
+          {/* Arriving from a lesson, the way back is to that lesson. The
+              planner embeds this page's creator inside a plan, so a teacher
+              gets here mid-lesson and "Back to dashboard" strands them. */}
           <Button asChild variant="outline">
-            <Link to="/app" className="w-fit">
-              <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
-            </Link>
+            {fromLesson && lessonPlannerEnabled ? (
+              <Link
+                to={`/app/lesson-planner?c=${fromLesson}`}
+                className="w-fit"
+                data-testid="back-to-lesson"
+              >
+                <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to your lesson
+              </Link>
+            ) : (
+              <Link to="/app" className="w-fit">
+                <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
+              </Link>
+            )}
           </Button>
 
           {isTeacher ? (
@@ -807,6 +939,7 @@ export default function AppAssignmentTypesIdRoute() {
                   data.assignmentType.collaborationSupported
                 }
                 assignmentTypeGradesGrammar={data.assignmentTypeGradesGrammar}
+                assignmentTypeKind={data.assignmentType.kind}
                 assignmentTypeDefaultWritingTimeMinutes={
                   data.assignmentTypeDefaultWritingTimeMinutes
                 }
@@ -819,6 +952,7 @@ export default function AppAssignmentTypesIdRoute() {
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
+                plannedExitTicket={plannedExitTicket}
                 titleRequired={showThesisLibrary}
                 apHistoryEntry={apHistoryEntry}
               />
@@ -876,6 +1010,7 @@ export default function AppAssignmentTypesIdRoute() {
             </p>
           </div>
         </div>
+        {data.showAboutExitTicket ? <AboutExitTicket /> : null}
         {data.promptLibrary ? (
           <TeacherDirections variant={data.promptLibrary.variant} />
         ) : null}

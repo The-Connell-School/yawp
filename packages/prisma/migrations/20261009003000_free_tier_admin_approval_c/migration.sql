@@ -1,5 +1,5 @@
 -- #416: deploy after `20261007235900_free_classroom_assignment_kind_usage` (#414).
--- `20261007193000_user_handle_accounts` ships with #413 on main (not duplicated here).
+-- `20261008140000_user_handle_accounts` ships with #413 on main (not duplicated here).
 SET lock_timeout = '5s';
 
 DO $$ BEGIN

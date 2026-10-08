@@ -6,6 +6,7 @@ const prisma = {
   orgMembership: { create: mock(), findFirst: mock() },
   session: { create: mock(), deleteMany: mock() },
   password: { upsert: mock() },
+  $executeRaw: mock(async () => undefined),
   $transaction: mock(),
 };
 
@@ -14,16 +15,20 @@ mock.module('~/utils/auth.server', () => ({
   getPasswordHash: async () => 'hash',
   getSessionExpirationDateForUser: () => new Date('2030-01-01'),
 }));
+const clearFailedLoginRateLimitsForTarget = mock(async () => undefined);
+mock.module('~/utils/rate-limit.server', () => ({
+  clearFailedLoginRateLimitsForTarget,
+}));
+
+afterAll(() => {
+  mock.restore();
+});
 
 const {
   findFreeTierClassesByCode,
   registerFreeTierStudent,
   teacherResetStudentPassword,
 } = await import('./student-join.server');
-
-afterAll(() => {
-  mock.restore();
-});
 
 describe('student-join', () => {
   beforeEach(() => {
@@ -94,6 +99,7 @@ describe('student-join', () => {
         user: {
           id: 'student-user',
           email: null,
+          username: 'samstudent',
           isAdmin: false,
           isSuperAdmin: false,
           memberships: [{ role: 'STUDENT', isActive: true }],
@@ -111,5 +117,9 @@ describe('student-join', () => {
 
     expect(result.status).toBe('ok');
     expect(prisma.$transaction).toHaveBeenCalled();
+    expect(clearFailedLoginRateLimitsForTarget).toHaveBeenCalledWith({
+      route: '/auth/login',
+      targetKey: 'samstudent',
+    });
   });
 });

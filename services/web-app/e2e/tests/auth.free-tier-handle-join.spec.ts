@@ -1,15 +1,21 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { createDeployedAssignment } from '../db-helpers';
+import {
+  createDeployedAssignment,
+  ensureDocumentUnsubmitted,
+} from '../db-helpers';
 import { generateStudentJoinToken } from '../../app/utils/student-join-token';
 import bcrypt from 'bcryptjs';
 
 test.describe('Free-tier handle student', () => {
+  // Smoke: join link → submit → teacher reset → temp login → password change → re-login
   test('join link flow: write, submit, grading queue, password reset', async ({
     page,
     browser,
     helpers,
+    e2eContext: _e2eContext,
   }) => {
+    test.setTimeout(120_000);
     const prisma = createE2EPrismaClient();
     const handle = `e2ehandle${Date.now()}`.slice(0, 20);
     const password = 'yawp-test-pass-1';
@@ -30,6 +36,24 @@ test.describe('Free-tier handle student', () => {
         position: 1,
         ownerOrgId: org.id,
         organizationAssignments: { create: { organizationId: org.id } },
+        assignmentModules: {
+          create: [
+            {
+              title: 'Writing',
+              position: 1,
+              instructions: {
+                create: [
+                  {
+                    title: 'Draft',
+                    prompt: 'Write your paragraph.',
+                    position: 1,
+                    showChatButton: true,
+                  },
+                ],
+              },
+            },
+          ],
+        },
       },
     });
     const school = await prisma.school.create({
@@ -69,7 +93,7 @@ test.describe('Free-tier handle student', () => {
         teachers: { connect: { id: teacherMembership.id } },
       },
     });
-    const { assignment } = await createDeployedAssignment({
+    const { assignment, classAssignment } = await createDeployedAssignment({
       prisma,
       classId: klass.id,
       assignmentTypeId: assignmentType.id,
@@ -90,12 +114,12 @@ test.describe('Free-tier handle student', () => {
 
       await page.goto(`/app/my-classes/${klass.id}`);
       await expect(page.getByTestId('student-class-detail')).toBeVisible();
-      const assignmentCard = page
-        .getByRole('button', { name: /Free tier writing/i })
-        .first();
-      await expect(assignmentCard).toBeVisible({ timeout: 15000 });
-      await assignmentCard.click();
-      await page.waitForURL('**/app/documents/**', { timeout: 15000 });
+      const startButton = page.locator(
+        `form[action="/app/class-assignments/${classAssignment.id}/start"] button`
+      );
+      await expect(startButton).toBeVisible({ timeout: 15000 });
+      await startButton.click();
+      await page.waitForURL('**/app/documents/**', { timeout: 30000 });
 
       await helpers.waitForEditorReady();
       await helpers.typeInEditor('Handle student draft for grading.');
@@ -125,35 +149,79 @@ test.describe('Free-tier handle student', () => {
       });
 
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=students`);
-      await teacherPage.locator('input[name="temporaryPassword"]').fill(tempPassword);
-      await teacherPage.getByRole('button', { name: 'Reset login' }).click();
+      const studentRow = teacherPage
+        .getByRole('row')
+        .filter({ hasText: `@${handle}` });
+      await studentRow.getByRole('button', { name: 'Reset login' }).click();
+      const resetDialog = teacherPage.getByTestId(
+        'handle-student-password-reset-dialog'
+      );
+      await resetDialog.getByLabel('Temporary password').fill(tempPassword);
+      await resetDialog
+        .getByRole('button', { name: 'Set temporary password' })
+        .click();
+      await expect(
+        resetDialog.getByRole('heading', { name: 'Temporary password set' })
+      ).toBeVisible({ timeout: 15000 });
+      await resetDialog.getByRole('button', { name: 'Done' }).click();
       await teacherContext.close();
 
-      await page.goto('/app');
-      await expect(page).toHaveURL(/required-password-change/);
+      await page.request.post('/auth/logout');
+      await page.goto('/auth/login');
+      await page.getByLabel('Email or handle').fill(handle);
+      await page.getByLabel('Password').fill(tempPassword);
+      await page.getByRole('button', { name: 'Log in' }).click();
+      await expect(page).toHaveURL(/required-password-change/, {
+        timeout: 15000,
+      });
       await page.getByLabel('New password', { exact: true }).fill(newPassword);
       await page.getByLabel('Confirm new password').fill(newPassword);
       await page.getByRole('button', { name: 'Save and continue' }).click();
       await expect(page).toHaveURL(/\/app/);
 
-      await page.goto('/auth/logout');
+      await page.request.post('/auth/logout');
       await page.goto('/auth/login');
       await page.getByLabel('Email or handle').fill(handle);
       await page.getByLabel('Password').fill(newPassword);
       await page.getByRole('button', { name: 'Log in' }).click();
       await expect(page).toHaveURL(/\/app/);
     } finally {
+      const student = await prisma.user.findFirst({
+        where: { username: handle },
+        select: {
+          id: true,
+          memberships: { where: { organizationId: org.id }, select: { id: true } },
+        },
+      });
+      const studentMembershipId = student?.memberships[0]?.id;
+      if (student && studentMembershipId) {
+        const documents = await prisma.document.findMany({
+          where: { membershipId: studentMembershipId },
+          select: { id: true },
+        });
+        for (const doc of documents) {
+          await ensureDocumentUnsubmitted({ prisma, documentId: doc.id });
+          await prisma.documentComment
+            .deleteMany({ where: { documentId: doc.id } })
+            .catch(() => {});
+        }
+        await prisma.document.deleteMany({ where: { membershipId: studentMembershipId } });
+        await prisma.session.deleteMany({ where: { userId: student.id } });
+        await prisma.password.deleteMany({ where: { userId: student.id } }).catch(() => {});
+        await prisma.orgMembership.deleteMany({ where: { userId: student.id } });
+        await prisma.user.delete({ where: { id: student.id } }).catch(() => {});
+      }
+      await prisma.classAssignment
+        .deleteMany({ where: { classId: klass.id } })
+        .catch(() => {});
       await prisma.assignment.delete({ where: { id: assignment.id } }).catch(() => {});
       await prisma.class.delete({ where: { id: klass.id } }).catch(() => {});
-      await prisma.orgMembership.deleteMany({ where: { organizationId: org.id } });
+      await prisma.orgMembership
+        .deleteMany({ where: { organizationId: org.id } })
+        .catch(() => {});
       await prisma.school.delete({ where: { id: school.id } }).catch(() => {});
       await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
       await prisma.user.delete({ where: { id: teacherUser.id } }).catch(() => {});
-      const student = await prisma.user.findFirst({ where: { username: handle } });
-      if (student) {
-        await prisma.session.deleteMany({ where: { userId: student.id } });
-        await prisma.user.delete({ where: { id: student.id } });
-      }
     }
   });
 });

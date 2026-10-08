@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   DAILY_PAGES_WRITING_CONDITIONS_FLAG,
+  LESSON_PLANNER_FLAG,
   FEATURE_FLAG_KEYS,
   featureFlagSettingName,
   isFeatureFlagKey,
@@ -12,6 +13,14 @@ describe('feature flag registry', () => {
   test('has the Daily Pages writing-conditions flag', () => {
     expect(FEATURE_FLAG_KEYS).toContain(DAILY_PAGES_WRITING_CONDITIONS_FLAG);
     expect(isFeatureFlagKey(DAILY_PAGES_WRITING_CONDITIONS_FLAG)).toBe(true);
+  });
+
+  test('has the Lesson Planner flag', () => {
+    expect(FEATURE_FLAG_KEYS).toContain(LESSON_PLANNER_FLAG);
+    expect(isFeatureFlagKey(LESSON_PLANNER_FLAG)).toBe(true);
+    expect(featureFlagSettingName(LESSON_PLANNER_FLAG)).toBe(
+      'feature_flag.lesson_planner'
+    );
   });
 
   test('rejects anything that is not a registered flag', () => {

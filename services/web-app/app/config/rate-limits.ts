@@ -86,6 +86,8 @@ export const RATE_LIMITS = {
       perIpPerMinute: 30,
       perIpPerHour: 120,
       perEmailPerHour: 12,
+      /** Failed attempts from one IP across any login identifier (password spraying). */
+      perIpFailedSprayPerHour: 300,
     },
     joinLookup: {
       perIpPerMinute: 60,

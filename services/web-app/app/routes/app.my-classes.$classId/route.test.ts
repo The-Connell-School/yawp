@@ -391,6 +391,7 @@ describe('class detail loader document visibility', () => {
         id: true,
         title: true,
         systemKey: true,
+        kind: true,
         collaborationSupported: true,
       },
       orderBy: { position: 'asc' },
@@ -706,6 +707,8 @@ describe('class detail loader document visibility', () => {
         prompt: 'Updated prompt',
         submitForGrade: true,
         pointValue: 100,
+        // Not an exit ticket, so any stored ticket config is cleared.
+        exitTicketConfigJson: expect.anything(),
       },
     });
   });

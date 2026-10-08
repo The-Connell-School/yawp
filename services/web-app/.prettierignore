@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+coverage
+
+# Binary test fixtures: real .pptx/.docx files the office readers parse.
+*.pptx
+*.docx

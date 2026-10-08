@@ -9,10 +9,9 @@ import {
   verifyUserPassword,
 } from '~/utils/auth.server';
 import {
-  checkFailedLoginIpRateLimit,
-  enforceLoginTargetRateLimit,
+  consumeLoginAttemptRateLimits,
   rateLimitedFormResponse,
-  recordFailedLoginIpRateLimit,
+  refundLoginAttemptRateLimits,
 } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { parseLoginIdentifier } from '~/utils/login-identifier.server';
@@ -34,55 +33,29 @@ export async function loginAction({ request }: ActionFunctionArgs) {
   try {
     const { email: loginIdentifier, password } = data;
     const parsed = parseLoginIdentifier(loginIdentifier);
-    {
-      const cfg = RATE_LIMITS.unauth.login;
-      const targetDecision = await enforceLoginTargetRateLimit({
-        request,
-        route: '/auth/login',
-        targetKey: parsed.value,
-        perTargetPerHour: cfg.perEmailPerHour,
-      });
-      if (!targetDecision.allowed) {
-        return rateLimitedFormResponse(
-          'email',
-          targetDecision.retryAfterSeconds,
-          'Too many login attempts. Please wait and try again.'
-        );
-      }
-      const ipDecision = await checkFailedLoginIpRateLimit({
-        request,
-        route: '/auth/login',
-        loginIdentifier: parsed.value,
-        perIpPerMinute: cfg.perIpPerMinute,
-        perIpPerHour: cfg.perIpPerHour,
-      });
-      if (!ipDecision.allowed) {
-        return rateLimitedFormResponse(
-          'email',
-          ipDecision.retryAfterSeconds,
-          'Too many login attempts. Please wait and try again.'
-        );
-      }
+    const cfg = RATE_LIMITS.unauth.login;
+
+    const limitDecision = await consumeLoginAttemptRateLimits({
+      request,
+      route: '/auth/login',
+      targetKey: parsed.value,
+      perIpPerMinute: cfg.perIpPerMinute,
+      perIpPerHour: cfg.perIpPerHour,
+      perTargetPerHour: cfg.perEmailPerHour,
+      perIpSprayPerHour: cfg.perIpFailedSprayPerHour,
+    });
+    if (!limitDecision.allowed) {
+      return rateLimitedFormResponse(
+        'email',
+        limitDecision.retryAfterSeconds,
+        'Too many login attempts. Please wait and try again.'
+      );
     }
+    const charged = limitDecision.charged;
 
     const user = await verifyUserPassword({ login: loginIdentifier }, password);
 
     if (!user) {
-      const cfg = RATE_LIMITS.unauth.login;
-      const failIp = await recordFailedLoginIpRateLimit({
-        request,
-        route: '/auth/login',
-        loginIdentifier: parsed.value,
-        perIpPerMinute: cfg.perIpPerMinute,
-        perIpPerHour: cfg.perIpPerHour,
-      });
-      if (!failIp.allowed) {
-        return rateLimitedFormResponse(
-          'email',
-          failIp.retryAfterSeconds,
-          'Too many login attempts. Please wait and try again.'
-        );
-      }
       return validationError(
         { fieldErrors: { email: 'Invalid email or password' } },
         data
@@ -102,15 +75,16 @@ export async function loginAction({ request }: ActionFunctionArgs) {
             select: { id: true },
           })
         : null;
-      if (seatMembership) {
-        previewMembershipId = seatMembership.id;
-      } else {
+      if (!seatMembership) {
         return validationError(
           { fieldErrors: { email: 'Invalid email or password' } },
           data
         );
       }
+      previewMembershipId = seatMembership.id;
     }
+
+    await refundLoginAttemptRateLimits(charged);
 
     const session = await prisma.session.create({
       select: { id: true, expirationDate: true, userId: true },

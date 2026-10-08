@@ -308,6 +308,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // for this column, so it is optional there and defaulted here.
     collaborationSupported: type.collaborationSupported ?? false,
     gradesGrammar: gradesGrammarIds.has(type.id),
+    kind: type.kind ?? null,
     defaultWritingTimeMinutes:
       creationTypeDefaults.get(type.id)?.defaultWritingTimeMinutes ?? null,
     offersParagraphModes:

@@ -8,6 +8,26 @@ import { createE2EPrismaClient } from './prisma-client';
 const WRITING_CONDITIONS_SETTING =
   'feature_flag.daily_pages_paragraph_type_and_writing_time';
 
+const LESSON_PLANNER_SETTING = 'feature_flag.lesson_planner';
+
+export async function setLessonPlannerFlag(enabled: boolean) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.setting.upsert({
+      where: { name: LESSON_PLANNER_SETTING },
+      create: {
+        name: LESSON_PLANNER_SETTING,
+        value: enabled ? 'true' : 'false',
+        valueType: 'boolean',
+        description: 'Set by e2e',
+      },
+      update: { value: enabled ? 'true' : 'false', updatedAt: new Date() },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 export async function setWritingConditionsFlag(enabled: boolean) {
   const prisma = createE2EPrismaClient();
   try {

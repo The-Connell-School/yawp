@@ -8,10 +8,10 @@ const get = (path = '', credential = key) => new Request(`${base}${path}`, { hea
 const post = (body: unknown, credential = key, path = '/versions') => new Request(`${base}${path}`, { method: 'POST', headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
 const valid = { key: 'daily-pages-engagement', requestId: crypto.randomUUID(), actorEmail: 'Brian@TheConnellSchool.com', reason: 'Tighten evidence descriptor', expectedFingerprint: 'a'.repeat(64), document: { name: 'daily-pages-engagement', title: 'x', rubric: { categories: [] } } };
 
-function fake(overrides: Partial<Record<'list' | 'get' | 'save', (...args: any[]) => Promise<any>>> = {}) {
+function fake(overrides: Partial<Record<'list' | 'get' | 'save' | 'stage', (...args: any[]) => Promise<any>>> = {}) {
   const calls: { method: string; args: unknown[] }[] = [];
   const wrap = (method: string, fn: (...args: any[]) => Promise<any>) => async (...args: any[]) => { calls.push({ method, args }); return fn(...args); };
-  return { calls, service: { list: wrap('list', overrides.list ?? (async () => ({ rubrics: [] }))), get: wrap('get', overrides.get ?? (async () => ({ rubric: {} }))), save: wrap('save', overrides.save ?? (async () => ({ revision: { version: 2 } }))) } };
+  return { calls, service: { list: wrap('list', overrides.list ?? (async () => ({ rubrics: [] }))), get: wrap('get', overrides.get ?? (async () => ({ rubric: {} }))), save: wrap('save', overrides.save ?? (async () => ({ revision: { version: 2 } }))), stage: wrap('stage', overrides.stage ?? (async () => ({ revision: { version: 3 }, replayed: false }))) } };
 }
 
 test('every route requires the management key and the right method', async () => {
@@ -62,4 +62,49 @@ test('domain errors map to status codes with field issues; unexpected errors lea
     const h = createRubricCatalogHttp(fake({ save: async () => { throw new CatalogError('Stale', code); } }).service as any, () => key);
     expect((await h.save(post(valid))).status).toBe(code);
   }
+});
+
+const validStage = { key: 'daily-pages-engagement', requestId: crypto.randomUUID(), actorEmail: 'Staff@Yawp.Test', reason: 'Stage for demo orgs', document: { name: 'daily-pages-engagement', title: 'x', rubric: { categories: [] } }, source: { contentId: crypto.randomUUID(), version: 2, fingerprint: 'b'.repeat(64) } };
+
+test('stage requires the management key, POST and exactly the documented body', async () => {
+  const { service, calls } = fake();
+  const http = createRubricCatalogHttp(service as any, () => key);
+  expect((await http.stage(post(validStage, 'wrong', '/stage'))).status).toBe(401);
+  expect((await http.stage(get('/stage'))).status).toBe(405);
+  expect((await createRubricCatalogHttp(service as any, () => undefined).stage(post(validStage, key, '/stage'))).status).toBe(404);
+  expect((await http.stage(post(validStage, key, '/stage?x=1'))).status).toBe(400);
+  const { source: _source, ...noSource } = validStage;
+  for (const body of [
+    noSource, { ...validStage, expectedFingerprint: 'a'.repeat(64) }, { ...validStage, requestId: 'nope' },
+    { ...validStage, actorEmail: 'nope' }, { ...validStage, reason: 'no' }, { ...validStage, reason: 'x'.repeat(501) }, { ...validStage, document: [] },
+    { ...validStage, source: { ...validStage.source, contentId: 'not-a-uuid' } },
+    { ...validStage, source: { ...validStage.source, version: 0 } },
+    { ...validStage, source: { ...validStage.source, version: 1.5 } },
+    { ...validStage, source: { ...validStage.source, fingerprint: 'B'.repeat(64) } },
+    { ...validStage, source: { ...validStage.source, extra: true } },
+  ]) expect((await http.stage(post(body, key, '/stage'))).status).toBe(400);
+  expect((await http.stage(post({ ...validStage, document: { notes: 'x'.repeat(310000) } }, key, '/stage'))).status).toBe(400);
+  expect(calls).toHaveLength(0);
+  const ok = await http.stage(post(validStage, key, '/stage'));
+  expect(ok.status).toBe(200); expect(ok.headers.get('cache-control')).toBe('no-store');
+  expect(await ok.json()).toEqual({ revision: { version: 3 }, replayed: false });
+  expect(calls).toHaveLength(1);
+  expect(calls[0]!.method).toBe('stage');
+  expect((calls[0]!.args[0] as any).actorEmail).toBe('staff@yawp.test');
+  expect((calls[0]!.args[0] as any).source).toEqual(validStage.source);
+});
+
+test('stage maps domain errors like save', async () => {
+  for (const code of [403, 404, 409, 422]) {
+    const h = createRubricCatalogHttp(fake({ stage: async () => { throw new CatalogError('No', code); } }).service as any, () => key);
+    expect((await h.stage(post(validStage, key, '/stage'))).status).toBe(code);
+  }
+  const h = createRubricCatalogHttp(fake({ stage: async () => { throw new Error('password=secret'); } }).service as any, () => key);
+  const failed = await h.stage(post(validStage, key, '/stage'));
+  expect(failed.status).toBe(503); expect(await failed.text()).not.toContain('secret');
+});
+
+test('the stage route delegates to the catalog stage handler', async () => {
+  const route = await import('~/routes/api.internal.v1.rubric-catalog.stage/route');
+  expect(typeof route.action).toBe('function');
 });

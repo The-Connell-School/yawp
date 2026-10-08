@@ -1515,6 +1515,22 @@ describe('demo environment deployment contract', () => {
     expect(missing).toEqual([]);
   });
 
+  test('demo deploys forward the optional Rubric Catalog management key; PR previews never do', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+
+    expect(workflow).toContain(
+      'PREVIEW_MANAGEMENT_SERVICE_KEY: ${{ secrets.DEMO_MANAGEMENT_SERVICE_KEY }}'
+    );
+    expect(workflow).toContain(
+      '"PREVIEW_MANAGEMENT_SERVICE_KEY=$(shell_quote "$PREVIEW_MANAGEMENT_SERVICE_KEY")"'
+    );
+    expect(workflow).not.toMatch(/echo[^\n]*\$PREVIEW_MANAGEMENT_SERVICE_KEY/);
+    expect(previewWorkflow).not.toContain('MANAGEMENT_SERVICE_KEY');
+  });
+
   test('demo deploys can enable the UA Stripe sandbox without changing demo data', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
 

@@ -52,6 +52,14 @@ mock.module('~/utils/preview-access.server', () => ({
     process.env.PREVIEW_DATA_MODE === 'seed',
 }));
 mock.module('~/cookies/membership-id.server', () => ({ setMembershipId }));
+mock.module('~/utils/rate-limit.server', () => ({
+  consumeLoginAttemptRateLimits: mock(async () => ({
+    allowed: true,
+    charged: [],
+  })),
+  refundLoginAttemptRateLimits: mock(async () => undefined),
+  rateLimitedFormResponse: mock(),
+}));
 
 const { action } = await import('./route');
 
