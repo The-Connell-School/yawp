@@ -51,6 +51,7 @@ export function HandleStudentPasswordResetButton({
         type="button"
         size="sm"
         variant="outline"
+        className="w-fit shrink-0"
         onClick={(e) => {
           e.stopPropagation();
           setOpen(true);

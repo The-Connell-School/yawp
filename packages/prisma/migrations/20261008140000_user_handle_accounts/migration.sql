@@ -1,6 +1,6 @@
 SET lock_timeout = '5s';
 
--- Handle + password free-tier student accounts (sorts after 20261008001100).
+-- Handle + password free-tier student accounts (sorts after 20261008001200).
 -- Idempotent: safe on preview DBs that partially applied an older migration name.
 --
 -- Rollback (production has NOT applied a later migration that depends on these columns):

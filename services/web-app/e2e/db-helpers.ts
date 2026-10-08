@@ -126,6 +126,7 @@ export async function ensureDocumentUnsubmitted(params: {
     await tx.submissionActivity.deleteMany({
       where: { submission: { documentId } },
     });
+    await tx.$executeRawUnsafe("SET LOCAL session_replication_role = 'origin'");
     await tx.submission.deleteMany({
       where: { documentId },
     });
