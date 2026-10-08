@@ -17,13 +17,31 @@ import {
   PREVIEW_TEACHER_NOTES_QA_STUDENT_EMAIL,
   PREVIEW_TEACHER_NOTES_QA_SUPERADMIN_EMAIL,
 } from './local-dev/preview-teacher-notes-qa';
-import { sampleRubricSnapshot } from './local-dev/seed-daily-pages-samples';
 import { DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG } from '../../../services/web-app/app/domain/assignment-types/daily-pages-short-form-rubric.ts';
 import dailyPagesEngagementSchema from '../../../services/web-app/app/domain/rubrics/library/daily-pages-engagement.json';
 
 type SeedClient = PrismaClient;
 
 const DAILY_PAGES_ENGAGEMENT_RUBRIC_NAME = 'daily-pages-engagement';
+
+function dailyPagesEngagementRubricSnapshot() {
+  const schema = dailyPagesEngagementSchema as {
+    rubric: { categories: unknown[] };
+    scoringScale: {
+      type: string;
+      minScore: number;
+      maxScore: number;
+      step?: number;
+    };
+  };
+  return {
+    categories: schema.rubric.categories,
+    minScore: schema.scoringScale.minScore,
+    maxScore: schema.scoringScale.maxScore,
+    step: schema.scoringScale.step ?? 10,
+    scoringType: schema.scoringScale.type,
+  };
+}
 
 function previewQaSuperadminPassword(): string {
   const configured =
@@ -148,7 +166,11 @@ async function ensureTeacherNoteOnGradedDailyPagesSample(prisma: SeedClient) {
   const submission = await prisma.submission.findFirst({
     where: {
       document: {
-        assignmentType: { kind: 'daily_pages', archivedAt: null },
+        assignmentType: {
+          kind: 'daily_pages',
+          archivedAt: null,
+          rubric: { name: DAILY_PAGES_ENGAGEMENT_RUBRIC_NAME },
+        },
         membership: {
           user: { email: PREVIEW_TEACHER_NOTES_QA_STUDENT_EMAIL },
         },
@@ -206,10 +228,15 @@ async function ensureTeacherNoteOnGradedDailyPagesSample(prisma: SeedClient) {
     });
   }
 
+  const engagementSnapshot = dailyPagesEngagementRubricSnapshot();
   if (run) {
     await prisma.submissionGradingAssistantRun.update({
       where: { id: run.id },
-      data: { metadata, status: 'succeeded' },
+      data: {
+        metadata,
+        status: 'succeeded',
+        assignmentTypeRubricSnapshot: engagementSnapshot,
+      },
     });
   } else {
     await prisma.submissionGradingAssistantRun.create({
@@ -217,7 +244,7 @@ async function ensureTeacherNoteOnGradedDailyPagesSample(prisma: SeedClient) {
         submissionId: submission.id,
         assignmentTypeId,
         assignmentTypeGradingVersion: 1,
-        assignmentTypeRubricSnapshot: sampleRubricSnapshot(),
+        assignmentTypeRubricSnapshot: dailyPagesEngagementRubricSnapshot(),
         assignmentTypePromptConfigSnapshot:
           DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG as object,
         source: 'preview-teacher-notes-qa',

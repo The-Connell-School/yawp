@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   TEACHER_NOTES_EVIDENCE_RULE,
   authorizeOutputSchemaTeacherNotes,
+  existingOutputSchemaForAssignmentTypeSave,
   gradingRepairPrivateObservationRules,
   normalizeTeacherNote,
   overallCommentWriterRules,
@@ -35,6 +36,19 @@ describe('teacher-notes', () => {
     expect(overallCommentWriterRules(false)).not.toContain('Teacher Note rules:');
     expect(overallCommentWriterRules(true)).not.toContain('Teacher Note rules:');
     expect(gradingRepairPrivateObservationRules(true)).toContain('Teacher Note rules:');
+  });
+
+  test('existingOutputSchemaForAssignmentTypeSave ignores library output when detaching rubric', () => {
+    expect(
+      existingOutputSchemaForAssignmentTypeSave({
+        hasRubricIdField: true,
+        nextRubricId: null,
+        libraryRubricSchemaJson: {
+          outputSchema: { teacherNotesEnabled: true },
+        },
+        gradingOutputSchemaJson: { schemaVersion: 1 },
+      })
+    ).toEqual({ schemaVersion: 1 });
   });
 
   test('authorizeOutputSchemaTeacherNotes ignores crafted toggle from plain admins', () => {

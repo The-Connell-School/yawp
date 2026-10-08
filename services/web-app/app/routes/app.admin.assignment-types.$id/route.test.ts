@@ -249,6 +249,57 @@ describe('admin assignment type detail action', () => {
     });
   });
 
+  test('superadmin update without outputSchemaJson preserves teacher notes on per-type rubric', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'super-1' });
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      rubricJson: {
+        categories: [
+          {
+            key: 'quality',
+            label: 'Quality',
+            description: 'Overall quality.',
+            weight: 1,
+          },
+        ],
+      },
+      gradingPromptConfigJson: {},
+      gradingOutputSchemaJson: {
+        schemaVersion: 1,
+        teacherNotesEnabled: true,
+      },
+      rubric: null,
+    });
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'Updated title');
+    form.set(
+      'rubricJson',
+      JSON.stringify({
+        categories: [
+          {
+            key: 'quality',
+            label: 'Quality',
+            description: 'Overall quality.',
+            weight: 1,
+          },
+        ],
+      })
+    );
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    const updateData = prisma.assignmentType.update.mock.calls.at(-1)?.[0].data;
+    expect(updateData.gradingOutputSchemaJson).toBeUndefined();
+  });
+
   test('plain admin cannot enable teacher notes via crafted outputSchemaJson', async () => {
     prisma.user.findFirst.mockResolvedValue(null);
     const form = new FormData();

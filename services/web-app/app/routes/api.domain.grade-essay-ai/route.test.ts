@@ -2743,7 +2743,7 @@ describe('api.domain.grade-essay-ai', () => {
       expect(retryPrompt).toContain('Never mention grammar, spelling, syntax, or organization');
       expect(retryPrompt).toContain('Never evaluate whether the content is correct');
       expect(retryPrompt).toContain('Feedback is 1–3 warm sentences');
-      expect(retryPrompt).toContain('don’t penalize on suspicion');
+      expect(retryPrompt).toMatch(/don['’]t penalize on suspicion/);
       if (mode === 'schema-repair') {
         expect(retry.system).toContain('without supplied comparison writing');
       }

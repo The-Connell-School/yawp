@@ -124,14 +124,15 @@ test.describe.serial('Admin teacher notes output toggle', () => {
 
     try {
       await switchUser(e2eContext.superAdminEmail, 'admin-e2e-password');
-      await page.goto(`/app/admin/assignment-types/${assignmentType.id}`);
-      await page.waitForResponse(
+      const optionsLoaded = page.waitForResponse(
         (response) =>
           response.url().includes('/api/admin/rubric-output-options') &&
           response.request().method() === 'GET' &&
           response.ok(),
         { timeout: 30_000 }
       );
+      await page.goto(`/app/admin/assignment-types/${assignmentType.id}`);
+      await optionsLoaded;
 
       const toggle = page.getByTestId('rubric-teacher-notes-toggle');
       await expect(page.getByText('Loading private note settings')).toHaveCount(0);
@@ -191,6 +192,15 @@ test.describe.serial('Admin teacher notes output toggle', () => {
         await prisma.assignmentType.deleteMany({ where: { id: assignmentTypeId } });
       }
       if (rubricId) {
+        const rubricRow = await prisma.rubric.findUnique({
+          where: { id: rubricId },
+          select: { name: true },
+        });
+        if (rubricRow?.name) {
+          await prisma.rubricRevision.deleteMany({
+            where: { rubricName: rubricRow.name },
+          });
+        }
         await prisma.rubric.deleteMany({ where: { id: rubricId } });
       }
       await prisma.$disconnect();

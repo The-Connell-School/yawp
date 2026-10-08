@@ -33,6 +33,30 @@ export function authorizeOutputSchemaTeacherNotes(
   return withTeacherNotesEnabled(submitted, preserveEnabled);
 }
 
+/**
+ * When an assignment type stops using a library rubric, teacher-notes authorization
+ * must read only the type's own gradingOutputSchemaJson — not the detached library's
+ * live outputSchema (which would leak catalog settings into per-type columns).
+ */
+export function existingOutputSchemaForAssignmentTypeSave(args: {
+  hasRubricIdField: boolean;
+  nextRubricId: string | null;
+  libraryRubricSchemaJson: unknown;
+  gradingOutputSchemaJson: unknown;
+}): unknown {
+  if (args.hasRubricIdField && !args.nextRubricId) {
+    return args.gradingOutputSchemaJson;
+  }
+  if (
+    args.libraryRubricSchemaJson &&
+    typeof args.libraryRubricSchemaJson === 'object' &&
+    !Array.isArray(args.libraryRubricSchemaJson)
+  ) {
+    return (args.libraryRubricSchemaJson as Record<string, unknown>).outputSchema;
+  }
+  return args.gradingOutputSchemaJson;
+}
+
 export function gradingRepairPrivateObservationRules(
   teacherNotesEnabled: boolean
 ): string {

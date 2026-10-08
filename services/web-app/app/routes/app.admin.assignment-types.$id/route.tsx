@@ -16,7 +16,10 @@ import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assi
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { computePromptVersionLabels } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 import { isPromptVersionControlEnabled } from '~/domain/ai-evaluation/prompt-version-control.server';
-import { authorizeOutputSchemaTeacherNotes } from '~/domain/grading/teacher-notes';
+import {
+  authorizeOutputSchemaTeacherNotes,
+  existingOutputSchemaForAssignmentTypeSave,
+} from '~/domain/grading/teacher-notes';
 
 const PROMPT_PREVIEW_INPUTS = {
   studentFirstName: 'Jordan',
@@ -252,15 +255,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       (formData.get('gradingInstructionsOverride')?.toString().trim() ?? '') !==
         readGradingInstructionsOverride(existing.gradingPromptConfigJson);
 
-    const parsedOutputSchema =
-      parseJsonFormField(formData, 'outputSchemaJson') ??
-      DEFAULT_OUTPUT_SCHEMA_JSON;
-    const existingOutputSchema =
-      existing.rubric?.schemaJson &&
-      typeof existing.rubric.schemaJson === 'object' &&
-      !Array.isArray(existing.rubric.schemaJson)
-        ? (existing.rubric.schemaJson as Record<string, unknown>).outputSchema
-        : existing.gradingOutputSchemaJson;
+    const hasOutputSchemaField = formData.has('outputSchemaJson');
+    const existingOutputSchema = existingOutputSchemaForAssignmentTypeSave({
+      hasRubricIdField,
+      nextRubricId: hasRubricIdField ? rubricId : null,
+      libraryRubricSchemaJson: existing.rubric?.schemaJson ?? null,
+      gradingOutputSchemaJson: existing.gradingOutputSchemaJson,
+    });
     const gradingConfigData = hasGradingConfigFields
       ? {
           scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
@@ -271,11 +272,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
                 formData.get('gradingInstructionsOverride')
               )
             : parseJsonFormField(formData, 'promptConfigJson'),
-          gradingOutputSchemaJson: authorizeOutputSchemaTeacherNotes(
-            parsedOutputSchema as Record<string, unknown>,
-            existingOutputSchema,
-            Boolean(superAdmin)
-          ) as Prisma.InputJsonValue,
+          ...(hasOutputSchemaField
+            ? {
+                gradingOutputSchemaJson: authorizeOutputSchemaTeacherNotes(
+                  (parseJsonFormField(formData, 'outputSchemaJson') ??
+                    DEFAULT_OUTPUT_SCHEMA_JSON) as Record<string, unknown>,
+                  existingOutputSchema,
+                  Boolean(superAdmin)
+                ) as Prisma.InputJsonValue,
+              }
+            : {}),
           gradingAssistantVersion: { increment: 1 },
         }
       : gradingInstructionsOverrideChanged

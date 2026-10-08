@@ -34,16 +34,6 @@ mock.module('~/domain/grading/grading-queue.server', () => ({
   loadGradingQueueNeighbors,
   loadDocumentNavigationNeighbors,
 }));
-const resolveRubricOutputOptionsForAssignmentType = mock<
-  () => Promise<{
-    catalogKey: string;
-    teacherNotesEnabled: boolean;
-    fingerprint: string;
-  } | null>
->(() => Promise.resolve(null));
-mock.module('~/domain/rubrics/rubric-output-options.server', () => ({
-  resolveRubricOutputOptionsForAssignmentType,
-}));
 const { loader: routeLoader } = await import('./route');
 const loader = routeLoader as any;
 
@@ -144,8 +134,6 @@ describe('submission loader — unsubmitted redirect', () => {
     prisma.assignmentType.findUnique.mockReset();
     loadGradingQueueNeighbors.mockReset();
     loadDocumentNavigationNeighbors.mockReset();
-    resolveRubricOutputOptionsForAssignmentType.mockReset();
-    resolveRubricOutputOptionsForAssignmentType.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
     prisma.assignmentType.findUnique.mockResolvedValue(null);
     prisma.submissionActivity.findMany.mockResolvedValue([]);
@@ -645,6 +633,7 @@ describe('submission loader — unsubmitted redirect', () => {
       id: 'at-1',
       title: 'Daily Pages',
       kind: 'daily_pages',
+      rubricId: 'rubric-dp',
       scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 },
       rubricJson: null,
       gradingPromptConfigJson: {},
@@ -655,14 +644,11 @@ describe('submission loader — unsubmitted redirect', () => {
       gradingAssistantSourceTemplateSlug: null,
       rubric: {
         name: 'daily-pages-engagement',
-        schemaJson: { outputSchema: { schemaVersion: 1 } },
+        schemaJson: {
+          outputSchema: { schemaVersion: 1, teacherNotesEnabled: true },
+        },
         currentRevision: null,
       },
-    });
-    resolveRubricOutputOptionsForAssignmentType.mockResolvedValue({
-      catalogKey: 'daily-pages-engagement',
-      teacherNotesEnabled: true,
-      fingerprint: 'fp-live',
     });
     const submission = buildSubmission() as any;
     submission.gradingAssistantRuns = [
