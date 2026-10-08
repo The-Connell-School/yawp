@@ -108,7 +108,10 @@ export type E2EContext = {
   /** Isolated fixture for grade-privacy smoke (safe to release in that spec only) */
   gradePrivacy: {
     assignmentTypeId: string;
+    /** Never released; used for unreleased loader privacy assertions */
     submissionId: string;
+    /** Released only by grade-privacy E2E; separate from submissionId so retries stay isolated */
+    releaseSubmissionId: string;
     releaseComment: string;
     dailyPagesAssignmentTypeId: string;
     dailyPagesUnreleasedOverallScore: number;
@@ -937,12 +940,44 @@ export async function seedE2E(): Promise<E2EContext> {
     },
     select: { id: true },
   });
+  const gradePrivacyReleaseDocText =
+    'GRADE_PRIVACY_RELEASE_MARKER body for release-only smoke test.';
+  const gradePrivacyReleaseDocHtml = `<p>${gradePrivacyReleaseDocText}</p>`;
+  const gradePrivacyReleaseDoc = await prisma.document.create({
+    data: {
+      title: 'Grade privacy release-only doc',
+      text: gradePrivacyReleaseDocText,
+      html: gradePrivacyReleaseDocHtml,
+      revision: 1,
+      membershipId: membership.id,
+      assignmentTypeId: assignmentType.id,
+      assignmentId: gradePrivacyAssignment.id,
+      classAssignmentId: seededClassAssignment.id,
+    },
+    select: { id: true },
+  });
+  const gradePrivacyReleaseSubmission = await prisma.submission.create({
+    data: {
+      documentId: gradePrivacyReleaseDoc.id,
+      html: gradePrivacyReleaseDocHtml,
+      text: gradePrivacyReleaseDocText,
+      title: 'Grade privacy release-only submission',
+      submittedAt: new Date(),
+      gradedByMembershipId: seededTeacherMembership.id,
+      gradedAt: new Date(),
+      overallScore: 80,
+      numericPercentage: 80,
+      score: '80/100',
+      releasedAt: null,
+    },
+    select: { id: true },
+  });
   await prisma.submissionComment.create({
     data: {
-      submissionId: gradePrivacySubmission.id,
+      submissionId: gradePrivacyReleaseSubmission.id,
       membershipId: seededTeacherMembership.id,
       content: gradePrivacyReleaseComment,
-      excerpt: 'GRADE_PRIVACY_MARKER',
+      excerpt: 'GRADE_PRIVACY_RELEASE_MARKER',
       occurrence: 1,
     },
   });
@@ -951,6 +986,14 @@ export async function seedE2E(): Promise<E2EContext> {
       assignmentModuleId: modulesByPosition[0].id,
       documentId: gradePrivacyDoc.id,
       title: 'E2E Grade Privacy Session',
+      instructionsCompleted: 0,
+    },
+  });
+  await prisma.assignmentModuleSession.create({
+    data: {
+      assignmentModuleId: modulesByPosition[0].id,
+      documentId: gradePrivacyReleaseDoc.id,
+      title: 'E2E Grade Privacy Release Session',
       instructionsCompleted: 0,
     },
   });
@@ -1159,6 +1202,7 @@ export async function seedE2E(): Promise<E2EContext> {
     gradePrivacy: {
       assignmentTypeId: assignmentType.id,
       submissionId: gradePrivacySubmission.id,
+      releaseSubmissionId: gradePrivacyReleaseSubmission.id,
       releaseComment: gradePrivacyReleaseComment,
       dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
       dailyPagesUnreleasedOverallScore: dailyPagesPrivacyOverallScore,

@@ -64,7 +64,7 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
     const { gradePrivacy } = e2eContext;
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     const form = new FormData();
-    form.set('submissionIds', gradePrivacy.submissionId);
+    form.set('submissionIds', gradePrivacy.releaseSubmissionId);
     const release = await page.request.post('/api/domain/release-grades', {
       multipart: form,
     });
@@ -72,11 +72,13 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
 
     await signIn(e2eContext.userEmail, 'johndoe');
     const submissionHtml = await (
-      await page.request.get(`/app/submissions/${gradePrivacy.submissionId}`)
+      await page.request.get(
+        `/app/submissions/${gradePrivacy.releaseSubmissionId}`
+      )
     ).text();
     const submissionData = await (
       await page.request.get(
-        `/app/submissions/${gradePrivacy.submissionId}.data`
+        `/app/submissions/${gradePrivacy.releaseSubmissionId}.data`
       )
     ).text();
 
