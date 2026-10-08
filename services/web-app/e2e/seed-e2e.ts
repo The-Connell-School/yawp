@@ -1269,6 +1269,17 @@ export async function seedE2E(): Promise<E2EContext> {
 
   await seedFreeClassroomForE2E(prisma);
 
+  await prisma.setting.upsert({
+    where: { name: 'feature_flag.lesson_planner' },
+    create: {
+      name: 'feature_flag.lesson_planner',
+      value: 'true',
+      valueType: 'boolean',
+      description: 'Enabled for E2E',
+    },
+    update: { value: 'true', updatedAt: new Date() },
+  });
+
   return {
     organizationId: org.id,
     schoolId: school.id,

@@ -55,6 +55,7 @@ import {
   previewAccessMiddleware,
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
+import { isLessonPlannerEnabled } from './domain/feature-flags/feature-flags.server.ts';
 
 export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware];
 
@@ -121,6 +122,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         previewAccessGateEnabled: isPreviewAccessGateEnabled(),
         previewAccessSeat: null,
         blackboardLtiMockEnabled: false,
+        lessonPlannerEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,
       },
@@ -211,6 +213,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     bannerWarning,
     localDevAuthEnabled: isLocalDevAuthEnabled(),
   });
+  const lessonPlannerEnabled = userId ? await isLessonPlannerEnabled() : false;
 
   return data(
     {
@@ -219,6 +222,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         isAdmin: Boolean(user?.isAdmin),
         selectedMembership: membership,
       },
+      lessonPlannerEnabled,
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),

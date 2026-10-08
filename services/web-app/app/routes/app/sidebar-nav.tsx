@@ -1,4 +1,5 @@
-import { Link } from 'react-router';
+import { Link, useRouteLoaderData } from 'react-router';
+import type { Route as RootRoute } from '../../+types/root';
 import {
   BookOpenIcon,
   NotebookPen,
@@ -42,7 +43,7 @@ const admin = (user: User) => user.isAdmin;
 const reporterNavVisible = (user: User) =>
   teacher(user) &&
   user.selectedMembership?.organization?.plan !== 'FREE_CLASSROOM';
-const lessonPlannerEnabled = (user: User) => teacher(user);
+const lessonPlannerNavVisible = (user: User) => teacher(user);
 const writingPracticeEnabled = (user: User) => teacher(user) || student(user);
 
 const icons = {
@@ -114,7 +115,7 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         to: '/app/lesson-planner',
         label: 'Lesson Planner',
         icon: icons.lessonPlanner,
-        requires: lessonPlannerEnabled,
+        requires: lessonPlannerNavVisible,
       },
       {
         to: '/app/organization',
@@ -180,10 +181,17 @@ export function SidebarNavLinks({
   isAppNavLinkActive,
   forceFullNavigation = false,
 }: SidebarNavLinksProps) {
-  const visibleSections = getVisibleSidebarSections(
-    sections,
-    user
-  );
+  const lessonPlannerFlagOn =
+    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
+      ?.lessonPlannerEnabled ?? false;
+  const visibleSections = getVisibleSidebarSections(sections, user)
+    .map((section) => ({
+      ...section,
+      links: section.links.filter(
+        (link) => link.to !== '/app/lesson-planner' || lessonPlannerFlagOn
+      ),
+    }))
+    .filter((section) => section.links.length > 0);
 
   return (
     <>

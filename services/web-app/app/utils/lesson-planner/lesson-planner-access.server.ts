@@ -1,9 +1,9 @@
 /**
  * Access gate for the YAWP! Lesson Planner.
  *
- * Teacher-only. Students and admins without a teacher role get a 404 so the
- * feature stays invisible to them. Free-plan orgs are limited by entitlements
- * when creating a new lesson plan conversation.
+ * Teacher-only, and gated by the global Lesson Planner feature flag (same
+ * mechanism as Daily Pages writing conditions). Students get a 404 so the
+ * feature stays invisible to them.
  */
 import { data } from 'react-router';
 import {
@@ -11,11 +11,13 @@ import {
   requireUserId,
   type RequiredMembership,
 } from '~/utils/auth.server';
+import { isLessonPlannerEnabled } from '~/domain/feature-flags/feature-flags.server';
 
 export type LessonPlannerAccess = {
   userId: string;
   membership: RequiredMembership;
   isTeacher: boolean;
+  enabled: boolean;
   allowed: boolean;
 };
 
@@ -25,12 +27,14 @@ export async function getLessonPlannerAccess(
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
   const isTeacher = membership.role === 'TEACHER';
+  const enabled = await isLessonPlannerEnabled();
 
   return {
     userId,
     membership,
     isTeacher,
-    allowed: isTeacher,
+    enabled,
+    allowed: isTeacher && enabled,
   };
 }
 
