@@ -35,6 +35,7 @@ export async function loginAction({ request }: ActionFunctionArgs) {
   try {
     const { email: loginIdentifier, password } = data;
     const parsed = parseLoginIdentifier(loginIdentifier);
+    // Per-target and per-IP login throttles count failed attempts only (see rate-limit.server.ts).
     {
       const cfg = RATE_LIMITS.unauth.login;
       const targetDecision = await checkFailedLoginTargetRateLimit({
