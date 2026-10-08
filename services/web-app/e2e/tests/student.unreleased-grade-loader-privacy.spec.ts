@@ -3,6 +3,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 import {
   decodeRouterDataResponse,
   findObjectsWithId,
+  getRouteLoaderData,
   walkTurboDecoded,
 } from '../decode-router-data';
 
@@ -25,16 +26,36 @@ function expectSubmissionPrivacy(
 
 function submissionFromRouteData(
   loaderData: unknown,
-  routeId: string,
+  routeIdSuffix: string,
   submissionId: string
 ) {
-  const route = (loaderData as Record<string, unknown>)[routeId] as Record<
-    string,
-    unknown
-  >;
-  const matches = findObjectsWithId(route?.submission ?? route, submissionId);
+  const route = getRouteLoaderData(loaderData, routeIdSuffix);
+  const matches = findObjectsWithId(route.submission ?? route, submissionId);
   expect(matches.length).toBeGreaterThan(0);
   return matches[0]!;
+}
+
+function expectNoGradedAtInDocumentLoader(
+  loaderData: unknown,
+  submissionId: string
+) {
+  const route = getRouteLoaderData(loaderData, 'app_.documents_.$id');
+  const lists: Record<string, unknown>[][] = [];
+  if (Array.isArray(route.submissions)) {
+    lists.push(route.submissions as Record<string, unknown>[]);
+  }
+  const doc = route.doc;
+  if (doc && typeof doc === 'object' && Array.isArray((doc as { submissions?: unknown }).submissions)) {
+    lists.push(
+      (doc as { submissions: Record<string, unknown>[] }).submissions
+    );
+  }
+  expect(lists.length).toBe(2);
+  for (const list of lists) {
+    const row = list.find((entry) => entry.id === submissionId);
+    expect(row).toBeTruthy();
+    expect(row!.gradedAt).toBeUndefined();
+  }
 }
 
 test.describe.serial('Unreleased grade privacy in student loader responses', () => {
@@ -54,7 +75,7 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
     const submissionLoader = decodeRouterDataResponse(submissionDataText);
     const submission = submissionFromRouteData(
       submissionLoader,
-      'routes/app_.submissions_.$submissionId',
+      'app_.submissions_.$submissionId',
       gradePrivacy.submissionId
     );
     expectSubmissionPrivacy(submission, {
@@ -70,17 +91,10 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
       )
     ).text();
     const documentLoader = decodeRouterDataResponse(documentDataText);
-    const docData = (documentLoader as Record<string, unknown>)[
-      'routes/app_.documents_.$id'
-    ] as Record<string, unknown>;
-    const doc = docData.doc as Record<string, unknown>;
-    for (const list of [docData.submissions, doc.submissions] as Array<
-      Record<string, unknown>[]
-    >) {
-      const row = list.find((entry) => entry.id === gradePrivacy.submissionId);
-      expect(row).toBeTruthy();
-      expect(row!.gradedAt).toBeUndefined();
-    }
+    expectNoGradedAtInDocumentLoader(
+      documentLoader,
+      gradePrivacy.submissionId
+    );
 
     const assignmentTypeDataText = await (
       await page.request.get(
@@ -149,7 +163,7 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
     );
     const submission = submissionFromRouteData(
       submissionLoader,
-      'routes/app_.submissions_.$submissionId',
+      'app_.submissions_.$submissionId',
       gradePrivacy.releaseSubmissionId
     );
 

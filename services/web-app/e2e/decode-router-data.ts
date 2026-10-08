@@ -39,6 +39,22 @@ function decodeTurboLine(line: unknown[], index: number): unknown {
   return value;
 }
 
+export function getRouteLoaderData(
+  loaderData: unknown,
+  routeIdSuffix: string
+): Record<string, unknown> {
+  const root = loaderData as Record<string, unknown>;
+  const key = Object.keys(root).find((candidate) =>
+    candidate.endsWith(routeIdSuffix)
+  );
+  if (!key) {
+    throw new Error(
+      `Route loader data not found for suffix "${routeIdSuffix}" (keys: ${Object.keys(root).join(', ')})`
+    );
+  }
+  return root[key] as Record<string, unknown>;
+}
+
 export function findObjectsWithId(
   root: unknown,
   id: string
