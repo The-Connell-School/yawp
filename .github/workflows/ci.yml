@@ -423,6 +423,7 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
         run: bun run test:e2e:smoke
 
+      # HTML report + traces for smoke failures (see playwright.config.ts).
       - name: Upload Playwright report on failure
         if: failure() && (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true'))
         uses: actions/upload-artifact@v4
