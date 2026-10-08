@@ -203,6 +203,7 @@ jobs:
           './services/web-app/app/routes/app.assignment-types.$id/route.test.ts'
           './services/web-app/app/routes/app_.documents_.$id/route.test.ts'
           ./services/web-app/e2e/decode-router-data.test.ts
+          # decode-router-data: turbo .data assertions in student.unreleased-grade-loader-privacy E2E
 
       - name: 🎨 Backfill class artwork keys
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
