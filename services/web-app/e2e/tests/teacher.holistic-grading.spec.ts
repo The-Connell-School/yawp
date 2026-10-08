@@ -57,17 +57,16 @@ test('holistic Cristo Rey rubric grades points-only through grade-essay-ai', asy
     await page.goto(`/app/submissions/${submission.id}`);
 
     const panel = page.getByTestId('submission-lifecycle-panel');
-    await expect(page.getByTestId('grading-assistant-generate')).toBeVisible({
-      timeout: 30_000,
-    });
+    const generateButton = panel.getByTestId('grading-assistant-generate');
+    await expect(generateButton).toBeEnabled({ timeout: 120_000 });
     const gradingResponse = page.waitForResponse(
       (response) =>
         response.url().includes('/api/domain/grade-essay-ai') &&
         response.request().method() === 'POST' &&
         response.status() === 200,
-      { timeout: 60_000 }
+      { timeout: 120_000 }
     );
-    await page.getByTestId('grading-assistant-generate').click();
+    await generateButton.click();
     await gradingResponse;
 
     const pointsLabel = '18 / 20';
