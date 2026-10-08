@@ -110,7 +110,7 @@ try {
 
   const databaseName = process.env.DATABASE_URL?.split('/').pop()?.split('?')[0] ?? '';
   const { shouldRunFreeTierShipReviewSeed } = await import(
-    '../../scripts/preview/free-tier-ship-review-seed-guard.mjs'
+    '../../../scripts/preview/free-tier-ship-review-seed-guard.mjs'
   );
   if (shouldRunFreeTierShipReviewSeed(databaseName)) {
     console.time('free-tier-ship-review');

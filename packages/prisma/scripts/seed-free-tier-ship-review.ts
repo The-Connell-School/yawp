@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import { createPrismaClient, assertLocalSeedTarget } from './local-dev/connection';
 import { seedFreeTierShipReview } from './local-dev/seed-free-tier-ship-review';
-import { shouldRunFreeTierShipReviewSeed } from '../../scripts/preview/free-tier-ship-review-seed-guard.mjs';
+import { shouldRunFreeTierShipReviewSeed } from '../../../scripts/preview/free-tier-ship-review-seed-guard.mjs';
 
 assertLocalSeedTarget();
 

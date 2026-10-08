@@ -9,13 +9,6 @@ import {
 
 const enabled = process.env.FEATURE_FLAG_DB_TESTS === '1';
 const suite = enabled ? describe : describe.skip;
-const flags = enabled ? await import('./feature-flags.server') : null;
-const http = enabled
-  ? await import('~/utils/internal-feature-flags-http.server')
-  : null;
-const { prisma } = enabled
-  ? await import('~/utils/db.server')
-  : { prisma: null };
 
 const KEY = 'f'.repeat(43);
 const NAME = featureFlagSettingName(DAILY_PAGES_WRITING_CONDITIONS_FLAG);
@@ -25,21 +18,29 @@ const auth = { authorization: `Bearer ${KEY}` };
 suite('feature flags against the database', () => {
   let oldKey: string | undefined;
   let original: { value: string } | null = null;
+  let prisma: import('~/utils/db.server').prisma;
+  let flags: typeof import('./feature-flags.server');
+  let http: typeof import('~/utils/internal-feature-flags-http.server');
 
   beforeAll(async () => {
+    if (!enabled) return;
+    ({ prisma } = await import('~/utils/db.server'));
+    flags = await import('./feature-flags.server');
+    http = await import('~/utils/internal-feature-flags-http.server');
     oldKey = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
     process.env.YAWP_MANAGEMENT_SERVICE_KEY = KEY;
-    original = await prisma!.setting.findUnique({
+    original = await prisma.setting.findUnique({
       where: { name: NAME },
       select: { value: true },
     });
-    await prisma!.setting.deleteMany({ where: { name: NAME } });
+    await prisma.setting.deleteMany({ where: { name: NAME } });
   });
 
   afterAll(async () => {
-    await prisma!.setting.deleteMany({ where: { name: NAME } });
+    if (!enabled) return;
+    await prisma.setting.deleteMany({ where: { name: NAME } });
     if (original) {
-      await prisma!.setting.create({
+      await prisma.setting.create({
         data: { name: NAME, value: original.value, valueType: 'boolean' },
       });
     }
@@ -48,7 +49,7 @@ suite('feature flags against the database', () => {
   });
 
   const setVia = (on: boolean) =>
-    http!.featureFlagUpdate(
+    http.featureFlagUpdate(
       new Request(`${URL_BASE}/${DAILY_PAGES_WRITING_CONDITIONS_FLAG}`, {
         method: 'POST',
         headers: {
@@ -62,8 +63,8 @@ suite('feature flags against the database', () => {
     );
 
   test('with no row the flag is off', async () => {
-    expect(await flags!.isDailyPagesWritingConditionsEnabled()).toBe(false);
-    const list = await http!.featureFlagsList(
+    expect(await flags.isDailyPagesWritingConditionsEnabled()).toBe(false);
+    const list = await http.featureFlagsList(
       new Request(URL_BASE, { headers: auth })
     );
     const body = (await list.json()) as { flags: { key: string; enabled: boolean }[] };
@@ -76,8 +77,8 @@ suite('feature flags against the database', () => {
   test('turning it on through the management API is read at once', async () => {
     const res = await setVia(true);
     expect(res.status).toBe(200);
-    expect(await flags!.isDailyPagesWritingConditionsEnabled()).toBe(true);
-    const row = await prisma!.setting.findUnique({ where: { name: NAME } });
+    expect(await flags.isDailyPagesWritingConditionsEnabled()).toBe(true);
+    const row = await prisma.setting.findUnique({ where: { name: NAME } });
     expect(row?.value).toBe('true');
     expect(row?.description).toContain('ops@yawp.school');
   });
@@ -85,7 +86,7 @@ suite('feature flags against the database', () => {
   test('turning it back off is read at once and keeps a single row', async () => {
     const res = await setVia(false);
     expect(res.status).toBe(200);
-    expect(await flags!.isDailyPagesWritingConditionsEnabled()).toBe(false);
-    expect(await prisma!.setting.count({ where: { name: NAME } })).toBe(1);
+    expect(await flags.isDailyPagesWritingConditionsEnabled()).toBe(false);
+    expect(await prisma.setting.count({ where: { name: NAME } })).toBe(1);
   });
 });
