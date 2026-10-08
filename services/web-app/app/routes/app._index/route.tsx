@@ -72,7 +72,6 @@ export type AssignmentTypeRow = {
   title: string;
   kind?: string | null;
   systemKey?: string | null;
-  kind?: string | null;
   collaborationSupported?: boolean;
   image?: { id: string } | null;
 };
@@ -265,7 +264,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
             kind: true,
             collaborationSupported: true,
             systemKey: true,
-            kind: true,
             image: { select: { id: true } },
           },
           orderBy: { position: 'asc' },
