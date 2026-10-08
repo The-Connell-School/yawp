@@ -37,6 +37,9 @@ const NEW_DP_ASSIGNMENT_ID = 'dp-new-assignment-post-migration';
 const NEW_SJP_ASSIGNMENT_ID = 'sjp-new-assignment-post-migration';
 const SUBMISSION_ID = 'dp-pinned-submission-prod-shape';
 const DOCUMENT_ID = 'dp-pinned-document-prod-shape';
+const FIXTURE_ORG_ID = 'dp-engagement-fixture-org';
+const FIXTURE_USER_ID = 'dp-engagement-fixture-user';
+const FIXTURE_MEMBERSHIP_ID = 'dp-engagement-fixture-membership';
 
 function run(
   cmd: string,
@@ -158,9 +161,16 @@ describe('daily-pages-engagement migration (real Postgres)', () => {
       ALTER TABLE "Assignment" ENABLE TRIGGER "internal_assignment_rubric_pin";
       INSERT INTO "InternalAssignmentRubricPinBackfill" ("assignmentId","selectedRevisionId","reason")
       VALUES ('${PINNED_ASSIGNMENT_ID}', '${BASELINE_REVISION_ID}', NULL);
-      INSERT INTO "Document" ("id","createdAt","updatedAt","title","text","html","assignmentTypeId","assignmentId")
+      INSERT INTO "Organization" ("id","createdAt","updatedAt","name")
+      VALUES ('${FIXTURE_ORG_ID}', now(), now(), 'DP engagement fixture org');
+      INSERT INTO "User" ("id","createdAt","updatedAt","email","name")
+      VALUES ('${FIXTURE_USER_ID}', now(), now(), 'dp-fixture@example.test', 'DP Fixture');
+      INSERT INTO "OrgMembership" ("id","createdAt","updatedAt","userId","organizationId","role")
+      VALUES ('${FIXTURE_MEMBERSHIP_ID}', now(), now(), '${FIXTURE_USER_ID}', '${FIXTURE_ORG_ID}', 'STUDENT');
+      INSERT INTO "Document" ("id","createdAt","updatedAt","title","text","html","membershipId","assignmentTypeId","assignmentId")
       VALUES (
         '${DOCUMENT_ID}', now(), now(), 'Pinned doc', 'hello', '<p>hello</p>',
+        '${FIXTURE_MEMBERSHIP_ID}',
         '${DAILY_PAGES_TYPE_ID}', '${PINNED_ASSIGNMENT_ID}'
       );
       INSERT INTO "Submission" ("id","createdAt","updatedAt","documentId","html","text","title","submittedAt","overallScore","score")
