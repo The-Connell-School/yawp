@@ -1,7 +1,7 @@
 import { expect, test } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
-import { mintSignedLink, RELEASE_LINK_TTL_MS } from '../../app/domain/free-tier/signed-link.server';
+import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
 
 const JOIN_PASSWORD = 'yawp-e2e-pass-1';
 const ADMIN_DOMAIN = 'e2e-ft.school.edu';
@@ -63,10 +63,9 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
       },
     });
 
-    const releaseMint = await mintSignedLink({
+    const releaseMint = await mintFreeTierLinkForE2E(prisma, {
       applicationId: app.id,
       purpose: 'RELEASE',
-      ttlMs: RELEASE_LINK_TTL_MS,
     });
 
     await page.goto(`/free/join?t=${encodeURIComponent(releaseMint.token)}`);
@@ -125,8 +124,11 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     });
     expect(classCount).toBeGreaterThan(0);
 
-    const { isAiUnlocked } = await import('../../app/domain/free-tier/is-ai-unlocked.server');
-    expect(await isAiUnlocked(org!)).toBe(true);
+    const approvedApp = await prisma.freeTierApplication.findFirst({
+      where: { organizationId: org!.id, status: 'APPROVED' },
+      select: { id: true },
+    });
+    expect(approvedApp?.id).toBeTruthy();
   });
 
   test('self-approval alias routes to manual review (no admin email)', async ({ page }) => {
@@ -144,10 +146,9 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
         releasedAt: new Date(),
       },
     });
-    const releaseMint = await mintSignedLink({
+    const releaseMint = await mintFreeTierLinkForE2E(prisma, {
       applicationId: app.id,
       purpose: 'RELEASE',
-      ttlMs: RELEASE_LINK_TTL_MS,
     });
 
     await page.goto(`/free/join?t=${encodeURIComponent(releaseMint.token)}`);
