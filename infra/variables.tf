@@ -147,8 +147,15 @@ variable "ua_partner_hostname" {
 
 variable "yawp_app_origin" {
   type        = string
-  description = "Public origin Stripe uses for checkout success and cancellation redirects."
+  description = "Public origin for the production web app (also PRIMARY_APP_URL for signed free-tier links)."
   default     = "https://ua.yawp.school"
+}
+
+variable "free_tier_link_hmac_secret" {
+  type        = string
+  description = "HMAC secret for free-tier signed links (admin approve / join). Set via tfvars or create the secret version manually in AWS before merge."
+  sensitive   = true
+  default     = ""
 }
 
 variable "stripe_secret_key" {

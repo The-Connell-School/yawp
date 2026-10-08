@@ -430,6 +430,12 @@ resource "aws_secretsmanager_secret" "free_tier_link_hmac" {
   name = "${var.app_name}-${var.env}-free-tier-link-hmac-secret"
 }
 
+resource "aws_secretsmanager_secret_version" "free_tier_link_hmac" {
+  count         = var.free_tier_link_hmac_secret != "" ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.free_tier_link_hmac.id
+  secret_string = var.free_tier_link_hmac_secret
+}
+
 resource "aws_secretsmanager_secret" "resend_api_key" {
   name = "${var.app_name}-${var.env}-resend-api-key"
 }
