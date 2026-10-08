@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../test-setup';
 
 const FREE_CLASSROOM_PASSWORD = 'yawp-dev';
 
@@ -12,7 +12,7 @@ test.describe('Free classroom bundle quotas', () => {
 
     await page.goto('/auth/login');
     await page.waitForLoadState('networkidle');
-    await page.locator('input[type="email"]').fill(email);
+    await page.getByLabel('Email or handle').fill(email);
     await page.locator('input[type="password"]').fill(FREE_CLASSROOM_PASSWORD);
     await page.getByRole('button', { name: /log in/i }).click();
     await page.waitForURL(

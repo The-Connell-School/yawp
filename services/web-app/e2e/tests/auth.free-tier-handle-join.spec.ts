@@ -162,17 +162,35 @@ test.describe('Free-tier handle student', () => {
       await page.getByRole('button', { name: 'Log in' }).click();
       await expect(page).toHaveURL(/\/app/);
     } finally {
+      const student = await prisma.user.findFirst({ where: { username: handle } });
+      if (student) {
+        const documents = await prisma.document.findMany({
+          where: { authorId: student.id },
+          select: { id: true },
+        });
+        for (const doc of documents) {
+          await prisma.submission.deleteMany({ where: { documentId: doc.id } });
+          await prisma.documentComment
+            .deleteMany({ where: { documentId: doc.id } })
+            .catch(() => {});
+        }
+        await prisma.document.deleteMany({ where: { authorId: student.id } });
+        await prisma.session.deleteMany({ where: { userId: student.id } });
+        await prisma.password.deleteMany({ where: { userId: student.id } }).catch(() => {});
+        await prisma.orgMembership.deleteMany({ where: { userId: student.id } });
+        await prisma.user.delete({ where: { id: student.id } }).catch(() => {});
+      }
+      await prisma.classAssignment
+        .deleteMany({ where: { classId: klass.id } })
+        .catch(() => {});
       await prisma.assignment.delete({ where: { id: assignment.id } }).catch(() => {});
       await prisma.class.delete({ where: { id: klass.id } }).catch(() => {});
-      await prisma.orgMembership.deleteMany({ where: { organizationId: org.id } });
+      await prisma.orgMembership
+        .deleteMany({ where: { organizationId: org.id } })
+        .catch(() => {});
       await prisma.school.delete({ where: { id: school.id } }).catch(() => {});
       await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
       await prisma.user.delete({ where: { id: teacherUser.id } }).catch(() => {});
-      const student = await prisma.user.findFirst({ where: { username: handle } });
-      if (student) {
-        await prisma.session.deleteMany({ where: { userId: student.id } });
-        await prisma.user.delete({ where: { id: student.id } });
-      }
     }
   });
 });
