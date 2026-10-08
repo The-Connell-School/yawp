@@ -1,4 +1,8 @@
-import { expect, mock, test } from 'bun:test';
+import { afterAll, expect, mock, test } from 'bun:test';
+
+afterAll(() => {
+  mock.restore();
+});
 
 test('onboarding action surfaces email_failed without redirecting to pending', async () => {
   mock.module('~/utils/auth.server', () => ({

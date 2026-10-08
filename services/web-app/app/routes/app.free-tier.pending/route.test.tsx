@@ -1,4 +1,8 @@
-import { expect, mock, test } from 'bun:test';
+import { afterAll, expect, mock, test } from 'bun:test';
+
+afterAll(() => {
+  mock.restore();
+});
 
 test('resend is blocked unless application status is SENT', async () => {
   mock.module('~/utils/auth.server', () => ({

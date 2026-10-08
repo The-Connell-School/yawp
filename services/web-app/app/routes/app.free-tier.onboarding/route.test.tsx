@@ -1,4 +1,8 @@
-import { expect, mock, test } from 'bun:test';
+import { afterAll, expect, mock, test } from 'bun:test';
+
+afterAll(() => {
+  mock.restore();
+});
 
 mock.module('~/domain/free-tier/approval-flow.server', () => ({
   submitAdminDetails: async () => ({ ok: true as const, status: 'SENT' as const }),
