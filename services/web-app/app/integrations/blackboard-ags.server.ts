@@ -255,6 +255,21 @@ export async function ensureMockLaunchClaims() {
 }
 
 /**
+ * The same passback for callers that do not wait on it, such as releasing
+ * grades. Any failure is logged here: a rejection left unhandled terminates
+ * the Node process, and a passback is never worth the server.
+ */
+export async function postGradeToBlackboardInBackground(
+  input: Parameters<typeof maybePostGradeToBlackboard>[0]
+): Promise<void> {
+  try {
+    await maybePostGradeToBlackboard(input);
+  } catch (error) {
+    console.warn('Blackboard AGS passback failed', { error });
+  }
+}
+
+/**
  * Convenience for server routes: if mock env is present and a numeric grade exists,
  * post it to the mock AGS lineitem for the test resource link.
  *

@@ -14,7 +14,7 @@ import {
   resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
-import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
+import { postGradeToBlackboardInBackground } from '~/integrations/blackboard-ags.server';
 
 const POST = z.object({
   submissionIds: z.preprocess(
@@ -242,8 +242,9 @@ export async function action({ request }: ActionFunctionArgs) {
     });
     for (const s of releasedSubs) {
       if (typeof s.numericPercentage === 'number') {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        maybePostGradeToBlackboard({ numericPercentage: s.numericPercentage });
+        void postGradeToBlackboardInBackground({
+          numericPercentage: s.numericPercentage,
+        });
       }
     }
   } catch (err) {
