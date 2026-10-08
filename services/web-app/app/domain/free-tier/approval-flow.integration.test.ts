@@ -501,4 +501,103 @@ describe('free-tier approval flow', () => {
     });
     expect(withPassword?.password?.userId).toBe(orphan.id);
   });
+
+  test('school admin approve on REJECTED application does not consume the link', async () => {
+    const email = `ft-reject-approve-${Date.now()}@school.edu`;
+    const app = await prisma.freeTierApplication.create({
+      data: {
+        email,
+        name: 'Rejected Teacher',
+        schoolName: 'Reject HS',
+        location: 'NY',
+        gradeLevel: '9',
+        status: 'ACCOUNT_CREATED',
+        userId: (
+          await prisma.user.create({
+            data: { email, name: 'Rejected Teacher' },
+            select: { id: true },
+          })
+        ).id,
+      },
+    });
+    const submit = await submitAdminDetails({
+      applicationId: app.id,
+      userId: app.userId!,
+      adminName: 'Principal Pat',
+      adminEmail: 'principal@school.edu',
+      adminRole: 'Principal',
+    });
+    expect(submit.ok, JSON.stringify(submit)).toBe(true);
+    const emailLog = await prisma.freeTierEmailLog.findFirst({
+      where: { applicationId: app.id, kind: 'admin_approval', success: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)?.approveUrl;
+    const approveToken = approveUrl ? new URL(approveUrl).searchParams.get('t') : null;
+    if (!approveToken) throw new Error('missing emailed approve token');
+    const linkId = (
+      await prisma.freeTierSignedLink.findFirst({
+        where: { applicationId: app.id, purpose: 'ADMIN_APPROVE' },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+    )?.id;
+    if (!linkId) throw new Error('missing approve link row');
+
+    await prisma.freeTierApplication.update({
+      where: { id: app.id },
+      data: { status: 'REJECTED' },
+    });
+
+    const req = new Request('https://yawp.test/free/admin/approve', {
+      headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.9' },
+    });
+    const result = await completeSchoolAdminApproval({
+      token: approveToken,
+      adminRole: 'Principal',
+      authorized: true,
+      request: req,
+    });
+    expect(result).toEqual({ ok: false, reason: 'illegal_state', status: 'REJECTED' });
+    const link = await prisma.freeTierSignedLink.findUnique({
+      where: { id: linkId },
+      select: { usedAt: true },
+    });
+    expect(link?.usedAt).toBeNull();
+    const finalApp = await prisma.freeTierApplication.findUnique({ where: { id: app.id } });
+    expect(finalApp?.status).toBe('REJECTED');
+  });
+
+  test('release join on non-INVITED application does not consume the link', async () => {
+    const email = `ft-release-bad-state-${Date.now()}@school.edu`;
+    const app = await prisma.freeTierApplication.create({
+      data: {
+        email,
+        name: 'Bad State',
+        schoolName: 'Join HS',
+        location: 'TX',
+        gradeLevel: '10',
+        status: 'ACCOUNT_CREATED',
+        releasedAt: new Date(),
+      },
+    });
+    const minted = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'RELEASE',
+      ttlMs: RELEASE_LINK_TTL_MS,
+    });
+    const created = await createFreeTierTeacherAccount({
+      token: minted.token,
+      name: 'Bad State',
+      passwordHash: await testPasswordHash('yawp-ft-join-pass'),
+    });
+    expect(created).toEqual({ ok: false, reason: 'illegal_state', status: 'ACCOUNT_CREATED' });
+    const link = await prisma.freeTierSignedLink.findUnique({
+      where: { id: minted.linkId },
+      select: { usedAt: true },
+    });
+    expect(link?.usedAt).toBeNull();
+    const peek = await peekSignedLink({ token: minted.token, expectedPurpose: 'RELEASE' });
+    expect(peek.ok).toBe(true);
+  });
 });

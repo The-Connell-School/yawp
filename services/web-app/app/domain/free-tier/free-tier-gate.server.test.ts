@@ -63,6 +63,18 @@ describe('enforceFreeTierTeacherGate', () => {
     );
   });
 
+  test('REJECTED cannot stay on pending', async () => {
+    await expectRedirect(
+      () =>
+        enforceFreeTierTeacherGate({
+          userId: 'u1',
+          pathname: '/app/free-tier/pending',
+          application: app({ status: 'REJECTED' }),
+        }),
+      '/app/free-tier/status'
+    );
+  });
+
   test('EXPIRED redirects to status', async () => {
     await expectRedirect(
       () =>

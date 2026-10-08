@@ -187,7 +187,7 @@ export function buildGradingPromptShape({
       : []),
     ...(teacherNotesEnabled ? [
       TEACHER_NOTES_EVIDENCE_RULE,
-      'teacherNote is private to the teacher. Use only observations explicitly requested in the grading instructions; return null when there is no observation.',
+      'teacherNote is private to the teacher. Follow the Teacher Note rules above; return null when no clear, useful inconsistency is supported.',
       'Never put private observations in overallComment or category comments. Do not infer AI authorship, give an AI probability, or make an accusation. Do not reduce a score on suspicion.',
     ] : []),
     `In overallComment, start with "${studentFirstName}," and continue with cohesive feedback in a warm but professional tone.`,

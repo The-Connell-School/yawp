@@ -285,7 +285,7 @@ export async function requireAdmin(request: Request) {
 export async function requireSuperAdmin(request: Request) {
   const userId = await requireUserId(request);
   const user = await prisma.user.findFirst({
-    select: { id: true },
+    select: { id: true, email: true },
     where: { id: userId, isSuperAdmin: true },
   });
   if (!user) {
@@ -298,6 +298,7 @@ export async function requireSuperAdmin(request: Request) {
       { status: 403 }
     );
   }
+
   return user;
 }
 

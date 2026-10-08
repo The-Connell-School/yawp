@@ -410,6 +410,52 @@ describe('September 14 Daily Pages library revision', () => {
     expect(config.instructions).toMatchObject({ gradingInstructions: 'Prior teacher-approved instructions.' });
   });
 
+  test('honors library outputSchema.teacherNotesEnabled on thesis-driven essay rubrics', async () => {
+    const { THESIS_DRIVEN_ESSAY_RUBRIC_NAME } = await import(
+      '~/domain/rubrics/thesis-driven-essay'
+    );
+    const schema = {
+      name: THESIS_DRIVEN_ESSAY_RUBRIC_NAME,
+      title: 'Thesis-driven essay',
+      scoringScale: { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 },
+      rubric: {
+        categories: [
+          {
+            key: 'thesis_and_content',
+            label: 'Thesis/Content',
+            weight: 0.6,
+            description: 'Original thesis.',
+          },
+        ],
+      },
+      promptConfig: { instructionsPreset: 'legacy_thesis_driven_essay' },
+      outputSchema: { schemaVersion: 1, teacherNotesEnabled: true },
+    };
+    const config = buildResolvedAssignmentTypeGradingConfig({
+      assignmentTypeId: 'thesis-type',
+      assignmentTypeKind: 'essay',
+      assignmentTypeTitle: 'Essay',
+      row: {
+        id: 'thesis-type',
+        title: 'Essay',
+        kind: 'essay',
+        scoringScaleJson: schema.scoringScale,
+        rubricJson: schema.rubric,
+        gradingPromptConfigJson: schema.promptConfig,
+        gradingOutputSchemaJson: schema.outputSchema,
+        gradingCalibrationNotes: null,
+        gradingAssistantVersion: 1,
+        gradingAssistantSourceTemplateId: null,
+        gradingAssistantSourceTemplateSlug: null,
+        selectedRubricName: THESIS_DRIVEN_ESSAY_RUBRIC_NAME,
+      },
+    });
+    expect(
+      (config.outputSchemaSnapshot as { teacherNotesEnabled?: boolean })
+        .teacherNotesEnabled
+    ).toBe(true);
+  });
+
   test('preserves whole-number score resolution on a configured 90-point engagement rubric', async () => {
     const { rubricScaleGradeFieldsFromScores } = await import('~/domain/grading/recorded-grade');
     const { isScoreInCategoryBands } = await import('./rubric-category-options');
@@ -460,6 +506,104 @@ describe('September 14 Daily Pages library revision', () => {
       rubricScores: { engagement_with_prompt: { score: 18 } },
     });
     expect(grade).toEqual({ overallScore: 18, score: '18/30', numericPercentage: null, letterGrade: null });
+  });
+
+  test('live teacher notes toggle applies to grading even when assignment pins an older revision', async () => {
+    const live = structuredClone(dailyPagesLibraryJson) as Record<string, unknown>;
+    live.outputSchema = {
+      ...(typeof live.outputSchema === 'object' && live.outputSchema
+        ? (live.outputSchema as Record<string, unknown>)
+        : {}),
+      teacherNotesEnabled: true,
+    };
+    const pinned = structuredClone(dailyPagesLibraryJson) as Record<string, unknown>;
+    pinned.outputSchema = {
+      ...(typeof pinned.outputSchema === 'object' && pinned.outputSchema
+        ? (pinned.outputSchema as Record<string, unknown>)
+        : {}),
+      teacherNotesEnabled: false,
+    };
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'dp-live-toggle',
+      title: 'Daily Pages',
+      kind: 'daily_pages',
+      rubricId: 'rubric-dp',
+      scoringScaleJson: null,
+      rubricJson: null,
+      gradingPromptConfigJson: null,
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 2,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      rubric: {
+        name: 'daily-pages-engagement',
+        schemaJson: live,
+        currentRevision: {
+          id: 'rev-2',
+          version: 2,
+          rubricName: 'daily-pages-engagement',
+          schemaJson: live,
+        },
+      },
+    });
+    prisma.assignment.findUnique.mockResolvedValue({
+      assignmentTypeId: 'dp-live-toggle',
+      rubricTotalPoints: null,
+      gradingMode: 'bands',
+      rubricRevision: {
+        id: 'rev-1',
+        version: 1,
+        rubricName: 'daily-pages-engagement',
+        schemaJson: pinned,
+      },
+    });
+    const enabled = await resolveAssignmentTypeGradingConfig({
+      assignmentTypeId: 'dp-live-toggle',
+      assignmentId: 'historical-assignment',
+    });
+    expect(
+      (enabled.outputSchemaSnapshot as { teacherNotesEnabled?: boolean })
+        .teacherNotesEnabled
+    ).toBe(true);
+
+    const liveOff = structuredClone(live);
+    liveOff.outputSchema = {
+      ...(liveOff.outputSchema as Record<string, unknown>),
+      teacherNotesEnabled: false,
+    };
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'dp-live-toggle',
+      title: 'Daily Pages',
+      kind: 'daily_pages',
+      rubricId: 'rubric-dp',
+      scoringScaleJson: null,
+      rubricJson: null,
+      gradingPromptConfigJson: null,
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 2,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      rubric: {
+        name: 'daily-pages-engagement',
+        schemaJson: liveOff,
+        currentRevision: {
+          id: 'rev-2',
+          version: 2,
+          rubricName: 'daily-pages-engagement',
+          schemaJson: liveOff,
+        },
+      },
+    });
+    const disabled = await resolveAssignmentTypeGradingConfig({
+      assignmentTypeId: 'dp-live-toggle',
+      assignmentId: 'historical-assignment',
+    });
+    expect(
+      (disabled.outputSchemaSnapshot as { teacherNotesEnabled?: boolean })
+        .teacherNotesEnabled
+    ).toBe(false);
   });
 });
 

@@ -4,7 +4,7 @@ import { data as dataResponse, redirect, useLoaderData } from 'react-router';
 import type { Prisma } from '@app/prisma';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
-import { requireAdmin } from '~/utils/auth.server';
+import { requireAdmin, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
   DEFAULT_OUTPUT_SCHEMA_JSON,
@@ -16,6 +16,10 @@ import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assi
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { computePromptVersionLabels } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 import { isPromptVersionControlEnabled } from '~/domain/ai-evaluation/prompt-version-control.server';
+import {
+  authorizeOutputSchemaTeacherNotes,
+  existingOutputSchemaForAssignmentTypeSave,
+} from '~/domain/grading/teacher-notes';
 
 const PROMPT_PREVIEW_INPUTS = {
   studentFirstName: 'Jordan',
@@ -71,6 +75,11 @@ function readGradingInstructionsOverride(rawPromptConfig: unknown) {
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
+  const userId = await requireUserId(request);
+  const superAdmin = await prisma.user.findFirst({
+    where: { id: userId, isSuperAdmin: true },
+    select: { id: true },
+  });
 
   const assignmentTypeId = params.id;
   const course = await prisma.assignmentType.findUnique({
@@ -96,11 +105,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   await seedStarterRubrics();
   const rubrics = (await listRubrics()).map(({ id, name, title, json }) => ({ id, name, title, json }));
   const currentPromptLabel = await resolveCurrentPromptLabel(course.id);
-
   if (course.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
     return dataResponse({
       course,
       rubrics,
+      canEditRubricOutputOptions: Boolean(superAdmin),
       gradingAssistantPromptPreview: null,
       gradingAssistantPromptPreviewUnavailableReason:
         'The AP History prompt is built from the assignment snapshot. Open a graded submission to inspect the full prompt.',
@@ -121,6 +130,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     course,
     rubrics,
+    canEditRubricOutputOptions: Boolean(superAdmin),
     gradingAssistantPromptPreview: {
       ...compiledInvocation,
       version: resolvedGradingConfig.version,
@@ -155,6 +165,11 @@ async function resolveCurrentPromptLabel(assignmentTypeId: string) {
 
 export async function action({ request, params }: ActionFunctionArgs) {
   await requireAdmin(request);
+  const userId = await requireUserId(request);
+  const superAdmin = await prisma.user.findFirst({
+    where: { id: userId, isSuperAdmin: true },
+    select: { id: true },
+  });
   const formData = await request.formData();
   const intent = formData.get('intent');
   const assignmentTypeId = params.id;
@@ -213,7 +228,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const existing = await prisma.assignmentType.findUnique({
       where: { id: assignmentTypeId },
-      select: { id: true, rubricJson: true, gradingPromptConfigJson: true },
+      select: {
+        id: true,
+        rubricJson: true,
+        gradingPromptConfigJson: true,
+        gradingOutputSchemaJson: true,
+        rubric: { select: { schemaJson: true } },
+      },
     });
     if (!existing) {
       throw new Response('Not Found', { status: 404 });
@@ -234,6 +255,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       (formData.get('gradingInstructionsOverride')?.toString().trim() ?? '') !==
         readGradingInstructionsOverride(existing.gradingPromptConfigJson);
 
+    const hasOutputSchemaField = formData.has('outputSchemaJson');
+    const existingOutputSchema = existingOutputSchemaForAssignmentTypeSave({
+      hasRubricIdField,
+      nextRubricId: hasRubricIdField ? rubricId : null,
+      libraryRubricSchemaJson: existing.rubric?.schemaJson ?? null,
+      gradingOutputSchemaJson: existing.gradingOutputSchemaJson,
+    });
     const gradingConfigData = hasGradingConfigFields
       ? {
           scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
@@ -244,9 +272,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
                 formData.get('gradingInstructionsOverride')
               )
             : parseJsonFormField(formData, 'promptConfigJson'),
-          gradingOutputSchemaJson:
-            parseJsonFormField(formData, 'outputSchemaJson') ??
-            DEFAULT_OUTPUT_SCHEMA_JSON,
+          ...(hasOutputSchemaField
+            ? {
+                gradingOutputSchemaJson: authorizeOutputSchemaTeacherNotes(
+                  (parseJsonFormField(formData, 'outputSchemaJson') ??
+                    DEFAULT_OUTPUT_SCHEMA_JSON) as Record<string, unknown>,
+                  existingOutputSchema,
+                  Boolean(superAdmin)
+                ) as Prisma.InputJsonValue,
+              }
+            : {}),
           gradingAssistantVersion: { increment: 1 },
         }
       : gradingInstructionsOverrideChanged
@@ -260,7 +295,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         : {};
 
     if (hasGradingConfigFields) {
-      const nextRubric = parseRubric(gradingConfigData.rubricJson);
+      const nextRubric = parseRubric(
+        parseJsonFormField(formData, 'rubricJson')
+      );
       const nextRubricComplete = isRubricFullyPopulated(nextRubric);
       if (!nextRubricComplete) {
         // Grandfather assignment types whose rubric was already incomplete
@@ -368,6 +405,7 @@ export default function AssignmentTypeRoute() {
     course,
     rubrics,
     currentPromptLabel,
+    canEditRubricOutputOptions,
   } = useLoaderData<typeof loader>();
 
   return (
@@ -384,6 +422,7 @@ export default function AssignmentTypeRoute() {
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}
       currentPromptLabel={currentPromptLabel}
+      canEditRubricOutputOptions={canEditRubricOutputOptions}
     />
   );
 }

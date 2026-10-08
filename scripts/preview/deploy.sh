@@ -637,6 +637,8 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/seed-local-dev.ts \
         packages/prisma/scripts/seed-class-starter-assignment-type.ts \
         packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts \
+        packages/prisma/scripts/seed-preview-teacher-notes-qa.ts \
+        packages/prisma/scripts/local-dev/preview-teacher-notes-qa.ts \
         packages/prisma/scripts/assets/class-starter.jpg \
         packages/prisma/scripts/sync-prod-fidelity-fixtures.ts \
         packages/prisma/scripts/preview-seats.ts \
@@ -766,6 +768,9 @@ run_tooling_if_needed() {
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
     tooling_command+=' && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)'
+  fi
+  if [[ "$DATA_MODE" == "seed" && -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-teacher-notes-qa.ts" ]]; then
+    tooling_command+=' && bun run seed-preview-teacher-notes-qa'
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'

@@ -1,10 +1,13 @@
 import { redirect } from 'react-router';
 import { prisma } from '~/utils/db.server';
 
-const OPEN_PREFIXES = [
-  '/app/free-tier',
-  '/auth/logout',
-];
+const TERMINAL_OPEN_PATHS = ['/app/free-tier/status', '/auth/logout'];
+
+function isTerminalOpenPath(pathname: string) {
+  return TERMINAL_OPEN_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`)
+  );
+}
 
 export type FreeTierGateApplication = {
   id: string;
@@ -44,9 +47,8 @@ export async function enforceFreeTierTeacherGate(args: {
       : args.application;
   if (!application) return null;
 
-  const open = OPEN_PREFIXES.some((p) => args.pathname === p || args.pathname.startsWith(`${p}/`));
   if (application.status === 'REJECTED' || application.status === 'EXPIRED') {
-    if (!open) throw redirect('/app/free-tier/status');
+    if (!isTerminalOpenPath(args.pathname)) throw redirect('/app/free-tier/status');
     return application;
   }
 

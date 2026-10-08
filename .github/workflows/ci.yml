@@ -1,3 +1,4 @@
+# CI: pull_request synchronize runs full test matrix including Playwright E2E.
 name: CI
 on:
   pull_request:
@@ -265,6 +266,24 @@ jobs:
           ./services/web-app/e2e/decode-router-data.test.ts
           # decode-router-data: turbo .data assertions in student.unreleased-grade-loader-privacy E2E
 
+      # These mock ~/utils/db.server; run each in its own process so DB integration
+      # suites above keep a real Prisma client.
+      - name: 🧪 Teacher notes + grading output unit tests (isolated)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          set -e
+          bun test ./services/web-app/app/domain/grading/teacher-notes.test.ts
+          bun test ./services/web-app/app/domain/grading/grading-prompt-shape.test.ts
+          bun test ./packages/prisma/scripts/seed-preview-teacher-notes-qa.test.ts
+          cd services/web-app
+          bun test app/domain/assignment-types/assignment-type-grading-config.server.test.ts
+          bun test app/routes/api.admin.rubric-output-options/route.test.ts
+          bun test 'app/routes/app_.submissions_.$submissionId/route.loader.test.ts'
+          bun test 'app/routes/app.admin.assignment-types.$id/route.test.ts'
+          bun test app/routes/app.admin.assignment-types.new/route.test.ts
+
       - name: 🧪 Free-tier student-join unit tests (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
@@ -301,6 +320,12 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma seed-local-dev
+
+      - name: 🧪 Preview teacher-notes QA seed (integration)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./packages/prisma/scripts/seed-preview-teacher-notes-qa.integration.test.ts
 
       # Entitlements/reporter-gate tests were never run by CI. Each file mocks
       # different modules, so they run in separate bun processes. The DB test

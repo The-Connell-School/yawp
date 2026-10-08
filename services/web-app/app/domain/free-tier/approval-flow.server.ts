@@ -27,6 +27,31 @@ import {
 import { getApprovalHooks } from './approval-hooks.server';
 import { getClientIp } from '~/utils/ip.server';
 
+export type FreeTierTransactionalFailure = {
+  ok: false;
+  reason: string;
+  status?: string;
+};
+
+export class FreeTierTransactionalAbortError extends Error {
+  readonly result: FreeTierTransactionalFailure;
+
+  constructor(result: FreeTierTransactionalFailure) {
+    super(result.reason);
+    this.name = 'FreeTierTransactionalAbortError';
+    this.result = result;
+  }
+}
+
+function abortClaimedLinkTransaction(result: FreeTierTransactionalFailure): never {
+  throw new FreeTierTransactionalAbortError(result);
+}
+
+function mapTransactionalAbort(error: unknown) {
+  if (error instanceof FreeTierTransactionalAbortError) return error.result;
+  throw error;
+}
+
 function hashClientMeta(value: string) {
   const secret = process.env.FREE_TIER_LINK_HMAC_SECRET?.trim() || 'dev';
   return createHash('sha256').update(`${secret}:${value}`).digest('hex');
@@ -214,80 +239,97 @@ export async function completeSchoolAdminApproval(args: {
   }
 
   const meta = hashRequestMeta(args.request);
-  const result = await prisma.$transaction(async (tx) => {
-    const consumed = await claimSignedLinkInTransaction(tx, {
-      token: args.token,
-      expectedPurpose: 'ADMIN_APPROVE',
-    });
-    if (!consumed.ok) return consumed;
-
-    const app = await tx.freeTierApplication.findUnique({
-      where: { id: consumed.applicationId },
-      select: { id: true, status: true, email: true, name: true, schoolName: true, userId: true, organizationId: true },
-    });
-    if (!app) return { ok: false as const, reason: 'not_found' as const };
-    if (app.status === 'APPROVED') return { ok: true as const, idempotent: true as const };
-    if (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW') {
-      return { ok: false as const, reason: 'illegal_state' as const, status: app.status };
-    }
-
-    const pending = await tx.freeTierAdminApproval.findFirst({
-      where: {
-        applicationId: app.id,
-        signedLinkId: consumed.linkId,
-        status: 'PENDING',
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, adminName: true, adminEmail: true },
-    });
-    if (!pending) {
-      const stillPending = await tx.freeTierAdminApproval.findFirst({
-        where: { applicationId: app.id, status: 'PENDING' },
-        select: { id: true },
+  let result;
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const consumed = await claimSignedLinkInTransaction(tx, {
+        token: args.token,
+        expectedPurpose: 'ADMIN_APPROVE',
       });
-      if (stillPending) return { ok: false as const, reason: 'superseded' as const };
-      return { ok: false as const, reason: 'not_found' as const };
-    }
+      if (!consumed.ok) return consumed;
 
-    await tx.freeTierAdminApproval.update({
-      where: { id: pending.id },
-      data: {
-        status: 'APPROVED',
-        adminRole: args.adminRole.trim(),
-        decidedAt: new Date(),
-        clientIpHash: meta.clientIpHash,
-        userAgentHash: meta.userAgentHash,
-      },
+      const app = await tx.freeTierApplication.findUnique({
+        where: { id: consumed.applicationId },
+        select: {
+          id: true,
+          status: true,
+          email: true,
+          name: true,
+          schoolName: true,
+          userId: true,
+          organizationId: true,
+        },
+      });
+      if (!app) abortClaimedLinkTransaction({ ok: false, reason: 'not_found' });
+      if (app.status === 'APPROVED') return { ok: true as const, idempotent: true as const };
+      if (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW') {
+        abortClaimedLinkTransaction({
+          ok: false,
+          reason: 'illegal_state',
+          status: app.status,
+        });
+      }
+
+      const pending = await tx.freeTierAdminApproval.findFirst({
+        where: {
+          applicationId: app.id,
+          signedLinkId: consumed.linkId,
+          status: 'PENDING',
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, adminName: true, adminEmail: true },
+      });
+      if (!pending) {
+        const stillPending = await tx.freeTierAdminApproval.findFirst({
+          where: { applicationId: app.id, status: 'PENDING' },
+          select: { id: true },
+        });
+        if (stillPending) abortClaimedLinkTransaction({ ok: false, reason: 'superseded' });
+        abortClaimedLinkTransaction({ ok: false, reason: 'not_found' });
+      }
+
+      await tx.freeTierAdminApproval.update({
+        where: { id: pending.id },
+        data: {
+          status: 'APPROVED',
+          adminRole: args.adminRole.trim(),
+          decidedAt: new Date(),
+          clientIpHash: meta.clientIpHash,
+          userAgentHash: meta.userAgentHash,
+        },
+      });
+
+      const updated = await tx.freeTierApplication.updateMany({
+        where: { id: app.id, status: { in: ['SENT', 'MANUAL_REVIEW'] } },
+        data: { status: 'APPROVED' },
+      });
+      if (updated.count === 0) abortClaimedLinkTransaction({ ok: false, reason: 'conflict' });
+
+      await tx.freeTierApprovalDecision.create({
+        data: {
+          applicationId: app.id,
+          decision: 'APPROVED',
+          decidedByEmail: pending.adminEmail,
+          reason: `School admin approval (${pending.adminName})`,
+        },
+      });
+
+      return {
+        ok: true as const,
+        app: {
+          id: app.id,
+          email: app.email,
+          name: app.name,
+          schoolName: app.schoolName,
+          userId: app.userId,
+          organizationId: app.organizationId,
+        },
+        adminName: pending.adminName,
+      };
     });
-
-    const updated = await tx.freeTierApplication.updateMany({
-      where: { id: app.id, status: { in: ['SENT', 'MANUAL_REVIEW'] } },
-      data: { status: 'APPROVED' },
-    });
-    if (updated.count === 0) return { ok: false as const, reason: 'conflict' as const };
-
-    await tx.freeTierApprovalDecision.create({
-      data: {
-        applicationId: app.id,
-        decision: 'APPROVED',
-        decidedByEmail: pending.adminEmail,
-        reason: `School admin approval (${pending.adminName})`,
-      },
-    });
-
-    return {
-      ok: true as const,
-      app: {
-        id: app.id,
-        email: app.email,
-        name: app.name,
-        schoolName: app.schoolName,
-        userId: app.userId,
-        organizationId: app.organizationId,
-      },
-      adminName: pending.adminName,
-    };
-  });
+  } catch (error) {
+    result = mapTransactionalAbort(error);
+  }
 
   if (!result.ok) return result;
   if ('idempotent' in result && result.idempotent) return result;
@@ -548,76 +590,86 @@ export async function createFreeTierTeacherAccount(args: {
     }
   }
 
-  return prisma.$transaction(async (tx) => {
-    const appId = applicationIdFromSignedToken(args.token);
-    if (!appId) return { ok: false as const, reason: 'invalid' as const };
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const appId = applicationIdFromSignedToken(args.token);
+      if (!appId) return { ok: false as const, reason: 'invalid' as const };
 
-    const preApp = await tx.freeTierApplication.findUnique({
-      where: { id: appId },
-      select: { id: true, status: true, email: true, userId: true },
-    });
-    if (!preApp) return { ok: false as const, reason: 'not_found' as const };
-    if (preApp.userId) return { ok: true as const, idempotent: true as const, userId: preApp.userId };
-
-    const existingUser = await tx.user.findUnique({
-      where: { email: preApp.email },
-      select: { id: true, password: { select: { userId: true } } },
-    });
-    if (existingUser?.password) {
-      await tx.freeTierApplication.updateMany({
-        where: { id: preApp.id, userId: null },
-        data: { userId: existingUser.id, status: 'ACCOUNT_CREATED' },
+      const preApp = await tx.freeTierApplication.findUnique({
+        where: { id: appId },
+        select: { id: true, status: true, email: true, userId: true },
       });
-      return { ok: false as const, reason: 'sign_in_required' as const };
-    }
+      if (!preApp) return { ok: false as const, reason: 'not_found' as const };
+      if (preApp.userId) return { ok: true as const, idempotent: true as const, userId: preApp.userId };
 
-    const consumed = await claimSignedLinkInTransaction(tx, {
-      token: args.token,
-      expectedPurpose: 'RELEASE',
-    });
-    if (!consumed.ok) return consumed;
+      const existingUser = await tx.user.findUnique({
+        where: { email: preApp.email },
+        select: { id: true, password: { select: { userId: true } } },
+      });
+      if (existingUser?.password) {
+        await tx.freeTierApplication.updateMany({
+          where: { id: preApp.id, userId: null },
+          data: { userId: existingUser.id, status: 'ACCOUNT_CREATED' },
+        });
+        return { ok: false as const, reason: 'sign_in_required' as const };
+      }
 
-    const app = await tx.freeTierApplication.findUnique({
-      where: { id: consumed.applicationId },
-      select: { id: true, status: true, email: true, userId: true },
-    });
-    if (!app) return { ok: false as const, reason: 'not_found' as const };
-    if (app.userId) return { ok: true as const, idempotent: true as const, userId: app.userId };
+      const consumed = await claimSignedLinkInTransaction(tx, {
+        token: args.token,
+        expectedPurpose: 'RELEASE',
+      });
+      if (!consumed.ok) return consumed;
 
-    if (app.status !== 'INVITED') return { ok: false as const, reason: 'illegal_state' as const, status: app.status };
+      const app = await tx.freeTierApplication.findUnique({
+        where: { id: consumed.applicationId },
+        select: { id: true, status: true, email: true, userId: true },
+      });
+      if (!app) abortClaimedLinkTransaction({ ok: false, reason: 'not_found' });
+      if (app.userId) return { ok: true as const, idempotent: true as const, userId: app.userId };
 
-    assertTransition('INVITED', 'ACCOUNT_CREATED');
-    const userId = existingUser
-      ? (
-          await tx.user.update({
-            where: { id: existingUser.id },
-            data: {
-              name: args.name.trim(),
-              password: {
-                upsert: {
-                  create: { hash: args.passwordHash },
-                  update: { hash: args.passwordHash },
+      if (app.status !== 'INVITED') {
+        abortClaimedLinkTransaction({
+          ok: false,
+          reason: 'illegal_state',
+          status: app.status,
+        });
+      }
+
+      assertTransition('INVITED', 'ACCOUNT_CREATED');
+      const userId = existingUser
+        ? (
+            await tx.user.update({
+              where: { id: existingUser.id },
+              data: {
+                name: args.name.trim(),
+                password: {
+                  upsert: {
+                    create: { hash: args.passwordHash },
+                    update: { hash: args.passwordHash },
+                  },
                 },
               },
-            },
-            select: { id: true },
-          })
-        ).id
-      : (
-          await tx.user.create({
-            data: {
-              email: app.email,
-              name: args.name.trim(),
-              password: { create: { hash: args.passwordHash } },
-            },
-            select: { id: true },
-          })
-        ).id;
-    const updated = await tx.freeTierApplication.updateMany({
-      where: { id: app.id, status: 'INVITED', userId: null },
-      data: { status: 'ACCOUNT_CREATED', userId },
+              select: { id: true },
+            })
+          ).id
+        : (
+            await tx.user.create({
+              data: {
+                email: app.email,
+                name: args.name.trim(),
+                password: { create: { hash: args.passwordHash } },
+              },
+              select: { id: true },
+            })
+          ).id;
+      const updated = await tx.freeTierApplication.updateMany({
+        where: { id: app.id, status: 'INVITED', userId: null },
+        data: { status: 'ACCOUNT_CREATED', userId },
+      });
+      if (updated.count === 0) abortClaimedLinkTransaction({ ok: false, reason: 'conflict' });
+      return { ok: true as const, userId, email: app.email };
     });
-    if (updated.count === 0) return { ok: false as const, reason: 'conflict' as const };
-    return { ok: true as const, userId, email: app.email };
-  });
+  } catch (error) {
+    return mapTransactionalAbort(error);
+  }
 }

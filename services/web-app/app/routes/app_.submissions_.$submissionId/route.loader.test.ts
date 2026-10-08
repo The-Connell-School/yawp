@@ -134,7 +134,6 @@ describe('submission loader — unsubmitted redirect', () => {
     prisma.assignmentType.findUnique.mockReset();
     loadGradingQueueNeighbors.mockReset();
     loadDocumentNavigationNeighbors.mockReset();
-
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
     prisma.assignmentType.findUnique.mockResolvedValue(null);
     prisma.submissionActivity.findMany.mockResolvedValue([]);
@@ -574,6 +573,28 @@ describe('submission loader — unsubmitted redirect', () => {
     requireUserId.mockResolvedValue(user);
     requireMembership.mockResolvedValue(membership(member, role as 'STUDENT' | 'TEACHER'));
     prisma.user.findUnique.mockResolvedValue({ isAdmin: admin });
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Essay',
+      kind: 'thesis_driven_essay',
+      scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 },
+      rubricJson: {
+        categories: [
+          {
+            key: 'quality',
+            label: 'Quality',
+            weight: 1,
+            description: 'Overall quality.',
+          },
+        ],
+      },
+      gradingPromptConfigJson: {},
+      gradingOutputSchemaJson: { schemaVersion: 1, teacherNotesEnabled: true },
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+    });
     const submission = buildSubmission() as any;
     submission.releasedAt = released ? new Date() : null;
     submission.gradingAssistantRuns = [{ status: 'succeeded', source: 'assignment-type', metadata: { teacherNote: 'PRIVATE_OBSERVATION: vocabulary shifts in the final paragraph.', output: { rubricScores: { engagement: { score: 18 } }, overallComment: 'Warm public feedback.' } } }];
@@ -752,6 +773,43 @@ describe('submission loader — unsubmitted redirect', () => {
       expect(JSON.stringify(result)).not.toContain('PRIVATE_OBSERVATION');
       expect(result).not.toHaveProperty('teacherNote');
     }
+  });
+
+  test('uses live rubric output toggle even when pinned grading config omits teacherNotesEnabled', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue(membership(TEACHER_MEMBERSHIP_ID, 'TEACHER'));
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Daily Pages',
+      kind: 'daily_pages',
+      rubricId: 'rubric-dp',
+      scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 },
+      rubricJson: null,
+      gradingPromptConfigJson: {},
+      gradingOutputSchemaJson: { schemaVersion: 1 },
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      rubric: {
+        name: 'daily-pages-engagement',
+        schemaJson: {
+          outputSchema: { schemaVersion: 1, teacherNotesEnabled: true },
+        },
+        currentRevision: null,
+      },
+    });
+    const submission = buildSubmission() as any;
+    submission.gradingAssistantRuns = [
+      {
+        status: 'succeeded',
+        metadata: { teacherNote: 'LIVE_TOGGLE_NOTE' },
+      },
+    ];
+    prisma.submission.findFirst.mockResolvedValue(submission);
+    const result = await loader({ request: request(), params: { submissionId: 'sub-1' } });
+    expect(result.teacherNote).toBe('LIVE_TOGGLE_NOTE');
   });
 
 });

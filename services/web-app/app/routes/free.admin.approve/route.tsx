@@ -49,6 +49,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (app?.status === 'APPROVED') {
     return { ok: false as const, reason: 'already_approved' as const, schoolName: app.schoolName };
   }
+  if (app?.status === 'REJECTED' || app?.status === 'EXPIRED') {
+    return { ok: false as const, reason: 'declined' as const, schoolName: app.schoolName };
+  }
   return {
     ok: true as const,
     token,
@@ -127,6 +130,16 @@ export default function FreeAdminApproveRoute() {
         <FreeTierAuthCard title="Link replaced">
           <p className="text-sm text-muted-foreground">
             A newer approval link was sent to your school administrator. Please use the most recent email from YAWP.
+          </p>
+        </FreeTierAuthCard>
+      );
+    }
+    if (data.reason === 'declined') {
+      return (
+        <FreeTierAuthCard title="Request not approved" className="yawp-entry-status-card">
+          <p className="text-sm text-muted-foreground">
+            This YAWP access request for {(data as { schoolName?: string }).schoolName ?? 'this school'} was not
+            approved. No further action is needed on this link.
           </p>
         </FreeTierAuthCard>
       );

@@ -2739,9 +2739,18 @@ describe('api.domain.grade-essay-ai', () => {
       expect(JSON.stringify(run.metadata.output)).not.toContain(teacherNote);
       const call = getLLMCompletion.mock.calls[0][0];
       expect(call.system).toContain('"teacherNote"');
-      expect(call.system).toContain('Never put private observations in overallComment');
-      expect(call.system).toContain('Do not infer AI authorship');
-      expect(call.system).toContain('without supplied comparison writing');
+    });
+
+    test('overall-comment writer never receives private teacher-note evidence rules', async () => {
+      await gradeWithNote({
+        response: { categories, teacherNote },
+        fallback: { categories, overallComment },
+      });
+      const writerCall = getLLMCompletion.mock.calls.find(
+        (call) => call[0]?.metadata?.kind === 'overall-comment'
+      );
+      expect(writerCall?.[0].system).not.toContain('Teacher Note rules:');
+      expect(writerCall?.[0].system).not.toContain(teacherNote);
     });
 
     test('ignores unsolicited notes from rubrics that have not opted in', async () => {
@@ -2775,6 +2784,23 @@ describe('api.domain.grade-essay-ai', () => {
       expect(prisma.submission.update.mock.calls.at(-1)?.[0].data.overallComment).toBe(overallComment);
     });
 
+    test('schema repair omits teacher-note rules when notes are disabled', async () => {
+      await gradeWithNote({
+        enabled: false,
+        response: {
+          categories: [{ key: 'engagement_with_prompt', score: 99 }],
+          teacherNote,
+          overallComment,
+        },
+        fallback: { categories, teacherNote, overallComment },
+      });
+      const repair = getLLMCompletion.mock.calls[1][0];
+      expect(repair.system).not.toContain('Teacher Note rules:');
+      expect(repair.system).not.toContain(
+        'Private observations belong only in teacherNote'
+      );
+    });
+
     test.each(['missing-feedback', 'schema-repair'] as const)('preserves authored system-template constraints during %s', async (mode) => {
       const response = mode === 'missing-feedback'
         ? { categories, teacherNote }
@@ -2787,11 +2813,14 @@ describe('api.domain.grade-essay-ai', () => {
       expect(retryPrompt).toContain('Never mention grammar, spelling, syntax, or organization');
       expect(retryPrompt).toContain('Never evaluate whether the content is correct');
       expect(retryPrompt).toContain('Feedback is 1–3 warm sentences');
-      expect(retryPrompt).toContain('don’t penalize on suspicion');
-      expect(retry.system).toContain('without supplied comparison writing');
+      expect(retryPrompt).toMatch(/don['’]t penalize on suspicion/);
+      if (mode === 'schema-repair') {
+        expect(retry.system).toContain('without supplied comparison writing');
+      }
       if (mode === 'missing-feedback') {
         expect(retryPrompt).not.toContain(teacherNote);
         expect(retry.system).not.toContain('"teacherNote":');
+        expect(retry.system).not.toContain('Teacher Note rules:');
       }
     });
 
