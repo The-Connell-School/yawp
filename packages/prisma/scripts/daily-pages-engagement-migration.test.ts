@@ -6,7 +6,7 @@ const MIGRATION_DIR = join(
   import.meta.dir,
   '..',
   'migrations',
-  '20261007210000_daily_pages_engagement_rubric_consolidation'
+  '20261008121500_daily_pages_engagement_rubric_consolidation'
 );
 
 describe('daily-pages-engagement migration SQL', () => {

@@ -17,6 +17,7 @@ import {
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { Button } from '~/components/ui/button';
+import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
 import { prisma } from '~/utils/db.server';
@@ -305,6 +306,7 @@ export default function ReporterRoute() {
                 Ask about your classes and students in plain language.
               </p>
             </div>
+            <SeeHowItWorksLink to="/app/reporter/how-it-works" />
             <div className="flex shrink-0 items-center gap-2 md:hidden">
               <label className="sr-only" htmlFor="reporter-mobile-history">
                 Past reports

@@ -17,7 +17,7 @@ const migrationDir = join(
   import.meta.dir,
   '..',
   'migrations',
-  '20261007210000_daily_pages_engagement_rubric_consolidation'
+  '20261008121500_daily_pages_engagement_rubric_consolidation'
 );
 
 const sql = `-- Daily Pages engagement rubric v2 (Brian Connell 2026-10-02)

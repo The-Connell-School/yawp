@@ -9,7 +9,7 @@ const ROOT = join(PRISMA_DIR, '..', '..');
 const MIGRATION_DIR = join(
   PRISMA_DIR,
   'migrations',
-  '20261007210000_daily_pages_engagement_rubric_consolidation'
+  '20261008121500_daily_pages_engagement_rubric_consolidation'
 );
 const DB_BASE =
   process.env.DATABASE_URL ||
@@ -86,7 +86,7 @@ function setupWithoutDpMigration() {
   const dir = mkdtempSync(join(tmpdir(), 'yawp-prisma-dp-'));
   cpSync(PRISMA_DIR, dir, { recursive: true });
   rmSync(
-    join(dir, 'migrations', '20261007210000_daily_pages_engagement_rubric_consolidation'),
+    join(dir, 'migrations', '20261008121500_daily_pages_engagement_rubric_consolidation'),
     { recursive: true, force: true }
   );
   return dir;
