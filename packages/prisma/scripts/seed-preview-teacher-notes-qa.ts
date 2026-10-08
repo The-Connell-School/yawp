@@ -119,6 +119,7 @@ async function ensureTeacherNoteOnGradedDailyPagesSample(prisma: SeedClient) {
     orderBy: { submittedAt: 'desc' },
     select: {
       id: true,
+      documentId: true,
       document: { select: { assignmentTypeId: true } },
     },
   });
@@ -153,10 +154,12 @@ async function ensureTeacherNoteOnGradedDailyPagesSample(prisma: SeedClient) {
     where: { id: submission.id },
     data: { title: qaTitlePrefix },
   });
-  await prisma.document.update({
-    where: { id: submission.id },
-    data: { title: qaTitlePrefix },
-  });
+  if (submission.documentId) {
+    await prisma.document.update({
+      where: { id: submission.documentId },
+      data: { title: qaTitlePrefix },
+    });
+  }
 
   if (run) {
     await prisma.submissionGradingAssistantRun.update({

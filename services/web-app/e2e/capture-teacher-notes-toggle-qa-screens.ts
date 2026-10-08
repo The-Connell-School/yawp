@@ -128,6 +128,14 @@ try {
 
   await devLogin(page, 'dev.teacher@yawp.local');
   await page.goto(`${origin}${submissionHref}`);
+  await page.waitForLoadState('networkidle');
+  if (await page.getByRole('heading', { name: /Something didn't work/i }).count()) {
+    await page.screenshot({
+      path: join(outDir, 'teacher-submission-load-error.png'),
+      fullPage: true,
+    });
+    throw new Error(`Submission route failed to load: ${submissionHref}`);
+  }
   const notesOn = page.getByTestId('teacher-private-notes');
   await expect(notesOn).toContainText(PREVIEW_TEACHER_NOTES_QA_NOTE, {
     timeout: 30_000,
