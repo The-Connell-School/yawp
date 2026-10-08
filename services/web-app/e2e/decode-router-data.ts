@@ -3,11 +3,39 @@
  */
 export function decodeRouterDataResponse(body: string): unknown {
   const line = JSON.parse(body) as unknown[];
-  const root = decodeTurboLine(line, 0);
+  const root = deepResolveTurboLine(line, decodeTurboLine(line, 0));
   if (root && typeof root === 'object' && 'loaderData' in root) {
-    return (root as { loaderData: unknown }).loaderData;
+    const loaderData = (root as { loaderData: unknown }).loaderData;
+    return deepResolveTurboLine(line, loaderData);
   }
   return root;
+}
+
+/** Follow leftover numeric indices after the first turbo decode pass. */
+export function deepResolveTurboLine(line: unknown[], value: unknown): unknown {
+  if (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value < line.length
+  ) {
+    return deepResolveTurboLine(line, decodeTurboLine(line, value));
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => deepResolveTurboLine(line, item));
+  }
+
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(record)) {
+      out[key] = deepResolveTurboLine(line, item);
+    }
+    return out;
+  }
+
+  return value;
 }
 
 function decodeTurboLine(line: unknown[], index: number): unknown {
