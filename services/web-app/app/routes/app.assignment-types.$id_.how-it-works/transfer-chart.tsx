@@ -129,7 +129,7 @@ export function TransferChart() {
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full"
         role="img"
-        aria-label="Illustration: a student's cold-write scores rise from 62 in September to 71 in January and 80 in May, while warm-write scores rise more slowly from 78 to 86. The gap between them narrows from 16 points to 6."
+        aria-label="Illustration: a student's cold-write scores rise from 62 in September to 71 in January, then to 80 in May, while warm-write scores rise more slowly from 78 to 86. The gap between them narrows from 16 points to 6."
       >
         {Y_TICKS.map((t) => (
           <g key={t}>
