@@ -1184,6 +1184,8 @@ export async function seedE2E(): Promise<E2EContext> {
     return { collabDoc, collabGroup };
   });
 
+  await seedFreeClassroomForE2E(prisma);
+
   return {
     organizationId: org.id,
     schoolId: school.id,
@@ -1250,6 +1252,19 @@ export async function seedE2E(): Promise<E2EContext> {
     secondStudentName: SECOND_STUDENT_NAME,
     secondStudentMembershipId: secondStudentMembership.id,
   };
+}
+
+async function seedFreeClassroomForE2E(client: E2EPrismaClient) {
+  const { seedFreeTierBundleAssignmentTypes } = await import(
+    '../../../packages/prisma/scripts/seed-free-tier-bundle-assignment-types'
+  );
+  const { ensurePreviewFreeClassroomFixture } = await import(
+    '../../../packages/prisma/scripts/local-dev/seed-preview-free-classroom'
+  );
+  await seedFreeTierBundleAssignmentTypes(client);
+  await ensurePreviewFreeClassroomFixture(client);
+  process.env.E2E_FREE_CLASSROOM_TEACHER_EMAIL =
+    'dev.teacher.free@yawp.local';
 }
 
 // Note: this module is imported by the E2E prepare script, not run directly.
