@@ -192,6 +192,26 @@ jobs:
       # unit tests: the rate limiter, client-IP and free-tier tests were present but
       # never executed. These need the migrated database above (real SQL), so they
       # live in this job. Add new web-app test files here.
+      - name: 🧪 Free-tier Postgres integration (isolated from prisma mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          FREE_TIER_DB_TESTS: '1'
+          FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
+          PRIMARY_APP_URL: https://yawp.test
+          RESEND_API_KEY: ''
+          RESEND_FROM_EMAIL: ''
+          EMAIL_PROVIDER: resend
+        run: >-
+          bun test
+          ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
+          ./services/web-app/app/utils/free-tier-class-create-route.real-db.integration.test.ts
+          ./services/web-app/app/utils/assignment-quota.real-db.integration.test.ts
+          ./services/web-app/app/domain/free-tier/approval-flow.integration.test.ts
+          ./services/web-app/app/domain/free-tier/approval.integration.test.ts
+          ./services/web-app/app/domain/free-tier/service.integration.test.ts
+          ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
+
       - name: 🧪 Web app unit + DB tests (rate limits, client IP, free tier)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
@@ -218,12 +238,8 @@ jobs:
           ./services/web-app/app/utils/rate-limit.responses.test.ts
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
-          $(find ./services/web-app/app/domain/free-tier -type f \( -name '*.test.ts' -o -name '*.integration.test.ts' \) ! -name 'student-join.server.test.ts')
-          ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
-          ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
-          ./services/web-app/app/utils/free-tier-class-create-route.real-db.integration.test.ts
+          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name '*.integration.test.ts')
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
-          ./services/web-app/app/utils/assignment-quota.real-db.integration.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
           ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
