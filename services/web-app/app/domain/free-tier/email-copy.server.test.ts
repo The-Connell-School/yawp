@@ -18,3 +18,29 @@ test('admin approval email includes note and links', () => {
   expect(body).toContain('https://yawp.school/a');
   expect(body).toMatchSnapshot();
 });
+
+test('forwarded admin email greets the new administrator', () => {
+  const body = renderAdminApprovalEmailBody({
+    teacherName: 'Ada',
+    teacherEmail: 'ada@example.edu',
+    schoolName: 'Example HS',
+    approveUrl: 'https://yawp.school/a',
+    notRightPersonUrl: 'https://yawp.school/n',
+    adminRecipientName: 'Principal Pat',
+  });
+  expect(body).toContain('Hi Principal Pat,');
+  expect(body).not.toContain('Hi Wrong Person');
+});
+
+test('reminder email includes reminder lead and copy version', () => {
+  const body = renderAdminApprovalEmailBody({
+    teacherName: 'Ada',
+    teacherEmail: 'ada@example.edu',
+    schoolName: 'Example HS',
+    approveUrl: 'https://yawp.school/a',
+    notRightPersonUrl: 'https://yawp.school/n',
+    reminderLead: 'This is a reminder about the approval request below.',
+  });
+  expect(body).toContain('This is a reminder about the approval request below.');
+  expect(body).toContain('Copy version: 2026-10-08-v4');
+});
