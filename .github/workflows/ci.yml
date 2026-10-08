@@ -200,6 +200,12 @@ jobs:
           ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
           ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
 
+      - name: 🧪 Free-tier student-join unit tests (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/student-join.server.test.ts
+
       - name: 🎨 Backfill class artwork keys
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
