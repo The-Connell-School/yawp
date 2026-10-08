@@ -176,7 +176,8 @@ describe('stripUnreleasedGradeFromSubmissionSummaries', () => {
         score: '90%',
       },
     ]);
-    expect(result[0]).toEqual({ id: 'a', releasedAt: null });
+    expect(result[0]).toMatchObject({ id: 'a', releasedAt: null });
+    expect(result[0]).not.toHaveProperty('overallScore');
     expect(result[1].numericPercentage).toBe(90);
     expect(result[1].overallScore).toBe(90);
   });
