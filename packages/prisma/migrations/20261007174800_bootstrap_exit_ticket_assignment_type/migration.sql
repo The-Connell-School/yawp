@@ -87,3 +87,47 @@ FROM "Organization" o
 CROSS JOIN "AssignmentType" t
 WHERE t."kind" = 'exit_ticket'
 ON CONFLICT ("organizationId", "assignmentTypeId") DO NOTHING;
+
+-- Card artwork: same pattern as Class Starter / Daily Pages (create-only, never
+-- overwrite a custom upload). Prefer copying an existing type image when the
+-- exit ticket row has none yet.
+INSERT INTO "AssignmentTypeImage" (
+  "id",
+  "createdAt",
+  "updatedAt",
+  "altText",
+  "contentType",
+  "blob",
+  "assignmentTypeId"
+)
+SELECT
+  'cexitticketimage000000000',
+  NOW(),
+  NOW(),
+  COALESCE(
+    donor."altText",
+    'A torn exit ticket resting on ruled notebook paper.'
+  ),
+  donor."contentType",
+  donor."blob",
+  exit_type."id"
+FROM "AssignmentType" exit_type
+CROSS JOIN LATERAL (
+  SELECT ati."altText", ati."contentType", ati."blob"
+  FROM "AssignmentTypeImage" ati
+  INNER JOIN "AssignmentType" src ON src."id" = ati."assignmentTypeId"
+  WHERE src."kind" IN ('class_starter', 'daily_pages')
+  ORDER BY
+    CASE src."kind"
+      WHEN 'class_starter' THEN 0
+      WHEN 'daily_pages' THEN 1
+      ELSE 2
+    END
+  LIMIT 1
+) donor
+WHERE exit_type."kind" = 'exit_ticket'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM "AssignmentTypeImage" existing
+    WHERE existing."assignmentTypeId" = exit_type."id"
+  );

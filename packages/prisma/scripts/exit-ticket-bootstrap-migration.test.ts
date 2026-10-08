@@ -45,11 +45,16 @@ describe('exit ticket bootstrap migration', () => {
             `SELECT COUNT(*)::int AS c FROM "AssignmentModule" WHERE "assignmentTypeId" = $1`,
             [typeId]
           );
+          const images = await client.query(
+            `SELECT COUNT(*)::int AS c FROM "AssignmentTypeImage" WHERE "assignmentTypeId" = $1`,
+            [typeId]
+          );
           return {
             orgGrants: orgGrants.rows[0]!.c,
             schoolGrants: schoolGrants.rows[0]!.c,
             teacherGrants: teacherGrants.rows[0]!.c,
             modules: modules.rows[0]!.c,
+            images: images.rows[0]!.c,
           };
         };
 
