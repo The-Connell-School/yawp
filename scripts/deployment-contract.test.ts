@@ -630,7 +630,7 @@ describe('PR preview deployment contract', () => {
     );
     expect(deployScript).toContain('scripts/preview/deploy.sh');
     expect(deployScript).toContain(
-      'Tooling fingerprint unchanged and database already existed; running migrate deploy on skip path.'
+      'Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.'
     );
     expect(deployScript).toContain(
       '"${compose[@]}" up -d --force-recreate web'
@@ -722,7 +722,7 @@ describe('PR preview deployment contract', () => {
       'COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web toolbox'
     );
     const cacheReturnIndex = deployScript.indexOf(
-      'Tooling fingerprint unchanged and database already existed; running migrate deploy on skip path.'
+      'Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.'
     );
     const prebuildCallIndex = deployScript.lastIndexOf(
       '\nprebuild_production_images\n'

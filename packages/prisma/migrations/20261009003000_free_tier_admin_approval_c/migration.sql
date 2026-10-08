@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS "FreeTierSignedLink" (
   "expiresAt" TIMESTAMPTZ(6) NOT NULL,
   "usedAt" TIMESTAMPTZ(6),
   CONSTRAINT "FreeTierSignedLink_applicationId_fkey"
-    FOREIGN KEY ("applicationId") REFERENCES "FreeTierApplication"("id") ON DELETE CASCADE
+    FOREIGN KEY ("applicationId") REFERENCES "FreeTierApplication"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS "FreeTierSignedLink_tokenHash_key" ON "FreeTierSignedLink"("tokenHash");
@@ -55,11 +55,11 @@ CREATE TABLE IF NOT EXISTS "FreeTierAdminApproval" (
   "redirectedFromId" TEXT,
   "personalNote" TEXT,
   CONSTRAINT "FreeTierAdminApproval_applicationId_fkey"
-    FOREIGN KEY ("applicationId") REFERENCES "FreeTierApplication"("id") ON DELETE CASCADE,
+    FOREIGN KEY ("applicationId") REFERENCES "FreeTierApplication"("id") ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "FreeTierAdminApproval_signedLinkId_fkey"
-    FOREIGN KEY ("signedLinkId") REFERENCES "FreeTierSignedLink"("id") ON DELETE SET NULL,
+    FOREIGN KEY ("signedLinkId") REFERENCES "FreeTierSignedLink"("id") ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT "FreeTierAdminApproval_redirectedFromId_fkey"
-    FOREIGN KEY ("redirectedFromId") REFERENCES "FreeTierAdminApproval"("id") ON DELETE SET NULL
+    FOREIGN KEY ("redirectedFromId") REFERENCES "FreeTierAdminApproval"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS "FreeTierAdminApproval_applicationId_createdAt_idx"
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS "FreeTierEmailLog" (
   "success" BOOLEAN NOT NULL,
   "error" TEXT,
   CONSTRAINT "FreeTierEmailLog_applicationId_fkey"
-    FOREIGN KEY ("applicationId") REFERENCES "FreeTierApplication"("id") ON DELETE CASCADE
+    FOREIGN KEY ("applicationId") REFERENCES "FreeTierApplication"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS "FreeTierEmailLog_applicationId_createdAt_idx"
