@@ -178,10 +178,6 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./packages/prisma/scripts/exit-ticket-bootstrap-migration.test.ts
 
-      - name: 🧪 Lesson planner migration rename map
-        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./packages/prisma/scripts/repair-lesson-planner-migration-history.test.ts
-
       - name: 🧪 Free tier bundle seed connection (tunnel TLS)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         run: bun test ./packages/prisma/scripts/seed-free-tier-bundle-assignment-types.test.ts

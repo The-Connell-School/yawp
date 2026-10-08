@@ -716,14 +716,8 @@ run_tooling_if_needed() {
     "${compose[@]}" pull --quiet toolbox web || true
   fi
 
-  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/repair-lesson-planner-migration-history.sql" ]]; then
-    echo "Repairing lesson-planner migration history in Postgres before migrate deploy..."
-    docker exec -i "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d "$DATABASE_NAME" \
-      < "$SOURCE_DIR/packages/prisma/scripts/repair-lesson-planner-migration-history.sql"
-  fi
-
   local tooling_command
-  tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun run scripts/repair-lesson-planner-migration-history.ts && bun prisma migrate deploy'
+  tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy'
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/backfill-class-art-key.ts" ]]; then
     tooling_command+=' && bun run scripts/backfill-class-art-key.ts'
   fi
@@ -765,19 +759,7 @@ run_tooling_if_needed() {
     tooling_command+=' && bun run seed-ap-history-library'
   fi
 
-  local tooling_log
-  tooling_log="$(mktemp)"
-  if ! "${compose[@]}" run --rm toolbox bash -lc "$tooling_command" 2>&1 | tee "$tooling_log"; then
-    if [[ "$SLUG" != demo ]] && grep -qE 'LessonPlanConversation.*already exists|relation "LessonPlanConversation" already exists' "$tooling_log"; then
-      echo "Lesson planner migration renumber collision detected; resetting preview database $DATABASE_NAME and retrying tooling." >&2
-      reset_seed_preview_database
-      "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
-    else
-      rm -f "$tooling_log"
-      exit 1
-    fi
-  fi
-  rm -f "$tooling_log"
+  "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
 }
 
