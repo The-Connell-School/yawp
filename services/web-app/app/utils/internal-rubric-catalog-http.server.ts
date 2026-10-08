@@ -15,6 +15,19 @@ export const saveInput = z.object({
   document: z.record(z.unknown()),
 }).strict();
 
+export const stageInput = z.object({
+  key: saveInput.shape.key,
+  requestId: saveInput.shape.requestId,
+  actorEmail: saveInput.shape.actorEmail,
+  reason: saveInput.shape.reason,
+  document: saveInput.shape.document,
+  source: z.object({
+    contentId: z.string().uuid(),
+    version: z.number().int().positive(),
+    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  }).strict(),
+}).strict();
+
 async function readJson(request: Request) {
   if (request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') throw new Error('content-type');
   const length = request.headers.get('content-length');
@@ -36,7 +49,7 @@ async function readJson(request: Request) {
  * Rubric manager endpoints for the internal app, authenticated with the same
  * management service key as the other /api/internal/v1 management routes.
  */
-export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'get' | 'save'>, credential: () => string | undefined) {
+export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'get' | 'save' | 'stage'>, credential: () => string | undefined) {
   function auth(request: Request, method: 'GET' | 'POST') {
     const key = credential();
     if (!key) return reply({ error: 'Not found' }, 404);
@@ -53,6 +66,14 @@ export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'g
     }
     return reply({ error: 'Rubric catalog unavailable' }, 503);
   }
+  async function write<T extends z.ZodTypeAny>(request: Request, schema: T, label: string, handler: (input: z.infer<T>) => Promise<unknown>) {
+    const denied = auth(request, 'POST'); if (denied) return denied;
+    if (new URL(request.url).search) return reply({ error: 'Invalid query' }, 400);
+    let input: z.infer<T>;
+    try { input = schema.parse(await readJson(request)); }
+    catch { return reply({ error: `Invalid ${label} request` }, 400); }
+    try { return reply(await handler(input)); } catch (error) { return failure(error); }
+  }
   return {
     async list(request: Request) {
       const denied = auth(request, 'GET'); if (denied) return denied;
@@ -66,13 +87,8 @@ export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'g
       if (keys.length !== 1 || keys[0] !== 'key' || params.getAll('key').length !== 1) return reply({ error: 'Provide one rubric key' }, 400);
       try { return reply(await service.get(params.get('key')!)); } catch (error) { return failure(error); }
     },
-    async save(request: Request) {
-      const denied = auth(request, 'POST'); if (denied) return denied;
-      if (new URL(request.url).search) return reply({ error: 'Invalid query' }, 400);
-      let input: z.infer<typeof saveInput>;
-      try { input = saveInput.parse(await readJson(request)); }
-      catch { return reply({ error: 'Invalid save request' }, 400); }
-      try { return reply(await service.save(input)); } catch (error) { return failure(error); }
-    },
+    save: (request: Request) => write(request, saveInput, 'save', (input) => service.save(input)),
+    /** Appends an Internal-authored revision without publishing it (demo-org staging). */
+    stage: (request: Request) => write(request, stageInput, 'stage', (input) => service.stage(input)),
   };
 }

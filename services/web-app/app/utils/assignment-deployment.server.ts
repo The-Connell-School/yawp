@@ -1,6 +1,7 @@
 import type { Prisma } from '@app/prisma';
 import { deleteAssignmentPromptAttachment } from '~/domain/assignments/assignment-prompt-attachment.server';
 import { lockClassAssignmentCollaboration } from '~/domain/collaboration/class-assignment-lock.server';
+import { findInternalDemoRubricRevisionId } from '~/domain/rubrics/internal-demo-rubrics.server';
 import {
   enforceFreeClassroomAssignmentCreateInTransaction,
   enforceFreeClassroomAssignmentRetypeInTransaction,
@@ -26,8 +27,19 @@ export async function createAssignmentDeployedToClasses(params: {
       classIds: uniqueClassIds,
       assignmentTypeId: String(params.data.assignmentTypeId),
     });
+    // Demo orgs may grade with a rubric revision staged in Yawp Internal
+    // (INTERNAL_DEMO_RUBRICS_ENABLED). Never overrides an explicit pin and
+    // falls back to the current revision on anything unexpected.
+    const stagedRevisionId = params.data.rubricRevisionId
+      ? null
+      : await findInternalDemoRubricRevisionId(tx, {
+          assignmentTypeId: String(params.data.assignmentTypeId),
+          classIds: uniqueClassIds,
+        });
     const assignment = await tx.assignment.create({
-      data: params.data,
+      data: stagedRevisionId
+        ? { ...params.data, rubricRevisionId: stagedRevisionId }
+        : params.data,
     });
 
     if (uniqueClassIds.length > 0) {

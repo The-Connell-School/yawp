@@ -204,6 +204,7 @@ jobs:
           bun test
           ./services/web-app/app/domain/rubrics/rubric-catalog.test.ts
           ./services/web-app/app/domain/rubrics/rubric-catalog.integration.test.ts
+          ./services/web-app/app/domain/rubrics/internal-demo-rubrics.integration.test.ts
           ./services/web-app/app/utils/internal-rubric-catalog-http.server.test.ts
           ./services/web-app/app/utils/ip.server.test.ts
           ./services/web-app/app/utils/rate-limit.server.test.ts
