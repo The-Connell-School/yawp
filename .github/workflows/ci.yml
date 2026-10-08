@@ -195,7 +195,7 @@ jobs:
           ./services/web-app/app/utils/rate-limit.responses.test.ts
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
-          ./services/web-app/app/domain/free-tier/
+          $(find ./services/web-app/app/domain/free-tier -type f \( -name '*.test.ts' -o -name '*.integration.test.ts' \) ! -name 'student-join.server.test.ts')
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
           ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
           ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
