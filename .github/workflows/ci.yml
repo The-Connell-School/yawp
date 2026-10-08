@@ -200,6 +200,8 @@ jobs:
           FREE_TIER_DB_TESTS: '1'
           FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
           PRIMARY_APP_URL: https://yawp.test
+          MOCKS: 'true'
+          RESEND_API_KEY: ''
           RUBRIC_CATALOG_DB_TESTS: '1'
           FEATURE_FLAG_DB_TESTS: '1'
         run: >-
@@ -467,6 +469,8 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
           FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
           PRIMARY_APP_URL: http://127.0.0.1:5173
+          MOCKS: 'true'
+          RESEND_API_KEY: ''
         run: bun run test:e2e:smoke
 
       # HTML report + traces for smoke failures (see playwright.config.ts).
