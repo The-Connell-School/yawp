@@ -1,8 +1,22 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { previewTeacherNotesQaDatabaseAllowed } from './seed-preview-teacher-notes-qa';
 
 describe('seed-preview-teacher-notes-qa', () => {
+  test('previewTeacherNotesQaDatabaseAllowed rejects demo and CI database names', () => {
+    expect(
+      previewTeacherNotesQaDatabaseAllowed(
+        'postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_415'
+      )
+    ).toBe(true);
+    expect(
+      previewTeacherNotesQaDatabaseAllowed(
+        'postgresql://postgres:postgres@preview-postgres:5432/yawp_demo'
+      )
+    ).toBe(false);
+  });
+
   test('is wired only for preview seed deploys and guards non-seed modes', () => {
     const script = readFileSync(
       join(import.meta.dir, 'seed-preview-teacher-notes-qa.ts'),
@@ -17,6 +31,7 @@ describe('seed-preview-teacher-notes-qa', () => {
     expect(script).toContain('Engagement Check (Preview)');
     expect(script).toContain('PREVIEW_TEACHER_NOTES_QA_ENGAGEMENT_SUBMISSION_TITLE');
     expect(script).toContain('restoreEssayGradedSamplesMutatedByLegacyQaSeed');
+    expect(script).toContain('previewTeacherNotesQaDatabaseAllowed');
     expect(script).toContain('failed (non-fatal)');
   });
 

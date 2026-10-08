@@ -249,6 +249,12 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma seed-local-dev
 
+      - name: 🧪 Preview teacher-notes QA seed (integration)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./packages/prisma/scripts/seed-preview-teacher-notes-qa.integration.test.ts
+
       # Entitlements/reporter-gate tests were never run by CI. Each file mocks
       # different modules, so they run in separate bun processes. The DB test
       # runs against the freshly migrated database.
