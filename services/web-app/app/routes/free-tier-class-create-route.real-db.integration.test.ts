@@ -45,14 +45,32 @@ describe.skipIf(!process.env.DATABASE_URL)(
   () => {
     const prisma = buildClient();
     const createdOrgIds: string[] = [];
+    const createdUserIds: string[] = [];
 
     afterAll(async () => {
-      if (createdOrgIds.length) {
-        await prisma.organization.deleteMany({
-          where: { id: { in: createdOrgIds } },
-        });
+      try {
+        if (createdOrgIds.length) {
+          await prisma.class.deleteMany({
+            where: { school: { organizationId: { in: createdOrgIds } } },
+          });
+          await prisma.orgMembership.deleteMany({
+            where: { organizationId: { in: createdOrgIds } },
+          });
+          await prisma.school.deleteMany({
+            where: { organizationId: { in: createdOrgIds } },
+          });
+          if (createdUserIds.length) {
+            await prisma.user.deleteMany({
+              where: { id: { in: createdUserIds } },
+            });
+          }
+          await prisma.organization.deleteMany({
+            where: { id: { in: createdOrgIds } },
+          });
+        }
+      } finally {
+        await prisma.$disconnect();
       }
-      await prisma.$disconnect();
     });
 
     async function createTeacherFixture(plan: 'SCHOOL' | 'FREE_CLASSROOM') {
