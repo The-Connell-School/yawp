@@ -212,7 +212,7 @@ export async function action({ request }: ActionFunctionArgs) {
       {
         success: false,
         message:
-          'This submission can no longer be unsubmitted because it has been graded.',
+          "This submission can't be unsubmitted right now. Ask your teacher if you need to make changes.",
       },
       { status: 409 }
     );

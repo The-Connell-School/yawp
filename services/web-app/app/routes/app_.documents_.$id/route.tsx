@@ -108,8 +108,8 @@ import { redactGradedAtFromStudentDocumentSubmissions } from '~/domain/submissio
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
-const GRADED_UNSUBMIT_TOOLTIP =
-  'This submission has been graded and can no longer be unsubmitted.';
+export const STUDENT_UNSUBMIT_BLOCKED_TOOLTIP =
+  "This submission can't be unsubmitted right now. Ask your teacher if you need to make changes.";
 
 function titleCase(value: string) {
   return value
@@ -495,16 +495,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     doc.html
   );
 
-  const submissionsForResponse =
+  const redactGradedAtForStudentOwner =
     isOwner &&
     profile.role === 'STUDENT' &&
-    !hasEffectivePlatformAdmin(user?.isAdmin)
-      ? redactGradedAtFromStudentDocumentSubmissions(submissions)
-      : submissions;
+    !hasEffectivePlatformAdmin(user?.isAdmin);
+
+  const submissionsForResponse = redactGradedAtForStudentOwner
+    ? redactGradedAtFromStudentDocumentSubmissions(submissions)
+    : submissions;
 
   return dataResponse({
     doc: {
       ...doc,
+      submissions: submissionsForResponse,
       membership: ownerMembership,
       assignmentModuleSessions: orderedModuleSessions,
       comments: sortedComments,
@@ -1083,7 +1086,7 @@ export default function Route() {
                               {data.canSelfUnsubmit ? (
                                 s.gradedAt != null || s.releasedAt != null ? (
                                   <Tooltip
-                                    text={GRADED_UNSUBMIT_TOOLTIP}
+                                    text={STUDENT_UNSUBMIT_BLOCKED_TOOLTIP}
                                     delayDuration={0}
                                   >
                                     <span
