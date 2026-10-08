@@ -20,6 +20,16 @@ describe('sanitizeFreeTierEmailLogPayload', () => {
     ).toEqual({ kind: 'admin_approval' });
   });
 
+  test('keeps URLs in FREE_TIER_DB_TESTS integration runs', () => {
+    process.env.YAWP_ENVIRONMENT = 'production';
+    process.env.FREE_TIER_DB_TESTS = '1';
+    const payload = {
+      approveUrl: 'https://yawp.test/free/admin/approve?t=x',
+    };
+    expect(sanitizeFreeTierEmailLogPayload(payload)).toEqual(payload);
+    delete process.env.FREE_TIER_DB_TESTS;
+  });
+
   test('keeps URLs in preview for QA manifest', () => {
     process.env.YAWP_ENVIRONMENT = 'preview';
     const payload = {

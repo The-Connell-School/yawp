@@ -2,7 +2,8 @@ function isPreviewFreeTierLogging() {
   return (
     process.env.YAWP_ENVIRONMENT === 'preview' ||
     process.env.NODE_ENV === 'development' ||
-    process.env.E2E === 'true'
+    process.env.E2E === 'true' ||
+    process.env.FREE_TIER_DB_TESTS === '1'
   );
 }
 
