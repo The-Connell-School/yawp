@@ -31,7 +31,6 @@ async function ensureDailyPagesEngagementTeacherNotesEnabled(
 ) {
   const rubric = await prisma.rubric.findUnique({
     where: { name: DAILY_PAGES_ENGAGEMENT_RUBRIC_NAME },
-    include: { currentRevision: true },
   });
   if (!rubric?.schemaJson || typeof rubric.schemaJson !== 'object') return;
 
@@ -46,26 +45,12 @@ async function ensureDailyPagesEngagementTeacherNotesEnabled(
   else delete outputSchema.teacherNotesEnabled;
 
   const nextSchema = { ...base, outputSchema };
+  // Preview QA only: update the rubric row. Do not mutate rubricRevision rows —
+  // the impersonation audit trigger rejects revision updates outside the catalog API.
   await prisma.rubric.update({
     where: { id: rubric.id },
     data: { schemaJson: nextSchema },
   });
-  if (rubric.currentRevision) {
-    const revisionSchema =
-      rubric.currentRevision.schemaJson &&
-      typeof rubric.currentRevision.schemaJson === 'object'
-        ? (rubric.currentRevision.schemaJson as Record<string, unknown>)
-        : {};
-    await prisma.rubricRevision.update({
-      where: { id: rubric.currentRevision.id },
-      data: {
-        schemaJson: {
-          ...revisionSchema,
-          outputSchema,
-        },
-      },
-    });
-  }
 }
 
 export function shouldRunPreviewTeacherNotesQaSeed() {
