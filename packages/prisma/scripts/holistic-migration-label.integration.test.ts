@@ -97,15 +97,20 @@ describe('holistic hornbuckle migration label (migrate deploy)', () => {
     );
     prismaDeploy(dir);
 
-    const row = jsonQuery(`
-      SELECT "createdBy", reason, version
-      FROM "RubricRevision"
+    const createdBy = jsonQuery(`
+      SELECT "createdBy" FROM "RubricRevision"
       WHERE "rubricName" = 'assignment-type:${TARGET_ID}'
       ORDER BY version DESC
       LIMIT 1
     `);
-    expect(row.createdBy).toBe('migration:holistic-tier-hornbuckle');
-    expect(String(row.reason)).toInclude('PR #411');
+    const reason = jsonQuery(`
+      SELECT reason FROM "RubricRevision"
+      WHERE "rubricName" = 'assignment-type:${TARGET_ID}'
+      ORDER BY version DESC
+      LIMIT 1
+    `);
+    expect(createdBy).toBe('migration:holistic-tier-hornbuckle');
+    expect(String(reason)).toInclude('PR #411');
 
     rmSync(dir, { recursive: true, force: true });
   }, 180000);
