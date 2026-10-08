@@ -105,3 +105,31 @@ export function partsSummary(parts: ReplyPart[]): {
     hasHandout: materials.some((material) => material.audience === 'student'),
   };
 }
+
+/** Prose this long reads as advice worth filing even without headings. */
+const KEEPABLE_PROSE_CHARS = 600;
+
+/**
+ * Whether "Add all of this" belongs under a reply.
+ *
+ * Most turns before a plan are questions — "Where are they in the book?" —
+ * and offering to file one as a page of the lesson is noise under every
+ * message. A reply earns the offer by handing something over: a card, a deck,
+ * a map, a plan with structure, or advice long enough to want back.
+ */
+export function replyWorthKeeping(
+  parts: ReplyPart[],
+  {
+    hasDeck = false,
+    hasUnit = false,
+  }: { hasDeck?: boolean; hasUnit?: boolean } = {}
+): boolean {
+  if (hasDeck || hasUnit) return true;
+  if (parts.some((part) => part.kind !== 'markdown')) return true;
+  const prose = parts
+    .map((part) => (part.kind === 'markdown' ? part.text : ''))
+    .join('\n\n');
+  if (/^\s{0,3}#{1,3}\s+\S/m.test(prose)) return true;
+  if (/^\s*\|.*\|\s*$/m.test(prose)) return true;
+  return prose.length >= KEEPABLE_PROSE_CHARS;
+}

@@ -235,3 +235,31 @@ describe('linkMaterialTitles', () => {
     expect(linkMaterialTitles(body, materials)).toBe(body);
   });
 });
+
+describe('readLessonMaterials — quotes written from memory', () => {
+  const handout = (header: string) =>
+    readLessonMaterials(
+      '```yawp-material\nkind: handout\ntitle: Diagnose & Repair\n' +
+        header +
+        '---\nSlim says, "His authority was so great that his word was taken on any subject."\n```'
+    ).materials[0]!;
+
+  test('a block that says its quotes are unchecked is flagged for the teacher', () => {
+    // The planner cannot see the novel. A misquote printed on thirty handouts
+    // is caught by a student, not by the teacher, unless someone says so.
+    expect(handout('quotes: unchecked\n').checkQuotes).toBe(true);
+    expect(handout('quotes: from memory\n').checkQuotes).toBe(true);
+  });
+
+  test('the flag never reaches the printed page', () => {
+    const material = handout('quotes: unchecked\n');
+    expect(material.content).not.toContain('quotes:');
+    expect(material.content).not.toContain('unchecked');
+  });
+
+  test('a block without the line, or with checked quotes, is not flagged', () => {
+    expect(handout('').checkQuotes).toBe(false);
+    expect(handout('quotes: checked\n').checkQuotes).toBe(false);
+    expect(handout('quotes: pasted by the teacher\n').checkQuotes).toBe(false);
+  });
+});

@@ -101,6 +101,12 @@ export type LessonMaterial = {
   audience: PacketAudience;
   /** Markdown, ready to render or print. */
   content: string;
+  /**
+   * The planner quoted a published text it could not see — no pasted passage,
+   * no tool result — so the wording is from memory. The card asks the teacher
+   * to check it against their edition; the flag never prints.
+   */
+  checkQuotes?: boolean;
 };
 
 const MATERIAL_BLOCK = new RegExp(
@@ -137,6 +143,9 @@ function readHeader(raw: string): {
 
   return { header, body: lines.slice(index).join('\n').trim() };
 }
+
+/** `quotes: unchecked` (or "from memory", "unverified") in a block's header. */
+const UNCHECKED_QUOTES = /\b(unchecked|unverified|memory)\b/i;
 
 function readKind(raw: string | undefined): MaterialKind {
   const key = (raw ?? '').trim().toLowerCase().replace(/\s+/g, '-');
@@ -219,6 +228,7 @@ export function readLessonMaterials(content: string): {
         ? parsePacketAudience(header.audience)
         : KIND_AUDIENCE[kind],
       content: materialBody,
+      checkQuotes: UNCHECKED_QUOTES.test(header.quotes ?? ''),
     });
   }
 

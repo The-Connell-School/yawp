@@ -109,7 +109,14 @@ export function ResourceIndex({
               <span className="mt-0.5 text-muted-foreground/70">
                 <KindIcon kind={entry.kind} />
               </span>
-              <span className="min-w-0 flex-1 truncate">{entry.title}</span>
+              {/* Two lines, not one: "Diagnose & Repair — 3 ex…" and "Diagnose &
+                  Repair — what…" are indistinguishable truncated. */}
+              <span
+                className="line-clamp-2 min-w-0 flex-1 break-words"
+                title={entry.title}
+              >
+                {entry.title}
+              </span>
               {entry.minutes !== null ? (
                 <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
                   {entry.minutes}m

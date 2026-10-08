@@ -48,7 +48,12 @@ export function SlideDeckCard({
           <Presentation size={16} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{deck.title}</p>
+          <p
+            className="line-clamp-2 break-words text-sm font-semibold"
+            title={deck.title}
+          >
+            {deck.title}
+          </p>
           <p className="truncate text-xs text-muted-foreground">
             {[
               `${deck.slides.length} ${deck.slides.length === 1 ? 'slide' : 'slides'}`,

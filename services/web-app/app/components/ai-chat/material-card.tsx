@@ -17,6 +17,7 @@ import {
   Plus,
   Check,
   PenLine,
+  TriangleAlert,
   Presentation,
 } from 'lucide-react';
 import { MarkdownContent } from './assistant-markdown';
@@ -73,7 +74,12 @@ export function MaterialCard({
           aria-expanded={open}
           className="min-w-0 flex-1 text-left"
         >
-          <p className="truncate text-sm font-semibold">{material.title}</p>
+          <p
+            className="line-clamp-2 break-words text-sm font-semibold"
+            title={material.title}
+          >
+            {material.title}
+          </p>
           <p className="truncate text-xs text-muted-foreground">
             {MATERIAL_KIND_LABELS[material.kind]}
             {material.audience === 'student' ? ' · for students' : ''}
@@ -105,6 +111,20 @@ export function MaterialCard({
           </button>
         ) : null}
       </div>
+      {material.checkQuotes ? (
+        // Outside the collapsed body on purpose: the teacher adds a handout to
+        // the stack from the header, usually without opening it.
+        <p
+          data-testid="material-check-quotes"
+          className="flex items-start gap-2 border-t border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+        >
+          <TriangleAlert size={13} className="mt-0.5 shrink-0" aria-hidden />
+          <span>
+            The planner quoted this text from memory, without the book in front
+            of it. Check each quote against your edition before you print.
+          </span>
+        </p>
+      ) : null}
       {open ? (
         <div className="border-t bg-foreground/[0.02] px-4 py-3">
           <MarkdownContent content={material.content} />

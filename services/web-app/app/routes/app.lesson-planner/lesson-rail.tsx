@@ -245,7 +245,9 @@ export function LessonRail({
                       conversation on this one, which is not navigation. */}
                   {href.startsWith('/app/lesson-planner/') ? (
                     <Link to={href} className={itemClass}>
-                      <span className="block truncate">{lesson.title}</span>
+                      <span className="block truncate" title={lesson.title}>
+                        {lesson.title}
+                      </span>
                     </Link>
                   ) : (
                     <button
@@ -253,7 +255,9 @@ export function LessonRail({
                       onClick={() => onSelect(lesson.id)}
                       className={itemClass}
                     >
-                      <span className="block truncate">{lesson.title}</span>
+                      <span className="block truncate" title={lesson.title}>
+                        {lesson.title}
+                      </span>
                     </button>
                   )}
                 </li>

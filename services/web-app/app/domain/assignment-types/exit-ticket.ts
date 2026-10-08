@@ -322,9 +322,13 @@ export const BASIC_EXIT_TICKET_PROMPT =
  * a lot of students answer in one line; the ask for elaboration is the whole
  * difference between a check that tells the teacher something and one that
  * does not.
+ *
+ * It says nothing about credit: the same note goes on graded and ungraded
+ * tickets, and most are ungraded. A promise that more writing is "worth more"
+ * reads as a lie on a ticket the sheet says never reaches the gradebook.
  */
 export const EXIT_TICKET_ELABORATION_NOTE =
-  'Write as much as you can, and go further than your first sentence — the more you explain your thinking, the more this is worth. Don’t worry about polish. This is about what you understand, not how neatly you say it.';
+  'Write as much as you can, and go further than your first sentence — the more you explain your thinking, the more your teacher can see what you understand. Don’t worry about polish. This is about what you understand, not how neatly you say it.';
 
 /**
  * The reflection prompts a teacher can pick from, plus their own. A short list

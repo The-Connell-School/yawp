@@ -23,6 +23,8 @@ export type LoadedLessonPacket = {
   packetTitleValue: string;
   /** Whether the teacher has published this lesson to their library. */
   published: boolean;
+  /** Whether the teacher has said they taught it. */
+  taught: boolean;
 };
 
 export async function loadLessonPacket({
@@ -46,6 +48,7 @@ export async function loadLessonPacket({
       title: true,
       packetTitle: true,
       publishedAt: true,
+      taughtAt: true,
       originClassAssignment: {
         select: {
           class: { select: { title: true, grade: true, period: true } },
@@ -132,5 +135,6 @@ export async function loadLessonPacket({
     }),
     packetTitleValue: conversation.packetTitle ?? '',
     published: Boolean(conversation.publishedAt),
+    taught: Boolean(conversation.taughtAt),
   };
 }

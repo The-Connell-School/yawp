@@ -85,6 +85,16 @@ describe('the exit ticket assignment type', () => {
 });
 
 describe('composeExitTicketPrompt', () => {
+  test('the elaboration note promises no credit, since most tickets are ungraded', () => {
+    // The same note goes on graded and ungraded tickets alike. An ungraded
+    // ticket saying "the more you explain, the more this is worth" sits right
+    // above the sheet's "Nothing goes in the gradebook".
+    expect(EXIT_TICKET_ELABORATION_NOTE).not.toMatch(
+      /\bworth\b|\bpoints?\b|\bgrade|\bcredit\b|\bscore/i
+    );
+    expect(EXIT_TICKET_ELABORATION_NOTE).toMatch(/go further than your first/i);
+  });
+
   test('a basic exit ticket is the same standard prompt every time', () => {
     const prompt = composeExitTicketPrompt({
       schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,

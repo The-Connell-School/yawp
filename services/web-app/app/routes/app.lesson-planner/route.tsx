@@ -46,11 +46,13 @@ import {
 } from '~/domain/lesson-planner/lesson-ask';
 import {
   partsSummary,
+  replyWorthKeeping,
   splitReplyParts,
 } from '~/domain/lesson-planner/reply-parts';
 import { linkMaterialTitles } from '~/domain/lesson-planner/lesson-material';
 import { LessonResourceCard } from '~/components/ai-chat/lesson-resource-card';
 import { DailyPagesCard } from '~/components/ai-chat/daily-pages-card';
+import { ReplyFeedback } from '~/components/ai-chat/reply-feedback';
 import { ExitTicketCard } from '~/components/ai-chat/exit-ticket-card';
 import { PracticeCard } from '~/components/ai-chat/practice-card';
 import {
@@ -88,6 +90,9 @@ type ChatMessage = {
   content: string;
   /** Set when this reply is kept in the printable packet. */
   keptAudience?: PacketAudience | null;
+  /** The teacher's verdict on this reply, if they gave one. */
+  rating?: 'up' | 'down' | null;
+  ratingNote?: string | null;
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -144,6 +149,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 role: true,
                 content: true,
                 keptAudience: true,
+                rating: true,
+                ratingNote: true,
               },
             },
             materials: {
@@ -1067,6 +1074,11 @@ function MessageBubble({
     topicSettled: !isOpeningReply,
     planAlreadyWritten: deliveredPlan,
   });
+  // A question on the way to a plan is not a page of the lesson.
+  const worthKeeping = replyWorthKeeping(parts, {
+    hasDeck: deckOutcome.kind === 'deck',
+    hasUnit: unitOutcome.kind === 'unit',
+  });
   const suggestions = withStandardSuggestions(modelSuggestions, {
     isOpeningReply,
     teacherRaisedRoomPersonality,
@@ -1228,7 +1240,7 @@ function MessageBubble({
                   Remove from stack
                 </button>
               </>
-            ) : (
+            ) : worthKeeping ? (
               <>
                 <button
                   type="button"
@@ -1246,7 +1258,7 @@ function MessageBubble({
                   Add all as a handout
                 </button>
               </>
-            )
+            ) : null
           ) : null}
           {isArtifact ? (
             <button
@@ -1261,6 +1273,17 @@ function MessageBubble({
             </button>
           ) : null}
         </div>
+        {message.id && conversationId && worthKeeping ? (
+          <div className="mt-1">
+            <ReplyFeedback
+              key={message.id}
+              conversationId={conversationId}
+              messageId={message.id}
+              initialRating={message.rating ?? null}
+              initialNote={message.ratingNote ?? null}
+            />
+          </div>
+        ) : null}
         {asks.length > 0 && isLast ? (
           <LessonAskCard
             asks={asks}

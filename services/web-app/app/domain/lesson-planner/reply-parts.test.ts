@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { splitReplyParts } from './reply-parts';
+import { replyWorthKeeping, splitReplyParts } from './reply-parts';
 
 describe('splitReplyParts', () => {
   test('keeps a lesson in the order it was written', () => {
@@ -48,9 +48,7 @@ describe('splitReplyParts', () => {
   });
 
   test('composes the ticket rather than carrying the block through', () => {
-    const [part] = splitReplyParts(
-      '```yawp-exit-ticket\nmode: basic\n```'
-    );
+    const [part] = splitReplyParts('```yawp-exit-ticket\nmode: basic\n```');
 
     expect(part!.kind).toBe('exit-ticket');
     if (part!.kind !== 'exit-ticket') throw new Error('wrong part');
@@ -72,5 +70,66 @@ describe('splitReplyParts', () => {
     expect(parts[0]!.kind).toBe('material');
     if (parts[0]!.kind !== 'material') throw new Error('wrong part');
     expect(parts[0]!.material.key).toBe('0');
+  });
+});
+
+describe('replyWorthKeeping', () => {
+  const keepable = (content: string, extra = {}) =>
+    replyWorthKeeping(splitReplyParts(content), extra);
+
+  test('an intake question is not something to file in a lesson', () => {
+    // "Add all of this" under "Where are they in the book?" offers to print a
+    // question as a page of the lesson.
+    expect(
+      keepable(
+        'Where are they in the book? I will pull the quotes from what they have read.'
+      )
+    ).toBe(false);
+    expect(
+      keepable(
+        "Chapter 3 works well for this: Candy's dog gives them a scene with a lot underneath it.\n\nHow long is the period, and how do you want them working?"
+      )
+    ).toBe(false);
+  });
+
+  test('a plan with headings is', () => {
+    expect(keepable('## Warm-up (5 min)\n\nDaily Pages prompt FW-001.')).toBe(
+      true
+    );
+  });
+
+  test('a schedule laid out as a table is', () => {
+    expect(
+      keepable(
+        'Here is the timing.\n\n| Minutes | What happens |\n| --- | --- |\n| 5 | Starter |'
+      )
+    ).toBe(true);
+  });
+
+  test('anything that hands over material is, however short its prose', () => {
+    expect(
+      keepable(
+        '```yawp-material\nkind: handout\ntitle: Diagnose & Repair\n---\nFix each sentence.\n```'
+      )
+    ).toBe(true);
+    expect(
+      keepable(
+        'Pick one:\n\n```yawp-daily-pages\nkind: class-starter\nWrite about a door.\n```'
+      )
+    ).toBe(true);
+  });
+
+  test('a deck or a unit map is, even though neither is a reply part', () => {
+    expect(keepable('Here is the deck.', { hasDeck: true })).toBe(true);
+    expect(keepable('Here is the map.', { hasUnit: true })).toBe(true);
+  });
+
+  test('long advice without headings is still worth keeping', () => {
+    const advice = Array.from(
+      { length: 8 },
+      () =>
+        'Give every student thirty seconds of silent writing before anyone speaks, then call on prepared thinking.'
+    ).join(' ');
+    expect(keepable(advice)).toBe(true);
   });
 });

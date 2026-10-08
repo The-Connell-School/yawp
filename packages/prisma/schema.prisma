@@ -1382,6 +1382,9 @@ model LessonPlanConversation {
   /// Set when the teacher publishes this lesson to their library. Null is a
   /// draft, which is where every lesson starts.
   publishedAt             DateTime?           @db.Timestamptz(6)
+  /// Set when the teacher says they taught this lesson. The plainest signal
+  /// that a plan was good enough to use, as opposed to merely generated.
+  taughtAt                DateTime?           @db.Timestamptz(6)
   title                   String              @default("New lesson")
   /// The name the teacher gave the printable packet; falls back to `title`.
   packetTitle             String?
@@ -1425,11 +1428,17 @@ model LessonPlanMessage {
   keptAudience   String?
   /// Teacher-supplied name for this resource; falls back to a derived title.
   keptTitle      String?
+  /// The teacher's verdict on this reply: "up" or "down". Null is unrated.
+  rating         String?
+  /// What was off, in the teacher's words or a chip they tapped.
+  ratingNote     String?
+  ratedAt        DateTime?              @db.Timestamptz(6)
   conversationId String
   conversation   LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
   @@index([conversationId, keptAt])
+  @@index([ratedAt(sort: Desc)])
 }
 
 /// One piece of teaching material the teacher pulled out of a planner reply and

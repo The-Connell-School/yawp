@@ -1356,3 +1356,44 @@ describe('writing fundamentals', () => {
     expect(entry!.prompt.toLowerCase()).toContain('practice');
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — quoting the text the class is reading', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: 'Ms. Rivera',
+    organizationName: 'Connell School',
+  });
+
+  test('treats a quote from memory as something the teacher must check', () => {
+    // The planner has no copy of the novel. Handouts print "real quotes from
+    // chapter 3" that nobody verified, and the student who catches a misquote
+    // is the one holding the page.
+    expect(prompt).toContain('quotes: unchecked');
+    expect(prompt).toMatch(/from memory/i);
+    expect(prompt).toMatch(/pasted/i);
+  });
+
+  test('never gives page or line numbers for text it has not seen', () => {
+    expect(prompt).toMatch(/never (give|cite) a page/i);
+  });
+
+  test('never paraphrases inside quotation marks', () => {
+    expect(prompt).toMatch(/paraphrase inside quotation marks/i);
+  });
+
+  test('asks for the passage when a close reading depends on it', () => {
+    expect(prompt).toMatch(/paste the passage/i);
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — the deck and the plan agree on time', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('the slide minutes add up to the same total as the plan, transitions included', () => {
+    // A 50-minute plan whose deck says "47 min" reads as two different lessons.
+    expect(prompt).toMatch(/same total as the plan/i);
+    expect(prompt).toMatch(/transitions/i);
+  });
+});

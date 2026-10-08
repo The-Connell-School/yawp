@@ -932,6 +932,19 @@ test.describe('YAWP! Lesson Planner', () => {
       page.getByRole('button', { name: /same topic, two very different/i })
     ).toBeVisible();
 
+    // Six cards up front; the rest wait behind "More ideas".
+    await expect(page.getByTestId('prompt-tiles').locator('li')).toHaveCount(6);
+    await expect(
+      page.getByRole('button', { name: /make me some extra practice/i })
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: /more ideas/i }).click();
+    await expect(
+      page.getByRole('button', { name: /make me some extra practice/i })
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: /more ideas/i })).toHaveCount(
+      0
+    );
+
     // Picking a starter prompt optimistically posts the teacher's message.
     await page
       .getByRole('button', { name: /same topic, two very different/i })
@@ -1288,6 +1301,153 @@ test.describe('YAWP! Lesson Planner', () => {
     // The unpublished one is a draft, and lives in the other tab.
     await page.getByTestId('lesson-rail-tab-drafts').click();
     await expect(page.getByTestId('lesson-rail-tab-drafts')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
+  test('offers to file a reply only when it hands something over', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    // An intake question is not a page of the lesson, so "Add all of this"
+    // under "Which class is this for?" is noise.
+    const intake = await seedAskTurn(e2eContext, 'minutes: 50');
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    await page.goto(`/app/lesson-planner?c=${intake.conversationId}`);
+    const questions = page.locator('[data-role="assistant"]');
+    await expect(questions).toHaveCount(2);
+    await expect(
+      questions.getByRole('button', { name: /add all of this/i })
+    ).toHaveCount(0);
+    await expect(
+      questions.getByRole('button', { name: /add all as a handout/i })
+    ).toHaveCount(0);
+    // Nor is a question something to rate.
+    await expect(
+      questions.getByRole('button', { name: /^(helpful|not helpful)$/i })
+    ).toHaveCount(0);
+
+    // A plan still carries both offers.
+    const plan = await seedLessonPlan(e2eContext);
+    await page.goto(`/app/lesson-planner?c=${plan.conversationId}`);
+    await expect(
+      page
+        .locator('[data-role="assistant"]')
+        .first()
+        .getByRole('button', { name: /add all of this/i })
+    ).toBeVisible();
+  });
+
+  test('lets a teacher rate a reply and say what was off', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const { conversationId } = await seedLessonPlan(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const replies = page.locator('[data-role="assistant"]');
+    const rated = () =>
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/feedback') &&
+          response.request().method() === 'POST'
+      );
+
+    // A thumbs down is recorded the moment it is tapped; saying why is extra.
+    await Promise.all([
+      rated(),
+      replies
+        .nth(0)
+        .getByRole('button', { name: /^not helpful$/i })
+        .click(),
+    ]);
+    const form = replies.nth(0).getByTestId('reply-feedback-note');
+    await expect(form).toBeVisible();
+    await form.getByRole('button', { name: /too long/i }).click();
+    await form
+      .getByLabel(/what was off/i)
+      .fill('Too long — and my period is 45 minutes.');
+    await Promise.all([
+      rated(),
+      form.getByRole('button', { name: /send/i }).click(),
+    ]);
+    await expect(replies.nth(0)).toContainText(/thanks/i);
+
+    await Promise.all([
+      rated(),
+      replies
+        .nth(1)
+        .getByRole('button', { name: /^helpful$/i })
+        .click(),
+    ]);
+
+    const prisma = createE2EPrismaClient();
+    try {
+      const messages = await prisma.lessonPlanMessage.findMany({
+        where: { conversationId, role: 'assistant' },
+        orderBy: { createdAt: 'asc' },
+        select: { rating: true, ratingNote: true },
+      });
+      expect(messages[0]).toEqual({
+        rating: 'down',
+        ratingNote: 'Too long — and my period is 45 minutes.',
+      });
+      expect(messages[1]!.rating).toBe('up');
+    } finally {
+      await prisma.$disconnect();
+    }
+
+    // The verdict survives a reload.
+    await page.reload();
+    await expect(
+      replies.nth(0).getByRole('button', { name: /^not helpful$/i })
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      replies.nth(1).getByRole('button', { name: /^helpful$/i })
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('marks a finished lesson as taught from its stack', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    const taught = page.getByTestId('packet-taught');
+    await expect(taught).toHaveAttribute('aria-pressed', 'false');
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/feedback') &&
+          response.request().method() === 'POST'
+      ),
+      taught.click(),
+    ]);
+    await expect(taught).toHaveAttribute('aria-pressed', 'true');
+
+    const prisma = createE2EPrismaClient();
+    try {
+      const conversation = await prisma.lessonPlanConversation.findUnique({
+        where: { id: conversationId },
+        select: { taughtAt: true },
+      });
+      expect(conversation?.taughtAt).not.toBeNull();
+    } finally {
+      await prisma.$disconnect();
+    }
+
+    await page.reload();
+    await expect(page.getByTestId('packet-taught')).toHaveAttribute(
       'aria-pressed',
       'true'
     );

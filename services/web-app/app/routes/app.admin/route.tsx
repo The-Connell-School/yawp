@@ -15,6 +15,7 @@ import {
   ClipboardList,
   Settings,
   FlaskConical,
+  Lightbulb,
 } from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 
@@ -43,6 +44,11 @@ export const adminTabs = [
     label: 'AI Evaluations',
     to: '/app/admin/ai-evaluations',
     icon: <FlaskConical size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'Lesson Planner',
+    to: '/app/admin/lesson-planner',
+    icon: <Lightbulb size={16} className="opacity-75 mr-1" />,
   },
   {
     label: 'Audit',

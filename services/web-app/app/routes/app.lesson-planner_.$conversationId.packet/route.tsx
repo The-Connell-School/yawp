@@ -13,6 +13,7 @@ import {
   ListTree,
   Rows,
   BookMarked,
+  CheckCircle2,
   PenLine,
 } from 'lucide-react';
 import {
@@ -42,9 +43,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export default function LessonPacketRoute() {
-  const { conversationId, packet, packetTitleValue, published } =
+  const { conversationId, packet, packetTitleValue, published, taught } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
+  const taughtFetcher = useFetcher();
   const [view, setView] = useState<'full' | 'outline' | 'handout'>('full');
   // Pieces the teacher does not want in students' hands this time. Nothing is
   // deleted — the handout is a reading of the packet, so it stays current.
@@ -62,6 +64,11 @@ export default function LessonPacketRoute() {
     pendingPublish === 'publish' || pendingPublish === 'unpublish'
       ? pendingPublish === 'publish'
       : published;
+  const pendingTaught = taughtFetcher.formData?.get('intent');
+  const isTaught =
+    pendingTaught === 'taught' || pendingTaught === 'untaught'
+      ? pendingTaught === 'taught'
+      : taught;
 
   /**
    * The file behind every print control on this page.
@@ -184,6 +191,30 @@ export default function LessonPacketRoute() {
           >
             <BookMarked size={15} className="mr-1.5" />
             {isPublished ? 'In your library' : 'Publish to my library'}
+          </Button>
+          {/* Whether a plan got used is the plainest measure of whether it
+              was any good, and only the teacher knows it. */}
+          <Button
+            type="button"
+            variant={isTaught ? 'default' : 'outline'}
+            size="sm"
+            data-testid="packet-taught"
+            aria-pressed={isTaught}
+            onClick={() =>
+              taughtFetcher.submit(
+                {
+                  intent: isTaught ? 'untaught' : 'taught',
+                  conversationId,
+                },
+                {
+                  method: 'post',
+                  action: '/api/domain/lesson-planner/feedback',
+                }
+              )
+            }
+          >
+            <CheckCircle2 size={15} className="mr-1.5" />
+            {isTaught ? 'Taught' : 'I taught this'}
           </Button>
           <div className="ml-auto flex items-center gap-2">
             <div className="flex rounded-lg border p-0.5">
