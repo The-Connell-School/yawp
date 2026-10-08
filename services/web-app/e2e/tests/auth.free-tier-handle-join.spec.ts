@@ -152,7 +152,7 @@ test.describe('Free-tier handle student', () => {
       await teacherPage.getByRole('button', { name: 'Reset login' }).click();
       await teacherContext.close();
 
-      await page.goto('/auth/logout');
+      await page.request.post('/auth/logout');
       await page.goto('/auth/login');
       await page.getByLabel('Email or handle').fill(handle);
       await page.getByLabel('Password').fill(tempPassword);
@@ -165,7 +165,7 @@ test.describe('Free-tier handle student', () => {
       await page.getByRole('button', { name: 'Save and continue' }).click();
       await expect(page).toHaveURL(/\/app/);
 
-      await page.goto('/auth/logout');
+      await page.request.post('/auth/logout');
       await page.goto('/auth/login');
       await page.getByLabel('Email or handle').fill(handle);
       await page.getByLabel('Password').fill(newPassword);
