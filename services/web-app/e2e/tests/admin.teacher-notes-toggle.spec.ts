@@ -105,8 +105,13 @@ test.describe.serial('Admin teacher notes output toggle', () => {
       },
     });
 
+    async function switchUser(email: string, password: string) {
+      await page.request.post('/auth/logout');
+      await signIn(email, password);
+    }
+
     try {
-      await signIn(e2eContext.superAdminEmail, 'admin-e2e-password');
+      await switchUser(e2eContext.superAdminEmail, 'admin-e2e-password');
       await page.goto(`/app/admin/assignment-types/${assignmentType.id}`);
 
       const toggle = page.getByTestId('rubric-teacher-notes-toggle');
@@ -125,18 +130,18 @@ test.describe.serial('Admin teacher notes output toggle', () => {
         })
         .toBe(true);
 
-      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await switchUser(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/submissions/${submissionId}`);
       await expect(page.getByTestId('teacher-private-notes')).toContainText(note, {
         timeout: 30000,
       });
 
-      await signIn(e2eContext.userEmail, 'johndoe');
+      await switchUser(e2eContext.userEmail, 'johndoe');
       await page.goto(`/app/submissions/${submissionId}`);
       await expect(page.getByTestId('teacher-private-notes')).toHaveCount(0);
       expect(await page.content()).not.toContain(note);
 
-      await signIn(e2eContext.adminEmail, 'admin-e2e-password');
+      await switchUser(e2eContext.adminEmail, 'admin-e2e-password');
       await page.goto(`/app/admin/assignment-types/${assignmentType.id}`);
       await expect(page.getByTestId('rubric-teacher-notes-toggle')).toBeDisabled();
     } finally {
