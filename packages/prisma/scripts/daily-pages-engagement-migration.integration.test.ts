@@ -342,10 +342,15 @@ describe('daily-pages-engagement migration (real Postgres)', () => {
       if (res.status !== 0) throw new Error(res.stderr);
     };
     const jsonOn = (sql: string) => {
-      const res = run('psql', ['-t', '-A', dbUrl, '-c', `SELECT (${sql})::text;`]);
+      const res = run('psql', [
+        '-t',
+        '-A',
+        dbUrl,
+        '-c',
+        `SELECT to_jsonb((${sql}))::text;`,
+      ]);
       if (res.status !== 0) throw new Error(res.stderr);
-      const line = res.stdout.trim().split('\n').pop();
-      return line === '' || line === undefined ? null : line;
+      return JSON.parse(res.stdout.trim().split('\n').pop() || 'null');
     };
 
     adminPsql(`CREATE DATABASE ${dbName}`);
@@ -380,8 +385,8 @@ describe('daily-pages-engagement migration (real Postgres)', () => {
     if (migrateRes.status !== 0) throw new Error(migrateRes.stderr);
 
     const hasKey = jsonOn(
-      `SELECT ("schemaJson"->'outputSchema' ? 'teacherNotesEnabled') FROM "Rubric" WHERE id='${ENGAGEMENT_ID}'`
+      `SELECT "schemaJson"->'outputSchema' ? 'teacherNotesEnabled' FROM "Rubric" WHERE id='${ENGAGEMENT_ID}'`
     );
-    expect(hasKey).toBe('f');
+    expect(hasKey).toBe(false);
   }, 120000);
 });
