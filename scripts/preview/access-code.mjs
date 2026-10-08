@@ -4,6 +4,7 @@ import {
   ACCESS_CODE_ANIMALS,
   generatePreviewAccessCode,
   generatePreviewAccessSeats,
+  buildPreviewAccessSeatRegistry,
 } from '../../packages/prisma/preview-access-code.ts';
 
 export {
@@ -34,10 +35,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const masterOrganizationId =
       process.env.PREVIEW_ACCESS_MASTER_ORGANIZATION_ID || 'local-dev-org';
     const masterLabel = process.env.PREVIEW_ACCESS_MASTER_LABEL || 'Master';
+    const previewSlug = process.env.PREVIEW_SLUG || null;
+    const includePreviewFreeClassroomFixture =
+      process.env.INCLUDE_PREVIEW_FREE_CLASSROOM_FIXTURE ?? null;
     process.stdout.write(
       `${JSON.stringify(
-        generatePreviewAccessSeats({
+        buildPreviewAccessSeatRegistry({
           count,
+          previewSlug,
+          includePreviewFreeClassroomFixture,
           existingCodes,
           existingSeats,
           reservedCodes,

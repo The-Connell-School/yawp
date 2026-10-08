@@ -1,9 +1,16 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
+const assertCanCreateClassInTransaction = mock(async () => {});
+
 const prisma = {
   class: { findMany: mock(), create: mock(), update: mock(), findFirst: mock() },
   orgMembership: { findUnique: mock() },
+  $transaction: mock(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),
 };
+
+mock.module('~/utils/assignment-quota.server', () => ({
+  assertCanCreateClassInTransaction,
+}));
 
 const requireUserId = mock();
 const requireMembership = mock();
@@ -84,7 +91,11 @@ describe('my classes route (student branch)', () => {
   });
 
   test('a teacher still gets the existing teacher class list, unaffected', async () => {
-    requireMembership.mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
     prisma.class.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ schools: [] });
 
@@ -116,7 +127,7 @@ describe('my classes route (teacher create/edit)', () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
-      organization: { id: 'org-1' },
+      organization: { id: 'org-1', plan: 'SCHOOL' },
     });
     prisma.orgMembership.findUnique.mockResolvedValue({
       schools: [{ id: 'school-1' }],

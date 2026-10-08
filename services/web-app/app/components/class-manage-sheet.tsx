@@ -45,6 +45,8 @@ export function ClassManageSheet({
   schools,
   actionUrl = '/app/my-classes?index',
   onSuccess,
+  classCreateBlockedMessage = null,
+  preferredSchoolYear = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -52,6 +54,10 @@ export function ClassManageSheet({
   schools: { id: string; name: string }[];
   actionUrl?: string;
   onSuccess?: () => void;
+  /** When set, creating a class is disabled (free tier one-class cap). */
+  classCreateBlockedMessage?: string | null;
+  /** Align new-class school year with the teacher's scoped year on My Classes. */
+  preferredSchoolYear?: string | null;
 }) {
   const fetcher = useFetcher({
     key: editingClass ? `edit-${editingClass.id}` : 'create',
@@ -76,12 +82,12 @@ export function ClassManageSheet({
     }
 
     setSchoolId(schools[0]?.id || '');
-    setSchoolYear(defaultSchoolYear());
+    setSchoolYear(preferredSchoolYear || defaultSchoolYear());
     setGrade('');
     setPeriod('');
     setTitle('');
     setCode(generateClassCode());
-  }, [editingClass, open, schools]);
+  }, [editingClass, open, schools, preferredSchoolYear]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data && !fetcher.data.error) {
@@ -90,8 +96,11 @@ export function ClassManageSheet({
     }
   }, [fetcher.state, fetcher.data, onOpenChange, onSuccess]);
 
+  const createBlocked = !editingClass && Boolean(classCreateBlockedMessage);
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
+    if (createBlocked) return;
     const formData = new FormData();
     formData.append('intent', editingClass ? 'edit-class' : 'create-class');
     if (editingClass) formData.append('classId', editingClass.id);
@@ -122,6 +131,17 @@ export function ClassManageSheet({
           </div>
         ) : null}
 
+        {createBlocked ? (
+          <div
+            className="mt-6 rounded-md border border-border bg-muted/40 p-4"
+            data-testid="class-create-blocked-callout"
+          >
+            <p className="text-sm font-medium">One class per free account</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {classCreateBlockedMessage}
+            </p>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div className="space-y-2">
             <Label>School</Label>
@@ -240,6 +260,15 @@ export function ClassManageSheet({
             </Button>
           </div>
         </form>
+        )}
+
+        {createBlocked ? (
+          <div className="mt-6 flex justify-end">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </div>
+        ) : null}
       </SheetContent>
     </Sheet>
   );

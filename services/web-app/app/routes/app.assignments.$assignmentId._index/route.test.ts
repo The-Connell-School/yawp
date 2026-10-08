@@ -1,5 +1,8 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
+const updateAssignmentInClassDeployment = mock();
+const createAssignmentDeployedToClasses = mock();
+
 const prisma = {
   class: { findFirst: mock() },
   assignment: { findFirst: mock(), update: mock() },
@@ -9,6 +12,14 @@ const prisma = {
   submission: { count: mock() },
   setting: { findUnique: mock() },
 };
+
+const actualAssignmentDeployment =
+  globalThis.__realModules['~/utils/assignment-deployment.server'];
+mock.module('~/utils/assignment-deployment.server', () => ({
+  ...actualAssignmentDeployment,
+  createAssignmentDeployedToClasses,
+  updateAssignmentInClassDeployment,
+}));
 
 const requireUserId = mock();
 const requireMembership = mock();
@@ -37,6 +48,10 @@ afterAll(() => {
   mock.module(
     '~/utils/assignment-type-access.server',
     () => actualAssignmentTypeAccess
+  );
+  mock.module(
+    '~/utils/assignment-deployment.server',
+    () => actualAssignmentDeployment
   );
 });
 
@@ -101,6 +116,7 @@ describe('app.assignments.$assignmentId loader', () => {
     prisma.assignment.update.mockReset();
     prisma.documentGroup.findFirst.mockReset();
     prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
+    updateAssignmentInClassDeployment.mockReset().mockResolvedValue(undefined);
   });
 
   test('scopes deployments to classes this teacher actually teaches', async () => {
@@ -229,8 +245,9 @@ describe('app.assignments.$assignmentId loader', () => {
       params: { assignmentId: 'assignment-1' },
     } as any);
 
-    expect(prisma.assignment.update).toHaveBeenCalledWith({
-      where: { id: 'assignment-1' },
+    expect(updateAssignmentInClassDeployment).toHaveBeenCalledWith({
+      assignmentId: 'assignment-1',
+      classId: 'class-1',
       data: expect.objectContaining({ writingTimeMinutes: 12 }),
     });
   });
@@ -268,8 +285,8 @@ describe('app.assignments.$assignmentId loader', () => {
       params: { assignmentId: 'assignment-1' },
     } as any);
 
-    expect(prisma.assignment.update).toHaveBeenCalled();
-    const data = prisma.assignment.update.mock.calls.at(-1)?.[0].data;
+    expect(updateAssignmentInClassDeployment).toHaveBeenCalled();
+    const data = updateAssignmentInClassDeployment.mock.calls.at(-1)?.[0].data;
     expect(data).not.toHaveProperty('writingTimeMinutes');
     expect(data).not.toHaveProperty('paragraphMode');
   });
@@ -311,6 +328,6 @@ describe('app.assignments.$assignmentId loader', () => {
     expect(response.data?.message ?? (await response.json()).message).toMatch(
       /collaborative assignment/i
     );
-    expect(prisma.assignment.update).not.toHaveBeenCalled();
+    expect(updateAssignmentInClassDeployment).not.toHaveBeenCalled();
   });
 });

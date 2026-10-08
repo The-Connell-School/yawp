@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { createAcquisitionTokens, getFreeTierReleaseCap, releaseBatch, releaseBatchSchema, tokenCreateSchema } from '~/domain/free-tier/service.server';
 import { readBoundedText } from '~/utils/bounded-body.server';
-import { getApprovalHooks } from '~/domain/free-tier/approval-hooks.server';
+import {
+  ensureFreeTierProductionApprovalHooks,
+  getApprovalHooks,
+} from '~/domain/free-tier/approval-hooks.server';
 import type { FreeTierApplicationStatus } from '@app/prisma';
 
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
@@ -356,7 +359,14 @@ async function enforceHeadroomForActivation(tx: any) {
   return remaining > 0;
 }
 
-type HookApp = { id: string; email: string; name: string; schoolName: string };
+type HookApp = {
+  id: string;
+  email: string;
+  name: string;
+  schoolName: string;
+  userId: string | null;
+  organizationId: string | null;
+};
 
 /**
  * Hooks run after the transaction commits, so a slow or failing hook can never
@@ -412,7 +422,15 @@ async function transition(args: {
   return prisma.$transaction(async (tx) => {
     const app = await tx.freeTierApplication.findUnique({
       where: { id: args.id },
-      select: { id: true, status: true, email: true, name: true, schoolName: true },
+      select: {
+        id: true,
+        status: true,
+        email: true,
+        name: true,
+        schoolName: true,
+        userId: true,
+        organizationId: true,
+      },
     });
     if (!app) return { status: 404 as const, payload: { error: 'Not found' }, changed: false };
     if (app.status === args.to) return { status: 200 as const, payload: { ok: true, idempotent: true, status: app.status }, changed: false };
@@ -427,7 +445,14 @@ async function transition(args: {
     return {
       status: 200 as const,
       payload: { ok: true, status: args.to, previousStatus: app.status },
-      app: { id: app.id, email: app.email, name: app.name, schoolName: app.schoolName },
+      app: {
+        id: app.id,
+        email: app.email,
+        name: app.name,
+        schoolName: app.schoolName,
+        userId: app.userId,
+        organizationId: app.organizationId,
+      },
       changed: true,
     };
   });
@@ -441,6 +466,7 @@ export const REJECTABLE_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED', 
 export const MANUAL_REVIEW_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED', 'SENT'];
 
 export async function approveHttp(request: Request) {
+  await ensureFreeTierProductionApprovalHooks();
   const denied = authenticate(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
