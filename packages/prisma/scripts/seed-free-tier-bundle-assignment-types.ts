@@ -9,9 +9,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { PrismaClient } from '../generated/prisma';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { isLocalDatabaseUrl } from './seed-overlay-connection';
+import type { PrismaClient } from '../generated/prisma';
+import { createPrismaClient } from './local-dev/connection';
 import {
   CLASS_STARTER_KIND,
   readClassStarterImage,
@@ -164,6 +163,11 @@ async function applyBundleRubricDefaults(
 ) {
   const defaults = RUBRIC_DEFAULTS_BY_KIND[kind];
   if (!defaults) return;
+  const existing = await prisma.assignmentType.findUnique({
+    where: { id: assignmentTypeId },
+    select: { rubricJson: true },
+  });
+  if (existing?.rubricJson) return;
   await prisma.assignmentType.update({
     where: { id: assignmentTypeId },
     data: {
@@ -248,16 +252,6 @@ export async function assertFreeTierBundleAssignmentTypeParity(
   }
 }
 
-function buildPrismaClient() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error('DATABASE_URL is not set');
-  const isLocal = isLocalDatabaseUrl(connectionString);
-  const adapter = new PrismaPg(
-    { connectionString, ssl: isLocal ? false : { rejectUnauthorized: false } }
-  );
-  return new PrismaClient({ adapter });
-}
-
 async function upsertStandaloneType(
   prisma: PrismaClient,
   args: {
@@ -271,12 +265,7 @@ async function upsertStandaloneType(
   const { mod, steps } = moduleFromProd(args.moduleId);
   const assignmentType = await prisma.assignmentType.upsert({
     where: { kind: args.kind },
-    update: {
-      title: args.title,
-      description: args.description,
-      position: args.position,
-      archivedAt: null,
-    },
+    update: {},
     create: {
       kind: args.kind,
       title: args.title,
@@ -323,7 +312,7 @@ async function upsertStandaloneType(
 export async function seedFreeTierBundleAssignmentTypes(prisma: PrismaClient) {
   const classStarter = await prisma.assignmentType.upsert({
     where: { kind: CLASS_STARTER_KIND },
-    update: { archivedAt: null },
+    update: {},
     create: {
       kind: CLASS_STARTER_KIND,
       title: 'Class Starter',
@@ -380,7 +369,7 @@ export async function seedFreeTierBundleAssignmentTypes(prisma: PrismaClient) {
 }
 
 if (import.meta.main) {
-  const prisma = buildPrismaClient();
+  const prisma = createPrismaClient();
   seedFreeTierBundleAssignmentTypes(prisma)
     .then((result) => {
       console.log('Free tier bundle assignment types ready:', result);

@@ -216,6 +216,9 @@ describe('production deployment contract', () => {
     const deployTrainingMigrationTestIndex = deployWorkflow.indexOf(
       'teacher-training-assignment-migration.test.ts'
     );
+    const deployBundleSeedIndex = deployWorkflow.indexOf(
+      'seed-free-tier-bundle-assignment-types'
+    );
     const deployValidateBackfillIndex = deployWorkflow.indexOf(
       'backfill-class-art-key'
     );
@@ -236,6 +239,9 @@ describe('production deployment contract', () => {
     );
     const remoteReleaseGateIndex = migrateRemoteScript.indexOf(
       'assignment-type-release-gate.ts'
+    );
+    const remoteBundleSeedIndex = migrateRemoteScript.indexOf(
+      'seed-free-tier-bundle-assignment-types'
     );
 
     expect(deployWorkflow).toContain('validate-prisma-migrations');
@@ -262,9 +268,8 @@ describe('production deployment contract', () => {
     expect(deployTrainingMigrationTestIndex).toBeLessThan(
       deployValidateMigrateIndex
     );
-    expect(deployValidateBackfillIndex).toBeGreaterThan(
-      deployValidateMigrateIndex
-    );
+    expect(deployBundleSeedIndex).toBeGreaterThan(deployValidateMigrateIndex);
+    expect(deployValidateBackfillIndex).toBeGreaterThan(deployBundleSeedIndex);
     expect(migrateIndex).toBeGreaterThan(-1);
     expect(fingerprintCheckIndex).toBeGreaterThan(-1);
     expect(fingerprintCheckIndex).toBeLessThan(migrateIndex);
@@ -285,6 +290,7 @@ describe('production deployment contract', () => {
     expect(remoteMigrateIndex).toBeGreaterThan(-1);
     expect(remoteBackfillIndex).toBeGreaterThan(remoteMigrateIndex);
     expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);
+    expect(remoteBundleSeedIndex).toBeGreaterThan(remoteReleaseGateIndex);
   });
 
   test('production QA pins and verifies the bastion host key before opening a tunnel', () => {

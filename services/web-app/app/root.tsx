@@ -172,6 +172,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                   organization: {
                     select: {
                       name: true,
+                      plan: true,
                       reporterEnabled: true,
                       classInsightsEnabled: true,
                       writingPracticeEnabled: true,

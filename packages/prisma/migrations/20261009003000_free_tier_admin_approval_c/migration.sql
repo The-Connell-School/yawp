@@ -1,5 +1,5 @@
--- #416: deploy after stack migrations including #412 `20261008121500` and
--- #413 `20261008124500_repair_free_class_join_columns` (timestamp order).
+-- #416: deploy after `20261007235900_free_classroom_assignment_kind_usage` (#414).
+-- `20261007193000_user_handle_accounts` ships with #413 on main (not duplicated here).
 SET lock_timeout = '5s';
 
 DO $$ BEGIN

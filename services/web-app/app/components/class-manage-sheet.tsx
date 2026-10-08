@@ -46,6 +46,7 @@ export function ClassManageSheet({
   actionUrl = '/app/my-classes?index',
   onSuccess,
   classCreateBlockedMessage = null,
+  preferredSchoolYear = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -55,6 +56,8 @@ export function ClassManageSheet({
   onSuccess?: () => void;
   /** When set, creating a class is disabled (free tier one-class cap). */
   classCreateBlockedMessage?: string | null;
+  /** Align new-class school year with the teacher's scoped year on My Classes. */
+  preferredSchoolYear?: string | null;
 }) {
   const fetcher = useFetcher({
     key: editingClass ? `edit-${editingClass.id}` : 'create',
@@ -79,12 +82,12 @@ export function ClassManageSheet({
     }
 
     setSchoolId(schools[0]?.id || '');
-    setSchoolYear(defaultSchoolYear());
+    setSchoolYear(preferredSchoolYear || defaultSchoolYear());
     setGrade('');
     setPeriod('');
     setTitle('');
     setCode(generateClassCode());
-  }, [editingClass, open, schools]);
+  }, [editingClass, open, schools, preferredSchoolYear]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data && !fetcher.data.error) {
@@ -129,11 +132,16 @@ export function ClassManageSheet({
         ) : null}
 
         {createBlocked ? (
-          <p className="mt-4 text-sm text-muted-foreground">
-            {classCreateBlockedMessage}
-          </p>
-        ) : null}
-
+          <div
+            className="mt-6 rounded-md border border-border bg-muted/40 p-4"
+            data-testid="class-create-blocked-callout"
+          >
+            <p className="text-sm font-medium">One class per free account</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {classCreateBlockedMessage}
+            </p>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div className="space-y-2">
             <Label>School</Label>
@@ -240,10 +248,7 @@ export function ClassManageSheet({
           </div>
 
           <div className="flex gap-2 pt-2">
-            <Button
-              type="submit"
-              disabled={fetcher.state !== 'idle' || createBlocked}
-            >
+            <Button type="submit" disabled={fetcher.state !== 'idle'}>
               {fetcher.state !== 'idle'
                 ? 'Saving...'
                 : editingClass
@@ -255,6 +260,15 @@ export function ClassManageSheet({
             </Button>
           </div>
         </form>
+        )}
+
+        {createBlocked ? (
+          <div className="mt-6 flex justify-end">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </div>
+        ) : null}
       </SheetContent>
     </Sheet>
   );

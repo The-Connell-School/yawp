@@ -6,11 +6,13 @@ import {
 
 function userWith({
   role,
-  reporterEnabled,
+  plan = 'SCHOOL',
+  reporterEnabled = true,
   isAdmin = false,
 }: {
   role: 'TEACHER' | 'STUDENT';
-  reporterEnabled: boolean;
+  plan?: 'SCHOOL' | 'FREE_CLASSROOM';
+  reporterEnabled?: boolean;
   isAdmin?: boolean;
 }) {
   return {
@@ -18,16 +20,13 @@ function userWith({
     selectedMembership: {
       role,
       isOrgOwner: false,
-      organization: { name: 'Org', reporterEnabled },
+      organization: { name: 'Org', plan, reporterEnabled },
     },
   } as any;
 }
 
 function reporterVisible(user: any) {
-  return getVisibleSidebarSections(
-    FLAT_SIDEBAR_SECTIONS,
-    user
-  )
+  return getVisibleSidebarSections(FLAT_SIDEBAR_SECTIONS, user)
     .flatMap((section) => section.links)
     .some((link) => link.to === '/app/reporter');
 }
@@ -39,21 +38,25 @@ function allDestinations(user: any) {
 }
 
 describe('Reporter sidebar gating', () => {
-  test('visible for a teacher (always on)', () => {
+  test('visible for a SCHOOL teacher even when reporterEnabled is false', () => {
     expect(
-      reporterVisible(userWith({ role: 'TEACHER', reporterEnabled: true }))
+      reporterVisible(
+        userWith({ role: 'TEACHER', plan: 'SCHOOL', reporterEnabled: false })
+      )
     ).toBe(true);
   });
 
-  test('hidden for a teacher when the org flag is off', () => {
+  test('hidden for a FREE_CLASSROOM teacher', () => {
     expect(
-      reporterVisible(userWith({ role: 'TEACHER', reporterEnabled: false }))
+      reporterVisible(
+        userWith({ role: 'TEACHER', plan: 'FREE_CLASSROOM', reporterEnabled: true })
+      )
     ).toBe(false);
   });
 
-  test('hidden for a student even if the org flag is on', () => {
+  test('hidden for a student even on SCHOOL plan', () => {
     expect(
-      reporterVisible(userWith({ role: 'STUDENT', reporterEnabled: true }))
+      reporterVisible(userWith({ role: 'STUDENT', plan: 'SCHOOL' }))
     ).toBe(false);
   });
 });
@@ -61,13 +64,13 @@ describe('Reporter sidebar gating', () => {
 describe('My Assignments navigation', () => {
   test('links teachers to the cross-class assignments page', () => {
     expect(
-      allDestinations(userWith({ role: 'TEACHER', reporterEnabled: true }))
+      allDestinations(userWith({ role: 'TEACHER', plan: 'SCHOOL' }))
     ).toContain('/app/assignments');
   });
 
   test('hidden for a student', () => {
     expect(
-      allDestinations(userWith({ role: 'STUDENT', reporterEnabled: true }))
+      allDestinations(userWith({ role: 'STUDENT', plan: 'SCHOOL' }))
     ).not.toContain('/app/assignments');
   });
 

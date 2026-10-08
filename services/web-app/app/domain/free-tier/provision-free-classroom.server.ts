@@ -9,6 +9,8 @@ import { FREE_CLASSROOM_ASSIGNMENT_KINDS } from '~/utils/entitlements.server';
 import { isConsumerEmailDomain } from '~/domain/free-tier/consumer-email-domains';
 import { currentSchoolYear } from '~/utils/school-year';
 import { generateClassCode } from '~/utils/class';
+import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
+import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
 
 export type ProvisionFreeClassroomResult =
   | { status: 'provisioned'; organizationId: string }
@@ -169,12 +171,16 @@ export async function provisionFreeClassroom(
       select: { id: true },
     });
 
+    const classCode = generateClassCode();
+    const classArtKey = await pickClassArtKeyForOrganization(org.id);
     await tx.class.create({
       data: {
         schoolId: school.id,
         schoolYear: currentSchoolYear(),
         title: 'My Class',
-        code: generateClassCode(),
+        code: classCode,
+        cardGradientKey: generateClassCardGradientKey(classCode),
+        classArtKey,
         teachers: { connect: { id: membership.id } },
       },
     });

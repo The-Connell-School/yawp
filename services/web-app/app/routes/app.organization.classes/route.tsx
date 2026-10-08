@@ -42,7 +42,7 @@ import {
   setOrganizationClassesTableCookie,
   getOrganizationClassesTableCookieValue,
 } from '~/utils/cookies.server';
-import { assertCanCreateClassInTransaction } from '~/utils/assignment-quota.server';
+import { assertCanCreateClassForOrganizationPlan } from '~/utils/assignment-quota.server';
 import { prisma } from '~/utils/db.server';
 import { SearchInput } from '~/components/search-input';
 import {
@@ -64,7 +64,6 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import { generateClassCode } from '~/utils/class';
-import { studentJoinTokenForClassCreate } from '~/utils/class-student-join-token.server';
 import {
   currentSchoolYear,
   selectableSchoolYears,
@@ -353,7 +352,7 @@ export async function action({ request }: ActionFunctionArgs) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         await prisma.$transaction(async (tx) => {
-          await assertCanCreateClassInTransaction(tx, profile.organization);
+          await assertCanCreateClassForOrganizationPlan(tx, profile.organization);
           await tx.class.create({
             data: {
               schoolId,
@@ -362,9 +361,6 @@ export async function action({ request }: ActionFunctionArgs) {
               period,
               title,
               code,
-              studentJoinToken: studentJoinTokenForClassCreate(
-                profile.organization.plan
-              ),
               cardGradientKey: generateClassCardGradientKey(code),
               classArtKey,
               teachers: {
@@ -1362,7 +1358,7 @@ function BulkEditClassSheet({
   schools: { id: string; name: string }[];
   teachers: {
     id: string;
-    user: { name: string | null; email: string | null; username?: string | null };
+    user: { name: string | null; email: string };
   }[];
 }) {
   const fetcher = useFetcher({

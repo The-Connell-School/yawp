@@ -1,27 +1,10 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { PrismaClient } from '@app/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import {
   assertCanCreateAssignmentOfKindInTransaction,
   getLifetimeAssignmentKindCount,
 } from './assignment-quota.server';
-
-/** Owned by #414; #416 depends on it but does not ship the migration. */
-const FREE_TIER_USAGE_MIGRATION_PRESENT = existsSync(
-  join(
-    import.meta.dir,
-    '..',
-    '..',
-    '..',
-    'packages',
-    'prisma',
-    'migrations',
-    '20261007235900_free_classroom_assignment_kind_usage',
-    'migration.sql'
-  )
-);
 import { createAssignmentDeployedToClasses } from './assignment-deployment.server';
 import { provisionFreeClassroom } from '~/domain/free-tier/provision-free-classroom.server';
 
@@ -33,9 +16,7 @@ function client() {
   return new PrismaClient({ adapter });
 }
 
-describe.skipIf(!process.env.DATABASE_URL || !FREE_TIER_USAGE_MIGRATION_PRESENT)(
-  'free classroom assignment quotas (db)',
-  () => {
+describe.skipIf(!process.env.DATABASE_URL)('free classroom assignment quotas (db)', () => {
   const prisma = client();
 
   afterAll(async () => {
@@ -128,5 +109,4 @@ describe.skipIf(!process.env.DATABASE_URL || !FREE_TIER_USAGE_MIGRATION_PRESENT)
       })
     ).rejects.toThrow(/used all 12/i);
   });
-  }
-);
+});

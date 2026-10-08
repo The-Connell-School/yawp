@@ -1,6 +1,4 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { seedFreeTierBundleAssignmentTypes } from './seed-free-tier-bundle-assignment-types';
@@ -14,26 +12,13 @@ import { createAssignmentDeployedToClasses } from '../../../services/web-app/app
 
 const DB = process.env.DATABASE_URL;
 
-/** Owned by #414; #416 depends on it but does not ship the migration. */
-const FREE_TIER_USAGE_MIGRATION_PRESENT = existsSync(
-  join(
-    import.meta.dir,
-    '..',
-    'migrations',
-    '20261007235900_free_classroom_assignment_kind_usage',
-    'migration.sql'
-  )
-);
-
 function buildClient() {
   if (!DB) throw new Error('DATABASE_URL is required');
   const adapter = new PrismaPg({ connectionString: DB, ssl: false });
   return new PrismaClient({ adapter });
 }
 
-describe.skipIf(!FREE_TIER_USAGE_MIGRATION_PRESENT)(
-  'free tier real Postgres integration',
-  () => {
+describe('free tier real Postgres integration', () => {
   const prisma = buildClient();
 
   afterAll(async () => {
@@ -255,5 +240,4 @@ describe.skipIf(!FREE_TIER_USAGE_MIGRATION_PRESENT)(
       })
     ).rejects.toThrow(/used all 12/i);
   });
-  }
-);
+});

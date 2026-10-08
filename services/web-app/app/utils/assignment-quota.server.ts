@@ -58,55 +58,11 @@ export function filterAssignmentTypesForOrganizationPlan<
 const usageClient = (client: Pick<typeof prisma, 'freeClassroomAssignmentKindUsage'>) =>
   client.freeClassroomAssignmentKindUsage;
 
-type QuotaDbClient = Pick<
-  typeof prisma,
-  'freeClassroomAssignmentKindUsage' | 'assignment' | '$queryRaw'
->;
-
-let freeClassroomAssignmentKindUsageTablePresent: boolean | null = null;
-
-/** #414 ships `FreeClassroomAssignmentKindUsage`; #416 must run before that migration lands. */
-export async function isFreeClassroomAssignmentKindUsageTablePresent(
-  client: QuotaDbClient = prisma
-): Promise<boolean> {
-  if (freeClassroomAssignmentKindUsageTablePresent !== null) {
-    return freeClassroomAssignmentKindUsageTablePresent;
-  }
-  const rows = await client.$queryRaw<Array<{ exists: boolean }>>`
-    SELECT EXISTS (
-      SELECT 1
-      FROM information_schema.tables
-      WHERE table_schema = 'public'
-        AND table_name = 'FreeClassroomAssignmentKindUsage'
-    ) AS "exists"
-  `;
-  freeClassroomAssignmentKindUsageTablePresent = Boolean(rows[0]?.exists);
-  return freeClassroomAssignmentKindUsageTablePresent;
-}
-
-async function countDeployedAssignmentsOfKind(
-  client: Pick<typeof prisma, 'assignment'>,
-  organizationId: string,
-  kind: string
-) {
-  return client.assignment.count({
-    where: {
-      assignmentType: { kind },
-      classAssignments: {
-        some: { class: { school: { organizationId } } },
-      },
-    },
-  });
-}
-
 export async function getLifetimeAssignmentKindCount(
   organizationId: string,
   kind: string,
-  client: QuotaDbClient = prisma
+  client: Pick<typeof prisma, 'freeClassroomAssignmentKindUsage'> = prisma
 ) {
-  if (!(await isFreeClassroomAssignmentKindUsageTablePresent(client))) {
-    return countDeployedAssignmentsOfKind(client, organizationId, kind);
-  }
   const row = await usageClient(client).findUnique({
     where: { organizationId_kind: { organizationId, kind } },
     select: { lifetimeCreatedCount: true },
@@ -119,9 +75,6 @@ async function incrementLifetimeAssignmentKindCount(
   organizationId: string,
   kind: FreeClassroomAssignmentQuotaKind
 ) {
-  if (!(await isFreeClassroomAssignmentKindUsageTablePresent(tx))) {
-    return;
-  }
   await tx.freeClassroomAssignmentKindUsage.upsert({
     where: { organizationId_kind: { organizationId, kind } },
     create: { organizationId, kind, lifetimeCreatedCount: 1 },
@@ -131,7 +84,7 @@ async function incrementLifetimeAssignmentKindCount(
 
 export async function getFreeClassroomAssignmentQuotaUsage(
   organizationId: string,
-  client: QuotaDbClient = prisma
+  client: Pick<typeof prisma, 'freeClassroomAssignmentKindUsage'> = prisma
 ) {
   const usage = new Map<FreeClassroomAssignmentQuotaKind, number>();
   for (const kind of FREE_CLASSROOM_ASSIGNMENT_KINDS) {
@@ -273,7 +226,7 @@ export async function enforceFreeClassroomAssignmentCreateInTransaction(
   }
 ) {
   const organization = await resolveOrganizationForClassIds(tx, params.classIds);
-  if (!organization) return;
+  if (!organization || organization.plan !== 'FREE_CLASSROOM') return;
   const assignmentType = await tx.assignmentType.findUnique({
     where: { id: params.assignmentTypeId },
     select: { kind: true },
@@ -294,7 +247,7 @@ export async function enforceFreeClassroomAssignmentRetypeInTransaction(
   }
 ) {
   const organization = await resolveOrganizationForClassIds(tx, params.classIds);
-  if (!organization) return;
+  if (!organization || organization.plan !== 'FREE_CLASSROOM') return;
   const types = await tx.assignmentType.findMany({
     where: { id: { in: [params.previousAssignmentTypeId, params.nextAssignmentTypeId] } },
     select: { id: true, kind: true },
@@ -306,6 +259,15 @@ export async function enforceFreeClassroomAssignmentRetypeInTransaction(
     byId.get(params.previousAssignmentTypeId) ?? null,
     byId.get(params.nextAssignmentTypeId) ?? null
   );
+}
+
+/** No-op for SCHOOL and other plans; free classroom cap enforced in-transaction. */
+export async function assertCanCreateClassForOrganizationPlan(
+  tx: Prisma.TransactionClient,
+  organization: Pick<Organization, 'id' | 'plan'>
+) {
+  if (organization.plan !== 'FREE_CLASSROOM') return;
+  await assertCanCreateClassInTransaction(tx, organization);
 }
 
 export async function assertCanCreateClassInTransaction(
