@@ -152,6 +152,35 @@ test.describe.serial('Free tier guided tour', () => {
     );
   });
 
+  for (const { path, welcome } of [
+    { path: '/app/documents', welcome: /Welcome to Documents/i },
+    { path: '/app/writing-lessons', welcome: /Welcome to Writing Practice/i },
+    {
+      path: '/app/teacher-trainings',
+      welcome: /Welcome to the Teacher's Lounge/i,
+    },
+    { path: '/app/lesson-planner', welcome: /Welcome to the Lesson Planner/i },
+    { path: '/app/organization/classes', welcome: /Welcome to Organization/i },
+  ]) {
+    test(`${path} has its own tour`, async ({ page }) => {
+      await logInAsFreeTeacher(page);
+      await page.goto(path);
+
+      const card = page.getByRole('dialog', { name: welcome });
+      await expect(card).toBeVisible();
+      await card.getByRole('button', { name: 'Take a tour' }).click();
+
+      const step = page.getByTestId('guided-tour-step');
+      await expect(step).toContainText('Step 1 of');
+      // The first step points at something real on the page, not a
+      // centered fallback card.
+      await expect(page.locator('[data-tour-active="true"]')).toHaveCount(1);
+      await expect(page.getByTestId('guided-tour-spotlight')).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(step).toBeHidden();
+    });
+  }
+
   test('no tour when the free_tier flag is off', async ({ page }) => {
     await logInAsFreeTeacher(page);
     await setFreeTierFlag(false);
