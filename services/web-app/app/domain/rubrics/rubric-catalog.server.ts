@@ -25,6 +25,9 @@ export const PROMPT_CONFIG_KEYS = [
   'systemInstructions', 'gradingInstructions', 'instructionsPreset', 'systemMessageTemplate',
   'userMessageTemplate', 'scoreInstructions', 'rubricInstructions',
 ] as const;
+/** Legacy pins without an override on their snapshot still grade with this after a catalog GA publish. */
+export const GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY =
+  'gradingInstructionsOverridePinnedFallback';
 const PER_TYPE_PREFIX = 'assignment-type:';
 const LIBRARY_NAME = /^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*$/;
 const TYPE_ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -146,7 +149,20 @@ function buildStoredContent(key: CatalogKey, live: LiveContent, document: JsonRe
     incomingGradingInstructions &&
     incomingGradingInstructions !== liveGradingInstructions
   ) {
-    delete promptConfig.gradingInstructionsOverride;
+    const previousOverride =
+      typeof livePrompt.gradingInstructionsOverride === 'string' &&
+      livePrompt.gradingInstructionsOverride.trim()
+        ? livePrompt.gradingInstructionsOverride.trim()
+        : typeof livePrompt[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY] ===
+              'string' &&
+            String(livePrompt[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY]).trim()
+          ? String(livePrompt[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY]).trim()
+          : '';
+    promptConfig.gradingInstructionsOverride = null;
+    if (previousOverride) {
+      promptConfig[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY] =
+        previousOverride;
+    }
   }
 
   if (key.source === 'library') {

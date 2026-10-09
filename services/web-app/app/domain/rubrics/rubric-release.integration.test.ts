@@ -177,6 +177,52 @@ run('an explicit rubric revision on the create input is never replaced', async (
   expect((await create(type.id, [school.klass.id], { rubricRevisionId: currentRevisionId })).rubricRevisionId).toBe(currentRevisionId);
 });
 
+run('internal_rubrics release: staged per-type GA publish clears override on the released revision for new assignments only', async () => {
+  const { perTypeKey, GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY } = await import('./rubric-catalog.server');
+  const shape = {
+    scoringScale: { type: 'points_scale', minScore: 1, maxScore: 4, step: 1, compositeMin: 0, compositeMax: 100 },
+    rubric: {
+      categories: [
+        { key: 'thesis', label: 'Thesis', description: 'Thesis moves.', weight: 1 },
+      ],
+    },
+    outputSchema: { teacherNotesEnabled: true, scoringMode: 'holistic_tier' },
+  };
+  const type = await db.assignmentType.create({ data: {
+    title: `Hornbuckle release ${suffix}`, position: 9202,
+    scoringScaleJson: shape.scoringScale as any, rubricJson: shape.rubric as any,
+    gradingPromptConfigJson: {
+      gradingInstructions: 'Placeholder GA.',
+      gradingInstructionsOverride: '10/5 pasted GA (live today).',
+    } as any,
+    gradingOutputSchemaJson: shape.outputSchema as any, gradingCalibrationNotes: null,
+  } });
+  const key = perTypeKey(type.id);
+  cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
+  cleanup.push(() => db.rubricRelease.deleteMany({ where: { catalogKey: key } }));
+  const legacy = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Before release' } });
+  const c = await catalog();
+  const detail = await c.get(key);
+  const document = structuredClone(detail.live.editable) as any;
+  document.promptConfig = { ...(document.promptConfig ?? {}), gradingInstructions: 'Released Hornbuckle v4 GA.' };
+  const released = await c.stage({ key, requestId: randomUUID(), actorEmail: actor, reason: 'Release GA', document, source: source() });
+  const releasedRow = await db.rubricRevision.findUniqueOrThrow({ where: { id: released.revision.id } });
+  expect((releasedRow.schemaJson as any).promptConfig.gradingInstructions).toBe('Released Hornbuckle v4 GA.');
+  expect((releasedRow.schemaJson as any).promptConfig.gradingInstructionsOverride).toBeNull();
+  expect((releasedRow.schemaJson as any).promptConfig[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY]).toBe('10/5 pasted GA (live today).');
+  const live = await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } });
+  expect((live.gradingPromptConfigJson as any).gradingInstructionsOverride).toBe('10/5 pasted GA (live today).');
+  const school = await schoolWithClass('Internal rubrics GA school');
+  await setFlag('everyone');
+  const { resolveAssignmentTypeGradingConfig } = await import('../assignment-types/assignment-type-grading-config.server');
+  const newAssignment = await create(type.id, [school.klass.id]);
+  expect(newAssignment.rubricRevisionId).toBe(released.revision.id);
+  const newConfig = await resolveAssignmentTypeGradingConfig({ assignmentTypeId: type.id, assignmentId: newAssignment.id });
+  expect(newConfig.instructions).toMatchObject({ mode: 'unified', gradingInstructions: 'Released Hornbuckle v4 GA.' });
+  const legacyConfig = await resolveAssignmentTypeGradingConfig({ assignmentTypeId: type.id, assignmentId: legacy.id });
+  expect(legacyConfig.instructions).toMatchObject({ mode: 'unified', gradingInstructions: '10/5 pasted GA (live today).' });
+});
+
 run('per-type rubrics are released under assignment-type:<id>', async () => {
   const { perTypeKey } = await import('./rubric-catalog.server');
   const daily = fixture.perTypeRubrics.find((type) => type.title === 'Daily Pages')!;

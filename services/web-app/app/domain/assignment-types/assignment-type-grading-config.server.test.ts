@@ -12,8 +12,11 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { buildResolvedAssignmentTypeGradingConfig, resolveAssignmentTypeGradingConfig } =
-  await import('./assignment-type-grading-config.server');
+const {
+  buildResolvedAssignmentTypeGradingConfig,
+  resolveAssignmentTypeGradingConfig,
+  resolveOwnGradingInstructionsOverrideForAssignment,
+} = await import('./assignment-type-grading-config.server');
 
 describe('resolveAssignmentTypeGradingConfig', () => {
   beforeEach(() => {
@@ -148,6 +151,94 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     expect(invocation.system).toContain('Preserved override.');
     expect(invocation.userMessage).toContain('Promoted rubric');
     expect(invocation.userMessage).toContain('Synthetic essay.');
+  });
+
+  test('per-type override resolution: legacy snapshot without key follows live override', () => {
+    const typeId = 'legacy-no-key';
+    expect(
+      resolveOwnGradingInstructionsOverrideForAssignment({
+        assignmentType: {
+          id: typeId,
+          gradingPromptConfigJson: {
+            gradingInstructionsOverride: 'Live override.',
+          },
+        } as never,
+        pinnedRevision: {
+          rubricName: `assignment-type:${typeId}`,
+          schemaJson: {
+            promptConfig: { gradingInstructions: 'Snapshot GA.' },
+          },
+        },
+      })
+    ).toBe('Live override.');
+  });
+
+  test('per-type override resolution: snapshot with string freezes that override', () => {
+    const typeId = 'frozen-key';
+    expect(
+      resolveOwnGradingInstructionsOverrideForAssignment({
+        assignmentType: {
+          id: typeId,
+          gradingPromptConfigJson: {
+            gradingInstructionsOverride: 'Live override must not win.',
+          },
+        } as never,
+        pinnedRevision: {
+          rubricName: `assignment-type:${typeId}`,
+          schemaJson: {
+            promptConfig: {
+              gradingInstructionsOverride: 'Frozen on pin.',
+            },
+          },
+        },
+      })
+    ).toBe('Frozen on pin.');
+  });
+
+  test('per-type override resolution: snapshot null clears override without live fallback', () => {
+    const typeId = 'explicit-null';
+    expect(
+      resolveOwnGradingInstructionsOverrideForAssignment({
+        assignmentType: {
+          id: typeId,
+          gradingPromptConfigJson: {
+            gradingInstructionsOverride: null,
+            gradingInstructionsOverridePinnedFallback: 'Legacy fallback text.',
+          },
+        } as never,
+        pinnedRevision: {
+          rubricName: `assignment-type:${typeId}`,
+          schemaJson: {
+            promptConfig: {
+              gradingInstructions: 'Internal GA.',
+              gradingInstructionsOverride: null,
+            },
+          },
+        },
+      })
+    ).toBeUndefined();
+  });
+
+  test('per-type override resolution: legacy pin after publish uses pinned fallback when live override was cleared', () => {
+    const typeId = 'legacy-after-publish';
+    expect(
+      resolveOwnGradingInstructionsOverrideForAssignment({
+        assignmentType: {
+          id: typeId,
+          gradingPromptConfigJson: {
+            gradingInstructions: 'Internal GA.',
+            gradingInstructionsOverride: null,
+            gradingInstructionsOverridePinnedFallback: '10/5 pasted GA (live today).',
+          },
+        } as never,
+        pinnedRevision: {
+          rubricName: `assignment-type:${typeId}`,
+          schemaJson: {
+            promptConfig: { gradingInstructions: 'Original placeholder GA.' },
+          },
+        },
+      })
+    ).toBe('10/5 pasted GA (live today).');
   });
 
   test('a per-type assignment pinned to a revision uses the override frozen on that revision, not the live type columns', async () => {

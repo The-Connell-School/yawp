@@ -4,6 +4,7 @@ import {
   gradingAssistantScoreScaleInstructions,
 } from '~/domain/grading/rubric-instructions';
 import { parseRubricSchema } from '~/domain/rubrics/rubric-schema';
+import { GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY } from '~/domain/rubrics/rubric-catalog.server';
 import { THESIS_DRIVEN_ESSAY_RUBRIC_NAME } from '~/domain/rubrics/thesis-driven-essay';
 import {
   parseAssignmentTypeRubricConfig,
@@ -328,17 +329,55 @@ function getOwnGradingInstructionsOverride(
     : undefined;
 }
 
-/** Per-type pins store prompt config on the revision; live overrides must not move them. */
-function getPinnedPerTypeGradingInstructionsOverride(
-  revision: { rubricName: string; schemaJson: unknown } | null
-): string | undefined | null {
-  if (!revision?.rubricName.startsWith('assignment-type:')) return null;
-  const schema = revision.schemaJson;
-  if (!isRecord(schema) || !isRecord(schema.promptConfig)) return undefined;
-  const override = schema.promptConfig.gradingInstructionsOverride;
-  return typeof override === 'string' && override.trim()
-    ? override.trim()
+function livePinnedFallbackOverride(
+  promptConfig: Record<string, unknown> | null | undefined
+): string | undefined {
+  if (!isRecord(promptConfig)) return undefined;
+  const fallback = promptConfig[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY];
+  return typeof fallback === 'string' && fallback.trim()
+    ? fallback.trim()
     : undefined;
+}
+
+/**
+ * Per-type revision pins may freeze an override, clear it (null), or omit the
+ * key (legacy). Library pins and unpinned reads keep today's live-column rule.
+ */
+export function resolveOwnGradingInstructionsOverrideForAssignment({
+  assignmentType,
+  pinnedRevision,
+}: {
+  assignmentType: AssignmentTypeGradingRow | null;
+  pinnedRevision: { rubricName: string; schemaJson: unknown } | null;
+}): string | undefined {
+  if (!pinnedRevision?.rubricName.startsWith('assignment-type:')) {
+    return getOwnGradingInstructionsOverride(assignmentType);
+  }
+  const schema = pinnedRevision.schemaJson;
+  const snapshotPrompt =
+    isRecord(schema) && isRecord(schema.promptConfig)
+      ? schema.promptConfig
+      : null;
+  if (
+    snapshotPrompt &&
+    Object.prototype.hasOwnProperty.call(
+      snapshotPrompt,
+      'gradingInstructionsOverride'
+    )
+  ) {
+    const override = snapshotPrompt.gradingInstructionsOverride;
+    if (override === null) return undefined;
+    return typeof override === 'string' && override.trim()
+      ? override.trim()
+      : undefined;
+  }
+  const livePrompt = assignmentType?.gradingPromptConfigJson;
+  return (
+    getOwnGradingInstructionsOverride(assignmentType) ??
+    livePinnedFallbackOverride(
+      isRecord(livePrompt) ? livePrompt : undefined
+    )
+  );
 }
 
 export function buildResolvedAssignmentTypeGradingConfig({
@@ -556,9 +595,6 @@ export async function resolveAssignmentTypeGradingConfig({
       internalAuthoredRevision = assignment.rubricRevision.sourceContentId != null;
     }
   }
-  const pinnedPerTypeOverride = getPinnedPerTypeGradingInstructionsOverride(
-    pinnedRevision
-  );
   const row = revision && assignmentType ? {
     ...assignmentType,
     gradingAssistantVersion: revision.version,
@@ -575,12 +611,10 @@ export async function resolveAssignmentTypeGradingConfig({
     row: withLibraryRubric(row),
     // The per-assignment-type grading assistant override always applies,
     // even when a library rubric supplies the rest of the prompt config.
-    ownGradingInstructionsOverride:
-      pinnedPerTypeOverride === null
-        ? getOwnGradingInstructionsOverride(
-            assignmentType as AssignmentTypeGradingRow | null
-          )
-        : pinnedPerTypeOverride,
+    ownGradingInstructionsOverride: resolveOwnGradingInstructionsOverrideForAssignment({
+      assignmentType: assignmentType as AssignmentTypeGradingRow | null,
+      pinnedRevision,
+    }),
     rubricTotalPoints: assignmentRubricTotalPoints,
     gradingMode: assignmentGradingMode,
   });
