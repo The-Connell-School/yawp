@@ -204,12 +204,38 @@ jobs:
       # unit tests: the rate limiter, client-IP and free-tier tests were present but
       # never executed. These need the migrated database above (real SQL), so they
       # live in this job. Add new web-app test files here.
+      - name: 🧪 Free-tier Postgres integration (isolated from prisma mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          FREE_TIER_DB_TESTS: '1'
+          FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
+          PRIMARY_APP_URL: https://yawp.test
+          RESEND_API_KEY: ''
+          RESEND_FROM_EMAIL: ''
+          EMAIL_PROVIDER: resend
+        run: >-
+          bun test
+          ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
+          ./services/web-app/app/utils/free-tier-class-create-route.real-db.integration.test.ts
+          ./services/web-app/app/utils/assignment-quota.real-db.integration.test.ts
+          ./services/web-app/app/domain/free-tier/approval-flow.integration.test.ts
+          ./services/web-app/app/domain/free-tier/approval.integration.test.ts
+          ./services/web-app/app/domain/free-tier/service.integration.test.ts
+          ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
+
       - name: 🧪 Web app unit + DB tests (rate limits, client IP, free tier)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
           RATE_LIMIT_DB_TESTS: '1'
           FREE_TIER_DB_TESTS: '1'
+          FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
+          PRIMARY_APP_URL: https://yawp.test
+          RESEND_API_KEY: ''
+          RESEND_FROM_EMAIL: ''
+          EMAIL_PROVIDER: resend
+          PREVIEW_SEAT_TOP_UP: '0'
           RUBRIC_CATALOG_DB_TESTS: '1'
           FEATURE_FLAG_DB_TESTS: '1'
         run: >-
@@ -226,12 +252,8 @@ jobs:
           ./services/web-app/app/utils/rate-limit.responses.test.ts
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
-          $(find ./services/web-app/app/domain/free-tier -name '*.test.ts' ! -name 'student-join.server.test.ts')
-          ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
-          ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
-          ./services/web-app/app/utils/free-tier-class-create-route.real-db.integration.test.ts
+          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name '*.integration.test.ts')
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
-          ./services/web-app/app/utils/assignment-quota.real-db.integration.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
           ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
@@ -264,6 +286,12 @@ jobs:
           bun test 'app/routes/app_.submissions_.$submissionId/route.loader.test.ts'
           bun test 'app/routes/app.admin.assignment-types.$id/route.test.ts'
           bun test app/routes/app.admin.assignment-types.new/route.test.ts
+
+      - name: 🧪 Free-tier student-join unit tests (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/student-join.server.test.ts
 
       - name: 🎨 Backfill class artwork keys
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -393,6 +421,14 @@ jobs:
             app/routes/app.my-classes._index/route.test.ts \
             app/utils/assignment-quota.server.test.ts \
             app/domain/free-tier/provision-free-classroom.server.test.ts \
+            app/routes/api.preview.qa.free-tier-manifest/route.test.ts \
+            app/routes/app.free-tier.onboarding/route.test.tsx \
+            app/routes/app.free-tier.pending/route.test.tsx \
+            app/routes/free.admin.approve/route.loader.test.ts \
+            app/routes/free._index/route.action.test.ts \
+            app/utils/free-tier/free-tier-feature-gate.server.test.ts \
+            app/domain/feature-flags/is-free-tier-enabled.server.test.ts \
+            app/routes/auth.login/route.test.tsx \
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/routes/api.domain.grade-essay-ai/route.test.ts \
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
@@ -515,6 +551,10 @@ jobs:
         env:
           CI: true
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
+          PRIMARY_APP_URL: http://127.0.0.1:5173
+          RESEND_API_KEY: ''
+          RESEND_FROM_EMAIL: ''
         run: bun run test:e2e:smoke
 
       # HTML report + traces for smoke failures (see playwright.config.ts).

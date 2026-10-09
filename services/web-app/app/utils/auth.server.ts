@@ -288,7 +288,6 @@ export async function requireSuperAdmin(request: Request) {
     select: { id: true, email: true },
     where: { id: userId, isSuperAdmin: true },
   });
-
   if (!user) {
     throw data(
       {

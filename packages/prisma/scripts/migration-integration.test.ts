@@ -867,6 +867,78 @@ describe('migration integration (real Postgres)', () => {
     });
   }, 120000);
 
+  test('free tier admin approval migration (#416): deploy, re-run, rollback', () => {
+    try {
+      adminPsql('DROP DATABASE IF EXISTS yawp_migration_integration WITH (FORCE)');
+    } catch {}
+    adminPsql('CREATE DATABASE yawp_migration_integration');
+    prismaDeploy(PRISMA_DIR);
+
+    const tables = jsonQuery(`
+      SELECT json_build_object(
+        'signedLink', EXISTS (
+          SELECT 1 FROM information_schema.tables WHERE table_name = 'FreeTierSignedLink'
+        ),
+        'adminApproval', EXISTS (
+          SELECT 1 FROM information_schema.tables WHERE table_name = 'FreeTierAdminApproval'
+        ),
+        'emailLog', EXISTS (
+          SELECT 1 FROM information_schema.tables WHERE table_name = 'FreeTierEmailLog'
+        ),
+        'teacherNote', EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'FreeTierApplication' AND column_name = 'teacherPersonalNote'
+        )
+      )
+    `);
+    expect(tables.signedLink).toBe(true);
+    expect(tables.adminApproval).toBe(true);
+    expect(tables.emailLog).toBe(true);
+    expect(tables.teacherNote).toBe(true);
+
+    prismaDeploy(PRISMA_DIR);
+
+    const approvalRollback = readFileSync(
+      join(
+        PRISMA_DIR,
+        'migrations',
+        '20261009003000_free_tier_admin_approval_c',
+        'rollback.sql'
+      ),
+      'utf8'
+    );
+    psql(approvalRollback);
+
+    const gone = jsonQuery(`
+      SELECT json_build_object(
+        'signedLink', EXISTS (
+          SELECT 1 FROM information_schema.tables WHERE table_name = 'FreeTierSignedLink'
+        )
+      )
+    `);
+    expect(gone.signedLink).toBe(false);
+
+    const approvalForward = readFileSync(
+      join(
+        PRISMA_DIR,
+        'migrations',
+        '20261009003000_free_tier_admin_approval_c',
+        'migration.sql'
+      ),
+      'utf8'
+    );
+    psql(approvalForward);
+
+    const back = jsonQuery(`
+      SELECT json_build_object(
+        'signedLink', EXISTS (
+          SELECT 1 FROM information_schema.tables WHERE table_name = 'FreeTierSignedLink'
+        )
+      )
+    `);
+    expect(back.signedLink).toBe(true);
+  }, 120000);
+
   test('20261008140000 user handle accounts is re-runnable', () => {
     const forward = readFileSync(
       join(

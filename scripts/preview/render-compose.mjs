@@ -167,6 +167,9 @@ ${tlsLabels}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
       NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
       YAWP_ENVIRONMENT: "preview"
+      PRIMARY_APP_URL: ${q(env.url)}
+      PREVIEW_SLUG: ${q(env.slug)}
+      PREVIEW_DOMAIN: ${q(env.domain)}
       PREVIEW_DATA_MODE: ${q(env.dataMode)}
       PREVIEW_ACCESS_GATE: "on"
       PREVIEW_ACCESS_SEATS: ${q(previewAccessSeats)}
@@ -181,7 +184,7 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
       AWS_S3_BUCKET_FOR_VIDEOS: ${q(optionalEnv('PREVIEW_AWS_S3_BUCKET_FOR_VIDEOS', 'preview-videos'))}
       AWS_S3_REGION_FOR_VIDEOS: ${q(optionalEnv('PREVIEW_AWS_S3_REGION_FOR_VIDEOS', 'us-east-1'))}
       RESEND_FROM_EMAIL: ${q(optionalEnv('PREVIEW_RESEND_FROM_EMAIL', 'preview@yawp.local'))}
-      RESEND_API_KEY: ${q(optionalEnv('PREVIEW_RESEND_API_KEY', 'preview-resend-key'))}
+      RESEND_API_KEY: ${q(optionalEnv('PREVIEW_RESEND_API_KEY', ''))}
       OPENAI_ORGANIZATION_ID: ${q(optionalEnv('PREVIEW_OPENAI_ORGANIZATION_ID'))}
       OPENAI_API_KEY: ${q(optionalEnv('PREVIEW_OPENAI_API_KEY'))}
       YAWP_PREVIEW_AI_MODE: ${q(aiMode)}

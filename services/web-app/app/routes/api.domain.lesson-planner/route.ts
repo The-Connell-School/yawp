@@ -44,6 +44,7 @@ import {
 } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import {
   AiRateLimitError,
+  aiAdmissionErrorResponse,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
 import { computeIpHash } from '~/utils/ai-usage-log.server';
@@ -308,6 +309,8 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     await reservePlannerAi();
   } catch (error) {
+    const locked = aiAdmissionErrorResponse(error);
+    if (locked) return locked;
     if (!(error instanceof AiRateLimitError)) {
       return dataResponse({ error: PLANNER_FAILED }, { status: 503 });
     }

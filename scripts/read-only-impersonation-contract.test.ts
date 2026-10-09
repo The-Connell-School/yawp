@@ -11,6 +11,8 @@ const allowedUnguardedWriteRoutes = new Set([
   'services/web-app/app/routes/api.preferences.submitted-papers-filter/route.tsx',
   // LTI launch establishes session and preview identities without read-only guard by design
   'services/web-app/app/routes/lti.launch/route.ts',
+  // Public release-link account creation (no session yet)
+  'services/web-app/app/routes/free.join/route.tsx',
 ]);
 
 function routeFiles(dir: string): string[] {
@@ -42,7 +44,7 @@ function hasDatabaseWrite(source: string) {
 }
 
 function hasReadOnlyGuard(source: string) {
-  return /\b(requireMutableRequest|requireUserId|requireAdmin|requireOwner|getGradingActor|logout)\s*\(/.test(
+  return /\b(requireMutableRequest|requireUserId|requireAdmin|requireSuperAdmin|requireOwner|getGradingActor|logout)\s*\(/.test(
     source
   );
 }

@@ -6,18 +6,25 @@ import { LESSON_PLANNER_FLAG, featureFlagSettingName } from './feature-flags';
 
 const enabled = process.env.FEATURE_FLAG_DB_TESTS === '1';
 const suite = enabled ? describe : describe.skip;
-const flags = enabled ? await import('./feature-flags.server') : null;
-const http = enabled
-  ? await import('~/utils/internal-feature-flags-http.server')
-  : null;
-const { prisma } = enabled
-  ? await import('~/utils/db.server')
-  : { prisma: null };
 
 const KEY = 'f'.repeat(43);
 const NAME = featureFlagSettingName(LESSON_PLANNER_FLAG);
 const URL_BASE = 'https://yawp.school/api/internal/v1/feature-flags';
 const auth = { authorization: `Bearer ${KEY}` };
+
+type DbPrisma = typeof import('~/utils/db.server').prisma;
+let prisma: DbPrisma | null = null;
+let flags: typeof import('./feature-flags.server') | null = null;
+let http: typeof import('~/utils/internal-feature-flags-http.server') | null = null;
+
+async function loadDbModules() {
+  if (!enabled) return;
+  if (!prisma) {
+    ({ prisma } = await import('~/utils/db.server'));
+    flags = await import('./feature-flags.server');
+    http = await import('~/utils/internal-feature-flags-http.server');
+  }
+}
 
 suite('feature flags against the database', () => {
   let oldKey: string | undefined;
@@ -25,6 +32,8 @@ suite('feature flags against the database', () => {
   let orgId = '';
 
   beforeAll(async () => {
+    if (!enabled) return;
+    await loadDbModules();
     oldKey = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
     process.env.YAWP_MANAGEMENT_SERVICE_KEY = KEY;
     original = await prisma!.setting.findUnique({
@@ -41,6 +50,7 @@ suite('feature flags against the database', () => {
   });
 
   afterAll(async () => {
+    if (!enabled) return;
     await prisma!.setting.deleteMany({ where: { name: NAME } });
     if (original) {
       await prisma!.setting.create({
@@ -133,6 +143,8 @@ suite('the removed writing-conditions flag against the database', () => {
   let original: { value: string; valueType: string } | null = null;
 
   beforeAll(async () => {
+    if (!enabled) return;
+    await loadDbModules();
     oldKey = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
     process.env.YAWP_MANAGEMENT_SERVICE_KEY = KEY;
     original = await prisma!.setting.findUnique({
@@ -147,6 +159,7 @@ suite('the removed writing-conditions flag against the database', () => {
   });
 
   afterAll(async () => {
+    if (!enabled) return;
     if (!original) {
       await prisma!.setting.deleteMany({ where: { name: REMOVED_NAME } });
     }

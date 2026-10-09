@@ -203,6 +203,10 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
     E2E_STRIPE_API_BASE: E2E_STRIPE_BASE_URL,
     E2E_UA_NOW: '2026-08-30T12:00:00.000Z',
     ANTHROPIC_API_KEY: '',
+    FREE_TIER_LINK_HMAC_SECRET:
+      process.env.FREE_TIER_LINK_HMAC_SECRET ||
+      'e2e-free-tier-link-hmac-secret-key-32b',
+    PRIMARY_APP_URL: 'http://127.0.0.1:5173',
   };
 
   const lines = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);

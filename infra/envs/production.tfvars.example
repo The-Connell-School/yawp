@@ -1,0 +1,10 @@
+# Non-secret production Terraform inputs (copy to your private tfvars).
+# Order for free-tier go-live:
+# 1. Create aws_secretsmanager_secret free_tier_link_hmac and set its secret value in AWS
+# 2. Set primary_app_url and yawp_app_origin below
+# 3. terraform apply (App Runner needs the secret version before the service can start)
+
+yawp_app_origin  = "https://ua.yawp.school"
+primary_app_url  = "https://yawp.school"
+
+# free_tier_link_hmac_secret = "<32+ byte random; never commit>"

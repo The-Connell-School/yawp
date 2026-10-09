@@ -20,6 +20,11 @@ unset DATABASE_URL
 # this produced the database "yawp_pr_" and, because PR_NUMBER is exported as an empty
 # string rather than left unset, did it silently instead of failing under `set -u`.
 : "${DATABASE_NAME:?preview-env.mjs did not export DATABASE_NAME}"
+
+should_run_free_tier_ship_review_seed() {
+  node "$SCRIPT_DIR/free-tier-ship-review-seed-guard.mjs" "$DATABASE_NAME"
+}
+
 DEMO_RESET_DATA="${DEMO_RESET_DATA:-false}"
 DEMO_RESET_CONFIRMATION="${DEMO_RESET_CONFIRMATION:-}"
 DEMO_BACKUP_RETENTION="${DEMO_BACKUP_RETENTION:-14}"
@@ -708,6 +713,10 @@ run_tooling_if_needed() {
         echo "Warning: idempotent preview seeds failed; continuing deploy (non-fatal)." >&2
       fi
     fi
+    if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-ship-review.ts" ]] && should_run_free_tier_ship_review_seed; then
+      echo "Running free-tier ship-review fixture seed on existing preview database (skip path)."
+      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && bun run seed-free-tier-ship-review'
+    fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
       echo "Applying Daily Pages engagement v2 preview seed on existing database (skip path)."
       "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)'
@@ -770,6 +779,9 @@ run_tooling_if_needed() {
   # previews backed by an existing database pick up newly added prompts/sections.
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
     tooling_command+=' && bun run seed-ap-history-library'
+  fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-ship-review.ts" ]] && should_run_free_tier_ship_review_seed; then
+    tooling_command+=' && bun run seed-free-tier-ship-review'
   fi
 
   "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
