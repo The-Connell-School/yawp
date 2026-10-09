@@ -72,6 +72,9 @@ import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
 import { prisma } from '~/utils/db.server';
 import { shouldRedirectClasslessStudent } from '~/utils/classless-student-gate';
 import { formatUserContactLabel } from '~/utils/user-display';
+import { GuidedTour } from '~/components/guided-tour/guided-tour';
+import { guidedToursAvailable } from '~/domain/guided-tours/tours';
+import { loadFinishedTourIds } from '~/domain/guided-tours/guided-tours.server';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -112,6 +115,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           options: [],
           isStudent: false,
         },
+        guidedTours: null,
       });
     }
   }
@@ -160,12 +164,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ? options
       : [selected, ...options].sort((a, b) => b.localeCompare(a));
 
+  // Free classroom teachers get page tours instead of a hands-on orientation.
+  const guidedTours = guidedToursAvailable({
+    freeTierEnabled: freeTierFeatureOn,
+    role: profile.role,
+    plan: profile.organization.plan,
+  })
+    ? { finishedTourIds: await loadFinishedTourIds(userId) }
+    : null;
+
   return data({
     schoolYearScope: {
       selected,
       options: selectableOptions,
       isStudent: profile.role === 'STUDENT',
     },
+    guidedTours,
   });
 }
 
@@ -193,7 +207,7 @@ function isAppNavLinkActive(linkTo: string, pathname: string) {
 export default function Route() {
   const location = useLocation();
   const user = useUser();
-  const { schoolYearScope } = useLoaderData<typeof loader>();
+  const { schoolYearScope, guidedTours } = useLoaderData<typeof loader>();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
@@ -277,6 +291,7 @@ export default function Route() {
     >
       {/* Left navigation panel */}
       <nav
+        data-tour="app-nav"
         className={cn(
           'z-20 flex h-full w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
           {
@@ -509,6 +524,9 @@ export default function Route() {
             <Outlet key={location.pathname} />
           </div>
         </NavExpandedContext.Provider>
+        {guidedTours && !isReadOnlyImpersonation ? (
+          <GuidedTour finishedTourIds={guidedTours.finishedTourIds} />
+        ) : null}
       </div>
       <UserSettingsDialog
         open={isSettingsOpen}
