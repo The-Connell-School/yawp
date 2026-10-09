@@ -40,11 +40,11 @@ describe('verify-host-alarms.sh', () => {
   test('passes only when all preview and demo alarms retain matching recovery actions', () => {
     const result = run([
       alarm('yawp-preview-host-disk-warning'),
-      alarm('yawp-preview-host-memory-warning'),
       alarm('yawp-preview-host-memory-critical'),
+      alarm('yawp-preview-host-memory-sustained'),
       alarm('yawp-demo-host-disk-warning'),
-      alarm('yawp-demo-host-memory-warning'),
       alarm('yawp-demo-host-memory-critical'),
+      alarm('yawp-demo-host-memory-sustained'),
     ]);
 
     expect(result.exitCode).toBe(0);
@@ -54,8 +54,8 @@ describe('verify-host-alarms.sh', () => {
   test('fails when a recovery action is missing', () => {
     const result = run([
       alarm('yawp-preview-host-disk-warning'),
-      alarm('yawp-preview-host-memory-warning', undefined, []),
-      alarm('yawp-preview-host-memory-critical'),
+      alarm('yawp-preview-host-memory-critical', undefined, []),
+      alarm('yawp-preview-host-memory-sustained'),
     ]);
 
     expect(result.exitCode).not.toBe(0);
@@ -63,7 +63,7 @@ describe('verify-host-alarms.sh', () => {
   });
 
   test('fails when alarm actions are disabled', () => {
-    const disabled = alarm('yawp-preview-host-memory-warning');
+    const disabled = alarm('yawp-preview-host-memory-critical');
     disabled.ActionsEnabled = false;
     const result = run([
       alarm('yawp-preview-host-disk-warning'),

@@ -1387,7 +1387,7 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain('verify-host-alarms.sh');
     expect(provision).toContain('MemoryUsedPercent');
     expect(provision).toContain('DiskUsedPercent');
-    expect(verify).toContain('yawp-demo-host-memory-warning');
+    expect(verify).toContain('yawp-demo-host-memory-sustained');
   });
 
   test('normal demo deploys prove aggregate data counts do not decrease', () => {
