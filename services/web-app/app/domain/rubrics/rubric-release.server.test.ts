@@ -17,18 +17,18 @@ describe('shouldUseInternalRubricRelease', () => {
   test('one school: the internal_rubrics flag decides for that school', async () => {
     const isEnabled = mock(async () => true);
     const db = classes([{ id: 'c1', orgId: 'org-1' }, { id: 'c2', orgId: 'org-1' }]);
-    expect(await shouldUseInternalRubricRelease(['c1', 'c2'], { db, isEnabled })).toBe(true);
+    expect(await shouldUseInternalRubricRelease(['c1', 'c2'], { db: db as any, isEnabled })).toBe(true);
     expect(isEnabled.mock.calls).toEqual([['internal_rubrics', 'org-1']] as any);
     const off = mock(async () => false);
-    expect(await shouldUseInternalRubricRelease(['c1'], { db, isEnabled: off })).toBe(false);
+    expect(await shouldUseInternalRubricRelease(['c1'], { db: db as any, isEnabled: off })).toBe(false);
   });
 
   test('no classes, unknown classes or classes from several schools keep the default pin without reading the flag', async () => {
     const isEnabled = mock(async () => true);
-    expect(await shouldUseInternalRubricRelease([], { db: classes([]), isEnabled })).toBe(false);
-    expect(await shouldUseInternalRubricRelease(['c1', 'missing'], { db: classes([{ id: 'c1', orgId: 'org-1' }]), isEnabled })).toBe(false);
-    expect(await shouldUseInternalRubricRelease(['c1', 'c2'], { db: classes([{ id: 'c1', orgId: 'org-1' }, { id: 'c2', orgId: 'org-2' }]), isEnabled })).toBe(false);
-    expect(await shouldUseInternalRubricRelease(['c1'], { db: classes([{ id: 'c1', orgId: null }]), isEnabled })).toBe(false);
+    expect(await shouldUseInternalRubricRelease([], { db: classes([]) as any, isEnabled })).toBe(false);
+    expect(await shouldUseInternalRubricRelease(['c1', 'missing'], { db: classes([{ id: 'c1', orgId: 'org-1' }]) as any, isEnabled })).toBe(false);
+    expect(await shouldUseInternalRubricRelease(['c1', 'c2'], { db: classes([{ id: 'c1', orgId: 'org-1' }, { id: 'c2', orgId: 'org-2' }]) as any, isEnabled })).toBe(false);
+    expect(await shouldUseInternalRubricRelease(['c1'], { db: classes([{ id: 'c1', orgId: null }]) as any, isEnabled })).toBe(false);
     expect(isEnabled).not.toHaveBeenCalled();
   });
 
@@ -37,9 +37,9 @@ describe('shouldUseInternalRubricRelease', () => {
     console.warn = () => {};
     try {
       const broken = { class: { findMany: mock(async () => { throw new Error('db down'); }) } };
-      expect(await shouldUseInternalRubricRelease(['c1'], { db: broken, isEnabled: async () => true })).toBe(false);
+      expect(await shouldUseInternalRubricRelease(['c1'], { db: broken as any, isEnabled: async () => true })).toBe(false);
       const db = classes([{ id: 'c1', orgId: 'org-1' }]);
-      expect(await shouldUseInternalRubricRelease(['c1'], { db, isEnabled: async () => { throw new Error('flag'); } })).toBe(false);
+      expect(await shouldUseInternalRubricRelease(['c1'], { db: db as any, isEnabled: async () => { throw new Error('flag'); } })).toBe(false);
     } finally {
       console.warn = warn;
     }
@@ -56,18 +56,18 @@ describe('catalogKeyForAssignmentType', () => {
 });
 
 describe('findReleasedRubricRevisionId', () => {
-  const db = (release: { rubricRevisionId: string; rubricRevision: { rubricName: string } } | null) => ({
+  const rel = (release: { rubricRevisionId: string; rubricRevision: { rubricName: string } } | null) => ({
     assignmentType: { findUnique: mock(async () => ({ id: 't1', rubricId: 'r1', rubric: { name: 'lib', currentRevisionId: 'cur' }, rubricBaseline: null })) },
     rubricRelease: { findUnique: mock(async () => release) },
   });
 
   test('returns the released revision only when it belongs to the type’s rubric', async () => {
-    expect(await findReleasedRubricRevisionId(db({ rubricRevisionId: 'rel', rubricRevision: { rubricName: 'lib' } }), 't1')).toBe('rel');
-    expect(await findReleasedRubricRevisionId(db(null), 't1')).toBeNull();
+    expect(await findReleasedRubricRevisionId(rel({ rubricRevisionId: 'rel', rubricRevision: { rubricName: 'lib' } }) as any, 't1')).toBe('rel');
+    expect(await findReleasedRubricRevisionId(rel(null) as any, 't1')).toBeNull();
     const warn = console.warn;
     console.warn = () => {};
     try {
-      expect(await findReleasedRubricRevisionId(db({ rubricRevisionId: 'rel', rubricRevision: { rubricName: 'other' } }), 't1')).toBeNull();
+      expect(await findReleasedRubricRevisionId(rel({ rubricRevisionId: 'rel', rubricRevision: { rubricName: 'other' } }) as any, 't1')).toBeNull();
     } finally {
       console.warn = warn;
     }

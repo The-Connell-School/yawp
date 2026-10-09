@@ -19,11 +19,26 @@
  */
 export const LESSON_PLANNER_FLAG = 'lesson_planner' as const;
 
+/**
+ * Rubrics managed in Yawp Internal instead of the code-seeded/static content.
+ * On: a new assignment pins to the rubric version Yawp Internal released for
+ * its rubric (`RubricRelease`, written by the rubric catalog `stage`
+ * endpoint), when there is one. Off: it pins to the rubric's current version
+ * as before. Existing assignments always keep the version they were created
+ * with.
+ */
+export const INTERNAL_RUBRICS_FLAG = 'internal_rubrics' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
     description:
       'Shows the Lesson Planner in the teacher nav and allows planner pages, exports, and AI generation. Off: entry points are hidden and direct URLs are blocked; saved lessons are not deleted.',
+  },
+  [INTERNAL_RUBRICS_FLAG]: {
+    label: 'Rubrics from Yawp Internal',
+    description:
+      'Schools with this on get the rubric version Yawp Internal released for each rubric when a new assignment is created. Off: new assignments use the platform\'s current rubric. Existing assignments keep the version they were created with.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

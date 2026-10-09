@@ -101,7 +101,7 @@ run('stage releases the new revision for its key without moving the live rubric'
   expect(released!.release).toEqual({ revisionId: released!.revision.id, version: 2, releasedAt: expect.any(String) });
   const row = await db.rubricRelease.findUniqueOrThrow({ where: { catalogKey: name } });
   expect(row).toMatchObject({ rubricRevisionId: released!.revision.id, releasedBy: actor });
-  expect(row.releasedAt.toISOString()).toBe(released!.release.releasedAt);
+  expect(row.releasedAt.toISOString()).toBe(released!.release!.releasedAt);
   // Live content and the school-facing pointer are untouched.
   expect((await db.rubric.findUniqueOrThrow({ where: { id: rubric.id } })).currentRevisionId).toBe(currentRevisionId);
 });
@@ -146,14 +146,16 @@ run('targeted: only the listed schools get the released revision', async () => {
   expect((await create(type.id, [other.klass.id])).rubricRevisionId).toBe(currentRevisionId);
 });
 
-run('several classes: one school uses its flag; classes from different schools keep the default pin', async () => {
+run('several classes: one school uses its flag; classes from different schools are still refused before any pin', async () => {
   const { type, currentRevisionId, released } = await libraryRubric();
   const first = await schoolWithClass('Multi class school');
   const second = await anotherClass(first.school);
   const other = await schoolWithClass('Second school');
-  await setFlag('everyone');
+  await setFlag('targeted', [first.organization.id]);
   expect((await create(type.id, [first.klass.id, second.id])).rubricRevisionId).toBe(released!.revision.id);
-  expect((await create(type.id, [first.klass.id, other.klass.id])).rubricRevisionId).toBe(currentRevisionId);
+  // Deploying to classes of different schools is refused by the existing
+  // quota guard; the release lookup falls back to the default pin for it.
+  await expect(create(type.id, [first.klass.id, other.klass.id])).rejects.toThrow('assignment_deploy_classes_must_share_organization');
   // No classes: no school to evaluate the flag for.
   expect((await create(type.id, [])).rubricRevisionId).toBe(currentRevisionId);
 });
@@ -190,7 +192,7 @@ run('per-type rubrics are released under assignment-type:<id>', async () => {
   const document = structuredClone(detail.live.editable) as any;
   document.calibrationNotes = 'Released per-type';
   const released = await c.stage({ key, requestId: randomUUID(), actorEmail: actor, reason: 'Release per-type', document, source: source() });
-  expect(released.release.revisionId).toBe(released.revision.id);
+  expect(released.release!.revisionId).toBe(released.revision.id);
   const baseline = await db.assignmentTypeRubricBaseline.findUniqueOrThrow({ where: { assignmentTypeId: type.id } });
   const on = await schoolWithClass('Per-type on');
   const off = await schoolWithClass('Per-type off');
@@ -208,7 +210,7 @@ run('a later release replaces the earlier one; replaying a request never moves t
   const requestId = randomUUID();
   const src = source();
   const second = await c.stage({ key: name, requestId, actorEmail: actor, reason: 'Second release', document, source: src });
-  expect(second.release.revisionId).toBe(second.revision.id);
+  expect(second.release!.revisionId).toBe(second.revision.id);
   expect((await db.rubricRelease.findUniqueOrThrow({ where: { catalogKey: name } })).rubricRevisionId).toBe(second.revision.id);
 
   const school = await schoolWithClass('Replaced release school');
@@ -232,7 +234,7 @@ run('list and item expose each rubric’s current release', async () => {
   const listed = list.rubrics.find((rubric) => rubric.key === withRelease.name)!;
   expect(listed.release).toEqual({
     revisionId: withRelease.released!.revision.id, version: withRelease.released!.revision.version,
-    fingerprint: withRelease.released!.revision.fingerprint, releasedAt: withRelease.released!.release.releasedAt,
+    fingerprint: withRelease.released!.revision.fingerprint, releasedAt: withRelease.released!.release!.releasedAt,
   });
   expect(list.rubrics.find((rubric) => rubric.key === without.name)!.release).toBeNull();
   const item = await c.get(withRelease.name);
@@ -248,7 +250,7 @@ run('clearing a release sends new assignments back to the current revision', asy
   expect((await create(type.id, [school.klass.id])).rubricRevisionId).toBe(released!.revision.id);
   const c = await catalog();
   const cleared = await c.clearRelease({ key: name, actorEmail: actor, reason: 'Roll back release' });
-  expect(cleared).toEqual({ key: name, cleared: true, previous: { revisionId: released!.revision.id, version: released!.revision.version, fingerprint: released!.revision.fingerprint, releasedAt: released!.release.releasedAt } });
+  expect(cleared).toEqual({ key: name, cleared: true, previous: { revisionId: released!.revision.id, version: released!.revision.version, fingerprint: released!.revision.fingerprint, releasedAt: released!.release!.releasedAt } });
   expect(await db.rubricRelease.findUnique({ where: { catalogKey: name } })).toBeNull();
   expect((await create(type.id, [school.klass.id])).rubricRevisionId).toBe(currentRevisionId);
   // Idempotent: clearing again reports nothing to clear. The revision itself is kept.

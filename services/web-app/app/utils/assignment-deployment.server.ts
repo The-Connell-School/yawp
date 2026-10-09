@@ -1,7 +1,11 @@
 import type { Prisma } from '@app/prisma';
 import { deleteAssignmentPromptAttachment } from '~/domain/assignments/assignment-prompt-attachment.server';
 import { lockClassAssignmentCollaboration } from '~/domain/collaboration/class-assignment-lock.server';
-import { findInternalDemoRubricRevisionId } from '~/domain/rubrics/internal-demo-rubrics.server';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import {
+  findReleasedRubricRevisionId,
+  shouldUseInternalRubricRelease,
+} from '~/domain/rubrics/rubric-release.server';
 import {
   enforceFreeClassroomAssignmentCreateInTransaction,
   enforceFreeClassroomAssignmentRetypeInTransaction,
@@ -22,23 +26,31 @@ export async function createAssignmentDeployedToClasses(params: {
   };
 }) {
   const uniqueClassIds = [...new Set(params.classIds)];
+  // Schools with `internal_rubrics` on pin new assignments to the rubric
+  // version Yawp Internal released (RubricRelease). Decided before the
+  // transaction because the flag reader uses the global client; classes from
+  // more than one school keep the default pin. Never overrides an explicit
+  // pin and falls back to the current revision on anything unexpected.
+  const useInternalRelease =
+    !params.data.rubricRevisionId &&
+    (await shouldUseInternalRubricRelease(uniqueClassIds, {
+      db: prisma,
+      isEnabled: isFeatureFlagEnabled,
+    }));
   return prisma.$transaction(async (tx) => {
     await enforceFreeClassroomAssignmentCreateInTransaction(tx, {
       classIds: uniqueClassIds,
       assignmentTypeId: String(params.data.assignmentTypeId),
     });
-    // Demo orgs may grade with a rubric revision staged in Yawp Internal
-    // (INTERNAL_DEMO_RUBRICS_ENABLED). Never overrides an explicit pin and
-    // falls back to the current revision on anything unexpected.
-    const stagedRevisionId = params.data.rubricRevisionId
-      ? null
-      : await findInternalDemoRubricRevisionId(tx, {
-          assignmentTypeId: String(params.data.assignmentTypeId),
-          classIds: uniqueClassIds,
-        });
+    const releasedRevisionId = useInternalRelease
+      ? await findReleasedRubricRevisionId(
+          tx,
+          String(params.data.assignmentTypeId)
+        )
+      : null;
     const assignment = await tx.assignment.create({
-      data: stagedRevisionId
-        ? { ...params.data, rubricRevisionId: stagedRevisionId }
+      data: releasedRevisionId
+        ? { ...params.data, rubricRevisionId: releasedRevisionId }
         : params.data,
     });
 
