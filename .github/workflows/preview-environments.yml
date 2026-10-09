@@ -383,7 +383,7 @@ jobs:
             **PR preview**
 
             - **One-click:** ${{ steps.deploy.outputs.url }}/?code=${{ steps.deploy.outputs.access_code }}
-            ${{ steps.deploy.outputs.free_classroom_code && format('- **Free classroom, signed in as the free teacher:** {0}/auth/login?code={1}&devLogin=dev.teacher.free%40yawp.local', steps.deploy.outputs.url, steps.deploy.outputs.free_classroom_code) || '' }}
+            ${{ steps.deploy.outputs.free_classroom_code && format('- **Free classroom, signed in as the free teacher:** {0}/?code={1}&devLogin=dev.teacher.free%40yawp.local', steps.deploy.outputs.url, steps.deploy.outputs.free_classroom_code) || '' }}
             - **URL:** ${{ steps.deploy.outputs.url }}
             - **UA one-click:** ${{ steps.deploy.outputs.ua_url }}/?code=${{ steps.deploy.outputs.access_code }}&organizationCode=${{ env.PREVIEW_UA_PARTNER_CODE }}
             - **Blackboard:** ${{ steps.deploy.outputs.blackboard_url }}

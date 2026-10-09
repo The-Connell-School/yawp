@@ -550,6 +550,20 @@ function blockedResponse(request: Request) {
  * Referer header. An unknown/invalid code falls through to the normal gate below
  * exactly as if the param had never been there.
  */
+/**
+ * Where a code-bearing link goes once `code` is stripped. A link that also
+ * signs the tester in (`devLogin`, read by the dev-login menu) cannot land on
+ * the public landing page, which never renders that menu, so it goes to the
+ * login page instead.
+ */
+function oneClickLocation(url: URL) {
+  url.searchParams.delete('code');
+  if (url.pathname === '/' && url.searchParams.has('devLogin')) {
+    return `/auth/login${url.search}`;
+  }
+  return `${url.pathname}${url.search}`;
+}
+
 async function consumeCodeQueryParam(
   request: Request,
   repository: PreviewAccessSeatRepository
@@ -563,13 +577,12 @@ async function consumeCodeQueryParam(
   const seat = await findPreviewOrganizationAccessSeatByCode(code, repository);
   if (!seat) return null;
 
-  url.searchParams.delete('code');
   return new Response(null, {
     status: 303,
     headers: {
       'Cache-Control': 'no-store',
       'set-cookie': await grantPreviewAccessCookie(seat),
-      Location: `${url.pathname}${url.search}`,
+      Location: oneClickLocation(url),
     },
   });
 }
@@ -580,12 +593,11 @@ function stripCodeQueryParam(request: Request): Response | null {
   const url = new URL(request.url);
   if (!url.searchParams.has('code')) return null;
 
-  url.searchParams.delete('code');
   return new Response(null, {
     status: 303,
     headers: {
       'Cache-Control': 'no-store',
-      Location: `${url.pathname}${url.search}`,
+      Location: oneClickLocation(url),
     },
   });
 }

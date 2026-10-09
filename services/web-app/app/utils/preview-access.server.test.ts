@@ -495,6 +495,43 @@ describe('preview access gate', () => {
       });
     });
 
+    test('a one-click link that signs in lands on the login page, not the public landing page', async () => {
+      const next = mock(async () => new Response('private'));
+
+      const response = (await previewAccessMiddleware(
+        middlewareArgs(
+          request('/?code=brave-otter-4193&devLogin=dev.teacher.free%40yawp.local')
+        ),
+        next
+      )) as Response;
+
+      expect(response.status).toBe(303);
+      // The landing page never renders the dev sign-in, so the email would be
+      // dropped there; the login page picks it up and signs in.
+      expect(response.headers.get('location')).toBe(
+        '/auth/login?devLogin=dev.teacher.free%40yawp.local'
+      );
+      expect(response.headers.get('set-cookie')).toContain(
+        `${PREVIEW_ACCESS_COOKIE_NAME}=`
+      );
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    test('a one-click sign-in link to any other page keeps that page', async () => {
+      const next = mock(async () => new Response('private'));
+
+      const response = (await previewAccessMiddleware(
+        middlewareArgs(
+          request('/auth/login?code=brave-otter-4193&devLogin=dev.teacher%40yawp.local')
+        ),
+        next
+      )) as Response;
+
+      expect(response.headers.get('location')).toBe(
+        '/auth/login?devLogin=dev.teacher%40yawp.local'
+      );
+    });
+
     test('an unknown code falls through to the normal access screen', async () => {
       const next = mock(async () => new Response('private'));
 
