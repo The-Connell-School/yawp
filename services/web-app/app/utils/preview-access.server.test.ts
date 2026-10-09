@@ -177,6 +177,7 @@ describe('preview access gate', () => {
       '/api/internal/v1/rubric-catalog/item',
       '/api/internal/v1/rubric-catalog/stage',
       '/api/internal/v1/rubric-catalog/versions',
+      '/api/internal/v1/rubric-catalog/unrelease',
     ]) {
       const response = await previewAccessMiddleware(
         middlewareArgs(request(path)),
@@ -184,14 +185,14 @@ describe('preview access gate', () => {
       );
       expect(await response?.text()).toBe('ok');
     }
-    expect(next).toHaveBeenCalledTimes(4);
+    expect(next).toHaveBeenCalledTimes(5);
 
     const gated = await previewAccessMiddleware(
       middlewareArgs(request('/api/internal/v1/users')),
       next
     );
     expect((gated as Response).status).toBe(401);
-    expect(next).toHaveBeenCalledTimes(4);
+    expect(next).toHaveBeenCalledTimes(5);
   });
 
   test('lets Yawp Internal reach feature flags and the school list without a preview cookie', async () => {

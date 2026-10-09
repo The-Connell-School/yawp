@@ -2058,7 +2058,26 @@ model RubricRevision {
   currentFor Rubric[] @relation("CurrentRubricRevision")
   assignments Assignment[]
   typeBaselines AssignmentTypeRubricBaseline[]
+  releases RubricRelease[]
   @@unique([rubricName, version])
+}
+
+/// The rubric revision Yawp Internal released for a catalog key (library
+/// `Rubric.name` or `assignment-type:<typeId>`), written by the rubric catalog
+/// `stage` endpoint. Schools with the `internal_rubrics` feature flag on pin
+/// new assignments to it; everyone else keeps the rubric's current revision.
+/// Releasing never moves live content or existing pins.
+model RubricRelease {
+  catalogKey       String         @id
+  rubricRevisionId String
+  rubricRevision   RubricRevision @relation(fields: [rubricRevisionId], references: [id], onDelete: Restrict)
+  releasedAt       DateTime       @default(now()) @db.Timestamptz(6)
+  /// Email of the Yawp Internal operator who released it.
+  releasedBy       String
+  /// The stage request that released it.
+  requestId        String
+
+  @@index([rubricRevisionId])
 }
 
 /// Baseline mapping from an AssignmentType's current per-type rubric JSON to an immutable revision.

@@ -106,8 +106,9 @@ describe('internal feature-flag endpoints', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     const body = await response.json();
-    expect(body.flags).toHaveLength(1);
+    expect(body.flags.map((flag: { key: string }) => flag.key)).toEqual([FLAG, 'internal_rubrics']);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
+    expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
   });
 
   test('no longer lists the removed writing-conditions flag, even if its row is still stored', async () => {
@@ -123,7 +124,7 @@ describe('internal feature-flag endpoints', () => {
       new Request(BASE, { headers: { authorization: `Bearer ${key}` } })
     );
     const body = await response.json();
-    expect(body.flags.map((flag: { key: string }) => flag.key)).toEqual([FLAG]);
+    expect(body.flags.map((flag: { key: string }) => flag.key)).toEqual([FLAG, 'internal_rubrics']);
   });
 
   test('lists each flag with its mode, schools, and legacy enabled', async () => {

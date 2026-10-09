@@ -191,6 +191,15 @@ export type StageInput = {
   key: string; requestId: string; actorEmail: string; reason: string;
   document: unknown; source: StageSource;
 };
+export type ClearReleaseInput = { key: string; actorEmail: string; reason: string };
+
+/** The revision Yawp Internal released for a catalog key (see rubric-release.server.ts). */
+export type PublicRelease = { revisionId: string; version: number; fingerprint: string; releasedAt: string };
+const releaseSelect = { catalogKey: true, rubricRevisionId: true, releasedAt: true, rubricRevision: { select: { version: true, fingerprint: true } } } as const;
+type ReleaseRow = { catalogKey: string; rubricRevisionId: string; releasedAt: Date; rubricRevision: { version: number; fingerprint: string } };
+const publicRelease = (row: ReleaseRow): PublicRelease => ({
+  revisionId: row.rubricRevisionId, version: row.rubricRevision.version, fingerprint: row.rubricRevision.fingerprint, releasedAt: row.releasedAt.toISOString(),
+});
 
 const revisionSelect = { id: true, rubricName: true, version: true, schemaJson: true, fingerprint: true, createdBy: true, reason: true, createdAt: true, requestId: true, requestHash: true } as const;
 type RevisionRow = { id: string; rubricName: string; version: number; schemaJson: unknown; fingerprint: string; createdBy: string; reason: string; createdAt: Date; requestId: string; requestHash: string };
@@ -209,7 +218,7 @@ export class RubricCatalog {
   constructor(private db: Db) {}
 
   async list() {
-    const [rubrics, revisions, types, pinCounts, recent] = await Promise.all([
+    const [rubrics, revisions, types, pinCounts, recent, releases] = await Promise.all([
       this.db.rubric.findMany({ orderBy: { title: 'asc' }, select: { id: true, name: true, title: true, schemaJson: true, currentRevisionId: true, createdAt: true, updatedAt: true } }),
       this.db.rubricRevision.findMany({ select: revisionSelect, orderBy: [{ rubricName: 'asc' }, { version: 'asc' }] }),
       this.db.assignmentType.findMany({
@@ -224,7 +233,9 @@ export class RubricCatalog {
       }),
       this.db.assignment.groupBy({ by: ['assignmentTypeId', 'rubricRevisionId'], _count: { _all: true } }),
       this.db.assignment.groupBy({ by: ['assignmentTypeId'], where: { createdAt: { gte: new Date(Date.now() - 30 * 86400000) } }, _count: { _all: true } }),
+      this.db.rubricRelease.findMany({ select: releaseSelect }),
     ]);
+    const releaseByKey = new Map((releases as ReleaseRow[]).map((row) => [row.catalogKey, publicRelease(row)]));
     const revisionsByName = new Map<string, RevisionRow[]>();
     for (const revision of revisions as RevisionRow[]) {
       const list = revisionsByName.get(revision.rubricName) ?? [];
@@ -268,6 +279,8 @@ export class RubricCatalog {
         assignmentTypes: args.types.map((type) => ({ id: type.id, title: type.title, archived: type.archivedAt !== null })),
         organizations: [...organizations].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)),
         assignmentCount, assignmentsOnCurrentVersion: onCurrent, assignmentsOnOlderVersions: onOlder, assignmentsUnpinned: unpinned,
+        /** What schools with the `internal_rubrics` flag on get for new assignments; null when nothing is released. */
+        release: releaseByKey.get(args.key) ?? null,
       };
     };
 
@@ -331,7 +344,8 @@ export class RubricCatalog {
       revisions: revisions.map((revision) => ({
         id: revision.id, version: revision.version, createdAt: revision.createdAt.toISOString(), createdBy: revision.createdBy,
         reason: revision.reason, fingerprint: revision.fingerprint, content: revision.schemaJson,
-        isCurrent: summary.currentVersion === revision.version, assignmentCount: pins.get(revision.id) ?? 0,
+        isCurrent: summary.currentVersion === revision.version, isReleased: summary.release?.revisionId === revision.id,
+        assignmentCount: pins.get(revision.id) ?? 0,
       })),
     };
   }
@@ -438,7 +452,9 @@ export class RubricCatalog {
    * it: the revision is appended (with its Internal source identity) but the
    * live rubric row, its current pointer, per-type columns/baseline and every
    * assignment are left exactly as they were. Schools keep grading with the
-   * current revision; only an explicit pin (demo-org rollout) uses it.
+   * current revision. The staged revision becomes the key's release
+   * (`RubricRelease`): only schools with the `internal_rubrics` feature flag
+   * on pin new assignments to it.
    */
   async stage(input: StageInput) {
     const { key, document, name } = this.prepareWrite(input.key, input.document);
@@ -450,7 +466,9 @@ export class RubricCatalog {
       const replay = await tx.rubricRevision.findUnique({ where: { requestId: input.requestId }, select: revisionSelect });
       if (replay) {
         if (replay.requestHash !== requestHash) throw new CatalogError('Request ID already used with different inputs', 409);
-        return { revision: publicRevision(replay as RevisionRow), replayed: true };
+        // A replay never re-releases: a later release for the key stays in place.
+        const current = await tx.rubricRelease.findUnique({ where: { catalogKey: name }, select: releaseSelect });
+        return { revision: publicRevision(replay as RevisionRow), replayed: true, release: current ? stageRelease(current as ReleaseRow) : null };
       }
       // Same row lock as save: serializes baseline capture and version numbering
       // with saves (whose revision trigger runs under it) and other stages.
@@ -471,9 +489,40 @@ export class RubricCatalog {
         requestId: input.requestId, requestHash, createdBy: input.actorEmail, reason: input.reason,
         sourceContentId: source.contentId, sourceVersion: source.version, sourceFingerprint: source.fingerprint,
       } });
-      return { revision: publicRevision(created as RevisionRow), replayed: false };
+      // Release it: schools with `internal_rubrics` on pin new assignments to it.
+      const releasedAt = new Date();
+      const release = await tx.rubricRelease.upsert({
+        where: { catalogKey: name }, select: releaseSelect,
+        create: { catalogKey: name, rubricRevisionId: created.id, releasedAt, releasedBy: input.actorEmail, requestId: input.requestId },
+        update: { rubricRevisionId: created.id, releasedAt, releasedBy: input.actorEmail, requestId: input.requestId },
+      });
+      return { revision: publicRevision(created as RevisionRow), replayed: false, release: stageRelease(release as ReleaseRow) };
     });
   }
+
+  /**
+   * Withdraws a key's release, so schools with `internal_rubrics` on go back
+   * to the rubric's current revision for new assignments. The revision and
+   * every assignment already pinned to it are kept. Idempotent.
+   */
+  async clearRelease(input: ClearReleaseInput) {
+    const key = parseCatalogKey(input.key);
+    if (!key) throw new CatalogError('Unknown rubric', 404);
+    const name = key.source === 'library' ? key.name : perTypeKey(key.assignmentTypeId);
+    return this.db.$transaction(async (tx) => {
+      const previous = await tx.rubricRelease.findUnique({ where: { catalogKey: name }, select: releaseSelect });
+      if (!previous) return { key: name, cleared: false, previous: null };
+      await tx.rubricRelease.delete({ where: { catalogKey: name } });
+      console.info('rubric_release_cleared', { key: name, revisionId: previous.rubricRevisionId, actorEmail: input.actorEmail, reason: input.reason });
+      return { key: name, cleared: true, previous: publicRelease(previous as ReleaseRow) };
+    });
+  }
+}
+
+/** The stage response's `release` (kept to the fields the endpoint has always documented). */
+function stageRelease(row: ReleaseRow) {
+  const { revisionId, version, releasedAt } = publicRelease(row);
+  return { revisionId, version, releasedAt };
 }
 
 function publicRevision(revision: RevisionRow) {

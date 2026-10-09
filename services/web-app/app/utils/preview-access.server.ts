@@ -33,6 +33,7 @@ const OPEN_PATHS = new Set([
   '/api/internal/v1/rubric-catalog/item',
   '/api/internal/v1/rubric-catalog/stage',
   '/api/internal/v1/rubric-catalog/versions',
+  '/api/internal/v1/rubric-catalog/unrelease',
   // Yawp Internal manages feature flags (and picks schools to target) in every
   // environment. These routes require YAWP_MANAGEMENT_SERVICE_KEY themselves.
   '/api/internal/v1/feature-flags',

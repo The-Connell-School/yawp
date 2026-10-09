@@ -28,6 +28,12 @@ export const stageInput = z.object({
   }).strict(),
 }).strict();
 
+export const clearReleaseInput = z.object({
+  key: saveInput.shape.key,
+  actorEmail: saveInput.shape.actorEmail,
+  reason: saveInput.shape.reason,
+}).strict();
+
 async function readJson(request: Request) {
   if (request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') throw new Error('content-type');
   const length = request.headers.get('content-length');
@@ -49,7 +55,7 @@ async function readJson(request: Request) {
  * Rubric manager endpoints for the internal app, authenticated with the same
  * management service key as the other /api/internal/v1 management routes.
  */
-export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'get' | 'save' | 'stage'>, credential: () => string | undefined) {
+export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'get' | 'save' | 'stage' | 'clearRelease'>, credential: () => string | undefined) {
   function auth(request: Request, method: 'GET' | 'POST') {
     const key = credential();
     if (!key) return reply({ error: 'Not found' }, 404);
@@ -88,7 +94,12 @@ export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'g
       try { return reply(await service.get(params.get('key')!)); } catch (error) { return failure(error); }
     },
     save: (request: Request) => write(request, saveInput, 'save', (input) => service.save(input)),
-    /** Appends an Internal-authored revision without publishing it (demo-org staging). */
+    /**
+     * Appends an Internal-authored revision without moving live content and
+     * releases it for the key (schools with `internal_rubrics` on use it).
+     */
     stage: (request: Request) => write(request, stageInput, 'stage', (input) => service.stage(input)),
+    /** Withdraws a key's release; the revision and existing pins are kept. */
+    clearRelease: (request: Request) => write(request, clearReleaseInput, 'unrelease', (input) => service.clearRelease(input)),
   };
 }

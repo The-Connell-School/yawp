@@ -8,10 +8,10 @@ const get = (path = '', credential = key) => new Request(`${base}${path}`, { hea
 const post = (body: unknown, credential = key, path = '/versions') => new Request(`${base}${path}`, { method: 'POST', headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
 const valid = { key: 'daily-pages-engagement', requestId: crypto.randomUUID(), actorEmail: 'Brian@TheConnellSchool.com', reason: 'Tighten evidence descriptor', expectedFingerprint: 'a'.repeat(64), document: { name: 'daily-pages-engagement', title: 'x', rubric: { categories: [] } } };
 
-function fake(overrides: Partial<Record<'list' | 'get' | 'save' | 'stage', (...args: any[]) => Promise<any>>> = {}) {
+function fake(overrides: Partial<Record<'list' | 'get' | 'save' | 'stage' | 'clearRelease', (...args: any[]) => Promise<any>>> = {}) {
   const calls: { method: string; args: unknown[] }[] = [];
   const wrap = (method: string, fn: (...args: any[]) => Promise<any>) => async (...args: any[]) => { calls.push({ method, args }); return fn(...args); };
-  return { calls, service: { list: wrap('list', overrides.list ?? (async () => ({ rubrics: [] }))), get: wrap('get', overrides.get ?? (async () => ({ rubric: {} }))), save: wrap('save', overrides.save ?? (async () => ({ revision: { version: 2 } }))), stage: wrap('stage', overrides.stage ?? (async () => ({ revision: { version: 3 }, replayed: false }))) } };
+  return { calls, service: { list: wrap('list', overrides.list ?? (async () => ({ rubrics: [] }))), get: wrap('get', overrides.get ?? (async () => ({ rubric: {} }))), save: wrap('save', overrides.save ?? (async () => ({ revision: { version: 2 } }))), stage: wrap('stage', overrides.stage ?? (async () => ({ revision: { version: 3 }, replayed: false }))), clearRelease: wrap('clearRelease', overrides.clearRelease ?? (async () => ({ key: 'daily-pages-engagement', cleared: true, previous: null }))) } };
 }
 
 test('every route requires the management key and the right method', async () => {
@@ -106,5 +106,40 @@ test('stage maps domain errors like save', async () => {
 
 test('the stage route delegates to the catalog stage handler', async () => {
   const route = await import('~/routes/api.internal.v1.rubric-catalog.stage/route');
+  expect(typeof route.action).toBe('function');
+});
+
+test('stage returns the released revision unchanged from the catalog', async () => {
+  const release = { revisionId: 'rev-3', version: 3, releasedAt: '2026-10-09T12:00:00.000Z' };
+  const revision = { id: 'rev-3', rubricName: 'daily-pages-engagement', version: 3, createdBy: 'staff@yawp.test', reason: 'Stage', createdAt: '2026-10-09T12:00:00.000Z', fingerprint: 'c'.repeat(64) };
+  const http = createRubricCatalogHttp(fake({ stage: async () => ({ revision, replayed: false, release }) }).service as any, () => key);
+  const ok = await http.stage(post(validStage, key, '/stage'));
+  expect(ok.status).toBe(200);
+  expect(await ok.json()).toEqual({ revision, replayed: false, release });
+});
+
+const validClear = { key: 'daily-pages-engagement', actorEmail: 'Staff@Yawp.Test', reason: 'Roll back the release' };
+
+test('unrelease requires the management key, POST and exactly the documented body', async () => {
+  const { service, calls } = fake();
+  const http = createRubricCatalogHttp(service as any, () => key);
+  expect((await http.clearRelease(post(validClear, 'wrong', '/unrelease'))).status).toBe(401);
+  expect((await http.clearRelease(get('/unrelease'))).status).toBe(405);
+  expect((await createRubricCatalogHttp(service as any, () => undefined).clearRelease(post(validClear, key, '/unrelease'))).status).toBe(404);
+  expect((await http.clearRelease(post(validClear, key, '/unrelease?x=1'))).status).toBe(400);
+  for (const body of [{ ...validClear, extra: true }, { ...validClear, actorEmail: 'nope' }, { ...validClear, reason: 'no' }, { ...validClear, key: '' }]) {
+    expect((await http.clearRelease(post(body, key, '/unrelease'))).status).toBe(400);
+  }
+  expect(calls).toHaveLength(0);
+  const ok = await http.clearRelease(post(validClear, key, '/unrelease'));
+  expect(ok.status).toBe(200);
+  expect(await ok.json()).toEqual({ key: 'daily-pages-engagement', cleared: true, previous: null });
+  expect(calls).toEqual([{ method: 'clearRelease', args: [{ ...validClear, actorEmail: 'staff@yawp.test' }] }]);
+  const missing = createRubricCatalogHttp(fake({ clearRelease: async () => { throw new CatalogError('Unknown rubric', 404); } }).service as any, () => key);
+  expect((await missing.clearRelease(post(validClear, key, '/unrelease'))).status).toBe(404);
+});
+
+test('the unrelease route delegates to the catalog clearRelease handler', async () => {
+  const route = await import('~/routes/api.internal.v1.rubric-catalog.unrelease/route');
   expect(typeof route.action).toBe('function');
 });

@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  FEATURE_FLAGS,
+  INTERNAL_RUBRICS_FLAG,
   LESSON_PLANNER_FLAG,
   FEATURE_FLAG_KEYS,
   featureFlagSettingName,
@@ -27,6 +29,21 @@ describe('feature flag registry', () => {
     expect(featureFlagSettingName(LESSON_PLANNER_FLAG)).toBe(
       'feature_flag.lesson_planner'
     );
+  });
+
+  test('has the Rubrics from Yawp Internal flag, stored under its own row', () => {
+    expect(INTERNAL_RUBRICS_FLAG).toBe('internal_rubrics');
+    expect(FEATURE_FLAG_KEYS).toEqual([LESSON_PLANNER_FLAG, INTERNAL_RUBRICS_FLAG]);
+    expect(isFeatureFlagKey(INTERNAL_RUBRICS_FLAG)).toBe(true);
+    expect(featureFlagSettingName(INTERNAL_RUBRICS_FLAG)).toBe(
+      'feature_flag.internal_rubrics'
+    );
+    expect(FEATURE_FLAGS[INTERNAL_RUBRICS_FLAG].label).toBe(
+      'Rubrics from Yawp Internal'
+    );
+    const { description } = FEATURE_FLAGS[INTERNAL_RUBRICS_FLAG];
+    expect(description).toContain('new assignment');
+    expect(description).toContain('Existing assignments keep');
   });
 
   test('rejects anything that is not a registered flag', () => {
