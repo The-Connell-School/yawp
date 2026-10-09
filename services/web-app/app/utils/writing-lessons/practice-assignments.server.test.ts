@@ -29,6 +29,7 @@ const {
   buildAssignedPracticeSequence,
   summarizeWritingPracticeResults,
   computeAssignedProgress,
+  splitProblemCountByKind,
   buildGeneratedPracticeSequence,
   buildMixedGeneratedPracticeSequence,
   getOrCreateStudentPracticeSet,
@@ -579,6 +580,43 @@ describe('summarizeWritingPracticeResults', () => {
   });
 });
 
+describe('summarizeWritingPracticeResults scores', () => {
+  test('reports grammar correct and composition mastered separately', () => {
+    const [row] = summarizeWritingPracticeResults({
+      students: [
+        { id: 's-1', user: { name: 'Taylor', email: 't@example.com' } },
+      ],
+      problemCount: 3,
+      attempts: [
+        {
+          membershipId: 's-1',
+          promptId: 'fixing-comma-splices-1',
+          lessonSlug: 'fixing-comma-splices',
+          status: 'strong',
+          createdAt: new Date('2026-07-01T10:00:00Z'),
+        },
+        {
+          membershipId: 's-1',
+          promptId: 'fixing-comma-splices-2',
+          lessonSlug: 'fixing-comma-splices',
+          status: 'needs_revision',
+          createdAt: new Date('2026-07-01T10:01:00Z'),
+        },
+        {
+          membershipId: 's-1',
+          promptId: 'topic-sentences-1',
+          lessonSlug: 'topic-sentences',
+          status: 'strong',
+          createdAt: new Date('2026-07-01T10:02:00Z'),
+        },
+      ],
+    });
+    expect(row.attemptCount).toBe(3);
+    expect(row.correctCount).toBe(1);
+    expect(row.compositionMasteredCount).toBe(1);
+  });
+});
+
 describe('computeAssignedProgress', () => {
   test('composition done requires mastery; ACT done on any attempt', () => {
     const progress = computeAssignedProgress([
@@ -606,6 +644,50 @@ describe('computeAssignedProgress', () => {
     expect(progress.masteredCount).toBe(1);
     // topic-sentences-1 (mastered) + fixing-comma-splices-1 (answered) = 2 done.
     expect(progress.doneCount).toBe(2);
+    // Scores split by kind: no grammar answer was right; one composition
+    // problem was mastered.
+    expect(progress.correctCount).toBe(0);
+    expect(progress.compositionMasteredCount).toBe(1);
+  });
+
+  test('a grammar problem counts as correct only with a strong attempt', () => {
+    const progress = computeAssignedProgress([
+      {
+        promptId: 'fixing-comma-splices-1',
+        lessonSlug: 'fixing-comma-splices',
+        status: 'strong',
+      },
+      {
+        promptId: 'fixing-comma-splices-2',
+        lessonSlug: 'fixing-comma-splices',
+        status: 'needs_revision',
+      },
+    ]);
+    expect(progress.attemptedCount).toBe(2);
+    expect(progress.correctCount).toBe(1);
+    expect(progress.compositionMasteredCount).toBe(0);
+  });
+});
+
+describe('splitProblemCountByKind', () => {
+  test('grammar-only and composition-only give every problem to one kind', () => {
+    expect(splitProblemCountByKind(['fixing-comma-splices'], 5)).toEqual({
+      grammarCount: 5,
+      compositionCount: 0,
+    });
+    expect(splitProblemCountByKind(['topic-sentences'], 5)).toEqual({
+      grammarCount: 0,
+      compositionCount: 5,
+    });
+  });
+
+  test('mixed skills split proportionally, at least one of each', () => {
+    expect(
+      splitProblemCountByKind(['fixing-comma-splices', 'topic-sentences'], 5)
+    ).toEqual({ grammarCount: 3, compositionCount: 2 });
+    expect(
+      splitProblemCountByKind(['fixing-comma-splices', 'topic-sentences'], 2)
+    ).toEqual({ grammarCount: 1, compositionCount: 1 });
   });
 });
 
