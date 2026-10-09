@@ -504,7 +504,9 @@ export async function redirectSchoolAdmin(args: {
     }
   }
 
-  const result = await prisma.$transaction(async (tx) => {
+  let result;
+  try {
+    result = await prisma.$transaction(async (tx) => {
     const app = await tx.freeTierApplication.findUnique({
       where: { id: peek.applicationId },
       select: { id: true, email: true, name: true, schoolName: true, status: true, adminRedirectCount: true },
@@ -529,7 +531,7 @@ export async function redirectSchoolAdmin(args: {
     });
     if (!consumed.ok) return consumed;
     if (consumed.applicationId !== app.id) {
-      return { ok: false as const, reason: 'invalid' as const };
+      abortClaimedLinkTransaction({ ok: false, reason: 'invalid' });
     }
 
     await tx.freeTierAdminApproval.update({
@@ -568,7 +570,10 @@ export async function redirectSchoolAdmin(args: {
     });
 
     return { ok: true as const };
-  });
+    });
+  } catch (error) {
+    result = mapTransactionalAbort(error);
+  }
 
   if (!result.ok) return result;
   return { ok: true as const };

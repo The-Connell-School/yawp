@@ -419,6 +419,7 @@ jobs:
             app/routes/api.preview.qa.free-tier-manifest/route.test.ts \
             app/routes/app.free-tier.onboarding/route.test.tsx \
             app/routes/app.free-tier.pending/route.test.tsx \
+            app/routes/free.admin.approve/route.loader.test.ts \
             app/routes/auth.login/route.test.tsx \
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/routes/api.domain.grade-essay-ai/route.test.ts \

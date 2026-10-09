@@ -100,8 +100,12 @@ export default function FreeAdminApproveRoute() {
   }
 
   if (actionData && !actionData.ok) {
-    const message =
-      actionData.reason === 'email_failed'
+    const declined =
+      actionData.reason === 'illegal_state' &&
+      (actionData.status === 'REJECTED' || actionData.status === 'EXPIRED');
+    const message = declined
+      ? 'This YAWP access request was not approved. No further action is needed on this link.'
+      : actionData.reason === 'email_failed'
         ? 'We recorded your approval but could not send the confirmation email. Our team will follow up.'
         : actionData.reason === 'superseded'
           ? 'A newer approval link was sent to your school administrator. Please use the most recent email from YAWP.'
@@ -109,7 +113,10 @@ export default function FreeAdminApproveRoute() {
             ? 'This approval link was already used.'
             : 'We could not complete this approval. The link may be invalid or expired.';
     return (
-      <FreeTierAuthCard title="Unable to approve">
+      <FreeTierAuthCard
+        title={declined ? 'Request not approved' : 'Unable to approve'}
+        className={declined ? 'yawp-entry-status-card' : undefined}
+      >
         <p className="text-sm text-muted-foreground">{message}</p>
       </FreeTierAuthCard>
     );
