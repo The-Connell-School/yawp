@@ -6,6 +6,7 @@ import {
   isTourId,
   isTourStatus,
   nextTourStatus,
+  tourForPage,
   tourForPathname,
 } from './tours';
 
@@ -56,6 +57,35 @@ describe('tourForPathname', () => {
     expect(tourForPathname('/app/lesson-planner/library')).toBeNull();
     expect(tourForPathname('/app/organization/classes/extra')).toBeNull();
     expect(tourForPathname('/free')).toBeNull();
+  });
+});
+
+describe('tourForPage', () => {
+  test('each free classroom assignment type page has its own tour', () => {
+    const path = '/app/assignment-types/at_123';
+    expect(tourForPage(path, 'class_starter')?.id).toBe('type-class-starter');
+    expect(tourForPage(path, 'prewriting')?.id).toBe('type-prewriting');
+    expect(tourForPage(path, 'thesis_statement')?.id).toBe(
+      'type-thesis-statement'
+    );
+    expect(tourForPage(path, 'class_starter')?.welcome.title).toBe(
+      'Welcome to Class Starter'
+    );
+  });
+
+  test('no tour for other types, or before the page says which type it is', () => {
+    const path = '/app/assignment-types/at_123';
+    expect(tourForPage(path, 'daily_pages')).toBeNull();
+    expect(tourForPage(path, null)).toBeNull();
+    expect(
+      tourForPage('/app/assignment-types/at_123/how-it-works', 'class_starter')
+    ).toBeNull();
+  });
+
+  test('a variant left over from another page does not change its tour', () => {
+    expect(tourForPage('/app/documents', 'class_starter')?.id).toBe(
+      'documents'
+    );
   });
 });
 

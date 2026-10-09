@@ -181,6 +181,38 @@ test.describe.serial('Free tier guided tour', () => {
     });
   }
 
+  for (const type of ['Class Starter', 'Prewriting', 'Thesis Statement']) {
+    test(`clicking into ${type} shows that type's tour`, async ({ page }) => {
+      await logInAsFreeTeacher(page);
+      await page.goto('/app');
+      await page.getByRole('button', { name: 'Skip' }).click();
+      await page
+        .getByTestId('teacher-assignments-grid')
+        .getByText(type, { exact: true })
+        .first()
+        .click();
+      await page.waitForURL(/\/app\/assignment-types\/[^/]+$/);
+
+      const card = page.getByRole('dialog', {
+        name: new RegExp(`Welcome to ${type}`, 'i'),
+      });
+      await expect(card).toBeVisible();
+      await card.getByRole('button', { name: 'Take a tour' }).click();
+
+      // The first step is how to create one: the New menu.
+      const step = page.getByTestId('guided-tour-step');
+      await expect(step).toContainText('Step 1 of');
+      await expect(page.locator('[data-tour="type-new"]')).toHaveAttribute(
+        'data-tour-active',
+        'true'
+      );
+      await page.keyboard.press('Escape');
+      await expect
+        .poll(() => tourOutcome(`type-${type.toLowerCase().replace(' ', '-')}`))
+        .toBe('dismissed');
+    });
+  }
+
   test('no tour when the free_tier flag is off', async ({ page }) => {
     await logInAsFreeTeacher(page);
     await setFreeTierFlag(false);
