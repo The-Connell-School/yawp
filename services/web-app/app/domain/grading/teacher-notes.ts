@@ -21,30 +21,6 @@ export function overallCommentWriterRules(_teacherNotesEnabled: boolean): string
   return '- Do not include private observations, notes for the teacher, or speculation about authorship. Write only student feedback and obey the supplied grading constraints.';
 }
 
-/**
- * When an assignment type stops using a library rubric, teacher-notes authorization
- * must read only the type's own gradingOutputSchemaJson — not the detached library's
- * live outputSchema (which would leak catalog settings into per-type columns).
- */
-export function existingOutputSchemaForAssignmentTypeSave(args: {
-  hasRubricIdField: boolean;
-  nextRubricId: string | null;
-  libraryRubricSchemaJson: unknown;
-  gradingOutputSchemaJson: unknown;
-}): unknown {
-  if (args.hasRubricIdField && !args.nextRubricId) {
-    return args.gradingOutputSchemaJson;
-  }
-  if (
-    args.libraryRubricSchemaJson &&
-    typeof args.libraryRubricSchemaJson === 'object' &&
-    !Array.isArray(args.libraryRubricSchemaJson)
-  ) {
-    return (args.libraryRubricSchemaJson as Record<string, unknown>).outputSchema;
-  }
-  return args.gradingOutputSchemaJson;
-}
-
 export function gradingRepairPrivateObservationRules(
   teacherNotesEnabled: boolean
 ): string {
@@ -53,17 +29,6 @@ export function gradingRepairPrivateObservationRules(
     '- Private observations belong only in teacherNote when the schema permits it. Never put them in overallComment or category comments. Do not infer AI authorship or penalize suspicion.',
     `- ${TEACHER_NOTES_EVIDENCE_RULE}`,
   ].join('\n');
-}
-
-/** @deprecated Legacy output-schema flag; teacher notes are always on for staff. */
-export function withTeacherNotesEnabled(
-  outputSchema: Record<string, unknown>,
-  enabled: boolean
-): Record<string, unknown> {
-  const next = { ...outputSchema };
-  if (enabled) next.teacherNotesEnabled = true;
-  else delete next.teacherNotesEnabled;
-  return next;
 }
 
 /** Teacher notes are released for all orgs; ignore legacy outputSchema.teacherNotesEnabled. */
