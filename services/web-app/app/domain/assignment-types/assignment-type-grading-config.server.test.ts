@@ -173,26 +173,26 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     ).toBe('Live override.');
   });
 
-  test('per-type override resolution: snapshot with string freezes that override', () => {
-    const typeId = 'frozen-key';
+  test('per-type override resolution: snapshot string does not beat live override', () => {
+    const typeId = 'stale-snapshot-string';
     expect(
       resolveOwnGradingInstructionsOverrideForAssignment({
         assignmentType: {
           id: typeId,
           gradingPromptConfigJson: {
-            gradingInstructionsOverride: 'Live override must not win.',
+            gradingInstructionsOverride: 'Live override wins.',
           },
         } as never,
         pinnedRevision: {
           rubricName: `assignment-type:${typeId}`,
           schemaJson: {
             promptConfig: {
-              gradingInstructionsOverride: 'Frozen on pin.',
+              gradingInstructionsOverride: 'Stale snapshot paste.',
             },
           },
         },
       })
-    ).toBe('Frozen on pin.');
+    ).toBe('Live override wins.');
   });
 
   test('per-type override resolution: snapshot null clears override without live fallback', () => {
@@ -241,7 +241,7 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     ).toBe('10/5 pasted GA (live today).');
   });
 
-  test('a per-type assignment pinned to a revision uses the override frozen on that revision, not the live type columns', async () => {
+  test('a per-type pin with snapshot null grades with catalog GA, not live fallback', async () => {
     const typeId = 'per-type-hornbuckle';
     const rubricName = `assignment-type:${typeId}`;
     prisma.assignmentType.findUnique.mockResolvedValue({
@@ -253,8 +253,9 @@ describe('resolveAssignmentTypeGradingConfig', () => {
         categories: [{ key: 'thesis', label: 'Thesis', description: 'Live rubric.', weight: 1 }],
       },
       gradingPromptConfigJson: {
-        gradingInstructions: 'Live GA text after internal publish.',
-        gradingInstructionsOverride: 'Live override that must not apply to pinned work.',
+        gradingInstructions: 'Live GA after publish.',
+        gradingInstructionsOverride: null,
+        gradingInstructionsOverridePinnedFallback: 'Old paste.',
       },
       gradingOutputSchemaJson: null,
       gradingCalibrationNotes: null,
@@ -268,7 +269,7 @@ describe('resolveAssignmentTypeGradingConfig', () => {
       rubricTotalPoints: null,
       gradingMode: 'bands',
       rubricRevision: {
-        version: 1,
+        version: 2,
         rubricName,
         schemaJson: {
           name: rubricName,
@@ -278,13 +279,13 @@ describe('resolveAssignmentTypeGradingConfig', () => {
             categories: [{ key: 'thesis', label: 'Thesis', description: 'Pinned rubric.', weight: 1 }],
           },
           promptConfig: {
-            gradingInstructions: 'Pinned GA text.',
-            gradingInstructionsOverride: 'Pinned override wins.',
+            gradingInstructions: 'Internal v4 GA.',
+            gradingInstructionsOverride: null,
           },
           outputSchema: {},
           calibrationNotes: null,
         },
-        sourceContentId: null,
+        sourceContentId: 'internal-content-id',
       },
     });
     const config = await resolveAssignmentTypeGradingConfig({
@@ -293,7 +294,7 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     });
     expect(config.instructions).toMatchObject({
       mode: 'unified',
-      gradingInstructions: 'Pinned override wins.',
+      gradingInstructions: 'Internal v4 GA.',
     });
     expect(config.rubricCategories[0].description).toBe('Pinned rubric.');
   });

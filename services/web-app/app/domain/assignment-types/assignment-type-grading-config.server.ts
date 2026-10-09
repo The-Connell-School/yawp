@@ -339,9 +339,23 @@ function livePinnedFallbackOverride(
     : undefined;
 }
 
+function liveOverrideOrPinnedFallback(
+  assignmentType: AssignmentTypeGradingRow | null
+): string | undefined {
+  const livePrompt = assignmentType?.gradingPromptConfigJson;
+  return (
+    getOwnGradingInstructionsOverride(assignmentType) ??
+    livePinnedFallbackOverride(
+      isRecord(livePrompt) ? livePrompt : undefined
+    )
+  );
+}
+
 /**
- * Per-type revision pins may freeze an override, clear it (null), or omit the
- * key (legacy). Library pins and unpinned reads keep today's live-column rule.
+ * Per-type pins: snapshot `gradingInstructionsOverride: null` means the
+ * assignment was created by an internal publish or release (use catalog GA).
+ * Any other snapshot (string or missing key) follows today's live override,
+ * then `gradingInstructionsOverridePinnedFallback` after a publish clears live.
  */
 export function resolveOwnGradingInstructionsOverrideForAssignment({
   assignmentType,
@@ -351,7 +365,7 @@ export function resolveOwnGradingInstructionsOverrideForAssignment({
   pinnedRevision: { rubricName: string; schemaJson: unknown } | null;
 }): string | undefined {
   if (!pinnedRevision?.rubricName.startsWith('assignment-type:')) {
-    return getOwnGradingInstructionsOverride(assignmentType);
+    return liveOverrideOrPinnedFallback(assignmentType);
   }
   const schema = pinnedRevision.schemaJson;
   const snapshotPrompt =
@@ -363,21 +377,12 @@ export function resolveOwnGradingInstructionsOverrideForAssignment({
     Object.prototype.hasOwnProperty.call(
       snapshotPrompt,
       'gradingInstructionsOverride'
-    )
+    ) &&
+    snapshotPrompt.gradingInstructionsOverride === null
   ) {
-    const override = snapshotPrompt.gradingInstructionsOverride;
-    if (override === null) return undefined;
-    return typeof override === 'string' && override.trim()
-      ? override.trim()
-      : undefined;
+    return undefined;
   }
-  const livePrompt = assignmentType?.gradingPromptConfigJson;
-  return (
-    getOwnGradingInstructionsOverride(assignmentType) ??
-    livePinnedFallbackOverride(
-      isRecord(livePrompt) ? livePrompt : undefined
-    )
-  );
+  return liveOverrideOrPinnedFallback(assignmentType);
 }
 
 export function buildResolvedAssignmentTypeGradingConfig({
