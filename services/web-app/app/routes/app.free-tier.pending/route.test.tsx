@@ -4,6 +4,10 @@ afterAll(() => {
   mock.restore();
 });
 
+mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
+  requireFreeTierEnabled: async () => {},
+}));
+
 test('resend is blocked unless application status is SENT', async () => {
   mock.module('~/utils/auth.server', () => ({
     requireUserId: async () => 'user-1',
