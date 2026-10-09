@@ -362,6 +362,204 @@ export async function seedCollaborationDemoForSeat(
   } catch (error) {
     console.error('Engagement preview assignment top-up failed:', error);
   }
+
+  // Top-up: Cristo Rey holistic tier assignment type + 20-point demo submission.
+  // PR previews only — not the long-lived demo box on first seed (see seatTopUpEnabled).
+  if (!seatTopUpEnabled()) {
+    return;
+  }
+  try {
+    const teacherEmail = seat.personas.find((p) => p.key === 'teacher')?.email;
+    const studentEmail = seat.personas.find((p) => p.key === 'student')?.email;
+    if (!teacherEmail || !studentEmail) return;
+    const teacher = await prisma.orgMembership.findFirst({
+      where: {
+        organizationId: seat.organizationId,
+        user: { email: teacherEmail },
+      },
+      select: { id: true },
+    });
+    const student = await prisma.orgMembership.findFirst({
+      where: {
+        organizationId: seat.organizationId,
+        user: { email: studentEmail },
+      },
+      select: { id: true },
+    });
+    if (!teacher || !student) return;
+    const klass = await prisma.class.findFirst({
+      where: {
+        isArchived: false,
+        teachers: { some: { id: teacher.id } },
+        students: { some: { id: student.id } },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (!klass) return;
+
+    const cristoModule = (await import(
+      '../../../services/web-app/app/domain/rubrics/library/cristo-rey-hornbuckle-five-paragraph-essay.json',
+      { with: { type: 'json' } }
+    )) as { default?: Record<string, unknown> };
+    const cristo = (cristoModule.default ?? cristoModule) as Record<
+      string,
+      unknown
+    >;
+    const holisticTitle = 'In-class Essay/Analysis (Cristo Rey)';
+    const holisticOutputSchema = {
+      ...(cristo.outputSchema as Record<string, unknown>),
+      scoringMode: 'holistic_tier',
+      teacherNotesEnabled: true,
+    } as Prisma.InputJsonValue;
+    const existingHolisticType = await prisma.assignmentType.findFirst({
+      where: {
+        title: holisticTitle,
+        ownerOrgId: seat.organizationId,
+        archivedAt: null,
+      },
+      select: { id: true, gradingOutputSchemaJson: true },
+    });
+    let holisticTypeId: string;
+    if (!existingHolisticType) {
+      const createdHolisticType = await prisma.assignmentType.create({
+        data: {
+          title: holisticTitle,
+          description:
+            'Holy Family Cristo Rey five-paragraph essay with holistic tier scoring.',
+          position: 99,
+          ownerOrgId: seat.organizationId,
+          scoringScaleJson: cristo.scoringScale as Prisma.InputJsonValue,
+          rubricJson: cristo.rubric as Prisma.InputJsonValue,
+          gradingPromptConfigJson: cristo.promptConfig as Prisma.InputJsonValue,
+          gradingOutputSchemaJson: holisticOutputSchema,
+          gradingCalibrationNotes: String(cristo.calibrationNotes ?? ''),
+          organizationAssignments: {
+            create: { organizationId: seat.organizationId },
+          },
+          assignmentModules: {
+            create: [
+              {
+                title: holisticTitle,
+                position: 1,
+                instructions: {
+                  create: [
+                    {
+                      title: 'Draft',
+                      prompt:
+                        'Write a five-paragraph essay that answers the prompt with a clear thesis and evidence.',
+                      position: 1,
+                      showChatButton: true,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      holisticTypeId = createdHolisticType.id;
+      console.log(
+        `Holistic Cristo Rey assignment type created for ${seat.label} (${seat.organizationId}).`
+      );
+    } else {
+      holisticTypeId = existingHolisticType.id;
+      const current = (existingHolisticType.gradingOutputSchemaJson ??
+        {}) as Record<string, unknown>;
+      if (current.scoringMode !== 'holistic_tier') {
+        await prisma.assignmentType.update({
+          where: { id: holisticTypeId },
+          data: {
+            gradingOutputSchemaJson: {
+              ...current,
+              ...(holisticOutputSchema as Record<string, unknown>),
+            } as Prisma.InputJsonValue,
+          },
+        });
+        console.log(
+          `Holistic Cristo Rey assignment type updated with scoringMode for ${seat.label} (${seat.organizationId}).`
+        );
+      }
+    }
+
+    const demoTitle = 'Holistic Tier Demo (Preview)';
+    const existingAssignment = await prisma.assignment.findFirst({
+      where: {
+        title: demoTitle,
+        assignmentTypeId: holisticTypeId,
+        classAssignments: { some: { classId: klass.id } },
+      },
+      select: { id: true, classAssignments: { select: { id: true } } },
+    });
+    let assignmentId = existingAssignment?.id;
+    let classAssignmentId = existingAssignment?.classAssignments[0]?.id;
+    if (!assignmentId || !classAssignmentId) {
+      const assignment = await prisma.assignment.create({
+        data: {
+          assignmentTypeId: holisticTypeId,
+          title: demoTitle,
+          prompt:
+            'Analyze how the author uses a symbol to develop a theme in the assigned text.',
+          submitForGrade: true,
+          pointValue: 20,
+        },
+        select: { id: true },
+      });
+      const classAssignment = await prisma.classAssignment.create({
+        data: { assignmentId: assignment.id, classId: klass.id },
+        select: { id: true },
+      });
+      assignmentId = assignment.id;
+      classAssignmentId = classAssignment.id;
+      console.log(
+        `Holistic preview assignment created for ${seat.label} (${seat.organizationId}).`
+      );
+    }
+
+    const existingSubmission = await prisma.submission.findFirst({
+      where: {
+        document: {
+          assignmentId,
+          membershipId: student.id,
+          artifactKind: 'STUDENT',
+        },
+        archivedAt: null,
+        unsubmittedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!existingSubmission) {
+      const essayText =
+        'In the novel, the green light symbolizes longing. The author repeats the image at the dock to show how hope outlasts loss.';
+      const document = await prisma.document.create({
+        data: {
+          title: demoTitle,
+          text: essayText,
+          html: `<p>${essayText}</p>`,
+          membershipId: student.id,
+          assignmentTypeId: holisticTypeId,
+          assignmentId,
+          classAssignmentId,
+          artifactKind: 'STUDENT',
+        },
+      });
+      await prisma.submission.create({
+        data: {
+          documentId: document.id,
+          title: demoTitle,
+          text: essayText,
+          html: `<p>${essayText}</p>`,
+          submittedAt: new Date(),
+        },
+      });
+      console.log(
+        `Holistic preview submission created for ${seat.label} (${seat.organizationId}).`
+      );
+    }
+  } catch (error) {
+    console.error('Holistic preview top-up failed:', error);
+  }
 }
 
 export async function ensurePreviewSeats(
@@ -451,25 +649,26 @@ export async function backfillLegacyPreviewSeatCodes(
       continue;
     }
 
-    const updated = await prisma.organization.updateMany({
-      where: { id: seat.organizationId, previewSeatCode: null },
-      data: { previewSeatCode: code },
-    });
-    if (updated.count > 0) {
-      results.push({
-        organizationId: seat.organizationId,
-        status: 'backfilled',
-      });
-      continue;
-    }
-
     const existing = await prisma.organization.findUnique({
       where: { id: seat.organizationId },
       select: { id: true, previewSeatCode: true },
     });
+    if (!existing) {
+      results.push({ organizationId: seat.organizationId, status: 'missing' });
+      continue;
+    }
+    const storedCode = existing.previewSeatCode?.trim().toLowerCase() ?? null;
+    if (storedCode === code) {
+      results.push({ organizationId: seat.organizationId, status: 'existing' });
+      continue;
+    }
+    await prisma.organization.update({
+      where: { id: seat.organizationId },
+      data: { previewSeatCode: code },
+    });
     results.push({
       organizationId: seat.organizationId,
-      status: existing ? 'existing' : 'missing',
+      status: 'backfilled',
     });
   }
 

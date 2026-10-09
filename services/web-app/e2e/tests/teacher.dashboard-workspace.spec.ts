@@ -30,7 +30,7 @@ async function expectStandardizedAssignmentForm(page: Page) {
   ).toBeChecked();
   await expect(
     dialog.getByText(
-      'Graded out of 100 points in steps, read at the intermediate level.',
+      'Graded out of 100 points in bands, read at the intermediate level.',
       { exact: true }
     )
   ).toBeVisible();
@@ -456,16 +456,12 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await dialog.getByLabel('Prompt', { exact: true }).fill(prompt);
       await dialog.getByRole('button', { name: 'Change', exact: true }).click();
       await dialog.getByLabel('Point value', { exact: true }).fill('25');
-      await dialog.getByRole('button', { name: 'Bands' }).click();
       await expect(
         dialog.getByText(
           'Graded out of 25 points in bands, read at the intermediate level.',
           { exact: true }
         )
       ).toBeVisible();
-      await expect(
-        dialog.getByRole('button', { name: 'Bands' })
-      ).toHaveAttribute('aria-pressed', 'true');
       await page.screenshot({
         path: testInfo.outputPath('assignment-grading-override.png'),
         fullPage: true,

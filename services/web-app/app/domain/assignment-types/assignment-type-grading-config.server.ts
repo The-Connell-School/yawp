@@ -4,6 +4,7 @@ import {
   gradingAssistantScoreScaleInstructions,
 } from '~/domain/grading/rubric-instructions';
 import { parseRubricSchema } from '~/domain/rubrics/rubric-schema';
+import { GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY } from '~/domain/rubrics/rubric-catalog.server';
 import { THESIS_DRIVEN_ESSAY_RUBRIC_NAME } from '~/domain/rubrics/thesis-driven-essay';
 import {
   parseAssignmentTypeRubricConfig,
@@ -73,6 +74,11 @@ export type ResolvedAssignmentTypeGradingConfig = {
     systemMessage: string;
     userMessage: string;
   } | null;
+  /**
+   * Overall scoring mode: weighted category average (default) or rubric-level holistic tier.
+   * Comes from the rubric schema (library or per-type outputSchema override).
+   */
+  scoringMode?: 'weighted_categories' | 'holistic_tier';
 };
 
 export type AssignmentTypeGradingRow = {
@@ -88,6 +94,12 @@ export type AssignmentTypeGradingRow = {
   gradingAssistantSourceTemplateId: string | null;
   gradingAssistantSourceTemplateSlug: string | null;
   selectedRubricName?: string | null;
+  /**
+   * True when the content comes from the assignment's pinned revision that was
+   * authored in Yawp Internal (`RubricRevision.sourceContentId` set). Such
+   * content is honored as-is, even for the thesis-driven essay rubric.
+   */
+  internalAuthoredRevision?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -317,6 +329,62 @@ function getOwnGradingInstructionsOverride(
     : undefined;
 }
 
+function livePinnedFallbackOverride(
+  promptConfig: Record<string, unknown> | null | undefined
+): string | undefined {
+  if (!isRecord(promptConfig)) return undefined;
+  const fallback = promptConfig[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY];
+  return typeof fallback === 'string' && fallback.trim()
+    ? fallback.trim()
+    : undefined;
+}
+
+function liveOverrideOrPinnedFallback(
+  assignmentType: AssignmentTypeGradingRow | null
+): string | undefined {
+  const livePrompt = assignmentType?.gradingPromptConfigJson;
+  return (
+    getOwnGradingInstructionsOverride(assignmentType) ??
+    livePinnedFallbackOverride(
+      isRecord(livePrompt) ? livePrompt : undefined
+    )
+  );
+}
+
+/**
+ * Per-type pins: snapshot `gradingInstructionsOverride: null` means the
+ * assignment was created by an internal publish or release (use catalog GA).
+ * Any other snapshot (string or missing key) follows today's live override,
+ * then `gradingInstructionsOverridePinnedFallback` after a publish clears live.
+ */
+export function resolveOwnGradingInstructionsOverrideForAssignment({
+  assignmentType,
+  pinnedRevision,
+}: {
+  assignmentType: AssignmentTypeGradingRow | null;
+  pinnedRevision: { rubricName: string; schemaJson: unknown } | null;
+}): string | undefined {
+  if (!pinnedRevision?.rubricName.startsWith('assignment-type:')) {
+    return liveOverrideOrPinnedFallback(assignmentType);
+  }
+  const schema = pinnedRevision.schemaJson;
+  const snapshotPrompt =
+    isRecord(schema) && isRecord(schema.promptConfig)
+      ? schema.promptConfig
+      : null;
+  if (
+    snapshotPrompt &&
+    Object.prototype.hasOwnProperty.call(
+      snapshotPrompt,
+      'gradingInstructionsOverride'
+    ) &&
+    snapshotPrompt.gradingInstructionsOverride === null
+  ) {
+    return undefined;
+  }
+  return liveOverrideOrPinnedFallback(assignmentType);
+}
+
 export function buildResolvedAssignmentTypeGradingConfig({
   assignmentTypeId,
   assignmentTypeKind,
@@ -334,8 +402,15 @@ export function buildResolvedAssignmentTypeGradingConfig({
   rubricTotalPoints?: number | null;
   gradingMode?: AssignmentGradingMode;
 }): ResolvedAssignmentTypeGradingConfig {
+  // The thesis-driven essay grades with the code default, except when the
+  // assignment is pinned to a revision authored in Yawp Internal.
   const usesProductionThesis =
-    row?.selectedRubricName === THESIS_DRIVEN_ESSAY_RUBRIC_NAME;
+    row?.selectedRubricName === THESIS_DRIVEN_ESSAY_RUBRIC_NAME &&
+    !row?.internalAuthoredRevision;
+  const libraryOutputSchemaJson =
+    usesProductionThesis && isRecord(row?.gradingOutputSchemaJson)
+      ? row.gradingOutputSchemaJson
+      : null;
   const parsedConfig = parseAssignmentTypeRubricConfig({
     assignmentTypeKind: usesProductionThesis
       ? null
@@ -388,6 +463,30 @@ export function buildResolvedAssignmentTypeGradingConfig({
     gradingMode
   );
 
+  // Resolve scoringMode from a library rubric's top-level schema JSON when present,
+  // falling back to any per-type outputSchema override, and defaulting to weighted.
+  const resolveScoringMode = (): 'holistic_tier' | undefined => {
+    // When a library rubric is in use, the original schema JSON may carry a top-level scoringMode.
+    const librarySchema =
+      (row as any)?.rubric?.schemaJson &&
+      typeof (row as any).rubric.schemaJson === 'object'
+        ? ((row as any).rubric.schemaJson as Record<string, unknown>)
+        : null;
+    if (
+      librarySchema &&
+      librarySchema.scoringMode === 'holistic_tier'
+    ) {
+      return 'holistic_tier';
+    }
+    const outSchema =
+      (parsedConfig.outputSchema as Record<string, unknown>) ?? {};
+    if (outSchema.scoringMode === 'holistic_tier') {
+      return 'holistic_tier';
+    }
+    return undefined;
+  };
+  const scoringMode = resolveScoringMode();
+
   return {
     source: parsedConfig.source,
     rubricName: row?.selectedRubricName ?? null,
@@ -420,11 +519,14 @@ export function buildResolvedAssignmentTypeGradingConfig({
       maxScore,
       ...(rubricTotalPoints === null ? {} : { rubricTotalPoints }),
       ...(gradingMode ? { gradingMode } : {}),
+      ...(scoringMode ? { scoringMode } : {}),
       step,
       scoringType,
     },
     promptConfigSnapshot,
-    outputSchemaSnapshot: parsedConfig.outputSchema,
+    outputSchemaSnapshot: libraryOutputSchemaJson
+      ? { ...parsedConfig.outputSchema, ...libraryOutputSchemaJson }
+      : parsedConfig.outputSchema,
     calibrationNotes: parsedConfig.calibrationNotes,
     sourceTemplateId:
       parsedConfig.source === 'assignment-type'
@@ -435,6 +537,7 @@ export function buildResolvedAssignmentTypeGradingConfig({
         ? (row?.gradingAssistantSourceTemplateSlug ?? null)
         : null,
     promptTemplate: getManagedPromptTemplate(promptConfigSnapshot),
+    scoringMode,
   };
 }
 
@@ -472,12 +575,14 @@ export async function resolveAssignmentTypeGradingConfig({
   let revision = assignmentType?.rubric?.currentRevision ?? null;
   let assignmentRubricTotalPoints: number | null = null;
   let assignmentGradingMode: AssignmentGradingMode | undefined;
+  let internalAuthoredRevision = false;
+  let pinnedRevision: { rubricName: string; schemaJson: unknown } | null = null;
   if (assignmentId) {
     const assignment = await prisma.assignment.findUnique({ where: { id: assignmentId }, select: {
       assignmentTypeId: true,
       rubricTotalPoints: true,
       gradingMode: true,
-      rubricRevision: { select: { id: true, version: true, rubricName: true, schemaJson: true } },
+      rubricRevision: { select: { id: true, version: true, rubricName: true, schemaJson: true, sourceContentId: true } },
     } });
     if (!assignment || assignment.assignmentTypeId !== assignmentTypeId) throw new Error('Assignment grading context does not match');
     assignmentRubricTotalPoints = assignment.rubricTotalPoints;
@@ -489,14 +594,19 @@ export async function resolveAssignmentTypeGradingConfig({
         ? parseAssignmentGradingMode(assignment.gradingMode) ??
           DEFAULT_ASSIGNMENT_GRADING_MODE
         : 'bands';
-    if (assignment.rubricRevision) revision = assignment.rubricRevision;
+    if (assignment.rubricRevision) {
+      revision = assignment.rubricRevision;
+      pinnedRevision = assignment.rubricRevision;
+      internalAuthoredRevision = assignment.rubricRevision.sourceContentId != null;
+    }
   }
   const row = revision && assignmentType ? {
     ...assignmentType,
     gradingAssistantVersion: revision.version,
     rubric: { name: revision.rubricName, schemaJson: revision.schemaJson },
+    ...(internalAuthoredRevision ? { internalAuthoredRevision: true } : {}),
   } : assignmentType;
-  return buildResolvedAssignmentTypeGradingConfig({
+  const resolved = buildResolvedAssignmentTypeGradingConfig({
     assignmentTypeId,
     assignmentTypeKind,
     assignmentTypeTitle,
@@ -506,12 +616,14 @@ export async function resolveAssignmentTypeGradingConfig({
     row: withLibraryRubric(row),
     // The per-assignment-type grading assistant override always applies,
     // even when a library rubric supplies the rest of the prompt config.
-    ownGradingInstructionsOverride: getOwnGradingInstructionsOverride(
-      assignmentType as AssignmentTypeGradingRow | null
-    ),
+    ownGradingInstructionsOverride: resolveOwnGradingInstructionsOverrideForAssignment({
+      assignmentType: assignmentType as AssignmentTypeGradingRow | null,
+      pinnedRevision,
+    }),
     rubricTotalPoints: assignmentRubricTotalPoints,
     gradingMode: assignmentGradingMode,
   });
+  return resolved;
 }
 
 /**

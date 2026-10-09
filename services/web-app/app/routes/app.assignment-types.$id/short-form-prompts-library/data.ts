@@ -16,12 +16,6 @@
 // what a finished answer looks like, in a piece a student can write in one
 // sitting. A test enforces both.
 
-import {
-  enabledParagraphModes,
-  getParagraphMode,
-  type ParagraphModeKey,
-} from '~/domain/assignment-types/daily-pages-paragraph-modes';
-
 /**
  * The shape of the thinking a prompt sets up. Chosen so a teacher can pick by
  * what they want to grade rather than by topic — these are the patterns that
@@ -280,60 +274,6 @@ export const COGNITIVE_MOVES = [
   'interpret',
   'synthesize',
 ] as const satisfies readonly ShortFormCognitiveMove[];
-
-/**
- * The paragraph type each cognitive mode is. The library tags a prompt by the
- * move it asks for; the assignment sheet names the same moves as paragraph
- * types, which carry the grading and tutoring for that move.
- */
-export const PARAGRAPH_MODE_FOR_MOVE: Record<
-  ShortFormCognitiveMove,
-  ParagraphModeKey
-> = {
-  analyze: 'analyze',
-  'argue-a-position': 'argue',
-  compare: 'compare',
-  'define-a-term': 'define',
-  evaluate: 'evaluate',
-  interpret: 'interpret',
-  synthesize: 'synthesize',
-};
-
-function isSwitchedOnMove(move: ShortFormCognitiveMove): boolean {
-  return getParagraphMode(PARAGRAPH_MODE_FOR_MOVE[move]) !== null;
-}
-
-/**
- * The paragraph types to tick when a teacher picks a prompt: its cognitive
- * modes that are switched on, in the registry's order.
- */
-export function paragraphModesForMoves(
-  moves: readonly ShortFormCognitiveMove[]
-): ParagraphModeKey[] {
-  const keys = new Set(
-    moves.filter(isSwitchedOnMove).map((move) => PARAGRAPH_MODE_FOR_MOVE[move])
-  );
-  return enabledParagraphModes()
-    .map((mode) => mode.key)
-    .filter((key) => keys.has(key));
-}
-
-/**
- * The library as a teacher sees it: cognitive modes roll out with their
- * paragraph types, one at a time. A library prompt keeps only its switched-on
- * modes and is hidden when none are left, so the Cognitive mode filter never
- * offers a move no grading or tutoring stands behind yet. A teacher's saved
- * prompts carry no modes and are never hidden.
- */
-export function onlySwitchedOnMoves(
-  entries: ShortFormLibraryEntry[]
-): ShortFormLibraryEntry[] {
-  return entries.flatMap((entry) => {
-    if (entry.collection !== 'library') return [entry];
-    const cognitiveMoves = entry.cognitiveMoves.filter(isSwitchedOnMove);
-    return cognitiveMoves.length ? [{ ...entry, cognitiveMoves }] : [];
-  });
-}
 
 /**
  * Guidance shown above the library, about the library. What the assignment type

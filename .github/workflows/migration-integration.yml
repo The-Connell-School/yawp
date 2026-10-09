@@ -34,8 +34,17 @@ jobs:
         run: bun run --cwd packages/prisma prisma generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration
+      - name: Prepare migration integration database
+        run: bun run --cwd packages/prisma prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration
       - name: Run migration integration test
-        run: bun test ./packages/prisma/scripts/migration-integration.test.ts
+        run: >-
+          bun test
+          ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
+          ./packages/prisma/scripts/migration-integration.test.ts
+          ./packages/prisma/scripts/holistic-migration-label.integration.test.ts
+          ./packages/prisma/scripts/daily-pages-engagement-migration.integration.test.ts
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration
 

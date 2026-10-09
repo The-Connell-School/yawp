@@ -169,6 +169,69 @@ describe('preview access gate', () => {
     expect(next).toHaveBeenCalledTimes(4);
   });
 
+  test('lets Yawp Internal reach the rubric catalog without a preview cookie', async () => {
+    const next = mock(async () => new Response('ok'));
+
+    for (const path of [
+      '/api/internal/v1/rubric-catalog',
+      '/api/internal/v1/rubric-catalog/item',
+      '/api/internal/v1/rubric-catalog/stage',
+      '/api/internal/v1/rubric-catalog/versions',
+      '/api/internal/v1/rubric-catalog/unrelease',
+    ]) {
+      const response = await previewAccessMiddleware(
+        middlewareArgs(request(path)),
+        next
+      );
+      expect(await response?.text()).toBe('ok');
+    }
+    expect(next).toHaveBeenCalledTimes(5);
+
+    const gated = await previewAccessMiddleware(
+      middlewareArgs(request('/api/internal/v1/users')),
+      next
+    );
+    expect((gated as Response).status).toBe(401);
+    expect(next).toHaveBeenCalledTimes(5);
+  });
+
+  test('lets Yawp Internal reach feature flags and the school list without a preview cookie', async () => {
+    const next = mock(async () => new Response('ok'));
+    const open = [
+      ['GET', '/api/internal/v1/feature-flags'],
+      ['POST', '/api/internal/v1/feature-flags/lesson_planner'],
+      ['GET', '/api/internal/v1/organizations'],
+    ] as const;
+
+    for (const [method, path] of open) {
+      const response = await previewAccessMiddleware(
+        middlewareArgs(request(path, { method })),
+        next
+      );
+      expect(await response?.text()).toBe('ok');
+    }
+    expect(next).toHaveBeenCalledTimes(open.length);
+
+    for (const [method, path] of [
+      ['GET', '/api/internal/v1/users'],
+      ['POST', '/api/internal/v1/free-tier/release'],
+      ['GET', '/api/internal/v1/feature-flags/'],
+      ['POST', '/api/internal/v1/feature-flags/a/b'],
+      ['POST', '/api/internal/v1/feature-flags/lesson_planner/'],
+      ['POST', '/api/internal/v1/feature-flags/..%2Fusers'],
+      ['GET', '/api/internal/v1/feature-flags-x'],
+      ['GET', '/api/internal/v1/organizations/other'],
+      ['POST', '/api/internal/v1/organizations/search'],
+    ] as const) {
+      const gated = await previewAccessMiddleware(
+        middlewareArgs(request(path, { method })),
+        next
+      );
+      expect((gated as Response).status).toBe(401);
+    }
+    expect(next).toHaveBeenCalledTimes(open.length);
+  });
+
   test('fails closed when no access codes are configured', async () => {
     delete process.env.PREVIEW_ACCESS_SEATS;
     delete process.env.PREVIEW_ACCESS_CODES;

@@ -9,6 +9,7 @@ import {
   formatClassLabel,
   type TeacherDocumentWorkRow,
 } from './teacher-document-work-utils';
+import { formatUserDisplayName } from '~/utils/user-display';
 
 export type DocumentGroupMode =
   | 'none'
@@ -76,7 +77,7 @@ export function buildTeacherDocumentWorkGroups<
           ? formatClassLabel(document.resolvedClass)
           : 'No class'
         : params.mode === 'student'
-          ? document.membership.user.name || document.membership.user.email
+          ? formatUserDisplayName(document.membership.user)
           : params.mode === 'assignment'
             ? document.assignment?.title || 'No assignment'
             : TEACHER_DOCUMENT_STATUS_LABELS[key as TeacherDocumentStatus];

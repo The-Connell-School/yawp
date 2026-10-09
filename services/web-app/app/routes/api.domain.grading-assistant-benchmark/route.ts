@@ -8,6 +8,8 @@ import {
 import { gradingAssistantBenchmarkV1 } from '~/domain/ai-evaluation/grading-assistant-benchmark.v1';
 import { requireAdmin } from '~/utils/auth.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
+import crypto from 'node:crypto';
+import { computeIpHash } from '~/utils/ai-usage-log.server';
 
 const RunBenchmarkInputSchema = z.object({
   intent: z.enum(['runCase', 'runAll']),
@@ -104,6 +106,13 @@ export async function action({ request }: ActionFunctionArgs) {
         assignmentTypeId: STATIC_THESIS_GRADING_ASSISTANT_ID,
         benchmarkCaseId,
         ...(criterionId ? { criterionId } : {}),
+      },
+      attribution: {
+        organizationId: null,
+        membershipId: null,
+        route: 'routes/api.domain.grading-assistant-benchmark',
+        requestId: crypto.randomUUID(),
+        ipHash: computeIpHash(request),
       },
     });
   };

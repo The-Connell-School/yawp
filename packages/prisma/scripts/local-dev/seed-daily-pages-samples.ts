@@ -20,18 +20,10 @@ import {
   type DailyPagesSamplePersonaKey,
 } from '../../../../services/web-app/app/domain/assignment-types/daily-pages-sample-entries.ts';
 import {
-  DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT,
-  DAILY_PAGES_ANALYZE_SAMPLE_DRAFT,
-  DAILY_PAGES_ANALYZE_SAMPLE_ENTRIES,
-} from '../../../../services/web-app/app/domain/assignment-types/daily-pages-analyze-sample-entries.ts';
-import {
   DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
   DAILY_PAGES_SHORT_FORM_RUBRIC,
-  DAILY_PAGES_SHORT_FORM_RUBRIC_ALIGNMENT,
   DAILY_PAGES_SHORT_FORM_SCORING_SCALE,
-  DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS,
   DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS,
-  DAILY_PAGES_SHORT_FORM_WELCOME,
 } from '../../../../services/web-app/app/domain/assignment-types/daily-pages-short-form-rubric.ts';
 
 /**
@@ -170,49 +162,32 @@ export async function adoptShortFormTutorForSeededDailyPages(
       tutorInstructions: DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS,
       description:
         'Respond to the prompt in one short academic paragraph: make your point clearly, then hold it up.',
-      rubricAlignmentJson:
-        DAILY_PAGES_SHORT_FORM_RUBRIC_ALIGNMENT as unknown as Prisma.InputJsonValue,
+      rubricAlignmentJson: {
+        depth_of_thought: 'primary',
+        development_of_thought: 'primary',
+        organization_and_structure: 'supporting',
+        voice_and_style: 'supporting',
+        grammar_and_mechanics: 'supporting',
+      } as unknown as Prisma.InputJsonValue,
     },
-  });
-
-  // The step is joined after the module text, and the one that shipped is the
-  // freewrite tutor: left in place, the tutor is told both to coach one
-  // deliberate move and to encourage exploring. Its welcome tells students
-  // they may not need feedback at all.
-  await prisma.assignmentModuleInstruction.updateMany({
-    where: { assignmentModule: { assignmentTypeId, deletedAt: null } },
-    data: {
-      tutorInstructions: DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS,
-      prompt: DAILY_PAGES_SHORT_FORM_WELCOME,
-    },
-  });
-
-  // Each document stores the welcome as its first tutor message when it is
-  // created, so documents already seeded would keep the old one. Only that
-  // exact opening message is rewritten; nothing anyone said is touched.
-  await prisma.assignmentModuleSessionMessage.updateMany({
-    where: {
-      agent: 'assistant',
-      content: { contains: OLD_DAILY_PAGES_WELCOME_SENTENCE },
-      assignmentModuleSession: { assignmentModule: { assignmentTypeId } },
-    },
-    data: { content: DAILY_PAGES_SHORT_FORM_WELCOME },
   });
 }
 
-/** The sentence that identifies the freewrite-era welcome message. */
-const OLD_DAILY_PAGES_WELCOME_SENTENCE =
-  'You may not need or want feedback for this type of writing';
+export async function seedDailyPagesSampleEntries(
+  prisma: SeedClient,
+  options: DailyPagesSampleSeedOptions
+): Promise<DailyPagesSampleSeedResult> {
+  await adoptShortFormRubricForSeededDailyPages(
+    prisma,
+    options.assignmentTypeId
+  );
+  await adoptShortFormTutorForSeededDailyPages(
+    prisma,
+    options.assignmentTypeId
+  );
 
-/**
- * One session per module in the type, opened on its first instruction.
- *
- * Every document needs one, or opening it hits "No assignment module session
- * found." — and a draft needs one for the tutor to run at all.
- */
-async function sampleModuleSessions(prisma: SeedClient, assignmentTypeId: string) {
   const modules = await prisma.assignmentModule.findMany({
-    where: { assignmentTypeId, deletedAt: null },
+    where: { assignmentTypeId: options.assignmentTypeId, deletedAt: null },
     orderBy: { position: 'asc' },
     select: {
       id: true,
@@ -223,7 +198,9 @@ async function sampleModuleSessions(prisma: SeedClient, assignmentTypeId: string
     },
   });
 
-  return modules.map((assignmentModule) => {
+  // Every document needs one session per module in its assignment type, or
+  // opening it hits "No assignment module session found."
+  const moduleSessions = modules.map((assignmentModule) => {
     const firstInstruction = assignmentModule.instructions[0];
     return {
       instructionsCompleted: 0,
@@ -243,25 +220,6 @@ async function sampleModuleSessions(prisma: SeedClient, assignmentTypeId: string
         : {}),
     };
   });
-}
-
-export async function seedDailyPagesSampleEntries(
-  prisma: SeedClient,
-  options: DailyPagesSampleSeedOptions
-): Promise<DailyPagesSampleSeedResult> {
-  await adoptShortFormRubricForSeededDailyPages(
-    prisma,
-    options.assignmentTypeId
-  );
-  await adoptShortFormTutorForSeededDailyPages(
-    prisma,
-    options.assignmentTypeId
-  );
-
-  const moduleSessions = await sampleModuleSessions(
-    prisma,
-    options.assignmentTypeId
-  );
 
   // Runs on every preview deploy, so it has to be safe to run twice: the
   // rubric above is reset each time, the class set is created once.
@@ -343,120 +301,6 @@ export async function seedDailyPagesSampleEntries(
         metadata: { seeded: true } as unknown as Prisma.InputJsonValue,
       },
     });
-  }
-
-  return { assignmentId: assignment.id, submissionIds, alreadySeeded: false };
-}
-
-/**
- * An Analyze class set beside the first one: a Daily Pages assignment run as
- * an analysis paragraph (`paragraphMode: 'analyze'`, fifteen minutes, tutor
- * on), three graded entries — two released, one held back — and one draft
- * left unsubmitted, so the live Analyze tutor has something to coach.
- *
- * Runs after `seedDailyPagesSampleEntries`, which owns the type's rubric and
- * tutor; this only adds work. Safe to run on every deploy.
- */
-export async function seedDailyPagesAnalyzeSamples(
-  prisma: SeedClient,
-  options: DailyPagesSampleSeedOptions
-): Promise<DailyPagesSampleSeedResult> {
-  const existing = await prisma.assignment.findFirst({
-    where: {
-      assignmentTypeId: options.assignmentTypeId,
-      title: DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.title,
-    },
-    select: { id: true },
-  });
-  if (existing) {
-    return {
-      assignmentId: existing.id,
-      submissionIds: [],
-      alreadySeeded: true,
-    };
-  }
-
-  const moduleSessions = await sampleModuleSessions(
-    prisma,
-    options.assignmentTypeId
-  );
-  const assignment = await prisma.assignment.create({
-    data: {
-      assignmentTypeId: options.assignmentTypeId,
-      title: DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.title,
-      prompt: DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.prompt,
-      paragraphMode: DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.paragraphMode,
-      paragraphModes: [DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.paragraphMode],
-      writingTimeMinutes: DAILY_PAGES_ANALYZE_SAMPLE_ASSIGNMENT.writingTimeMinutes,
-      tutorEnabled: true,
-      submitForGrade: true,
-      pointValue: 100,
-    },
-  });
-  const classAssignment = await prisma.classAssignment.create({
-    data: { assignmentId: assignment.id, classId: options.classId },
-  });
-  const documentFor = (membershipId: string, title: string, text: string) =>
-    prisma.document.create({
-      data: {
-        title,
-        text,
-        html: sampleEntryHtml(text),
-        revision: 2,
-        membershipId,
-        assignmentTypeId: options.assignmentTypeId,
-        assignmentId: assignment.id,
-        classAssignmentId: classAssignment.id,
-        ...(moduleSessions.length
-          ? { assignmentModuleSessions: { create: moduleSessions } }
-          : {}),
-      },
-    });
-
-  const submissionIds: string[] = [];
-  for (const entry of DAILY_PAGES_ANALYZE_SAMPLE_ENTRIES) {
-    const membershipId = options.studentMembershipIds[entry.personaKey];
-    if (!membershipId) continue;
-
-    const document = await documentFor(membershipId, entry.title, entry.text);
-    const submission = await prisma.submission.create({
-      data: {
-        documentId: document.id,
-        title: entry.title,
-        text: entry.text,
-        html: sampleEntryHtml(entry.text),
-        ...sampleSubmissionGradeData(entry, {
-          teacherMembershipId: options.teacherMembershipId,
-          assignmentTypeId: options.assignmentTypeId,
-        }),
-      },
-    });
-    submissionIds.push(submission.id);
-
-    await prisma.submissionGradingAssistantRun.create({
-      data: {
-        submissionId: submission.id,
-        assignmentTypeId: options.assignmentTypeId,
-        assignmentTypeGradingVersion: 1,
-        assignmentTypeRubricSnapshot: sampleRubricSnapshot(),
-        assignmentTypePromptConfigSnapshot:
-          DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG as unknown as Prisma.InputJsonValue,
-        source: 'daily-pages-short-form-default',
-        model: 'seeded-sample',
-        status: 'succeeded',
-        metadata: { seeded: true } as unknown as Prisma.InputJsonValue,
-      },
-    });
-  }
-
-  const draftMembershipId =
-    options.studentMembershipIds[DAILY_PAGES_ANALYZE_SAMPLE_DRAFT.personaKey];
-  if (draftMembershipId) {
-    await documentFor(
-      draftMembershipId,
-      DAILY_PAGES_ANALYZE_SAMPLE_DRAFT.title,
-      DAILY_PAGES_ANALYZE_SAMPLE_DRAFT.text
-    );
   }
 
   return { assignmentId: assignment.id, submissionIds, alreadySeeded: false };

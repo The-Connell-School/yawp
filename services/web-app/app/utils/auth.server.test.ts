@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { OrganizationPlan } from '@app/prisma';
 import { matchesOwnerWhere } from './testing/where-eval.ts';
 
 const prisma = {
@@ -10,6 +11,7 @@ const prisma = {
   orgMembership: {
     findUnique: mock(),
     findFirst: mock(),
+    findMany: mock(),
   },
   session: {
     findUnique: mock(),
@@ -45,6 +47,10 @@ const {
   requireOwner,
   isTeacherMembership,
   isStudentMembership,
+  getUserId,
+  getAuthSessionCookieExpiresAt,
+  getSessionExpirationDateForUser,
+  HANDLE_ONLY_SESSION_EXPIRATION_TIME,
 } = await import('./auth.server.ts');
 
 const membershipFixture = {
@@ -55,6 +61,8 @@ const membershipFixture = {
   organization: {
     id: 'org-1',
     name: 'Yawp Org',
+    plan: 'SCHOOL' as OrganizationPlan,
+    numOfTeacherSeats: 10,
     reporterEnabled: false,
     classInsightsEnabled: false,
     writingPracticeEnabled: false,
@@ -62,6 +70,67 @@ const membershipFixture = {
     revisionFlowEnabled: false,
   },
 };
+
+describe('session expiry', () => {
+  beforeEach(() => {
+    getSession.mockReset();
+    prisma.session.findUnique.mockReset();
+  });
+
+  test('getUserId rejects expired sessions for handle-only users', async () => {
+    getSession.mockResolvedValue({ get: () => 'sess-expired' });
+    prisma.session.findUnique.mockResolvedValue({
+      expirationDate: new Date('2020-01-01T00:00:00Z'),
+      user: { id: 'user-handle', email: null },
+    });
+
+    let thrown: unknown;
+    try {
+      await getUserId(new Request('https://example.com/app'));
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeDefined();
+  });
+
+  test('getUserId keeps email users signed in when session expirationDate is in the past', async () => {
+    getSession.mockResolvedValue({ get: () => 'sess-legacy-email' });
+    prisma.session.findUnique.mockResolvedValue({
+      expirationDate: new Date('2020-01-01T00:00:00Z'),
+      user: { id: 'user-email', email: 'teacher@example.com' },
+    });
+
+    await expect(getUserId(new Request('https://example.com/app'))).resolves.toBe(
+      'user-email'
+    );
+  });
+
+  test('getAuthSessionCookieExpiresAt keeps handle-only expiry fixed', async () => {
+    const fixed = new Date('2026-01-02T12:00:00Z');
+    prisma.session.findUnique.mockResolvedValue({ expirationDate: fixed });
+    const expires = await getAuthSessionCookieExpiresAt({
+      sessionId: 'sess-1',
+      userEmail: null,
+    });
+    expect(expires.getTime()).toBe(fixed.getTime());
+  });
+
+  test('getAuthSessionCookieExpiresAt rolls email users forward', async () => {
+    const expires = await getAuthSessionCookieExpiresAt({
+      sessionId: 'sess-1',
+      userEmail: 'teacher@example.com',
+    });
+    expect(expires.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  test('getSessionExpirationDateForUser uses 12h for handle-only accounts', () => {
+    const before = Date.now();
+    const expires = getSessionExpirationDateForUser({ email: null });
+    const deltaMs = expires.getTime() - before;
+    expect(deltaMs).toBeGreaterThanOrEqual(HANDLE_ONLY_SESSION_EXPIRATION_TIME - 2_000);
+    expect(deltaMs).toBeLessThanOrEqual(HANDLE_ONLY_SESSION_EXPIRATION_TIME + 2_000);
+  });
+});
 
 describe('membership auth helpers', () => {
   beforeEach(() => {
@@ -73,6 +142,7 @@ describe('membership auth helpers', () => {
     getUaStudentLicenseAccess.mockResolvedValue('BYPASS');
     prisma.orgMembership.findUnique.mockReset();
     prisma.orgMembership.findFirst.mockReset();
+    prisma.orgMembership.findMany.mockReset();
     prisma.user.findFirst.mockReset();
     prisma.session.findUnique.mockReset();
     setMembershipId.mockResolvedValue('membership-id=; Path=/');
@@ -105,6 +175,8 @@ describe('membership auth helpers', () => {
           select: {
             id: true,
             name: true,
+            plan: true,
+            numOfTeacherSeats: true,
             reporterEnabled: true,
             classInsightsEnabled: true,
             writingPracticeEnabled: true,
@@ -119,16 +191,16 @@ describe('membership auth helpers', () => {
 
   test('requireMembership falls back to first membership when cookie is missing', async () => {
     getMembershipId.mockResolvedValue('');
-    prisma.orgMembership.findFirst.mockResolvedValue(membershipFixture);
+    prisma.orgMembership.findMany.mockResolvedValue([membershipFixture]);
 
     const membership = await requireMembership(
       new Request('https://example.com/app'),
       'user-1'
     );
 
-    expect(prisma.orgMembership.findFirst).toHaveBeenCalledWith({
+    expect(prisma.orgMembership.findMany).toHaveBeenCalledWith({
       where: { userId: 'user-1', isActive: true },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         role: true,
@@ -138,6 +210,8 @@ describe('membership auth helpers', () => {
           select: {
             id: true,
             name: true,
+            plan: true,
+            numOfTeacherSeats: true,
             reporterEnabled: true,
             classInsightsEnabled: true,
             writingPracticeEnabled: true,
@@ -148,6 +222,40 @@ describe('membership auth helpers', () => {
       },
     });
     expect(membership).toEqual(membershipFixture);
+  });
+
+  test('requireMembership prefers a non-default-org membership over legacy default-org', async () => {
+    getMembershipId.mockResolvedValue('');
+    const legacyDefaultOrg = {
+      ...membershipFixture,
+      id: 'membership-legacy',
+      role: 'STUDENT' as const,
+      organization: {
+        ...membershipFixture.organization,
+        id: 'default-org',
+        name: 'Yawp!',
+      },
+    };
+    const schoolOrg = {
+      ...membershipFixture,
+      id: 'membership-school',
+      role: 'STUDENT' as const,
+      organization: {
+        ...membershipFixture.organization,
+        id: 'org-gear-up',
+        name: 'GEAR UP ASU',
+      },
+    };
+    // Newest first from the query; default-org still present and would win under
+    // the old createdAt-asc behavior if it were older.
+    prisma.orgMembership.findMany.mockResolvedValue([schoolOrg, legacyDefaultOrg]);
+
+    const membership = await requireMembership(
+      new Request('https://example.com/app'),
+      'user-1'
+    );
+
+    expect(membership).toEqual(schoolOrg);
   });
 
   test('requireMembership redirects an unpaid UA student to billing', async () => {
@@ -214,13 +322,13 @@ describe('membership auth helpers', () => {
 
   test('requireMembership never falls back to an inactive membership', async () => {
     getMembershipId.mockResolvedValue('');
-    prisma.orgMembership.findFirst.mockResolvedValue(null);
+    prisma.orgMembership.findMany.mockResolvedValue([]);
 
     await expect(
       requireMembership(new Request('https://example.com/app'), 'user-1')
     ).rejects.toMatchObject({ status: 302 });
 
-    expect(prisma.orgMembership.findFirst).toHaveBeenCalledWith(
+    expect(prisma.orgMembership.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 'user-1', isActive: true } })
     );
   });
@@ -230,8 +338,10 @@ describe('membership auth helpers', () => {
       get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
     });
     prisma.session.findUnique.mockResolvedValue({
-      user: { id: 'user-1' },
+      expirationDate: new Date('2030-01-01'),
+      user: { id: 'user-1', email: 'owner@example.com' },
     });
+    prisma.user.findUnique.mockResolvedValue({ mustChangePassword: false });
     getMembershipId.mockResolvedValue('membership-1');
     prisma.orgMembership.findUnique.mockResolvedValue({
       ...membershipFixture,
@@ -281,7 +391,11 @@ describe('membership auth helpers', () => {
     getSession.mockResolvedValue({
       get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
     });
-    prisma.session.findUnique.mockResolvedValue({ user: { id: 'user-1' } });
+    prisma.session.findUnique.mockResolvedValue({
+      expirationDate: new Date('2030-01-01'),
+      user: { id: 'user-1', email: 'admin@example.com' },
+    });
+    prisma.user.findUnique.mockResolvedValue({ mustChangePassword: false });
     getMembershipId.mockResolvedValue(activeMembershipId);
 
     const active = twoOrgUser.memberships.find(
@@ -336,7 +450,11 @@ describe('membership auth helpers', () => {
     getSession.mockResolvedValue({
       get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
     });
-    prisma.session.findUnique.mockResolvedValue({ user: { id: 'user-1' } });
+    prisma.session.findUnique.mockResolvedValue({
+      expirationDate: new Date('2030-01-01'),
+      user: { id: 'user-1', email: 'admin@example.com' },
+    });
+    prisma.user.findUnique.mockResolvedValue({ mustChangePassword: false });
     prisma.user.findFirst.mockResolvedValue({ id: 'user-1' });
 
     try {
@@ -365,6 +483,8 @@ describe('auth email normalization', () => {
 
     prisma.user.findFirst.mockResolvedValue({
       id: 'user-1',
+      email: 'teacher.invited@example.com',
+      mustChangePassword: false,
       password: { hash },
     });
 
@@ -382,10 +502,16 @@ describe('auth email normalization', () => {
       },
       select: {
         id: true,
+        email: true,
+        mustChangePassword: true,
         password: { select: { hash: true } },
       },
     });
-    expect(result).toEqual({ id: 'user-1' });
+    expect(result).toEqual({
+      id: 'user-1',
+      email: 'teacher.invited@example.com',
+      mustChangePassword: false,
+    });
   });
 
   test('resetUserPassword updates password for mixed-case stored email', async () => {

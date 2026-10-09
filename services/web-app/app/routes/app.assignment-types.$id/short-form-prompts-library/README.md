@@ -72,7 +72,7 @@ type to ship.
 | `title` | short row heading; the directive lives in `prompt` |
 | `prompt` | the assignment text, used verbatim |
 | `kind` | one of the five above |
-| `cognitiveMoves` | the analytic set — deliberately not Class Starter's `introspect`/`tell-a-story`. Each is a Daily Pages paragraph type (`PARAGRAPH_MODE_FOR_MOVE`); teachers see only the switched-on ones, and a prompt with none is hidden until one is |
+| `cognitiveMoves` | the analytic set — deliberately not Class Starter's `introspect`/`tell-a-story` |
 | `sourceNeed` | `required` / `optional` / `none` — the filter a teacher reaches for first |
 | `lengthTarget` | `paragraph` / `half-page` / `page` |
 | `textsOrUnits` | named texts this is anchored to; empty for portable prompts |

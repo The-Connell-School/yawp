@@ -2,6 +2,7 @@ import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
+import crypto from 'node:crypto';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { requireMutableRequest } from '~/utils/auth.server';
 import { requireReporterAccess } from '~/utils/reporter/reporter-access.server';
@@ -14,6 +15,10 @@ import {
   AiRateLimitError,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
+import {
+  computeIpHash,
+  logDeniedUsage,
+} from '~/utils/ai-usage-log.server';
 
 const REPORTER_FAILED =
   'The reporter could not put that together. Please try again.';
@@ -167,8 +172,19 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   } catch (error) {
     if (!(error instanceof AiRateLimitError)) {
+      // A store failure is not an admission decision, so it is not logged as one.
       return dataResponse({ error: REPORTER_FAILED }, { status: 503 });
     }
+    void logDeniedUsage({
+      route: 'routes/api.domain.reporter',
+      feature: 'reporter',
+      membershipId: ctx.membershipId,
+      organizationId: ctx.organizationId,
+      requestId: crypto.randomUUID(),
+      units: 1,
+      decision: 'DENIED_USER',
+      ipHash: computeIpHash(request),
+    });
     return dataResponse(
       {
         error:
@@ -214,6 +230,13 @@ export async function action({ request }: ActionFunctionArgs) {
       logPayload: 'metadata-only',
       metadata: {
         feature: 'reporter',
+      },
+      attribution: {
+        organizationId: ctx.organizationId,
+        membershipId: ctx.membershipId,
+        route: 'routes/api.domain.reporter',
+        requestId: crypto.randomUUID(),
+        ipHash: computeIpHash(request),
       },
     });
   } catch (err) {

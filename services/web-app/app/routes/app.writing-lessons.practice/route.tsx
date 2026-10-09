@@ -1,4 +1,5 @@
 import { Link, data as dataResponse, redirect, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
+import crypto from 'node:crypto';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
@@ -106,6 +107,8 @@ async function buildTopicSequence(
           .map((prompt) => prompt.exercise),
         count: problemCount,
         topic,
+      }, {
+        route: 'routes/app.writing-lessons.practice',
       });
       const prompts: QuickWritingPracticePrompt[] =
         generated.length > 0
@@ -379,6 +382,11 @@ export async function action({ request }: ActionFunctionArgs) {
       exercise: String(formData.get('exercise') ?? ''),
       instruction: String(formData.get('instruction') ?? ''),
       response: String(formData.get('response') ?? ''),
+    }, {
+      organizationId: profile.organization.id,
+      membershipId: profile.id,
+      route: 'routes/app.writing-lessons.practice',
+      requestId: crypto.randomUUID(),
     });
     return dataResponse<PracticeSessionActionData>({
       intent: 'check-rewrite',
@@ -451,6 +459,11 @@ export async function action({ request }: ActionFunctionArgs) {
       exercise,
       instruction,
       response: responseText,
+    }, {
+      organizationId: profile.organization.id,
+      membershipId: profile.id,
+      route: 'routes/app.writing-lessons.practice',
+      requestId: crypto.randomUUID(),
     });
 
     return dataResponse<PracticeSessionActionData>({

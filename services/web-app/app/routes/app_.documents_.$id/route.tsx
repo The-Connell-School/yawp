@@ -61,7 +61,6 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import { effectiveParagraphModes } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { ensureAssignmentModuleSessionsForDocument } from '~/domain/documents.server';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { documentReadWhere } from '~/utils/document-access.server';
@@ -105,11 +104,12 @@ import {
   parseGradingQueueSort,
 } from '~/domain/grading/grading-queue';
 import { loadDocumentNavigationNeighbors } from '~/domain/grading/grading-queue.server';
+import { redactGradedAtFromStudentDocumentSubmissions } from '~/domain/submissions/student-submission-grade-visibility.server';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
-const GRADED_UNSUBMIT_TOOLTIP =
-  'This submission has been graded and can no longer be unsubmitted.';
+export const STUDENT_UNSUBMIT_BLOCKED_TOOLTIP =
+  "This submission can't be unsubmitted right now. Ask your teacher if you need to make changes.";
 
 function titleCase(value: string) {
   return value
@@ -301,8 +301,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           promptAttachmentName: true,
           apHistorySnapshot: true,
           tutorEnabled: true,
-          paragraphMode: true,
-          paragraphModes: true,
         },
       },
       classAssignment: {
@@ -497,14 +495,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     doc.html
   );
 
+  const redactGradedAtForStudentOwner =
+    isOwner &&
+    profile.role === 'STUDENT' &&
+    !hasEffectivePlatformAdmin(user?.isAdmin);
+
+  const submissionsForResponse = redactGradedAtForStudentOwner
+    ? redactGradedAtFromStudentDocumentSubmissions(submissions)
+    : submissions;
+
   return dataResponse({
     doc: {
       ...doc,
+      submissions: submissionsForResponse,
       membership: ownerMembership,
       assignmentModuleSessions: orderedModuleSessions,
       comments: sortedComments,
     },
-    submissions,
+    submissions: submissionsForResponse,
     currentCms,
     currentCmsIdx,
     nextCmId,
@@ -701,14 +709,7 @@ export default function Route() {
     data.doc && user.id !== data.doc?.membership.userId;
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
-  // Assignments made before paragraph types became a list hold their one
-  // type in the old column; read either as the list the guide expects.
-  const assignment = data.doc.assignment
-    ? {
-        ...data.doc.assignment,
-        paragraphModes: effectiveParagraphModes(data.doc.assignment),
-      }
-    : null;
+  const assignment = data.doc.assignment;
   // A student practice document carries its own snapshot; a teacher-assigned
   // document inherits it from the assignment.
   const apHistorySnapshot = getRenderableApHistorySnapshot({
@@ -1085,7 +1086,7 @@ export default function Route() {
                               {data.canSelfUnsubmit ? (
                                 s.gradedAt != null || s.releasedAt != null ? (
                                   <Tooltip
-                                    text={GRADED_UNSUBMIT_TOOLTIP}
+                                    text={STUDENT_UNSUBMIT_BLOCKED_TOOLTIP}
                                     delayDuration={0}
                                   >
                                     <span

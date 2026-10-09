@@ -3,15 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
 import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
-import {
-  seedDailyPagesAnalyzeSamples,
-  seedDailyPagesSampleEntries,
-} from './seed-daily-pages-samples';
+import { seedDailyPagesSampleEntries } from './seed-daily-pages-samples';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './dev-personas';
+import { composeExitTicketPrompt } from '../../../../services/web-app/app/domain/assignment-types/exit-ticket.ts';
+import { EXIT_TICKET_DEMO_TICKETS } from './exit-ticket-demo-data.ts';
 
 type PersonaRecord = {
   persona: LocalDevPersona;
@@ -50,6 +49,7 @@ async function upsertPersona(
       email: persona.email,
       name: persona.name,
       isAdmin: persona.isAdmin ?? false,
+      isSuperAdmin: persona.isSuperAdmin ?? false,
       password: { create: createPassword(persona.password) },
       memberships: {
         create: {
@@ -75,7 +75,12 @@ async function upsertPersona(
 }
 
 function pickAssignmentTypeId(
-  rows: Array<{ id: string; title: string; kind: string | null; systemKey: string | null }>,
+  rows: Array<{
+    id: string;
+    title: string;
+    kind: string | null;
+    systemKey: string | null;
+  }>,
   matcher: (row: (typeof rows)[number]) => boolean
 ) {
   return rows.find(matcher)?.id ?? null;
@@ -83,7 +88,7 @@ function pickAssignmentTypeId(
 
 export async function seedSyntheticLocalDevData(
   prisma: SyntheticSeedClient,
-  options: SyntheticSeedOptions = {},
+  options: SyntheticSeedOptions = {}
 ): Promise<LocalDevSeedContext> {
   const organizationId = options.organizationId ?? LOCAL_DEV_ORG_ID;
   const personas = options.personas ?? LOCAL_DEV_PERSONAS;
@@ -115,14 +120,15 @@ export async function seedSyntheticLocalDevData(
   ];
 
   const schools = await Promise.all(
-    ['North Ridge High', 'Riverview Academy', 'Summit Prep'].map(async (name, index) =>
-      prisma.school.create({
-        data: {
-          name,
-          code: schoolCodes[index]!,
-          organizationId,
-        },
-      })
+    ['North Ridge High', 'Riverview Academy', 'Summit Prep'].map(
+      async (name, index) =>
+        prisma.school.create({
+          data: {
+            name,
+            code: schoolCodes[index]!,
+            organizationId,
+          },
+        })
     )
   );
 
@@ -255,6 +261,10 @@ export async function seedSyntheticLocalDevData(
     assignmentTypes,
     (row) => row.title === 'ACT Writing Section'
   );
+  const exitTicketAssignmentTypeId = pickAssignmentTypeId(
+    assignmentTypes,
+    (row) => row.kind === 'exit_ticket'
+  );
 
   const thesisModules = await prisma.assignmentModule.findMany({
     where: { assignmentTypeId: thesisAssignmentTypeId, deletedAt: null },
@@ -319,7 +329,7 @@ export async function seedSyntheticLocalDevData(
     // legible once you can open four entries on one prompt and see where the
     // assistant put them. Also points the seeded type at the short-form
     // rubric — see seed-daily-pages-samples.ts.
-    const dailyPagesSampleTargets = {
+    await seedDailyPagesSampleEntries(prisma, {
       assignmentTypeId: dailyPagesAssignmentTypeId,
       classId: primaryClass.id,
       teacherMembershipId: primaryTeacher.membershipId,
@@ -330,11 +340,7 @@ export async function seedSyntheticLocalDevData(
         'student-unreleased':
           personaRecords['student-unreleased'].membershipId,
       },
-    };
-    await seedDailyPagesSampleEntries(prisma, dailyPagesSampleTargets);
-    // And the same class set run as an Analyze paragraph, with a draft left
-    // open for the live tutor.
-    await seedDailyPagesAnalyzeSamples(prisma, dailyPagesSampleTargets);
+    });
   }
 
   // Add a ready-to-use Engagement preview assignment under the existing Daily Pages
@@ -438,6 +444,106 @@ export async function seedSyntheticLocalDevData(
         classId: primaryClass.id,
       },
     });
+  }
+
+  if (exitTicketAssignmentTypeId) {
+    // A worked set of exit tickets, so the whole rotation is visible without
+    // waiting on a live grading run. What each one is there to show — and the
+    // guarantee that between them they cover every configuration — lives in
+    // exit-ticket-demo-data.ts alongside its coverage test.
+    //
+    // Prompts are composed by the same function the product uses rather than
+    // pasted, so the demo cannot drift from what a teacher would really get.
+    const exitTicketModules = await prisma.assignmentModule.findMany({
+      where: { assignmentTypeId: exitTicketAssignmentTypeId, deletedAt: null },
+      orderBy: { position: 'asc' },
+      select: {
+        id: true,
+        position: true,
+        instructions: {
+          orderBy: { position: 'asc' },
+          select: { id: true, prompt: true },
+        },
+      },
+    });
+
+    for (const ticket of EXIT_TICKET_DEMO_TICKETS) {
+      const assignment = await prisma.assignment.create({
+        data: {
+          assignmentTypeId: exitTicketAssignmentTypeId,
+          title: ticket.title,
+          prompt: composeExitTicketPrompt(ticket.config),
+          exitTicketConfigJson:
+            ticket.config as unknown as Prisma.InputJsonValue,
+          submitForGrade: ticket.submitForGrade,
+          pointValue: ticket.pointValue,
+          tutorEnabled: ticket.tutorEnabled,
+        },
+      });
+      const classAssignment = await prisma.classAssignment.create({
+        data: { assignmentId: assignment.id, classId: primaryClass.id },
+      });
+
+      for (const response of ticket.responses) {
+        const html = `<p>${response.text}</p>`;
+        const document = await prisma.document.create({
+          data: {
+            title: ticket.title,
+            text: response.text,
+            html,
+            revision: 2,
+            membershipId: personaRecords[response.personaKey].membershipId,
+            assignmentTypeId: exitTicketAssignmentTypeId,
+            assignmentId: assignment.id,
+            classAssignmentId: classAssignment.id,
+            assignmentModuleSessions: {
+              create: buildModuleSessionsCreateData(exitTicketModules),
+            },
+          },
+        });
+
+        // A draft was started and never handed in, so there is nothing to
+        // grade and no submission row to make.
+        if (response.state === 'draft') continue;
+
+        const submitted = {
+          documentId: document.id,
+          html,
+          text: response.text,
+          title: ticket.title,
+          submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+        };
+
+        if (response.state === 'submitted') {
+          await prisma.submission.create({ data: submitted });
+          continue;
+        }
+
+        await prisma.submission.create({
+          data: {
+            ...submitted,
+            gradedByMembershipId: primaryTeacher.membershipId,
+            gradedAt: new Date(),
+            // A band-scored rubric records the percentage it was scored at,
+            // which is what lets a graded ticket show "9 / 10" against the
+            // point value the teacher chose.
+            numericPercentage: response.score,
+            overallScore: response.score,
+            letterGrade: response.letterGrade,
+            score: `${response.score}% (${response.letterGrade})`,
+            overallComment: response.overallComment,
+            rubricScores: {
+              understanding: {
+                score: response.score,
+                comment: '',
+                isAi: true,
+              },
+            },
+            releasedAt: new Date(),
+          },
+        });
+      }
+    }
   }
 
   const teacherTrainings = await prisma.teacherTraining.findMany({

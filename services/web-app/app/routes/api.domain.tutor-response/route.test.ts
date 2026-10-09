@@ -12,6 +12,7 @@ const requireUserId = mock();
 const requireMembership = mock();
 const prisma = {
   user: { findUnique: mock() },
+  setting: { findUnique: mock() },
   assignmentModuleSession: {
     findFirst: mock(),
     findUnique: mock(),
@@ -49,17 +50,18 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });
+    // The AI usage log (#404) attributes every call to the caller's organization.
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT', organization: { id: 'org-1' } });
     prisma.user.findUnique.mockReset();
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
+    prisma.setting.findUnique.mockReset().mockResolvedValue(null);
     prisma.assignmentModuleSession.findFirst.mockReset();
     prisma.assignmentModuleSession.findUnique.mockReset();
     prisma.assignmentModuleSession.update.mockReset();
   });
 
   function mockCms(
-    documentOverrides: Record<string, unknown> = {},
-    moduleOverrides: Record<string, unknown> = {}
+    documentOverrides: Record<string, unknown> = {}
   ) {
     prisma.assignmentModuleSession.findFirst.mockResolvedValueOnce({
       id: 'cms-1',
@@ -96,7 +98,6 @@ describe('api.domain.tutor-response read-only impersonation', () => {
             tutorInstructions: 'Focus on thesis clarity.',
           },
         ],
-        ...moduleOverrides,
       },
       messages: [],
       document: {
@@ -146,13 +147,9 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect((thrown as Response).status).toBe(403);
   });
 
-  async function tutorSystemTextFor(
-    assignment: Record<string, unknown> | null,
-    documentOverrides: Record<string, unknown> = {},
-    moduleOverrides: Record<string, unknown> = {}
-  ) {
+  async function tutorSystemTextFor(assignment: Record<string, unknown>) {
     getLLMCompletion.mockResolvedValue('What is your claim about the text?');
-    mockCms({ assignment, ...documentOverrides }, moduleOverrides);
+    mockCms({ assignment });
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       id: 'cms-1',
       messages: [],
@@ -175,7 +172,9 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     return completionArgs.system[0].text as string;
   }
 
-  test('layers the chosen paragraph type onto the module tutor', async () => {
+  // Daily Pages paragraph type was removed: a value still stored on an old
+  // assignment never reaches the tutor.
+  test('ignores a stored paragraph type', async () => {
     const systemText = await tutorSystemTextFor({
       id: 'assignment-1',
       title: 'Daily Pages',
@@ -185,138 +184,9 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     });
 
     expect(systemText).toContain('Coach the student.');
-    expect(systemText).toContain('PARAGRAPH TYPE: Analyze');
-    expect(systemText.indexOf('Coach the student.')).toBeLessThan(
-      systemText.indexOf('PARAGRAPH TYPE: Analyze')
-    );
-  });
-
-  test('layers every paragraph type in the assignment’s list', async () => {
-    const systemText = await tutorSystemTextFor({
-      id: 'assignment-1',
-      title: 'Daily Pages',
-      prompt: 'Is loyalty a virtue?',
-      tutorEnabled: true,
-      paragraphMode: 'analyze',
-      paragraphModes: ['analyze', 'argue'],
-    });
-
-    expect(systemText).toContain('PARAGRAPH TYPE: Analyze');
-    expect(systemText).toContain('PARAGRAPH TYPE: Argue a position');
-  });
-
-  /**
-   * A teacher's standalone Daily Pages document has no assignment, so the
-   * type it practices is recorded on the document itself.
-   */
-  test('layers the type of a standalone document onto the module tutor', async () => {
-    const systemText = await tutorSystemTextFor(null, {
-      paragraphMode: 'argue',
-    });
-
-    expect(systemText).toContain('PARAGRAPH TYPE: Argue a position');
-  });
-
-  test("prefers the assignment's type over the document's", async () => {
-    const systemText = await tutorSystemTextFor(
-      {
-        id: 'assignment-1',
-        title: 'Daily Pages',
-        prompt: 'Quote the line where her argument turns.',
-        tutorEnabled: true,
-        paragraphMode: 'analyze',
-      },
-      { paragraphMode: 'argue' }
-    );
-
-    expect(systemText).toContain('PARAGRAPH TYPE: Analyze');
-    expect(systemText).not.toContain('PARAGRAPH TYPE: Argue a position');
-  });
-
-  /**
-   * A type that saved no rubric of its own is graded on the built-in rubric
-   * for its kind — the seeded Daily Pages row clears its saved rubric for
-   * exactly that reason. The tutor's rubric guidance has to read the same
-   * rubric, or a module's rubric alignment never reaches the tutor.
-   */
-  test('reads the built-in rubric for its kind when the type saved none', async () => {
-    const systemText = await tutorSystemTextFor(
-      null,
-      {},
-      {
-        rubricAlignmentJson: {
-          depth_of_thought: 'primary',
-          voice_and_style: 'supporting',
-        },
-        assignmentType: {
-          id: 'daily-pages-type',
-          kind: 'daily_pages',
-          gradingAssistantVersion: 1,
-          rubricJson: null,
-        },
-      }
-    );
-
-    expect(systemText).toContain('Module rubric guidance');
-    expect(systemText).toContain('Depth of Thought');
-    expect(systemText).toContain('Voice/Style');
-  });
-
-  test('a saved rubric still wins over the built-in one', async () => {
-    const systemText = await tutorSystemTextFor(
-      null,
-      {},
-      {
-        assignmentType: {
-          id: 'daily-pages-type',
-          kind: 'daily_pages',
-          gradingAssistantVersion: 1,
-          rubricJson: {
-            categories: [
-              {
-                key: 'thesis_and_content',
-                label: 'Thesis/Content',
-                description: 'Original, defensible thesis.',
-                weight: 1,
-              },
-            ],
-          },
-        },
-      }
-    );
-
-    expect(systemText).toContain('Thesis/Content');
-    expect(systemText).not.toContain('Depth of Thought');
-  });
-
-  test('a module with no rubric alignment adds no guidance', async () => {
-    const systemText = await tutorSystemTextFor(
-      null,
-      {},
-      {
-        rubricAlignmentJson: null,
-        assignmentType: {
-          id: 'daily-pages-type',
-          kind: 'daily_pages',
-          gradingAssistantVersion: 1,
-          rubricJson: null,
-        },
-      }
-    );
-
-    expect(systemText).not.toContain('Module rubric guidance');
-  });
-
-  test('adds no paragraph-type layer when none was chosen', async () => {
-    const systemText = await tutorSystemTextFor({
-      id: 'assignment-1',
-      title: 'Daily Pages',
-      prompt: 'Quote the line where her argument turns.',
-      tutorEnabled: true,
-      paragraphMode: null,
-    });
-
     expect(systemText).not.toContain('PARAGRAPH TYPE');
+    expect(systemText).not.toContain('Claim-Evidence-Analysis');
+    expect(prisma.setting.findUnique).not.toHaveBeenCalled();
   });
 
   test('sends the current document as explicit auditable tutor context', async () => {

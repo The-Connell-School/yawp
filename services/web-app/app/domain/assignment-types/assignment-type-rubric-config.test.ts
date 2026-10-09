@@ -426,24 +426,24 @@ describe('the default rubric config for a Class Starter assignment type', () => 
 });
 
 describe('the default rubric config for a Daily Pages assignment type', () => {
-  /**
-   * Daily Pages is the graded assignment now — there is no flag and no legacy
-   * path. A `daily_pages` type that saved no rubric of its own grades on the
-   * short-form rubric, which is a real change for every such row: a 1-5 scale
-   * with grammar marked, where the old default judged engagement alone.
-   */
-  test('grades on the short-form rubric, unconditionally', () => {
+  test('grades on the engagement rubric with proportional tiers', () => {
     const config = parseAssignmentTypeRubricConfig({
       assignmentTypeKind: 'daily_pages',
     });
 
-    expect(config.source).toBe('daily-pages-short-form-default');
-    expect(config.rubric.categories).toHaveLength(5);
-    expect(config.scoringScale).toMatchObject({ minScore: 1, maxScore: 5 });
-    expect(config.defaultLabel).toBe('Daily Pages short-form writing');
+    expect(config.source).toBe('daily-pages-engagement-default');
+    expect(config.rubric.categories).toHaveLength(1);
+    expect(config.rubric.categories[0].key).toBe('engagement_with_prompt');
+    expect(config.scoringScale).toMatchObject({ minScore: 0, maxScore: 100 });
+    expect(config.outputSchema.assignmentPointScaling).toBe(
+      'daily_pages_engagement_v2'
+    );
+    expect(config.outputSchema.scoringMode).toBe('holistic_tier');
+    expect(config.outputSchema.teacherNotesEnabled).toBeUndefined();
+    expect(config.defaultLabel).toBe('Daily Pages engagement');
   });
 
-  test('marks grammar, which the Class Starter default never does', () => {
+  test('never marks grammar, same as Class Starter', () => {
     const dailyPages = parseAssignmentTypeRubricConfig({
       assignmentTypeKind: 'daily_pages',
     });
@@ -452,7 +452,7 @@ describe('the default rubric config for a Daily Pages assignment type', () => {
     });
 
     expect(resolveGrammarHighlightingEnabled(dailyPages.rubric.categories)).toBe(
-      true
+      false
     );
     expect(
       resolveGrammarHighlightingEnabled(classStarter.rubric.categories)
@@ -496,8 +496,55 @@ describe('the default rubric config for a Daily Pages assignment type', () => {
     expect(dailyPages.promptConfig.gradingInstructions).not.toBe(
       classStarter.promptConfig.gradingInstructions
     );
-    expect(dailyPages.rubric.categories.length).toBeGreaterThan(
+    expect(dailyPages.rubric.categories.length).toBe(
       classStarter.rubric.categories.length
     );
+  });
+});
+
+describe('the Exit Ticket default rubric', () => {
+  test('is chosen by kind, and only when the type saved none of its own', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'exit_ticket',
+    });
+
+    expect(config.source).toBe('exit-ticket-default');
+    expect(config.rubric.categories[0].key).toBe('understanding');
+    expect(config.rubricIncomplete).toBe(false);
+  });
+
+  test('never displaces a rubric an admin actually configured', () => {
+    // Registering a default for a kind must not change what an existing row
+    // grades with. Its own rubric still wins.
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'exit_ticket',
+      rubricJson: {
+        categories: [
+          {
+            key: 'custom',
+            label: 'Custom',
+            description: 'Configured by an admin.',
+            weight: 1,
+          },
+        ],
+      },
+    });
+
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubric.categories[0].key).toBe('custom');
+  });
+
+  test('leaves every other kind on the rubric it had', () => {
+    expect(parseAssignmentTypeRubricConfig({}).source).toBe('thesis-default');
+    // Daily Pages defaults to the consolidated engagement rubric; registering
+    // the exit ticket default must not disturb that.
+    expect(
+      parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'daily_pages' })
+        .source
+    ).toBe('daily-pages-engagement-default');
+    expect(
+      parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'class_starter' })
+        .source
+    ).toBe('class-starter-default');
   });
 });

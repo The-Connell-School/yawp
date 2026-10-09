@@ -161,6 +161,16 @@ describe('writing practice preview enablement', () => {
       'seats.map(({ organizationId }) => organizationId)'
     );
   });
+
+  test('preview planner QA seed failures are non-fatal inside preview seat bootstrap', async () => {
+    const seedSource = await Bun.file(
+      new URL('./seed-preview-seats.ts', import.meta.url)
+    ).text();
+
+    expect(seedSource).toContain('preview planner QA seed failed (non-fatal)');
+    expect(seedSource).toContain('try {');
+    expect(seedSource).toContain('seedPreviewPlannerQa');
+  });
 });
 
 describe('create-only preview seat seeding', () => {
@@ -382,23 +392,22 @@ describe('topping up an existing preview seat', () => {
 });
 
 describe('legacy preview seat code backfill', () => {
-  test('skips Master, fills null codes only, and never creates missing organizations', async () => {
+  test('skips Master, reconciles configured codes, and never creates missing organizations', async () => {
     const rows: Record<string, string | null> = {
       'local-dev-org': null,
       'preview-seat-2': null,
       'preview-seat-3': 'steady-wren-3333',
     };
-    const updateMany = mock(
+    const update = mock(
       async ({
         where,
         data,
       }: {
-        where: { id: string; previewSeatCode: null };
+        where: { id: string };
         data: { previewSeatCode: string };
       }) => {
-        if (!(where.id in rows) || rows[where.id] !== null) return { count: 0 };
+        if (!(where.id in rows)) throw new Error('missing org');
         rows[where.id] = data.previewSeatCode;
-        return { count: 1 };
       }
     );
     const findUnique = mock(async ({ where }: { where: { id: string } }) =>
@@ -408,7 +417,7 @@ describe('legacy preview seat code backfill', () => {
     );
 
     const result = await backfillLegacyPreviewSeatCodes(
-      { organization: { updateMany, findUnique } } as never,
+      { organization: { update, findUnique } } as never,
       [
         {
           code: 'brave-otter-4193',
@@ -436,15 +445,15 @@ describe('legacy preview seat code backfill', () => {
     expect(rows).toEqual({
       'local-dev-org': null,
       'preview-seat-2': 'calm-panda-8127',
-      'preview-seat-3': 'steady-wren-3333',
+      'preview-seat-3': 'ready-robin-2222',
     });
     expect(result.map(({ status }) => status)).toEqual([
       'master',
       'backfilled',
-      'existing',
+      'backfilled',
       'missing',
     ]);
-    expect(updateMany).toHaveBeenCalledTimes(3);
+    expect(update).toHaveBeenCalledTimes(2);
   });
 });
 

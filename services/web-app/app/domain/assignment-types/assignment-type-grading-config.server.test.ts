@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import dailyPagesLibraryJson from '~/domain/rubrics/library/daily-pages-engagement.json';
+import { dailyPagesEngagementV1LibrarySchema } from '~/domain/rubrics/library/daily-pages-engagement-v1.fixture';
 
 const prisma = {
   assignment: { findUnique: mock() },
@@ -11,8 +12,11 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { buildResolvedAssignmentTypeGradingConfig, resolveAssignmentTypeGradingConfig } =
-  await import('./assignment-type-grading-config.server');
+const {
+  buildResolvedAssignmentTypeGradingConfig,
+  resolveAssignmentTypeGradingConfig,
+  resolveOwnGradingInstructionsOverrideForAssignment,
+} = await import('./assignment-type-grading-config.server');
 
 describe('resolveAssignmentTypeGradingConfig', () => {
   beforeEach(() => {
@@ -101,9 +105,8 @@ describe('resolveAssignmentTypeGradingConfig', () => {
   });
 
   test('selected library rubric drives the compiled grading invocation instead of stale inline configuration', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
     const { compileGradingAssistantInvocation } = await import('~/domain/grading/grading-assistant-invocation');
-    const schema = STARTER_RUBRICS.find(rubric => rubric.name === DAILY_PAGES_RUBRIC_NAME)!;
+    const schema = dailyPagesEngagementV1LibrarySchema;
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'selected-library', title: 'Journal', kind: null,
       rubric: { name: schema.name, schemaJson: schema },
@@ -142,12 +145,158 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     });
     const config = await resolveAssignmentTypeGradingConfig({ assignmentTypeId: 'managed-library' });
     expect(config.promptTemplate).toEqual({ systemMessage: 'Promoted system {{grading_instructions}}', userMessage: 'Promoted rubric {{rubric}} Document {{document}}' });
-    expect(config.maxScore).toBe(name === 'daily-pages-engagement' ? 30 : 5);
+    expect(config.maxScore).toBe(name === 'daily-pages-engagement' ? 100 : 5);
     const invocation = compileGradingAssistantInvocation({ gradingConfig: config, studentFirstName: 'Jordan', strictnessLevel: 'intermediate', documentText: 'Synthetic essay.' });
     expect(invocation.system).toContain('Promoted system');
     expect(invocation.system).toContain('Preserved override.');
     expect(invocation.userMessage).toContain('Promoted rubric');
     expect(invocation.userMessage).toContain('Synthetic essay.');
+  });
+
+  test('per-type override resolution: legacy snapshot without key follows live override', () => {
+    const typeId = 'legacy-no-key';
+    expect(
+      resolveOwnGradingInstructionsOverrideForAssignment({
+        assignmentType: {
+          id: typeId,
+          gradingPromptConfigJson: {
+            gradingInstructionsOverride: 'Live override.',
+          },
+        } as never,
+        pinnedRevision: {
+          rubricName: `assignment-type:${typeId}`,
+          schemaJson: {
+            promptConfig: { gradingInstructions: 'Snapshot GA.' },
+          },
+        },
+      })
+    ).toBe('Live override.');
+  });
+
+  test('per-type override resolution: snapshot string does not beat live override', () => {
+    const typeId = 'stale-snapshot-string';
+    expect(
+      resolveOwnGradingInstructionsOverrideForAssignment({
+        assignmentType: {
+          id: typeId,
+          gradingPromptConfigJson: {
+            gradingInstructionsOverride: 'Live override wins.',
+          },
+        } as never,
+        pinnedRevision: {
+          rubricName: `assignment-type:${typeId}`,
+          schemaJson: {
+            promptConfig: {
+              gradingInstructionsOverride: 'Stale snapshot paste.',
+            },
+          },
+        },
+      })
+    ).toBe('Live override wins.');
+  });
+
+  test('per-type override resolution: snapshot null clears override without live fallback', () => {
+    const typeId = 'explicit-null';
+    expect(
+      resolveOwnGradingInstructionsOverrideForAssignment({
+        assignmentType: {
+          id: typeId,
+          gradingPromptConfigJson: {
+            gradingInstructionsOverride: null,
+            gradingInstructionsOverridePinnedFallback: 'Legacy fallback text.',
+          },
+        } as never,
+        pinnedRevision: {
+          rubricName: `assignment-type:${typeId}`,
+          schemaJson: {
+            promptConfig: {
+              gradingInstructions: 'Internal GA.',
+              gradingInstructionsOverride: null,
+            },
+          },
+        },
+      })
+    ).toBeUndefined();
+  });
+
+  test('per-type override resolution: legacy pin after publish uses pinned fallback when live override was cleared', () => {
+    const typeId = 'legacy-after-publish';
+    expect(
+      resolveOwnGradingInstructionsOverrideForAssignment({
+        assignmentType: {
+          id: typeId,
+          gradingPromptConfigJson: {
+            gradingInstructions: 'Internal GA.',
+            gradingInstructionsOverride: null,
+            gradingInstructionsOverridePinnedFallback: '10/5 pasted GA (live today).',
+          },
+        } as never,
+        pinnedRevision: {
+          rubricName: `assignment-type:${typeId}`,
+          schemaJson: {
+            promptConfig: { gradingInstructions: 'Original placeholder GA.' },
+          },
+        },
+      })
+    ).toBe('10/5 pasted GA (live today).');
+  });
+
+  test('a per-type pin with snapshot null grades with catalog GA, not live fallback', async () => {
+    const typeId = 'per-type-hornbuckle';
+    const rubricName = `assignment-type:${typeId}`;
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: typeId,
+      title: 'Hornbuckle essay',
+      kind: 'essay',
+      scoringScaleJson: { type: 'points_scale', minScore: 1, maxScore: 4, step: 1 },
+      rubricJson: {
+        categories: [{ key: 'thesis', label: 'Thesis', description: 'Live rubric.', weight: 1 }],
+      },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Live GA after publish.',
+        gradingInstructionsOverride: null,
+        gradingInstructionsOverridePinnedFallback: 'Old paste.',
+      },
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 3,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      rubric: null,
+    });
+    prisma.assignment.findUnique.mockResolvedValue({
+      assignmentTypeId: typeId,
+      rubricTotalPoints: null,
+      gradingMode: 'bands',
+      rubricRevision: {
+        version: 2,
+        rubricName,
+        schemaJson: {
+          name: rubricName,
+          title: 'Hornbuckle essay',
+          scoringScale: { type: 'points_scale', minScore: 1, maxScore: 4, step: 1 },
+          rubric: {
+            categories: [{ key: 'thesis', label: 'Thesis', description: 'Pinned rubric.', weight: 1 }],
+          },
+          promptConfig: {
+            gradingInstructions: 'Internal v4 GA.',
+            gradingInstructionsOverride: null,
+          },
+          outputSchema: {},
+          calibrationNotes: null,
+        },
+        sourceContentId: 'internal-content-id',
+      },
+    });
+    const config = await resolveAssignmentTypeGradingConfig({
+      assignmentTypeId: typeId,
+      assignmentId: 'pinned-essay',
+    });
+    expect(config.instructions).toMatchObject({
+      mode: 'unified',
+      gradingInstructions: 'Internal v4 GA.',
+    });
+    expect(config.rubricCategories[0].description).toBe('Pinned rubric.');
   });
 
   test('returns assignment-type-owned rubric and prompt config when present', async () => {
@@ -355,10 +504,9 @@ describe('resolveAssignmentTypeGradingConfig', () => {
 
 describe('September 14 Daily Pages library revision', () => {
   test('preserves the authored deployment text exactly and represents every allowed integer band', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
     const { isScoreInCategoryBands } = await import('./rubric-category-options');
     const { parseRubricSchema } = await import('~/domain/rubrics/rubric-schema');
-    const schema = STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!;
+    const schema = dailyPagesEngagementV1LibrarySchema;
     expect(createHash('sha256').update(schema.promptConfig.gradingInstructions!.trim() + '\n').digest('hex'))
       .toBe('e0529c37ba362ac810a13129d547ee1654b92382ffbcf87b249d2391f15a4a86');
     expect(schema.scoringScale).toMatchObject({ minScore: 0, maxScore: 30, step: 1 });
@@ -367,13 +515,12 @@ describe('September 14 Daily Pages library revision', () => {
     expect(category.grammarHighlighting).toBe(false);
     const allowed = Array.from({ length: 31 }, (_, score) => score).filter(score => isScoreInCategoryBands(category, score));
     expect(allowed).toEqual([0, 7, 8, 9, 10, 11, 12, 13, 17, 18, 19, 20, 21, 22, 23, 28, 29, 30]);
-    expect(parseRubricSchema(dailyPagesLibraryJson)).toEqual(parseRubricSchema(schema));
+    expect(dailyPagesLibraryJson.scoringScale.maxScore).toBe(100);
   });
 
   test('sends actual tier bands, overall-only feedback and the assignment prompt to the model', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
     const { compileGradingAssistantInvocation } = await import('~/domain/grading/grading-assistant-invocation');
-    const schema = STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!;
+    const schema = dailyPagesEngagementV1LibrarySchema;
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'daily-pages-linked', title: 'Daily Pages', kind: 'daily_pages',
       rubric: { name: schema.name, schemaJson: schema },
@@ -394,8 +541,7 @@ describe('September 14 Daily Pages library revision', () => {
   });
 
   test('keeps an existing assignment pinned to its prior library revision', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
-    const current = STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!;
+    const current = dailyPagesEngagementV1LibrarySchema;
     const prior = structuredClone(current);
     prior.scoringScale.step = 10;
     delete prior.rubric.categories[0].bands;
@@ -413,11 +559,56 @@ describe('September 14 Daily Pages library revision', () => {
     expect(config.instructions).toMatchObject({ gradingInstructions: 'Prior teacher-approved instructions.' });
   });
 
+  test('honors library outputSchema.teacherNotesEnabled on thesis-driven essay rubrics', async () => {
+    const { THESIS_DRIVEN_ESSAY_RUBRIC_NAME } = await import(
+      '~/domain/rubrics/thesis-driven-essay'
+    );
+    const schema = {
+      name: THESIS_DRIVEN_ESSAY_RUBRIC_NAME,
+      title: 'Thesis-driven essay',
+      scoringScale: { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 },
+      rubric: {
+        categories: [
+          {
+            key: 'thesis_and_content',
+            label: 'Thesis/Content',
+            weight: 0.6,
+            description: 'Original thesis.',
+          },
+        ],
+      },
+      promptConfig: { instructionsPreset: 'legacy_thesis_driven_essay' },
+      outputSchema: { schemaVersion: 1, teacherNotesEnabled: true },
+    };
+    const config = buildResolvedAssignmentTypeGradingConfig({
+      assignmentTypeId: 'thesis-type',
+      assignmentTypeKind: 'essay',
+      assignmentTypeTitle: 'Essay',
+      row: {
+        id: 'thesis-type',
+        title: 'Essay',
+        kind: 'essay',
+        scoringScaleJson: schema.scoringScale,
+        rubricJson: schema.rubric,
+        gradingPromptConfigJson: schema.promptConfig,
+        gradingOutputSchemaJson: schema.outputSchema,
+        gradingCalibrationNotes: null,
+        gradingAssistantVersion: 1,
+        gradingAssistantSourceTemplateId: null,
+        gradingAssistantSourceTemplateSlug: null,
+        selectedRubricName: THESIS_DRIVEN_ESSAY_RUBRIC_NAME,
+      },
+    });
+    expect(
+      (config.outputSchemaSnapshot as { teacherNotesEnabled?: boolean })
+        .teacherNotesEnabled
+    ).toBe(true);
+  });
+
   test('preserves whole-number score resolution on a configured 90-point engagement rubric', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
     const { rubricScaleGradeFieldsFromScores } = await import('~/domain/grading/recorded-grade');
     const { isScoreInCategoryBands } = await import('./rubric-category-options');
-    const schema = structuredClone(STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!);
+    const schema = structuredClone(dailyPagesEngagementV1LibrarySchema);
     schema.scoringScale.maxScore = 90;
     schema.scoringScale.compositeMax = 90;
     schema.rubric.categories[0].bands = schema.rubric.categories[0].bands!.map(band => ({ ...band, min: band.min * 3, max: band.max * 3 }));
@@ -430,15 +621,14 @@ describe('September 14 Daily Pages library revision', () => {
   });
 
   test('existing recorded scores remain unchanged when assignment is pinned to a prior revision', async () => {
-    const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
     const { rubricScaleGradeFieldsFromScores } = await import('~/domain/grading/recorded-grade');
     // Current library (e.g., post-Sep 14/16) is 90-point variant in this scenario.
-    const current = structuredClone(STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!);
+    const current = structuredClone(dailyPagesEngagementV1LibrarySchema);
     current.scoringScale.maxScore = 90;
     current.scoringScale.compositeMax = 90;
     current.rubric.categories[0].bands = current.rubric.categories[0].bands!.map(b => ({ ...b, min: b.min * 3, max: b.max * 3 }));
     // Prior revision (e.g., pre-Sep 14/16) is 30-point with original bands.
-    const prior = structuredClone(STARTER_RUBRICS.find(r => r.name === DAILY_PAGES_RUBRIC_NAME)!);
+    const prior = structuredClone(dailyPagesEngagementV1LibrarySchema);
     // Mock: assignment type points at current library revision…
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'daily-pages-pinned-grade',
@@ -465,5 +655,49 @@ describe('September 14 Daily Pages library revision', () => {
       rubricScores: { engagement_with_prompt: { score: 18 } },
     });
     expect(grade).toEqual({ overallScore: 18, score: '18/30', numericPercentage: null, letterGrade: null });
+  });
+
+});
+
+describe('thesis-driven essay revisions authored in Yawp Internal', () => {
+  beforeEach(() => {
+    prisma.assignmentType.findUnique.mockReset();
+    prisma.assignment.findUnique.mockReset();
+  });
+
+  async function thesisSetup(pinned: { sourceContentId: string | null }) {
+    const { THESIS_DRIVEN_ESSAY } = await import('~/domain/rubrics/thesis-driven-essay');
+    const authored = structuredClone(THESIS_DRIVEN_ESSAY) as any;
+    authored.scoringScale = { type: 'rubric_points', minScore: 0, maxScore: 40 };
+    authored.rubric = { categories: [{ key: 'claim', label: 'Claim (internal)', weight: 1, description: 'Authored in Yawp Internal.' }] };
+    authored.calibrationNotes = 'Internal calibration notes';
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'assignment-type-thesis', title: 'Thesis-driven Essay', kind: null,
+      scoringScaleJson: null, rubricJson: null, gradingPromptConfigJson: null, gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null, gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: null, gradingAssistantSourceTemplateSlug: null,
+      rubric: { name: 'thesis-driven-essay', schemaJson: THESIS_DRIVEN_ESSAY, currentRevision: { id: 'rev-current', version: 1, rubricName: 'thesis-driven-essay', schemaJson: THESIS_DRIVEN_ESSAY, sourceContentId: null } },
+    });
+    prisma.assignment.findUnique.mockResolvedValue({
+      assignmentTypeId: 'assignment-type-thesis', rubricTotalPoints: null, gradingMode: 'bands',
+      rubricRevision: { id: 'rev-pinned', version: 2, rubricName: 'thesis-driven-essay', schemaJson: authored, sourceContentId: pinned.sourceContentId },
+    });
+    return resolveAssignmentTypeGradingConfig({ assignmentTypeId: 'assignment-type-thesis', assignmentId: 'assignment-1' });
+  }
+
+  test('a pinned revision staged from Yawp Internal grades with its own content', async () => {
+    const config = await thesisSetup({ sourceContentId: '6f1f5b5e-7a39-4d4f-9a52-6a1b9d3b2c11' });
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubricName).toBe('thesis-driven-essay');
+    expect(config.maxScore).toBe(40);
+    expect(config.rubricCategories.map((category) => category.label)).toEqual(['Claim (internal)']);
+    expect(config.calibrationNotes).toBe('Internal calibration notes');
+  });
+
+  test('a pinned revision without Internal source keeps the production code default', async () => {
+    const config = await thesisSetup({ sourceContentId: null });
+    expect(config.source).toBe('thesis-default');
+    expect(config.scoringType).toBe('weighted_1_5');
+    expect(config.rubricCategories.map((category) => category.label)).not.toContain('Claim (internal)');
   });
 });

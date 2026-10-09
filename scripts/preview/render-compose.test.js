@@ -248,6 +248,78 @@ describe('renderPreviewCompose', () => {
     }
   });
 
+  describe('Rubric Catalog management service key', () => {
+    const validKey = 'demo_management-key_0123456789abcdefghijklmnopqrstuv';
+    let previousKey;
+
+    beforeAll(() => {
+      previousKey = process.env.PREVIEW_MANAGEMENT_SERVICE_KEY;
+    });
+
+    afterAll(() => {
+      if (previousKey === undefined)
+        delete process.env.PREVIEW_MANAGEMENT_SERVICE_KEY;
+      else process.env.PREVIEW_MANAGEMENT_SERVICE_KEY = previousKey;
+    });
+
+    function renderWithKey(value, overrides = {}) {
+      if (value === undefined) delete process.env.PREVIEW_MANAGEMENT_SERVICE_KEY;
+      else process.env.PREVIEW_MANAGEMENT_SERVICE_KEY = value;
+      return renderCompose(overrides);
+    }
+
+    test('passes a valid demo key to the web app only', () => {
+      const parsed = Bun.YAML.parse(
+        renderWithKey(validKey, {
+          prNumber: '',
+          slug: 'demo',
+          domain: 'yawp.school',
+          sourceDir: '/srv/yawp-demo/sources/demo',
+          runtime: 'production',
+        })
+      );
+
+      expect(parsed.services.web.environment.YAWP_MANAGEMENT_SERVICE_KEY).toBe(
+        validKey
+      );
+      expect(
+        parsed.services.toolbox.environment.YAWP_MANAGEMENT_SERVICE_KEY
+      ).toBeUndefined();
+      expect(
+        parsed.services['blackboard-lti-mock'].environment
+          .YAWP_MANAGEMENT_SERVICE_KEY
+      ).toBeUndefined();
+    });
+
+    test('omits the key entirely when it is unset or empty', () => {
+      for (const value of [undefined, '']) {
+        const compose = renderWithKey(value, { runtime: 'production' });
+        expect(compose).not.toContain('YAWP_MANAGEMENT_SERVICE_KEY');
+      }
+    });
+
+    test('refuses to render a malformed key without echoing it', () => {
+      const malformed = 'too-short-key';
+      let error;
+      try {
+        renderWithKey(malformed);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toContain('PREVIEW_MANAGEMENT_SERVICE_KEY');
+      expect(error.message).not.toContain(malformed);
+      expect(() => renderWithKey(`${validKey}!`)).toThrow(
+        'PREVIEW_MANAGEMENT_SERVICE_KEY'
+      );
+    });
+
+    test('PR previews never receive a management key by default', () => {
+      const compose = renderWithKey(undefined);
+      expect(compose).not.toContain('YAWP_MANAGEMENT_SERVICE_KEY');
+    });
+  });
+
   test('keeps UA billing disabled unless the preview is explicitly configured', () => {
     const compose = renderCompose();
 

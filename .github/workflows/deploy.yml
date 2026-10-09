@@ -66,6 +66,11 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_deploy
         run: bun prisma migrate deploy
 
+      - name: 🌱 Seed free tier bundle assignment types
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_deploy
+        run: bun run --cwd packages/prisma seed-free-tier-bundle-assignment-types
+
       - name: 🎨 Backfill class artwork keys
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_deploy

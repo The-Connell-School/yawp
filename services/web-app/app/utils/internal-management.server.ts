@@ -68,6 +68,7 @@ export function createUserManagementHandlers(directory: Directory, credential: (
             ...(q ? { user: { OR: [
               { email: { contains: q, mode: 'insensitive' } },
               { name: { contains: q, mode: 'insensitive' } },
+              { username: { contains: q, mode: 'insensitive' } },
             ] } } : {}),
           },
         };

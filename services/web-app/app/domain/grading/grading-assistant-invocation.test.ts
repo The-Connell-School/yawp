@@ -49,6 +49,20 @@ function gradingConfig(
 }
 
 describe('compileGradingAssistantInvocation', () => {
+  test('includes the assignment prompt in the user message when provided', () => {
+    const invocation = compileGradingAssistantInvocation({
+      gradingConfig: gradingConfig(),
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'My reflection for today.',
+      assignmentPrompt: 'What surprised you in chapter 4?',
+    });
+
+    expect(invocation.userMessage).toContain(
+      'Assignment prompt: What surprised you in chapter 4?'
+    );
+  });
+
   test('compiles the exact system and user messages for assignment-type instructions', () => {
     const invocation = compileGradingAssistantInvocation({
       gradingConfig: gradingConfig(),
@@ -155,7 +169,8 @@ describe('compileGradingAssistantInvocation', () => {
       documentText: 'School uniforms should be optional.',
     });
 
-    expect(invocation.system).toBe('Coach Jordan with scores 1-5.');
+    expect(invocation.system).toStartWith('Coach Jordan with scores 1-5.');
+    expect(invocation.system).toContain('"teacherNote": string | null');
     expect(invocation.userMessage).toContain('Argument Essay');
     expect(invocation.userMessage).toContain('Advanced');
     expect(invocation.userMessage).toContain(
@@ -181,64 +196,68 @@ describe('compileGradingAssistantInvocation', () => {
     expect(invocation.system).toContain('Do not infer AI authorship');
   });
 
-});
-
-describe('compileGradingAssistantInvocation writing time', () => {
-  const base = {
-    gradingConfig: gradingConfig(),
-    studentFirstName: 'Jordan',
-    strictnessLevel: 'intermediate' as const,
-    documentText: 'School uniforms should be optional.',
-  };
-
-  test('leaves the prompt exactly as it was when no writing time is set', () => {
-    const without = compileGradingAssistantInvocation(base);
-    expect(compileGradingAssistantInvocation({ ...base, writingTimeMinutes: null }))
-      .toEqual(without);
-    expect(without.userMessage).not.toContain('Writing time');
-  });
-
-  test('tells the assistant how long the student had', () => {
+  test('appends assignment grading context for a template that has no slot for it', () => {
     const invocation = compileGradingAssistantInvocation({
-      ...base,
-      writingTimeMinutes: 10,
+      gradingConfig: gradingConfig(),
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'Weathering breaks rock down where it sits.',
+      assignmentPrompt: 'What is the difference between weathering and erosion?',
+      gradingContext:
+        "The teacher's notes on the lesson this ticket closes. The student did not see these; judge the response against them.\n- Main points: Erosion moves the pieces.",
     });
-    expect(invocation.userMessage).toContain('Writing time:');
-    expect(invocation.userMessage).toContain('10 minutes');
-    // Placed before the essay, beside the other things the teacher decided.
-    expect(invocation.userMessage.indexOf('Writing time:')).toBeLessThan(
-      invocation.userMessage.indexOf('Essay:')
+
+    expect(invocation.userMessage).toContain('Erosion moves the pieces.');
+    expect(invocation.userMessage).toContain(
+      'The student did not see these'
     );
+    expect(invocation.userMessage).not.toContain('{{');
   });
 
-  test('a managed template can place it with {{writing_time}}', () => {
+  test('renders grading context inline when the template asks for it', () => {
     const invocation = compileGradingAssistantInvocation({
-      ...base,
       gradingConfig: gradingConfig({
         promptTemplate: {
-          systemMessage: 'Grade it.',
-          userMessage: '{{writing_time}}\n---\n{{document}}',
+          systemMessage: 'Managed grading system.',
+          userMessage: '{{grading_context}}\n\nEssay:\n{{document}}',
         },
       }),
-      writingTimeMinutes: 20,
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'A response.',
+      gradingContext: 'Judge this against the objective.',
     });
-    expect(invocation.userMessage.startsWith('Writing time:')).toBe(true);
-    expect(invocation.userMessage.match(/Writing time:/g)).toHaveLength(1);
+
+    expect(invocation.userMessage).toStartWith(
+      'Judge this against the objective.'
+    );
+    // Inline means once, not once inline and once appended.
+    expect(
+      invocation.userMessage.split('Judge this against the objective.').length - 1
+    ).toBe(1);
   });
 
-  test('an older managed template without the variable still receives it', () => {
-    const invocation = compileGradingAssistantInvocation({
-      ...base,
-      gradingConfig: gradingConfig({
-        promptTemplate: {
-          systemMessage: 'Grade it.',
-          userMessage: 'Essay:\n{{document}}',
-        },
-      }),
-      writingTimeMinutes: 20,
+  test('leaves the payload untouched for an assignment with no grading context', () => {
+    const without = compileGradingAssistantInvocation({
+      gradingConfig: gradingConfig(),
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'A response.',
+      assignmentPrompt: 'A prompt.',
     });
-    expect(invocation.userMessage).toContain('20 minutes');
+    const withNull = compileGradingAssistantInvocation({
+      gradingConfig: gradingConfig(),
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'A response.',
+      assignmentPrompt: 'A prompt.',
+      gradingContext: null,
+    });
+
+    expect(withNull.userMessage).toBe(without.userMessage);
+    expect(withNull.system).toBe(without.system);
   });
+
 });
 
 /**
@@ -274,58 +293,30 @@ describe('compileGradingAssistantInvocation cold write', () => {
     );
   });
 
-  test('sits beside the writing time when both are set', () => {
+  test('a managed template can place it with {{writing_time}}', () => {
+    const invocation = compileGradingAssistantInvocation({
+      ...base,
+      gradingConfig: gradingConfig({
+        promptTemplate: {
+          systemMessage: 'Grade it.',
+          userMessage: '{{writing_time}}\n---\n{{document}}',
+        },
+      }),
+      coldWrite: true,
+    });
+    expect(invocation.userMessage.startsWith('Cold write:')).toBe(true);
+    expect(invocation.userMessage.match(/Cold write:/g)).toHaveLength(1);
+  });
+
+  // Daily Pages paragraph type and writing time were removed: the grader is
+  // never told either, whatever an old assignment still has stored.
+  test('never mentions a writing time or a paragraph type', () => {
     const invocation = compileGradingAssistantInvocation({
       ...base,
       coldWrite: true,
-      writingTimeMinutes: 15,
     });
-    expect(invocation.userMessage).toContain('15 minutes');
-    expect(invocation.userMessage.indexOf('Writing time:')).toBeLessThan(
-      invocation.userMessage.indexOf('Cold write:')
-    );
-    expect(invocation.userMessage.indexOf('Cold write:')).toBeLessThan(
-      invocation.userMessage.indexOf('Essay:')
-    );
-  });
-});
-
-/**
- * The paragraph type a teacher chose layers its own guidance onto the one
- * Daily Pages rubric. No type is every assignment before this existed.
- */
-describe('compileGradingAssistantInvocation paragraph type', () => {
-  const base = {
-    gradingConfig: gradingConfig(),
-    studentFirstName: 'Jordan',
-    strictnessLevel: 'intermediate' as const,
-    documentText: 'Nick never admits that he envies Gatsby.',
-  };
-
-  test('leaves the prompt exactly as it was when no type is chosen', () => {
-    const without = compileGradingAssistantInvocation(base);
-    expect(
-      compileGradingAssistantInvocation({ ...base, paragraphMode: null })
-    ).toEqual(without);
-    expect(without.userMessage).not.toContain('Paragraph type');
-  });
-
-  test('adds the type guidance ahead of the essay', () => {
-    const invocation = compileGradingAssistantInvocation({
-      ...base,
-      paragraphMode: 'analyze',
-      writingTimeMinutes: 15,
-    });
-    expect(invocation.userMessage).toContain('Paragraph type: Analyze');
-    expect(invocation.userMessage).toContain('Claim-Evidence-Analysis');
-    expect(invocation.userMessage.indexOf('Paragraph type:')).toBeLessThan(
-      invocation.userMessage.indexOf('Essay:')
-    );
-  });
-
-  test('ignores a type that is not switched on', () => {
-    expect(
-      compileGradingAssistantInvocation({ ...base, paragraphMode: 'retired' })
-    ).toEqual(compileGradingAssistantInvocation(base));
+    const text = `${invocation.system}\n${invocation.userMessage}`;
+    expect(text).not.toContain('Writing time');
+    expect(text).not.toContain('Paragraph type');
   });
 });

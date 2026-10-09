@@ -147,6 +147,25 @@ describe('buildGradingPromptShape for the Daily Pages rubric', () => {
   });
 });
 
+describe('buildGradingPromptShape with teacher notes and no rubric-specific note instructions', () => {
+  test('still adds teacherNote to the schema and evidence rules', () => {
+    const shape = buildGradingPromptShape({
+      categories: thesisCategories,
+      minScore: 1,
+      maxScore: 5,
+      studentFirstName: 'Jordan',
+      teacherNotesEnabled: true,
+    });
+
+    expect(shape.systemPrompt).toContain('"teacherNote": string | null');
+    expect(shape.systemPrompt).toContain('Teacher Note rules:');
+    expect(shape.systemPrompt).toContain('Follow the Teacher Note rules above');
+    expect(shape.systemPrompt).not.toContain(
+      'explicitly requested in the grading instructions'
+    );
+  });
+});
+
 describe('buildGradingPromptShape for a rubric that customizes nothing', () => {
   const shape = buildGradingPromptShape({
     categories: thesisCategories,

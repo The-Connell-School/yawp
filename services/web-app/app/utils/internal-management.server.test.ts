@@ -33,6 +33,7 @@ describe('internal user management boundary', () => {
       where: { isActive: true, organizationId: 'org-1', user: { OR: [
         { email: { contains: 'Teacher', mode: 'insensitive' } },
         { name: { contains: 'Teacher', mode: 'insensitive' } },
+        { username: { contains: 'Teacher', mode: 'insensitive' } },
       ] } }, take: 2, orderBy: { id: 'asc' },
     });
     expect(await response.json()).toEqual({ users: [{ id: 'user-1', organizationId: 'org-1', displayName: 'QA Teacher', email: 'qa@example.test', privileged: false }], nextCursor: null });

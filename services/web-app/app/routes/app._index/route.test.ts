@@ -266,7 +266,7 @@ describe('app index loader assignments', () => {
     expect(practice.classLabel.title).toBe('English 10');
   });
 
-  test('hides Composition assignments while their rollout flag is off', async () => {
+  test('still lists assigned practice on the dashboard when the composition rollout flag is off', async () => {
     process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
     getAssignedPracticeForStudent.mockResolvedValue([
       {
@@ -304,10 +304,10 @@ describe('app index loader assignments', () => {
       data.writingPracticeAssignments.map(
         (assignment: { id: string }) => assignment.id
       )
-    ).toEqual(['grammar-assignment']);
+    ).toEqual(['grammar-assignment', 'composition-assignment']);
   });
 
-  test('does not load assigned writing practice while the organization flag is off', async () => {
+  test('loads assigned writing practice for students even when the organization flag is off', async () => {
     requireMembership.mockResolvedValue({
       id: 'profile-1',
       role: 'STUDENT',
@@ -326,7 +326,7 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(getAssignedPracticeForStudent).not.toHaveBeenCalled();
+    expect(getAssignedPracticeForStudent).toHaveBeenCalledWith('profile-1');
     expect(data.writingPracticeAssignments).toEqual([]);
   });
 
@@ -726,9 +726,9 @@ describe('app index loader assignments', () => {
       },
     ]);
     expect(data.assignmentCreationTypes).toEqual([
-      // Defaulted rather than omitted: the sheet reads this to decide whether to
-      // offer collaborative drafts, and an absent flag would read as supported
-      // nowhere but be indistinguishable from a select that forgot to ask.
+      // Defaulted rather than omitted: the sheet reads these to decide whether
+      // to offer collaborative drafts and which form to show, and an absent
+      // value would be indistinguishable from a select that forgot to ask.
       {
         id: 'type-1',
         title: 'Daily Pages',
@@ -737,9 +737,8 @@ describe('app index loader assignments', () => {
         // grammar-grading toggle, and the mocked type has no rubric to grade
         // grammar with.
         gradesGrammar: false,
-        // The mocked type has no kind, so no writing time is suggested.
-        defaultWritingTimeMinutes: null,
-        offersParagraphModes: false,
+        kind: null,
+        rubricName: null,
       },
     ]);
   });

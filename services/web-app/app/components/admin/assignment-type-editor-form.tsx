@@ -194,6 +194,7 @@ export function AssignmentTypeEditorForm({
   );
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
+  const rubricSelectionDirty = rubricId !== selectedRubricId;
   const canSubmit = isEdit ? isDirty && !isSubmitting : !isSubmitting;
   const submitLabel = isEdit
     ? isSubmitting

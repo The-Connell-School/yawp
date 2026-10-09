@@ -85,6 +85,8 @@ Required repository settings:
 - Secret `PREVIEW_LOGIN_EMAIL`
 - Secret `PREVIEW_LOGIN_PASSWORD`
 
+The demo environment (`demo.yawp.school`, `.github/workflows/demo-environment.yml`) also reads an optional `demo` environment secret, `DEMO_MANAGEMENT_SERVICE_KEY`. Yawp Internal uses it to publish rubric versions to demo through the Rubric Catalog API (`/api/internal/v1/rubric-catalog`). When set, the deploy passes it to the demo web app as `YAWP_MANAGEMENT_SERVICE_KEY`; it must match `^[A-Za-z0-9_-]{43,}$` (for example `openssl rand -base64 48 | tr '+/' '-_' | tr -d '='`) or the compose render fails without printing the value. Leave it unset and the catalog routes 404 on demo. PR previews never receive this key.
+
 ### Retrieve or add seat access codes
 
 On the first deploy, `scripts/preview/deploy.sh` creates six isolated seats and generates one memorable code per seat from curated adjective and animal lists. Seat 1 is Brian Connell's adopted `local-dev-org`; seat 2 is Bryant Brock's; seats 3–6 are generic. The deploy retains the code-to-organization map across redeploys and prints every code in the job log:

@@ -6,7 +6,7 @@ import { test, expect } from '../test-setup';
  * at all, because it only ever turns grammar grading off.
  */
 test.describe.serial('Grammar grading toggle at assignment creation', () => {
-  test('Daily Pages offers the toggle, on by default', async ({
+  test('Daily Pages never offers grammar grading on the engagement rubric', async ({
     page,
     e2eContext,
     signIn,
@@ -20,12 +20,9 @@ test.describe.serial('Grammar grading toggle at assignment creation', () => {
     await page.getByRole('menuitem', { name: 'Assignment' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
 
-    const toggle = page.getByLabel('Grade this for grammar and syntax');
-    await expect(toggle).toBeVisible();
-    await expect(toggle).toBeChecked();
-
-    await toggle.uncheck();
-    await expect(toggle).not.toBeChecked();
+    await expect(
+      page.getByLabel('Grade this for grammar and syntax')
+    ).toHaveCount(0);
   });
 
   test('Class Starter never offers it, because it never grades grammar', async ({

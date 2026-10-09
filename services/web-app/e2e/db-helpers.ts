@@ -122,9 +122,11 @@ export async function ensureDocumentUnsubmitted(params: {
   const { prisma, documentId } = params;
   // Fixture cleanup may remove its own audit rows. Production flows retain them.
   await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe("SET LOCAL session_replication_role = 'replica'");
     await tx.submissionActivity.deleteMany({
       where: { submission: { documentId } },
     });
+    await tx.$executeRawUnsafe("SET LOCAL session_replication_role = 'origin'");
     await tx.submission.deleteMany({
       where: { documentId },
     });

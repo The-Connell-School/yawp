@@ -1,3 +1,5 @@
+import { formatUserDisplayName } from '~/utils/user-display';
+
 export type TeacherDocumentWorkFilterOption = {
   id: string;
   label: string;
@@ -33,25 +35,23 @@ export function dedupeFilterOptionsById<T extends { id: string }>(
 }
 
 function studentFilterLabel(membership: {
-  user: { name: string | null; email: string };
+  user: { name: string | null; email: string | null; username?: string | null };
 }) {
-  return (
-    membership.user.name?.trim() || membership.user.email || 'Unknown student'
-  );
+  return formatUserDisplayName(membership.user);
 }
 
 export function buildStudentFilterOptionsFromDocuments(
   documents: Array<{
     membership: {
       id: string;
-      user: { id?: string; name: string | null; email: string };
+      user: { id?: string; name: string | null; email: string | null; username?: string | null };
     };
     group?: {
       members: Array<{
         membershipId: string;
         membership: {
           id: string;
-          user: { id?: string; name: string | null; email: string };
+          user: { id?: string; name: string | null; email: string | null; username?: string | null };
         };
       }>;
     } | null;
@@ -62,7 +62,7 @@ export function buildStudentFilterOptionsFromDocuments(
     {
       id: string;
       label: string;
-      email: string;
+      email: string | null;
       membershipIds: Set<string>;
     }
   >();

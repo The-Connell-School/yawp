@@ -41,30 +41,25 @@ describe('buildStaticDailyPagesGradingConfig', () => {
     const config = buildStaticDailyPagesGradingConfig();
 
     expect(config.rubricCategories.map((category) => category.key)).toEqual([
-      'depth_of_thought',
-      'development_of_thought',
-      'organization_and_structure',
-      'voice_and_style',
-      'grammar_and_mechanics',
+      'engagement_with_prompt',
     ]);
-    expect(config.minScore).toBe(1);
-    expect(config.maxScore).toBe(5);
+    expect(config.minScore).toBe(0);
+    expect(config.maxScore).toBe(100);
   });
 });
 
 describe('runLiveGradingAssistantBenchmarkCase', () => {
   /**
-   * A timed piece has to be graded as a timed piece. The case carries the
-   * prompt and the writing time the way an assignment does, and both reach
-   * the grader exactly as they would in production.
+   * The case carries the prompt the way an assignment does, and it reaches
+   * the grader exactly as it would in production — with no writing time,
+   * which was removed from assignments.
    */
-  test('hands the case prompt and writing time to the grader', async () => {
+  test('hands the case prompt to the grader, and no writing time', async () => {
     const benchmarkCase = {
       ...gradingAssistantBenchmarkV1.cases[0],
       input: {
         ...gradingAssistantBenchmarkV1.cases[0].input,
         assignmentPrompt: 'Quote the line where the argument turns.',
-        writingTimeMinutes: 15,
       },
     };
     const gradingCalls: string[] = [];
@@ -95,49 +90,7 @@ describe('runLiveGradingAssistantBenchmarkCase', () => {
     expect(gradingCalls[0]).toContain(
       'Quote the line where the argument turns.'
     );
-    expect(gradingCalls[0]).toContain('the student had 15 minutes');
-  });
-
-  /**
-   * A paragraph type is calibrated before it is switched on, so a case that
-   * names one has to reach the grader with that type's guidance layered in,
-   * exactly as an assignment with that type would.
-   */
-  test('hands the case paragraph type to the grader', async () => {
-    const benchmarkCase = {
-      ...gradingAssistantBenchmarkV1.cases[0],
-      input: {
-        ...gradingAssistantBenchmarkV1.cases[0].input,
-        writingTimeMinutes: 15,
-        paragraphMode: 'argue',
-      },
-    };
-    const gradingCalls: string[] = [];
-    const execute = mock(
-      async ({
-        purpose,
-        messages,
-      }: {
-        purpose: string;
-        messages: Array<{ content: string }>;
-      }) => {
-        if (purpose === 'criterion') {
-          return JSON.stringify({ passed: true, evidence: 'Grounded.' });
-        }
-        gradingCalls.push(messages.map((message) => message.content).join(''));
-        return JSON.stringify(validOutputFor(benchmarkCase));
-      }
-    );
-
-    await runLiveGradingAssistantBenchmarkCase({
-      suite: gradingAssistantBenchmarkV1,
-      benchmarkCase,
-      gradingConfig: buildStaticDailyPagesGradingConfig(),
-      execute,
-    });
-
-    expect(gradingCalls).toHaveLength(1);
-    expect(gradingCalls[0]).toContain('Paragraph type: Argue a position');
+    expect(gradingCalls[0]).not.toContain('Writing time');
   });
 
 

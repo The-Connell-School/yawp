@@ -2,9 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   DAILY_PAGES_SHORT_FORM_CATEGORY_KEYS,
-  DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS,
   DAILY_PAGES_SHORT_FORM_TUTOR_INSTRUCTIONS,
-  DAILY_PAGES_SHORT_FORM_WELCOME,
   DAILY_PAGES_SHORT_FORM_GRAMMAR_CATEGORY_KEY,
   DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
   DAILY_PAGES_SHORT_FORM_RUBRIC,
@@ -402,74 +400,5 @@ describe('refinement costs something', () => {
     const thinking =
       weightOf('depth_of_thought') + weightOf('development_of_thought');
     expect(thinking).toBeGreaterThan(0.5);
-  });
-});
-
-/**
- * The tutor's one step ("Today's Writing") carries instructions of its own,
- * joined after the module's. The step that shipped was the freewrite tutor —
- * brainstorming, journaling, big praise — which contradicted the module text
- * it followed. This is its replacement: how a feedback round runs and where
- * the tutor stops, with the coaching left to the module and the paragraph
- * type.
- */
-describe('the Daily Pages step instructions', () => {
-  const step = DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS.toLowerCase();
-
-  test('do not ask for exploratory or brainstorming feedback', () => {
-    for (const phrase of [
-      'brainstorm',
-      'exploratory',
-      'journaling',
-      'go deeper',
-      'singlehandedly',
-    ]) {
-      expect(step).not.toContain(phrase);
-    }
-    expect(step).toContain('paragraph practice');
-  });
-
-  test('keep the safety boundaries the old step carried', () => {
-    for (const topic of [
-      'suicidal',
-      'self-harm',
-      'abuse',
-      'unsafe',
-      'sexual',
-      'substance use',
-      'school counselor',
-    ]) {
-      expect(step).toContain(topic);
-    }
-  });
-
-  test('run each "Give me feedback" as the next turn, not a recap', () => {
-    expect(step).toContain('give me feedback');
-    expect(step).toContain('new writing');
-    expect(step).toContain('do not repeat');
-  });
-
-  test('keep praise specific and earned', () => {
-    expect(step).toContain('specific');
-    expect(step).not.toContain('awesome');
-  });
-
-  test('never write the paragraph for the student', () => {
-    expect(step).toContain('never write');
-  });
-});
-
-describe('the Daily Pages welcome', () => {
-  const welcome = DAILY_PAGES_SHORT_FORM_WELCOME.toLowerCase();
-
-  test('no longer tells the student feedback is optional for this writing', () => {
-    expect(welcome).not.toContain('may not need or want feedback');
-    expect(welcome).not.toContain('brainstorm');
-  });
-
-  test('says what to write and how to ask for help', () => {
-    expect(welcome).toContain('paragraph');
-    expect(welcome).toContain('give me feedback');
-    expect(welcome).toContain('chat');
   });
 });

@@ -89,6 +89,19 @@ export function canSubmitWritingPracticeAssignment({
 }
 
 /**
+ * What a caller already decided, for the teacher to keep or change. The Lesson
+ * Planner opens the sheet this way: the skills, size and directions of the
+ * practice it planned are filled in, and nothing is assigned until the teacher
+ * picks a class and a due date.
+ */
+export type WritingPracticeAssignmentInitial = {
+  slugs?: string[];
+  title?: string;
+  problemCount?: number;
+  instructions?: string;
+};
+
+/**
  * Assigning writing practice. Opened from a lesson it assigns that lesson;
  * opened from the practice page it takes a set of skills, which is how a
  * teacher assigns mixed practice — several skills interleaved into one set.
@@ -96,29 +109,38 @@ export function canSubmitWritingPracticeAssignment({
 export function WritingPracticeAssignmentSheetContent({
   lesson,
   skillOptions,
+  initial,
   teacherClasses,
   onOpenChange,
 }: {
   lesson?: { slug: string; title: string };
   skillOptions?: PracticeSkillOption[];
+  initial?: WritingPracticeAssignmentInitial;
   teacherClasses: WritingPracticeAssignmentClass[];
   onOpenChange: (open: boolean) => void;
 }) {
   const fetcher = useFetcher<AssignResult>();
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [selectedSlugs, setSelectedSlugs] = useState<string[]>(
-    lesson ? [lesson.slug] : []
+    lesson ? [lesson.slug] : (initial?.slugs ?? [])
   );
-  const [title, setTitle] = useState(
-    lesson
-      ? suggestWritingPracticeTitle([lesson.title])
-      : suggestWritingPracticeTitle([])
-  );
+  const [title, setTitle] = useState(() => {
+    if (initial?.title) return initial.title;
+    if (lesson) return suggestWritingPracticeTitle([lesson.title]);
+    const titles = (initial?.slugs ?? []).map(
+      (slug) =>
+        (skillOptions ?? []).find((option) => option.slug === slug)?.title ??
+        slug
+    );
+    return suggestWritingPracticeTitle(titles);
+  });
   // Once a teacher names the set themselves, changing the skills must not
-  // overwrite what they typed.
-  const [titleEdited, setTitleEdited] = useState(false);
+  // overwrite what they typed — and a title a caller chose counts as named.
+  const [titleEdited, setTitleEdited] = useState(Boolean(initial?.title));
   const [dueAt, setDueAt] = useState('');
-  const [problemCount, setProblemCount] = useState('5');
+  const [problemCount, setProblemCount] = useState(
+    String(initial?.problemCount ?? 5)
+  );
   const isSubmitting = fetcher.state !== 'idle';
 
   const lessonSlugs = lesson ? [lesson.slug] : selectedSlugs;
@@ -276,6 +298,7 @@ export function WritingPracticeAssignmentSheetContent({
           <Textarea
             id="writing-practice-instructions"
             name="instructions"
+            defaultValue={initial?.instructions}
             placeholder="Add any directions for your students."
           />
         </div>
@@ -308,11 +331,13 @@ export function WritingPracticeAssignmentSheetContent({
 export function WritingPracticeAssignmentSheet({
   lesson,
   skillOptions,
+  initial,
   teacherClasses,
   onOpenChange,
 }: {
   lesson?: { slug: string; title: string };
   skillOptions?: PracticeSkillOption[];
+  initial?: WritingPracticeAssignmentInitial;
   teacherClasses: WritingPracticeAssignmentClass[];
   onOpenChange: (open: boolean) => void;
 }) {
@@ -322,6 +347,7 @@ export function WritingPracticeAssignmentSheet({
         <WritingPracticeAssignmentSheetContent
           lesson={lesson}
           skillOptions={skillOptions}
+          initial={initial}
           teacherClasses={teacherClasses}
           onOpenChange={onOpenChange}
         />

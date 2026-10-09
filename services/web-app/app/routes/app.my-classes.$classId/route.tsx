@@ -1,5 +1,4 @@
-import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
-import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
+import { Prisma } from '@app/prisma';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -24,6 +23,10 @@ import {
 } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 import {
+  exitTicketGradingModeFor,
+  resolveAssignmentPrompt,
+} from '~/utils/assignment-exit-ticket.server';
+import {
   formatClassLabel,
   type ClassDisplayFields,
 } from '~/utils/class-display';
@@ -33,7 +36,9 @@ import {
   AssignmentHasCollaborativeWorkError,
   createAssignmentDeployedToClasses,
   deleteClassAssignmentDeployment,
+  updateAssignmentInClassDeployment,
 } from '~/utils/assignment-deployment.server';
+import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
 import {
   AssignmentPromptAttachmentError,
   assignmentPromptAttachmentRequestTooLarge,
@@ -64,6 +69,7 @@ import {
 } from '~/components/class-manage-sheet';
 import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
+import { HandleStudentPasswordResetButton } from './handle-student-password-reset';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import { UnsubmitSubmissionsSheet } from '~/components/teacher-document-work/unsubmit-submissions-sheet';
 import {
@@ -146,6 +152,7 @@ import {
   lockStudentRosters,
 } from '~/domain/collaboration/class-assignment-lock.server';
 import { filterClassStudentsByQuery } from './class-students-search';
+import { formatUserContactLabel, formatUserDisplayName } from '~/utils/user-display';
 import {
   StudentGrowthPlansSheet,
   type StudentGrowthPlan,
@@ -161,6 +168,12 @@ import {
   summarizeStudentPasteActivity,
 } from './class-paste-alerts';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import {
+  ensureClassStudentJoinToken,
+  teacherResetStudentPassword,
+} from '~/domain/free-tier/student-join.server';
+import { FreeClassStudentJoinCard } from '~/components/free-class-student-join-card';
+import { getDomainUrl } from '~/utils/misc';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -234,6 +247,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const allowedAssignmentTypes = await getAvailableAssignmentTypesForScopes<{
     id: string;
     systemKey: string | null;
+    kind: string | null;
   }>({
     scopes: [
       {
@@ -242,7 +256,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         teacherProfileId: profile.id,
       },
     ],
-    select: { id: true, systemKey: true },
+    select: { id: true, systemKey: true, kind: true },
   });
   const allowedAssignmentTypeIds = new Set(
     allowedAssignmentTypes
@@ -456,7 +470,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    if (!prompt) {
+    // An exit ticket's prompt is composed from the form answers, here as well
+    // as on the create API, so editing one cannot replace a composed prompt
+    // with whatever the browser happened to post.
+    const resolvedPrompt = resolveAssignmentPrompt({
+      assignmentTypeKind: selectedAssignmentType?.kind,
+      postedPrompt: prompt,
+      formData,
+    });
+    if (!resolvedPrompt.success) {
+      return dataResponse(
+        { success: false, message: resolvedPrompt.message },
+        { status: 400 }
+      );
+    }
+    const assignmentPrompt = resolvedPrompt.prompt;
+    const exitTicketConfigJson = resolvedPrompt.exitTicketConfigJson;
+
+    if (!assignmentPrompt) {
       return dataResponse(
         { success: false, message: 'Prompt is required.' },
         { status: 400 }
@@ -486,24 +517,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    const writingTimeResult = parseWritingTimeMinutes(formData);
-    if (!writingTimeResult.success) {
-      return dataResponse(
-        { success: false, message: writingTimeResult.message },
-        { status: 400 }
-      );
-    }
-    // Only written when the form sent it, so an older caller that omits the
-    // field leaves the stored value alone. Blank clears it.
-    const writingTimeData = writingTimeResult.sent
-      ? { writingTimeMinutes: writingTimeResult.value }
-      : {};
+    // Daily Pages writing time and paragraph type were removed: anything sent
+    // for either is ignored, never rejected, and a stored value is left alone.
     const rubricOverrideData = {
       ...(formData.has('rubricTotalPoints')
         ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
         : {}),
       ...(formData.has('gradingMode')
-        ? { gradingMode: rubricOverrides.data.gradingMode }
+        ? {
+            gradingMode: exitTicketGradingModeFor({
+              assignmentTypeKind: selectedAssignmentType?.kind,
+              formData,
+              gradingMode: rubricOverrides.data.gradingMode,
+            }),
+          }
         : {}),
     };
 
@@ -579,7 +606,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
           data: {
             assignmentTypeId,
             title,
-            prompt,
+            prompt: assignmentPrompt,
+            ...(exitTicketConfigJson ? { exitTicketConfigJson } : {}),
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
             ...rubricOverrideData,
@@ -599,6 +627,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
             promptAttachmentData.promptAttachmentKey
           ).catch(() => {});
         }
+        if (error instanceof FreeClassroomAssignmentQuotaError) {
+          return dataResponse(
+            { success: false, message: error.message },
+            { status: 403 }
+          );
+        }
         throw error;
       }
 
@@ -609,19 +643,30 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     try {
-      await prisma.assignment.update({
-        where: { id: existingAssignment!.id },
+      await updateAssignmentInClassDeployment({
+        assignmentId: existingAssignment!.id,
+        classId,
         data: {
           assignmentTypeId,
           title,
-          prompt,
+          prompt: assignmentPrompt,
+          // Cleared rather than left alone: a type changed away from Exit
+          // Ticket must not keep a config describing a prompt it no longer
+          // has. Prisma.DbNull is how a nullable Json column is set to null.
+          exitTicketConfigJson: exitTicketConfigJson ?? Prisma.DbNull,
           submitForGrade: gradingIntent.data.submitForGrade,
           pointValue: gradingIntent.data.pointValue,
           ...(formData.has('rubricTotalPoints')
             ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
             : {}),
           ...(formData.has('gradingMode')
-            ? { gradingMode: rubricOverrides.data.gradingMode }
+            ? {
+                gradingMode: exitTicketGradingModeFor({
+                  assignmentTypeKind: selectedAssignmentType?.kind,
+                  formData,
+                  gradingMode: rubricOverrides.data.gradingMode,
+                }),
+              }
             : {}),
           // Both controls now live on the edit form as well as the create
           // form. Only write them when the form actually sent them, so an
@@ -632,7 +677,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           ...(formData.has('tutorEnabled')
             ? { tutorEnabled: tutorEnabledResult.value }
             : {}),
-          ...writingTimeData,
           ...promptAttachmentData,
         },
       });
@@ -655,6 +699,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
         await deleteAssignmentPromptAttachment(
           promptAttachmentData.promptAttachmentKey
         ).catch(() => {});
+      }
+      if (error instanceof FreeClassroomAssignmentQuotaError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 403 }
+        );
       }
       throw error;
     }
@@ -736,6 +786,34 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return dataResponse({
       success: true,
       message: `Invitation sent to ${result.email}.`,
+    });
+  }
+
+  if (intent === 'reset-student-password') {
+    const studentMembershipId =
+      formData.get('studentMembershipId')?.toString() ?? '';
+    const temporaryPassword =
+      formData.get('temporaryPassword')?.toString() ?? '';
+    if (temporaryPassword.length < 6) {
+      return dataResponse(
+        { error: 'Temporary password must be at least 6 characters.' },
+        { status: 400 }
+      );
+    }
+    const result = await teacherResetStudentPassword({
+      studentMembershipId,
+      classId,
+      organizationId: classAccess.school.organizationId,
+      actorUserId: userId,
+      temporaryPassword,
+    });
+    if (result.status === 'error') {
+      return dataResponse({ error: result.error }, { status: 400 });
+    }
+    return dataResponse({
+      success: true,
+      message:
+        'Temporary password set. The student must change it at next login.',
     });
   }
 
@@ -915,14 +993,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             name: true,
             organizationId: true,
             organization: {
-              select: { classInsightsEnabled: true, reporterEnabled: true },
+              select: {
+                plan: true,
+                classInsightsEnabled: true,
+                reporterEnabled: true,
+              },
             },
           },
         },
         students: {
           select: {
             id: true,
-            user: { select: { name: true, email: true } },
+            user: { select: { name: true, email: true, username: true } },
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -1032,7 +1114,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   membership: {
                     select: {
                       id: true,
-                      user: { select: { id: true, name: true, email: true } },
+                      user: {
+                        select: { id: true, name: true, email: true, username: true },
+                      },
                     },
                   },
                 },
@@ -1148,7 +1232,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: string;
       title: string;
       systemKey: string | null;
+      kind: string | null;
       collaborationSupported: boolean;
+      rubric: { name: string } | null;
     }>({
       scopes: [
         {
@@ -1160,8 +1246,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       select: {
         id: true,
         title: true,
+        kind: true,
         systemKey: true,
         collaborationSupported: true,
+        rubric: { select: { name: true } },
       },
       orderBy: { position: 'asc' },
     }),
@@ -1289,26 +1377,31 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     creationTypeRows.map((assignmentType) => assignmentType.id)
   );
 
-  const creationTypeDefaults = await getCreationTypeDefaultsById(
-    creationTypeRows.map((assignmentType) => assignmentType.id)
-  );
+  let studentJoinUrl: string | null = null;
+  if (klass.school.organization.plan === 'FREE_CLASSROOM') {
+    const joinToken = await ensureClassStudentJoinToken(klass.id);
+    if (joinToken) {
+      const joinPath = new URL('/join', getDomainUrl(request));
+      joinPath.searchParams.set('t', joinToken);
+      studentJoinUrl = joinPath.toString();
+    }
+  }
 
   return dataResponse({
     role: 'TEACHER' as const,
+    studentJoinUrl,
     klass,
     submissions,
     inProgressDocuments,
     assignments,
     assignmentTypes: creationTypeRows.map(
-      ({ id, title, collaborationSupported }) => ({
+      ({ id, title, kind, collaborationSupported, rubric }) => ({
         id,
         title,
+        kind,
+        rubricName: rubric?.name ?? null,
         collaborationSupported,
         gradesGrammar: gradesGrammarIds.has(id),
-        defaultWritingTimeMinutes:
-          creationTypeDefaults.get(id)?.defaultWritingTimeMinutes ?? null,
-        offersParagraphModes:
-          creationTypeDefaults.get(id)?.offersParagraphModes ?? false,
       })
     ),
     apHistoryAssignmentTypeId:
@@ -1349,7 +1442,7 @@ type ClassDocumentRow = {
   updatedAt: Date;
   membership: {
     id: string;
-    user: { name: string | null; email: string };
+    user: { name: string | null; email: string | null; username?: string | null };
   };
   group: TeacherDocumentWorkRow['group'];
   assignment: {
@@ -1637,11 +1730,14 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const sortedStudents = useMemo(() => {
     const direction = studentNameSortDirection === 'asc' ? 1 : -1;
     return [...students].sort((a, b) => {
-      const aName = a.user.name || a.user.email;
-      const bName = b.user.name || b.user.email;
+      const aName = formatUserDisplayName(a.user);
+      const bName = formatUserDisplayName(b.user);
       const primary = collator.compare(aName, bName);
       if (primary !== 0) return primary * direction;
-      return collator.compare(a.user.email, b.user.email);
+      return collator.compare(
+        formatUserContactLabel(a.user),
+        formatUserContactLabel(b.user)
+      );
     });
   }, [collator, studentNameSortDirection, students]);
 
@@ -2064,7 +2160,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           statusCounts={documentWorkStatusCounts}
           students={sortedStudents.map((student) => ({
             id: student.id,
-            label: student.user.name || student.user.email,
+            label: formatUserDisplayName(student.user),
           }))}
           assignments={data.assignments.map((assignment) => ({
             id: assignment.id,
@@ -2156,6 +2252,12 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
 
       return (
         <div className="space-y-4">
+          {data.studentJoinUrl ? (
+            <FreeClassStudentJoinCard
+              joinUrl={data.studentJoinUrl}
+              classCode={data.klass.code}
+            />
+          ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="relative min-w-0 w-full max-w-sm flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -2478,7 +2580,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                         )}
                       </Button>
                     </TableHead>
-                    <TableHead className="whitespace-nowrap">Email</TableHead>
+                    <TableHead className="whitespace-nowrap">Login</TableHead>
                     <TableHead className="whitespace-nowrap pr-4">
                       Documents
                     </TableHead>
@@ -2540,7 +2642,17 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                           {s.user.name ?? 'Unnamed Student'}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {s.user.email}
+                          <div className="flex flex-col gap-1">
+                            <span>{formatUserContactLabel(s.user)}</span>
+                            {!s.user.email ? (
+                              <HandleStudentPasswordResetButton
+                                studentMembershipId={s.id}
+                                studentName={
+                                  s.user.name?.trim() || 'this student'
+                                }
+                              />
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell className="pr-4">
                           <button

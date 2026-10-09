@@ -12,6 +12,7 @@ import {
   type RequiredMembership,
 } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { getEntitlements } from '~/utils/entitlements.server';
 
 export type ReporterAccess = {
   userId: string;
@@ -27,8 +28,9 @@ export async function getReporterAccess(
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
   const isTeacher = membership.role === 'TEACHER';
-  // Reporter is now always enabled for all organizations.
-  const enabled = true;
+  // Reporter is allowed for all plans except FREE_CLASSROOM (§5.1).
+  const entitlements = getEntitlements(membership.organization);
+  const enabled = entitlements.features.reporter;
 
   return {
     userId,

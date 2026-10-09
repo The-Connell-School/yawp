@@ -168,62 +168,6 @@ describe('createDocumentForAssignmentType', () => {
     );
   });
 
-  test('records the paragraph type on a standalone document', async () => {
-    prisma.assignmentModule.findMany.mockResolvedValue([
-      { id: 'module-1', instructions: [] },
-    ]);
-
-    await createDocumentForAssignmentType({
-      membershipId: 'membership-1',
-      assignmentTypeId: 'assignment-type-1',
-      paragraphMode: 'argue',
-    });
-
-    expect(prisma.document.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          paragraphMode: 'argue',
-          paragraphModes: ['argue'],
-        }),
-      })
-    );
-  });
-
-  /** So a teacher's test documents say which type each one practices. */
-  test('titles a typed document after its paragraph type', async () => {
-    prisma.assignmentModule.findMany.mockResolvedValue([
-      { id: 'module-1', instructions: [] },
-    ]);
-
-    await createDocumentForAssignmentType({
-      membershipId: 'membership-1',
-      assignmentTypeId: 'assignment-type-1',
-      paragraphMode: 'argue',
-    });
-
-    expect(prisma.document.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ title: 'Argue a position' }),
-      })
-    );
-  });
-
-  test('writes no paragraph type when none is given', async () => {
-    prisma.assignmentModule.findMany.mockResolvedValue([
-      { id: 'module-1', instructions: [] },
-    ]);
-
-    await createDocumentForAssignmentType({
-      membershipId: 'membership-1',
-      assignmentTypeId: 'assignment-type-1',
-    });
-
-    const data = (prisma.document.create.mock.calls[0]?.[0] as any).data;
-    expect('paragraphMode' in data).toBe(false);
-    expect('paragraphModes' in data).toBe(false);
-    expect(data.title).toBe('');
-  });
-
   test('does not create a document for an archived assignment type', async () => {
     prisma.assignmentType.findFirst.mockResolvedValue(null);
 

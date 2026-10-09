@@ -22,7 +22,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-function render(prompt: string, paragraphModes: string[] = []) {
+function render(prompt: string) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -34,7 +34,6 @@ function render(prompt: string, paragraphModes: string[] = []) {
             id: 'assignment-1',
             title: 'Juliet argues with a name',
             prompt,
-            paragraphModes,
           } as never
         }
       />
@@ -62,30 +61,5 @@ describe('AssignmentPromptPanel', () => {
   it('renders nothing without a prompt', () => {
     const container = render('   ');
     expect(container.textContent).toBe('');
-  });
-});
-
-/**
- * A student writing an Analyze or Argue paragraph can open what they are
- * aiming for from beside the prompt.
- */
-describe('AssignmentPromptPanel paragraph-type guide', () => {
-  it('offers the guide for an assignment with a paragraph type', () => {
-    const container = render('Quote the line where her argument turns.', [
-      'analyze',
-    ]);
-
-    const button = container.querySelector(
-      '[data-testid="paragraph-guide-open"]'
-    ) as HTMLButtonElement | null;
-    expect(button?.textContent).toContain('What you’re aiming for');
-  });
-
-  it('offers nothing for an assignment with no paragraph type', () => {
-    const container = render('Write about anything.');
-
-    expect(
-      container.querySelector('[data-testid="paragraph-guide-open"]')
-    ).toBeNull();
   });
 });

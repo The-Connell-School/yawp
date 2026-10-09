@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 
-import { getParagraphMode } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import {
   DAILY_PAGES_SHORT_FORM_CATEGORY_KEYS,
   DAILY_PAGES_SHORT_FORM_RUBRIC,
@@ -44,13 +43,9 @@ describe('the Daily Pages calibration suite', () => {
     expect(suite.rubric.maxScore).toBe(5);
   });
 
-  /**
-   * Big enough to see drift, small enough to run live after every change.
-   * The ceiling grows a little as each paragraph type adds its cases.
-   */
   test('is big enough to see drift across the scale', () => {
     expect(suite.cases.length).toBeGreaterThanOrEqual(8);
-    expect(suite.cases.length).toBeLessThanOrEqual(34);
+    expect(suite.cases.length).toBeLessThanOrEqual(14);
   });
 
   test('gives every case a band for every category, inside the scale', () => {
@@ -65,10 +60,13 @@ describe('the Daily Pages calibration suite', () => {
     }
   });
 
-  /** A Daily Pages entry is graded as timed writing to a prompt, never untimed. */
-  test('grades every case as timed writing to a prompt', () => {
+  /**
+   * A Daily Pages entry is graded against its prompt, as production grades
+   * it. Writing time was removed from assignments, so no case carries one.
+   */
+  test('grades every case against a prompt, with no writing time', () => {
     for (const benchmarkCase of suite.cases) {
-      expect(benchmarkCase.input.writingTimeMinutes).toBeGreaterThan(0);
+      expect(benchmarkCase.input).not.toHaveProperty('writingTimeMinutes');
       expect(benchmarkCase.input.assignmentPrompt?.length).toBeGreaterThan(20);
     }
   });
@@ -147,216 +145,6 @@ describe('the strictness the suite encodes', () => {
       expect(
         benchmarkCase.expectations.scoreBands.voice_and_style.max
       ).toBeLessThanOrEqual(3);
-    }
-  });
-});
-
-/**
- * A paragraph type is switched on only after it is calibrated, so the suite
- * grades cases under it the way an assignment with that type is graded: with
- * the type's guidance in the prompt.
- */
-describe('the paragraph types the suite grades under', () => {
-  function gradedUnder(key: string) {
-    return suite.cases.filter(
-      (benchmarkCase) => benchmarkCase.input.paragraphMode === key
-    );
-  }
-
-  test('names only paragraph types that are switched on', () => {
-    for (const benchmarkCase of suite.cases) {
-      const key = benchmarkCase.input.paragraphMode;
-      if (key === undefined) continue;
-      expect(getParagraphMode(key)).not.toBeNull();
-    }
-  });
-
-  test('grades Argue a position across the scale', () => {
-    const argued = gradedUnder('argue');
-    expect(argued.length).toBeGreaterThanOrEqual(3);
-    expect(
-      argued.some((benchmarkCase) => composite(benchmarkCase, 'min') >= 80)
-    ).toBe(true);
-  });
-
-  /**
-   * A top Argue paragraph takes a side with a stated condition, gives one
-   * reason, faces a hard case, and ends on the narrower position the test
-   * produced. More than one such paragraph, on different prompts, keeps the
-   * top band from being calibrated on a single example.
-   */
-  test('reaches the top for argued paragraphs that face their hardest case', () => {
-    const exemplars = gradedUnder('argue').filter((benchmarkCase) =>
-      benchmarkCase.tags.includes('strong')
-    );
-    expect(exemplars.length).toBeGreaterThanOrEqual(3);
-    expect(new Set(exemplars.map((c) => c.input.assignmentPrompt)).size).toBe(
-      exemplars.length
-    );
-    for (const benchmarkCase of exemplars) {
-      expect(composite(benchmarkCase, 'min')).toBeGreaterThanOrEqual(80);
-      expect(
-        benchmarkCase.expectations.scoreBands.depth_of_thought.min
-      ).toBeGreaterThanOrEqual(4);
-      expect(
-        benchmarkCase.expectations.scoreBands.development_of_thought.min
-      ).toBeGreaterThanOrEqual(4);
-    }
-  });
-
-  /** "Both sides have a point" is not a position, however well it is written. */
-  test('a straddle that takes no position stays low on Depth of Thought', () => {
-    const straddles = caseTagged('argue-straddle');
-    expect(straddles.length).toBeGreaterThanOrEqual(1);
-    for (const benchmarkCase of straddles) {
-      expect(benchmarkCase.input.paragraphMode).toBe('argue');
-      expect(
-        benchmarkCase.expectations.scoreBands.depth_of_thought.max
-      ).toBeLessThanOrEqual(2);
-    }
-  });
-
-  /** Reasons held up only by generalities have not been tested. */
-  test('a position never tested against a specific case stays low on Development', () => {
-    const untested = caseTagged('argue-untested');
-    expect(untested.length).toBeGreaterThanOrEqual(1);
-    for (const benchmarkCase of untested) {
-      expect(benchmarkCase.input.paragraphMode).toBe('argue');
-      expect(
-        benchmarkCase.expectations.scoreBands.development_of_thought.max
-      ).toBeLessThanOrEqual(2);
-    }
-  });
-
-  test('grades Compare across the scale', () => {
-    const compared = gradedUnder('compare');
-    expect(compared.length).toBeGreaterThanOrEqual(4);
-    expect(
-      compared.some((benchmarkCase) => composite(benchmarkCase, 'min') >= 80)
-    ).toBe(true);
-  });
-
-  /**
-   * A top comparison names one difference, shows it in both things, and
-   * says what it reveals. Two such paragraphs, on different prompts, keep
-   * the top band from resting on a single example.
-   */
-  test('reaches the top for comparisons narrowed to one difference that matters', () => {
-    const exemplars = gradedUnder('compare').filter((benchmarkCase) =>
-      benchmarkCase.tags.includes('strong')
-    );
-    expect(exemplars.length).toBeGreaterThanOrEqual(2);
-    expect(new Set(exemplars.map((c) => c.input.assignmentPrompt)).size).toBe(
-      exemplars.length
-    );
-    for (const benchmarkCase of exemplars) {
-      expect(composite(benchmarkCase, 'min')).toBeGreaterThanOrEqual(80);
-      expect(
-        benchmarkCase.expectations.scoreBands.depth_of_thought.min
-      ).toBeGreaterThanOrEqual(4);
-      expect(
-        benchmarkCase.expectations.scoreBands.development_of_thought.min
-      ).toBeGreaterThanOrEqual(4);
-    }
-  });
-
-  /** Likenesses, then differences, then nothing: a Venn diagram in prose. */
-  test('a list of likenesses and differences stays low on Depth of Thought', () => {
-    const lists = caseTagged('compare-list');
-    expect(lists.length).toBeGreaterThanOrEqual(1);
-    for (const benchmarkCase of lists) {
-      expect(benchmarkCase.input.paragraphMode).toBe('compare');
-      expect(
-        benchmarkCase.expectations.scoreBands.depth_of_thought.max
-      ).toBeLessThanOrEqual(2);
-    }
-  });
-
-  /** A difference shown in only one of the two has not been compared. */
-  test('a comparison with evidence from only one side stays low on Development', () => {
-    const oneSided = caseTagged('compare-one-sided');
-    expect(oneSided.length).toBeGreaterThanOrEqual(1);
-    for (const benchmarkCase of oneSided) {
-      expect(benchmarkCase.input.paragraphMode).toBe('compare');
-      expect(
-        benchmarkCase.expectations.scoreBands.development_of_thought.max
-      ).toBeLessThanOrEqual(2);
-    }
-  });
-});
-
-/**
- * Define a term, Interpret, Evaluate and Synthesize each get a strong
- * paragraph that reaches the top, and a miss for each of the two ways the
- * type most often goes wrong: one held down on Depth of Thought, the other on
- * Development of Thought.
- */
-describe.each([
-  {
-    key: 'define',
-    depthMiss: 'define-dictionary',
-    developmentMiss: 'define-untested',
-  },
-  {
-    key: 'interpret',
-    depthMiss: 'interpret-paraphrase',
-    developmentMiss: 'interpret-unsupported',
-  },
-  {
-    key: 'evaluate',
-    depthMiss: 'evaluate-no-standard',
-    developmentMiss: 'evaluate-unapplied',
-  },
-  {
-    key: 'synthesize',
-    depthMiss: 'synthesize-summaries',
-    developmentMiss: 'synthesize-one-source',
-  },
-])('calibrating $key', ({ key, depthMiss, developmentMiss }) => {
-  const gradedUnder = suite.cases.filter(
-    (benchmarkCase) => benchmarkCase.input.paragraphMode === key
-  );
-
-  test('grades it across the scale', () => {
-    expect(gradedUnder.length).toBeGreaterThanOrEqual(3);
-    expect(new Set(gradedUnder.map((c) => c.input.assignmentPrompt)).size).toBe(
-      gradedUnder.length
-    );
-  });
-
-  test('reaches the top for a paragraph with all three parts', () => {
-    const strong = gradedUnder.filter((c) => c.tags.includes('strong'));
-    expect(strong.length).toBeGreaterThanOrEqual(1);
-    for (const benchmarkCase of strong) {
-      expect(composite(benchmarkCase, 'min')).toBeGreaterThanOrEqual(80);
-      expect(
-        benchmarkCase.expectations.scoreBands.depth_of_thought.min
-      ).toBeGreaterThanOrEqual(4);
-      expect(
-        benchmarkCase.expectations.scoreBands.development_of_thought.min
-      ).toBeGreaterThanOrEqual(4);
-    }
-  });
-
-  test(`${depthMiss} stays low on Depth of Thought`, () => {
-    const misses = caseTagged(depthMiss);
-    expect(misses.length).toBeGreaterThanOrEqual(1);
-    for (const benchmarkCase of misses) {
-      expect(benchmarkCase.input.paragraphMode).toBe(key);
-      expect(
-        benchmarkCase.expectations.scoreBands.depth_of_thought.max
-      ).toBeLessThanOrEqual(2);
-    }
-  });
-
-  test(`${developmentMiss} stays low on Development of Thought`, () => {
-    const misses = caseTagged(developmentMiss);
-    expect(misses.length).toBeGreaterThanOrEqual(1);
-    for (const benchmarkCase of misses) {
-      expect(benchmarkCase.input.paragraphMode).toBe(key);
-      expect(
-        benchmarkCase.expectations.scoreBands.development_of_thought.max
-      ).toBeLessThanOrEqual(2);
     }
   });
 });

@@ -13,7 +13,8 @@ const scale = z.object({
 const category = z.object({
   key: text, label: text, description: text, weight: number.min(0),
   scoreLabels: z.array(z.object({ value: number, label: text }).strict()).optional(),
-  bands: z.array(z.object({ min: number, max: number, label: text, description: text }).strict()).optional(),
+  // Band descriptions may be blank: production rubrics store bands whose wording lives in the label.
+  bands: z.array(z.object({ min: number, max: number, label: text, description: z.string() }).strict()).optional(),
   feedbackEnabled: z.boolean().optional(), grammarHighlighting: z.boolean().optional(),
 }).strict();
 const input = z.object({
@@ -27,6 +28,7 @@ const input = z.object({
     scoreInstructions: z.string().optional(), rubricInstructions: z.string().optional(),
   }).strict().optional(),
   outputSchema: z.record(json).optional(), calibrationNotes: z.string().nullable().optional(),
+  scoringMode: z.enum(['weighted_categories', 'holistic_tier']).optional(),
 }).strict();
 export type RubricValidationIssue = { path: string; message: string };
 export type RubricPromotionValidation = { ok: true; schema: RubricSchema } | { ok: false; issues: RubricValidationIssue[] };

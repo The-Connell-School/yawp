@@ -55,6 +55,7 @@ import {
   previewAccessMiddleware,
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
+import { isLessonPlannerEnabled } from './domain/feature-flags/feature-flags.server.ts';
 
 export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware];
 
@@ -121,6 +122,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         previewAccessGateEnabled: isPreviewAccessGateEnabled(),
         previewAccessSeat: null,
         blackboardLtiMockEnabled: false,
+        lessonPlannerEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,
       },
@@ -130,7 +132,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const {
     getImpersonationState,
-    getSessionExpirationDate,
+    getAuthSessionCookieExpiresAt,
     getUserId,
     logout,
     sessionKey,
@@ -153,6 +155,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
               id: true,
               name: true,
               email: true,
+              username: true,
+              mustChangePassword: true,
               isAdmin: true,
               memberships: {
                 ...(internal ? { where: { id: internal.membershipId, organizationId: internal.organizationId, isActive: true } } : previewAccessSeat && isIsolatedPreviewSeatMode()
@@ -167,9 +171,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
                   id: true,
                   role: true,
                   isOrgOwner: true,
+                  organizationId: true,
                   organization: {
                     select: {
                       name: true,
+                      plan: true,
                       reporterEnabled: true,
                       classInsightsEnabled: true,
                       writingPracticeEnabled: true,
@@ -194,7 +200,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const refreshedAuthSessionCookie =
     userId && authSessionId
       ? await authSessionStorage.commitSession(authSession, {
-          expires: getSessionExpirationDate(),
+          expires: await getAuthSessionCookieExpiresAt({
+            sessionId: authSessionId,
+            userEmail: user?.email ?? null,
+          }),
         })
       : null;
 
@@ -210,6 +219,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     bannerWarning,
     localDevAuthEnabled: isLocalDevAuthEnabled(),
   });
+  const lessonPlannerEnabled = userId
+    ? await isLessonPlannerEnabled(membership?.organizationId ?? null)
+    : false;
 
   return data(
     {
@@ -218,6 +230,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         isAdmin: Boolean(user?.isAdmin),
         selectedMembership: membership,
       },
+      lessonPlannerEnabled,
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),
@@ -374,12 +387,13 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
       // Identify user if logged in
       if (data.user) {
         posthog.identify(data.user.id, {
-          email: data.user.email,
+          ...(data.user.email ? { email: data.user.email } : {}),
+          ...(data.user.username ? { username: data.user.username } : {}),
           name: data.user.name,
           membership_id: data.user.selectedMembership?.id,
           is_admin: data.user.isAdmin,
           is_owner: data.user.selectedMembership?.isOrgOwner,
-          ...omit(data.user, ['id', 'email', 'name']),
+          ...omit(data.user, ['id', 'email', 'name', 'username']),
         });
       }
     }

@@ -1,11 +1,6 @@
 import { teacherNotesEnabled } from './teacher-notes';
 import { buildGradingPromptShape } from './grading-prompt-shape';
 import type { ResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
-import { buildParagraphModeGradingBlock } from '~/domain/assignment-types/daily-pages-paragraph-modes';
-import {
-  buildColdWriteGradingBlock,
-  buildWritingTimeGradingBlock,
-} from './writing-time';
 import {
   getGradingAssistantStrictnessInstructions,
   getGradingAssistantStrictnessLabel,
@@ -28,6 +23,7 @@ export const GRADING_ASSISTANT_PROMPT_VARIABLES = [
   'assignment_type',
   'assignment_prompt',
   'document',
+  'grading_context',
   'grading_instructions',
   'grading_response_instructions',
   'max_score',
@@ -40,6 +36,19 @@ export const GRADING_ASSISTANT_PROMPT_VARIABLES = [
   'student_first_name',
   'system_instructions',
 ] as const;
+
+/**
+ * What the grader is told when the tutor was off for the assignment: a cold
+ * write, the student's unassisted writing. Absent when the tutor was on, so
+ * those prompts are unchanged.
+ */
+function buildColdWriteGradingBlock(coldWrite: boolean | null | undefined): string {
+  if (coldWrite !== true) return '';
+  return [
+    'Cold write: the tutor was switched off for this assignment, so this is the student\'s own unassisted writing.',
+    'Hold it to the same rubric, and do not refer the student to the tutor in your feedback.',
+  ].join('\n');
+}
 
 const PROMPT_VARIABLE_PATTERN = /{{\s*([a-z0-9_]+)\s*}}/gi;
 
@@ -123,9 +132,9 @@ export function compileGradingAssistantInvocation({
   strictnessLevel,
   documentText,
   assignmentPrompt,
-  writingTimeMinutes,
+  gradingContext,
   coldWrite,
-  paragraphMode,
+  assignmentPointTotal,
 }: {
   gradingConfig: Pick<
     ResolvedAssignmentTypeGradingConfig,
@@ -138,20 +147,24 @@ export function compileGradingAssistantInvocation({
   > & Partial<
     Pick<
       ResolvedAssignmentTypeGradingConfig,
-      'outputSchemaSnapshot' | 'gradingMode' | 'rubricTotalPoints'
+      'outputSchemaSnapshot' | 'gradingMode' | 'rubricTotalPoints' | 'scoringMode'
     >
   >;
   studentFirstName: string;
   strictnessLevel: GradingAssistantStrictnessLevel;
   documentText: string;
   assignmentPrompt?: string | null;
-  /** How long the student had to write; null or absent leaves the prompt as it was. */
-  writingTimeMinutes?: number | null;
+  /**
+   * What this particular assignment adds for the grader and the student never
+   * saw: how to read the rubric for it, and any notes the teacher gave.
+   * Absent for every assignment that supplies none, which keeps the payload
+   * for every existing type byte-identical.
+   */
+  gradingContext?: string | null;
   /** True when the tutor was off: a cold write. Absent or false changes nothing. */
   coldWrite?: boolean | null;
-  /** The Daily Pages paragraph type the teacher chose; absent changes nothing. */
-  /** One type or several; Daily Pages paragraph types to read for. */
-  paragraphMode?: string | readonly string[] | null;
+  /** The assignment's point total, for holistic scoring prompts. */
+  assignmentPointTotal?: number | null;
 }): CompiledGradingAssistantInvocation {
   const { minScore, maxScore } = gradingConfig;
   const promptShape = buildGradingPromptShape({
@@ -161,6 +174,8 @@ export function compileGradingAssistantInvocation({
     studentFirstName,
     teacherNotesEnabled: teacherNotesEnabled(gradingConfig.outputSchemaSnapshot),
     gradingMode: gradingConfig.gradingMode,
+    scoringMode: gradingConfig.scoringMode,
+    assignmentPointTotal: assignmentPointTotal ?? null,
   });
   const strictnessLabel = getGradingAssistantStrictnessLabel(strictnessLevel);
   const strictnessInstructions =
@@ -181,21 +196,18 @@ export function compileGradingAssistantInvocation({
   const template =
     gradingConfig.promptTemplate ??
     defaultGradingAssistantPromptTemplate(gradingConfig);
-  // The conditions the teacher set for the writing — how long, whether the
-  // tutor was there, and what kind of paragraph was asked for — travel
-  // together as one block.
-  const writingTimeBlock = [
-    buildWritingTimeGradingBlock(writingTimeMinutes),
-    buildColdWriteGradingBlock(coldWrite),
-    buildParagraphModeGradingBlock(paragraphMode),
-  ]
-    .filter(Boolean)
-    .join('\n\n');
+  // The conditions the teacher set for the writing: today only whether the
+  // tutor was there. (Daily Pages writing time and paragraph type were
+  // removed before release; whatever an old assignment stored is never read.)
+  // The template variable keeps its original name, `writing_time`, so a
+  // managed template that places it still renders.
+  const writingConditionsBlock = buildColdWriteGradingBlock(coldWrite);
   const variables = {
     assignment_type: gradingConfig.rubricTotalPoints
       ? `${gradingConfig.label} (total rubric points: ${gradingConfig.rubricTotalPoints})`
       : gradingConfig.label,
     assignment_prompt: assignmentPrompt?.trim() || 'No assignment prompt was provided.',
+    grading_context: gradingContext?.trim() ?? '',
     grading_response_instructions: promptShape.systemPrompt,
     document: documentText,
     grading_instructions: gradingInstructions,
@@ -208,7 +220,7 @@ export function compileGradingAssistantInvocation({
     strictness_label: strictnessLabel,
     student_first_name: studentFirstName,
     system_instructions: assignmentTypeSystemInstructions ?? '',
-    writing_time: writingTimeBlock,
+    writing_time: writingConditionsBlock,
   };
   const renderedSystem = renderPromptTemplate(template.systemMessage, variables);
   // Older managed templates do not carry the response-contract variable. The
@@ -222,18 +234,26 @@ export function compileGradingAssistantInvocation({
   const userMessageWithPrompt = assignmentPrompt?.trim() && !/{{\s*assignment_prompt\s*}}/i.test(template.userMessage)
     ? `${renderedUserMessage}\n\nAssignment prompt: ${assignmentPrompt.trim()}`
     : renderedUserMessage;
-  // No template carries writing_time yet, and none needs to: with no writing
-  // time the block is empty and the message is untouched. With one, it goes in
-  // just ahead of the essay, beside the other things the teacher decided.
+  // No template carries writing_time yet, and none needs to: with no
+  // conditions the block is empty and the message is untouched. With one, it
+  // goes in just ahead of the essay, beside the other things the teacher decided.
   const userMessage =
-    writingTimeBlock && !/{{\s*writing_time\s*}}/i.test(template.userMessage)
-      ? insertBeforeEssay(userMessageWithPrompt, writingTimeBlock)
+    writingConditionsBlock && !/{{\s*writing_time\s*}}/i.test(template.userMessage)
+      ? insertBeforeEssay(userMessageWithPrompt, writingConditionsBlock)
       : userMessageWithPrompt;
+  // Same story as the assignment prompt above: no existing template carries a
+  // slot for what an assignment adds for the grader, so it is appended rather
+  // than dropped. An assignment that supplies none appends nothing, which
+  // leaves every other type's payload exactly as it was.
+  const userMessageWithContext =
+    gradingContext?.trim() && !/{{\s*grading_context\s*}}/i.test(template.userMessage)
+      ? `${userMessage}\n\n${gradingContext.trim()}`
+      : userMessage;
 
   return {
     system,
-    userMessage,
-    messages: [{ role: 'user', content: userMessage }],
+    userMessage: userMessageWithContext,
+    messages: [{ role: 'user', content: userMessageWithContext }],
     maxTokens: 900,
   };
 }

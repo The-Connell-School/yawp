@@ -1,54 +1,68 @@
-import { describe, expect, test } from 'bun:test';
-import { renderToString } from 'react-dom/server';
-import { createRoutesStub } from 'react-router';
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
 
-import { DocumentLink } from './document-link';
+try {
+  GlobalRegistrator.register();
+} catch {
+  // Multiple Bun test files can share the same process.
+}
 
-function renderLink(overrides: Record<string, unknown> = {}) {
-  const doc = {
-    id: 'doc-1',
-    title: 'Argue a position',
-    html: '<p>Draft</p>',
-    updatedAt: new Date('2026-10-01T12:00:00Z'),
-    assignmentModuleSessions: [{ assignmentModule: { title: 'Daily Pages' } }],
-    submissions: [],
-    assignment: null,
-    group: null,
-    ...overrides,
-  } as any;
-  const Stub = createRoutesStub([
-    {
-      path: '/',
-      Component: () => <DocumentLink doc={doc} exitTo="/app" isStudentView />,
-    },
+(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+
+import { afterEach, describe, expect, it } from 'bun:test';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { createMemoryRouter, RouterProvider } from 'react-router';
+
+const { DocumentLink } = await import('./document-link');
+
+let root: Root | null = null;
+
+afterEach(() => {
+  if (root) act(() => root!.unmount());
+  root = null;
+  document.body.innerHTML = '';
+});
+
+function render(props: Parameters<typeof DocumentLink>[0]) {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const router = createMemoryRouter([
+    { path: '/', element: <DocumentLink {...props} /> },
   ]);
-  return renderToString(<Stub initialEntries={['/']} />);
+  root = createRoot(container);
+  act(() => {
+    root!.render(<RouterProvider router={router} />);
+  });
+  return container;
 }
 
-/** Every <button> opened before the matching </button> closes it. */
-function hasNestedButton(html: string): boolean {
-  let depth = 0;
-  for (const [tag] of html.matchAll(/<\/?button\b/g)) {
-    depth += tag === '<button' ? 1 : -1;
-    if (depth > 1) return true;
-  }
-  return false;
-}
+const doc = {
+  id: 'doc-1',
+  title: 'Honest and kind — Sam',
+  html: '<p>Yes, I think it is possible.</p>',
+  updatedAt: new Date('2026-10-07T12:00:00Z'),
+  assignmentModuleSessions: [{ assignmentModule: { title: 'Daily Pages' } }],
+  submissions: [],
+} as any;
 
-/**
- * A browser will not put a <button> inside a <button>: it closes the first
- * before opening the second, so the page it builds from the server's HTML
- * no longer matches what React renders, and hydration fails for the whole
- * page. The document card's menu used to render exactly that.
- */
 describe('DocumentLink', () => {
-  test('renders the card with its title and menu', () => {
-    const html = renderLink();
-    expect(html).toContain('Argue a position');
-    expect(html).toContain('<button');
+  // A button inside a link (or inside another button) is invalid HTML. React
+  // rejected the server markup over it and re-rendered every student page that
+  // lists documents on the client.
+  it('keeps the actions menu outside the link and never nests buttons', () => {
+    const container = render({ doc, exitTo: '/app' });
+
+    expect(container.querySelector('a')).not.toBeNull();
+    expect(container.querySelector('a button, a a')).toBeNull();
+    expect(container.querySelector('button button')).toBeNull();
+    expect(container.querySelector('button[aria-haspopup="menu"]')).not.toBeNull();
   });
 
-  test('never nests a button inside a button', () => {
-    expect(hasNestedButton(renderLink())).toBe(false);
+  it('still opens the document from the card', () => {
+    const container = render({ doc, exitTo: '/app' });
+
+    const link = container.querySelector('a');
+    expect(link?.textContent).toContain('Honest and kind — Sam');
+    expect(link?.getAttribute('href')).toContain('doc-1');
   });
 });

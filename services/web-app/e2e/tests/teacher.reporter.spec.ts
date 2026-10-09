@@ -2,6 +2,7 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
+const STUDENT_PASSWORD = 'johndoe';
 
 async function setReporterEnabled(organizationId: string, enabled: boolean) {
   const prisma = createE2EPrismaClient();
@@ -21,7 +22,7 @@ test.describe('Yawp Reporter', () => {
     await setReporterEnabled(e2eContext.organizationId, false);
   });
 
-  test('is visible and reachable when the org flag is off', async ({
+  test('stays in the sidebar for SCHOOL orgs when reporterEnabled is off', async ({
     page,
     signIn,
     e2eContext,
@@ -29,10 +30,17 @@ test.describe('Yawp Reporter', () => {
     await setReporterEnabled(e2eContext.organizationId, false);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
-    // Sidebar entry is present.
     await expect(page.getByRole('link', { name: 'Reporter' })).toBeVisible();
+  });
 
-    // Direct navigation reaches the reporter.
+  test('opens /app/reporter when reporterEnabled is false', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setReporterEnabled(e2eContext.organizationId, false);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
     await page.goto('/app/reporter');
     await expect(page).toHaveURL(/\/app\/reporter/);
   });
@@ -83,6 +91,79 @@ test.describe('Yawp Reporter', () => {
     ).toBeVisible();
     // Composer clears after sending.
     await expect(composer).toHaveValue('');
+  });
+
+  test('opens the how-it-works guide from the Reporter header', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto('/app/reporter');
+
+    await page.getByRole('link', { name: 'See how it works' }).click();
+    await expect(page).toHaveURL(/\/app\/reporter\/how-it-works$/);
+
+    await expect(
+      page.getByRole('heading', { level: 1, name: /ask about your classes/i })
+    ).toBeVisible();
+    // The starter cards come first, so a reader sees what Reporter can run.
+    const reports = page.getByTestId('guide-reports');
+    await expect(reports).toContainText(/growth report for a student/i);
+    await expect(reports).toContainText(/who needs attention/i);
+    await expect(
+      page.getByRole('heading', {
+        level: 2,
+        name: /track student growth over time/i,
+      })
+    ).toBeVisible();
+    await expect(page.getByTestId('guide-uses')).toContainText(
+      /parent-teacher conferences/i
+    );
+    // The section a school approving Reporter reads first.
+    const wont = page.getByTestId('guide-wont');
+    await expect(wont).toContainText(/change, give, or release grades/i);
+    await expect(wont).toContainText(/other teachers’ classes/i);
+    // The clips are served from the app, not an outside site.
+    await expect(page.locator('video source').first()).toHaveAttribute(
+      'src',
+      /^\/img\/reporter-guide\/.+\.mp4$/
+    );
+
+    await page.getByRole('link', { name: /back to reporter/i }).click();
+    await expect(page).toHaveURL(/\/app\/reporter$/);
+  });
+
+  test('keeps the how-it-works guide teacher-only', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, STUDENT_PASSWORD);
+    await page.goto('/app/reporter/how-it-works');
+    await expect(page).toHaveURL(/\/app(?!\/reporter)/);
+  });
+
+  test('keeps the how-it-works guide in bounds on a phone', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    await page.goto('/app/reporter');
+    // Icon only at this width, still named for anyone using a screen reader.
+    await expect(
+      page.getByRole('link', { name: 'See how it works' })
+    ).toBeVisible();
+
+    await page.goto('/app/reporter/how-it-works');
+    await expect(page.getByTestId('guide-wont')).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
   });
 
   test('keeps Reporter controls in bounds at desktop and mobile breakpoints', async ({

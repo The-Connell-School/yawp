@@ -1,5 +1,4 @@
-import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
@@ -23,18 +22,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
-import {
-  PARAGRAPH_MODE_FIELD,
-  enabledParagraphModes,
-  offersParagraphModesForKind,
-  parseParagraphMode,
-} from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { useUser } from '~/hooks/useUser.js';
+import { useRouteLoaderData } from 'react-router';
+import type { Route as RootRoute } from '../../+types/root';
 import {
   createDocumentForAssignmentType,
   DocumentCreationError,
@@ -43,6 +35,7 @@ import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server'
 import { listSavedThesisPrompts } from '~/domain/thesis-prompts/saved-prompts.server';
 import { listSavedDailyPagesPrompts } from '~/domain/daily-pages-prompts/saved-prompts.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { stripUnreleasedGradeFromSubmissionSummaries } from '~/domain/submissions/student-submission-grade-visibility.server';
 import {
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
@@ -53,7 +46,6 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { AboutDailyPages } from './about-daily-pages/about-daily-pages';
-import { ParagraphTypeGuides } from '~/components/daily-pages/paragraph-type-guide';
 import { ApHistoryLibrary } from './ap-history-library';
 import { ApPromptsLibrary } from './ap-history/ap-prompts-library';
 import { ApHistoryGradingBreakdown } from './ap-history/grading-breakdown';
@@ -67,6 +59,8 @@ import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
+import { AboutExitTicket } from './about-exit-ticket/about-exit-ticket';
+import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
 import {
   resolvePromptLibraryVariant,
   usesOpenEndedLibrary,
@@ -81,8 +75,6 @@ import {
   deriveTitleFromPrompt,
   readFilters as readShortFormFilters,
   savedPromptToLibraryEntry as savedShortFormPromptToLibraryEntry,
-  onlySwitchedOnMoves,
-  paragraphModesForMoves,
   toLibraryEntries as toShortFormLibraryEntries,
   type ShortFormPrompt,
 } from './short-form-prompts-library/data';
@@ -102,6 +94,12 @@ import {
   toLibraryEntries,
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
+import { FROM_LESSON_PARAM } from '~/domain/lesson-planner/daily-pages-block';
+import {
+  EXIT_TICKET_PARAMS,
+  readExitTicketPrefill,
+  type ExitTicketPrefill,
+} from '~/domain/lesson-planner/exit-ticket-block';
 import { ThesisPromptsLibrary } from './thesis-prompts-library/thesis-prompts-library';
 import { ThesisPromptGenerator } from './thesis-prompts-library/thesis-prompt-generator';
 import { ThesisTeacherDirections } from './thesis-prompts-library/thesis-teacher-directions';
@@ -116,14 +114,18 @@ import {
 } from './thesis-prompts-library/data';
 import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
+import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 
-const THESIS_ESSAY_TITLE = 'the thesis-driven essay';
+/** How the Lesson Planner hands a written warm-up to this page. */
+const NEW_PROMPT_PARAM = 'newPrompt';
+
 const ALL_PROMPTS = toLibraryEntries(promptsRaw as LibraryPrompt[]);
 const ALL_THESIS_PROMPTS = toThesisLibraryEntries(
   thesisPromptsRaw as ThesisPrompt[]
 );
-const ALL_SHORT_FORM_PROMPTS = onlySwitchedOnMoves(
-  toShortFormLibraryEntries(shortFormPromptsRaw as ShortFormPrompt[])
+const ALL_SHORT_FORM_PROMPTS = toShortFormLibraryEntries(
+  shortFormPromptsRaw as ShortFormPrompt[]
 );
 const SERIOUSNESS_ORDER: PromptSeriousness[] = [
   'playful',
@@ -138,6 +140,8 @@ type AssignmentTypeDetailRow = {
   id: string;
   title: string;
   description: string | null;
+  kind: string | null;
+  rubric: { name: string } | null;
   systemKey: string | null;
   collaborationSupported: boolean;
   image: { id: string } | null;
@@ -420,6 +424,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         id: true,
         title: true,
         description: true,
+        kind: true,
+        rubric: { select: { name: true } },
         systemKey: true,
         collaborationSupported: true,
         image: { select: { id: true } },
@@ -445,7 +451,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  const normalizedTitle = assignmentType.title.trim().toLowerCase();
   // Class Starter and Daily Pages share the open-ended prompt library; which
   // of the two this is decides the directions shown above it.
   const promptLibraryVariant = resolvePromptLibraryVariant({
@@ -458,7 +463,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isTeacher && usesOpenEndedLibrary(promptLibraryVariant);
   const showsShortFormLibrary =
     isTeacher && usesShortFormLibrary(promptLibraryVariant);
-  const isThesisEssay = normalizedTitle === THESIS_ESSAY_TITLE;
+  const isThesisEssay = isThesisDrivenEssayTitle(assignmentType.title);
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   // "My prompts": prompts this teacher generated and kept, shown in the same
@@ -523,21 +528,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // "My prompts": prompts this teacher generated and kept, shown in the same
   // library alongside the fixed corpus and filterable on their own.
   const savedThesisPrompts =
-    profile.role === "TEACHER" && isThesisEssay
+    profile.role === 'TEACHER' && isThesisEssay
       ? await listSavedThesisPrompts({
           membershipId: profile.id,
           assignmentTypeId: assignmentType.id,
         })
       : [];
   const thesisLibraryEntries =
-    profile.role === "TEACHER" && isThesisEssay
+    profile.role === 'TEACHER' && isThesisEssay
       ? [
           ...savedThesisPrompts.map(savedThesisPromptToLibraryEntry),
           ...ALL_THESIS_PROMPTS,
         ]
       : [];
   const thesisPromptLibrary =
-    profile.role === "TEACHER" && isThesisEssay
+    profile.role === 'TEACHER' && isThesisEssay
       ? {
           prompts: applyThesisFilters(
             thesisLibraryEntries,
@@ -570,26 +575,44 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentTypeGradesGrammar = (
     await getGrammarGradingAssignmentTypeIds([assignmentType.id])
   ).has(assignmentType.id);
-  const creationTypeDefaults = (
-    await getCreationTypeDefaultsById([assignmentType.id])
-  ).get(assignmentType.id);
-  const assignmentTypeDefaultWritingTimeMinutes =
-    creationTypeDefaults?.defaultWritingTimeMinutes ?? null;
-  const assignmentTypeOffersParagraphModes =
-    creationTypeDefaults?.offersParagraphModes ?? false;
+
+  const sanitizeDocumentListForStudents = <
+    T extends {
+      submissions: Array<
+        { releasedAt?: Date | string | null } & Record<string, unknown>
+      >;
+    },
+  >(
+    rows: T[]
+  ) =>
+    rows.map((document) => ({
+      ...document,
+      submissions: stripUnreleasedGradeFromSubmissionSummaries(
+        document.submissions
+      ),
+    }));
+
+  const isStudent = profile.role === 'STUDENT';
 
   return dataResponse({
     assignmentType,
     assignmentTypeGradesGrammar,
-    assignmentTypeDefaultWritingTimeMinutes,
-    assignmentTypeOffersParagraphModes,
-    documents,
-    archivedDocuments,
+    documents: isStudent
+      ? sanitizeDocumentListForStudents(documents)
+      : documents,
+    archivedDocuments: isStudent
+      ? sanitizeDocumentListForStudents(archivedDocuments)
+      : archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
     shortFormPromptLibrary,
     thesisPromptLibrary,
     apHistoryLibrary,
+    // Teacher-facing guidance, so it follows the same role gate the other
+    // assignment types' directions do.
+    showAboutExitTicket:
+      profile.role === 'TEACHER' &&
+      isExitTicketAssignmentType(assignmentType),
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -624,7 +647,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           id: params.id,
           archivedAt: null,
         },
-        select: { id: true, systemKey: true, kind: true },
+        select: { id: true, systemKey: true },
       })
     : null;
 
@@ -649,28 +672,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
-  // A teacher testing Daily Pages names the paragraph type the document
-  // practices, so the tutor and grader read it as they would an assignment of
-  // that type. Blank is "any kind of paragraph", which changes nothing.
-  let paragraphMode: string | null = null;
-  if (offersParagraphModesForKind(assignmentType.kind)) {
-    const formData = await request.formData().catch(() => new FormData());
-    const parsed = parseParagraphMode(formData);
-    if (!parsed.success) {
-      return redirectWithToast(`/app/assignment-types/${params.id}`, {
-        type: 'error',
-        description: parsed.message,
-      });
-    }
-    paragraphMode = parsed.value;
-  }
-
   let documentId = '';
   try {
     const created = await createDocumentForAssignmentType({
       membershipId: profile.id,
       assignmentTypeId: assignmentType.id,
-      ...(paragraphMode ? { paragraphMode } : {}),
     });
     documentId = created.documentId;
   } catch (creationError) {
@@ -698,31 +704,45 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
 }
 
+/**
+ * Whether the modules accordion earns its place on this page.
+ *
+ * Every assignment type carries at least one module — it is what a direct
+ * document is created from — but an exit ticket's is a single row whose
+ * description restates the prompt, sitting directly under directions that
+ * already explain the whole thing. Hidden there rather than deleted, because
+ * the module itself is still what New -> Document builds from.
+ */
+export function showModulesAccordion(
+  assignmentType: { kind?: string | null },
+  moduleCount: number
+): boolean {
+  if (moduleCount === 0) return false;
+  return !isExitTicketAssignmentType(assignmentType);
+}
+
 export default function AppAssignmentTypesIdRoute() {
   const user = useUser();
-  const [searchParams] = useSearchParams();
+  const lessonPlannerEnabled =
+    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
+      ?.lessonPlannerEnabled ?? false;
   const data = useLoaderData<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const hasModules = data.assignmentType.assignmentModules.length > 0;
+  const modulesVisible = showModulesAccordion(
+    data.assignmentType,
+    data.assignmentType.assignmentModules.length
+  );
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
-  const docParagraphModeRef = useRef<HTMLInputElement>(null);
-  const createDocument = (paragraphMode = '') => {
-    if (docParagraphModeRef.current) {
-      docParagraphModeRef.current.value = paragraphMode;
-    }
-    docFormRef.current?.requestSubmit();
-  };
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
   const [isPromptGeneratorOpen, setIsPromptGeneratorOpen] = useState(false);
   const [customEssayType, setCustomEssayType] =
     useState<CustomEssayType | null>(null);
   const [libraryPrompt, setLibraryPrompt] = useState('');
-  // A picked short-form prompt arrives with its paragraph types ticked.
-  const [libraryParagraphModes, setLibraryParagraphModes] = useState<
-    string[]
-  >([]);
+  const [plannedExitTicket, setPlannedExitTicket] =
+    useState<ExitTicketPrefill | null>(null);
   const [apHistoryEntry, setApHistoryEntry] = useState<{
     externalKey: string;
     title: string;
@@ -731,12 +751,65 @@ export default function AppAssignmentTypesIdRoute() {
     sources?: ApHistorySourceCardData[];
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
+
+  // The Lesson Planner sends a teacher here with a warm-up it wrote, to be
+  // assigned rather than retyped. Open the sheet on it once, then drop the
+  // param so a refresh (or the back button) does not reopen it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const incomingPrompt = searchParams.get(NEW_PROMPT_PARAM);
+  // Kept in the URL after the prompt is consumed: a teacher who followed a
+  // button out of a half-finished lesson needs the way back to still be there
+  // once the sheet has done its job.
+  const fromLesson = searchParams.get(FROM_LESSON_PARAM);
+  useEffect(() => {
+    if (!incomingPrompt) return;
+    setLibraryPrompt(incomingPrompt);
+    setApHistoryEntry(null);
+    setIsAssignmentSheetOpen(true);
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete(NEW_PROMPT_PARAM);
+        return next;
+      },
+      { replace: true, preventScrollReset: true }
+    );
+  }, [incomingPrompt, setSearchParams]);
+
   const showShortFormLibrary = data.shortFormPromptLibrary != null;
+  const showDailyPagesAbout =
+    isTeacher && data.assignmentType.kind === 'daily_pages';
   // Daily Pages carries one module, whose blurb is freewrite-era copy telling
   // students to throw ideas around — which the about section directly above it
   // now contradicts. The module row itself stays: documents are created inside
   // it, and `hasModules` still gates New → Document.
-  const showModules = hasModules && !showShortFormLibrary;
+  const showModules = modulesVisible && !showShortFormLibrary;
+  // The same door, for the other end of the lesson: the planner sends a
+  // teacher here with the exit ticket its plan ended on, already answered.
+  // They still read the composed prompt in the sheet before a class sees it.
+  const incomingExitTicketMode = searchParams.get(EXIT_TICKET_PARAMS.mode);
+  const incomingExitTicket = useMemo(
+    () => (incomingExitTicketMode ? readExitTicketPrefill(searchParams) : null),
+    [incomingExitTicketMode, searchParams]
+  );
+  useEffect(() => {
+    if (!incomingExitTicketMode) return;
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        for (const key of Object.values(EXIT_TICKET_PARAMS)) next.delete(key);
+        return next;
+      },
+      { replace: true, preventScrollReset: true }
+    );
+    // A hand-edited link that describes no ticket we can build opens nothing,
+    // rather than a sheet answered with something nobody chose.
+    if (!incomingExitTicket) return;
+    setPlannedExitTicket(incomingExitTicket);
+    setApHistoryEntry(null);
+    setIsAssignmentSheetOpen(true);
+  }, [incomingExitTicketMode, incomingExitTicket, setSearchParams]);
+
   const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -755,24 +828,35 @@ export default function AppAssignmentTypesIdRoute() {
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
       <div className="mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5">
         <div className="mb-4 flex justify-between gap-2">
+          {/* Arriving from a lesson, the way back is to that lesson. The
+              planner embeds this page's creator inside a plan, so a teacher
+              gets here mid-lesson and "Back to dashboard" strands them. */}
           <Button asChild variant="outline">
-            <Link to="/app" className="w-fit">
-              <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
-            </Link>
+            {fromLesson && lessonPlannerEnabled ? (
+              <Link
+                to={`/app/lesson-planner?c=${fromLesson}`}
+                className="w-fit"
+                data-testid="back-to-lesson"
+              >
+                <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to your lesson
+              </Link>
+            ) : (
+              <Link to="/app" className="w-fit">
+                <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
+              </Link>
+            )}
           </Button>
 
           {isTeacher ? (
-            <>
+            <div className="flex items-center gap-2">
+              {isThesisDrivenEssayTitle(data.assignmentType.title) ? (
+                <SeeHowItWorksLink
+                  to={`/app/assignment-types/${data.assignmentType.id}/how-it-works`}
+                />
+              ) : null}
               {canCreateDirectDocument ? (
                 <>
-                  <Form method="post" ref={docFormRef} className="hidden">
-                    <input
-                      ref={docParagraphModeRef}
-                      type="hidden"
-                      name={PARAGRAPH_MODE_FIELD}
-                      defaultValue=""
-                    />
-                  </Form>
+                  <Form method="post" ref={docFormRef} className="hidden" />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button type="button" className="w-fit">
@@ -780,45 +864,16 @@ export default function AppAssignmentTypesIdRoute() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {data.assignmentTypeOffersParagraphModes ? (
-                        // Daily Pages: a test document names the paragraph
-                        // type it practices, so the tutor and grader read it
-                        // as they would an assignment of that type.
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger
-                            disabled={!hasModules || isLoading}
-                          >
-                            Document
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent>
-                            <DropdownMenuItem
-                              onSelect={() => createDocument('')}
-                            >
-                              Any kind of paragraph
-                            </DropdownMenuItem>
-                            {enabledParagraphModes().map((mode) => (
-                              <DropdownMenuItem
-                                key={mode.key}
-                                onSelect={() => createDocument(mode.key)}
-                              >
-                                {mode.label}
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                      ) : (
-                        <DropdownMenuItem
-                          disabled={!hasModules || isLoading}
-                          onSelect={() => createDocument()}
-                        >
-                          Document
-                        </DropdownMenuItem>
-                      )}
+                      <DropdownMenuItem
+                        disabled={!hasModules || isLoading}
+                        onSelect={() => docFormRef.current?.requestSubmit()}
+                      >
+                        Document
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         disabled={data.teacherClasses.length === 0}
                         onSelect={() => {
                           setLibraryPrompt('');
-                          setLibraryParagraphModes([]);
                           setApHistoryEntry(null);
                           setIsAssignmentSheetOpen(true);
                         }}
@@ -866,22 +921,18 @@ export default function AppAssignmentTypesIdRoute() {
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
+                assignmentTypeKind={data.assignmentType.kind}
+                assignmentTypeRubricName={data.assignmentType.rubric?.name ?? null}
                 assignmentTypeCollaborationSupported={
                   data.assignmentType.collaborationSupported
                 }
                 assignmentTypeGradesGrammar={data.assignmentTypeGradesGrammar}
-                assignmentTypeDefaultWritingTimeMinutes={
-                  data.assignmentTypeDefaultWritingTimeMinutes
-                }
-                assignmentTypeOffersParagraphModes={
-                  data.assignmentTypeOffersParagraphModes
-                }
                 teacherClasses={assignmentSheetClasses}
                 initialClassId={initialApHistoryClassId}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
-                initialParagraphModes={libraryParagraphModes}
+                plannedExitTicket={plannedExitTicket}
                 titleRequired={showThesisLibrary}
                 apHistoryEntry={apHistoryEntry}
               />
@@ -921,7 +972,7 @@ export default function AppAssignmentTypesIdRoute() {
                   essayType={customEssayType ?? 'dbq'}
                 />
               ) : null}
-            </>
+            </div>
           ) : null}
         </div>
         <div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
@@ -939,11 +990,11 @@ export default function AppAssignmentTypesIdRoute() {
             </p>
           </div>
         </div>
+        {data.showAboutExitTicket ? <AboutExitTicket /> : null}
         {data.promptLibrary ? (
           <TeacherDirections variant={data.promptLibrary.variant} />
         ) : null}
-        {showShortFormLibrary ? <AboutDailyPages /> : null}
-        {showShortFormLibrary ? <ParagraphTypeGuides /> : null}
+        {showDailyPagesAbout ? <AboutDailyPages /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {data.apHistoryLibrary?.mode === 'teacher' ? (
           <ApHistoryTeacherDirections />
@@ -1005,12 +1056,9 @@ export default function AppAssignmentTypesIdRoute() {
               facets={data.shortFormPromptLibrary.facets}
               optionCounts={data.shortFormPromptLibrary.optionCounts}
               totalCount={data.shortFormPromptLibrary.totalCount}
-              onSelectPrompt={(prompt, entry) => {
+              onSelectPrompt={(prompt) => {
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
-                setLibraryParagraphModes(
-                  paragraphModesForMoves(entry.cognitiveMoves)
-                );
                 setIsAssignmentSheetOpen(true);
               }}
             />

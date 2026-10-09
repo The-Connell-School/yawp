@@ -1,5 +1,4 @@
 import type { Prisma } from '@app/prisma';
-import { getParagraphMode } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { prisma } from '~/utils/db.server';
 
 export class DocumentCreationError extends Error {}
@@ -95,8 +94,6 @@ type CreateDocumentInput = {
   assignmentId?: string | null;
   classAssignmentId?: string | null;
   apHistorySnapshot?: unknown;
-  /** The Daily Pages paragraph type a standalone document practices. */
-  paragraphMode?: string | null;
 };
 
 type CreatedDocument = {
@@ -229,16 +226,12 @@ export async function createDocumentForAssignmentType(
     }
   }
 
-  // Only a switched-on type is recorded; anything else is no type.
-  const paragraphMode = getParagraphMode(input.paragraphMode);
-
   const document = await prisma.document.create({
     data: {
       membershipId: input.membershipId,
       text: '',
       html: '',
-      // A typed test document says which type it practices.
-      title: paragraphMode?.label ?? '',
+      title: '',
       assignmentTypeId: input.assignmentTypeId,
       ...(input.assignmentId ? { assignmentId: input.assignmentId } : {}),
       ...(input.classAssignmentId
@@ -248,9 +241,6 @@ export async function createDocumentForAssignmentType(
         ? {
             apHistorySnapshot: input.apHistorySnapshot as Prisma.InputJsonValue,
           }
-        : {}),
-      ...(paragraphMode
-        ? { paragraphMode: paragraphMode.key, paragraphModes: [paragraphMode.key] }
         : {}),
       assignmentModuleSessions: {
         create: buildAssignmentModuleSessionCreateData(assignmentModules),

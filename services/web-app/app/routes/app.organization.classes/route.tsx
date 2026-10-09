@@ -42,6 +42,7 @@ import {
   setOrganizationClassesTableCookie,
   getOrganizationClassesTableCookieValue,
 } from '~/utils/cookies.server';
+import { assertCanCreateClassForOrganizationPlan } from '~/utils/assignment-quota.server';
 import { prisma } from '~/utils/db.server';
 import { SearchInput } from '~/components/search-input';
 import {
@@ -63,6 +64,7 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import { generateClassCode } from '~/utils/class';
+import { studentJoinTokenForClassCreate } from '~/utils/class-student-join-token.server';
 import {
   currentSchoolYear,
   selectableSchoolYears,
@@ -351,6 +353,7 @@ export async function action({ request }: ActionFunctionArgs) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         await prisma.$transaction(async (tx) => {
+          await assertCanCreateClassForOrganizationPlan(tx, profile.organization);
           await tx.class.create({
             data: {
               schoolId,
@@ -359,6 +362,9 @@ export async function action({ request }: ActionFunctionArgs) {
               period,
               title,
               code,
+              studentJoinToken: studentJoinTokenForClassCreate(
+                profile.organization.plan
+              ),
               cardGradientKey: generateClassCardGradientKey(code),
               classArtKey,
               teachers: {
@@ -392,6 +398,12 @@ export async function action({ request }: ActionFunctionArgs) {
             { error: 'Class could not be created.' },
             { status: 400 }
           );
+        }
+        if (
+          error instanceof Error &&
+          error.message.includes('Free classroom accounts include one class')
+        ) {
+          return dataResponse({ error: error.message }, { status: 403 });
         }
         throw error;
       }
@@ -1350,7 +1362,7 @@ function BulkEditClassSheet({
   schools: { id: string; name: string }[];
   teachers: {
     id: string;
-    user: { name: string | null; email: string };
+    user: { name: string | null; email: string | null; username?: string | null };
   }[];
 }) {
   const fetcher = useFetcher({

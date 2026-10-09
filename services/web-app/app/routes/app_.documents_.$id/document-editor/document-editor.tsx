@@ -1,4 +1,3 @@
-import { ParagraphTypeGuideButton } from '~/components/daily-pages/paragraph-type-guide';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
@@ -18,8 +17,6 @@ export type AssignmentPrompt = {
   prompt: string | null;
   promptAttachmentName?: string | null;
   dueDate?: string | Date | null;
-  /** Daily Pages paragraph types; offers "What you're aiming for" when any are set. */
-  paragraphModes?: readonly string[];
 };
 
 type Props = {
@@ -110,7 +107,7 @@ export function DocumentEditor({
   );
 }
 
-export function AssignmentPromptBanner({
+function AssignmentPromptBanner({
   docId,
   assignment,
 }: {
@@ -143,18 +140,13 @@ export function AssignmentPromptBanner({
             </span>
           </div>
         </div>
-        <ParagraphTypeGuideButton
-          paragraphModes={assignment.paragraphModes ?? []}
-        />
         <Button
           type="button"
           variant="secondary"
           size="icon-sm"
           className="min-w-8"
           aria-label={
-            isCollapsed
-              ? 'Expand assignment prompt'
-              : 'Collapse assignment prompt'
+            isCollapsed ? 'Expand assignment prompt' : 'Collapse assignment prompt'
           }
           onClick={() => setIsCollapsed((value) => !value)}
         >

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { anthropic } from '~/services/anthropic';
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import crypto from 'node:crypto';
+import { computeIpHash, logAllowedUsage } from '~/utils/ai-usage-log.server';
 import {
   buildRubricExtractSystemPrompt,
   ExtractedRubricSchema,
@@ -67,8 +69,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const system = buildRubricExtractSystemPrompt();
   const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
   const metadata = {
-    route: '/api/domain/rubric-extract',
+    route: 'routes/api.domain.rubric-extract',
+    requestId,
     source: file instanceof File ? 'pdf' : 'text',
     fileName: file instanceof File ? file.name : undefined,
     fileSize: file instanceof File ? file.size : undefined,
@@ -147,6 +151,16 @@ export async function action({ request }: ActionFunctionArgs) {
         durationMs: Date.now() - startedAt,
         metadata,
       },
+    });
+    await logAllowedUsage({
+      route: metadata.route,
+      feature: 'rubric-extract',
+      requestId,
+      units: 1,
+      ipHash: computeIpHash(request),
+      inputTokens: message.usage?.input_tokens ?? undefined,
+      outputTokens: message.usage?.output_tokens ?? undefined,
+      latencyMs: Date.now() - startedAt,
     });
 
     return dataResponse({

@@ -35,10 +35,6 @@ export type GradingBenchmarkCase = {
     strictness: GradingStrictness;
     /** The assignment prompt the student answered, when the case has one. */
     assignmentPrompt?: string;
-    /** How long the student had to write; absent grades it as untimed. */
-    writingTimeMinutes?: number;
-    /** The Daily Pages paragraph type; absent grades with no type chosen. */
-    paragraphMode?: string;
   };
   expectations: {
     scoreBands: Record<string, { min: number; max: number }>;

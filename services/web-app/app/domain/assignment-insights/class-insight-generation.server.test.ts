@@ -9,6 +9,7 @@ const prisma = {
     updateMany: mock(),
     create: mock(),
   },
+  setting: { findUnique: mock() },
 };
 
 const resolveAssignmentTypeGradingConfig = mock();
@@ -203,9 +204,11 @@ describe('generateClassAssignmentInsight rubric scoping', () => {
 
   /**
    * The summary is told the conditions the class wrote under, read off the
-   * assignment, so a fifteen-minute cold write is not summarized as an essay.
+   * assignment, so a cold write is not summarized as an essay. Daily Pages
+   * paragraph type and writing time were removed: values still stored on an
+   * old assignment are never read.
    */
-  test('passes the writing conditions to the summary', async () => {
+  test('passes the writing conditions to the summary, never a stored paragraph type or writing time', async () => {
     prisma.classAssignment.findFirst.mockResolvedValue({
       id: 'ca-1',
       assignment: {
@@ -232,47 +235,15 @@ describe('generateClassAssignmentInsight rubric scoping', () => {
       generatedByMembershipId: 'teacher-1',
     });
 
-    expect(generateClassInsight.mock.calls[0]?.[0]?.context).toMatchObject({
+    const context = generateClassInsight.mock.calls[0]?.[0]?.context;
+    expect(context).toMatchObject({
       assignmentTitle: 'Juliet argues with a name',
       assignmentTypeTitle: 'Daily Pages',
-      paragraphModeLabel: 'Analyze',
-      writingTimeMinutes: 15,
       coldWrite: true,
       grammarGraded: false,
     });
-  });
-
-  test('names every paragraph type the class wrote under', async () => {
-    prisma.classAssignment.findFirst.mockResolvedValue({
-      id: 'ca-1',
-      assignment: {
-        title: 'Loyalty',
-        tutorEnabled: true,
-        writingTimeMinutes: 15,
-        paragraphMode: 'analyze',
-        paragraphModes: ['analyze', 'argue'],
-        grammarGradingEnabled: true,
-        assignmentType: { title: 'Daily Pages' },
-      },
-      class: {
-        grade: '9',
-        period: '1',
-        school: {
-          organizationId: 'org-1',
-          organization: { classInsightsEnabled: true },
-        },
-      },
-    });
-
-    await generateClassAssignmentInsight({
-      classAssignmentId: 'ca-1',
-      organizationId: 'org-1',
-      generatedByMembershipId: 'teacher-1',
-    });
-
-    expect(generateClassInsight.mock.calls[0]?.[0]?.context).toMatchObject({
-      paragraphModeLabel: 'Analyze and Argue a position',
-    });
+    expect(context).not.toHaveProperty('paragraphModeLabel');
+    expect(context).not.toHaveProperty('writingTimeMinutes');
   });
 
   test('leaves the conditions empty for an assignment that set none', async () => {
@@ -283,8 +254,6 @@ describe('generateClassAssignmentInsight rubric scoping', () => {
     });
 
     expect(generateClassInsight.mock.calls[0]?.[0]?.context).toMatchObject({
-      paragraphModeLabel: null,
-      writingTimeMinutes: null,
       coldWrite: false,
       grammarGraded: null,
     });

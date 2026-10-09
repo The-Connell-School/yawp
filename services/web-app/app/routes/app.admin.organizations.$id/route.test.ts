@@ -186,7 +186,7 @@ describe('admin organization detail route', () => {
     });
   });
 
-  test('disables both rollout gates when their toggles are absent', async () => {
+  test('disables every rollout gate when its toggle is absent', async () => {
     const form = new URLSearchParams();
     form.set('intent', 'update');
     form.set('name', 'Test Org');

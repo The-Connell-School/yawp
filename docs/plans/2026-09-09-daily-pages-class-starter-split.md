@@ -298,19 +298,6 @@ what ships:
 - The seed sets both for seeded environments, so a preview shows the real
   behaviour. Doing the same for a customer is a deliberate content change, like
   the rubric reset beside it.
-- The tutor's one step ("Today's Writing") carries instructions of its own,
-  joined after the module's, and the shipped step was the freewrite tutor
-  (brainstorming, journaling, big praise). Left alone, the tutor was told both
-  to coach one deliberate move and to encourage exploring. The seed replaces
-  it with `DAILY_PAGES_SHORT_FORM_STEP_TUTOR_INSTRUCTIONS` (how a feedback
-  round runs, with the safety boundaries kept word for word) and replaces the
-  welcome, which told students they "may not need or want feedback", with
-  `DAILY_PAGES_SHORT_FORM_WELCOME`. Stored copies of the old welcome in seeded
-  documents are rewritten too. Seeded environments only, like the rest.
-- The tutor's rubric guidance reads the rubric the type is graded on: its
-  saved rubric, or the built-in one for its kind. It used to read only the
-  saved rubric, so the seeded type, which clears its saved rubric on purpose,
-  sent the tutor no rubric guidance at all.
 
 ## Calibrating strictness
 
@@ -328,44 +315,6 @@ outside its band as lenient or strict. Run it after any rubric or instruction
 change, and before a new paragraph type is switched on. The cases are drafts
 until product and an educator approve them.
 
-## What students are aiming for
-
-Each switched-on paragraph type has a guide
-(`app/domain/assignment-types/daily-pages-paragraph-guides.ts`): the three
-parts in plain words, the part students skip most, a model with each part
-marked, a typical miss with the one change that fixes it, and the questions
-the tutor will ask. Teachers read every guide under "The kinds of paragraphs"
-on the Daily Pages page; students open their assignment's guide from "What
-you're aiming for" beside the prompt. One component renders both, so a teacher
-and a student read the same words.
-
-- The guide names the same three parts, in the same order, as the type's
-  tutor coaching, and a test holds that.
-- Its models answer prompts that are not in the library, since a student
-  reads the guide while writing; each miss answers the same prompt as its
-  model so the two can be compared.
-- Switching a type on needs its guide too: a test fails if a switched-on
-  type has none.
-
-## Assessing the tutor
-
-The calibration suite asks whether the grader puts a finished entry in the
-right band. The tutor is the half a student meets first, so it has its own
-suite: `app/domain/ai-evaluation/daily-pages-tutor-evaluation.v1.ts`, one case
-per phase of a draft (no point yet, a quote with no analysis, a revision after
-feedback, a finished paragraph, "just write it for me", a hedged opener, a
-safety disclosure, and Argue's straddle and untested position).
-
-    bun services/web-app/scripts/run-daily-pages-tutor-evaluation.ts --repeat 3
-
-asks the tutor for each reply exactly as the route would (the request is built
-by the same `buildTutorMessages` and `buildTutorSystemPrompt`), then checks it
-by code (brief, one question, no gushing, never "avoid I", nothing behind the
-scenes exposed) and by an LLM judge against the case's criteria, quoting the
-reply as evidence. It prints every phase with the tutor's actual words. The
-tutor runs warm, so `--repeat` reports a pass rate rather than one sample. Run
-it after any change to the module, step or paragraph-type instructions.
-
 ## Per-assignment settings
 
 Four settings on the assignment sheet change how an entry is written or graded,
@@ -381,106 +330,22 @@ and the about page names each:
 
 ## Paragraph types
 
-A teacher can name the moves a Daily Pages entry practices — the **Paragraph
-types** checkboxes on the assignment sheet, stored as
-`Assignment.paragraphModes`. The registry is
-`app/domain/assignment-types/daily-pages-paragraph-modes.ts`.
-
-- **Several types, one paragraph.** A prompt can ask for more than one move
-  ("take a position, and ground it in her words" is Argue and Analyze), so
-  each switched-on type is a checkbox. With several ticked, the grader and
-  tutor get every type's layer, in registry order, under one line saying the
-  paragraph combines them: the grader reads for each, and the tutor coaches
-  whichever the draft needs most first, never asking for two paragraphs. One
-  type ticked gives exactly the single-type text.
-- **Prefilled from the library.** Picking a library prompt ticks its
-  switched-on Cognitive mode tags; the teacher can untick them.
-- **Dual-write.** `paragraphModes String[]` (migration
-  `20261005120000_paragraph_modes_list`) is written beside the old
-  single `paragraphMode`, which keeps the first ticked type. Readers use
-  `effectiveParagraphModes`: the list when it has entries, otherwise the old
-  column, so assignments made before the list read the same. The old column
-  can go once nothing reads it.
-- **Students see each guide.** "What you're aiming for" opens every chosen
-  type's guide, each under its own heading.
+A teacher can name the move a Daily Pages entry practices — the **Paragraph
+type** on the assignment sheet, stored as `Assignment.paragraphMode`. The
+registry is `app/domain/assignment-types/daily-pages-paragraph-modes.ts`.
 
 - **Layers, not new assistants.** A type adds guidance beside the writing time
   in the grading prompt, and coaching after the module's own tutor
   instructions. The rubric is unchanged, so a new type is a text constant and
   tests — not a new grading assistant built by hand.
 - **One type at a time.** Each type has an `enabled` switch; teachers see only
-  the enabled ones and the server refuses the rest. **Analyze** shipped first,
+  the enabled ones and the server refuses the rest. **Analyze** ships first,
   built on Claim-Evidence-Analysis (offered as a guide, not the only form).
-  **Argue a position** is second, built on Position-Reason-Test: a position a
-  reader could disagree with, its strongest reason, and a specific case that
-  tests it. **Compare** is third, built on Basis-Difference-Significance:
-  what two things share, the one difference that matters, shown in both,
-  and what it reveals. Then the remaining four together: **Define a term**
-  (Boundary-Example-Hard Case), **Interpret** (Reading-Evidence-Defense),
-  **Evaluate** (Judgment-Standard-Evidence) and **Synthesize**
-  (Point-Sources-Connection). All seven are now on, and the library shows all
-  31 prompts. Each type ships with its grading and tutor text, its guide, and
-  calibration and tutor-evaluation cases; run the calibration script before
-  merging. `enabled` stays the switch for taking one back off.
-- **Why Compare third.** Of the types still off, it unlocked the most
-  library prompts that were hidden (4 of the 9, taking the library from 22
-  to 26 of 31), and it is the most distinct from the two already on.
-  Interpret has more tags (12) but every one is paired with Analyze, so it
-  unlocks almost nothing new and would be hard to tell apart from Analyze
-  in the tutor's coaching. Define a term and Evaluate are the likely next
-  two.
-- **No type is the default** (all unticked: any kind of paragraph), stored as
-  an empty list and null, which grades and tutors exactly as before. Frozen after creation, like the grammar
+  Before switching the next one on: write its grading and tutor text, add
+  calibration cases for it, run the calibration script, then flip `enabled`.
+- **No type is the default** ("Any kind of paragraph"), stored as null, which
+  grades and tutors exactly as before. Frozen after creation, like the grammar
   toggle.
-- **Compare** reads the difference chosen and its significance in Depth of
-  Thought: a list of likenesses and differences with none chosen to matter
-  is a Venn diagram, not a comparison, and does not rise above Developing.
-  Development of Thought reads the evidence on both sides: two summaries
-  joined by "similarly" are not a comparison, and evidence from only one of
-  the two does not rise above Developing. A comparison that turns on a
-  likeness, where the prompt allows it, is credited the same way.
-- **Define a term, Interpret, Evaluate, Synthesize** each hold one miss down
-  on Depth of Thought and another on Development of Thought:
-  - Define: a dictionary definition (Depth); a boundary tested only by easy
-    cases, never a hard one (Development).
-  - Interpret: a paraphrase or a theme that fits any text (Depth); a reading
-    with none of the passage's own words (Development). The Defense part,
-    why the words point to this reading and not the obvious one, is what
-    separates Interpret from Analyze in the tutor's coaching.
-  - Evaluate: a verdict whose standard is never named (Depth); a standard
-    never measured against a specific case, or swapped partway (Development).
-  - Synthesize: two summaries, or a point one source makes alone (Depth); a
-    second source that only decorates (Development).
-- **Argue a position** reads the position in Depth of Thought and the reason
-  and its test in Development of Thought. A straddle ("both sides have a
-  point") does not rise above Developing on Depth; a position held up only by
-  generalities, never tested against a specific case, does not rise above
-  Developing on Development. One reason developed beats three listed, and a
-  formal counterargument and rebuttal is not required in a timed paragraph —
-  facing the one case that tests the position is the move. A position that
-  comes out of its test narrower is credited, not marked as a retreat.
-- **The prompt library rolls out with the types.** Its Cognitive mode tags
-  are the same moves, so the library shows only switched-on types: a library
-  prompt keeps only its switched-on tags and is hidden when none are left
-  (22 of the 31 prompts show with Analyze and Argue on). Saved prompts are
-  never hidden. Switching a type on brings its prompts back with it.
-- **A teacher can test one type end to end.** On Daily Pages, New → Document
-  asks which type the document practices (any kind of paragraph, or each
-  switched-on type). The choice is stored on `Document.paragraphMode` and
-  `Document.paragraphModes`, which
-  the tutor and the grader read when the document has no assignment; an
-  assignment's own type always wins. A typed document is titled after its
-  type so test documents are easy to tell apart. Null changes nothing.
-- Calibration cases can name a `paragraphMode`, and the live runner grades
-  them with that type's guidance in the prompt. The five Argue cases
-  (`dp-argue-*`), the four Compare cases (`dp-compare-*`) and three each
-  for Define, Interpret, Evaluate and Synthesize (`dp-define-*`,
-  `dp-interpret-*`, `dp-evaluate-*`, `dp-synthesize-*`) do. The
-  Analyze-tagged cases and the older `dp-comparison-one-difference` predate
-  this and are still graded with no type chosen. The tutor evaluation has
-  two Compare cases, one case each for the four later types (a draft
-  missing the part students skip), and one combined case
-  (`combined-argue-from-text`, Analyze and Argue together).
 - The universal tutor persona is still copied into each module row's
   `tutorInstructions`; there is no shared tutor prompt in code. The type layer
   sits on top of whatever the module carries.

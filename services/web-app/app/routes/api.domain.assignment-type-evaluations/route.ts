@@ -23,6 +23,8 @@ import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
+import crypto from 'node:crypto';
+import { computeIpHash } from '~/utils/ai-usage-log.server';
 
 const GeneratedOutputSchema = z.object({
   categories: z
@@ -470,6 +472,13 @@ export async function action({ request }: ActionFunctionArgs) {
         metadata: {
           feature: 'grading-evaluation-case-generation',
           assignmentTypeId: assignmentType.id,
+        },
+        attribution: {
+          organizationId: null,
+          membershipId: null,
+          route: 'routes/api.domain.assignment-type-evaluations',
+          requestId: crypto.randomUUID(),
+          ipHash: computeIpHash(request),
         },
       });
     }
@@ -1020,6 +1029,13 @@ export async function action({ request }: ActionFunctionArgs) {
             evaluationCaseId: evaluationCase.id,
             evaluationRunId: run.id,
             gradingAssistantVersion: gradingConfig.version,
+          },
+          attribution: {
+            organizationId: null,
+            membershipId: null,
+            route: 'routes/api.domain.assignment-type-evaluations',
+            requestId: crypto.randomUUID(),
+            ipHash: computeIpHash(request),
           },
         });
       },

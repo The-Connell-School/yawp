@@ -6,6 +6,7 @@ type AuthSession = {
 
 type SessionWithMemberships = {
   user: {
+    id: string;
     memberships: Array<{ id: string; organizationId: string }>;
   };
 } | null;
@@ -17,6 +18,8 @@ export type PreviewSeatSessionDependencies = {
   clearSelectedMembership(): Promise<string>;
   findSession(sessionId: string): Promise<SessionWithMemberships>;
   deleteSession(sessionId: string): Promise<void>;
+  /** Preview FT-C teachers are not members of the paid preview seat org. */
+  sessionAllowedWithoutSeatMembership?: (userId: string) => Promise<boolean>;
 };
 
 export type PreviewSeatSessionGuard = (
@@ -47,6 +50,29 @@ function mismatchedSessionResponse(request: Request, cookies: string[]) {
   return new Response(null, { status: 302, headers });
 }
 
+export async function previewSessionAllowedWithoutSeatMembership(userId: string) {
+  const { prisma } = await import('./db.server.ts');
+  const { isFreeTierEnabled } = await import(
+    '~/domain/feature-flags/feature-flags.server'
+  );
+  if (await isFreeTierEnabled()) {
+    const freeTier = await prisma.freeTierApplication.findFirst({
+      where: { userId },
+      select: { id: true },
+    });
+    if (freeTier) return true;
+  }
+  const freeClassMembership = await prisma.orgMembership.findFirst({
+    where: {
+      userId,
+      isActive: true,
+      organization: { plan: 'FREE_CLASSROOM' },
+    },
+    select: { id: true },
+  });
+  return Boolean(freeClassMembership);
+}
+
 export function createPreviewSeatSessionGuard(
   dependencies: PreviewSeatSessionDependencies,
 ): PreviewSeatSessionGuard {
@@ -70,6 +96,15 @@ export function createPreviewSeatSessionGuard(
       : memberships.length === 1 && seatMembership !== undefined;
 
     if (effectiveMembershipBelongsToSeat) return null;
+
+    const userId = session?.user.id;
+    if (
+      userId &&
+      dependencies.sessionAllowedWithoutSeatMembership &&
+      (await dependencies.sessionAllowedWithoutSeatMembership(userId))
+    ) {
+      return null;
+    }
 
     await dependencies.deleteSession(rawSessionId);
     const cookies = await Promise.all([
@@ -103,6 +138,7 @@ export const enforcePreviewSeatSession: PreviewSeatSessionGuard = async (
         select: {
           user: {
             select: {
+              id: true,
               memberships: {
                 where: { isActive: true },
                 select: { id: true, organizationId: true },
@@ -111,6 +147,7 @@ export const enforcePreviewSeatSession: PreviewSeatSessionGuard = async (
           },
         },
       }),
+    sessionAllowedWithoutSeatMembership: previewSessionAllowedWithoutSeatMembership,
     deleteSession: async (sessionId) => {
       await prisma.session.deleteMany({ where: { id: sessionId } });
     },

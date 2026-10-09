@@ -1,4 +1,5 @@
-import { readTeacherNote } from '~/domain/grading/teacher-notes';
+import { staffTeacherNoteLoaderField } from '~/domain/grading/teacher-notes';
+import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { TeacherNotes } from './teacher-grading/teacher-notes';
 import { invariant } from '@epic-web/invariant';
 import {
@@ -95,6 +96,10 @@ import {
   resolveGrammarHighlightingForAssignmentType,
   resolveRubricConfigForSubmission,
 } from './submission-rubric-config.server';
+import {
+  shouldHideUnreleasedGradeFromStudent,
+  stripUnreleasedGradeFromStudentSubmissionPayload,
+} from '~/domain/submissions/student-submission-grade-visibility.server';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -353,19 +358,33 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw redirect(`${next.pathname}${next.search}${next.hash}`);
   }
 
-  const [rubricConfig, grammarHighlightingEnabled] = await Promise.all([
-    resolveRubricConfigForSubmission({
-      assignmentTypeId: submission.document.assignmentTypeId,
-      pointValue: submission.document.assignment?.pointValue,
-      assignmentId: submission.document.assignment?.id,
-      latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
-      rubricScores: submission.rubricScores,
-    }),
-    resolveGrammarHighlightingForAssignmentType(
-      submission.document.assignmentTypeId,
-      submission.document.assignment?.grammarGradingEnabled
-    ),
-  ]);
+  const assignmentTypeId = submission.document.assignmentTypeId;
+  const [rubricConfig, grammarHighlightingEnabled, gradingConfig] =
+    await Promise.all([
+      resolveRubricConfigForSubmission({
+        assignmentTypeId,
+        pointValue: submission.document.assignment?.pointValue,
+        assignmentId: submission.document.assignment?.id,
+        latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
+        rubricScores: submission.rubricScores,
+      }),
+      resolveGrammarHighlightingForAssignmentType(
+        assignmentTypeId,
+        submission.document.assignment?.grammarGradingEnabled
+      ),
+      assignmentTypeId
+        ? resolveAssignmentTypeGradingConfig({
+            assignmentTypeId,
+            assignmentId: submission.document.assignment?.id ?? null,
+          }).catch((error) => {
+            console.error(
+              'Failed to resolve assignment type grading config for submission view',
+              { assignmentTypeId, error }
+            );
+            return null;
+          })
+        : Promise.resolve(null),
+    ]);
 
   const activityPage =
     !isOwner && (isTeacher || isAdmin)
@@ -467,24 +486,43 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })
     : null;
 
+  const hideUnreleasedGrade = shouldHideUnreleasedGradeFromStudent({
+    isOwner,
+    isTeacher,
+    isAdmin,
+  });
+
+  const submissionPayload = {
+    ...publicSubmission,
+    comments: sortedComments,
+    rubricConfig,
+    grammarHighlightingEnabled,
+    // What the Grading Assistant last suggested, so a teacher who has since
+    // edited the grade can put the suggestions back.
+    ...(hideUnreleasedGrade
+      ? {}
+      : {
+          assistantSuggestion: parseAssistantSuggestion(
+            submission.gradingAssistantRuns[0] ?? null
+          ),
+        }),
+  };
+
+  const submissionForResponse = hideUnreleasedGrade
+    ? stripUnreleasedGradeFromStudentSubmissionPayload(submissionPayload)
+    : submissionPayload;
+
   return {
     revisionFlowEnabled: profile.organization.revisionFlowEnabled === true,
     gradingQueue,
     documentNavigation,
-    submission: {
-      ...publicSubmission,
-      comments: sortedComments,
-      rubricConfig,
-      grammarHighlightingEnabled,
-      // What the Grading Assistant last suggested, so a teacher who has since
-      // edited the grade can put the suggestions back.
-      assistantSuggestion: parseAssistantSuggestion(
-        submission.gradingAssistantRuns[0] ?? null
-      ),
-    },
-    ...(!isOwner && (isTeacher || isAdmin)
-      ? { teacherNote: readTeacherNote(gradingAssistantRuns[0] ?? null) }
-      : {}),
+    submission: submissionForResponse,
+    ...staffTeacherNoteLoaderField({
+      isOwner,
+      isTeacher,
+      isAdmin,
+      run: gradingAssistantRuns[0] ?? null,
+    }),
     isOwner,
     isTeacher: isTeacher || isAdmin,
     submissionActivityEnabled,
@@ -1258,12 +1296,14 @@ function SubmissionDetail({
               {submissionVersions.map((version, index) => {
                 const versionNumber = submissionVersions.length - index;
                 const isCurrent = version.id === submission.id;
-                const gradeLabel =
-                  version.numericPercentage != null
-                    ? `${version.numericPercentage}%${
-                        version.letterGrade ? ` (${version.letterGrade})` : ''
-                      }`
-                    : version.score?.trim() || null;
+                const gradeLabel = formatAssignmentGrade({
+                  submitForGrade:
+                    submission.document.assignment?.submitForGrade,
+                  numericPercentage: version.numericPercentage,
+                  letterGrade: version.letterGrade,
+                  pointValue: submission.document.assignment?.pointValue,
+                  score: version.score,
+                });
                 const lifecycleLabel = version.releasedAt
                   ? gradeLabel
                     ? `Graded · ${gradeLabel}`
@@ -1438,7 +1478,13 @@ function SubmissionDetail({
                 {isPending ? (
                   <PendingViewPanel />
                 ) : (
-                  <ViewPanel submission={submissionForView} />
+                  <ViewPanel
+                    submission={{
+                      ...submissionForView,
+                      releasedAt: effectiveReleasedAt,
+                    }}
+                    viewer={isOwner ? 'student' : 'teacher'}
+                  />
                 )}
               </div>
             </>
