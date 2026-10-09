@@ -688,6 +688,7 @@ export default function LessonPlannerRoute() {
             <Link
               to="/app/lesson-planner/how-it-works"
               aria-label="See how it works"
+              data-tour="planner-guide"
               className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-background px-2.5 text-sm font-medium text-primary transition hover:bg-primary/10 sm:px-3"
             >
               <CirclePlay size={16} />
@@ -870,6 +871,7 @@ function LessonComposer({
 
   return (
     <form
+      data-tour="planner-composer"
       className={cn(
         'flex w-full items-end gap-2',
         hero &&
@@ -964,7 +966,7 @@ function LessonPlannerEmptyState({
           </p>
         </div>
       ) : null}
-      <div className="flex w-full flex-col gap-3">
+      <div className="flex w-full flex-col gap-3" data-tour="planner-starters">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Or start from one of these
         </p>

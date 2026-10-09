@@ -17,6 +17,11 @@ export const TOUR_IDS = [
   'my-classes',
   'class',
   'my-assignments',
+  'documents',
+  'writing-practice',
+  'teachers-lounge',
+  'lesson-planner',
+  'organization',
 ] as const;
 
 export type TourId = (typeof TOUR_IDS)[number];
@@ -26,7 +31,16 @@ export const TOUR_STATUSES = ['completed', 'dismissed'] as const;
 
 export type TourStatus = (typeof TOUR_STATUSES)[number];
 
-export type TourIcon = 'home' | 'classes' | 'class' | 'assignments';
+export type TourIcon =
+  | 'home'
+  | 'classes'
+  | 'class'
+  | 'assignments'
+  | 'documents'
+  | 'practice'
+  | 'lounge'
+  | 'planner'
+  | 'organization';
 
 export type TourStep = {
   /** Value of the `data-tour` attribute on the element this step points at. */
@@ -137,6 +151,121 @@ const TOURS: Record<TourId, PageTour> = {
       },
     ],
   },
+  documents: {
+    id: 'documents',
+    welcome: {
+      title: 'Welcome to Documents',
+      body: 'Every piece of writing your students start or submit lands here, ready to review, grade, and release.',
+      icon: 'documents',
+    },
+    steps: [
+      {
+        target: 'documents-status',
+        title: 'Where each document stands',
+        body: 'Filter by In Progress, Needs Grading, Needs Releasing, or Released. The numbers show how many are in each.',
+      },
+      {
+        target: 'documents-tools',
+        title: 'Filter, group, and act',
+        body: 'Narrow the list to a student or assignment, group it, and release grades or unsubmit work for the documents you select.',
+      },
+      {
+        target: 'documents-list',
+        title: 'Open a document',
+        body: 'Click any row to read the writing, see the AI feedback, and grade it.',
+      },
+    ],
+  },
+  'writing-practice': {
+    id: 'writing-practice',
+    welcome: {
+      title: 'Welcome to Writing Practice',
+      body: "Short lessons on grammar, syntax, and revision that sharpen the skills behind your students' writing.",
+      icon: 'practice',
+    },
+    steps: [
+      {
+        target: 'practice-create',
+        title: 'Send practice to your class',
+        body: 'Build an assignment from one or more lessons and send it to your class.',
+      },
+      {
+        target: 'practice-assigned',
+        title: 'Practice you assigned',
+        body: 'Everything you have sent shows up here, so you can see how your class did.',
+      },
+      {
+        target: 'practice-library',
+        title: 'The lesson library',
+        body: 'Browse every lesson by skill. Open one to see the example and the practice prompt your students will get.',
+      },
+    ],
+  },
+  'teachers-lounge': {
+    id: 'teachers-lounge',
+    welcome: {
+      title: "Welcome to the Teacher's Lounge",
+      body: 'Courses and resources for you, the teacher, to work through at your own pace.',
+      icon: 'lounge',
+    },
+    steps: [
+      {
+        target: 'lounge-courses',
+        title: 'Your courses',
+        body: 'Open a course to work through its modules and download its resources.',
+      },
+    ],
+  },
+  'lesson-planner': {
+    id: 'lesson-planner',
+    welcome: {
+      title: 'Welcome to the Lesson Planner',
+      body: 'Plan a lesson by talking it through. The planner builds the slides, activities, handouts, and exit tickets for your class.',
+      icon: 'planner',
+    },
+    steps: [
+      {
+        target: 'planner-composer',
+        title: 'Describe your lesson',
+        body: 'Say what you are teaching and who is in the room, the way you would tell a colleague. Then send it.',
+      },
+      {
+        target: 'planner-starters',
+        title: 'Or start from an idea',
+        body: 'Not sure where to begin? Pick one of these to get a lesson going.',
+      },
+      {
+        target: 'planner-rail',
+        title: 'Your lessons',
+        body: 'Every lesson you plan is saved here. Your free classroom includes a limited number of lesson plans; deleting a draft frees one up.',
+      },
+      {
+        target: 'planner-guide',
+        title: 'See how it works',
+        body: 'A short walkthrough of the planner, with clips, whenever you want a refresher.',
+      },
+    ],
+  },
+  organization: {
+    id: 'organization',
+    welcome: {
+      title: 'Welcome to Organization',
+      body: 'The account behind your free classroom: its class, school, teachers, and students.',
+      icon: 'organization',
+    },
+    steps: [
+      {
+        target: 'organization-tabs',
+        title: 'Classes, schools, teachers, students',
+        body: 'Switch tabs to see everyone and everything in your account. Your free classroom has one class with room for up to 35 students.',
+      },
+      {
+        target: 'organization-content',
+        title: 'Manage the details',
+        body: 'Each tab lists what is in your account. Use its Edit button to update a class, your school, or a student.',
+      },
+    ],
+  },
 };
 
 export function getTour(id: TourId): PageTour {
@@ -166,6 +295,11 @@ export function tourForPathname(pathname: string): PageTour | null {
   if (path === '/app/my-classes') return TOURS['my-classes'];
   if (/^\/app\/my-classes\/[^/]+$/.test(path)) return TOURS.class;
   if (path === '/app/assignments') return TOURS['my-assignments'];
+  if (path === '/app/documents') return TOURS.documents;
+  if (path === '/app/writing-lessons') return TOURS['writing-practice'];
+  if (path === '/app/teacher-trainings') return TOURS['teachers-lounge'];
+  if (path === '/app/lesson-planner') return TOURS['lesson-planner'];
+  if (/^\/app\/organization(\/[^/]+)?$/.test(path)) return TOURS.organization;
   return null;
 }
 

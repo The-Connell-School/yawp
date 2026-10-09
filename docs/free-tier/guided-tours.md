@@ -27,6 +27,11 @@ The tours are defined in `services/web-app/app/domain/guided-tours/tours.ts`:
 | `my-classes` | `/app/my-classes` | Class grid, Create Class (one-class limit) |
 | `class` | `/app/my-classes/:id` | Student join link, roster, tabs |
 | `my-assignments` | `/app/assignments` | New Assignment, assigned list |
+| `documents` | `/app/documents` | Status filters, filter/group/actions, document list |
+| `writing-practice` | `/app/writing-lessons` | Create assignment, practice you assigned, lesson library |
+| `teachers-lounge` | `/app/teacher-trainings` | Courses |
+| `lesson-planner` | `/app/lesson-planner` | Message box, starter ideas, saved lessons, See how it works |
+| `organization` | `/app/organization/*` | Tabs, tab content |
 
 A step targets an element by its `data-tour="..."` attribute. If that
 element isn't on screen (another tab is open, or a phone hides the sidebar),

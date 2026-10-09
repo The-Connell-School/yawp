@@ -9,10 +9,15 @@
  */
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import {
+  BookOpen,
   ChevronLeft,
   ChevronRight,
+  CogIcon,
   Compass,
+  FileText,
   House,
+  Lightbulb,
+  MonitorPlay,
   NotebookPen,
   School,
   Sparkles,
@@ -37,6 +42,11 @@ const ICONS: Record<TourIcon, typeof House> = {
   classes: Users,
   class: School,
   assignments: NotebookPen,
+  documents: FileText,
+  practice: BookOpen,
+  lounge: MonitorPlay,
+  planner: Lightbulb,
+  organization: CogIcon,
 };
 
 /** About how big the step card is, to tell which side of an element it fits. */

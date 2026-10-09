@@ -73,14 +73,20 @@ export default function TeacherTrainingsRoute() {
         <div className="flex flex-1 flex-col">
           <div className="flex-1 overflow-y-auto">
             {teacherTrainings.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted py-6">
+              <div
+                data-tour="lounge-courses"
+                className="flex h-full flex-col items-center justify-center border border-dashed bg-muted py-6"
+              >
                 <span className="text-lg font-bold">No courses found</span>
                 <span className="text-sm text-muted-foreground">
                   No courses are currently available
                 </span>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div
+                data-tour="lounge-courses"
+                className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+              >
                 {teacherTrainings.map((course) => (
                   <Card
                     key={course.id}
