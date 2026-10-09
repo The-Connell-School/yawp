@@ -12,8 +12,11 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { buildResolvedAssignmentTypeGradingConfig, resolveAssignmentTypeGradingConfig } =
-  await import('./assignment-type-grading-config.server');
+const {
+  buildResolvedAssignmentTypeGradingConfig,
+  resolveAssignmentTypeGradingConfig,
+  resolveOwnGradingInstructionsOverrideForAssignment,
+} = await import('./assignment-type-grading-config.server');
 
 describe('resolveAssignmentTypeGradingConfig', () => {
   beforeEach(() => {
@@ -148,6 +151,152 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     expect(invocation.system).toContain('Preserved override.');
     expect(invocation.userMessage).toContain('Promoted rubric');
     expect(invocation.userMessage).toContain('Synthetic essay.');
+  });
+
+  test('per-type override resolution: legacy snapshot without key follows live override', () => {
+    const typeId = 'legacy-no-key';
+    expect(
+      resolveOwnGradingInstructionsOverrideForAssignment({
+        assignmentType: {
+          id: typeId,
+          gradingPromptConfigJson: {
+            gradingInstructionsOverride: 'Live override.',
+          },
+        } as never,
+        pinnedRevision: {
+          rubricName: `assignment-type:${typeId}`,
+          schemaJson: {
+            promptConfig: { gradingInstructions: 'Snapshot GA.' },
+          },
+        },
+      })
+    ).toBe('Live override.');
+  });
+
+  test('per-type override resolution: snapshot string does not beat live override', () => {
+    const typeId = 'stale-snapshot-string';
+    expect(
+      resolveOwnGradingInstructionsOverrideForAssignment({
+        assignmentType: {
+          id: typeId,
+          gradingPromptConfigJson: {
+            gradingInstructionsOverride: 'Live override wins.',
+          },
+        } as never,
+        pinnedRevision: {
+          rubricName: `assignment-type:${typeId}`,
+          schemaJson: {
+            promptConfig: {
+              gradingInstructionsOverride: 'Stale snapshot paste.',
+            },
+          },
+        },
+      })
+    ).toBe('Live override wins.');
+  });
+
+  test('per-type override resolution: snapshot null clears override without live fallback', () => {
+    const typeId = 'explicit-null';
+    expect(
+      resolveOwnGradingInstructionsOverrideForAssignment({
+        assignmentType: {
+          id: typeId,
+          gradingPromptConfigJson: {
+            gradingInstructionsOverride: null,
+            gradingInstructionsOverridePinnedFallback: 'Legacy fallback text.',
+          },
+        } as never,
+        pinnedRevision: {
+          rubricName: `assignment-type:${typeId}`,
+          schemaJson: {
+            promptConfig: {
+              gradingInstructions: 'Internal GA.',
+              gradingInstructionsOverride: null,
+            },
+          },
+        },
+      })
+    ).toBeUndefined();
+  });
+
+  test('per-type override resolution: legacy pin after publish uses pinned fallback when live override was cleared', () => {
+    const typeId = 'legacy-after-publish';
+    expect(
+      resolveOwnGradingInstructionsOverrideForAssignment({
+        assignmentType: {
+          id: typeId,
+          gradingPromptConfigJson: {
+            gradingInstructions: 'Internal GA.',
+            gradingInstructionsOverride: null,
+            gradingInstructionsOverridePinnedFallback: '10/5 pasted GA (live today).',
+          },
+        } as never,
+        pinnedRevision: {
+          rubricName: `assignment-type:${typeId}`,
+          schemaJson: {
+            promptConfig: { gradingInstructions: 'Original placeholder GA.' },
+          },
+        },
+      })
+    ).toBe('10/5 pasted GA (live today).');
+  });
+
+  test('a per-type pin with snapshot null grades with catalog GA, not live fallback', async () => {
+    const typeId = 'per-type-hornbuckle';
+    const rubricName = `assignment-type:${typeId}`;
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: typeId,
+      title: 'Hornbuckle essay',
+      kind: 'essay',
+      scoringScaleJson: { type: 'points_scale', minScore: 1, maxScore: 4, step: 1 },
+      rubricJson: {
+        categories: [{ key: 'thesis', label: 'Thesis', description: 'Live rubric.', weight: 1 }],
+      },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Live GA after publish.',
+        gradingInstructionsOverride: null,
+        gradingInstructionsOverridePinnedFallback: 'Old paste.',
+      },
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 3,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      rubric: null,
+    });
+    prisma.assignment.findUnique.mockResolvedValue({
+      assignmentTypeId: typeId,
+      rubricTotalPoints: null,
+      gradingMode: 'bands',
+      rubricRevision: {
+        version: 2,
+        rubricName,
+        schemaJson: {
+          name: rubricName,
+          title: 'Hornbuckle essay',
+          scoringScale: { type: 'points_scale', minScore: 1, maxScore: 4, step: 1 },
+          rubric: {
+            categories: [{ key: 'thesis', label: 'Thesis', description: 'Pinned rubric.', weight: 1 }],
+          },
+          promptConfig: {
+            gradingInstructions: 'Internal v4 GA.',
+            gradingInstructionsOverride: null,
+          },
+          outputSchema: {},
+          calibrationNotes: null,
+        },
+        sourceContentId: 'internal-content-id',
+      },
+    });
+    const config = await resolveAssignmentTypeGradingConfig({
+      assignmentTypeId: typeId,
+      assignmentId: 'pinned-essay',
+    });
+    expect(config.instructions).toMatchObject({
+      mode: 'unified',
+      gradingInstructions: 'Internal v4 GA.',
+    });
+    expect(config.rubricCategories[0].description).toBe('Pinned rubric.');
   });
 
   test('returns assignment-type-owned rubric and prompt config when present', async () => {

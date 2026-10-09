@@ -25,6 +25,9 @@ export const PROMPT_CONFIG_KEYS = [
   'systemInstructions', 'gradingInstructions', 'instructionsPreset', 'systemMessageTemplate',
   'userMessageTemplate', 'scoreInstructions', 'rubricInstructions',
 ] as const;
+/** Legacy pins without an override on their snapshot still grade with this after a catalog GA publish. */
+export const GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY =
+  'gradingInstructionsOverridePinnedFallback';
 const PER_TYPE_PREFIX = 'assignment-type:';
 const LIBRARY_NAME = /^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*$/;
 const TYPE_ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -131,7 +134,36 @@ function buildStoredContent(key: CatalogKey, live: LiveContent, document: JsonRe
   const livePrompt = isRecord(live.content.promptConfig) ? live.content.promptConfig : {};
   const preservedPrompt = Object.fromEntries(Object.entries(livePrompt).filter(([k]) => !(PROMPT_CONFIG_KEYS as readonly string[]).includes(k)));
   const editedPrompt = isRecord(document.promptConfig) ? document.promptConfig : {};
-  const promptConfig = { ...preservedPrompt, ...editedPrompt };
+  const promptConfig: JsonRecord = { ...preservedPrompt, ...editedPrompt };
+  // Internal publishes GA text as gradingInstructions. A stale per-type override
+  // would otherwise keep winning at grade time, so a new instruction set replaces it.
+  const liveGradingInstructions =
+    typeof livePrompt.gradingInstructions === 'string'
+      ? livePrompt.gradingInstructions.trim()
+      : '';
+  const incomingGradingInstructions =
+    typeof editedPrompt.gradingInstructions === 'string'
+      ? editedPrompt.gradingInstructions.trim()
+      : '';
+  if (
+    incomingGradingInstructions &&
+    incomingGradingInstructions !== liveGradingInstructions
+  ) {
+    const previousOverride =
+      typeof livePrompt.gradingInstructionsOverride === 'string' &&
+      livePrompt.gradingInstructionsOverride.trim()
+        ? livePrompt.gradingInstructionsOverride.trim()
+        : typeof livePrompt[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY] ===
+              'string' &&
+            String(livePrompt[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY]).trim()
+          ? String(livePrompt[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY]).trim()
+          : '';
+    promptConfig.gradingInstructionsOverride = null;
+    if (previousOverride) {
+      promptConfig[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY] =
+        previousOverride;
+    }
+  }
 
   if (key.source === 'library') {
     const preservedTop = Object.fromEntries(Object.entries(live.content).filter(([k]) => !['name', 'title', 'scoringScale', 'rubric', 'promptConfig', 'outputSchema', 'calibrationNotes'].includes(k)));

@@ -50,4 +50,9 @@ describe('promotion rubric validation', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.issues.some(issue => issue.path === '/rubric/categories/0/weight')).toBe(true);
   });
+  test('accepts a top-level scoringMode from the rubric document shape (#411)', () => {
+    const result = validateRubricPromotion({ ...valid(), scoringMode: 'holistic_tier' });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.schema.scoringMode).toBe('holistic_tier');
+  });
 });
