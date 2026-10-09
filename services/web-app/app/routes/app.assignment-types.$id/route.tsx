@@ -825,7 +825,10 @@ export default function AppAssignmentTypesIdRoute() {
     : undefined;
 
   return (
-    <div className="no-scrollbar h-full w-full overflow-y-scroll">
+    <div
+      className="no-scrollbar h-full w-full overflow-y-scroll"
+      data-tour-variant={data.assignmentType.kind ?? undefined}
+    >
       <div className="mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5">
         <div className="mb-4 flex justify-between gap-2">
           {/* Arriving from a lesson, the way back is to that lesson. The
@@ -859,7 +862,11 @@ export default function AppAssignmentTypesIdRoute() {
                   <Form method="post" ref={docFormRef} className="hidden" />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button type="button" className="w-fit">
+                      <Button
+                        type="button"
+                        className="w-fit"
+                        data-tour="type-new"
+                      >
                         New <ChevronDownIcon className="ml-1 h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -992,15 +999,21 @@ export default function AppAssignmentTypesIdRoute() {
         </div>
         {data.showAboutExitTicket ? <AboutExitTicket /> : null}
         {data.promptLibrary ? (
-          <TeacherDirections variant={data.promptLibrary.variant} />
+          <div data-tour="type-directions">
+            <TeacherDirections variant={data.promptLibrary.variant} />
+          </div>
         ) : null}
         {showDailyPagesAbout ? <AboutDailyPages /> : null}
-        {showThesisLibrary ? <ThesisTeacherDirections /> : null}
+        {showThesisLibrary ? (
+          <div data-tour="type-directions">
+            <ThesisTeacherDirections />
+          </div>
+        ) : null}
         {data.apHistoryLibrary?.mode === 'teacher' ? (
           <ApHistoryTeacherDirections />
         ) : null}
         {showModules ? (
-          <Accordion type="single" collapsible>
+          <Accordion type="single" collapsible data-tour="type-modules">
             <AccordionItem value="modules">
               <AccordionTrigger className="py-2 text-base">
                 Modules
@@ -1035,7 +1048,7 @@ export default function AppAssignmentTypesIdRoute() {
           </Accordion>
         ) : null}
         {data.promptLibrary ? (
-          <div className="pb-6">
+          <div className="pb-6" data-tour="type-library">
             <PromptsLibrary
               prompts={data.promptLibrary.prompts}
               facets={data.promptLibrary.facets}
@@ -1065,7 +1078,7 @@ export default function AppAssignmentTypesIdRoute() {
           </div>
         ) : null}
         {data.thesisPromptLibrary ? (
-          <div className="pb-6">
+          <div className="pb-6" data-tour="type-library">
             <ThesisPromptsLibrary
               prompts={data.thesisPromptLibrary.prompts}
               facets={data.thesisPromptLibrary.facets}
@@ -1096,65 +1109,67 @@ export default function AppAssignmentTypesIdRoute() {
             </div>
           </>
         ) : null}
-        {data.documents.length ? (
-          <>
-            <div className="grid grid-cols-2 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
-              {data.documents.map((doc) => (
-                <DocumentLink
-                  key={doc.id}
-                  doc={doc}
-                  exitTo={`/app/assignment-types/${data.assignmentType.id}`}
-                  isStudentView
-                />
-              ))}
-            </div>
-            {data.archivedDocuments.length > 0 && (
-              <div className="pb-10">
-                <Accordion type="single" collapsible>
-                  <AccordionItem value="archived" className="border-none">
-                    <AccordionTrigger className="text-sm text-muted-foreground hover:no-underline py-2">
-                      View archived documents ({data.archivedDocuments.length})
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-2 md:grid-cols-3">
-                        {data.archivedDocuments.map((doc) => (
-                          <DocumentLink
-                            key={doc.id}
-                            doc={doc}
-                            exitTo={`/app/assignment-types/${data.assignmentType.id}`}
-                            isArchived
-                            isStudentView
-                          />
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
+        <div data-tour="type-documents">
+          {data.documents.length ? (
+            <>
+              <div className="grid grid-cols-2 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
+                {data.documents.map((doc) => (
+                  <DocumentLink
+                    key={doc.id}
+                    doc={doc}
+                    exitTo={`/app/assignment-types/${data.assignmentType.id}`}
+                    isStudentView
+                  />
+                ))}
               </div>
-            )}
-          </>
-        ) : !hasModules ? (
-          <NoDataPlaceholder
-            title="No modules"
-            subtitle="Come back later to check for modules to work through."
-          />
-        ) : (
-          <NoDataPlaceholder
-            title="No documents"
-            subtitle={
-              isTeacher && canCreateDirectDocument ? (
-                <>
-                  Hit the <code className="px-1">New +</code> button above to
-                  create your first document.
-                </>
-              ) : isTeacher ? (
-                'Choose a prompt from the AP History library to create an assignment.'
-              ) : (
-                'Open an assignment from one of your classes to start writing.'
-              )
-            }
-          />
-        )}
+              {data.archivedDocuments.length > 0 && (
+                <div className="pb-10">
+                  <Accordion type="single" collapsible>
+                    <AccordionItem value="archived" className="border-none">
+                      <AccordionTrigger className="text-sm text-muted-foreground hover:no-underline py-2">
+                        View archived documents ({data.archivedDocuments.length})
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-2 md:grid-cols-3">
+                          {data.archivedDocuments.map((doc) => (
+                            <DocumentLink
+                              key={doc.id}
+                              doc={doc}
+                              exitTo={`/app/assignment-types/${data.assignmentType.id}`}
+                              isArchived
+                              isStudentView
+                            />
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
+              )}
+            </>
+          ) : !hasModules ? (
+            <NoDataPlaceholder
+              title="No modules"
+              subtitle="Come back later to check for modules to work through."
+            />
+          ) : (
+            <NoDataPlaceholder
+              title="No documents"
+              subtitle={
+                isTeacher && canCreateDirectDocument ? (
+                  <>
+                    Hit the <code className="px-1">New +</code> button above to
+                    create your first document.
+                  </>
+                ) : isTeacher ? (
+                  'Choose a prompt from the AP History library to create an assignment.'
+                ) : (
+                  'Open an assignment from one of your classes to start writing.'
+                )
+              }
+            />
+          )}
+        </div>
       </div>
     </div>
   );

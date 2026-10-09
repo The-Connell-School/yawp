@@ -22,6 +22,9 @@ export const TOUR_IDS = [
   'teachers-lounge',
   'lesson-planner',
   'organization',
+  'type-class-starter',
+  'type-prewriting',
+  'type-thesis-statement',
 ] as const;
 
 export type TourId = (typeof TOUR_IDS)[number];
@@ -40,7 +43,8 @@ export type TourIcon =
   | 'practice'
   | 'lounge'
   | 'planner'
-  | 'organization';
+  | 'organization'
+  | 'assignment-type';
 
 export type TourStep = {
   /** Value of the `data-tour` attribute on the element this step points at. */
@@ -266,6 +270,108 @@ const TOURS: Record<TourId, PageTour> = {
       },
     ],
   },
+  'type-class-starter': {
+    id: 'type-class-starter',
+    welcome: {
+      title: 'Welcome to Class Starter',
+      body: 'Open-ended writing to begin class. It is graded on engagement: did the student write, and did they reflect.',
+      icon: 'assignment-type',
+    },
+    steps: [
+      {
+        target: 'type-new',
+        title: 'Make one',
+        body: 'New → Assignment gives it to your class. New → Document lets you try it yourself first, the way your students will. Each one you assign uses one from your free classroom.',
+      },
+      {
+        target: 'type-directions',
+        title: 'How it works',
+        body: 'Write a prompt and every student gets a blank document titled with it. Feedback is about their ideas, not rubric scores or correctness.',
+      },
+      {
+        target: 'type-library',
+        title: 'Prompt library',
+        body: 'Short on ideas? Open the Prompt Library and pick one; it fills in the assignment for you. New → Generate a prompt makes a fresh one.',
+      },
+      {
+        target: 'type-modules',
+        title: 'The writing process',
+        body: 'The steps this assignment walks students through. Open one for an overview of what they will do.',
+      },
+      {
+        target: 'type-documents',
+        title: 'Your own drafts',
+        body: 'Documents you start with New → Document show up here, so you can see the student side before you assign it.',
+      },
+    ],
+  },
+  'type-prewriting': {
+    id: 'type-prewriting',
+    welcome: {
+      title: 'Welcome to Prewriting',
+      body: 'Students explore the prompt and find a specific focus before they write a thesis.',
+      icon: 'assignment-type',
+    },
+    steps: [
+      {
+        target: 'type-new',
+        title: 'Make one',
+        body: 'New → Assignment gives it to your class. New → Document lets you try it yourself first, the way your students will. Each one you assign uses one from your free classroom.',
+      },
+      {
+        target: 'type-modules',
+        title: 'The writing process',
+        body: 'The steps this assignment walks students through. Open one for an overview of what they will do.',
+      },
+      {
+        target: 'type-documents',
+        title: 'Your own drafts',
+        body: 'Documents you start with New → Document show up here, so you can see the student side before you assign it.',
+      },
+    ],
+  },
+  'type-thesis-statement': {
+    id: 'type-thesis-statement',
+    welcome: {
+      title: 'Welcome to Thesis Statement',
+      body: 'Students develop a single clear, arguable thesis sentence.',
+      icon: 'assignment-type',
+    },
+    steps: [
+      {
+        target: 'type-new',
+        title: 'Make one',
+        body: 'New → Assignment gives it to your class. New → Document lets you try it yourself first, the way your students will. Each one you assign uses one from your free classroom.',
+      },
+      {
+        target: 'type-directions',
+        title: 'How it works',
+        body: 'How the prompts work and what tends to get the best essays out of students.',
+      },
+      {
+        target: 'type-library',
+        title: 'Prompt library',
+        body: 'Pick a ready-made prompt and it fills in the assignment for you, or use New → Generate a prompt.',
+      },
+      {
+        target: 'type-modules',
+        title: 'The writing process',
+        body: 'The steps this assignment walks students through. Open one for an overview of what they will do.',
+      },
+      {
+        target: 'type-documents',
+        title: 'Your own drafts',
+        body: 'Documents you start with New → Document show up here, so you can see the student side before you assign it.',
+      },
+    ],
+  },
+};
+
+/** Assignment type kinds with a tour of their page, and which tour. */
+const ASSIGNMENT_TYPE_TOURS: Record<string, TourId> = {
+  class_starter: 'type-class-starter',
+  prewriting: 'type-prewriting',
+  thesis_statement: 'type-thesis-statement',
 };
 
 export function getTour(id: TourId): PageTour {
@@ -285,7 +391,27 @@ export function isTourStatus(value: unknown): value is TourStatus {
   );
 }
 
-/** The tour for a page, or null for pages without one. */
+/**
+ * The tour for a page, or null for pages without one. `variant` is the page's
+ * own `data-tour-variant`, for pages whose URL does not say enough: an
+ * assignment type page names its kind there.
+ */
+export function tourForPage(
+  pathname: string,
+  variant: string | null | undefined
+): PageTour | null {
+  const path =
+    pathname.length > 1 && pathname.endsWith('/')
+      ? pathname.slice(0, -1)
+      : pathname;
+  if (/^\/app\/assignment-types\/[^/]+$/.test(path)) {
+    const id = variant ? ASSIGNMENT_TYPE_TOURS[variant] : undefined;
+    return id ? TOURS[id] : null;
+  }
+  return tourForPathname(path);
+}
+
+/** The tour for a page whose URL alone picks it, or null. */
 export function tourForPathname(pathname: string): PageTour | null {
   const path =
     pathname.length > 1 && pathname.endsWith('/')

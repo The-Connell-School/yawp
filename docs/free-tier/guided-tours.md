@@ -32,6 +32,13 @@ The tours are defined in `services/web-app/app/domain/guided-tours/tours.ts`:
 | `teachers-lounge` | `/app/teacher-trainings` | Courses |
 | `lesson-planner` | `/app/lesson-planner` | Message box, starter ideas, saved lessons, See how it works |
 | `organization` | `/app/organization/*` | Tabs, tab content |
+| `type-class-starter` | `/app/assignment-types/:id` (Class Starter) | New menu, how it works, prompt library, modules, your drafts |
+| `type-prewriting` | `/app/assignment-types/:id` (Prewriting) | New menu, modules, your drafts |
+| `type-thesis-statement` | `/app/assignment-types/:id` (Thesis Statement) | New menu, modules, your drafts |
+
+An assignment type page's URL doesn't say which type it is, so the page
+names its kind with `data-tour-variant`, and `tourForPage` picks that
+type's tour. Types without a tour get none.
 
 A step targets an element by its `data-tour="..."` attribute. If that
 element isn't on screen (another tab is open, or a phone hides the sidebar),

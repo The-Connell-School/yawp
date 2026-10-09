@@ -29,7 +29,7 @@ import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router';
 import { Button } from '~/components/ui/button';
 import {
-  tourForPathname,
+  tourForPage,
   type PageTour,
   type TourIcon,
   type TourId,
@@ -47,6 +47,7 @@ const ICONS: Record<TourIcon, typeof House> = {
   lounge: MonitorPlay,
   planner: Lightbulb,
   organization: CogIcon,
+  'assignment-type': NotebookPen,
 };
 
 /** About how big the step card is, to tell which side of an element it fits. */
@@ -172,13 +173,30 @@ export function GuidedTour(props: { finishedTourIds: readonly string[] }) {
   return createPortal(<PageTourController {...props} />, document.body);
 }
 
+/**
+ * The current page's tour. Most pages are known by their URL; a page whose URL
+ * is not enough (an assignment type page) names itself with
+ * `data-tour-variant`, read once the page has rendered.
+ */
+function usePageTour() {
+  const location = useLocation();
+  const [variant, setVariant] = useState<string | null>(null);
+  useEffect(() => {
+    setVariant(
+      document
+        .querySelector('[data-tour-variant]')
+        ?.getAttribute('data-tour-variant') ?? null
+    );
+  }, [location.pathname, location.key]);
+  return tourForPage(location.pathname, variant);
+}
+
 function PageTourController({
   finishedTourIds,
 }: {
   finishedTourIds: readonly string[];
 }) {
-  const location = useLocation();
-  const tour = tourForPathname(location.pathname);
+  const tour = usePageTour();
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   // Outcomes from this visit, so a card stays closed before the server's
   // list catches up.
@@ -314,8 +332,8 @@ export function TourThisPageButton({
   navExpanded: boolean;
   onClick?: () => void;
 }) {
-  const location = useLocation();
-  if (!tourForPathname(location.pathname)) return null;
+  const tour = usePageTour();
+  if (!tour) return null;
   return (
     <button
       type="button"
