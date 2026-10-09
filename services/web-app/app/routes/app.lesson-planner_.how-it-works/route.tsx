@@ -334,7 +334,7 @@ export default function LessonPlannerHowItWorksRoute() {
             media={
               <Clip
                 name="ask"
-                label="A teacher describes an English 10 class, taps a suggested reply, sets the lesson length to 50 minutes, checks three activities and sends."
+                label="A teacher describes an English 10 class, taps a suggested reply, sets the lesson length to 50 minutes, checks three activities, and sends."
               />
             }
           >
@@ -351,7 +351,7 @@ export default function LessonPlannerHowItWorksRoute() {
             media={
               <Clip
                 name="plan"
-                label="Scrolling a finished plan: a timing table, Class Starter prompts, a sample paragraph, a handout, an answer key and an exit ticket."
+                label="Scrolling a finished plan: a timing table, Class Starter prompts, a sample paragraph, a handout, an answer key, and an exit ticket."
               />
             }
           >
@@ -476,7 +476,7 @@ export default function LessonPlannerHowItWorksRoute() {
           </Row>
           <Clip
             name="deck"
-            label="Tapping Build the slide deck for this lesson. A card appears with the deck’s thumbnails and Add to stack, PowerPoint and Present buttons."
+            label="Tapping Build the slide deck for this lesson. A card appears with the deck’s thumbnails and Add to stack, PowerPoint, and Present buttons."
           />
         </section>
 
@@ -495,7 +495,7 @@ export default function LessonPlannerHowItWorksRoute() {
           </div>
           <Clip
             name="stack"
-            label="Adding the handout, answer key and deck to the stack, then viewing it as a full plan, an outline and a student handout."
+            label="Adding the handout, answer key, and deck to the stack, then viewing it as a full plan, an outline, and a student handout."
           />
           <div className="grid gap-6 md:grid-cols-3">
             {[
