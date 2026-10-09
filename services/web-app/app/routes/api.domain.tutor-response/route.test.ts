@@ -654,6 +654,40 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
   });
 
+  test('hides the provider error from the student when the tutor call fails', async () => {
+    mockCms();
+    getLLMCompletion.mockImplementationOnce(() => {
+      throw new Error(
+        'Could not resolve authentication method. Expected either apiKey or authToken to be set.'
+      );
+    });
+    const consoleError = console.error;
+    console.error = mock();
+
+    const body = new FormData();
+    body.set('response', 'Can you review this?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+    console.error = consoleError;
+    const payload = response as {
+      data: { error?: string };
+      init?: { status?: number };
+    };
+
+    expect(payload.init?.status).toBe(500);
+    expect(payload.data.error).toBe(
+      'Failed to get a response from the tutor. Please try again.'
+    );
+    expect(payload.data.error).not.toContain('apiKey');
+  });
+
   test('forces fallback model on retry and persists one user and one tutor message', async () => {
     getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
     mockCms();

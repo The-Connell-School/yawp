@@ -39,3 +39,24 @@ test('posts a score to Blackboard mock AGS using client assertion', async () => 
   }
 });
 
+
+// Release fires the passback without awaiting it. A rejection there used to be
+// unhandled, and with the mock down that killed the whole dev server.
+test('a background passback that fails is logged, never left unhandled', async () => {
+  const { postGradeToBlackboardInBackground } = await import('./blackboard-ags.server');
+  const previous = process.env.BLACKBOARD_LTI_MOCK_URL;
+  process.env.BLACKBOARD_LTI_MOCK_URL = 'http://127.0.0.1:1';
+  const warn = console.warn;
+  const warnings: unknown[][] = [];
+  console.warn = (...args: unknown[]) => { warnings.push(args); };
+  try {
+    await expect(
+      postGradeToBlackboardInBackground({ numericPercentage: 80 })
+    ).resolves.toBeUndefined();
+    expect(warnings.length).toBe(1);
+  } finally {
+    console.warn = warn;
+    if (previous === undefined) delete process.env.BLACKBOARD_LTI_MOCK_URL;
+    else process.env.BLACKBOARD_LTI_MOCK_URL = previous;
+  }
+});

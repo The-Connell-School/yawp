@@ -294,6 +294,13 @@ export function TeacherGradingPanel({
     // percentage, so its overall grade is the weighted average with nothing
     // converted. Everything else keeps the 1-5 mapping.
     if (isBandScoredRubric(activeRubricConfig.categories)) {
+      // A blank category is the unscored sentinel, not a real zero. Reading it
+      // as one made the empty form compute 0%, which the percentage sync then
+      // wrote over a recorded grade when the form was reopened for editing.
+      const allScored = activeRubricConfig.categories.every((category) =>
+        isScored(rubricScores[category.key]?.score, activeRubricConfig.minScore)
+      );
+      if (!allScored) return null;
       return computeWeightedBandPercentage(
         rubricScores as unknown as Record<string, unknown>,
         activeRubricConfig.categories
