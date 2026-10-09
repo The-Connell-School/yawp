@@ -72,7 +72,10 @@ import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
 import { prisma } from '~/utils/db.server';
 import { shouldRedirectClasslessStudent } from '~/utils/classless-student-gate';
 import { formatUserContactLabel } from '~/utils/user-display';
-import { GuidedTour } from '~/components/guided-tour/guided-tour';
+import {
+  GuidedTour,
+  TourThisPageButton,
+} from '~/components/guided-tour/guided-tour';
 import { guidedToursAvailable } from '~/domain/guided-tours/tours';
 import { loadFinishedTourIds } from '~/domain/guided-tours/guided-tours.server';
 
@@ -356,6 +359,12 @@ export default function Route() {
           />
         </div>
         <div className="flex flex-grow flex-col justify-end">
+          {guidedTours && !isReadOnlyImpersonation ? (
+            <TourThisPageButton
+              navExpanded={navExpanded}
+              onClick={() => setIsMobileNavOpen(false)}
+            />
+          ) : null}
           <Popover>
             <PopoverTrigger>
               <div className="flex items-center gap-2 border-t p-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">

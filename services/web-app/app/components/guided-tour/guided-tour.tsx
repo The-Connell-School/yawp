@@ -44,6 +44,8 @@ const STEP_CARD_HEIGHT = 240;
 const STEP_CARD_WIDTH = 396;
 /** Room left around the spotlighted element, in pixels. */
 const SPOTLIGHT_PADDING = 8;
+/** Sent by the "Tour this page" button in the sidebar. */
+const START_EVENT = 'yawp:page-tour-start';
 /** Let the page draw before the welcome card slides in. */
 const WELCOME_DELAY_MS = 400;
 
@@ -204,6 +206,11 @@ function PageTourController({
     setPhase({ kind: 'touring', steps: resolveSteps(tour), index: 0 });
   }, [tour]);
 
+  useEffect(() => {
+    window.addEventListener(START_EVENT, start);
+    return () => window.removeEventListener(START_EVENT, start);
+  }, [start]);
+
   if (!tour) return null;
 
   if (phase.kind === 'welcome') {
@@ -228,7 +235,7 @@ function PageTourController({
     );
   }
 
-  return <TourLauncher onClick={start} />;
+  return null;
 }
 
 function WelcomeCard({
@@ -286,15 +293,31 @@ function WelcomeCard({
   );
 }
 
-function TourLauncher({ onClick }: { onClick: () => void }) {
+/**
+ * Replays the current page's tour. Lives in the sidebar so it never covers
+ * page content; renders nothing on pages without a tour.
+ */
+export function TourThisPageButton({
+  navExpanded,
+  onClick,
+}: {
+  navExpanded: boolean;
+  onClick?: () => void;
+}) {
+  const location = useLocation();
+  if (!tourForPathname(location.pathname)) return null;
   return (
     <button
       type="button"
-      onClick={onClick}
-      className="fixed bottom-4 right-4 z-30 inline-flex h-9 items-center gap-1.5 rounded-full border bg-background px-3 text-sm font-medium text-muted-foreground shadow-sm transition hover:border-primary/40 hover:text-primary print:hidden sm:bottom-6 sm:right-6"
+      aria-label="Tour this page"
+      onClick={() => {
+        onClick?.();
+        window.dispatchEvent(new Event(START_EVENT));
+      }}
+      className="flex items-center gap-2 border-t px-4 py-3 text-left text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
     >
-      <Compass size={16} aria-hidden="true" />
-      Tour this page
+      <Compass size={18} aria-hidden="true" />
+      {navExpanded ? <span>Tour this page</span> : null}
     </button>
   );
 }
