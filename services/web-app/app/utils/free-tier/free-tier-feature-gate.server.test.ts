@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
-const isFreeTierEnabled = mock(() => Promise.resolve(true));
+const actualFeatureFlags = await import('~/domain/feature-flags/feature-flags.server');
+const isFreeTierEnabled = mock(actualFeatureFlags.isFreeTierEnabled);
 
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
+  ...actualFeatureFlags,
   isFreeTierEnabled,
 }));
 
