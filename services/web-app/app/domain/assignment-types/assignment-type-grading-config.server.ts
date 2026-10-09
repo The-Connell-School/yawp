@@ -328,6 +328,19 @@ function getOwnGradingInstructionsOverride(
     : undefined;
 }
 
+/** Per-type pins store prompt config on the revision; live overrides must not move them. */
+function getPinnedPerTypeGradingInstructionsOverride(
+  revision: { rubricName: string; schemaJson: unknown } | null
+): string | undefined | null {
+  if (!revision?.rubricName.startsWith('assignment-type:')) return null;
+  const schema = revision.schemaJson;
+  if (!isRecord(schema) || !isRecord(schema.promptConfig)) return undefined;
+  const override = schema.promptConfig.gradingInstructionsOverride;
+  return typeof override === 'string' && override.trim()
+    ? override.trim()
+    : undefined;
+}
+
 export function buildResolvedAssignmentTypeGradingConfig({
   assignmentTypeId,
   assignmentTypeKind,
@@ -519,6 +532,7 @@ export async function resolveAssignmentTypeGradingConfig({
   let assignmentRubricTotalPoints: number | null = null;
   let assignmentGradingMode: AssignmentGradingMode | undefined;
   let internalAuthoredRevision = false;
+  let pinnedRevision: { rubricName: string; schemaJson: unknown } | null = null;
   if (assignmentId) {
     const assignment = await prisma.assignment.findUnique({ where: { id: assignmentId }, select: {
       assignmentTypeId: true,
@@ -538,9 +552,13 @@ export async function resolveAssignmentTypeGradingConfig({
         : 'bands';
     if (assignment.rubricRevision) {
       revision = assignment.rubricRevision;
+      pinnedRevision = assignment.rubricRevision;
       internalAuthoredRevision = assignment.rubricRevision.sourceContentId != null;
     }
   }
+  const pinnedPerTypeOverride = getPinnedPerTypeGradingInstructionsOverride(
+    pinnedRevision
+  );
   const row = revision && assignmentType ? {
     ...assignmentType,
     gradingAssistantVersion: revision.version,
@@ -557,9 +575,12 @@ export async function resolveAssignmentTypeGradingConfig({
     row: withLibraryRubric(row),
     // The per-assignment-type grading assistant override always applies,
     // even when a library rubric supplies the rest of the prompt config.
-    ownGradingInstructionsOverride: getOwnGradingInstructionsOverride(
-      assignmentType as AssignmentTypeGradingRow | null
-    ),
+    ownGradingInstructionsOverride:
+      pinnedPerTypeOverride === null
+        ? getOwnGradingInstructionsOverride(
+            assignmentType as AssignmentTypeGradingRow | null
+          )
+        : pinnedPerTypeOverride,
     rubricTotalPoints: assignmentRubricTotalPoints,
     gradingMode: assignmentGradingMode,
   });

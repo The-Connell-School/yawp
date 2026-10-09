@@ -134,11 +134,18 @@ function buildStoredContent(key: CatalogKey, live: LiveContent, document: JsonRe
   const promptConfig: JsonRecord = { ...preservedPrompt, ...editedPrompt };
   // Internal publishes GA text as gradingInstructions. A stale per-type override
   // would otherwise keep winning at grade time, so a new instruction set replaces it.
+  const liveGradingInstructions =
+    typeof livePrompt.gradingInstructions === 'string'
+      ? livePrompt.gradingInstructions.trim()
+      : '';
   const incomingGradingInstructions =
     typeof editedPrompt.gradingInstructions === 'string'
       ? editedPrompt.gradingInstructions.trim()
       : '';
-  if (incomingGradingInstructions) {
+  if (
+    incomingGradingInstructions &&
+    incomingGradingInstructions !== liveGradingInstructions
+  ) {
     delete promptConfig.gradingInstructionsOverride;
   }
 

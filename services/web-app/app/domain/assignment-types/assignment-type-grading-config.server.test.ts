@@ -150,6 +150,63 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     expect(invocation.userMessage).toContain('Synthetic essay.');
   });
 
+  test('a per-type assignment pinned to a revision uses the override frozen on that revision, not the live type columns', async () => {
+    const typeId = 'per-type-hornbuckle';
+    const rubricName = `assignment-type:${typeId}`;
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: typeId,
+      title: 'Hornbuckle essay',
+      kind: 'essay',
+      scoringScaleJson: { type: 'points_scale', minScore: 1, maxScore: 4, step: 1 },
+      rubricJson: {
+        categories: [{ key: 'thesis', label: 'Thesis', description: 'Live rubric.', weight: 1 }],
+      },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Live GA text after internal publish.',
+        gradingInstructionsOverride: 'Live override that must not apply to pinned work.',
+      },
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 3,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      rubric: null,
+    });
+    prisma.assignment.findUnique.mockResolvedValue({
+      assignmentTypeId: typeId,
+      rubricTotalPoints: null,
+      gradingMode: 'bands',
+      rubricRevision: {
+        version: 1,
+        rubricName,
+        schemaJson: {
+          name: rubricName,
+          title: 'Hornbuckle essay',
+          scoringScale: { type: 'points_scale', minScore: 1, maxScore: 4, step: 1 },
+          rubric: {
+            categories: [{ key: 'thesis', label: 'Thesis', description: 'Pinned rubric.', weight: 1 }],
+          },
+          promptConfig: {
+            gradingInstructions: 'Pinned GA text.',
+            gradingInstructionsOverride: 'Pinned override wins.',
+          },
+          outputSchema: {},
+          calibrationNotes: null,
+        },
+        sourceContentId: null,
+      },
+    });
+    const config = await resolveAssignmentTypeGradingConfig({
+      assignmentTypeId: typeId,
+      assignmentId: 'pinned-essay',
+    });
+    expect(config.instructions).toMatchObject({
+      mode: 'unified',
+      gradingInstructions: 'Pinned override wins.',
+    });
+    expect(config.rubricCategories[0].description).toBe('Pinned rubric.');
+  });
+
   test('returns assignment-type-owned rubric and prompt config when present', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'assignment-type-act',
