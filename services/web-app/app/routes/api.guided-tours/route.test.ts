@@ -9,7 +9,10 @@ const requireMembership = mock();
 const isFreeTierEnabled = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFreeTierEnabled,
 }));
@@ -76,7 +79,10 @@ describe('api.guided-tours', () => {
   });
 
   test('rejects unknown tours and statuses without writing', async () => {
-    const badTour = (await post({ tourId: 'admin', status: 'completed' })) as Response;
+    const badTour = (await post({
+      tourId: 'admin',
+      status: 'completed',
+    })) as Response;
     const badStatus = (await post({
       tourId: 'dashboard',
       status: 'started',

@@ -111,7 +111,9 @@ test.describe.serial('Free tier guided tour', () => {
     await logInAsFreeTeacher(page);
     await page.goto('/app/my-classes');
 
-    const welcome = page.getByRole('dialog', { name: /Welcome to My Classes/i });
+    const welcome = page.getByRole('dialog', {
+      name: /Welcome to My Classes/i,
+    });
     await expect(welcome).toBeVisible();
     await welcome.getByRole('button', { name: 'Skip' }).click();
     await expect(welcome).toBeHidden();
@@ -137,14 +139,17 @@ test.describe.serial('Free tier guided tour', () => {
     await page.locator('a[href^="/app/my-classes/"]').first().click();
     await page.waitForURL(/\/app\/my-classes\/[^/]+$/);
 
-    const welcome = page.getByRole('dialog', { name: /Welcome to your class/i });
+    const welcome = page.getByRole('dialog', {
+      name: /Welcome to your class/i,
+    });
     await expect(welcome).toBeVisible();
     await welcome.getByRole('button', { name: 'Take a tour' }).click();
     const step = page.getByTestId('guided-tour-step');
     await expect(step).toContainText('Student join link');
-    await expect(
-      page.locator('[data-tour="class-join-link"]')
-    ).toHaveAttribute('data-tour-active', 'true');
+    await expect(page.locator('[data-tour="class-join-link"]')).toHaveAttribute(
+      'data-tour-active',
+      'true'
+    );
   });
 
   test('no tour when the free_tier flag is off', async ({ page }) => {
@@ -169,8 +174,10 @@ test('teachers at paid schools never see the free tier tour', async ({
   await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
   await page.goto('/app');
   await expect(page.getByTestId('app._index')).toBeVisible();
-  await expect(page.getByRole('dialog', { name: /Welcome to/i })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Tour this page' })).toHaveCount(
+  await expect(page.getByRole('dialog', { name: /Welcome to/i })).toHaveCount(
     0
   );
+  await expect(
+    page.getByRole('button', { name: 'Tour this page' })
+  ).toHaveCount(0);
 });
