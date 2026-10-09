@@ -35,3 +35,8 @@ export async function recordTourOutcome(
     update: { status },
   });
 }
+
+/** Forget every tour the user finished or skipped, so each page greets them again. */
+export async function resetTours(userId: string) {
+  await prisma.userTour.deleteMany({ where: { userId } });
+}

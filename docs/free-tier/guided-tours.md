@@ -10,6 +10,12 @@ gives them a short guided tour instead. The pattern follows The Nest's tour:
    buttons and **Finish**. Escape or ✕ closes it.
 3. **Tour this page**, in the sidebar above Settings, replays the current
    page's tour at any time.
+4. **Restart all tours**, in the Settings menu, forgets every tour the teacher
+   finished or skipped, so each page shows its welcome card again.
+
+Only **Skip** (or ✕) on the welcome card and **Finish** at the end are
+recorded. Closing a tour partway through records nothing, so the welcome card
+comes back on the next visit.
 
 ## Who sees it
 

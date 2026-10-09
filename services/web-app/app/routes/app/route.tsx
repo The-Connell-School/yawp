@@ -74,6 +74,7 @@ import { shouldRedirectClasslessStudent } from '~/utils/classless-student-gate';
 import { formatUserContactLabel } from '~/utils/user-display';
 import {
   GuidedTour,
+  RestartToursButton,
   TourThisPageButton,
 } from '~/components/guided-tour/guided-tour';
 import { guidedToursAvailable } from '~/domain/guided-tours/tours';
@@ -445,6 +446,11 @@ export default function Route() {
                       ? 'Shows the classes and work from this year. Switch back any time — nothing is ever removed.'
                       : 'Scopes your classes and grading queue. Students always keep their earlier work.'}
                   </p>
+                </div>
+              ) : null}
+              {guidedTours && !isReadOnlyImpersonation ? (
+                <div className="border-b p-1">
+                  <RestartToursButton className="w-full justify-start gap-2 rounded-lg" />
                 </div>
               ) : null}
               <Form action="/auth/logout" method="POST" className="p-1">

@@ -57,6 +57,8 @@ const STEP_CARD_WIDTH = 396;
 const SPOTLIGHT_PADDING = 8;
 /** Sent by the "Tour this page" button in the sidebar. */
 const START_EVENT = 'yawp:page-tour-start';
+/** Sent by "Restart all tours" once the server has forgotten them. */
+const RESET_EVENT = 'yawp:page-tour-reset';
 /** Let the page draw before the welcome card slides in. */
 const WELCOME_DELAY_MS = 400;
 
@@ -203,10 +205,14 @@ function PageTourController({
   const [finishedHere, setFinishedHere] = useState<ReadonlySet<string>>(
     () => new Set()
   );
+  // After "Restart all tours" the server has no rows left, so the list this
+  // page loaded with is out of date until the next full load.
+  const [restarted, setRestarted] = useState(false);
   const tourId = tour?.id ?? null;
   const finished =
     tourId !== null &&
-    (finishedTourIds.includes(tourId) || finishedHere.has(tourId));
+    ((!restarted && finishedTourIds.includes(tourId)) ||
+      finishedHere.has(tourId));
 
   useEffect(() => {
     setPhase({ kind: 'idle' });
@@ -239,6 +245,16 @@ function PageTourController({
     return () => window.removeEventListener(START_EVENT, start);
   }, [start]);
 
+  useEffect(() => {
+    const restart = () => {
+      setRestarted(true);
+      setFinishedHere(new Set());
+      if (tourId) setPhase({ kind: 'welcome' });
+    };
+    window.addEventListener(RESET_EVENT, restart);
+    return () => window.removeEventListener(RESET_EVENT, restart);
+  }, [tourId]);
+
   if (!tour) return null;
 
   if (phase.kind === 'welcome') {
@@ -257,7 +273,9 @@ function PageTourController({
         steps={phase.steps}
         index={phase.index}
         onIndexChange={(index) => setPhase({ ...phase, index })}
-        onClose={() => finish('dismissed')}
+        // Closing partway is not skipping: nothing is recorded, so the
+        // welcome card comes back next visit.
+        onClose={() => setPhase({ kind: 'idle' })}
         onFinish={() => finish('completed')}
       />
     );
@@ -347,6 +365,40 @@ export function TourThisPageButton({
       <Compass size={18} aria-hidden="true" />
       {navExpanded ? <span>Tour this page</span> : null}
     </button>
+  );
+}
+
+/**
+ * Forgets every tour the teacher finished or skipped, so each page greets
+ * them again, starting with this one. Lives in the Settings menu.
+ */
+export function RestartToursButton({ className }: { className?: string }) {
+  const [pending, setPending] = useState(false);
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="ghost"
+      disabled={pending}
+      className={className}
+      onClick={async () => {
+        setPending(true);
+        const body = new FormData();
+        body.set('intent', 'reset');
+        try {
+          const response = await fetch('/api/guided-tours', {
+            method: 'POST',
+            body,
+          });
+          if (response.ok) window.dispatchEvent(new Event(RESET_EVENT));
+        } finally {
+          setPending(false);
+        }
+      }}
+    >
+      <Compass size={16} aria-hidden="true" />
+      Restart all tours
+    </Button>
   );
 }
 
