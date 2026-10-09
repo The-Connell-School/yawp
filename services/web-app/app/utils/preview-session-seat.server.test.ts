@@ -18,7 +18,7 @@ function dependencies(
     destroyAuthSession,
     clearSelectedMembership,
     getSelectedMembershipId: mock(async () => selectedMembershipId),
-    findSession: mock(async () => ({ user: { memberships } })),
+    findSession: mock(async () => ({ user: { id: 'user-1', memberships } })),
     deleteSession,
   };
   return { deps, destroyAuthSession, clearSelectedMembership, deleteSession };
@@ -94,6 +94,18 @@ describe('preview seat session boundary', () => {
     expect(
       (await guard(new Request('https://preview.test/app'), seat))?.status,
     ).toBe(302);
+  });
+
+  test('allows free-tier teachers without a preview seat membership', async () => {
+    const { deps, deleteSession } = dependencies(
+      [{ id: 'membership-3', organizationId: 'preview-seat-3' }],
+      'membership-3',
+    );
+    deps.sessionAllowedWithoutSeatMembership = mock(async () => true);
+    const guard = createPreviewSeatSessionGuard(deps);
+
+    expect(await guard(new Request('https://preview.test/app/free-tier/onboarding'), seat)).toBeNull();
+    expect(deleteSession).not.toHaveBeenCalled();
   });
 
   test('allows anonymous requests to proceed after the access-code gate', async () => {

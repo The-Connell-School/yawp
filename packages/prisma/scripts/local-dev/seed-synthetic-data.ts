@@ -49,6 +49,7 @@ async function upsertPersona(
       email: persona.email,
       name: persona.name,
       isAdmin: persona.isAdmin ?? false,
+      isSuperAdmin: persona.isSuperAdmin ?? false,
       password: { create: createPassword(persona.password) },
       memberships: {
         create: {

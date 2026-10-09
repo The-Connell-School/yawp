@@ -34,7 +34,80 @@ model FreeTierApplication {
   organizationId   String?
   releasedAt       DateTime?                 @db.Timestamptz(6)
   notes            String?
+  teacherPersonalNote String?
+  adminRedirectCount Int                     @default(0)
   approvalDecisions FreeTierApprovalDecision[]
+  adminApprovals    FreeTierAdminApproval[]
+  signedLinks       FreeTierSignedLink[]
+  emailLogs         FreeTierEmailLog[]
+
+  @@index([userId])
+  @@index([organizationId])
+}
+
+enum FreeTierAdminApprovalStatus {
+  PENDING
+  APPROVED
+  REDIRECTED
+  SUPERSEDED
+  EXPIRED
+}
+
+enum FreeTierSignedLinkPurpose {
+  RELEASE
+  ADMIN_APPROVE
+  ADMIN_NOT_RIGHT_PERSON
+}
+
+model FreeTierSignedLink {
+  id            String                    @id @default(cuid())
+  createdAt     DateTime                  @default(now()) @db.Timestamptz(6)
+  applicationId String
+  application   FreeTierApplication       @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  purpose       FreeTierSignedLinkPurpose
+  tokenHash     String                    @unique
+  expiresAt     DateTime                  @db.Timestamptz(6)
+  usedAt        DateTime?                 @db.Timestamptz(6)
+  adminApprovals FreeTierAdminApproval[]
+
+  @@index([applicationId])
+}
+
+model FreeTierAdminApproval {
+  id                   String                      @id @default(cuid())
+  createdAt            DateTime                    @default(now()) @db.Timestamptz(6)
+  applicationId        String
+  application          FreeTierApplication         @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  adminName            String
+  adminEmail           String
+  adminRole            String?
+  status               FreeTierAdminApprovalStatus @default(PENDING)
+  signedLinkId         String?
+  signedLink           FreeTierSignedLink?         @relation(fields: [signedLinkId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  emailCopyVersionHash String
+  decidedAt            DateTime?                   @db.Timestamptz(6)
+  clientIpHash         String?
+  userAgentHash        String?
+  redirectedFromId     String?
+  redirectedFrom       FreeTierAdminApproval?      @relation("AdminApprovalRedirectChain", fields: [redirectedFromId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  redirects            FreeTierAdminApproval[]     @relation("AdminApprovalRedirectChain")
+  personalNote         String?
+
+  @@index([applicationId, createdAt(sort: Desc)])
+}
+
+model FreeTierEmailLog {
+  id            String              @id @default(cuid())
+  createdAt     DateTime            @default(now()) @db.Timestamptz(6)
+  applicationId String
+  application   FreeTierApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  kind          String
+  toEmail       String
+  success       Boolean
+  error         String?
+  payload       Json?
+
+  @@index([applicationId, createdAt(sort: Desc)])
 }
 
 model AcquisitionToken {
@@ -61,7 +134,7 @@ model FreeTierApprovalDecision {
   id              String                        @id @default(cuid())
   createdAt       DateTime                      @default(now()) @db.Timestamptz(6)
   applicationId   String
-  application     FreeTierApplication           @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application     FreeTierApplication           @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   decision        FreeTierApprovalDecisionType
   /// Required for REJECTED; validated in application code.
   reason          String?

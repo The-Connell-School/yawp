@@ -3,7 +3,9 @@ import {
   FEATURE_FLAGS,
   INTERNAL_RUBRICS_FLAG,
   LESSON_PLANNER_FLAG,
+  FREE_TIER_FLAG,
   FEATURE_FLAG_KEYS,
+  isFreeTierGloballyEnabled,
   featureFlagSettingName,
   MAX_FEATURE_FLAG_ORG_IDS,
   evaluateFeatureFlag,
@@ -33,7 +35,6 @@ describe('feature flag registry', () => {
 
   test('has the Rubrics from Yawp Internal flag, stored under its own row', () => {
     expect(INTERNAL_RUBRICS_FLAG).toBe('internal_rubrics');
-    expect(FEATURE_FLAG_KEYS).toEqual([LESSON_PLANNER_FLAG, INTERNAL_RUBRICS_FLAG]);
     expect(isFeatureFlagKey(INTERNAL_RUBRICS_FLAG)).toBe(true);
     expect(featureFlagSettingName(INTERNAL_RUBRICS_FLAG)).toBe(
       'feature_flag.internal_rubrics'
@@ -44,6 +45,20 @@ describe('feature flag registry', () => {
     const { description } = FEATURE_FLAGS[INTERNAL_RUBRICS_FLAG];
     expect(description).toContain('new assignment');
     expect(description).toContain('Existing assignments keep');
+  });
+
+  test('has the Free tier flag', () => {
+    expect(FEATURE_FLAG_KEYS).toContain(FREE_TIER_FLAG);
+    expect(isFeatureFlagKey(FREE_TIER_FLAG)).toBe(true);
+    expect(featureFlagSettingName(FREE_TIER_FLAG)).toBe('feature_flag.free_tier');
+  });
+
+  test('lists every registered flag key', () => {
+    expect(FEATURE_FLAG_KEYS).toEqual([
+      LESSON_PLANNER_FLAG,
+      INTERNAL_RUBRICS_FLAG,
+      FREE_TIER_FLAG,
+    ]);
   });
 
   test('rejects anything that is not a registered flag', () => {
@@ -151,5 +166,15 @@ describe('evaluateFeatureFlag', () => {
     expect(evaluateFeatureFlag(targeted, '')).toBe(false);
     expect(evaluateFeatureFlag(targeted, null)).toBe(false);
     expect(evaluateFeatureFlag(targeted, undefined)).toBe(false);
+  });
+});
+
+describe('isFreeTierGloballyEnabled', () => {
+  test('is on only for everyone', () => {
+    expect(isFreeTierGloballyEnabled({ mode: 'everyone', orgIds: [] })).toBe(true);
+    expect(isFreeTierGloballyEnabled({ mode: 'off', orgIds: [] })).toBe(false);
+    expect(isFreeTierGloballyEnabled({ mode: 'targeted', orgIds: ['org-1'] })).toBe(
+      false
+    );
   });
 });

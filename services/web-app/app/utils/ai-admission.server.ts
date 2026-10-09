@@ -30,6 +30,24 @@ export type AiAdmissionPolicy = {
  * intentionally retained when a provider call fails: failed and concurrent
  * attempts still consume capacity and cannot be used to bypass spend limits.
  */
+export class AiLockedForFreeTierError extends Error {
+  constructor() {
+    super('AI is locked until school administrator approval');
+    this.name = 'AiLockedForFreeTierError';
+  }
+}
+
+export function aiLockedForFreeTierMessage() {
+  return 'AI tools unlock after your school administrator approves YAWP for your classroom.';
+}
+
+export function aiAdmissionErrorResponse(error: unknown): Response | null {
+  if (error instanceof AiLockedForFreeTierError) {
+    return Response.json({ error: 'ai_locked', message: aiLockedForFreeTierMessage() }, { status: 403 });
+  }
+  return null;
+}
+
 export async function reserveAiRequest({
   membershipId,
   organizationId,
@@ -47,6 +65,21 @@ export async function reserveAiRequest({
 }): Promise<void> {
   if (!Number.isInteger(units) || units < 1) {
     throw new Error('AI reservation units must be a positive integer');
+  }
+  const { isFreeTierEnabled } = await import(
+    '~/domain/feature-flags/feature-flags.server'
+  );
+  if (await isFreeTierEnabled()) {
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, plan: true },
+    });
+    if (org) {
+      const { isAiUnlocked } = await import('~/domain/free-tier/is-ai-unlocked.server');
+      if (!(await isAiUnlocked(org))) {
+        throw new AiLockedForFreeTierError();
+      }
+    }
   }
   const membershipSince = new Date(now.getTime() - policy.membershipWindowMs);
   const organizationSince = new Date(

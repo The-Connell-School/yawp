@@ -16,6 +16,7 @@ export type LocalDevPersona = {
   description: string;
   password: string;
   isAdmin?: boolean;
+  isSuperAdmin?: boolean;
   isOrgOwner?: boolean;
   role: 'TEACHER' | 'STUDENT';
 };
@@ -35,6 +36,7 @@ export const LOCAL_DEV_PERSONAS: LocalDevPersona[] = [
     description: 'Platform admin, org owner, and multi-class teacher.',
     password: LOCAL_DEV_PASSWORD,
     isAdmin: true,
+    isSuperAdmin: true,
     isOrgOwner: true,
     role: 'TEACHER',
   },

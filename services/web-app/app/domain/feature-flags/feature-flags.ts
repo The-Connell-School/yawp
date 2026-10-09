@@ -29,6 +29,14 @@ export const LESSON_PLANNER_FLAG = 'lesson_planner' as const;
  */
 export const INTERNAL_RUBRICS_FLAG = 'internal_rubrics' as const;
 
+/**
+ * Free Tier C (#416). Off: public `/free` UI routes, teacher onboarding, operator
+ * admin UI, and internal release/link-mint APIs behave as if the product were not shipped.
+ * On for `everyone` only; `targeted` is treated as off for anonymous `/free`
+ * routes (there is no organization context). Waitlist/token APIs on main stay available.
+ */
+export const FREE_TIER_FLAG = 'free_tier' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -38,7 +46,12 @@ export const FEATURE_FLAGS = {
   [INTERNAL_RUBRICS_FLAG]: {
     label: 'Rubrics from Yawp Internal',
     description:
-      'Schools with this on get the rubric version Yawp Internal released for each rubric when a new assignment is created. Off: new assignments use the platform\'s current rubric. Existing assignments keep the version they were created with.',
+      "Schools with this on get the rubric version Yawp Internal released for each rubric when a new assignment is created. Off: new assignments use the platform's current rubric. Existing assignments keep the version they were created with.",
+  },
+  [FREE_TIER_FLAG]: {
+    label: 'Free tier',
+    description:
+      'Enables Free Tier C teacher onboarding, school-admin approval links, operator release tools, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
@@ -143,6 +156,13 @@ export function evaluateFeatureFlag(
   if (value.mode === 'everyone') return true;
   if (value.mode === 'targeted') return !!orgId && value.orgIds.includes(orgId);
   return false;
+}
+
+/** Free tier public flows are global; only `everyone` turns them on. */
+export function isFreeTierGloballyEnabled(
+  value: FeatureFlagValueInput
+): boolean {
+  return value.mode === 'everyone';
 }
 
 /** Same mode and the same set of schools, in any order. */
