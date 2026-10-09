@@ -9,7 +9,7 @@ This document contains all essential information needed for emergency handoff, i
 ### Emergency Contacts
 - **Development Team**: Contact through GitHub repository issues
 - **AWS Account**: The Connell School organization
-- **Primary Repository**: https://github.com/The-Connell-School/yawp-2.0
+- **Primary Repository**: https://github.com/The-Connell-School/yawp
 
 ### Critical URLs
 - **Production Application**: https://yawp.school
@@ -574,7 +574,7 @@ bastion_public_key = "ssh-rsa ..."
 ## 📚 Additional Resources
 
 ### Documentation
-- **Repository**: https://github.com/The-Connell-School/yawp-2.0
+- **Repository**: https://github.com/The-Connell-School/yawp
 - **CLAUDE.md**: Comprehensive development guide
 - **React Router v7**: https://reactrouter.com/
 - **Prisma ORM**: https://prisma.io/docs

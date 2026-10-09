@@ -1,0 +1,59 @@
+name: release-gate
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  gate:
+    name: release-gate
+    runs-on: ubuntu-22.04
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+
+      - name: 🔎 Resolve PR number for workflow_run
+        id: prnum
+        if: github.event_name == 'workflow_run'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          REPO="${{ github.repository }}"
+          PRS_JSON="$(curl -sSf -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${REPO}/commits/${SHA}/pulls")"
+          PR_NUMBER="$(printf '%s\n' "${PRS_JSON}" | grep -m1 -E '"number":\s*[0-9]+' | sed -E 's/[^0-9]*([0-9]+).*/\1/' )"
+          if [ -z "${PR_NUMBER}" ]; then
+            echo "No PR found for ${SHA}"
+            exit 1
+          fi
+          echo "number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: 🔎 Run release gate (lean)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_BRANCH: main
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            node scripts/release-gate/gate.mjs --pr "${{ steps.prnum.outputs.number }}"
+          else
+            node scripts/release-gate/gate.mjs --pr "${{ github.event.pull_request.number }}"
+          fi
+
