@@ -1,5 +1,4 @@
 import { prisma } from '~/utils/db.server';
-import { readLiveRubricOutputOptionsForAssignmentType } from '~/domain/rubrics/rubric-output-options.server';
 import {
   gradingAssistantRubricInstructions,
   gradingAssistantScoreScaleInstructions,
@@ -564,16 +563,6 @@ export async function resolveAssignmentTypeGradingConfig({
     rubricTotalPoints: assignmentRubricTotalPoints,
     gradingMode: assignmentGradingMode,
   });
-  const liveOutput = await readLiveRubricOutputOptionsForAssignmentType(
-    prisma,
-    assignmentTypeId
-  );
-  if (liveOutput) {
-    resolved.outputSchemaSnapshot = {
-      ...resolved.outputSchemaSnapshot,
-      teacherNotesEnabled: liveOutput.teacherNotesEnabled,
-    };
-  }
   return resolved;
 }
 

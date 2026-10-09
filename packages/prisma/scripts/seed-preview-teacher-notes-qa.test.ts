@@ -1,9 +1,26 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { previewTeacherNotesQaDatabaseAllowed } from './seed-preview-teacher-notes-qa';
+import {
+  dailyPagesEngagementRubricSnapshot,
+  previewTeacherNotesQaDatabaseAllowed,
+} from './seed-preview-teacher-notes-qa';
+import { getCategoryScoreBand } from '../../../services/web-app/app/domain/assignment-types/rubric-category-options';
 
 describe('seed-preview-teacher-notes-qa', () => {
+  test('dailyPagesEngagementRubricSnapshot scales bands so QA score 24 is Good', () => {
+    const snapshot = dailyPagesEngagementRubricSnapshot();
+    const category = snapshot.categories[0] as {
+      bands?: Array<{ min: number; max: number; label: string }>;
+    };
+    const band = getCategoryScoreBand(
+      { key: 'engagement_with_prompt', label: 'Engagement', bands: category.bands },
+      24
+    );
+    expect(band?.label).toBe('Good');
+    expect(snapshot.maxScore).toBe(30);
+  });
+
   test('previewTeacherNotesQaDatabaseAllowed rejects demo and CI database names', () => {
     expect(
       previewTeacherNotesQaDatabaseAllowed(
