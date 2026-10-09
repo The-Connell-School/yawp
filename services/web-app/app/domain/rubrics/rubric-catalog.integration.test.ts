@@ -141,6 +141,38 @@ run('per-type rubric (production Daily Pages content) saves as a new revision, m
   cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
 });
 
+run('publishing new gradingInstructions through the catalog clears a per-type override for new work but keeps it on older pinned revisions', async () => {
+  const { db, catalog, perTypeKey, resolve } = await setup();
+  const daily = fixture.perTypeRubrics.find((type) => type.title === 'Daily Pages')!;
+  const promptConfig = {
+    ...((daily.gradingPromptConfigJson as object) ?? {}),
+    gradingInstructions: 'Original GA from internal.',
+    gradingInstructionsOverride: 'Legacy paste override from platform admin.',
+  };
+  const type = await db.assignmentType.create({ data: {
+    title: `Hornbuckle-style ${suffix}`, position: 9003, scoringScaleJson: daily.scoringScaleJson as any, rubricJson: daily.rubricJson as any,
+    gradingPromptConfigJson: promptConfig as any, gradingOutputSchemaJson: (daily.gradingOutputSchemaJson ?? undefined) as any, gradingCalibrationNotes: daily.gradingCalibrationNotes,
+  } });
+  const key = perTypeKey(type.id);
+  const before = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Existing essay' } });
+  const detail = await catalog.get(key);
+  const doc = structuredClone(detail.live.editable) as any;
+  doc.promptConfig = { ...(doc.promptConfig ?? {}), gradingInstructions: 'Hornbuckle v4 GA from internal publish.' };
+  const saved = await catalog.save({ key, requestId: randomUUID(), actorEmail: actor, reason: 'Hornbuckle v4', expectedFingerprint: detail.live.fingerprint, document: doc });
+  const row = await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } });
+  expect((row.gradingPromptConfigJson as any).gradingInstructions).toBe('Hornbuckle v4 GA from internal publish.');
+  expect((row.gradingPromptConfigJson as any).gradingInstructionsOverride).toBeUndefined();
+  const pinnedRevision = await db.rubricRevision.findUniqueOrThrow({ where: { id: (await db.assignment.findUniqueOrThrow({ where: { id: before.id } })).rubricRevisionId! } });
+  expect((pinnedRevision.schemaJson as any).promptConfig.gradingInstructionsOverride).toBe('Legacy paste override from platform admin.');
+  const after = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'New essay' } });
+  expect(after.rubricRevisionId).toBe(saved.revision.id);
+  const oldConfig = await resolve({ assignmentTypeId: type.id, assignmentId: before.id });
+  const newConfig = await resolve({ assignmentTypeId: type.id, assignmentId: after.id });
+  expect(oldConfig.instructions).toMatchObject({ mode: 'unified', gradingInstructions: 'Legacy paste override from platform admin.' });
+  expect(newConfig.instructions).toMatchObject({ mode: 'unified', gradingInstructions: 'Hornbuckle v4 GA from internal publish.' });
+  cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
+});
+
 run('code-seeded starters are editable and flagged; library-linked types are read-only; list counts every library rubric', async () => {
   const { db, catalog } = await setup();
   const listed = await catalog.list();

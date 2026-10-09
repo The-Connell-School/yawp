@@ -131,7 +131,16 @@ function buildStoredContent(key: CatalogKey, live: LiveContent, document: JsonRe
   const livePrompt = isRecord(live.content.promptConfig) ? live.content.promptConfig : {};
   const preservedPrompt = Object.fromEntries(Object.entries(livePrompt).filter(([k]) => !(PROMPT_CONFIG_KEYS as readonly string[]).includes(k)));
   const editedPrompt = isRecord(document.promptConfig) ? document.promptConfig : {};
-  const promptConfig = { ...preservedPrompt, ...editedPrompt };
+  const promptConfig: JsonRecord = { ...preservedPrompt, ...editedPrompt };
+  // Internal publishes GA text as gradingInstructions. A stale per-type override
+  // would otherwise keep winning at grade time, so a new instruction set replaces it.
+  const incomingGradingInstructions =
+    typeof editedPrompt.gradingInstructions === 'string'
+      ? editedPrompt.gradingInstructions.trim()
+      : '';
+  if (incomingGradingInstructions) {
+    delete promptConfig.gradingInstructionsOverride;
+  }
 
   if (key.source === 'library') {
     const preservedTop = Object.fromEntries(Object.entries(live.content).filter(([k]) => !['name', 'title', 'scoringScale', 'rubric', 'promptConfig', 'outputSchema', 'calibrationNotes'].includes(k)));
