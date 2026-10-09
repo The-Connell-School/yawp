@@ -169,7 +169,8 @@ describe('compileGradingAssistantInvocation', () => {
       documentText: 'School uniforms should be optional.',
     });
 
-    expect(invocation.system).toBe('Coach Jordan with scores 1-5.');
+    expect(invocation.system).toStartWith('Coach Jordan with scores 1-5.');
+    expect(invocation.system).toContain('"teacherNote": string | null');
     expect(invocation.userMessage).toContain('Argument Essay');
     expect(invocation.userMessage).toContain('Advanced');
     expect(invocation.userMessage).toContain(

@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
   TEACHER_NOTES_EVIDENCE_RULE,
-  existingOutputSchemaForAssignmentTypeSave,
   gradingRepairPrivateObservationRules,
   normalizeTeacherNote,
   overallCommentWriterRules,
@@ -40,19 +39,6 @@ describe('teacher-notes', () => {
   test('teacherNotesEnabled is always true regardless of legacy outputSchema flag', () => {
     expect(teacherNotesEnabled({ teacherNotesEnabled: false })).toBe(true);
     expect(teacherNotesEnabled({})).toBe(true);
-  });
-
-  test('existingOutputSchemaForAssignmentTypeSave ignores library output when detaching rubric', () => {
-    expect(
-      existingOutputSchemaForAssignmentTypeSave({
-        hasRubricIdField: true,
-        nextRubricId: null,
-        libraryRubricSchemaJson: {
-          outputSchema: { teacherNotesEnabled: true },
-        },
-        gradingOutputSchemaJson: { schemaVersion: 1 },
-      })
-    ).toEqual({ schemaVersion: 1 });
   });
 
   test('normalizeTeacherNote trims and enforces max length', () => {
